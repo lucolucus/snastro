@@ -19,7 +19,7 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 
 | Gradle module | Package | Contains |
 |---|---|---|
-| `:kernel` | `snastro.kernel` | shared kernel: ids (`@JvmInline value class`: `ProgettoId`, `RegistrazioneId`, `VoceId`, `SegmentoId`, `ParlanteId`), `VoceRef`, `IntervalloMs`, `Esito`, `ErroreDominio` base, `EventoDominio`, `UnitaDiLavoro`, `DispatcherEventi` |
+| `:kernel` | `snastro.kernel` | shared kernel: ids (`@JvmInline value class`: `ProgettoId`, `RegistrazioneId`, `ElaborazioneId`, `VoceId`, `SegmentoId`, `ParlanteId`), `VoceRef`, `IntervalloMs`, `RiferimentoAudio`, `CampioniAudio`, `EstrattoRef`, `Esito`, `ErroreDominio` base, `EventoDominio`, `EventoPubblicato`, `Creato`, `RicostituzioneDaPersistenza`, ports `GeneratoreId`, `UnitaDiLavoro`, `DispatcherEventi` *(amended 2026-09-23, R9)* |
 | `:progetto:dominio` | `snastro.progetto.dominio` | `Progetto`, `Registrazione` aggregates, VOs, events |
 | `:progetto:applicazione` | `snastro.progetto.applicazione` | commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`), queries/read-models, repository ports, `SondaAudio` port, public query API (`CatalogoRegistrazioni`) |
 | `:progetto:adattatori` | `snastro.progetto.adattatori` | SQLDelight repositories, file copy of sources, `SondaAudio` adapter (→ `:audio`) |
@@ -94,3 +94,26 @@ Cross-context events flow `supplier:applicazione` (published events, Published L
 2. Konsist in `:architettura-test` (imports/packages/naming — `code-rules.md`).
 3. detekt (style, error handling, `!!`) with `allWarningsAsErrors`.
 4. ADR `enforced_by` rules (run by `mismagent-verifier`).
+
+## Amendment 2026-09-23 (build-manifest reconciliation, feature trascrizione-con-parlanti)
+- **R9 kernel list** (row above): adds `ElaborazioneId`, `RiferimentoAudio`, `CampioniAudio` (shared by
+  two contexts' ports), `EstrattoRef` (`registrazioneId` + a LIST of `IntervalloMs`, played as a
+  sequence), `EventoPubblicato`, `Creato`, `RicostituzioneDaPersistenza`, `GeneratoreId`. `Impronta`
+  lives in `:parlanti:dominio` (not kernel). Exact signatures: boundary `kernel-pl` in
+  `features/trascrizione-con-parlanti/building-blocks.yaml`.
+- **R3 project registry:** `:progetto:applicazione` also declares `RegistroProgetti` (per-user list of
+  recent projects), implemented in `:progetto:adattatori` over a file in the OS app-data dir. Project
+  folder layout, `.lock`, DB opening and registry updates on open/close are done by `:avvio`'s
+  `SessioneProgetto`.
+- **`:ui` declares ports implemented by `:avvio`:** `LettoreAudio` (existing), `SessioneProgetto`,
+  `ApriEsterno` (open file / reveal in folder), `AggiornamentiVista` (refresh flow, R15),
+  `ServizioModelli` (S5, R10 — `:ui` cannot reach `:modelli`).
+- **R1 read-models per owning context:** a view that mixes contexts is split into one read-model per
+  context, joined by `registrazioneId`/`voceId` in the presenter (e.g. S2 = `registrazioni-del-progetto`
+  ⨝ `stati-elaborazione` ⨝ `identificazione-registrazioni`). Read-models compute on read over
+  repository/query ports (R15); no event-folded tables in v1.
+- **R2:** the `RegistrazioneAggiunta` → `AvviaElaborazione` policy lives in `:trascrizione:adattatori`
+  (sync subscriber), never in Progetto (ADR 0012 amendment).
+- **R12:** one mutex serializes every native (sherpa) call, pipeline and `EstrattoreImpronta` alike.
+- **R25 (open, see ADR 0003):** `ErroreDominio` must be a plain (non-sealed) interface — Kotlin forbids
+  sealed subtypes across modules; each context's `Errori<Contesto>` is the sealed hierarchy.

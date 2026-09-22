@@ -6,7 +6,7 @@ closes_spike: null
 enforced_by:
   kind: presence
   rule: "grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(registrazione_id\\) WHERE .*in_attesa.*in_corso' persistenza | grep -q . && grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(registrazione_id\\) WHERE .*completata' persistenza | grep -q . && grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(progetto_id, nome_normalizzato\\) WHERE .*attivo' persistenza | grep -q ."
-  exigible_from: "persistence adapter blocks of elaborazione AND parlante (block ids pinned by build-manifest; until both are merged the rule is not exigible)"
+  exigible_from: "persistenza-schema"
 ---
 # 0007 — Set invariants INV-4 and INV-16 backed by partial unique indexes
 
@@ -43,3 +43,10 @@ and can be bypassed by a future code path; the store must refuse the violating r
 - Presence rule, wave-gated on the two persistence adapter blocks; the invariant tests of the
   application services remain the primary proof (tests against the real SQLite in the adapters'
   round-trip tests include a concurrent-insert case).
+
+## Amendment 2026-09-23 (build-manifest reconciliation R19)
+`exigible_from` pinned to block **`persistenza-schema`** (feature trascrizione-con-parlanti): the index DDL
+lives in the `:persistenza` `.sq` owned by that block, so the presence rule is exigible once it merges.
+The round-trip + concurrent-insert proof stays on `repository-sql-trascrizione` and
+`repository-sql-parlanti` (their ACs), and the constraint → `ErroreDominio` mapping also covers
+`ElaborazioneGiaCompletata` for the second index.

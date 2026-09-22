@@ -144,3 +144,38 @@ Layout: a header, the transcript in the center, and the **Voci** panel on the ri
 None new. Playback of `.m4a` (and other source formats) inside the desktop UI depends on the
 stack. It is folded into the architect's stack decision and `packaging-modelli-desktop`, not a
 separate spike.
+
+## Amendments 2026-09-23 (build-manifest reconciliation — user checkpoint, all [user])
+- **R1 data views split by owning context** (the edges forbid a Trascrizione/Progetto view reading
+  Parlanti); the presenter joins them:
+  - S2 `RegistrazioniDelProgetto` = `registrazioni-del-progetto` (Progetto: registrazioneId, titolo,
+    dataRegistrazione, durataMs) ⨝ `stati-elaborazione` (Trascrizione: stato, fase, avviataAlle,
+    motivoFallimento, posizioneInCoda, numVoci) ⨝ `identificazione-registrazioni` (Parlanti:
+    numVociDaIdentificare).
+  - S3 `TrascrittoView` = `trascritto-view` (Trascrizione: registrazioneId, titolo, dataRegistrazione,
+    durataMs, segmenti, voci{voceId, etichetta}) ⨝ `identificazione-voci` (Parlanti: voceId →
+    parlanteId?, nome?, tipoParlante?).
+- **R8:** `documentoPath` comes from the Documento projection (`nomeFile`), `audioDisponibile` from the
+  `LettoreAudio` port, `colore` from a UI palette keyed by the Voce number. "Apri documento" /
+  "Mostra nella cartella" go through the `ApriEsterno` port.
+- **R3 S1:** besides "Nuovo progetto", an **"Apri progetto…"** action (folder picker). The list comes
+  from a per-user registry of recent projects (`RegistroProgetti`); numRegistrazioni / ultimaAttivita
+  are cached there when a project is closed. Extra error states: folder already exists, invalid
+  folder, "progetto già aperto".
+- **R24:** "▶ estratto" plays the 2–3 longest `Segmento`s of the `Voce` in sequence (~10 s).
+  `EstrattoRef` = `{registrazioneId, intervalli: [IntervalloMs]}`. Ties among `Candidato`s with the
+  same type and `Fascia` are ordered by `Nome`. "salta" is not shown on an attributed `Voce`.
+
+## Screen S5 · Modelli (onboarding download + licences) — added 2026-09-23 [user, R10]
+- **When:** at startup if required models are missing or corrupt (ADR 0008). `Elaborazione`s wait
+  `in_attesa` meanwhile. Also reachable from the shell for the licences.
+- **Shows:** the total size to download and a "Scarica" button. During the download: progress per
+  model (bytes downloaded / total). After it: "Licenze dei modelli e librerie" (name, role, licence,
+  attribution, from the catalogue).
+- **States:** *missing* (size + "Scarica"); *downloading* (progress); *error — hash mismatch* (nothing
+  installed, "Riprova"); *error — no network* (message, "Riprova"); *ready* (the screen does not block
+  the app).
+- **Data view `StatoModelli`:** `Pronti | Mancanti{numero, totaleByte} | InDownload{modelloId,
+  scaricatiByte, totaliByte} | Errore{HashNonValido | ReteAssente | DownloadFallito}` + `LicenzaVista[]`.
+- **Commands:** `ScaricaModelli` (through the `ServizioModelli` port implemented in `:avvio` over `:modelli`).
+- **ui block:** `schermata-modelli`.

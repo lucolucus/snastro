@@ -36,3 +36,22 @@ Knob K1. Several invariants span aggregates/contexts inside one local database:
   commits the result (`completata` + `Trascritto`) in one short transaction.
 - Discursive (code review): no invariant policy may be moved after commit; no `Rigenerazione` inside
   the transaction.
+
+## Amendment 2026-09-23 (build-manifest reconciliation R2, R4, R12, R13, R21, R22)
+- **R4 — no `documento_generato_versione`.** `:documento:*` may neither persist (ADR 0006) nor read
+  back (ADR 0010), so the persisted version is dropped: at startup **every** `Documento` with a
+  `Trascritto` is regenerated unconditionally (`RigeneraTuttiIDocumenti`, idempotent, cheap). The
+  after-commit, coalesced, retried `Rigenerazione` is unchanged.
+- **R2 — auto-start policy lives in Trascrizione.** `RegistrazioneAggiunta` is a published event of
+  Progetto; a **synchronous** subscriber in `:trascrizione:adattatori` runs `AvviaElaborazione` in
+  the same transaction (a `Registrazione` never exists without its queued `Elaborazione`). Progetto
+  never depends on Trascrizione.
+- **R12 — ML inside a command transaction, accepted.** `ConfermaAttribuzione`, `SaltaVoce` and the
+  Parlanti revisione-policy extract one embedding (seconds) inside the transaction (single local
+  writer). Every native call — pipeline and `EstrattoreImpronta` — is serialized by one mutex in
+  `:ml-sherpa`/`:avvio`. The long `Elaborazione` pipeline still never holds a transaction.
+- **R13:** Parlanti does not subscribe to `ElaborazioneCompletata` (no consumer).
+- **R21/R22:** `SaltaVoce` publishes `ParlanteCreato` + `AttribuzioneConfermata`; `ParlantePromosso`
+  carries `nome` + `nomeCambiato` so the Documento policy can apply "only if the Nome changed".
+- Published-event types are pinned in `features/trascrizione-con-parlanti/building-blocks.yaml`
+  (boundaries `eventi-progetto`, `eventi-elaborazione`, `eventi-revisione`, `eventi-parlanti`).

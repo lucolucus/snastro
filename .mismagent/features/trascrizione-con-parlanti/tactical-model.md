@@ -237,3 +237,35 @@
   `AttribuzioneConfermata`, `ParlanteRinominato`, `ParlantePromosso` (if `Nome` changed) →
   `Rigenerazione` of every affected `Documento` (one per `Registrazione`). `ParlanteEliminato` →
   no `Rigenerazione` [user]. → side-effect block (rigenerazione policy)
+
+## Amendments 2026-09-23 (build-manifest reconciliation — user checkpoint, all [user])
+Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
+- **R6 `titolo`:** `Registrazione` also guards `titolo` = the source file name without extension,
+  set at `AggiungiRegistrazione`, immutable. It crosses to Trascrizione/Parlanti/Documento in `RegistrazioneVista`.
+- **R2 policy placement:** "on `RegistrazioneAggiunta` → `AvviaElaborazione`" is realized as a
+  synchronous subscriber in Trascrizione (same transaction), NOT inside the aggiungi-registrazione
+  service (Progetto must not depend on Trascrizione).
+- **R17 AvviaElaborazione split:** `AvviaElaborazione` (queueing + retry, INV-4) and the internal
+  commands `EseguiProssimaElaborazione` (pipeline, INV-5) and `RecuperaElaborazioniInterrotte`
+  (the startup policy), actor: sistema.
+- **R5 Documento policy:** also on `DataRegistrazioneModificata` (the `.md` file name contains the date;
+  the new file is written, then the old one removed).
+- **R7:** `VoceId` IS the label number n of "Voce n" (no separate `etichettaNumero`).
+- **R21:** `SaltaVoce` emits `ParlanteCreato` + `AttribuzioneConfermata`. **R22:** `ParlantePromosso`
+  carries `nome` + `nomeCambiato`.
+- **R24 decisions:**
+  - Voci are numbered by first appearance (the Voce that speaks first is Voce 1).
+  - Zero speech / zero diarization turns → `Elaborazione` `fallita` with motivo "nessun parlato rilevato".
+  - The same source file added twice → two distinct `Registrazione`s, never blocked.
+  - Re-confirming the same `Parlante` for a `Voce` → no-op, no event.
+  - `SaltaVoce` on an already-attributed `Voce` is not offered and is rejected (`VoceGiaAttribuita`);
+    use "cambia".
+  - Guest name format: "Ospite del 12/09/2026" (dd/MM/yyyy).
+  - `EstrattoAudio` = the 2–3 LONGEST `Segmento`s of the `Voce`, about 10 s in total (≤ 10 000 ms,
+    the last clipped), played as a sequence of intervals.
+  - A `Candidato`'s `Fascia` = the BEST over the `Parlante`'s `ImprontaVocale`s; ties (same
+    `TipoParlante` and `Fascia`) are ordered by `Nome` alphabetically.
+  - `Documento` format: `# <titolo>`, a date line "Registrata il dd/MM/yyyy", then one line per
+    `Segmento` `**Nome** (mm:ss): testo`; consecutive `Segmento`s of the same `Voce` stay separate lines.
+- **R25 (flag):** `INV-25` is realized with a repository `rimuovi` — the only physical deletion of a
+  `Parlante` (the "no deletion" aggregate rule does not apply: nothing references it).

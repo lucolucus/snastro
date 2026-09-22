@@ -35,3 +35,11 @@ in sherpa.
 ## Consequences
 - First run needs network once; later runs are fully offline.
 - Changing a model = a catalogue edit (URL + SHA-256 + licence) + the spike/ADR that chose it.
+
+## Amendment 2026-09-23 (build-manifest reconciliation R10 — user decision: include in v1)
+The onboarding/download screen and the "Licenze dei modelli e librerie" list are one v1 screen,
+**S5 · Modelli** (ui block `schermata-modelli`, added to the ux-proposal): download with progress,
+hash-error and no-network states with "Riprova", licences from the catalogue. `:ui` cannot depend on
+`:modelli`, so S5 declares a `ServizioModelli` port implemented in `:avvio` over `:modelli`
+(block `avvio-composizione`); the mechanism itself is block `modelli-provisioning`, and each
+spike ADR adds its catalogue entry in the real-adapter block it gates.

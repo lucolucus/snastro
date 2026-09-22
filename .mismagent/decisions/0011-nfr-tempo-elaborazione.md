@@ -32,3 +32,8 @@ best-effort.
 ## Consequences
 - Discursive/measurable: no grep can check a time budget; the benchmark task is the guardian, and
   the build-manifest attaches it as an AC of the avvia-elaborazione block (opt-in run).
+
+## Amendment 2026-09-23 (build-manifest reconciliation R17)
+`AvviaElaborazione` was split into `avvia-elaborazione` (queueing) and `esegui-elaborazione`
+(pipeline). The measurable AC is attached to a dedicated opt-in block **`benchmark-elaborazione`**
+(wave 13, gated on the five spike ADRs and the real ML adapters), not to either service.

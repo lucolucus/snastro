@@ -74,3 +74,21 @@ compilation and the contract tests, never silently.
 Models per port and `SoglieFascia`: spikes `scelta-diarizzatore`, `scelta-asr-code-switching`,
 `impronta-vocale-affidabilita`, `allineamento-parole-voci`; native packaging hello-world:
 `packaging-modelli-desktop` (re-scoped 2026-09-23 to sherpa-onnx/ONNX candidates).
+
+## Amendments 2026-09-23 (build-manifest reconciliation — user checkpoint)
+The authoritative boundary pins are now `../building-blocks.yaml` § boundaries. Deltas against the tables above:
+- **R6/R7:** `RegistrazioneVista` gains `titolo`; `VoceVista` = `{voceRef, intervalli}` (no
+  `etichettaNumero` — `VoceId` is the label number).
+- **R18 + rule 15:** `LettoreNomi` also has `registrazioniCon(parlanteId)` (for `ParlanteRinominato`);
+  `LettoreTrascritto` = `trascritto(id): TrascrittoTesto?` (titolo + dataRegistrazione + segmenti,
+  composed from `VociDelTrascritto` + `CatalogoRegistrazioni`) + `registrazioniConTrascritto()`.
+- **R2:** a new event boundary Progetto → Trascrizione: `RegistrazioneAggiunta` (sync subscriber in
+  `:trascrizione:adattatori` → `AvviaElaborazione`); `DataRegistrazioneModificata` → Documento (R5).
+- **R13:** Parlanti does not subscribe to `ElaborazioneCompletata`.
+- **R1/R8:** UI data views split per owning context (see the ux-proposal amendment).
+- **R3:** `RegistroProgetti` port (Progetto) + `SessioneProgetto` in `:avvio`.
+- **R10:** S5 `schermata-modelli` via the `ServizioModelli` port (`:ui`) → `:avvio` → `:modelli`.
+- **R12:** `EstrattoreImpronta` runs inside command transactions; one mutex serializes all native calls.
+- **`EstrattoRef`** = `{registrazioneId, intervalli: List<IntervalloMs>}` (the 2–3 longest `Segmento`s, ≤ 10 s).
+- **ADR 0012 R4:** no `documento_generato_versione`; all `Documento`s are regenerated at startup.
+- **ADR 0007/0009 `exigible_from`:** `persistenza-schema`.

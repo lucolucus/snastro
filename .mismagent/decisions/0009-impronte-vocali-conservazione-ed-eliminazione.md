@@ -6,7 +6,7 @@ closes_spike: null
 enforced_by:
   kind: presence
   rule: "grep -rniE --include='*.kt' --exclude-dir=build '(secure_delete[[:space:]]*=[[:space:]]*(on|1|true)|setSecureDelete\\(true\\))' persistenza | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-  exigible_from: "the persistenza driver-factory block (scaffold or first persistence block — id pinned by build-manifest)"
+  exigible_from: "persistenza-schema"
 ---
 # 0009 — `ImprontaVocale` (biometric): stored only in the project DB, purged in the tombstone transaction
 
@@ -36,3 +36,11 @@ project folder) may retain purged prints** — outside the app's control.
 ## Consequences
 - Tests: invariant-test on the `parlante` aggregate ([INV-13]) + adapter round-trip test asserting
   zero `impronta_vocale` rows after `EliminaParlante`.
+
+## Amendment 2026-09-23 (build-manifest reconciliation R19, R23, R12)
+- `exigible_from` pinned to block **`persistenza-schema`** (owns `apriDatabaseProgetto` with `secure_delete=ON`).
+- R23: `PRAGMA wal_checkpoint(TRUNCATE)` cannot run inside a transaction — `repository-sql-parlanti`
+  runs it **after the commit** of the `EliminaParlante` transaction (the purge itself stays in-tx).
+- R12: the embedding of a `Voce` being attributed (INV-15/INV-21 re-derivation) is extracted inside
+  the command transaction and written only as `impronta_vocale` rows; the transient `Proposta`
+  embedding stays in memory only (unchanged).
