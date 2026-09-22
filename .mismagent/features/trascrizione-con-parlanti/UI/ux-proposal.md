@@ -1,0 +1,146 @@
+# UX proposal — trascrizione-con-parlanti
+
+> Canonical names from `.mismagent/context-map.md`; tactical rules from `../tactical-model.md`.
+> UI labels are Italian (the user's language). No mockups existed (`materials.ui: none`): this
+> concept was dialogued with the user on 2026-09-23. `[user]` = chosen by the user.
+> Consumers: `build-manifest` → one `ui` block per screen below (`consumes_rm` = its data views) and
+> the `read-model` blocks' `view_shape` (the views listed here are consumer-driven).
+
+## How might we…
+…let the user name every speaker of a new recording mostly by **confirming** proposals, while
+fixing the separation errors in the same place where they notice them?
+
+## Concepts considered
+- **A · Guided wizard, then transcript**: one card per Voce, corrections afterwards. Not chosen,
+  because the user notices diarization errors while reading, not in a separate pass.
+- **B · Transcript + voices panel**: **chosen** [user].
+- **C · Voice lanes timeline (DAW-like)**: very visual for overlaps but the most costly. Not chosen.
+
+## App shell
+A single window with a left navigation: the **Progetto** selector at the top, then **Registrazioni**
+and **Parlanti**. There is no global menu logic beyond this.
+
+## Screen S1 · Progetti (open/create)
+- **Shows:** the list of `Progetto`s (name, number of `Registrazione`s, last activity), and a
+  "Nuovo progetto" action (name → `CreaProgetto`).
+- **States:** *empty*: "Nessun progetto. Crea il primo". *Error*: creation failed, with an inline
+  message.
+- **Data view `ElencoProgetti`:** `[{ progettoId, nome, numRegistrazioni, ultimaAttivita }]`.
+- **Commands:** `CreaProgetto`.
+
+## Screen S2 · Registrazioni del Progetto (project home)
+- **Shows:** the `Registrazione`s of the `Progetto` sorted by `DataRegistrazione` (newest first).
+  Each row shows the title (source file name), `DataRegistrazione` (editable inline →
+  `ModificaDataRegistrazione`), duration, the processing state and an identification badge
+  ("3 voci · 1 da identificare"). There is an "Aggiungi registrazione" action (file picker +
+  drag-and-drop onto the window → `AggiungiRegistrazione`; processing is queued automatically, per Q-6).
+- **Processing state per row** [user]:
+  - `in_attesa`: "In coda" (position in queue).
+  - `in_corso`: **stage + elapsed time**, e.g. "In corso · separazione voci · 3:12". There is no
+    percentage bar.
+  - `completata`: opens S3.
+  - `fallita`: the reason in plain words + a "Riprova" button (→ `AvviaElaborazione`, retry).
+- **States:** *empty*: "Nessuna registrazione. Trascina qui un file audio". *Error adding*
+  (unreadable file / unsupported format): an inline message and nothing is created.
+- **Data view `RegistrazioniDelProgetto`:** `[{ registrazioneId, titolo, dataRegistrazione,
+  durataMs, stato: StatoElaborazione, fase?: FaseElaborazione, avviataAlle?, motivoFallimento?,
+  posizioneInCoda?, numVoci?, numVociDaIdentificare? }]`.
+- **Commands:** `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` (retry).
+
+## Screen S3 · Registrazione (the core: identification + Revisione), concept B [user]
+Layout: a header, the transcript in the center, and the **Voci** panel on the right.
+
+- **Header:** title, `DataRegistrazione`, an **audio bar** (play/pause, position) [user], and
+  "Apri documento" / "Mostra nella cartella" for the `Documento` `.md`.
+- **Transcript (center):** `Segmento`s in time order across `Voce`s. Each shows its start time and
+  a colored dot + label (the `Nome` if attributed, otherwise "Voce n"), and its verbatim text (not
+  editable, v1).
+  - **Click a `Segmento` → playback starts from its `inizio`** [user]. The playing `Segmento` is
+    highlighted.
+  - **Selection:** click / shift-click / cmd-click selects one or more `Segmento`s of the same
+    `Voce`. The selection toolbar shows:
+    - "Riassegna a ▾" (existing `Voce`, or "nuova voce") → `RiassegnaSegmento` (per `Segmento`).
+    - "Dividi voce" (selection = S, a proper non-empty subset of the `Voce`) → `DividiVoce`. It is
+      disabled with an explanation when S is the whole `Voce` ([INV-10]).
+  - Overlapping `Segmento`s are shown in order of `inizio`, both kept (Q-4). No warning is shown.
+- **Voci panel (right):** one card per `Voce`, in label order.
+  - Not attributed: "▶ estratto" (`EstrattoAudio` of the `Voce`), then the `Proposta`'s
+    `Candidato`s in rank order, each showing `Nome`, `TipoParlante`, a **`Fascia` bar
+    (forte/debole/nessuna, never a number)** and "▶" (the `EstrattoAudio` of that `Candidato`'s
+    past `ImprontaVocale` source). The actions are:
+    - "Conferma" (the top candidate).
+    - "altri ▾" (any `attivo` `Parlante` of the `Progetto`).
+    - "nuovo…" (a `Nome` field; `ricorrente` preselected, with an `occasionale` toggle, per Q-7).
+    - "salta" (→ `SaltaVoce` → "Ospite del …").
+  - Attributed: the `Nome` + `TipoParlante`, with "cambia" (it reopens the choices →
+    `ConfermaAttribuzione` with another `Parlante`).
+  - "Unisci con ▾" on each card (→ `UnisciVoci`, this card survives).
+  - **`Proposta di unione`** banner in the panel when two `Voce`s point to the same `Parlante`:
+    "Voce 1 e Voce 3 sono entrambe Marco · [Unisci]" (one click → `UnisciVoci`; it is never
+    automatic, and it disappears when the condition no longer holds).
+- **States:**
+  - *Loading*: skeleton transcript.
+  - *No `Candidato`s* (empty `Galleria`, e.g. the first recording of a project): the card shows
+    only "nuovo…" / "salta", with the hint "Prima registrazione: dai un nome alle voci".
+  - *All `Candidato`s `nessuna`*: the candidates are still listed (ranked), and "nuovo…" is
+    visually preferred.
+  - *Error on a command* (e.g. a `Nome` already used, [INV-16]): an inline message on the card,
+    and nothing changes.
+  - *Audio source missing* (file moved/deleted): the audio bar and extracts are disabled with a
+    message; the transcript stays usable.
+- **Data views:**
+  - `TrascrittoView`: `{ registrazioneId, titolo, dataRegistrazione, durataMs,
+    documentoPath, audioDisponibile, segmenti: [{ segmentoId, voceId, inizioMs, fineMs, testo }],
+    voci: [{ voceId, etichetta ("Voce n"), colore, nome?, tipoParlante?, parlanteId? }] }`.
+  - `PropostaView` per `Voce`: `{ voceId, candidati: [{ parlanteId, nome, tipoParlante, fascia,
+    estratto: EstrattoRef }] }`. There is no numeric score ([INV-20]).
+  - `PropostaUnioneView` per `Registrazione`: `[{ voceA, voceB, parlanteId, nome }]`.
+  - `EstrattoAudio`: `{ sorgente audio ref, inizioMs, fineMs }`, playable by the audio bar.
+  - `ParlantiAttivi` (for "altri ▾"): `[{ parlanteId, nome, tipoParlante }]`.
+- **Commands:** `ConfermaAttribuzione`, `SaltaVoce`, `UnisciVoci`, `DividiVoce`,
+  `RiassegnaSegmento`.
+
+## Screen S4 · Parlanti del Progetto (the gallery, managed)
+- **Shows:** `attivo` `Parlante`s grouped as **Ricorrenti** / **Occasionali**, each showing `Nome`,
+  the number of `ImprontaVocale`s, the number of `Registrazione`s it appears in, and the last
+  appearance. `eliminato` `Parlante`s appear in a collapsed "Eliminati" section, name only.
+- **Actions per `Parlante`:**
+  - "Rinomina" (inline; [INV-16] errors are shown inline) → `RinominaParlante`.
+  - "Promuovi a ricorrente" (only `occasionale`, optionally renaming the "Ospite del …") →
+    `PromuoviParlante`.
+  - "Elimina…": a confirmation dialog that explains the privacy effect ("le impronte vocali
+    vengono cancellate; il nome resta nei documenti passati") → `EliminaParlante`.
+  - "▶": the `EstrattoAudio` of one of its `ImprontaVocale`s.
+- **States:** *empty*: "Nessun parlante. Nascono identificando le voci di una registrazione".
+- **Data view `ParlantiDelProgetto`:** `[{ parlanteId, nome, tipoParlante, statoParlante,
+  numImpronte, numRegistrazioni, ultimaApparizione, estratto?: EstrattoRef }]`.
+- **Commands:** `RinominaParlante`, `PromuoviParlante`, `EliminaParlante`.
+
+## Decisions taken here (low stakes, overridable)
+- The `Documento` is never shown as editable content inside the app. It is only opened externally
+  ("Apri documento"), consistent with [INV-23].
+- Multi-select of `Segmento`s is limited to one `Voce` at a time, so `Dividi` has a well-defined
+  source.
+- Colors per `Voce` are assigned by label number and are stable for the `Trascritto`'s lifetime.
+
+## Proposed new term (for the analyst: context-map amendment, non-blocking)
+- `FaseElaborazione` = the pipeline stage an `in_corso` `Elaborazione` is in:
+  `decodifica | diarizzazione | trascrizione | allineamento` (display: "preparazione audio",
+  "separazione voci", "trascrizione", "allineamento"). It is **progress information only**, not
+  guarded state: it is not an invariant of `Elaborazione` ([INV-3] is unchanged). It is fed by
+  the pipeline ports to the `RegistrazioniDelProgetto` view. Requirement on the ML adapters: they
+  must report the stage change (no percentage required) [user].
+
+## Components to build (→ manifest `ui` blocks)
+| ui block | consumes (read-models) | triggers (commands) |
+|---|---|---|
+| `schermata-progetti` (S1) | `ElencoProgetti` | `CreaProgetto` |
+| `schermata-registrazioni` (S2) | `RegistrazioniDelProgetto` | `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` |
+| `schermata-registrazione` (S3) | `TrascrittoView`, `PropostaView`, `PropostaUnioneView`, `ParlantiAttivi`, `EstrattoAudio` | `ConfermaAttribuzione`, `SaltaVoce`, `UnisciVoci`, `DividiVoce`, `RiassegnaSegmento` |
+| `schermata-parlanti` (S4) | `ParlantiDelProgetto` | `RinominaParlante`, `PromuoviParlante`, `EliminaParlante` |
+| `lettore-audio` (shared, used by S3 and S4) | `EstrattoAudio` / source ref | — |
+
+## Spikes
+None new. Playback of `.m4a` (and other source formats) inside the desktop UI depends on the
+stack. It is folded into the architect's stack decision and `packaging-modelli-desktop`, not a
+separate spike.

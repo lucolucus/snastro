@@ -1,0 +1,58 @@
+# snastro — never commit samples, user projects, model weights, native caches, DBs, audio, secrets
+# (profile boundary rule + ADR 0006/0008/0009)
+
+# real recordings (third-party voices)
+sample/
+
+# user projects (self-contained folders, ADR 0010)
+*.snastro/
+
+# model weights & native libs caches (ADR 0004/0008)
+.modelli/
+modelli-cache/
+native-cache/
+**/native/
+*.onnx
+*.onnx.data
+*.dylib
+*.so
+*.dll
+*.jnilib
+
+# build
+build/
+.gradle/
+.kotlin/
+out/
+*.class
+local.properties
+
+# databases — EXCEPTION: SQLDelight schema snapshots (schema only, no data) that
+# verifySqlDelightMigration needs (ADR 0006, scoped profile exception)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+!persistenza/src/main/sqldelight/databases/*.db
+
+# audio
+*.m4a
+*.wav
+*.mp3
+*.aac
+*.flac
+*.ogg
+*.opus
+*.webm
+*.mp4
+
+# secrets
+.env
+.env.*
+
+# IDE / OS
+.idea/
+*.iml
+.DS_Store
+.claude/settings.local.json

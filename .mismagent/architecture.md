@@ -1,0 +1,96 @@
+# snastro — Architecture (project definition file)
+
+> Written by the architect (model movement, foundational dispatch, 2026-09-23) after the user's
+> deliberation. Change it only through a new deliberation + an ADR (`supersedes:`).
+> The wave-0 scaffold derives the skeleton from this file; the gate's dependency lint
+> (`verificaDipendenzeModuli` + Konsist in `:architettura-test`) is its executable projection.
+> Rationale: `decisions/0001`–`0012`. Code-writing rules: `code-rules.md`.
+
+## Style
+**Hexagonal (ports & adapters) modular monolith, one Gradle module set per bounded context**
+([ADR 0002](decisions/0002-esagonale-modulo-per-contesto.md)). Kotlin/JVM, Compose Multiplatform
+Desktop, single side `app` ([ADR 0001](decisions/0001-stack-kotlin-compose-desktop.md)). Every
+context boundary is **in-process**: a consumer-owned port + an in-process consumer-driven contract
+test. No OpenAPI, no IPC.
+
+## Module map
+Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Kotlin sources in
+`<module>/src/main/kotlin/`, tests in `<module>/src/test/kotlin/`. Group/package root `snastro`.
+
+| Gradle module | Package | Contains |
+|---|---|---|
+| `:kernel` | `snastro.kernel` | shared kernel: ids (`@JvmInline value class`: `ProgettoId`, `RegistrazioneId`, `VoceId`, `SegmentoId`, `ParlanteId`), `VoceRef`, `IntervalloMs`, `Esito`, `ErroreDominio` base, `EventoDominio`, `UnitaDiLavoro`, `DispatcherEventi` |
+| `:progetto:dominio` | `snastro.progetto.dominio` | `Progetto`, `Registrazione` aggregates, VOs, events |
+| `:progetto:applicazione` | `snastro.progetto.applicazione` | commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`), queries/read-models, repository ports, `SondaAudio` port, public query API (`CatalogoRegistrazioni`) |
+| `:progetto:adattatori` | `snastro.progetto.adattatori` | SQLDelight repositories, file copy of sources, `SondaAudio` adapter (→ `:audio`) |
+| `:trascrizione:dominio` | `snastro.trascrizione.dominio` | `Elaborazione`, `Trascritto` (`Voce`, `Segmento`, `Revisione` methods), events |
+| `:trascrizione:applicazione` | `snastro.trascrizione.applicazione` | commands (`AvviaElaborazione`, `UnisciVoci`, `DividiVoce`, `RiassegnaSegmento`), read-models, ports (repository; `LettoreRegistrazione` → Progetto; ML: `DecodificatoreAudio`, `Diarizzatore`, `RiconoscitoreParlato`, `Vad`, `Allineatore`, `SegnalatoreFase`), public query API (`VociDelTrascritto`) |
+| `:trascrizione:adattatori` | `snastro.trascrizione.adattatori` | repositories, port adapters (→ Progetto API, → `:audio`, → `:ml-sherpa`), pure `Allineatore` |
+| `:parlanti:dominio` | `snastro.parlanti.dominio` | `Parlante` (+ `ImprontaVocale`), `Attribuzione`, events |
+| `:parlanti:applicazione` | `snastro.parlanti.applicazione` | commands (`ConfermaAttribuzione`, `SaltaVoce`, `RinominaParlante`, `PromuoviParlante`, `EliminaParlante`), revisione-policy, read-models (`Proposta`, `EstrattoAudio`, `PropostaUnione`, `ParlantiDelProgetto`, `ParlantiAttivi`), ports (repository; `LettoreVoci` → Trascrizione; `LettoreRegistrazione` → Progetto; `EstrattoreImpronta`, `ConfrontoImpronte`), public query API (`NomiDelleVoci`) |
+| `:parlanti:adattatori` | `snastro.parlanti.adattatori` | repositories, port adapters (→ Trascrizione / Progetto API, → `:ml-sherpa`), pure `ConfrontoImpronte` |
+| `:documento:applicazione` | `snastro.documento.applicazione` | `Documento` projection (pure: inputs → markdown string), `Rigenerazione` policy, ports (`LettoreTrascritto`, `LettoreNomi`, `ScrittoreDocumento`) |
+| `:documento:adattatori` | `snastro.documento.adattatori` | port adapters (→ Trascrizione / Parlanti API), atomic `.md` writer |
+| `:persistenza` | `snastro.persistenza` | SQLDelight schema `.sq`, migrations `.sqm`, schema snapshots, driver factory (WAL, FK, `secure_delete`), `UnitaDiLavoro` impl |
+| `:audio` | `snastro.audio` | bytedeco FFmpeg `sonda`/`decodifica` → derived WAV; javax.sound player `RiproduttoreWav` (adapted to `:ui`'s `LettoreAudio` by `:avvio`) |
+| `:ml-sherpa` | `snastro.ml` | native-lib loading, sherpa session config, `AutoCloseable` wrappers, diarization/ASR/VAD/embedding engines |
+| `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |
+| `:ui` | `snastro.ui` | Compose screens S1–S4 + shared `lettore-audio`: presenters (state holders, unit-tested) + thin composables; declares `LettoreAudio` |
+| `:avvio` | `snastro.avvio` | `main()`, composition root, adapter selection (config), serial `Elaborazione` queue + pipeline dispatcher, startup policies, `--smoke` mode |
+| `:architettura-test` | `snastro.architettura` | Konsist rules (test-only module) |
+
+## Allowed dependency edges (project → project) — the dependency lint's source
+Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
+
+| From | May depend on |
+|---|---|
+| `:kernel` | — |
+| `:<ctx>:dominio` | `:kernel` |
+| `:<ctx>:applicazione` | `:<ctx>:dominio`, `:kernel` |
+| `:progetto:adattatori` | `:progetto:applicazione`, `:progetto:dominio`, `:kernel`, `:persistenza`, `:audio` |
+| `:trascrizione:adattatori` | `:trascrizione:applicazione`, `:trascrizione:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:audio`, `:ml-sherpa` |
+| `:parlanti:adattatori` | `:parlanti:applicazione`, `:parlanti:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:audio`, `:ml-sherpa` |
+| `:documento:applicazione` | `:kernel` |
+| `:documento:adattatori` | `:documento:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione` |
+| `:persistenza` | `:kernel` |
+| `:audio` | `:kernel` |
+| `:ml-sherpa` | `:kernel`, `:modelli` |
+| `:modelli` | `:kernel` |
+| `:ui` | `:kernel`, every `:<ctx>:applicazione` |
+| `:avvio` | every module (composition root) |
+| `:architettura-test` | (test) every module |
+
+Direction summary: `adattatori → applicazione → dominio → kernel`; cross-context only
+`consumer:adattatori → supplier:applicazione`; `Progetto` is upstream of all; `Trascrizione` is
+upstream of `Parlanti` and `Documento`; `Parlanti` is upstream of `Documento`. `ui` sees only
+`applicazione`. Technical modules (`persistenza`, `audio`, `ml-sherpa`, `modelli`) are reached only
+from adapters (and `avvio`).
+
+## Boundaries (feature `trascrizione-con-parlanti`)
+Detailed in `features/trascrizione-con-parlanti/architetture/architecture-overview.md` (ports,
+Published Language, authorship, contract tests).
+
+## Pipeline and progress
+`AvviaElaborazione` (serial queue, single-thread pipeline dispatcher, ADR 0004) runs the stages in
+order, reporting each through `SegnalatoreFase`:
+`decodifica` (`:audio`) → `diarizzazione` → `trascrizione` → `allineamento`, then commits
+`completata` + `Trascritto` in one transaction (ADR 0012).
+**`FaseElaborazione` = `decodifica | diarizzazione | trascrizione | allineamento`** (display:
+"preparazione audio", "separazione voci", "trascrizione", "allineamento") is **progress information
+only**, not guarded state ([INV-3] unchanged). **Pending:** the context-map amendment adding
+`FaseElaborazione` to the `Trascrizione` ubiquitous language is owed by the analyst (proposed in
+`features/trascrizione-con-parlanti/UI/ux-proposal.md`); until then this file and ADR 0004 are its
+reference.
+
+## Transactions and events
+One transaction per command; invariant-carrying policies in-transaction; `Documento`
+`Rigenerazione` after commit, idempotent, retried ([ADR 0012](decisions/0012-unita-di-lavoro-ed-eventi.md)).
+Cross-context events flow `supplier:applicazione` (published events, Published Language) →
+`consumer:adattatori` (subscriber, via the kernel `DispatcherEventi`) → `consumer:applicazione`
+(policy). This keeps the edges table above intact (no consumer depends on a supplier's `dominio`).
+
+## Enforcement channels (all inside `./gradlew check`)
+1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).
+2. Konsist in `:architettura-test` (imports/packages/naming — `code-rules.md`).
+3. detekt (style, error handling, `!!`) with `allWarningsAsErrors`.
+4. ADR `enforced_by` rules (run by `mismagent-verifier`).
