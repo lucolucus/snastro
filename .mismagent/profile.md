@@ -26,10 +26,7 @@ code_rules: .mismagent/code-rules.md
 sides:
   app:                          # single side, one Kotlin codebase (ADR 0001), fully local processing
     repo: .
-    # dev-architecture (style memory) — NOT authored yet: a separate targeted style dispatch will
-    # write .mismagent/architetture/dev-architecture-app.md (deliberated with the user) BEFORE the
-    # first domain wave and switch this binding to that path.
-    dev_architecture: none
+    dev_architecture: .mismagent/architetture/dev-architecture-app.md   # prescriptive style memory (authored 2026-09-23, before the first domain wave); harvest-dev-architecture reconciles it after the first green wave
     gate: "./gradlew check"     # compile (allWarningsAsErrors) + detekt + unit/contract/Konsist tests + Compose UI tests (:ui:renderCheck) + verificaDipendenzeModuli + verifySqlDelightMigration; headless, no model weights, no native ML libs
     toolchain: "Kotlin 2.x/JVM on JetBrains Runtime 21 (Gradle toolchain, foojay resolver); Gradle wrapper + Kotlin DSL + version catalog; Compose Multiplatform Desktop; SQLDelight; Konsist; detekt. Opt-in (outside the gate): ./gradlew modelliTest (real ML adapters, @Tag(\"modelli\"), downloads natives+models) and ./gradlew benchmarkElaborazione -Pcampione=<60-min sample> (NFR, ADR 0011)"
     ui_render_check: "./gradlew :ui:renderCheck"   # Compose Desktop headless (runComposeUiTest/ImageComposeScene): every screen S1–S4 + lettore-audio from fixture read-models at 1280x800 and 1024x640, all states (empty/loading/error/data); PNGs to ui/build/render-check/; semantic asserts on key nodes + no clipped text. Part of the gate.

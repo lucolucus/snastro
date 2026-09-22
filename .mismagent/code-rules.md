@@ -5,6 +5,8 @@
 > only through a new deliberation — each change cites its ADR. Every rule carries its
 > **enforcement channel**; a rule with no channel is not written here.
 > Style and module map: `architecture.md`. Stack: Kotlin/JVM, Compose Desktop (ADR 0001).
+> Codebase conventions (style memory): `architetture/dev-architecture-app.md`.
+> **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9.
 
 Channels:
 - **gate lint** — runs inside `./gradlew check` (the worker's own loop, verifier step 2, CI). Tools and
@@ -77,6 +79,27 @@ edge check sees every edge. → gate lint: `verificaDipendenzeModuli`.
 snapshot; a committed `.sqm` is never edited. → gate lint: `verifySqlDelightMigration`; the
 "never edited" half is a **review criterion** (diff touches an existing `.sqm` → finding).
 
+**CR-14 · No wall clock in the inner layers.** `*:dominio` and `*:applicazione` never call
+`Instant.now()`, `LocalDate.now()`, `LocalDateTime.now()`, `ZonedDateTime.now()`,
+`Clock.systemDefaultZone()`, `Clock.systemUTC()`, `System.currentTimeMillis()`, `System.nanoTime()`;
+services receive an injected `java.time.Clock`. → gate lint: Konsist.
+*(delta 2026-09-23, dev-architecture `#pacchetti`)*
+
+**CR-15 · Reconstitution only from persistence adapters.** `@OptIn(RicostituzioneDaPersistenza::class)`
+(and any call of an aggregate's `ricostituisci`) appears only in `..adattatori.persistenza..`; the
+annotation is `@RequiresOptIn(level = ERROR)`, so the compiler blocks unopted callers.
+→ gate lint: compiler (opt-in) + Konsist (opt-in location). *(delta 2026-09-23, `#aggregato`)*
+
+**CR-16 · Command services expose only `esegui`.** Every class in `..applicazione.comandi..` named
+`*Servizio` has exactly one public function, `esegui`, returning `Esito`, and it is not `suspend`.
+→ gate lint: Konsist. *(delta 2026-09-23, `#servizio`)*
+
+**CR-17 · MockK scope.** No `io.mockk` import in any `src/testFixtures` source set, nor in any
+`*Contratto` class or its subclasses; no `mockkStatic`/`mockkObject` anywhere. → gate lint: Konsist
+(test source sets). The judgment half — MockK only for interaction checks where a recording fake
+would be the only alternative, never stubbing a port that has a fake — is a **review criterion**
+(RC-9). Build-level: `mockk` is declared `testImplementation` only. *(delta 2026-09-23, `#test`)*
+
 ## Discursive rules (review criteria)
 
 **RC-1 · The root owns the rule.** A command goes through the aggregate that owns the invariant;
@@ -106,6 +129,11 @@ cache, log of embedding values; every removal path deletes rows in the command's
 **RC-8 · Offline inference.** No inference/adapter path triggers a download or a network call
 (ADR 0008) — beyond CR-3's mechanical part, review that `:modelli` download is invoked only from the
 onboarding/startup flow.
+
+**RC-9 · Fakes first.** Every port has a hand-written `<Porta>Finta` passing its `Contratto`; a
+test stubbing such a port with MockK is a finding. MockK is acceptable only to verify an interaction
+(call count/order/absence) that a recording fake would otherwise be written just for (CR-17,
+dev-architecture `#test`).
 
 ## Structural (owned by the method — cited, not restated)
 - **SRP / granularity** — one block = one reason to change: the tactical-model → block map
