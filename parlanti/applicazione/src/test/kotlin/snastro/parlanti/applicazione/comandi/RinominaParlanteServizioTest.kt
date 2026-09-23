@@ -75,7 +75,7 @@ class RinominaParlanteServizioTest {
     @Test
     fun `un parlanteId sconosciuto e ParlanteNonTrovato`() {
         val errore = servizio.esegui(RinominaParlante(ParlanteId("id-9"), "Luca"))
-            .erroreAtteso<ErroreApplicazioneParlanti.ParlanteNonTrovato>()
+            .erroreAtteso<ErroreParlanti.ParlanteNonTrovato>()
 
         assertEquals(ParlanteId("id-9"), errore.id)
         assertTrue(eventi.pubblicati.isEmpty())

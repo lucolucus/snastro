@@ -104,7 +104,7 @@ class PromuoviParlanteServizioTest {
     @Test
     fun `un parlanteId sconosciuto e ParlanteNonTrovato`() {
         val errore = servizio.esegui(PromuoviParlante(ParlanteId("id-9"), nome = null))
-            .erroreAtteso<ErroreApplicazioneParlanti.ParlanteNonTrovato>()
+            .erroreAtteso<ErroreParlanti.ParlanteNonTrovato>()
 
         assertEquals(ParlanteId("id-9"), errore.id)
         assertTrue(eventi.pubblicati.isEmpty())

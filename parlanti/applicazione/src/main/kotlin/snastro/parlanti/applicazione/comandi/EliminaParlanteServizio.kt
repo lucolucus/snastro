@@ -4,8 +4,8 @@ import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
-import snastro.parlanti.applicazione.comandi.ErroreApplicazioneParlanti.ParlanteNonTrovato
 import snastro.parlanti.applicazione.porte.ParlanteRepository
+import snastro.parlanti.dominio.ErroreParlanti.ParlanteNonTrovato
 import snastro.parlanti.dominio.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlanteEliminato as ParlanteEliminatoPubblicato
 
