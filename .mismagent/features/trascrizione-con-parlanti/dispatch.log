@@ -373,3 +373,7 @@
 2026-09-23T12:18:38Z	trascritto-view	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (9126d34; test-only; both mutants now killed)
 2026-09-23T12:18:38Z	trascritto-view	verifier	dispatch	cycle=1	tier=deep	model=opus	(test-only cycle: verifier only, code-review already APPROVE on unchanged production code)
 2026-09-23T12:18:38Z	fix-batch-6	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: HIGH elenco tolerant, per-line encoding, + AC-328 cross-process lock with JVM-wide per-path lock and sweep inside the lock)
+2026-09-23T12:21:44Z	riallinea-impronte	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW (9b93bc9; 18 tests, 9 mutants killed; worker decisions on AC-295/299/300/301 to be judged by review)
+2026-09-23T12:21:44Z	riallinea-impronte	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:21:44Z	riallinea-impronte	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:21:44Z	registrazioni-del-progetto	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: 4-field view per pin, id tie-break, insertion-order-independent ordering tests)
