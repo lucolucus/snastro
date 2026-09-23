@@ -85,6 +85,13 @@ class EventiParlantiTest {
     }
 
     @Test
+    fun `AC-14 ImpronteRiallineate ha solo registrazioneId`() {
+        val evento: EventoPubblicato = ImpronteRiallineate(registrazioneId = RegistrazioneId("id-9"))
+        assertEquals(ImpronteRiallineate(RegistrazioneId("id-9")), evento)
+        assertEquals(listOf("registrazioneId: RegistrazioneId"), formaDi("ImpronteRiallineate"))
+    }
+
+    @Test
     fun `TipoParlanteVista ha esattamente RICORRENTE e OCCASIONALE`() {
         assertEquals(listOf("RICORRENTE", "OCCASIONALE"), TipoParlanteVista.entries.map { it.name })
     }
@@ -98,6 +105,7 @@ class EventiParlantiTest {
                 "ParlanteRinominato",
                 "ParlantePromosso",
                 "ParlanteEliminato",
+                "ImpronteRiallineate",
             ),
             eventi.map { it.name }.toSet(),
         )
