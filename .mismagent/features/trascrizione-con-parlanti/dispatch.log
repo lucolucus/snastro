@@ -384,3 +384,6 @@
 2026-09-23T12:26:39Z	fix-batch-8	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:26:39Z	fix-batch-8	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:26:39Z	modelli-provisioning	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: review HIGH redirects/.part recovery/timeouts + amended spec AC-129/130/133/330-339 archives, LOCALAPPDATA, modelloId; branch synced first)
+2026-09-23T12:27:25Z	registrazioni-del-progetto	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (4a715f4; 4-field view, id tie-break, order-independent tests)
+2026-09-23T12:27:25Z	registrazioni-del-progetto	verifier	dispatch	cycle=1	tier=deep	model=opus	(verifier only: cycle-0 review APPROVE, rework addresses its findings)
+2026-09-23T12:27:25Z	documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	(un-parked after user decision; new series cycle=0 on existing branch: AC-320/321 sanitized nomeFile + reversed tie-break test)
