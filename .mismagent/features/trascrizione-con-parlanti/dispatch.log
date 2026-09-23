@@ -90,3 +90,16 @@
 2026-09-23T08:50:51Z	porte-documento	verifier	result	cycle=1	tier=deep	model=opus	PASS
 2026-09-23T08:50:51Z	(documento)	decision	result	-	-	-	USER DECISION: Documento sanitizes titolo when minting nomeFile (invalid chars -> _, trim length, suffix after sanitizing, uniqueness case-insensitive + Unicode-normalized); port guard stays strict -> build-manifest for documento
 2026-09-23T08:50:51Z	porte-documento	code-review	result	cycle=1	tier=deep	model=opus	APPROVE after user Decision
+2026-09-23T08:51:10Z	porte-progetto	verifier	result	cycle=0	tier=deep	model=opus	PASS (ADR gap: ErroreAudioProgetto 2nd hierarchy; ADR 0005 grep false-positive on architettura-test)
+2026-09-23T08:51:10Z	porte-parlanti	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T08:51:22Z	porte-progetto	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED (Decisions D1 error hierarchy per module, D2 aggiorna keyed by progettoId vs percorso; Patches 3,4,7,8,10,14)
+2026-09-23T08:55:09Z	trascritto	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-23T08:55:09Z	trascritto	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (carry: INV-11 wording in model/pin needs lone-Segmento exception; AC-30 must cover ricostituisci guards; MessaggiErrore must branch on destinazione==null)
+2026-09-23T08:55:09Z	porte-parlanti	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (HIGH predisponi lacks VoceRefs for FK parents; MED biometric row count, rename-clash nothing-stored, cosine zero/NaN)
+2026-09-23T08:55:09Z	porte-parlanti	worker	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:55:09Z	(adr-0003)	decision	result	-	-	-	USER DECISION: one error hierarchy per context PER MODULE: Errore<Ctx> in dominio (domain rules), ErroreApplicazione<Ctx> in applicazione (application/technical); both pinned for ui MessaggiErrore -> architect ADR 0003 amendment
+2026-09-23T08:55:09Z	(registro-progetti)	decision	result	-	-	-	USER DECISION: RegistroProgetti.aggiorna keyed by percorso (pin change) -> build-manifest
+2026-09-23T08:55:09Z	porte-progetto	worker	dispatch	cycle=1	tier=deep	model=opus	(user Decisions D1 rename ErroreApplicazioneProgetto, D2 aggiorna(percorso))
+2026-09-23T08:55:09Z	porta-registrazione-trascrizione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:55:09Z	porta-registrazione-trascrizione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:55:09Z	porta-registrazione-trascrizione	code-review	dispatch	cycle=0	tier=deep	model=opus
