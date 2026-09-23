@@ -520,3 +520,4 @@
 2026-09-23T20:30:55Z	spike-r1-asr-diarizzazione	user	result	-	-	-	USER: Parakeet full transcript best; Via Roquel = 4 speakers (diar 10); background music transcribed/clustered; style later
 2026-09-23T20:31:31Z	fix-batch-12	worker	dispatch	cycle=0	tier=standard	model=sonnet	R0 pre-release cleanup (tasks/app/todo/r0-pulizia-1.md)
 2026-09-23T20:47:12Z	spike-r1-asr-diarizzazione	experiment	result	-	standard	sonnet	num_clusters=4 → 4 speakers (only reliable fix); music tagger catches blips only (156 s); VAD worse; v2 transcript in scratch
+2026-09-23T20:53:23Z	(spikes)	architect	result	-	deep	opus	ADR 0013 (Parakeet) + 0014 (diarizer, optional Numero di persone) close scelta-asr-code-switching + scelta-diarizzatore [user]; open: where count is entered when import auto-queues

@@ -4,6 +4,9 @@ type: spike
 side: app
 repo: .
 depends_on: []
+status: answered
+closed_by: 0013-asr-parakeet
+closed: 2026-09-23 [user]
 ---
 # Spike / Which ASR for IT+EN code-switching: Parakeet v3 int8 vs Whisper large-v3-turbo (ONNX, sherpa-onnx)?
 
@@ -31,3 +34,12 @@ goes back to the user.
 ## Unblocks
 (block ids pinned by build-manifest) Trascrizione: `RiconoscitoreParlato` adapter in `:ml-sherpa`
 behind `avvia-elaborazione`; spike `allineamento-parole-voci` (strategy B needs token timestamps).
+
+## Closure (2026-09-23) [user]
+Answered by ADR [0013-asr-parakeet](../../../../../decisions/0013-asr-parakeet.md). Parakeet TDT 0.6B v3 int8 chosen (sherpa-onnx `OfflineRecognizer`, `nemo_transducer`, greedy, CPU). Qwen3-ASR 0.6B int8 measured as challenger and rejected (~4× slower, foreign scripts on short turns, lowercase). Whisper large-v3-turbo NOT measured: not needed, Parakeet meets quality (user judgement) and budget (≈ 462 s/h under load ≤ 600 s, ADR 0011).
+Closed on **user acceptance of the evidence**
+(`features/trascrizione-con-parlanti/research/misure-r1-asr-diarizzazione.md`), NOT on the full
+criterion. Residual gaps: 2 real recordings instead of ≥ 3 (both Italian with English jargon, no real
+English turns); no WER against reference labels (quality judged by the user); timings under heavy
+load. Re-measure when a 3rd recording (ideally with English turns) is available — see the ADR's
+re-measure trigger.

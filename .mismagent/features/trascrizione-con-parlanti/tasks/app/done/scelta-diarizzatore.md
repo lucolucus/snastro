@@ -4,6 +4,9 @@ type: spike
 side: app
 repo: .
 depends_on: []
+status: answered
+closed_by: 0014-diarizzazione-sherpa-numero-persone
+closed: 2026-09-23 [user]
 ---
 # Spike / Which sherpa-onnx diarization configuration produces the Voci?
 
@@ -36,3 +39,12 @@ that adds it to the `:modelli` catalogue (URL + SHA-256 + licence).
 (block ids pinned by build-manifest) Trascrizione: `Diarizzatore` adapter in `:ml-sherpa` behind
 `avvia-elaborazione`; spikes `allineamento-parole-voci`, `impronta-vocale-affidabilita` (embedding
 reuse).
+
+## Closure (2026-09-23) [user]
+Answered by ADR [0014-diarizzazione-sherpa-numero-persone](../../../../../decisions/0014-diarizzazione-sherpa-numero-persone.md). pyannote segmentation-3.0 int8 + WeSpeaker ResNet34-LM, FastClustering threshold 0.4, windowShiftRatio 0.5; NEW optional "Numero di persone" → `num_clusters` (auto threshold clustering otherwise). Music filtering (CED) and stricter VAD rejected.
+Closed on **user acceptance of the evidence**
+(`features/trascrizione-con-parlanti/research/misure-r1-asr-diarizzazione.md`), NOT on the full
+criterion. Residual gaps: 2 real recordings instead of ≥ 3 (both Italian with English jargon, no real
+English turns); no DER against reference labels (quality judged by the user); timings under heavy
+load. Re-measure when a 3rd recording (ideally with English turns) is available — see the ADR's
+re-measure trigger.
