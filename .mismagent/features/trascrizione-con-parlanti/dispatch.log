@@ -278,3 +278,8 @@
 2026-09-23T11:27:56Z	revisione-policy	verifier	dispatch	cycle=2	tier=deep	model=opus
 2026-09-23T11:27:56Z	revisione-policy	code-review	dispatch	cycle=2	tier=deep	model=opus
 2026-09-23T11:27:56Z	audio-ffmpeg	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:28:28Z	conferma-attribuzione	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH; all cycle-0 fixed; LOW: FK fake only insert side, P->Q-new path not via FK fake; carry to persistenza-schema: print uniqueness per (parlante,registrazione,voce) — do not tighten to (registrazione,voce) without reordering; amendment (b) will force rewrite of F3/AC-86 tests)
+2026-09-23T11:28:28Z	api-trascritto	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (98ed0a0; no out-of-block touches)
+2026-09-23T11:28:28Z	api-trascritto	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:28:28Z	api-trascritto	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:28:28Z	modelli-provisioning	worker	dispatch	cycle=0	tier=standard	model=sonnet
