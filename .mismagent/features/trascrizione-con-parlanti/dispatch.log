@@ -274,3 +274,7 @@
 2026-09-23T11:27:11Z	esegui-elaborazione	verifier	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T11:27:11Z	esegui-elaborazione	code-review	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T11:27:11Z	registro-progetti-file	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:27:56Z	revisione-policy	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW (6d8e994; RC-9 throwing fake, dead stubs dropped, KDoc)
+2026-09-23T11:27:56Z	revisione-policy	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-23T11:27:56Z	revisione-policy	code-review	dispatch	cycle=2	tier=deep	model=opus
+2026-09-23T11:27:56Z	audio-ffmpeg	worker	dispatch	cycle=0	tier=standard	model=sonnet
