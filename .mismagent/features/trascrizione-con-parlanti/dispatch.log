@@ -511,3 +511,8 @@
 2026-09-23T18:16:19Z	avvio-r0	composer	pre-release	cycle=2	-	-	LOW chiudi joins player up to 2s on UI thread
 2026-09-23T19:40:27Z	(r0-feedback)	decision	result	-	-	-	USER FEEDBACK after first R0 run: rename Registrazione + date from file/audio creation → fix-batch-11 (AC-360..366, tasks/app/todo/r0-feedback-1.md)
 2026-09-23T19:40:27Z	fix-batch-11	worker	dispatch	cycle=0	tier=deep	model=opus	aggregate touched
+2026-09-23T19:55:15Z	fix-batch-11	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW 28e3fa4
+2026-09-23T19:55:15Z	fix-batch-11	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-23T19:58:14Z	fix-batch-11	verifier	result	cycle=0	tier=deep	model=opus	PASS (no HIGH; 29 modelli tests green)
+2026-09-23T19:58:14Z	fix-batch-11	composer	merge	cycle=0	-	-	MERGED abe8fee
+2026-09-23T19:58:14Z	fix-batch-11	composer	pre-release	cycle=0	-	-	MED rejected titolo text stays in the field after a refused rename (reset on error / Esc); LOW Enter+blur may repeat error; LOW 1970 plausibility floor; LOW 1.sqm comment "only mutable column" outdated (fix before freeze)
