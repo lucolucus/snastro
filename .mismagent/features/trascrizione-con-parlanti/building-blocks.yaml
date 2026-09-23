@@ -719,11 +719,13 @@ blocks:
     commands:
       - "ApplicaRevisione"
     invariants:
-      - "INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins"
+      - "INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins; EXCEPTION (amended 2026-09-23, user decision): in unire(A,B) with B attributed to P and A unattributed, A INHERITS the Attribuzione to P (B's Attribuzione and print removed, P's print for A re-derived from A's current Segmenti — none if P is eliminato), so P is not left without Attribuzioni and INV-25 does not fire"
       - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept"
     tests_nl:
       - "INV-21 unire(A, B) con A e B attribuiti a Parlanti diversi → vince A; l'Attribuzione di B e l'impronta derivata da B sono cancellate"
       - "INV-21 unire con A attribuita e B no → l'impronta di A è ri-derivata dai Segmenti correnti"
+      - "INV-21 unire(A, B) con B attribuita a P e A non attribuita → A eredita l'Attribuzione a P (Attribuzione(A) = P); l'Attribuzione di B e l'impronta di P per B sono cancellate; l'impronta di P per A è ri-derivata dai Segmenti correnti di A; P occasionale NON cessa (INV-25 non scatta); se P è eliminato A eredita comunque l'Attribuzione ma nessuna impronta viene creata"
+      - "INV-21 unire(A, B) con A e B attribuiti allo stesso Parlante P → A mantiene l'Attribuzione a P con l'impronta ri-derivata; l'Attribuzione e l'impronta di B sono cancellate; P non cessa"
       - "INV-21 dividere(A, S) → A' nasce senza Attribuzione; A la mantiene con l'impronta ri-derivata"
       - "INV-21 riassegnare → la sorgente svuotata perde Attribuzione e impronta; una destinazione nuova nasce senza Attribuzione"
       - "INV-25 un occasionale rimasto senza Attribuzioni cessa; un ricorrente resta"
@@ -1577,7 +1579,7 @@ blocks:
       - "AC-192 Vuoto: 'Nessun progetto. Crea il primo'"
       - "AC-193 Caricamento dell'elenco mostrato come indicatore"
       - "AC-194 Crea con nome vuoto → messaggio inline"
-      - "AC-195 Creazione fallita (cartella esistente) → errore inline"
+      - "AC-195 Creazione fallita (SessioneProgetto.crea restituisce un Esito.Errore diverso da NomeProgettoVuoto — nel presenter test un fake che restituisce es. CartellaNonValida) → errore inline e nessun progetto aperto; una cartella già esistente NON è un errore (AC-264: nome libero ' (2)', ' (3)'…)"
       - "AC-196 Aprire un progetto già aperto da un'altra istanza → 'progetto già aperto'"
       - "AC-197 'Apri progetto…' con una cartella non valida → errore inline"
       - "AC-198 La lista mostra nome, numero di registrazioni e ultima attività"
@@ -1813,7 +1815,7 @@ blocks:
       - "AC-240 Alla chiusura il registro è aggiornato con numRegistrazioni e ultimaAttivita"
       - "AC-241 Il LettoreAudio ricostruisce un WAV derivato mancante dalla sorgente; senza sorgente riporta non disponibile"
       - "AC-242 Un comando completato produce un Cambiamento su AggiornamentiVista per la sua Registrazione"
-    notes: "USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (the variant is still pinned on tec-shell-ui; re-pin pending). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime."
+    notes: "USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (variant removed from tec-shell-ui's pinned ErroreSessione, re-pinned 2026-09-23, user decision). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime."
     sources: "architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding, user decision 2026-09-23 (folder naming)"
   - id: "ml-sherpa-motore"
     type: "adapter"
@@ -2738,7 +2740,7 @@ boundaries:
     pinned_types:
       SessioneProgetto: "interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }"
       ProgettoAperto: "data class(progettoId: ProgettoId, nome: String, percorso: String)"
-      ErroreSessione: "sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }"
+      ErroreSessione: "sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente } — no CartellaGiaEsistente: crea derives a free folder name (AC-264), re-pinned 2026-09-23 (user decision)"
       ApriEsterno: "interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }"
       AggiornamentiVista: "interface { val cambiamenti: Flow<Cambiamento> }"
       Cambiamento: "data class(registrazioneId: RegistrazioneId?) — null = everything may have changed"

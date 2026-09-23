@@ -27,7 +27,7 @@ related_adrs:
 commands:
   - "ApplicaRevisione"
 invariants:
-  - "INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins"
+  - "INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins; EXCEPTION (amended 2026-09-23, user decision): in unire(A,B) with B attributed to P and A unattributed, A INHERITS the Attribuzione to P (B's Attribuzione and print removed, P's print for A re-derived from A's current Segmenti — none if P is eliminato), so P is not left without Attribuzioni and INV-25 does not fire"
   - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept"
 ---
 # revisione-policy — Policy di Revisione dei Parlanti
@@ -36,12 +36,14 @@ invariants:
 ApplicaRevisione(evento) reacts to VociUnite / VoceDivisa / SegmentoRiassegnato inside the Revisione's transaction (called by abbonato-revisione-parlanti).
 
 ### Invariants owned here (one test each, name starts with the tag)
-- INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins
+- INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins; EXCEPTION (amended 2026-09-23, user decision): in unire(A,B) with B attributed to P and A unattributed, A INHERITS the Attribuzione to P (B's Attribuzione and print removed, P's print for A re-derived from A's current Segmenti — none if P is eliminato), so P is not left without Attribuzioni and INV-25 does not fire
 - INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept
 
 ## Tasks
 - INV-21 unire(A, B) con A e B attribuiti a Parlanti diversi → vince A; l'Attribuzione di B e l'impronta derivata da B sono cancellate
 - INV-21 unire con A attribuita e B no → l'impronta di A è ri-derivata dai Segmenti correnti
+- INV-21 unire(A, B) con B attribuita a P e A non attribuita → A eredita l'Attribuzione a P (Attribuzione(A) = P); l'Attribuzione di B e l'impronta di P per B sono cancellate; l'impronta di P per A è ri-derivata dai Segmenti correnti di A; P occasionale NON cessa (INV-25 non scatta); se P è eliminato A eredita comunque l'Attribuzione ma nessuna impronta viene creata
+- INV-21 unire(A, B) con A e B attribuiti allo stesso Parlante P → A mantiene l'Attribuzione a P con l'impronta ri-derivata; l'Attribuzione e l'impronta di B sono cancellate; P non cessa
 - INV-21 dividere(A, S) → A' nasce senza Attribuzione; A la mantiene con l'impronta ri-derivata
 - INV-21 riassegnare → la sorgente svuotata perde Attribuzione e impronta; una destinazione nuova nasce senza Attribuzione
 - INV-25 un occasionale rimasto senza Attribuzioni cessa; un ricorrente resta
