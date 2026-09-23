@@ -10,10 +10,13 @@ dependencies {
     implementation(project(":kernel"))
     implementation(libs.kotlinx.coroutines.core)
 
-    // ErroreApplicazioneProgetto (MessaggiErrore, AC-180) — package `..applicazione.porte`, CR-1
-    // ("ui sees only kernel and *:applicazione"). ErroreProgetto/ErroreTrascrizione/ErroreParlanti
-    // live in `*:dominio` and are NOT reachable here yet (BOUNCED — see the worker's report).
+    // MessaggiErrore (AC-180): ErroreApplicazioneProgetto lives in `..applicazione.porte`; each
+    // context's dominio-owned Errore<Contesto> is reachable transitively (fix-batch-10, CR-1
+    // amendment) because `*:applicazione` exposes its own `*:dominio` as `api` — `:ui` never
+    // declares a direct `*:dominio` dependency (code-rules.md CR-1(b)).
     implementation(project(":progetto:applicazione"))
+    implementation(project(":trascrizione:applicazione"))
+    implementation(project(":parlanti:applicazione"))
 
     testImplementation(compose.desktop.uiTestJUnit4)
 
