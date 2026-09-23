@@ -124,3 +124,8 @@
 2026-09-23T09:04:50Z	porta-lettore-trascritto	verifier	result	cycle=0	tier=deep	model=opus	PASS
 2026-09-23T09:05:06Z	porta-lettore-trascritto	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED F1 re-run after fallita test + LOW F2 KDoc, F4 listed=>non-null -> follow-up batch; F3 covered by user nomeFile decision)
 2026-09-23T09:05:09Z	porta-lettore-nomi	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:06:11Z	porta-registrazione-parlanti	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW (composer brief wrongly said 2-field view; worker correctly followed the 6-field pin)
+2026-09-23T09:06:11Z	porta-registrazione-parlanti	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:06:11Z	porta-registrazione-parlanti	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:07:55Z	porta-registrazione-parlanti	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (LOW: 3 unused view fields -> manifest note; D2 ambient must use ModificaDataRegistrazione)
+2026-09-23T09:09:39Z	porta-registrazione-parlanti	verifier	result	cycle=0	tier=deep	model=opus	PASS
