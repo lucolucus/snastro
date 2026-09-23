@@ -448,3 +448,17 @@
 2026-09-23T14:26:40Z	ui-fondamenta	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (H1 error screen dead-end; M1 stuck Caricamento; M2 etichettaStato runtime error; M3 concurrent ops)
 2026-09-23T14:26:56Z	ui-fondamenta	verifier	result	cycle=0	tier=deep	model=opus	PASS (MED CR-1 reflection workaround)
 2026-09-23T14:26:56Z	ui-fondamenta	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework H1+M1+M2+M3+L1
+2026-09-23T14:39:05Z	ui-fondamenta	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-23T14:39:05Z	ui-fondamenta	verifier	dispatch	cycle=1	tier=deep	model=opus	verify + re-review of rework diff
+2026-09-23T14:41:42Z	ui-fondamenta	verifier	result	cycle=1	tier=deep	model=opus	PASS (H1 resolved; MED stuck-Caricamento guard → pre-release list; LOW collector/Ok race)
+2026-09-23T14:41:42Z	ui-fondamenta	composer	merge	cycle=1	-	-	MERGED 050925b
+2026-09-23T14:41:42Z	lettore-audio	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T14:41:42Z	schermata-progetti	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T14:42:09Z	ui-fondamenta	composer	pre-release	cycle=1	-	-	MED ShellPresenter guard can stick in Caricamento on CancellationException/Error (add finally restore); LOW collector-vs-Ok race (use sessione.corrente.value on Ok)
+2026-09-23T14:59:11Z	lettore-audio	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 74de645
+2026-09-23T14:59:11Z	lettore-audio	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + code-review combined
+2026-09-23T14:59:23Z	schermata-progetti	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 9922b9e
+2026-09-23T14:59:23Z	schermata-progetti	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + code-review combined
+2026-09-23T15:01:35Z	schermata-progetti	verifier	result	cycle=0	tier=deep	model=opus	PASS (no HIGH)
+2026-09-23T15:01:35Z	schermata-progetti	composer	merge	cycle=0	-	-	MERGED 5bd3af5
+2026-09-23T15:01:35Z	schermata-progetti	composer	pre-release	cycle=0	-	-	MED inCorso no finally (stuck on Error); MED initial elenco load uncaught -> stuck Caricamento; MED list stale after crea/chiudi (no ricarica) — MUST be handled by avvio-r0 wiring or cleanup; MED JFileChooser in composable w/o owner (move behind port, FileDialog); LOW AC-195 tautological assert, test naming, name field enabled while inCorso
