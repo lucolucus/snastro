@@ -388,3 +388,5 @@
 2026-09-23T12:27:25Z	registrazioni-del-progetto	verifier	dispatch	cycle=1	tier=deep	model=opus	(verifier only: cycle-0 review APPROVE, rework addresses its findings)
 2026-09-23T12:27:25Z	documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	(un-parked after user decision; new series cycle=0 on existing branch: AC-320/321 sanitized nomeFile + reversed tie-break test)
 2026-09-23T12:28:52Z	riallinea-impronte	verifier	result	cycle=0	tier=deep	model=opus	PASS (M1/M2/M9 killed; 5 judgement calls consistent; per-Voce isolation F1 -> fix-batch)
+2026-09-23T12:30:12Z	fix-batch-8	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; every decision re-checked in tx; MED patch-later F1: cheap refusals (Nome.di, NomeGiaInUso pre-check, ParlanteNonTrovato) only after extraction -> add phase-1 pre-checks; MED patch-later F2: race tests for non-Voce state changes between phases; LOW defer: <1s fallback via service, unused params, orphan Trascritto)
+2026-09-23T12:31:42Z	registrazioni-del-progetto	verifier	result	cycle=1	tier=deep	model=opus	PASS (both mutants killed; dedicated 4-field view)
