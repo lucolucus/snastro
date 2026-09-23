@@ -1,5 +1,6 @@
 package snastro.progetto.applicazione.comandi
 
+import org.junit.jupiter.api.Timeout
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
@@ -220,6 +221,7 @@ class AggiungiRegistrazioneServizioTest {
     }
 
     @Test
+    @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD) // a lost suffix never terminates
     fun `AC-324 un nome lungo e' troncato prima del suffisso e le due chiavi differiscono`() {
         val primi237 = "x".repeat(237)
         val esistente = primi237 + "y".repeat(13) // 250 byte

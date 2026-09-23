@@ -1,12 +1,18 @@
 package snastro.progetto.applicazione.comandi
 
+import org.junit.jupiter.api.Timeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
-/** Tests of [TitoloRegistrazione]: the private copy of `pulisci`, the key and the unique titolo (AC-322..324). */
+/**
+ * Tests of [TitoloRegistrazione]: the private copy of `pulisci`, the key and the unique titolo (AC-322..324).
+ * AC-324's "the search terminates" is a liveness property: a suffix lost to `pulisci` loops forever, so
+ * every test runs under a timeout on a separate thread (a busy loop ignores interruption).
+ */
+@Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD)
 class TitoloRegistrazioneTest {
 
     /**
