@@ -230,3 +230,16 @@ model loads.
 - Via Roquel had **4 real speakers**; the diarizer produced 10 clusters (8 with substantial speech) → over-count confirmed.
 - The recording has **background music**; the user reports it was picked up too — i.e. music passages are transcribed as speech and very likely split into extra "voices" (the short English fragments seen in the excerpt are consistent with sung lyrics).
 - Open for R1: music/non-speech rejection before ASR+diarization, and speaker-count control (known number of speakers, or merge of small/near clusters).
+
+## Follow-up: speaker count and music (2026-09-23, full Via Roquel, 4511 s, ≤6 threads)
+| variant | clusters | speech s per cluster | diar wall |
+|---|---|---|---|
+| baseline auto (th 0.4, wsr 0.5) | 10 | 974, 851, 433, 379, 315, 311, 37, 15, 6, 2 | — |
+| A: num_clusters=4 | 4 | 1874, 737, 367, 349 | 67 s |
+| B: music removed + auto | 12 | 1327 … 2 | 68 s |
+| B + merge <3 % into nearest | 5 | 1378, 771, 446, 337, 221 | — |
+| B: music removed + num_clusters=4 (v2 transcript) | 4 | 2118, 664, 323, 53 | 70 s + 6 s tagging |
+| C: Silero VAD 0.6 + auto | 14 | 973 … 3 | 66 s + 12 s |
+- Music tagger: sherpa-onnx CED-mini audio tagging; flagged 156 s (3.5 %), mostly sub-2 s blips inside speech turns — background music under talk is NOT separable this way; only one tiny phantom cluster was mostly music.
+- Auto clustering over-splits even without music; a known speaker count (num_clusters) is the only variant that gives 4. Stricter VAD makes it worse.
+- Candidate for the app: optional "numero di persone" at import (num_clusters), auto otherwise. Pending user listening check of A vs B-nc4 balance (B-nc4 has a 53 s cluster — possibly a real speaker merged away).
