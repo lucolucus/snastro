@@ -216,6 +216,7 @@ public class EseguiProssimaElaborazioneServizio(
         const val MOTIVO_TRANSIZIONE_NON_AMMESSA = "transizione di stato non consentita"
         const val MOTIVO_ELABORAZIONE_GIA_APERTA = "un'altra elaborazione è già in corso per questa registrazione"
         const val MOTIVO_ELABORAZIONE_GIA_COMPLETATA = "questa registrazione ha già un risultato completato"
+        const val MOTIVO_TRASCRITTO_NON_TROVATO = "trascrizione non ancora disponibile"
         const val MOTIVO_VOCE_NON_TROVATA = "voce non trovata"
         const val MOTIVO_SEGMENTO_NON_TROVATO = "segmento non trovato"
         const val MOTIVO_UNIONE_NON_AMMESSA = "unione di voci non consentita"
@@ -237,6 +238,8 @@ public class EseguiProssimaElaborazioneServizio(
             is ErroreTrascrizione.TransizioneNonAmmessa -> MOTIVO_TRANSIZIONE_NON_AMMESSA
             is ErroreTrascrizione.ElaborazioneGiaAperta -> MOTIVO_ELABORAZIONE_GIA_APERTA
             is ErroreTrascrizione.ElaborazioneGiaCompletata -> MOTIVO_ELABORAZIONE_GIA_COMPLETATA
+            is ErroreTrascrizione.RegistrazioneNonTrovata -> MOTIVO_REGISTRAZIONE_MANCANTE
+            is ErroreTrascrizione.TrascrittoNonTrovato -> MOTIVO_TRASCRITTO_NON_TROVATO
             is ErroreTrascrizione.VoceNonTrovata -> MOTIVO_VOCE_NON_TROVATA
             is ErroreTrascrizione.SegmentoNonTrovato -> MOTIVO_SEGMENTO_NON_TROVATO
             is ErroreTrascrizione.UnioneNonAmmessa -> MOTIVO_UNIONE_NON_AMMESSA
