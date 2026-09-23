@@ -3,10 +3,12 @@ package snastro.kernel
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 /**
  * Contract of [UnitaDiLavoro] (ADR 0012): commit on [Esito.Ok], rollback on [Esito.Errore] or on a
- * thrown exception, nested calls join the outer transaction. One subclass per implementation
+ * thrown exception, nested calls join the outer transaction and a nested failure dooms it (the outer
+ * block's own Errore wins; a swallowed nested exception surfaces as the `cause`). One subclass per implementation
  * (`UnitaDiLavoroFinta` here, `UnitaDiLavoroSql` in `:persistenza`).
  */
 public abstract class UnitaDiLavoroContratto {
@@ -134,18 +136,51 @@ public abstract class UnitaDiLavoroContratto {
     @Test
     public fun `AC-2 un eccezione annidata intercettata dall esterna annulla comunque tutto e non riporta Ok`() {
         val a = ambiente()
-        assertFailsWith<IllegalStateException> {
+        val guasto = GuastoDiProva()
+        val lanciata = assertFailsWith<IllegalStateException> {
             a.unitaDiLavoro.inTransazione {
                 a.scrivi("esterno")
                 assertFailsWith<GuastoDiProva> {
                     a.unitaDiLavoro.inTransazione<Unit> {
                         a.scrivi("interno")
-                        throw GuastoDiProva()
+                        throw guasto
                     }
                 }
                 Esito.Ok(VALORE)
             }
         }
+        assertSame(guasto, lanciata.cause, "la causa annidata non si perde")
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
+    public fun `AC-2 un eccezione annidata tradotta in Errore dall esterna annulla tutto e restituisce quell Errore`() {
+        val a = ambiente()
+        val esito = a.unitaDiLavoro.inTransazione<Int> {
+            a.scrivi("esterno")
+            try {
+                a.unitaDiLavoro.inTransazione<Unit> {
+                    a.scrivi("interno")
+                    throw GuastoDiProva()
+                }
+            } catch (e: GuastoDiProva) {
+                return@inTransazione Esito.Errore(ErroreDiProva.Fallito("tradotto: ${e.message}"))
+            }
+            Esito.Ok(VALORE)
+        }
+        assertEquals(TRADOTTO, esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
+    public fun `AC-2 l Errore restituito dall esterna prevale su un Errore annidato`() {
+        val a = ambiente()
+        val esito = a.unitaDiLavoro.inTransazione<Int> {
+            a.scrivi("esterno")
+            a.unitaDiLavoro.inTransazione<Unit> { Esito.Errore(ERRORE) }
+            Esito.Errore(TRADOTTO)
+        }
+        assertEquals(TRADOTTO, esito.erroreAtteso<ErroreDiProva.Fallito>())
         assertEquals(emptySet(), a.effetti())
     }
 
@@ -168,5 +203,6 @@ public abstract class UnitaDiLavoroContratto {
     private companion object {
         const val VALORE = 42
         val ERRORE = ErroreDiProva.Fallito("rifiutato")
+        val TRADOTTO = ErroreDiProva.Fallito("tradotto: guasto di prova")
     }
 }
