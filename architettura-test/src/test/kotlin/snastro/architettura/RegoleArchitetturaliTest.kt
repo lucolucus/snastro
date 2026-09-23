@@ -120,11 +120,21 @@ class RegoleArchitetturaliTest {
 
     // --- CR-4 - Aggregates are encapsulated, never `data class` -----------------------------
 
+    /**
+     * The aggregate roots, verbatim from `.mismagent/features/trascrizione-con-parlanti/tactical-model.md`
+     * (the `(root)` rows: Progetto, Registrazione — § Progetto; Elaborazione, Trascritto — § Trascrizione;
+     * Parlante, Attribuzione — § Parlanti; Documento has none). CR-4 bans `data class` for these only:
+     * VOs, events and error members MUST be `data class` (CR-5). A feature adding a root amends this list.
+     */
+    private val radiciAggregato = setOf(
+        "Progetto", "Registrazione", "Elaborazione", "Trascritto", "Parlante", "Attribuzione",
+    )
+
     @Test
-    fun `CR-4 le classi del dominio non sono data class`() {
+    fun `CR-4 le radici di aggregato del dominio non sono data class`() {
         Konsist.scopeFromProject()
             .classes()
-            .filter { it.resideInPackage("..dominio..") }
+            .filter { it.resideInPackage("..dominio..") && it.name in radiciAggregato }
             .assertFalse { it.hasDataModifier }
     }
 
@@ -277,9 +287,12 @@ class RegoleArchitetturaliTest {
             """|typealias\s+\w+\s*=\s*(snastro\.kernel\.)?RicostituzioneDaPersistenza\b""",
     )
     private val importRicostituzione = Regex("""import\s+snastro\.kernel\.RicostituzioneDaPersistenza\s*\n""")
+    /** The marker, then any other annotations (with arguments), modifiers and type parameters, then `ricostituisci`. */
     private val marcaRicostituisci = Regex(
         """@(snastro\.kernel\.)?RicostituzioneDaPersistenza\s+""" +
-            """(?:@\w+\s+|(?:public|internal|protected|private)\s+)*fun\s+ricostituisci\b""",
+            """(?:@[\w.]+(?:\s*\((?:[^()]|\([^()]*\))*\))?\s*""" +
+            """|(?:public|internal|protected|private|inline|suspend|override|open|final|actual|external|tailrec)\s+)*""" +
+            """fun\s+(?:<(?:[^<>]|<[^<>]*>)*>\s*)?ricostituisci\b""",
     )
 
     /** Opting in (any form: FQN, multi-marker, markerClass, @file:) only in persistence adapters. */
