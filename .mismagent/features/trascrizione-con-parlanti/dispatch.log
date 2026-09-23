@@ -399,3 +399,7 @@
 2026-09-23T12:43:07Z	persistenza-schema	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (5d1b19e; WIP kept + stash kept (secure_delete both in SQLiteConfig and explicit PRAGMA — needed for ThreadedConnectionManager + ADR 0009 grep); sorgente/modello columns, CAS + metadata queries; full single-shot gate not completed due to machine contention, components green)
 2026-09-23T12:43:07Z	persistenza-schema	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:43:07Z	persistenza-schema	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:46:27Z	fix-batch-6	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (0f9ae43; tolerant/strict read split + read seam, per-line UTF-8, AC-328 JVM-wide path lock + FileChannel.lock, sweep inside lock; mutation-checked; AC-328 spec mentions a child-JVM test — not done)
+2026-09-23T12:46:27Z	fix-batch-6	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T12:46:27Z	fix-batch-6	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T12:46:27Z	(load)	note	result	-	-	-	machine load avg ~55: holding worker slots at 2-3 until persistenza-schema D1 completes
