@@ -1,9 +1,10 @@
 ---
 scope: global
 status: accepted
-supersedes: null
+supersedes: null   # partial: the auto-start policy of ADR 0012 Amendment R2 / ADR 0004 Execution — superseded in place by their dated amendments, pointing here
 closes_spike: scelta-diarizzatore
 enforced_by: null
+amended: 2026-09-23   # user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10
 ---
 # 0014 — Diarization: sherpa-onnx pyannote-3.0 + WeSpeaker ResNet34-LM, threshold 0.4; optional "Numero di persone" → `num_clusters`
 
@@ -69,9 +70,29 @@ long recordings, with or without music.
     into the manifest by `build-manifest`, from the architect's proposal returned with this ADR
     (see `features/trascrizione-con-parlanti/dispatch.log`, 2026-09-23). The manifest is
     authoritative for them.
-  - **Open, for the user.** Where the field is offered for recordings that R1 queues automatically
-    on import (ADR 0004 policy `RegistrazioneAggiunta` → `AvviaElaborazione`). This is the one
-    unsettled point of this decision. It is recorded here only; other docs reference this ADR.
+  - **Bound: an integer from 1 to 10 [user] 2026-09-23.** The architect proposed 1..20, and the
+    user chose 1..10. `NumeroPersone` is a value object in `:trascrizione:dominio`. Its factory
+    rejects anything outside 1..10 with `NumeroPersoneFuoriIntervallo`, and the S2 presenter
+    validates the field before it invokes the command.
+  - **Where the field is offered, and no automatic start [user] 2026-09-23.** *(This resolves the
+    open point this ADR first recorded: where to enter the count for recordings that R1 queued
+    automatically on import.)* This ADR is the **single home** of the decision. ADR 0004 and ADR
+    0012 amend their text to point here.
+    - **No automatic transcription on import.** In R1 a newly imported `Registrazione` stays
+      without an `Elaborazione`, shown as `NON_AVVIATA`. The policy "on `RegistrazioneAggiunta` →
+      `AvviaElaborazione`" (tactical Q-6, ADR 0004 Decision/Execution, ADR 0012 Amendment R2) is
+      **removed**.
+    - **The user starts the transcription** from the S2 row with **"Trascrivi"**, and after a
+      failure with **"Riprova"**. `AvviaElaborazione` therefore has one actor: the utente. It
+      keeps its INV-4 checks.
+    - **Both actions offer the optional "Numero di persone" field.** Empty means `numeroPersone`
+      is absent, so clustering is automatic.
+    - **"Riprova" prefills the field** with the `numeroPersone` of the failed `Elaborazione`, and
+      leaves it empty if that run had none. The user may change or clear it, and the new
+      `Elaborazione` stores the value that was submitted.
+    - **Unchanged.** The serial FIFO queue (ADR 0004): a started `Elaborazione` is still created
+      `in_attesa` and processed in order. `RegistrazioneAggiunta` is still published by Progetto,
+      now with after-commit consumers only (view refresh).
 - **Adapter behaviour contract.**
   - Seconds are rounded to ms.
   - Overlapping `Turno`s are emitted (per [INV-7]) and sorted by start.
@@ -129,8 +150,13 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
   (ADR 0006). `AvviaElaborazione` gains an optional input, and S2 gains the field. These are
   folded by `build-manifest`. The `porte-trascrizione`, `elaborazione`, `avvia-elaborazione` and
   `esegui-elaborazione` blocks are already built, so they need a rework.
-- **Ubiquitous language.** The term needs a context-map amendment by the analyst. Proposed name:
-  `NumeroPersone`, shown as "Numero di persone".
+- **No automatic start (2026-09-23 [user]).** The `abbonato-registrazione-aggiunta` block is
+  dropped from the manifest. `RegistrazioneAggiunta` loses its synchronous consumer. The R1
+  composition no longer registers it. A `Registrazione` may now exist in R1 with no
+  `Elaborazione`; `NON_AVVIATA` + "Trascrivi" already covers that state, so no invariant changes.
+  One cost is accepted: importing a batch now needs one "Trascrivi" per row.
+- **Ubiquitous language.** `NumeroPersone`, shown as "Numero di persone", was added to
+  `context-map.md` § Trascrizione on 2026-09-23 (optional, 1..10).
 - **Accepted failure modes.** Without a count, long recordings **over-count**; `Revisione` →
   `unire` fixes that in one action. Short backchannels are dropped. Crosstalk is handled only up to
   2 overlapping speakers. Background music can create phantom small `Voce`s.

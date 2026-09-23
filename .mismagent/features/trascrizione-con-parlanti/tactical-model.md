@@ -45,7 +45,8 @@
 - **Domain events:**
   - `ProgettoCreato` → `read-model` block: elenco dei Progetti (open/create screen)
   - `RegistrazioneAggiunta` → `read-model` block: Registrazioni del Progetto (with their
-    `StatoElaborazione`, joined from Trascrizione) + policy auto-start (below) [user, Q-6]
+    `StatoElaborazione`, joined from Trascrizione) ~~+ policy auto-start (below) [user, Q-6]~~
+    *(auto-start REMOVED 2026-09-23 [user], ADR 0014: no Trascrizione consumer)*
   - `DataRegistrazioneModificata` → `read-model` Registrazioni del Progetto. It does NOT change any
     `Nome`: a provisional "Ospite del <DataRegistrazione>" is a stored value fixed at creation and
     does not follow a later date change (the user can rename it) [user, Q-5]
@@ -53,12 +54,17 @@
   - `CreaProgetto` (actor: utente) → `application-service` block
   - `AggiungiRegistrazione` (actor: utente) → `application-service` block
   - `ModificaDataRegistrazione` (actor: utente) → `application-service` block
-- **Policy:** on `RegistrazioneAggiunta` → `AvviaElaborazione` (queued as `in_attesa`, processed
-  in order) [user, Q-6] → side-effect wired in the aggiungi-registrazione application-service
+- ~~**Policy:** on `RegistrazioneAggiunta` → `AvviaElaborazione` (queued as `in_attesa`, processed
+  in order) [user, Q-6] → side-effect wired in the aggiungi-registrazione application-service~~
+  **REMOVED 2026-09-23 [user] (ADR 0014; supersedes Q-6).** No transcription starts on import: a
+  new `Registrazione` has no `Elaborazione` (`NON_AVVIATA`) until the user starts one ("Trascrivi");
+  see `AvviaElaborazione` in Trascrizione.
 
 ## Tactical model — Trascrizione — every row names the consumer, or it is not written
 - **Aggregates / entities:**
-  - `Elaborazione` (root, one per run) guards `StatoElaborazione`, `registrazioneId`, failure reason.
+  - `Elaborazione` (root, one per run) guards `StatoElaborazione`, `registrazioneId`, failure reason,
+    and *(amended 2026-09-23 [user], ADR 0014)* the optional `NumeroPersone` (1..10), fixed at
+    creation and immutable, passed to the `Diarizzatore`.
     → manifest `aggregate` block (elaborazione) + architect decision (long-running execution:
     background worker/process, ML adapters from spikes `scelta-diarizzatore`,
     `scelta-asr-code-switching`, `allineamento-parole-voci`, `packaging-modelli-desktop`)
@@ -112,9 +118,12 @@
   - `SegmentoRiassegnato` (registrazioneId, segmento, da, a, da rimossa?, a nuova?) → Parlanti policy
     [INV-21] + Documento `Rigenerazione` policy + `read-model` Trascritto
 - **Commands (+ actor):**
-  - `AvviaElaborazione` (actors: the `RegistrazioneAggiunta` policy — automatic queueing — and the
-    utente only as retry after `fallita` [user, Q-6]) → `application-service` block (orchestrates the
-    local pipeline through ports: audio decoding, diarization, ASR, alignment into `Segmento`s)
+  - `AvviaElaborazione` (actor: utente — "Trascrivi" on a `Registrazione` with no `Elaborazione`,
+    "Riprova" after `fallita`; *amended 2026-09-23 [user], ADR 0014: the automatic
+    `RegistrazioneAggiunta` actor of Q-6 is removed*) with optional `NumeroPersone` (1..10; empty =
+    automatic clustering; "Riprova" prefilled with the failed `Elaborazione`'s value)
+    → `application-service` block (orchestrates the local pipeline through ports: audio decoding,
+    diarization, ASR, alignment into `Segmento`s)
   - `UnisciVoci` (actor: utente — directly, or one click on a `Proposta di unione`)
     → `application-service` block
   - `DividiVoce` (actor: utente) → `application-service` block
@@ -275,9 +284,10 @@ Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
   `AggiungiRegistrazione` inside its transaction (one writer process per project, ADR 0010 `.lock`): on a clash
   of the file-safe case-insensitive key it appends " (2)", " (3)"… once, never changed afterwards; this keys the
   `Documento` file name (manifest `servizi-registrazione` AC-322..324, `documento` AC-320/321).
-- **R2 policy placement:** "on `RegistrazioneAggiunta` → `AvviaElaborazione`" is realized as a
+- ~~**R2 policy placement:** "on `RegistrazioneAggiunta` → `AvviaElaborazione`" is realized as a
   synchronous subscriber in Trascrizione (same transaction), NOT inside the aggiungi-registrazione
-  service (Progetto must not depend on Trascrizione).
+  service (Progetto must not depend on Trascrizione).~~ *SUPERSEDED 2026-09-23 [user] — the policy
+  no longer exists (ADR 0014; ADR 0012 Amendment (c)).*
 - **R17 AvviaElaborazione split:** `AvviaElaborazione` (queueing + retry, INV-4) and the internal
   commands `EseguiProssimaElaborazione` (pipeline, INV-5) and `RecuperaElaborazioniInterrotte`
   (the startup policy), actor: sistema.
@@ -304,3 +314,13 @@ Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
     `Segmento` `**Nome** (mm:ss): testo`; consecutive `Segmento`s of the same `Voce` stay separate lines.
 - **R25 (flag):** `INV-25` is realized with a repository `rimuovi` — the only physical deletion of a
   `Parlante` (the "no deletion" aggregate rule does not apply: nothing references it).
+
+## Amendment 2026-09-23 (c): no automatic start; Numero di persone [user] (ADR 0014)
+- **Q-6 superseded.** No `Elaborazione` is started on `RegistrazioneAggiunta`. The Progetto policy
+  and the R2 placement above are struck through. `AvviaElaborazione` has the utente as its only
+  actor, through "Trascrivi" (`NON_AVVIATA`) and "Riprova" (`fallita`). INV-4 is unchanged.
+- **`NumeroPersone` (optional, an integer from 1 to 10).** It is carried by `AvviaElaborazione`,
+  stored immutable on `Elaborazione`, and passed by the pipeline to the `Diarizzatore`. If it is
+  absent, clustering is automatic. A value outside 1..10 is rejected with
+  `NumeroPersoneFuoriIntervallo` → AC-tests on the avvia-elaborazione block, plus a VO table test
+  on the elaborazione block. "Riprova" prefills the value of the failed `Elaborazione`.

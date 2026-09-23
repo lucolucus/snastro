@@ -521,3 +521,5 @@
 2026-09-23T20:31:31Z	fix-batch-12	worker	dispatch	cycle=0	tier=standard	model=sonnet	R0 pre-release cleanup (tasks/app/todo/r0-pulizia-1.md)
 2026-09-23T20:47:12Z	spike-r1-asr-diarizzazione	experiment	result	-	standard	sonnet	num_clusters=4 → 4 speakers (only reliable fix); music tagger catches blips only (156 s); VAD worse; v2 transcript in scratch
 2026-09-23T20:53:23Z	(spikes)	architect	result	-	deep	opus	ADR 0013 (Parakeet) + 0014 (diarizer, optional Numero di persone) close scelta-asr-code-switching + scelta-diarizzatore [user]; open: where count is entered when import auto-queues
+2026-09-23T20:54:12Z	(r1-plan)	decision	result	-	-	-	USER DECISION: no automatic transcription on import — user starts it with Trascrivi + optional Numero di persone (1..10); Riprova prefilled
+2026-09-23T20:58:44Z	(r1-plan)	architect	result	-	deep	opus	manual-start + NumeroPersone 1..10 folded into ADR 0014/0012(c)/0004(b), tactical-model, context-map; manifest delta saved (manifest-deltas/2026-09-23-numero-persone.md) for build-manifest

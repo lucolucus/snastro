@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' 'snastro\\.(parlanti\\.applicazione\\.porte\\.(EstrattoreImpronta|DecodificatoreAudio)|kernel\\.CampioniAudio|parlanti\\.dominio\\.Impronta)([^A-Za-z0-9_]|$)' parlanti/applicazione/src/main | grep '/politiche/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-23   # see "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added
+amended: 2026-09-23   # see "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added. "Amendment 2026-09-23 (c)" — R2 auto-start removed (ADR 0014 [user])
 ---
 # 0012 — Unit of work and domain-event dispatch: invariant policies in-transaction, Rigenerazione after commit
 
@@ -43,10 +43,11 @@ Knob K1. Several invariants span aggregates/contexts inside one local database:
   back (ADR 0010), so the persisted version is dropped: at startup **every** `Documento` with a
   `Trascritto` is regenerated unconditionally (`RigeneraTuttiIDocumenti`, idempotent, cheap). The
   after-commit, coalesced, retried `Rigenerazione` is unchanged.
-- **R2 — auto-start policy lives in Trascrizione.** `RegistrazioneAggiunta` is a published event of
-  Progetto; a **synchronous** subscriber in `:trascrizione:adattatori` runs `AvviaElaborazione` in
-  the same transaction (a `Registrazione` never exists without its queued `Elaborazione`). Progetto
-  never depends on Trascrizione.
+- **R2 — auto-start policy lives in Trascrizione.** *(SUPERSEDED by "Amendment 2026-09-23 (c)"
+  below, following the user decision in ADR 0014. Kept as history.)* `RegistrazioneAggiunta` is a
+  published event of Progetto; a **synchronous** subscriber in `:trascrizione:adattatori` runs
+  `AvviaElaborazione` in the same transaction (a `Registrazione` never exists without its queued
+  `Elaborazione`). Progetto never depends on Trascrizione.
 - **R12 — ML inside a command transaction, accepted.** *(SUPERSEDED by "Amendment 2026-09-23 (b)"
   below — kept as history.)* `ConfermaAttribuzione`, `SaltaVoce` and the
   Parlanti revisione-policy extract one embedding (seconds) inside the transaction (single local
@@ -187,3 +188,24 @@ write lock.
   unresolved (candidates noted in discovery: Mutex timeout with "riprova dopo l'elaborazione",
   per-call Mutex release between pipeline chunks, a separate extractor session). To be decided
   before `avvio-coda-elaborazioni` / `schermata-registrazione` are built.
+
+## Amendment 2026-09-23 (c): no automatic start on import (supersedes R2) [user]
+**Decision (the user, 2026-09-23; recorded in ADR 0014, which is its single home).** No
+`Elaborazione` is started automatically when a `Registrazione` is imported. The user starts one
+from S2 with "Trascrivi", or with "Riprova" after a failure. Both actions take the optional
+`NumeroPersone`, an integer from 1 to 10.
+
+**What this supersedes.** The R2 bullet above. There is **no** synchronous subscriber to
+`RegistrazioneAggiunta` in `:trascrizione:adattatori`. The guarantee "a `Registrazione` never exists
+without its queued `Elaborazione`" is **withdrawn**: in R1, a `Registrazione` with no `Elaborazione`
+is a normal state, shown as `NON_AVVIATA`.
+
+**What is unchanged.**
+- The unit-of-work and dispatch mechanism of this ADR, synchronous subscribers included (other
+  invariant policies still use them).
+- `RegistrazioneAggiunta` stays a published event of Progetto, with after-commit consumers only
+  (view refresh). Progetto still never depends on Trascrizione.
+- `AvviaElaborazione` still runs in its own `UnitaDiLavoro` transaction with the INV-4 checks.
+
+**Consequences.** The `abbonato-registrazione-aggiunta` block and its ACs (AC-140, AC-141) leave the
+manifest. The R1 composition stops registering the subscriber. This is folded by `build-manifest`.

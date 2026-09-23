@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=architettura-test '(com\\.k2fsa|System\\.load)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-23   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test)
+amended: 2026-09-23   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test) and "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user])
 ---
 # 0004 — ML runtime: sherpa-onnx (JNI) in-process, confined to `:ml-sherpa`, serial pipeline
 
@@ -32,7 +32,8 @@ open (spikes `scelta-diarizzatore`, `scelta-asr-code-switching`, `impronta-vocal
   `ConfrontoImpronte` (cosine similarity + `SoglieFascia`) are **pure Kotlin**, testable in the gate.
 - **Execution: IN-PROCESS [user]** on a **dedicated single-thread pipeline dispatcher**; one
   `Elaborazione` at a time from a **serial FIFO queue** (policy `RegistrazioneAggiunta` →
-  `AvviaElaborazione` queued `in_attesa`). ONNX intra-op threads = number of performance cores.
+  `AvviaElaborazione` queued `in_attesa` — *the automatic policy is SUPERSEDED by "Amendment
+  2026-09-23 (b)" below: the user starts each `Elaborazione`; the queue is unchanged*). ONNX intra-op threads = number of performance cores.
   Every native handle is wrapped in an `AutoCloseable` and released (`use {}`) at the end of the
   `Elaborazione` (~1–2 GB off-heap).
 - **Progress:** the pipeline reports its `FaseElaborazione`
@@ -67,3 +68,11 @@ non-excluded module (probe removed).
 
 **Known blind spot.** `architettura-test` itself is no longer scanned; it is a test-only module
 holding the architecture rules, and its imports are reviewed by code-review.
+
+## Amendment 2026-09-23 (b): the queue is fed by the user, not by import [user]
+The Execution bullet named the policy `RegistrazioneAggiunta` → `AvviaElaborazione` as the source of
+the queue. By user decision (2026-09-23, recorded in **ADR 0014**, the single home of the decision),
+that policy is **removed**: the user enqueues an `Elaborazione` from S2 with "Trascrivi", or with
+"Riprova" after a failure, optionally stating `NumeroPersone` (1..10). The rest of this ADR is
+unchanged: the in-process execution, the single-thread dispatcher, the serial FIFO over `in_attesa`,
+and the startup recovery. See also ADR 0012 Amendment (c).

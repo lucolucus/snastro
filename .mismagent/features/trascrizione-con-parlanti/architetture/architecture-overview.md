@@ -50,7 +50,7 @@ opens.
 |---|---|---|---|
 | `SondaAudio` (readability + duration) | Progetto (`AggiungiRegistrazione`) | `:audio` | ADR 0005 |
 | `DecodificatoreAudio` (`decodifica` → derived WAV, `campioni(intervallo)`) | Trascrizione; Parlanti (own port copy, samples for prints/estratti) | `:audio` | ADR 0005 |
-| `Diarizzatore` (`CampioniAudio` → turns `[{inizioMs, fineMs, voceIndice}]`) | Trascrizione | `:ml-sherpa` | spike `scelta-diarizzatore` |
+| `Diarizzatore` (`CampioniAudio` + optional `NumeroPersone` → turns `[{inizioMs, fineMs, voceIndice}]`) | Trascrizione | `:ml-sherpa` | ADR 0014 (closes `scelta-diarizzatore`) |
 | `Vad` | Trascrizione | `:ml-sherpa` (Silero) | spike `allineamento-parole-voci` |
 | `RiconoscitoreParlato` (`CampioniAudio` → text + token timestamps if available) | Trascrizione | `:ml-sherpa` | spike `scelta-asr-code-switching` |
 | `Allineatore` (turns + ASR output → `Segmento`s) | Trascrizione | pure Kotlin in `:trascrizione:adattatori` | spike `allineamento-parole-voci` |
@@ -82,8 +82,8 @@ The authoritative boundary pins are now `../building-blocks.yaml` § boundaries.
 - **R18 + rule 15:** `LettoreNomi` also has `registrazioniCon(parlanteId)` (for `ParlanteRinominato`);
   `LettoreTrascritto` = `trascritto(id): TrascrittoTesto?` (titolo + dataRegistrazione + segmenti,
   composed from `VociDelTrascritto` + `CatalogoRegistrazioni`) + `registrazioniConTrascritto()`.
-- **R2:** a new event boundary Progetto → Trascrizione: `RegistrazioneAggiunta` (sync subscriber in
-  `:trascrizione:adattatori` → `AvviaElaborazione`); `DataRegistrazioneModificata` → Documento (R5).
+- **R2:** ~~a new event boundary Progetto → Trascrizione: `RegistrazioneAggiunta` (sync subscriber in
+  `:trascrizione:adattatori` → `AvviaElaborazione`)~~ *(superseded 2026-09-23 [user], ADR 0014: no automatic start; `AvviaElaborazione` is started by the user with an optional `NumeroPersone`, 1..10)*; `DataRegistrazioneModificata` → Documento (R5).
 - **R13:** Parlanti does not subscribe to `ElaborazioneCompletata`.
 - **R1/R8:** UI data views split per owning context (see the ux-proposal amendment).
 - **R3:** `RegistroProgetti` port (Progetto) + `SessioneProgetto` in `:avvio`.
