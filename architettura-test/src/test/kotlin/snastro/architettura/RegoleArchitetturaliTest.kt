@@ -127,7 +127,12 @@ class RegoleArchitetturaliTest {
      * VOs, events and error members MUST be `data class` (CR-5). A feature adding a root amends this list.
      */
     private val radiciAggregato = setOf(
-        "Progetto", "Registrazione", "Elaborazione", "Trascritto", "Parlante", "Attribuzione",
+        "Progetto",
+        "Registrazione",
+        "Elaborazione",
+        "Trascritto",
+        "Parlante",
+        "Attribuzione",
     )
 
     @Test
@@ -287,11 +292,13 @@ class RegoleArchitetturaliTest {
             """|typealias\s+\w+\s*=\s*(snastro\.kernel\.)?RicostituzioneDaPersistenza\b""",
     )
     private val importRicostituzione = Regex("""import\s+snastro\.kernel\.RicostituzioneDaPersistenza\s*\n""")
+
     /** The marker, then any other annotations (with arguments), modifiers and type parameters, then `ricostituisci`. */
     private val marcaRicostituisci = Regex(
         """@(snastro\.kernel\.)?RicostituzioneDaPersistenza\s+""" +
             """(?:@[\w.]+(?:\s*\((?:[^()]|\([^()]*\))*\))?\s*""" +
-            """|(?:public|internal|protected|private|inline|suspend|override|open|final|actual|external|tailrec)\s+)*""" +
+            """|(?:public|internal|protected|private|inline|suspend|override|open|final|actual|external""" +
+            """|tailrec)\s+)*""" +
             """fun\s+(?:<(?:[^<>]|<[^<>]*>)*>\s*)?ricostituisci\b""",
     )
 
