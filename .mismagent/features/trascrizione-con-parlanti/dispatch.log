@@ -423,3 +423,6 @@
 2026-09-23T13:16:11Z	(release-plan)	decision	result	-	-	-	USER DECISION: pivot to functional releases — R0 Archivio (projects, import, list, play; no ML), R1 Trascrizione (ASR+diarization+alignment, S3, Documento), R2 Parlanti (paused). R0 + R1 spikes in parallel; only HIGH findings gate merges, MED/LOW -> pre-release cleanup list
 2026-09-23T13:16:11Z	elenco-progetti	worker	dispatch	cycle=0	tier=standard	model=sonnet	(R0)
 2026-09-23T13:16:25Z	ui-fondamenta	worker	dispatch	cycle=0	tier=standard	model=sonnet	(R0)
+2026-09-23T13:23:23Z	elenco-progetti	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (4b2c3c7; ProgettoVista; order delegated to RegistroProgetti.elenco AC-28)
+2026-09-23T13:23:23Z	elenco-progetti	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode: small read-model -> verifier only, HIGH-only gating)
+2026-09-23T13:25:59Z	elenco-progetti	verifier	result	cycle=0	tier=deep	model=opus	PASS (2 mutants killed)
