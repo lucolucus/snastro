@@ -177,3 +177,7 @@
 2026-09-23T10:13:47Z	crea-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; worktree empty)
 2026-09-23T10:13:47Z	avvia-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; worktree empty)
 2026-09-23T10:13:47Z	gestione-parlante	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; worktree empty)
+2026-09-23T10:22:45Z	crea-progetto	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (ccbcc65; out-of-block: ErroreProgetto.ProgettoGiaPresente + CR-16 Konsist generic fix; folder-name rule left to avvio-composizione per spec R3)
+2026-09-23T10:22:45Z	crea-progetto	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:22:45Z	crea-progetto	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:23:31Z	servizi-registrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
