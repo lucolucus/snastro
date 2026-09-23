@@ -54,7 +54,6 @@ private constructor(
 
         /** Rebuilds a persisted Registrazione; the database is trusted, nothing is re-validated (CR-15). */
         @RicostituzioneDaPersistenza
-        @Suppress("LongParameterList") // one parameter per persisted column
         public fun ricostituisci(
             id: RegistrazioneId,
             progettoId: ProgettoId,

@@ -30,7 +30,17 @@ formatting: # CR-11: official Kotlin style (ktlint rules via detekt-formatting).
   active: true
   android: false
   autoCorrect: false
+  Filename: # dev-architecture-app.md#pacchetti names these files after the hierarchy/aggregate, not a single declaration.
+    excludes: ['**/Errori*.kt', '**/*Eventi.kt']
+
+complexity:
+  LongParameterList:
+    # `ricostituisci` takes exactly the persisted fields (dev-architecture-app.md#aggregato): exempt by annotation.
+    ignoreAnnotated: ['RicostituzioneDaPersistenza']
+    # Detekt's default thresholds apply everywhere else; a pinned wider signature is suppressed locally, with a reason.
 
 naming:
+  MatchingDeclarationName: # dev-architecture-app.md#pacchetti: `Errori<Contesto>.kt`, `<Aggregato>Eventi.kt`.
+    excludes: ['**/Errori*.kt', '**/*Eventi.kt']
   FunctionNaming:
     ignoreAnnotated: ["Composable"] # Compose convention: composables are PascalCase (screen/component names).

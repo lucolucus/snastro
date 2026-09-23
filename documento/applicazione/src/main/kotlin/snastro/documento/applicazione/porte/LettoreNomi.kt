@@ -15,6 +15,7 @@ public interface LettoreNomi {
      * "Voce n"). The Nome is the Parlante's current one, so the latest rinomina wins (a change of
      * case only included); an eliminato Parlante still resolves to the Nome it had when eliminato
      * (INV-13, INV-24). An unknown [id], or one with no Attribuzione, gives an empty map.
+     * It is a lookup keyed by [VoceRef]: its iteration order carries no meaning (INV-23).
      */
     public fun nomi(id: RegistrazioneId): Map<VoceRef, String>
 

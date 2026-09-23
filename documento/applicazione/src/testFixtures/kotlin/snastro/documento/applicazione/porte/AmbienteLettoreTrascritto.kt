@@ -19,10 +19,12 @@ public interface AmbienteLettoreTrascritto {
     /**
      * Completes the Elaborazione of [registrazioneId] with the non-empty [turni] as its output, so
      * its Trascritto exists. Returns the ids minted for each turno, in the order of [turni].
+     * Allowed after a `fallita` Elaborazione of the same Registrazione (a new one is started); never
+     * after a completata one.
      */
     public fun completaElaborazione(registrazioneId: RegistrazioneId, turni: List<SemeTurno>): List<SegmentoConiato>
 
-    /** Makes the Elaborazione of [registrazioneId] end `fallita`: no Trascritto exists. */
+    /** Makes an Elaborazione of [registrazioneId] (never completata) end `fallita`: no Trascritto exists. */
     public fun fallisciElaborazione(registrazioneId: RegistrazioneId)
 
     /**

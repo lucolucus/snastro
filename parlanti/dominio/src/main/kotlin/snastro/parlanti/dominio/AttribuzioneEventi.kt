@@ -1,6 +1,3 @@
-// Named per dev-architecture-app.md#pacchetti (an aggregate's domain events in <Aggregato>Eventi.kt).
-@file:Suppress("MatchingDeclarationName", "Filename")
-
 package snastro.parlanti.dominio
 
 import snastro.kernel.EventoDominio

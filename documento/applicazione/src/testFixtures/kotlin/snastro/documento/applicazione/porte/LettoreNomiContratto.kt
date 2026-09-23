@@ -122,6 +122,24 @@ public abstract class LettoreNomiContratto {
     }
 
     @Test
+    public fun `AC-51 quando l unica Voce di un occasionale passa a un altro Parlante mostra il nuovo Nome`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val r = a.aggiungiRegistrazione(voci = 2)
+        val ospite = a.confermaNuovoParlante(r.voci[0], "Ospite", occasionale = true)
+        val giulia = a.confermaNuovoParlante(r.voci[1], "Giulia")
+        assertEquals(mapOf(r.voci[0] to "Ospite", r.voci[1] to "Giulia"), lettore.nomi(r.id))
+        assertRegistrazioni(lettore, ospite, "Ospite", setOf(r.id))
+
+        // Its only Voce leaves: the occasionale is removed (INV-25). The port cannot observe whether the
+        // Parlante row is gone; the case bites at D2, where the real Ambiente physically deletes it.
+        a.conferma(r.voci[0], giulia)
+
+        assertEquals(mapOf(r.voci[0] to "Giulia", r.voci[1] to "Giulia"), lettore.nomi(r.id))
+        assertTrue(lettore.registrazioniCon(ospite).isEmpty())
+    }
+
+    @Test
     public fun `AC-52 un Parlante sconosciuto non ha Registrazioni`() {
         val a = ambiente()
         val r = a.aggiungiRegistrazione(voci = 1)

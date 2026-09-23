@@ -1,6 +1,3 @@
-// Named per dev-architecture-app.md#pacchetti (hierarchy file), not after its single declaration.
-@file:Suppress("MatchingDeclarationName", "Filename")
-
 package snastro.progetto.applicazione.porte
 
 import snastro.kernel.ErroreDominio

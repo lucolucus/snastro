@@ -92,7 +92,6 @@ public class Parlante private constructor(
 
         /** Rebuilds from persisted state, one parameter per field; re-validates nothing (the DB is trusted). */
         @RicostituzioneDaPersistenza
-        @Suppress("LongParameterList")
         public fun ricostituisci(
             id: ParlanteId,
             progettoId: ProgettoId,

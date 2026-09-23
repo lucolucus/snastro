@@ -20,10 +20,16 @@ public interface AmbienteLettoreNomi {
      */
     public fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata
 
-    /** ConfermaAttribuzione of [voce] (attributed or not) to a NEW ricorrente Parlante named [nome]; returns its minted id. */
-    public fun confermaNuovoParlante(voce: VoceRef, nome: String): ParlanteId
+    /**
+     * ConfermaAttribuzione of [voce] (attributed or not) to a NEW Parlante named [nome], ricorrente or,
+     * when [occasionale], occasionale; returns its minted id.
+     */
+    public fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean = false): ParlanteId
 
-    /** ConfermaAttribuzione of [voce] to the existing attivo [parlante]; on an attributed Voce it changes its Attribuzione. */
+    /**
+     * ConfermaAttribuzione of [voce] to the existing attivo [parlante]; on an attributed Voce it changes its
+     * Attribuzione, and an occasionale Parlante left with no Voce is removed (INV-25).
+     */
     public fun conferma(voce: VoceRef, parlante: ParlanteId)
 
     /** RinominaParlante: the attivo [parlante] is now named [nome]. */
