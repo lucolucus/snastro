@@ -25,7 +25,9 @@ class LettoreAudioFinta(private val nonDisponibili: Set<RegistrazioneId> = empty
     }
 
     override fun riproduciEstratto(e: EstrattoRef) {
-        _stato.value = StatoLettore(e.registrazioneId, e.intervalli.first().inizioMs, inRiproduzione = true)
+        // MED-3: `posizioneMs` is relative to the REBUILT excerpt, so it starts at 0 — never at the
+        // source interval's absolute `inizioMs` (StatoLettore's KDoc; pinned by LettoreAudioContratto).
+        _stato.value = StatoLettore(e.registrazioneId, 0, inRiproduzione = true)
     }
 
     override fun pausa() {
