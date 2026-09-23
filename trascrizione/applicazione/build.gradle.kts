@@ -13,3 +13,16 @@ dependencies {
     // LettoreRegistrazioneFintaTest mints ids like the supplier, with the kernel's GeneratoreIdFinto.
     testImplementation(testFixtures(project(":kernel")))
 }
+
+dependencies {
+    // Repository ports (applicazione.porte) expose the Trascrizione domain types (Elaborazione, Trascritto).
+    api(project(":trascrizione:dominio"))
+
+    // Port Finte are kernel `Ripristinabile` (roll back with UnitaDiLavoroFinta); Contratti use the kernel
+    // Esito test helpers — both reach the modules that subclass the Contratti.
+    testFixturesApi(testFixtures(project(":kernel")))
+
+    // Contratti, Finte and their tests build aggregates through the dominio fixtures (never `ricostituisci`,
+    // CR-15); `api` so the subclasses of the Contratti (and their tests) reach the same builders.
+    testFixturesApi(testFixtures(project(":trascrizione:dominio")))
+}

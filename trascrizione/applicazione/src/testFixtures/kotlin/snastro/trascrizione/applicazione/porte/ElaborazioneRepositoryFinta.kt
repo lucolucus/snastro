@@ -1,0 +1,77 @@
+package snastro.trascrizione.applicazione.porte
+
+import snastro.kernel.ElaborazioneId
+import snastro.kernel.Esito
+import snastro.kernel.RegistrazioneId
+import snastro.kernel.Ripristinabile
+import snastro.trascrizione.applicazione.porte.ErroreApplicazioneTrascrizione.ElaborazioneGiaAperta
+import snastro.trascrizione.applicazione.porte.ErroreApplicazioneTrascrizione.ElaborazioneGiaCompletata
+import snastro.trascrizione.dominio.Elaborazione
+import snastro.trascrizione.dominio.StatoElaborazione
+import snastro.trascrizione.dominio.unaElaborazione
+import java.time.Instant
+
+/**
+ * In-memory [ElaborazioneRepository], a stand-in for the `elaborazione` table: refuses INV-4 like the partial
+ * unique indexes of ADR 0007 and stores immutable rows, rebuilding a fresh [Elaborazione] through its own
+ * transitions on every read (reconstitution is reserved to persistence adapters, CR-15) — so no caller ever
+ * aliases the stored state. [Ripristinabile]: pass it to `UnitaDiLavoroFinta`.
+ */
+public class ElaborazioneRepositoryFinta : ElaborazioneRepository, Ripristinabile {
+    private val righe = LinkedHashMap<ElaborazioneId, Riga>()
+
+    override fun diRegistrazione(id: RegistrazioneId): List<Elaborazione> =
+        righe.values.filter { it.registrazioneId == id }.map { it.inDominio() }
+
+    override fun inAttesa(): List<Elaborazione> = conStato(StatoElaborazione.IN_ATTESA)
+
+    override fun inCorso(): List<Elaborazione> = conStato(StatoElaborazione.IN_CORSO)
+
+    override fun salva(e: Elaborazione): Esito<Unit> {
+        val altre = righe.values.filter { it.registrazioneId == e.registrazioneId && it.id != e.id }
+        return when {
+            e.aperta && altre.any { it.aperta } -> Esito.Errore(ElaborazioneGiaAperta(e.registrazioneId))
+            e.completata && altre.any { it.stato == StatoElaborazione.COMPLETATA } ->
+                Esito.Errore(ElaborazioneGiaCompletata(e.registrazioneId))
+            else -> {
+                righe[e.id] = Riga(e)
+                Esito.Ok(Unit)
+            }
+        }
+    }
+
+    override fun istantanea(): () -> Unit {
+        val salvate = LinkedHashMap(righe)
+        return {
+            righe.clear()
+            righe.putAll(salvate)
+        }
+    }
+
+    private fun conStato(stato: StatoElaborazione): List<Elaborazione> =
+        righe.values
+            .filter { it.stato == stato }
+            .sortedWith(compareBy({ it.creataAlle }, { it.id.valore }))
+            .map { it.inDominio() }
+
+    /** The persisted fields of one `elaborazione` row. */
+    private class Riga(e: Elaborazione) {
+        val id = e.id
+        val registrazioneId = e.registrazioneId
+        val creataAlle: Instant = e.creataAlle
+        val stato = e.stato
+        val avviataAlle = e.avviataAlle
+        val motivoFallimento = e.motivoFallimento
+        val aperta = e.aperta
+
+        fun inDominio(): Elaborazione =
+            unaElaborazione(
+                stato = stato,
+                id = id,
+                registrazioneId = registrazioneId,
+                creataAlle = creataAlle,
+                avviataAlle = avviataAlle ?: creataAlle,
+                motivo = motivoFallimento.orEmpty(),
+            )
+    }
+}
