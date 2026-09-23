@@ -5,6 +5,7 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -149,6 +150,31 @@ public abstract class LettoreTrascrittoContratto {
         val elencate = a.lettore.registrazioniConTrascritto()
         assertEquals(setOf(prima, seconda), elencate.toSet())
         assertEquals(2, elencate.size, "ogni Registrazione una sola volta: $elencate")
+        assertOgniElencataHaTrascritto(a.lettore)
+    }
+
+    @Test
+    public fun `AC-50 una Elaborazione completata dopo una fallita da il Trascritto ed e elencata`() {
+        val a = ambiente()
+        val id = a.aggiungiRegistrazione(RIUNIONE)
+        a.fallisciElaborazione(id)
+        assertNull(a.lettore.trascritto(id))
+
+        val turno = SemeTurno(0, IntervalloMs(0, 1_000), "Riproviamo.")
+        val c = a.completaElaborazione(id, listOf(turno))
+
+        assertEquals(
+            TrascrittoTesto(id, RIUNIONE.titolo, RIUNIONE.dataRegistrazione, listOf(vista(turno, c[0]))),
+            a.lettore.trascritto(id),
+        )
+        assertEquals(listOf(id), a.lettore.registrazioniConTrascritto())
+        assertOgniElencataHaTrascritto(a.lettore)
+    }
+
+    private fun assertOgniElencataHaTrascritto(lettore: LettoreTrascritto) {
+        lettore.registrazioniConTrascritto().forEach {
+            assertNotNull(lettore.trascritto(it), "elencata senza Trascritto: ${it.valore}")
+        }
     }
 
     private fun vista(turno: SemeTurno, coniato: SegmentoConiato) =

@@ -9,14 +9,15 @@ import snastro.kernel.RegistrazioneId
  */
 public interface LettoreTrascritto {
     /**
-     * The Trascritto of [id], or `null` when the Registrazione has none: unknown id, Elaborazione
-     * not completata (never started, still running, or fallita). [TrascrittoTesto.segmenti] are
-     * ordered as [SegmentoVista] states.
+     * The Trascritto of [id], or `null` when no Elaborazione of it has ever completed (so no Trascritto
+     * exists): unknown id, or every Elaborazione never started, still running or fallita. A fallita
+     * followed by a completata yields the Trascritto. [TrascrittoTesto.segmenti] are ordered as
+     * [SegmentoVista] states.
      */
     public fun trascritto(id: RegistrazioneId): TrascrittoTesto?
 
     /**
-     * Every Registrazione whose Elaborazione is completata (so it has a Trascritto), each once.
+     * Every Registrazione with a completata Elaborazione (so [trascritto] of it is non-null), each once.
      * No order is guaranteed.
      */
     public fun registrazioniConTrascritto(): List<RegistrazioneId>
