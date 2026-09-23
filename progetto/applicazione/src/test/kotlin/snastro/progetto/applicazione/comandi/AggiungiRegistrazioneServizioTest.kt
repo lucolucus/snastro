@@ -25,6 +25,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -140,6 +141,19 @@ class AggiungiRegistrazioneServizioTest {
     }
 
     @Test
+    fun `AC-60 se l abbonato sincrono lancia un eccezione la Registrazione non esiste e il file copiato e scartato`() {
+        eventi.registraSincrono { evento ->
+            if (evento is RegistrazioneAggiunta) throw GuastoDiProva() else Esito.Ok(Unit)
+        }
+
+        assertFailsWith<GuastoDiProva> { servizio.esegui(AggiungiRegistrazione(SORGENTE)) }
+
+        assertNull(registrazioni.trova(RegistrazioneId("id-1")))
+        assertEquals(emptySet(), archivio.archiviati)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
     fun `AC-61 aggiungere due volte lo stesso file crea due Registrazioni distinte senza blocchi`() {
         servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
         servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
@@ -151,6 +165,8 @@ class AggiungiRegistrazioneServizioTest {
             archivio.archiviati,
         )
     }
+
+    private class GuastoDiProva : RuntimeException("guasto di prova")
 
     private companion object {
         const val SORGENTE = "/sorgenti/Seduta del 12 marzo.m4a"

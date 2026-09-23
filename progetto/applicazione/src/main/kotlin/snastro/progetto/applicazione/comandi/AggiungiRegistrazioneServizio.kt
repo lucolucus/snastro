@@ -19,9 +19,11 @@ import java.time.Clock
  * `audio/` (ADR 0010: verified copy, then commit the row — a failed copy creates nothing), creates
  * the Registrazione (titolo = source file name without extension, durata/data from the probe) and
  * publishes `RegistrazioneAggiunta` — whose SYNC subscriber auto-starts the Elaborazione (ADR 0012
- * R2, out of scope here). If the transaction fails after a successful copy (e.g. the sync
- * subscriber's Esito.Errore rolls the command back, AC-60) the copied file is discarded so no file
- * is left behind without its Registrazione.
+ * R2, out of scope here). If the transaction does not commit after a successful copy — a sync
+ * subscriber's `Esito.Errore` (AC-60) or a thrown exception (sync subscriber throw, or any
+ * SQLite/IO fault at save/commit) — the copied file is discarded so no file is left behind without
+ * its Registrazione; the discard runs from a `finally` so it still happens when the transaction
+ * throws instead of returning.
  */
 @Suppress("LongParameterList") // one parameter per collaborator: uow, id/clock, 2 repos, 2 technical ports, eventi
 public class AggiungiRegistrazioneServizio(
@@ -39,22 +41,26 @@ public class AggiungiRegistrazioneServizio(
         return sonda.sonda(c.percorsoSorgente).poi { info ->
             val id = RegistrazioneId(generatoreId.nuovo())
             archivio.copia(c.percorsoSorgente, id).poi { riferimento ->
-                val esito = uow.inTransazione {
-                    val creato = Registrazione.aggiungi(
-                        id = id,
-                        progettoId = progetto.id,
-                        titolo = titoloDa(c.percorsoSorgente),
-                        riferimentoAudio = riferimento,
-                        durataMs = info.durataMs,
-                        dataRegistrazione = info.dataFile,
-                        aggiuntaAlle = clock.instant(),
-                    )
-                    registrazioni.salva(creato.aggregato)
-                    eventi.pubblica(creato.evento.pubblicato())
-                    Esito.Ok(Unit)
+                var confermata = false
+                try {
+                    uow.inTransazione {
+                        val creato = Registrazione.aggiungi(
+                            id = id,
+                            progettoId = progetto.id,
+                            titolo = titoloDa(c.percorsoSorgente),
+                            riferimentoAudio = riferimento,
+                            durataMs = info.durataMs,
+                            dataRegistrazione = info.dataFile,
+                            aggiuntaAlle = clock.instant(),
+                        )
+                        registrazioni.salva(creato.aggregato)
+                        eventi.pubblica(creato.evento.pubblicato())
+                        Esito.Ok(Unit)
+                    }.also { confermata = it is Esito.Ok }
+                } finally {
+                    // AC-60: no file without its row, whether the transaction returns Errore or throws
+                    if (!confermata) archivio.scarta(riferimento)
                 }
-                if (esito is Esito.Errore) archivio.scarta(riferimento) // AC-60: no file without its row
-                esito
             }
         }
     }
