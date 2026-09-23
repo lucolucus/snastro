@@ -324,3 +324,4 @@
 2026-09-23T11:56:00Z	sorgente-impronta	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:56:00Z	sorgente-impronta	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:56:00Z	fix-batch-6	worker	dispatch	cycle=0	tier=standard	model=sonnet	(registro-progetti-file follow-up)
+2026-09-23T11:56:10Z	esegui-elaborazione	verifier	result	cycle=2	tier=deep	model=opus	PASS (merged-tree gate green x2; M1/M6/M7 killed; notes: KDoc recovery "startup only" understates AC-312; double-fault motivo ends as interrotta)
