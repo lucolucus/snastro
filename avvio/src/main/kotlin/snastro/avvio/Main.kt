@@ -29,6 +29,9 @@ private const val ALTEZZA_SMOKE_PX = 800
 private const val ATTESA_SMOKE_TIMEOUT_MS = 10_000L
 private const val ATTESA_SMOKE_PASSO_MS = 20L
 
+/** AC-350/AC-341: R0's own wiring decision — the shell shows only Registrazioni, never Parlanti. */
+internal val SEZIONI_SHELL_R0: Set<DestinazioneShell> = setOf(DestinazioneShell.REGISTRAZIONI)
+
 /**
  * Composition root R0 (release Archivio): manual wiring of the R0 graph ([costruisciGrafoR0]) — S1 ·
  * Progetti, S2 · Registrazioni del Progetto, shell WITHOUT the Parlanti section (AC-341), no S3/S4/S5
@@ -63,7 +66,7 @@ fun main(args: Array<String>) {
 @Composable
 internal fun ContenutoApp(grafo: GrafoR0) {
     val shellPresenter = remember {
-        ShellPresenter(grafo.scope, grafo.io, grafo.sessione, setOf(DestinazioneShell.REGISTRAZIONI))
+        ShellPresenter(grafo.scope, grafo.io, grafo.sessione, SEZIONI_SHELL_R0)
     }
     ShellRoute(
         presenter = shellPresenter,
@@ -77,22 +80,34 @@ internal fun ContenutoApp(grafo: GrafoR0) {
             val collaboratori = grafo.sessione.collaboratoriCorrenti()
             if (collaboratori != null) {
                 val registrazioniPresenter = remember(conProgetto.progetto.progettoId) {
-                    RegistrazioniPresenter(
-                        scope = grafo.scope,
-                        io = grafo.io,
-                        registrazioni = collaboratori.registrazioni,
-                        aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
-                        modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,
-                        lettore = collaboratori.lettoreAudio,
-                        aggiornamenti = collaboratori.aggiornamentiVista,
-                        clock = grafo.clock,
-                    )
+                    costruisciRegistrazioniPresenter(grafo, collaboratori)
                 }
                 RegistrazioniRoute(registrazioniPresenter)
             }
         },
     )
 }
+
+/**
+ * AC-350: R0 wires `statiElaborazione`/`avviaElaborazione` as `null` (default) — no Trascrizione
+ * source at all. H2: launched on [CollaboratoriProgettoAperto.scope] — this Progetto's OWN child
+ * scope, never the app-wide [GrafoR0.scope] — so [snastro.ui.registrazioni.RegistrazioniPresenter]'s
+ * endless collectors (`init`) are cancelled together when [SessioneProgettoImpl.chiudi] cancels that
+ * scope, instead of outliving the closed Progetto.
+ */
+internal fun costruisciRegistrazioniPresenter(
+    grafo: GrafoR0,
+    collaboratori: CollaboratoriProgettoAperto,
+): RegistrazioniPresenter = RegistrazioniPresenter(
+    scope = collaboratori.scope,
+    io = grafo.io,
+    registrazioni = collaboratori.registrazioni,
+    aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
+    modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,
+    lettore = collaboratori.lettoreAudio,
+    aggiornamenti = collaboratori.aggiornamentiVista,
+    clock = grafo.clock,
+)
 
 @OptIn(ExperimentalTestApi::class)
 internal fun eseguiSmoke(fixtureDir: String) {

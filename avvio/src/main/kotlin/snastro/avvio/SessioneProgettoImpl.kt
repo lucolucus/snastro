@@ -1,8 +1,14 @@
 package snastro.avvio
 
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import snastro.audio.RiproduttoreWav
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
@@ -20,6 +26,7 @@ import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazioneServizio
 import snastro.progetto.applicazione.letture.RegistrazioniDelProgetto
+import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.VoceRegistro
 import snastro.ui.ErroreSessione
@@ -45,12 +52,21 @@ import java.util.logging.Logger
  * open at a time per instance ([corrente]); [collaboratoriCorrenti] exposes this open Progetto's
  * collaborators for `:avvio`'s own presenters wiring (`:ui`'s [SessioneProgetto] contract does not
  * carry them — this class is `:avvio`'s own, a superset of it).
+ *
+ * H2: [scopeGenitore] is the app-wide `grafo.scope` — every open Progetto gets its OWN child
+ * [CoroutineScope] ([SessioneAperta.scope]), cancelled in [chiudi]; `:avvio`'s own wiring launches
+ * this Progetto's presenters on [CollaboratoriProgettoAperto.scope], never on [scopeGenitore]
+ * directly. H3: every failure path after [acquisisciLock] releases the `.lock` — including a
+ * `.lock` already held (early return, nothing to release) — before returning; [chiudi] releases it
+ * (and stops [SessioneAperta.lettoreAudio]) in a `finally`, even if reading the Progetto's own
+ * Registrazioni fails.
  */
 internal class SessioneProgettoImpl(
     private val registro: RegistroProgetti,
     private val generatoreId: GeneratoreId,
     private val clock: Clock,
-    private val apriDatabase: (File) -> SnastroDatabase = ::apriDatabaseProgetto,
+    private val scopeGenitore: CoroutineScope,
+    private val seams: SessioneProgettoSeams = SessioneProgettoSeams(),
 ) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
     override val corrente: StateFlow<ProgettoAperto?> = _corrente.asStateFlow()
@@ -58,12 +74,16 @@ internal class SessioneProgettoImpl(
     @Volatile
     private var aperta: SessioneAperta? = null
 
+    // `scope` is not repeated here: it is `collaboratori.scope` (the very value handed to `:avvio`'s
+    // own presenter wiring) — keeping ONE source of truth for it, and this constructor's own param
+    // count down (LongParameterList), the same reason `collaboratori`/`ContestoDatabase` are bundles.
     private class SessioneAperta(
         val cartella: Path,
         val lockCartella: LockCartella,
-        val registrazioni: RegistrazioneRepositorySql,
+        val registrazioni: RegistrazioneRepository,
         val progettoId: ProgettoId,
         val collaboratori: CollaboratoriProgettoAperto,
+        val lettoreAudio: LettoreAudioReale,
     )
 
     /** The currently open Progetto's collaborators, or `null` if none is open. */
@@ -74,7 +94,12 @@ internal class SessioneProgettoImpl(
         val nomeProgetto = nome.trim()
         if (nomeProgetto.isBlank()) return Esito.Errore(ErroreSessione.NomeProgettoVuoto)
 
-        val cartella = creaCartellaLibera(Path.of(cartellaGenitore), NomeCartella.base(nome))
+        // L2 (ADR 0010): la cartella genitore predefinita (es. ~/Documents/snastro/) puo' non
+        // esistere ancora al primo `crea` — `creaCartellaLibera` (createDirectory) richiede che
+        // esista gia'.
+        val genitore = Path.of(cartellaGenitore)
+        Files.createDirectories(genitore)
+        val cartella = creaCartellaLibera(genitore, NomeCartella.base(nome))
         Files.createDirectories(cartella.resolve("audio"))
         Files.createDirectories(cartella.resolve("documenti"))
         Files.createDirectories(cartella.resolve("cache/audio"))
@@ -82,11 +107,31 @@ internal class SessioneProgettoImpl(
         // Un brand-new folder: nessun altro puo' gia' detenere il lock, difensivo soltanto.
         val lockCartella = acquisisciLock(cartella) ?: return Esito.Errore(ErroreSessione.ProgettoGiaAperto)
 
-        val db = apriDatabase(cartella.toFile())
+        val db = try {
+            seams.apriDatabase(cartella.toFile())
+        } catch (e: CancellationException) {
+            rilasciaLock(lockCartella)
+            throw e
+        } catch (
+            // H3: qualunque fallimento nell'apertura (es. un SQLException) non deve mai trattenere
+            // il lock per sempre.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.log(Level.WARNING, "apertura del database fallita in crea", e)
+            rilasciaLock(lockCartella)
+            return Esito.Errore(ErroreSessione.CartellaNonValida)
+        }
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db))
         val progetti = ProgettoRepositorySql(db)
-        CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
+        val esitoCrea = CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
             .esegui(CreaProgetto(nomeProgetto))
+        if (esitoCrea is Esito.Errore) {
+            // H3: CreaProgetto puo' fallire (es. NomeProgettoVuoto tramite NomeProgetto.di, o
+            // ProgettoGiaPresente in teoria) — mai un lock trattenuto o un IllegalStateException da
+            // `progetti.trova() ?: error(...)` sotto.
+            rilasciaLock(lockCartella)
+            return esitoCrea
+        }
         val progetto = progetti.trova() ?: error("CreaProgetto non ha creato il Progetto")
 
         return apriGrafo(cartella, lockCartella, ContestoDatabase(db, dispatcher), progetto.id, progetto.nome.valore)
@@ -100,10 +145,21 @@ internal class SessioneProgettoImpl(
         val lockCartella = acquisisciLock(cartella) ?: return Esito.Errore(ErroreSessione.ProgettoGiaAperto)
 
         val db = try {
-            apriDatabase(cartella.toFile())
+            seams.apriDatabase(cartella.toFile())
         } catch (ignored: SchemaProgettoPiuRecenteException) {
             rilasciaLock(lockCartella)
             return Esito.Errore(ErroreSessione.DatabasePiuRecente)
+        } catch (e: CancellationException) {
+            rilasciaLock(lockCartella)
+            throw e
+        } catch (
+            // H3 (AC-349): un progetto.db corrotto o illeggibile lancia (tipicamente un
+            // java.sql.SQLException) — mai un lock trattenuto per sempre.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.log(Level.WARNING, "apertura del database fallita in apri", e)
+            rilasciaLock(lockCartella)
+            return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
         val progetti = ProgettoRepositorySql(db)
@@ -120,12 +176,28 @@ internal class SessioneProgettoImpl(
     override fun chiudi() {
         val sessione = aperta ?: return
         aperta = null
-        val numRegistrazioni = sessione.registrazioni.delProgetto(sessione.progettoId).size
-        val percorso = percorsoAssoluto(sessione.cartella)
-        val ultimaAttivita = clock.instant()
-        fuoriDalThreadUi(registro) { it.aggiorna(percorso, numRegistrazioni, ultimaAttivita) }
-        rilasciaLock(sessione.lockCartella)
-        _corrente.value = null
+        try {
+            val numRegistrazioni = sessione.registrazioni.delProgetto(sessione.progettoId).size
+            val percorso = percorsoAssoluto(sessione.cartella)
+            val ultimaAttivita = clock.instant()
+            fuoriDalThreadUi(registro) { it.aggiorna(percorso, numRegistrazioni, ultimaAttivita) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // H3: stessa regola AC-347 gia' vale per il registro (chiudi non deve MAI lanciare) —
+            // estesa qui alla lettura delle Registrazioni: solo il conteggio per il registro va
+            // perso, loggato, mai un chiudi() che lancia verso il chiamante (un click handler UI).
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            log.log(Level.WARNING, "lettura delle Registrazioni fallita in chiudi", e)
+        } finally {
+            // H2/H3: fermare il lettore, cancellare lo scope della sessione, rilasciare il lock e
+            // azzerare `corrente` accadono SEMPRE — anche se la lettura di `delProgetto` sopra lancia.
+            sessione.lettoreAudio.chiudi()
+            sessione.collaboratori.scope.cancel()
+            rilasciaLock(sessione.lockCartella)
+            _corrente.value = null
+        }
     }
 
     /** Builds the rest of the R0 graph for a freshly opened/created [progettoId] and sets [corrente]. */
@@ -137,8 +209,12 @@ internal class SessioneProgettoImpl(
         nomeProgetto: String,
     ): Esito<ProgettoAperto> {
         val (db, dispatcher) = contesto
-        val registrazioni = RegistrazioneRepositorySql(db)
+        val registrazioni = seams.costruisciRegistrazioni(db)
         val progetti = ProgettoRepositorySql(db)
+        // H2: uno scope FIGLIO di scopeGenitore (stesso dispatcher, un SupervisorJob proprio) —
+        // cancellato in chiudi(), mai l'app-wide scopeGenitore stesso.
+        val scopeSessione =
+            CoroutineScope(scopeGenitore.coroutineContext + SupervisorJob(scopeGenitore.coroutineContext[Job]))
         val aggiungiServizio = AggiungiRegistrazioneServizio(
             dispatcher.unitaDiLavoro,
             generatoreId,
@@ -154,6 +230,7 @@ internal class SessioneProgettoImpl(
         val lettoreAudio = LettoreAudioReale(
             cartella,
             riferimentoAudioDi = { id -> registrazioni.trova(id)?.riferimentoAudio },
+            riproduttore = seams.riproduttoreFabbrica(),
         )
         val collaboratori = CollaboratoriProgettoAperto(
             registrazioni = { registrazioniDelProgetto.delProgetto(progettoId) },
@@ -161,6 +238,7 @@ internal class SessioneProgettoImpl(
             modificaDataRegistrazione = modificaServizio::esegui,
             lettoreAudio = lettoreAudio,
             aggiornamentiVista = AggiornamentiVistaEventi(dispatcher),
+            scope = scopeSessione,
         )
 
         val percorso = percorsoAssoluto(cartella)
@@ -169,7 +247,7 @@ internal class SessioneProgettoImpl(
             it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, clock.instant()))
         }
 
-        aperta = SessioneAperta(cartella, lockCartella, registrazioni, progettoId, collaboratori)
+        aperta = SessioneAperta(cartella, lockCartella, registrazioni, progettoId, collaboratori, lettoreAudio)
         val progettoAperto = ProgettoAperto(progettoId, nomeProgetto, percorso)
         _corrente.value = progettoAperto
         return Esito.Ok(progettoAperto)
@@ -178,6 +256,18 @@ internal class SessioneProgettoImpl(
 
 /** [SessioneProgettoImpl.apriGrafo]'s two persistence collaborators, bundled to keep its param count down. */
 private data class ContestoDatabase(val db: SnastroDatabase, val dispatcher: DispatcherEventiInMemoria)
+
+/**
+ * [SessioneProgettoImpl]'s replaceable collaborators for the green-on-its-own tests (`apriDatabase`
+ * already existed; `costruisciRegistrazioni`/`riproduttoreFabbrica` are new, H2/H3) — bundled into
+ * ONE constructor param to keep [SessioneProgettoImpl]'s own param count under detekt's
+ * `LongParameterList` (mirrors [ContestoDatabase]).
+ */
+internal data class SessioneProgettoSeams(
+    val apriDatabase: (File) -> SnastroDatabase = ::apriDatabaseProgetto,
+    val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql,
+    val riproduttoreFabbrica: () -> RiproduttoreWav = ::RiproduttoreWav,
+)
 
 /** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */
 private class LockCartella(val canale: FileChannel, val lock: FileLock)

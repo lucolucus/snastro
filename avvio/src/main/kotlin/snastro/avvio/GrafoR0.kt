@@ -47,7 +47,7 @@ internal fun costruisciGrafoR0(cartellaRegistro: Path = cartellaDatiRegistroProg
     val generatoreId = GeneratoreIdUuid()
 
     val registro = RegistroProgettiFile(cartellaRegistro.resolve("registro-progetti.tsv"))
-    val sessione = SessioneProgettoImpl(registro, generatoreId, clock)
+    val sessione = SessioneProgettoImpl(registro, generatoreId, clock, scopeGenitore = scope)
     val elencoProgetti = ElencoProgetti(registro)
 
     return GrafoR0(scope, io, clock, sessione, elencoProgetti)

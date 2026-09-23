@@ -1,7 +1,10 @@
 package snastro.avvio
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.GeneratoreIdUuid
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.persistenza.SchemaProgettoPiuRecenteException
@@ -16,6 +19,8 @@ import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -24,6 +29,8 @@ import kotlin.test.assertTrue
 
 /**
  * D2 (consumer-driven contract, real-on-real) + the block's own AC-238/239/240/263..265/347/349.
+ * No `io.mockk` here (CR-17: this class extends a `*Contratto`) — a mockk-based test (e.g. the H2
+ * player-close/scope-cancel one) lives in [SessioneProgettoImplChiudiTest] instead.
  */
 class SessioneProgettoImplTest : SessioneProgettoContratto() {
     @TempDir
@@ -37,7 +44,10 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         registro: RegistroProgetti = RegistroProgettiFinta(),
         generatoreId: GeneratoreIdFinto = GeneratoreIdFinto(),
         clock: Clock = Clock.fixed(ORA, ZoneOffset.UTC),
-    ): SessioneProgettoImpl = SessioneProgettoImpl(registro, generatoreId, clock)
+    ): SessioneProgettoImpl = SessioneProgettoImpl(registro, generatoreId, clock, scopeGenitore = scopeDiProva())
+
+    /** Every test scope is a standalone `SupervisorJob` — nothing outlives one test's own assertions. */
+    private fun scopeDiProva(): CoroutineScope = CoroutineScope(SupervisorJob())
 
     private fun attendi(timeoutMs: Long = 2_000, condizione: () -> Boolean) {
         val scadenza = System.currentTimeMillis() + timeoutMs
@@ -183,10 +193,12 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val cartellaProgetto = cartella.resolve("Futuro.snastro").also(Files::createDirectories)
         Files.createFile(cartellaProgetto.resolve("progetto.db"))
         val sessione = SessioneProgettoImpl(
-            RegistroProgettiFinta(),
-            GeneratoreIdFinto(),
-            Clock.fixed(ORA, ZoneOffset.UTC),
-        ) { throw SchemaProgettoPiuRecenteException(999, 1) }
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = Clock.fixed(ORA, ZoneOffset.UTC),
+            scopeGenitore = scopeDiProva(),
+            seams = SessioneProgettoSeams(apriDatabase = { throw SchemaProgettoPiuRecenteException(999, 1) }),
+        )
 
         val errore = sessione.apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
         assertEquals(ErroreSessione.DatabasePiuRecente, errore)
@@ -227,6 +239,96 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val seconda = nuovaSessione()
         val riaperto = seconda.apri(progetto.percorso).atteso()
         assertEquals(progetto.progettoId, riaperto.progettoId)
+    }
+
+    // --- H3 (AC-349): .lock non trattenuto su eccezione in apertura ------------------------------
+
+    @Test
+    fun `H3 un progetto db corrotto restituisce CartellaNonValida e rilascia il lock`() {
+        val cartellaProgetto = cartella.resolve("Corrotto.snastro").also(Files::createDirectories)
+        // Byte casuali: un file esistente, leggibile, ma non un database SQLite valido — l'apertura
+        // reale (apriDatabaseProgetto) lancia un java.sql.SQLException leggendo `PRAGMA user_version`.
+        Files.write(cartellaProgetto.resolve("progetto.db"), ByteArray(64) { it.toByte() })
+
+        val sessione = con()
+        val errore = sessione.apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
+        assertEquals(ErroreSessione.CartellaNonValida, errore)
+
+        // Il lock non e' rimasto trattenuto: una seconda apri (ancora corrotta) fallisce di nuovo per
+        // lo stesso motivo, mai per ProgettoGiaAperto (prova indiretta del rilascio, come AC-349 sopra).
+        val secondoErrore = sessione.apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
+        assertEquals(ErroreSessione.CartellaNonValida, secondoErrore)
+    }
+
+    @Test
+    fun `H3 in crea un errore nell apertura del database rilascia il lock`() {
+        val cartellaFallita = cartella.resolve("Prova.snastro") // il primo nome che creaCartellaLibera sceglie
+        val sessioneRotta = SessioneProgettoImpl(
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = Clock.fixed(ORA, ZoneOffset.UTC),
+            scopeGenitore = scopeDiProva(),
+            seams = SessioneProgettoSeams(apriDatabase = { throw java.sql.SQLException("errore di prova") }),
+        )
+
+        val errore = sessioneRotta.crea(cartella.toString(), "Prova").erroreAtteso<ErroreSessione>()
+        assertEquals(ErroreSessione.CartellaNonValida, errore)
+
+        // Il lock non e' rimasto trattenuto sulla cartella appena creata: apri sulla stessa cartella
+        // (senza un progetto.db valido, mai completato) fallisce per CartellaNonValida, mai
+        // ProgettoGiaAperto.
+        val erroreApri = con().apri(cartellaFallita.toString()).erroreAtteso<ErroreSessione>()
+        assertEquals(ErroreSessione.CartellaNonValida, erroreApri)
+    }
+
+    // --- AC-264 race: N thread in gara sullo stesso nome, mai una collisione --------------------
+
+    @Test
+    fun `AC-264 race N thread chiamano crea con lo stesso nome, ognuno ottiene una cartella distinta`() {
+        val numeroThread = 8
+        val via = java.util.concurrent.CountDownLatch(1)
+        val pronti = java.util.concurrent.CountDownLatch(numeroThread)
+        val eseguibile = Executors.newFixedThreadPool(numeroThread)
+        try {
+            val futures = (1..numeroThread).map {
+                eseguibile.submit<Pair<SessioneProgettoImpl, String>> {
+                    pronti.countDown()
+                    via.await()
+                    val sessione = SessioneProgettoImpl(
+                        registro = RegistroProgettiFinta(),
+                        generatoreId = GeneratoreIdUuid(),
+                        clock = Clock.fixed(ORA, ZoneOffset.UTC),
+                        scopeGenitore = scopeDiProva(),
+                    )
+                    sessione to sessione.crea(cartella.toString(), "Prova").atteso().percorso
+                }
+            }
+            assertTrue(pronti.await(5, TimeUnit.SECONDS))
+            via.countDown()
+            val risultati = futures.map { it.get(10, TimeUnit.SECONDS) }
+            // chiudi ogni sessione: rilascia i .lock e le connessioni SQLite aperte prima che @TempDir
+            // provi a ripulire la cartella condivisa a fine test.
+            risultati.forEach { (sessione, _) -> sessione.chiudi() }
+            val percorsi = risultati.map { it.second }
+
+            assertEquals(numeroThread, percorsi.toSet().size, "ogni thread deve ottenere una cartella distinta")
+            percorsi.forEach { assertTrue(Files.isDirectory(Path.of(it)), "$it deve esistere") }
+        } finally {
+            eseguibile.shutdownNow()
+        }
+    }
+
+    // --- L2 (ADR 0010) ----------------------------------------------------------------------------
+
+    @Test
+    fun `L2 crea crea la cartella genitore se non esiste ancora`() {
+        val genitoreMancante = cartella.resolve("Documents/snastro")
+        assertTrue(Files.notExists(genitoreMancante))
+
+        val progetto = con().crea(genitoreMancante.toString(), "Prova").atteso()
+
+        assertTrue(Files.isDirectory(genitoreMancante))
+        assertTrue(Files.isDirectory(Path.of(progetto.percorso)))
     }
 
     private companion object {
