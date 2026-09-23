@@ -187,3 +187,8 @@
 2026-09-23T10:25:39Z	avvia-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:25:39Z	avvia-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:26:03Z	esegui-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:27:26Z	avvia-elaborazione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED defer: agg-elaborazione §14 gate StatoElaborazione\. already red at 091e443 on test/testFixtures — gate scope vs tests needs a decision; LOW patch: mixed INV-4 histories, AC-66 GiaCompletata backstop, creataAlle==clock; LOW: comment on discarded ElaborazioneAccodata)
+2026-09-23T10:27:33Z	gestione-parlante	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (7b275d1; new ErroreApplicazioneParlanti hierarchy; duplicate CR-16 fix)
+2026-09-23T10:27:33Z	gestione-parlante	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:27:33Z	gestione-parlante	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:27:55Z	avvia-elaborazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (pre-existing mis-scoped reds, not from this diff: ADR 0004 enforced_by matches "com.k2fsa" literals in architettura-test; agg-elaborazione §14 StatoElaborazione\. matches test/testFixtures → re-scope to src/main via write-adr/build-manifest)
