@@ -4,11 +4,18 @@ package snastro.kernel
  * In-memory [UnitaDiLavoro]: the outermost transaction snapshots every [partecipanti] state and
  * restores it on rollback. A nested call joins the outer transaction; a nested [Esito.Errore] or
  * exception dooms it (the [UnitaDiLavoro] rule).
+ *
+ * [transazioneAperta] tells whether a block is running inside [inTransazione] right now (nested
+ * included): the Parlanti ML fakes read it to refuse being called inside a transaction
+ * (ADR 0012 Amendment (b), AC-266).
  */
 public class UnitaDiLavoroFinta(private vararg val partecipanti: Ripristinabile) : UnitaDiLavoro {
     private var profondita = 0
     private var erroreAnnidato: Esito.Errore? = null
     private var eccezioneAnnidata: Throwable? = null
+
+    /** True only while a block runs inside [inTransazione]; false again after commit and rollback. */
+    public val transazioneAperta: Boolean get() = profondita > 0
 
     override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> =
         if (profondita == 0) esterna(blocco) else annidata(blocco)
