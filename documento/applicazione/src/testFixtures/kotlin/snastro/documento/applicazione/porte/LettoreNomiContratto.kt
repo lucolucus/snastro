@@ -131,7 +131,8 @@ public abstract class LettoreNomiContratto {
         assertEquals(mapOf(r.voci[0] to "Ospite", r.voci[1] to "Giulia"), lettore.nomi(r.id))
         assertRegistrazioni(lettore, ospite, "Ospite", setOf(r.id))
 
-        // Its only Voce leaves: the occasionale is removed (INV-25).
+        // Its only Voce leaves: the occasionale is removed (INV-25). The port cannot observe whether the
+        // Parlante row is gone; the case bites at D2, where the real Ambiente physically deletes it.
         a.conferma(r.voci[0], giulia)
 
         assertEquals(mapOf(r.voci[0] to "Giulia", r.voci[1] to "Giulia"), lettore.nomi(r.id))
