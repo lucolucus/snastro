@@ -6,4 +6,7 @@ import snastro.kernel.ErroreDominio
 public sealed interface ErroreProgetto : ErroreDominio {
     /** The Nome of a Progetto was empty or blank. */
     public data object NomeProgettoVuoto : ErroreProgetto
+
+    /** The project database already holds a Progetto: only one is ever created in it. */
+    public data object ProgettoGiaPresente : ErroreProgetto
 }
