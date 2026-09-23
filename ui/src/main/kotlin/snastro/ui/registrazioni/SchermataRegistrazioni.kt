@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -36,7 +38,9 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import snastro.kernel.RegistrazioneId
 import snastro.ui.SnastroTema
@@ -47,15 +51,15 @@ import snastro.ui.testi.ETICHETTA_COMPLETATA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
+import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
+import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
-import snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE
 import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.etichettaInCorso
-import java.io.ByteArrayOutputStream
-import java.io.File
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
+import java.time.format.ResolverStyle
 import javax.swing.JFileChooser
 
 private val PADDING_SCHERMO = 24.dp
@@ -63,9 +67,11 @@ private val PADDING_SEZIONE = 16.dp
 private val PADDING_RIGA = 8.dp
 private val LARGHEZZA_CAMPO_DATA = 120.dp
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
-private const val RADICE_ESADECIMALE = 16
-private const val LUNGHEZZA_ESCAPE_PERCENTO = 2 // "%XX": 2 hex digits after '%'
-private val FORMATO_DATA_MODIFICABILE: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
+
+/** M4: `uuuu` (proleptic year, not `yyyy`) + [ResolverStyle.STRICT] rejects an out-of-range day
+ * (e.g. 31/02) instead of a SMART resolver silently rolling it into the next month (28/02). */
+private val FORMATO_DATA_MODIFICABILE: DateTimeFormatter =
+    DateTimeFormatter.ofPattern("dd/MM/uuuu").withResolverStyle(ResolverStyle.STRICT)
 
 /**
  * Thin view of S2 · Registrazioni (RC-2): only renders [stato] and forwards [azioni]'s events. The
@@ -80,6 +86,7 @@ fun SchermataRegistrazioni(stato: RegistrazioniUiStato, azioni: AzioniRegistrazi
             when (stato) {
                 RegistrazioniUiStato.Caricamento -> IndicatoreCaricamentoRegistrazioni()
                 is RegistrazioniUiStato.Dati -> ContenutoRegistrazioni(stato, azioni)
+                is RegistrazioniUiStato.Errore -> ErroreCaricamentoRegistrazioni(stato.messaggio, azioni.riprova)
             }
         }
     }
@@ -89,6 +96,21 @@ fun SchermataRegistrazioni(stato: RegistrazioniUiStato, azioni: AzioniRegistrazi
 private fun IndicatoreCaricamentoRegistrazioni() {
     Column(modifier = Modifier.fillMaxSize().padding(PADDING_SCHERMO)) {
         CircularProgressIndicator(modifier = Modifier.testTag("registrazioni-indicatore-caricamento"))
+    }
+}
+
+/** M5: the INITIAL load failed — a distinct state, never the AC-199 empty-catalog message (which
+ * would falsely claim there are no registrazioni) — with a retry action. */
+@Composable
+private fun ErroreCaricamentoRegistrazioni(messaggio: String, onRiprova: () -> Unit) {
+    Column(
+        modifier = Modifier.fillMaxSize().padding(PADDING_SCHERMO).testTag("registrazioni-errore-caricamento"),
+    ) {
+        Text(text = messaggio, color = MaterialTheme.colorScheme.error)
+        Spacer(modifier = Modifier.height(PADDING_SEZIONE))
+        TextButton(onClick = onRiprova, modifier = Modifier.testTag("registrazioni-riprova")) {
+            Text(ETICHETTA_RIPROVA)
+        }
     }
 }
 
@@ -120,7 +142,7 @@ private fun ContenutoRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: Azi
 private fun BarraImportazione(inCorso: Boolean, azioni: AzioniRegistrazioni) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Button(
-            onClick = { sceltaFileAudio()?.let { azioni.importa(it) } },
+            onClick = { sceltaFileAudio()?.let { azioni.importa(listOf(it)) } },
             enabled = !inCorso,
             modifier = Modifier.testTag("registrazioni-importa"),
         ) { Text(ETICHETTA_IMPORTA_FILE) }
@@ -208,7 +230,7 @@ private fun ControlloRiproduzione(riga: RigaRegistrazione, azioni: AzioniRegistr
                     modifier = Modifier.testTag(tagBase),
                 )
                 Text(
-                    text = MESSAGGIO_SORGENTE_NON_DISPONIBILE,
+                    text = MESSAGGIO_AUDIO_NON_DISPONIBILE,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(start = PADDING_RIGA).testTag("$tagBase-non-disponibile"),
@@ -217,28 +239,60 @@ private fun ControlloRiproduzione(riga: RigaRegistrazione, azioni: AzioniRegistr
     }
 }
 
-/** AC-206: local text buffer, resynced from [RigaRegistrazione.dataRegistrazione] on every real change. */
+/**
+ * AC-206: local text buffer, resynced from [RigaRegistrazione.dataRegistrazione] on every real
+ * change. M4: submits only on Enter or on losing focus — never on every keystroke, so a partial date
+ * while typing never round-trips through the parser — and a value that fails to parse (STRICT: no
+ * 31/02 silently rolled to 28/02) is shown as an inline error instead of being dropped.
+ */
 @Composable
 private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     var testo by remember(riga.dataRegistrazione) { mutableStateOf(formattaData(riga.dataRegistrazione)) }
-    OutlinedTextField(
-        value = testo,
-        onValueChange = { nuovo ->
-            testo = nuovo
-            nuovo.aData()?.let { azioni.modificaData(riga.registrazioneId, it) }
-        },
-        singleLine = true,
-        enabled = !riga.operazioneInCorso,
-        textStyle = MaterialTheme.typography.bodySmall,
-        modifier = Modifier.width(LARGHEZZA_CAMPO_DATA).testTag("registrazioni-data-${riga.registrazioneId.valore}"),
-    )
+    var nonValido by remember(riga.dataRegistrazione) { mutableStateOf(false) }
+    var eraFocalizzato by remember(riga.dataRegistrazione) { mutableStateOf(false) }
+    fun sottometti() {
+        val data = testo.aData()
+        nonValido = data == null
+        if (data != null && data != riga.dataRegistrazione) azioni.modificaData(riga.registrazioneId, data)
+    }
+    Column {
+        OutlinedTextField(
+            value = testo,
+            onValueChange = { testo = it },
+            singleLine = true,
+            enabled = !riga.operazioneInCorso,
+            isError = nonValido,
+            textStyle = MaterialTheme.typography.bodySmall,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { sottometti() }),
+            modifier = Modifier
+                .width(LARGHEZZA_CAMPO_DATA)
+                .onFocusChanged { stato ->
+                    if (eraFocalizzato && !stato.isFocused) sottometti()
+                    eraFocalizzato = stato.isFocused
+                }
+                .testTag("registrazioni-data-${riga.registrazioneId.valore}"),
+        )
+        if (nonValido) {
+            Text(
+                text = MESSAGGIO_DATA_NON_VALIDA,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("registrazioni-data-errore-${riga.registrazioneId.valore}"),
+            )
+        }
+    }
 }
 
-private fun String.aData(): LocalDate? =
+/** M4: `FORMATO_DATA_MODIFICABILE` (`uuuu` + STRICT) rejects an out-of-range date instead of a SMART
+ * resolver silently rolling it (e.g. 31/02 → 28/02) — `internal` so [PercorsoTrascinatoTest]-style unit
+ * tests can cover the parser directly (see `RegistrazioniDataTest`). */
+internal fun String.aData(): LocalDate? =
     try {
         LocalDate.parse(this, FORMATO_DATA_MODIFICABILE)
     } catch (
-        // AC-206: malformed/partial input while typing is recoverable — the field just doesn't submit yet.
+        // Invalid/malformed input is surfaced as an inline error by the caller — never thrown further,
+        // never silently dropped.
         @Suppress("SwallowedException") e: DateTimeParseException,
     ) {
         null
@@ -293,40 +347,19 @@ private fun sceltaFileAudio(): String? {
     }
 }
 
-/** AC-199..201: an OS drag-and-drop of one or more files hands the first one's path to [onFile]. */
+/**
+ * AC-199..201/LOW: an OS drag-and-drop of one or more files hands every SUCCESSFULLY decoded path to
+ * [onFiles] (`snastro.ui.registrazioni` `percorsoDaUriFile`, H1: correct on non-ASCII paths — a
+ * malformed `%` escape drops just that one file, never throws inside this AWT callback). Nothing
+ * usable in the drop → `false` (rejects the drop, nothing imported).
+ */
 @OptIn(ExperimentalComposeUiApi::class)
-private fun registrazioneDropTarget(onFile: (String) -> Unit) = object : DragAndDropTarget {
+private fun registrazioneDropTarget(onFiles: (List<String>) -> Unit) = object : DragAndDropTarget {
     override fun onDrop(event: DragAndDropEvent): Boolean {
-        val uri = (event.dragData() as? DragData.FilesList)?.readFiles()?.firstOrNull() ?: return false
-        onFile(File(percorsoDaUriFile(uri)).path)
+        val uri = (event.dragData() as? DragData.FilesList)?.readFiles().orEmpty()
+        val percorsi = uri.mapNotNull(::percorsoDaUriFile)
+        if (percorsi.isEmpty()) return false
+        onFiles(percorsi)
         return true
     }
-}
-
-/**
- * `DragData.FilesList.readFiles()` returns each path as a `file:` URI string (JetBrains Compose
- * Desktop encodes it via `File.toURI().toString()` on the AWT side) — decoded here by hand, not via
- * `java.net.URI` (CR-3 confines `java.net.*` to `:modelli`; this is pure string parsing, no network).
- */
-private fun percorsoDaUriFile(uri: String): String {
-    val senzaSchema = uri.removePrefix("file:")
-    val percorso = if (senzaSchema.startsWith("//")) senzaSchema.substring(1) else senzaSchema
-    return percorso.decodificaPercento()
-}
-
-/** Reverses URI percent-encoding (RFC 3986) — a `file:` URI is pure ASCII, so one char is one byte. */
-private fun String.decodificaPercento(): String {
-    val bytes = ByteArrayOutputStream()
-    var i = 0
-    while (i < length) {
-        val c = this[i]
-        if (c == '%' && i + LUNGHEZZA_ESCAPE_PERCENTO < length) {
-            bytes.write(substring(i + 1, i + 1 + LUNGHEZZA_ESCAPE_PERCENTO).toInt(radix = RADICE_ESADECIMALE))
-            i += 1 + LUNGHEZZA_ESCAPE_PERCENTO
-        } else {
-            bytes.write(c.code)
-            i += 1
-        }
-    }
-    return bytes.toString(Charsets.UTF_8)
 }

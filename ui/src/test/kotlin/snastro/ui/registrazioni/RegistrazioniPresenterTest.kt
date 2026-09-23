@@ -2,9 +2,11 @@ package snastro.ui.registrazioni
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
@@ -23,6 +25,7 @@ import snastro.ui.Cambiamento
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 import java.time.Clock
@@ -128,15 +131,9 @@ class RegistrazioniPresenterTest {
         assertEquals(125_000L, riga.durataMs)
     }
 
-    @Test
-    fun `un fallimento nel caricare il catalogo mostra un errore invece di restare in Caricamento`() = runTest {
-        val presenter = presentatore(this, registrazioni = { error("guasto di lettura") })
-        advanceUntilIdle()
-
-        val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
-        assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
-        assertEquals(emptyList(), dati.righe)
-    }
+    // M5: a failure loading the initial catalog is covered below ("M5 un fallimento del caricamento
+    // iniziale mostra uno stato Errore distinto") — it is now a distinct RegistrazioniUiStato.Errore,
+    // never a Dati (which would show the misleading AC-199 empty-list message).
 
     // --- AC-342: R0 variant, no Trascrizione sources -------------------------------------------
 
@@ -250,11 +247,15 @@ class RegistrazioniPresenterTest {
         )
         advanceUntilIdle()
 
-        presenter.azioni.importa("/sorgenti/x.m4a")
+        presenter.azioni.importa(listOf("/sorgenti/x.m4a"))
         advanceUntilIdle()
 
         val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreApplicazioneProgetto.AudioNonLeggibile("/sorgenti/x.m4a")), dati.errore)
+        assertEquals(true, dati.errore?.contains("x.m4a"))
+        assertEquals(
+            true,
+            dati.errore?.contains(messaggioPer(ErroreApplicazioneProgetto.AudioNonLeggibile("/sorgenti/x.m4a"))),
+        )
         assertEquals(emptyList(), dati.righe)
         assertEquals(false, dati.importoInCorso)
     }
@@ -273,12 +274,40 @@ class RegistrazioniPresenterTest {
         advanceUntilIdle()
         assertEquals(emptyList(), assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe)
 
-        presenter.azioni.importa("/sorgenti/x.m4a")
+        presenter.azioni.importa(listOf("/sorgenti/x.m4a"))
         advanceUntilIdle()
 
         val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
         assertEquals(listOf(REG_1), dati.righe.map { it.registrazioneId })
         assertEquals(false, dati.importoInCorso)
+        assertNull(dati.errore)
+    }
+
+    @Test
+    fun `LOW un drop multiplo importa ogni file in sequenza e riporta gli errori per singolo file`() = runTest {
+        val chiamate = mutableListOf<String>()
+        val presenter = presentatore(
+            this,
+            aggiungi = { c ->
+                chiamate += c.percorsoSorgente
+                if (c.percorsoSorgente.endsWith("b.m4a")) {
+                    Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(c.percorsoSorgente))
+                } else {
+                    Esito.Ok(Unit)
+                }
+            },
+        )
+        advanceUntilIdle()
+
+        presenter.azioni.importa(listOf("/sorgenti/a.m4a", "/sorgenti/b.m4a", "/sorgenti/c.m4a"))
+        advanceUntilIdle()
+
+        // sequential: every file was attempted, in order, even though the second one failed
+        assertEquals(listOf("/sorgenti/a.m4a", "/sorgenti/b.m4a", "/sorgenti/c.m4a"), chiamate)
+        val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
+        assertEquals(false, dati.importoInCorso)
+        assertNotNull(dati.errore)
+        assertEquals(true, dati.errore!!.contains("b.m4a"))
     }
 
     @Test
@@ -293,8 +322,8 @@ class RegistrazioniPresenterTest {
         )
         advanceUntilIdle()
 
-        presenter.azioni.importa("/sorgenti/a.m4a")
-        presenter.azioni.importa("/sorgenti/b.m4a")
+        presenter.azioni.importa(listOf("/sorgenti/a.m4a"))
+        presenter.azioni.importa(listOf("/sorgenti/b.m4a"))
         advanceUntilIdle()
 
         assertEquals(1, chiamate)
@@ -305,11 +334,11 @@ class RegistrazioniPresenterTest {
         val presenter = presentatore(this, aggiungi = { throw IllegalStateException("guasto") })
         advanceUntilIdle()
 
-        presenter.azioni.importa("/sorgenti/x.m4a")
+        presenter.azioni.importa(listOf("/sorgenti/x.m4a"))
         advanceUntilIdle()
 
         val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
-        assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
+        assertEquals(true, dati.errore?.contains(MESSAGGIO_ERRORE_GENERICO))
         assertEquals(false, dati.importoInCorso)
     }
 
@@ -534,7 +563,7 @@ class RegistrazioniPresenterTest {
             modificaData = { Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(REG_1)) },
         )
         advanceUntilIdle()
-        presenter.azioni.importa("/sorgenti/x.m4a")
+        presenter.azioni.importa(listOf("/sorgenti/x.m4a"))
         advanceUntilIdle()
         presenter.azioni.modificaData(REG_1, LocalDate.of(2026, 1, 2))
         advanceUntilIdle()
@@ -551,5 +580,177 @@ class RegistrazioniPresenterTest {
         presenter.azioni.chiudiErroreRiga(REG_1)
         dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
         assertNull(dati.righe.single().erroreRiga)
+    }
+
+    // --- M5: distinct error state for the INITIAL load -------------------------------------------
+
+    @Test
+    fun `M5 un fallimento del caricamento iniziale mostra uno stato Errore distinto`() = runTest {
+        val presenter = presentatore(this, registrazioni = { error("guasto di lettura") })
+        advanceUntilIdle()
+
+        val stato = assertIs<RegistrazioniUiStato.Errore>(presenter.stato.value)
+        assertEquals(MESSAGGIO_ERRORE_CARICAMENTO, stato.messaggio)
+    }
+
+    @Test
+    fun `M5 riprova ricarica dopo un fallimento del caricamento iniziale`() = runTest {
+        var fallisce = true
+        val presenter = presentatore(
+            this,
+            registrazioni = { if (fallisce) error("guasto") else listOf(rigaVista(REG_1)) },
+        )
+        advanceUntilIdle()
+        assertIs<RegistrazioniUiStato.Errore>(presenter.stato.value)
+
+        fallisce = false
+        presenter.azioni.riprova()
+        advanceUntilIdle()
+
+        val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
+        assertEquals(listOf(REG_1), dati.righe.map { it.registrazioneId })
+    }
+
+    @Test
+    fun `M5 un fallimento di un refresh successivo mantiene le righe note invece di passare a Errore`() = runTest {
+        var fallisce = false
+        val aggiornamenti = AggiornamentiVistaFinta()
+        val presenter = presentatore(
+            this,
+            registrazioni = { if (fallisce) error("guasto di rete") else listOf(rigaVista(REG_1)) },
+            aggiornamenti = aggiornamenti,
+        )
+        advanceUntilIdle()
+        assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
+
+        fallisce = true
+        aggiornamenti.emetti(Cambiamento(REG_1))
+        advanceUntilIdle()
+
+        val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
+        assertEquals(listOf(REG_1), dati.righe.map { it.registrazioneId })
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
+    }
+
+    // --- M1: a refresh merges into the current state, it never wipes in-flight flags -------------
+
+    @Test
+    fun `M1 un Cambiamento in arrivo mentre importoInCorso e vero lo preserva nel refresh`() = runTest {
+        var righeCorrenti = listOf(rigaVista(REG_1))
+        val aggiornamenti = AggiornamentiVistaFinta()
+        val presenter = presentatore(
+            this,
+            registrazioni = { righeCorrenti },
+            aggiornamenti = aggiornamenti,
+            aggiungi = { Esito.Ok(Unit) },
+        )
+        advanceUntilIdle() // initial load: Dati(righe=[REG_1], importoInCorso=false)
+
+        val storico = mutableListOf<RegistrazioniUiStato>()
+        val job = launch { presenter.stato.collect { storico.add(it) } }
+        runCurrent()
+
+        // a second row becomes visible via some other path, concurrently with an import in flight
+        righeCorrenti = listOf(rigaVista(REG_1), rigaVista(REG_2))
+        // queued BEFORE the import's own coroutine even starts running (see importa() below)
+        aggiornamenti.emetti(Cambiamento(REG_2))
+        // synchronously flips importoInCorso -> true before any coroutine has run
+        presenter.azioni.importa(listOf("/sorgenti/x.m4a"))
+        advanceUntilIdle()
+        job.cancel()
+
+        val statoIntermedio = storico.filterIsInstance<RegistrazioniUiStato.Dati>()
+            .firstOrNull { it.righe.size == 2 && it.importoInCorso }
+        assertNotNull(
+            statoIntermedio,
+            "il refresh innescato dal Cambiamento deve preservare importoInCorso durante l'import",
+        )
+    }
+
+    @Test
+    fun `M1 un erroreRiga sopravvive a un refresh innescato da Cambiamento`() = runTest {
+        val aggiornamenti = AggiornamentiVistaFinta()
+        val presenter = presentatore(
+            this,
+            registrazioni = { listOf(rigaVista(REG_1)) },
+            modificaData = { Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(REG_1)) },
+            aggiornamenti = aggiornamenti,
+        )
+        advanceUntilIdle()
+        presenter.azioni.modificaData(REG_1, LocalDate.of(2026, 1, 2))
+        advanceUntilIdle()
+        val primaDelRefresh = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertNotNull(primaDelRefresh.erroreRiga)
+
+        aggiornamenti.emetti(Cambiamento(REG_1))
+        advanceUntilIdle()
+
+        val dopoIlRefresh = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertEquals(primaDelRefresh.erroreRiga, dopoIlRefresh.erroreRiga)
+    }
+
+    // --- H2: LettoreAudio exceptions never kill the presenter ---------------------------------------
+
+    private class LettoreAudioCheLanciaEccezione(
+        private val delegato: LettoreAudio = LettoreAudioFinta(),
+        private val eccezioneRiproduci: Throwable? = null,
+        private val eccezionePausa: Throwable? = null,
+    ) : LettoreAudio by delegato {
+        override fun riproduciDa(id: RegistrazioneId, daMs: Long) {
+            eccezioneRiproduci?.let { throw it } ?: delegato.riproduciDa(id, daMs)
+        }
+
+        override fun pausa() {
+            eccezionePausa?.let { throw it } ?: delegato.pausa()
+        }
+    }
+
+    @Test
+    fun `H2 un eccezione di riproduci e mostrata inline e il presenter resta funzionante dopo`() = runTest {
+        val aggiornamenti = AggiornamentiVistaFinta()
+        val presenter = presentatore(
+            this,
+            registrazioni = { listOf(rigaVista(REG_1)) },
+            lettore = LettoreAudioCheLanciaEccezione(eccezioneRiproduci = IllegalStateException("guasto lettore")),
+            aggiornamenti = aggiornamenti,
+        )
+        advanceUntilIdle()
+
+        presenter.azioni.riproduci(REG_1)
+        advanceUntilIdle()
+
+        val rigaDopoErrore = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, rigaDopoErrore.erroreRiga)
+
+        // the presenter (its `stato`, the AggiornamentiVista collector) is still alive after the throw
+        aggiornamenti.emetti(Cambiamento(REG_1))
+        advanceUntilIdle()
+        val rigaDopoRefresh = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertEquals(REG_1, rigaDopoRefresh.registrazioneId)
+    }
+
+    @Test
+    fun `H2 un eccezione di pausa e mostrata inline sulla riga attiva e il presenter resta funzionante`() = runTest {
+        val delegato = LettoreAudioFinta()
+        val lettore = LettoreAudioCheLanciaEccezione(
+            delegato = delegato,
+            eccezionePausa = IllegalStateException("guasto"),
+        )
+        val presenter = presentatore(this, registrazioni = { listOf(rigaVista(REG_1)) }, lettore = lettore)
+        advanceUntilIdle()
+        presenter.azioni.riproduci(REG_1)
+        advanceUntilIdle()
+
+        presenter.azioni.pausa()
+        advanceUntilIdle()
+
+        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, riga.erroreRiga)
+
+        // still functional afterwards
+        presenter.azioni.riproduci(REG_1)
+        advanceUntilIdle()
+        val rigaDopo = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertEquals(StatoRiproduzioneRiga.InRiproduzione, rigaDopo.riproduzione)
     }
 }

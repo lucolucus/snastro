@@ -10,6 +10,18 @@ const val ETICHETTA_TRASCRIVI: String = "Trascrivi"
 const val ETICHETTA_RIPROVA: String = "Riprova"
 const val ETICHETTA_COMPLETATA: String = "Completata"
 
+/** M5: the initial load failed — distinct from [MESSAGGIO_REGISTRAZIONI_VUOTO] (a real empty catalog). */
+const val MESSAGGIO_ERRORE_CARICAMENTO: String = "Non è stato possibile caricare le registrazioni."
+
+/** M4: shown under the inline date field when it fails to parse (AC-206). */
+const val MESSAGGIO_DATA_NON_VALIDA: String = "Data non valida."
+
+/** AC-343: shown next to a disabled '▶' — a dedicated string, deliberately NOT
+ * [snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE] (the lettore-audio screen's own copy for the
+ * same underlying `LettoreAudio.disponibile` condition; LOW finding — AC-343's exact text is "Audio
+ * non disponibile", not "Sorgente audio non disponibile."). */
+const val MESSAGGIO_AUDIO_NON_DISPONIBILE: String = "Audio non disponibile"
+
 /** AC-203: the phase label of an `in_corso` Elaborazione, e.g. "In corso · separazione voci · 3:12". */
 fun etichetta(fase: FaseElaborazione): String = when (fase) {
     FaseElaborazione.DECODIFICA -> "decodifica"

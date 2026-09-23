@@ -9,7 +9,7 @@ import java.time.LocalDate
  * (AC-203/AC-344): same underlying command, only the label differs by row state.
  */
 data class AzioniRegistrazioni(
-    val importa: (percorsoSorgente: String) -> Unit,
+    val importa: (percorsi: List<String>) -> Unit,
     val modificaData: (RegistrazioneId, LocalDate) -> Unit,
     val riproduci: (RegistrazioneId) -> Unit,
     val pausa: () -> Unit,
@@ -17,4 +17,5 @@ data class AzioniRegistrazioni(
     val apriRiga: (RegistrazioneId) -> Unit,
     val chiudiErrore: () -> Unit,
     val chiudiErroreRiga: (RegistrazioneId) -> Unit,
+    val riprova: () -> Unit,
 )

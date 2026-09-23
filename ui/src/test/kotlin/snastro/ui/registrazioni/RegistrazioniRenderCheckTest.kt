@@ -15,8 +15,9 @@ import snastro.kernel.RegistrazioneId
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
+import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
+import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
-import snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE
 import snastro.ui.testi.etichettaInAttesa
 import java.io.File
 import java.time.LocalDate
@@ -36,6 +37,7 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     apriRiga = {},
     chiudiErrore = {},
     chiudiErroreRiga = {},
+    riprova = {},
 )
 
 private val REG_1 = RegistrazioneId("id-1")
@@ -82,6 +84,14 @@ class RegistrazioniRenderCheckTest {
     @Test
     fun `AC-199 lista vuota mostra il messaggio dedicato a 1024x640`() =
         verificaVuoto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `M5 un fallimento del caricamento iniziale mostra uno stato distinto con Riprova a 1280x800`() =
+        verificaErroreCaricamento(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `M5 un fallimento del caricamento iniziale mostra uno stato distinto con Riprova a 1024x640`() =
+        verificaErroreCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
     fun `AC-342 AC-343 la lista mostra il controllo di riproduzione a 1280x800`() =
@@ -154,6 +164,19 @@ class RegistrazioniRenderCheckTest {
         catturaPng("registrazioni-vuoto", width, height)
     }
 
+    private fun verificaErroreCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazioni-errore-caricamento").assertIsDisplayed()
+        onNodeWithText(MESSAGGIO_ERRORE_CARICAMENTO).assertIsDisplayed()
+        onNodeWithText(ETICHETTA_RIPROVA).assertIsDisplayed()
+        catturaPng("registrazioni-errore-caricamento", width, height)
+    }
+
     private fun verificaLista(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent {
             SchermataRegistrazioni(stato = RegistrazioniUiStato.Dati(righe = listOf(unaRiga())), azioni = AZIONI_VUOTE)
@@ -185,7 +208,7 @@ class RegistrazioniRenderCheckTest {
                 azioni = AZIONI_VUOTE,
             )
         }
-        onNodeWithText(MESSAGGIO_SORGENTE_NON_DISPONIBILE).assertIsDisplayed()
+        onNodeWithText(MESSAGGIO_AUDIO_NON_DISPONIBILE).assertIsDisplayed()
         catturaPng("registrazioni-audio-non-disponibile", width, height)
     }
 

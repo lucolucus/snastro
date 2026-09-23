@@ -23,6 +23,15 @@ sealed interface RegistrazioniUiStato {
         val importoInCorso: Boolean = false,
         val errore: String? = null,
     ) : RegistrazioniUiStato
+
+    /**
+     * M5: the INITIAL load failed — distinct from [Dati] with an empty [Dati.righe] (AC-199, a real
+     * empty catalog): showing the AC-199 empty message here would falsely claim there are no
+     * registrazioni. [messaggio] is paired with a retry action (`AzioniRegistrazioni.riprova`). A
+     * refresh failing AFTER rows are already known stays in [Dati] (H1/M1): the known rows and every
+     * in-flight flag survive, only [Dati.errore] changes.
+     */
+    data class Errore(val messaggio: String) : RegistrazioniUiStato
 }
 
 /**

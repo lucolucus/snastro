@@ -19,9 +19,11 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.ui.AggiornamentiVista
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.etichetta
 import snastro.ui.testi.messaggioPer
+import java.io.File
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -34,7 +36,13 @@ import java.time.LocalDate
  * per refresh, [LettoreAudio.stato] is collected live so the play/pause control never goes stale) and
  * refreshes on [AggiornamentiVista] (R15) or after a successful import/`modificaData`/
  * `avviaElaborazione` (never after a failure — H1, AC-201/AC-206/AC-344: "nulla cambia" beyond the
- * inline message).
+ * inline message). M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato]
+ * instead of rebuilding it from scratch, so a refresh landing mid-flight of an unrelated in-progress
+ * operation never wipes [RegistrazioniUiStato.Dati.importoInCorso]/`errore` or a row's
+ * `operazioneInCorso`/`erroreRiga`; a generation counter drops a [carica] result that resolves after a
+ * newer one already has (out-of-order completion). M5: the INITIAL load failing (no rows known yet)
+ * is a distinct [RegistrazioniUiStato.Errore] with a retry action, never the misleading AC-199 empty
+ * message.
  *
  * Depends on `applicazione` through PLAIN FUNCTION TYPES ([registrazioni]/[aggiungiRegistrazione]/
  * [modificaDataRegistrazione]/[statiElaborazione]/[avviaElaborazione]) rather than the concrete
@@ -65,6 +73,11 @@ class RegistrazioniPresenter(
     private val _stato = MutableStateFlow<RegistrazioniUiStato>(RegistrazioniUiStato.Caricamento)
     val stato: StateFlow<RegistrazioniUiStato> = _stato.asStateFlow()
 
+    // M1: bumped at the START of every `carica()`; a result is applied only if this is still the
+    // latest call when it resolves — drops a stale (superseded) result instead of letting it overwrite
+    // a fresher one on out-of-order completion. Mutated only from `scope`'s own (confined) dispatcher.
+    private var generazioneCaricamento = 0
+
     init {
         scope.launch { carica() }
         scope.launch { aggiornamenti.cambiamenti.collect { carica() } } // R15
@@ -72,9 +85,10 @@ class RegistrazioniPresenter(
     }
 
     private suspend fun carica() {
+        val generazione = ++generazioneCaricamento
         try {
             val righe = withContext(io) { costruisciRighe() }
-            _stato.value = RegistrazioniUiStato.Dati(righe)
+            if (generazione == generazioneCaricamento) aggiornaConNuoveRighe(righe)
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -82,9 +96,50 @@ class RegistrazioniPresenter(
             // reviews): the previous good rows (if any) stay on screen, H1 — never stuck in Caricamento.
             @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
         ) {
-            val precedenti = (_stato.value as? RegistrazioniUiStato.Dati)?.righe.orEmpty()
-            _stato.value = RegistrazioniUiStato.Dati(precedenti, errore = MESSAGGIO_ERRORE_GENERICO)
+            if (generazione == generazioneCaricamento) segnalaErroreDiCaricamento()
         }
+    }
+
+    /**
+     * M1: merges freshly-read [nuove] rows into the CURRENT [RegistrazioniUiStato.Dati] instead of
+     * rebuilding it — [RegistrazioniUiStato.Dati.importoInCorso]/`errore` and each row's
+     * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([importa]/[suRiga]) ever
+     * clears them.
+     */
+    private fun aggiornaConNuoveRighe(nuove: List<RigaRegistrazione>) {
+        val precedente = _stato.value as? RegistrazioniUiStato.Dati
+        val fuse = nuove.map { nuova ->
+            val vecchia = precedente?.righe?.find { it.registrazioneId == nuova.registrazioneId }
+            if (vecchia == null) {
+                nuova
+            } else {
+                nuova.copy(operazioneInCorso = vecchia.operazioneInCorso, erroreRiga = vecchia.erroreRiga)
+            }
+        }
+        _stato.value = RegistrazioniUiStato.Dati(
+            righe = fuse,
+            importoInCorso = precedente?.importoInCorso ?: false,
+            errore = precedente?.errore,
+        )
+    }
+
+    /**
+     * M5: the INITIAL load (no [RegistrazioniUiStato.Dati] known yet) fails into a distinct
+     * [RegistrazioniUiStato.Errore] with a retry action — never the misleading AC-199 empty-list
+     * message. A later refresh failure (already showing [RegistrazioniUiStato.Dati]) keeps the known
+     * rows and every in-flight flag on screen (H1), only [RegistrazioniUiStato.Dati.errore] changes.
+     */
+    private fun segnalaErroreDiCaricamento() {
+        when (val attuale = _stato.value) {
+            is RegistrazioniUiStato.Dati -> _stato.value = attuale.copy(errore = MESSAGGIO_ERRORE_GENERICO)
+            RegistrazioniUiStato.Caricamento, is RegistrazioniUiStato.Errore ->
+                _stato.value = RegistrazioniUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO)
+        }
+    }
+
+    /** M5: retries the initial load after [RegistrazioniUiStato.Errore]. */
+    fun riprova() {
+        scope.launch { carica() }
     }
 
     private fun costruisciRighe(): List<RigaRegistrazione> {
@@ -144,27 +199,41 @@ class RegistrazioniPresenter(
         )
     }
 
-    /** AC-199..201: drag-and-drop and the file picker both hand their chosen path here. */
-    fun importa(percorsoSorgente: String) {
+    /**
+     * AC-199..201/LOW: drag-and-drop (one or more files) and the file picker (one file, as
+     * `listOf(path)`) both land here. Every file is imported SEQUENTIALLY — a drop no longer silently
+     * drops every file after the first — and every per-file failure is collected and reported inline
+     * together, without stopping the others; the list is refreshed once at the end.
+     */
+    fun importa(percorsi: List<String>) {
+        if (percorsi.isEmpty()) return
         val attuale = _stato.value
         if (attuale !is RegistrazioniUiStato.Dati || attuale.importoInCorso) return // M3
         _stato.value = attuale.copy(importoInCorso = true, errore = null)
         scope.launch {
-            try {
-                when (val esito = withContext(io) { aggiungiRegistrazione(AggiungiRegistrazione(percorsoSorgente)) }) {
-                    is Esito.Ok -> carica() // refreshes the list; also resets importoInCorso (fresh Dati)
-                    is Esito.Errore ->
-                        aggiornaDati { it.copy(importoInCorso = false, errore = messaggioPer(esito.errore)) }
+            val errori = mutableListOf<String>()
+            for (percorso in percorsi) {
+                try {
+                    when (val esito = withContext(io) { aggiungiRegistrazione(AggiungiRegistrazione(percorso)) }) {
+                        is Esito.Ok -> {}
+                        is Esito.Errore -> errori += messaggioImportFallito(percorso, messaggioPer(esito.errore))
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+                ) {
+                    errori += messaggioImportFallito(percorso, MESSAGGIO_ERRORE_GENERICO)
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiornaDati { it.copy(importoInCorso = false, errore = MESSAGGIO_ERRORE_GENERICO) }
             }
+            carica() // M1: merges the refreshed list, preserving importoInCorso/errore until reset below
+            val messaggioErrori = errori.takeIf(List<*>::isNotEmpty)?.joinToString("\n")
+            aggiornaDati { it.copy(importoInCorso = false, errore = messaggioErrori) }
         }
     }
+
+    private fun messaggioImportFallito(percorso: String, messaggio: String): String =
+        "${File(percorso).name}: $messaggio"
 
     /** AC-206: replaces the DataRegistrazione shown/edited inline on the row. */
     fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) =
@@ -183,7 +252,10 @@ class RegistrazioniPresenter(
         scope.launch {
             try {
                 when (val esito = operazione()) {
-                    is Esito.Ok -> carica()
+                    is Esito.Ok -> {
+                        carica() // M1: merges the refreshed list, preserving this row's flags until reset below
+                        aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = null) }
+                    }
                     is Esito.Errore ->
                         aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggioPer(esito.errore)) }
                 }
@@ -197,14 +269,42 @@ class RegistrazioniPresenter(
         }
     }
 
-    /** AC-343: always `daMs = 0` — 'restart from the beginning', never a resume from `posizioneMs`. */
+    /**
+     * AC-343: always `daMs = 0` — 'restart from the beginning', never a resume from `posizioneMs`.
+     * H2: a throwing [LettoreAudio] is mapped to an inline row error, never left to kill this
+     * coroutine — [scope] has no supervisor, so an uncaught exception here would also take down the
+     * `stato`/`AggiornamentiVista`/`LettoreAudio.stato` collectors launched in `init`.
+     */
     fun riproduci(id: RegistrazioneId) {
-        scope.launch { withContext(io) { lettore.riproduciDa(id, 0) } }
+        scope.launch {
+            try {
+                withContext(io) { lettore.riproduciDa(id, 0) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+            }
+        }
     }
 
-    /** AC-343: no target — pauses whichever row `LettoreAudio.stato` currently plays. */
+    /** AC-343: no target — pauses whichever row `LettoreAudio.stato` currently plays. H2: same
+     * exception safety as [riproduci]; the active row (if any) is captured before the call so a
+     * failure can still land on it. */
     fun pausa() {
-        scope.launch { withContext(io) { lettore.pausa() } }
+        val idAttivo = lettore.stato.value.registrazioneId
+        scope.launch {
+            try {
+                withContext(io) { lettore.pausa() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                idAttivo?.let { id -> aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) } }
+            }
+        }
     }
 
     /** AC-203/AC-342: only a COMPLETATA row opens S3 — a click elsewhere (or in R0) is a no-op. */
@@ -237,5 +337,6 @@ class RegistrazioniPresenter(
         apriRiga = ::apriRiga,
         chiudiErrore = ::chiudiErrore,
         chiudiErroreRiga = ::chiudiErroreRiga,
+        riprova = ::riprova,
     )
 }
