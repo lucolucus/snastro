@@ -22,6 +22,9 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
     /** INV-4 (ADR 0007, `elaborazione_completata_unica`): the Registrazione already has a `completata` one. */
     public data class ElaborazioneGiaCompletata(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
 
+    /** AC-67: `LettoreRegistrazione` (Progetto, via the port) does not know this Registrazione. */
+    public data class RegistrazioneNonTrovata(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
+
     /** AC-21: the pipeline produced no Segmento, so no [Trascritto] can exist. */
     public data object NessunParlatoRilevato : ErroreTrascrizione
 
