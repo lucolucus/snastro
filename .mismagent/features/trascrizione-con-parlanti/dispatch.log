@@ -121,3 +121,5 @@
 2026-09-23T09:02:46Z	porta-lettore-trascritto	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T09:03:13Z	porte-parlanti	verifier	result	cycle=1	tier=deep	model=opus	PASS
 2026-09-23T09:03:19Z	porta-registrazione-parlanti	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:04:50Z	porta-lettore-trascritto	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T09:05:06Z	porta-lettore-trascritto	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED F1 re-run after fallita test + LOW F2 KDoc, F4 listed=>non-null -> follow-up batch; F3 covered by user nomeFile decision)
