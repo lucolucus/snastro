@@ -19,7 +19,7 @@
 | D-9 | `ImprontaVocale` only in project DB; purge in tombstone tx; `secure_delete` | privacy right; backup caveat accepted | 0009 |
 | D-10 | Self-contained `<nome>.snastro/` folder; copied audio; `.md` written atomically, never read | relocatable; INV-23 | 0010 |
 | D-11 | NFR ≤ 10 min per 1 h audio on M3 Pro (opt-in benchmark) | measurable, machine-scoped | 0011 |
-| D-12 | Invariant policies in-transaction; `Rigenerazione` after commit | INV-15/21/25 atomic; projection idempotent | 0012 |
+| D-12 | Invariant policies in-transaction; `Rigenerazione` and print re-alignment (`RiallineaImpronte`) after commit; no ML inside a transaction *(amended 2026-09-23 (b))* | INV-15 existence + INV-21/25 structure atomic; projection and print freshness idempotent/eventual | 0012 |
 
 ## Boundaries (in-process: consumer-owned port + in-process consumer-driven contract test)
 Published Language = kernel VOs (`RegistrazioneId`, `VoceRef`, `IntervalloMs`, `ParlanteId`, …) +
@@ -32,7 +32,7 @@ on its own) and against the real adapter (D2).
 | Progetto → Trascrizione | `LettoreRegistrazione` | `CatalogoRegistrazioni` | read → consumer-driven | `registrazione(id): RegistrazioneVista?` = `{registrazioneId, progettoId, riferimentoAudio (relative path), dataRegistrazione, durataMs}` |
 | Progetto → Parlanti | `LettoreRegistrazione` (own copy) | `CatalogoRegistrazioni` | read → consumer-driven | same fields + `progettoId` for scoping ([INV-17]) and `DataRegistrazione` for "Ospite del …" ([INV-19]) |
 | Trascrizione → Parlanti | `LettoreVoci` | `VociDelTrascritto` | read → consumer-driven | `voci(registrazioneId): List<VoceVista>?` (null if no `Trascritto`, [INV-5]) with `VoceVista = {voceRef, etichettaNumero, intervalli: List<IntervalloMs>}` — **intervals only, never text** |
-| Trascrizione → Parlanti (events) | subscriber in `:parlanti:adattatori` | published `VociUnite`, `VoceDivisa`, `SegmentoRiassegnato`, `ElaborazioneCompletata` | producer-driven (event) | kernel VOs; handled **in the same transaction** (ADR 0012) |
+| Trascrizione → Parlanti (events) | subscriber in `:parlanti:adattatori` | published `VociUnite`, `VoceDivisa`, `SegmentoRiassegnato`, `ElaborazioneCompletata` | producer-driven (event) | kernel VOs; structural INV-21/25 handled **in the same transaction**, print re-alignment **after commit** (ADR 0012, Amendment (b)) |
 | Trascrizione → Documento | `LettoreTrascritto` | `VociDelTrascritto` (text view) | read → consumer-driven | `segmenti(registrazioneId)` = `[{segmentoId, voceRef, etichettaNumero, inizioMs, fineMs, testo}]` + `titolo`, `dataRegistrazione` (via Progetto API) |
 | Parlanti → Documento | `LettoreNomi` | `NomiDelleVoci` | read → consumer-driven | `nomi(registrazioneId): Map<VoceRef, String>` (attributed only; `eliminato` still resolves, [INV-24]) |
 | Trascrizione/Parlanti → Documento (events) | subscriber in `:documento:adattatori` | published events listed in the tactical model's Documento policy | producer-driven | **after commit**, coalesced per `registrazioneId` |
@@ -50,7 +50,7 @@ opens.
 |---|---|---|---|
 | `SondaAudio` (readability + duration) | Progetto (`AggiungiRegistrazione`) | `:audio` | ADR 0005 |
 | `DecodificatoreAudio` (`decodifica` → derived WAV, `campioni(intervallo)`) | Trascrizione; Parlanti (own port copy, samples for prints/estratti) | `:audio` | ADR 0005 |
-| `Diarizzatore` (`CampioniAudio` → turns `[{inizioMs, fineMs, voceIndice}]`) | Trascrizione | `:ml-sherpa` | spike `scelta-diarizzatore` |
+| `Diarizzatore` (`CampioniAudio` + optional `NumeroPersone` → turns `[{inizioMs, fineMs, voceIndice}]`) | Trascrizione | `:ml-sherpa` | ADR 0014 (closes `scelta-diarizzatore`) |
 | `Vad` | Trascrizione | `:ml-sherpa` (Silero) | spike `allineamento-parole-voci` |
 | `RiconoscitoreParlato` (`CampioniAudio` → text + token timestamps if available) | Trascrizione | `:ml-sherpa` | spike `scelta-asr-code-switching` |
 | `Allineatore` (turns + ASR output → `Segmento`s) | Trascrizione | pure Kotlin in `:trascrizione:adattatori` | spike `allineamento-parole-voci` |
@@ -82,13 +82,13 @@ The authoritative boundary pins are now `../building-blocks.yaml` § boundaries.
 - **R18 + rule 15:** `LettoreNomi` also has `registrazioniCon(parlanteId)` (for `ParlanteRinominato`);
   `LettoreTrascritto` = `trascritto(id): TrascrittoTesto?` (titolo + dataRegistrazione + segmenti,
   composed from `VociDelTrascritto` + `CatalogoRegistrazioni`) + `registrazioniConTrascritto()`.
-- **R2:** a new event boundary Progetto → Trascrizione: `RegistrazioneAggiunta` (sync subscriber in
-  `:trascrizione:adattatori` → `AvviaElaborazione`); `DataRegistrazioneModificata` → Documento (R5).
+- **R2:** ~~a new event boundary Progetto → Trascrizione: `RegistrazioneAggiunta` (sync subscriber in
+  `:trascrizione:adattatori` → `AvviaElaborazione`)~~ *(superseded 2026-09-23 [user], ADR 0014: no automatic start; `AvviaElaborazione` is started by the user with an optional `NumeroPersone`, 1..10)*; `DataRegistrazioneModificata` → Documento (R5).
 - **R13:** Parlanti does not subscribe to `ElaborazioneCompletata`.
 - **R1/R8:** UI data views split per owning context (see the ux-proposal amendment).
 - **R3:** `RegistroProgetti` port (Progetto) + `SessioneProgetto` in `:avvio`.
 - **R10:** S5 `schermata-modelli` via the `ServizioModelli` port (`:ui`) → `:avvio` → `:modelli`.
-- **R12:** `EstrattoreImpronta` runs inside command transactions; one mutex serializes all native calls.
-- **`EstrattoRef`** = `{registrazioneId, intervalli: List<IntervalloMs>}` (the 2–3 longest `Segmento`s, ≤ 10 s).
+- **R12:** *(superseded 2026-09-23 by ADR 0012 Amendment (b), option (c) [user])* ~~`EstrattoreImpronta` runs inside command transactions~~ → prints come from the bounded `SorgenteImpronta` (≤ `BUDGET_IMPRONTA_MS`, provisional 30 s); **no ML inside a transaction** (extract first, re-read + `VoceCambiata` in-tx); the revisione-policy keeps only the structural INV-21/INV-25 part, print re-derivation is the after-commit `RiallineaImpronte` (stale = `sorgente_impronta`/`modello_impronta` ≠ current). One mutex still serializes all native calls, always acquired outside any transaction.
+- **`EstrattoRef`** = `{registrazioneId, intervalli: List<IntervalloMs>}` (the `SorgenteImpronta` selection rule with budget 10 s and ≤ 3 intervals — ADR 0012 Amendment (b)).
 - **ADR 0012 R4:** no `documento_generato_versione`; all `Documento`s are regenerated at startup.
 - **ADR 0007/0009 `exigible_from`:** `persistenza-schema`.

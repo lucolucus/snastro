@@ -1,0 +1,10 @@
+-- Queries for `progetto` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+
+trova:
+SELECT * FROM progetto LIMIT 1;
+
+inserisci:
+INSERT INTO progetto(id, nome) VALUES (:id, :nome);
+
+aggiorna:
+UPDATE progetto SET nome = :nome WHERE id = :id;

@@ -4,6 +4,7 @@ type: "adapter"
 context: "trascrizione"
 side: "app"
 wave: 5
+release: "R1"
 module: ":trascrizione:adattatori (..audio)"
 consumes:
   - "kernel-pl"

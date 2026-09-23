@@ -8,16 +8,25 @@
 # `[@modelli]` items run only in the opt-in `./gradlew modelliTest`; `[opt-in, fuori gate]` only in benchmarkElaborazione.
 # Waves 11-13 are GATED: their blocks wait on the spike ADRs named in `gated_by` (Phase 1 marks them not-ready until then);
 # everything upstream builds against the ports' Finte.
+# AMENDED 2026-09-23 (ADR 0012 Amendment (b) / ADR 0009 Amendment (b), user option (c)): SorgenteImpronta (new block sorgente-impronta),
+# no ML inside a transaction, Revisione split with after-commit RiallineaImpronte (new blocks riallinea-impronte, abbonato-riallineamento-impronte).
+# Blocks MERGED before this amendment keep their folder; their follow-up is listed in each block's `notes` (AMENDED … FOLLOW-UP).
+# AMENDED 2026-09-23 (user decisions in dispatch.log: titolo unique per Progetto + sanitized Documento file name; Mutex-wait spike gate;
+# multi-instance registry lock; ADR 0008 Amendment (c) archives/LOCALAPPDATA): AC-320..AC-340; tec-registro-progetti re-pinned to the merged port.
+# AMENDED 2026-09-23 RELEASE PIVOT (user decision): every block carries `release: R0|R1|R2` (minimal release that needs it; see release_plan);
+# the monolithic composition root is split into avvio-r0 (R0) / avvio-composizione (R1) / avvio-parlanti (R2); S2 gets an R0 variant
+# (AC-342/343) and its Parlanti badge moves to schermata-registrazioni-identificazione (R2); new ACs AC-341..AC-359.
 # `depends_on` = non-boundary build dependencies (read-models a ui consumes, services a subscriber calls, suppliers an adapter wraps).
 feature: trascrizione-con-parlanti
 profile: .mismagent/profile.md
-ac_scheme: "AC-1..AC-262 feature-global, assigned in manifest order; INV-1..INV-25 from the tactical model"
+ac_scheme: "AC-1..AC-359 feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
 blocks:
   - id: "scaffold-app"
     type: "scaffold"
     context: "piattaforma"
     side: "app"
     wave: 0
+    release: "R0"
     module: "root + every module of architecture.md"
     title: "Scheletro Gradle multi-modulo eseguibile"
     consumes: []
@@ -43,6 +52,7 @@ blocks:
     context: "piattaforma"
     side: "app"
     wave: 1
+    release: "R0"
     module: ":kernel"
     title: "Shared kernel: ids, VO del Published Language, Esito, porte di kernel"
     consumes: []
@@ -59,12 +69,15 @@ blocks:
       - "AC-5 IntervalloMs rifiuta inizio >= fine o inizio < 0 (require — errore di programmazione)"
       - "AC-6 CampioniAudio ed EstrattoRef sono uguali per valore (stesso contenuto → equals e hashCode uguali)"
       - "AC-7 Nessun sottotipo di ErroreDominio estende Throwable (Konsist CR-8)"
+      - "AC-266 UnitaDiLavoroFinta espone transazioneAperta: false fuori da inTransazione, true dentro il blocco, di nuovo false dopo il commit e dopo il rollback (su Errore e su eccezione)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): testFixtures UnitaDiLavoroFinta exposes `val transazioneAperta: Boolean` (testFixtures surface, AC-266 — deliberately not re-pinned in kernel-pl, which would re-seed every block file for a fixture detail) — read by the Parlanti ML Finte (porte-parlanti) to throw when invoked inside a transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
     sources: "architecture.md (kernel row), dev-architecture-app.md #valori-id #servizio #test, features/trascrizione-con-parlanti/architetture/architecture-overview.md (Published Language)"
   - id: "persistenza-schema"
     type: "adapter"
     context: "piattaforma"
     side: "app"
     wave: 2
+    release: "R0"
     module: ":persistenza"
     title: "Schema SQLDelight v1, factory del driver, UnitaDiLavoroSql"
     consumes:
@@ -81,14 +94,16 @@ blocks:
       - "AC-10 Il driver apre il DB con journal WAL, foreign_keys=ON e secure_delete=ON (pragma letti nel test)"
       - "AC-11 UnitaDiLavoroSql passa UnitaDiLavoroContratto: rollback su Errore e su eccezione"
       - "AC-12 Un DB con versione di schema più recente dell'app viene rifiutato con un errore chiaro, senza modificarlo"
-      - "AC-13 attribuzione ha chiave (registrazione_id, voce_id) e impronta_vocale rifiuta una seconda riga con stessi (parlante_id, registrazione_id, voce_id)"
-    notes: "ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema)."
+      - "AC-13 attribuzione ha chiave (registrazione_id, voce_id) e impronta_vocale rifiuta una seconda riga con stessi (parlante_id, registrazione_id, voce_id); impronta_vocale ha le colonne sorgente_impronta TEXT NOT NULL e modello_impronta TEXT NOT NULL (un inserimento senza una delle due è rifiutato)"
+      - "AC-267 impronta_vocale.sq espone: l'UPDATE compare-and-set di UNA riga (SET impronta, sorgente_impronta, modello_impronta WHERE parlante_id, registrazione_id, voce_id AND sorgente_impronta = :attesa AND modello_impronta = :atteso — nessun INSERT) e le letture dei metadati (parlante_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta, senza BLOB) per registrazione e per progetto; test SQL: l'UPDATE con valori attesi cambiati tocca 0 righe"
+    notes: "ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema). AMENDED 2026-09-23 (ADR 0009/0012 Amendment (b)): schema v1 is UNRELEASED — the two columns go straight into v1, no migration; regenerate the committed 1.db snapshot (AC-8 stays green)."
     sources: "ADR 0006/0007/0009/0012, dev-architecture-app.md #repository, features/trascrizione-con-parlanti/tactical-model.md (all aggregates)"
   - id: "eventi-pubblicati"
     type: "port"
     context: "piattaforma"
     side: "app"
     wave: 2
+    release: "R0"
     module: "progetto|trascrizione|parlanti:applicazione (package ..applicazione.eventi)"
     title: "Eventi pubblicati (Published Language degli eventi)"
     consumes:
@@ -97,14 +112,16 @@ blocks:
     related_adrs:
       - "0012"
     tests_nl:
-      - "AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 14 eventi)"
+      - "AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 15 eventi, incluso ImpronteRiallineate)"
       - "AC-15 Tutti gli eventi pubblicati implementano EventoPubblicato e sono data class con soli val (Konsist CR-5)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
     sources: "features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012"
   - id: "progetto"
     type: "aggregate"
     context: "progetto"
     side: "app"
     wave: 2
+    release: "R0"
     module: ":progetto:dominio"
     title: "Aggregato Progetto"
     consumes:
@@ -128,6 +145,7 @@ blocks:
     context: "progetto"
     side: "app"
     wave: 2
+    release: "R0"
     module: ":progetto:dominio"
     title: "Aggregato Registrazione"
     consumes:
@@ -156,6 +174,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 2
+    release: "R1"
     module: ":trascrizione:dominio"
     title: "Aggregato Elaborazione"
     consumes:
@@ -183,6 +202,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 2
+    release: "R1"
     module: ":trascrizione:dominio"
     title: "Aggregato Trascritto (Voci, Segmenti, Revisione)"
     consumes:
@@ -224,6 +244,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 2
+    release: "R2"
     module: ":parlanti:dominio"
     title: "Aggregato Parlante (+ ImprontaVocale)"
     consumes:
@@ -233,8 +254,9 @@ blocks:
       - "0003"
       - "0007"
       - "0009"
+      - "0012"
     invariants:
-      - "INV-13 StatoParlante = eliminato ⇒ zero ImprontaVocale; eliminato is terminal: no rinomina, no promozione, no new Attribuzione; Nome and past Attribuzioni kept"
+      - "INV-13 StatoParlante = eliminato ⇒ zero ImprontaVocale; eliminato is terminal: no rinomina, no promozione, no new Attribuzione (sole, policy-only exception: the INV-21 unire re-keying of its tombstone Attribuzione — attribuzione/revisione-policy; no print is ever created); Nome and past Attribuzioni kept"
       - "INV-14 a Parlante holds at most one ImprontaVocale per VoceRef; prints are kept individually (adding one never replaces or averages the others)"
       - "INV-18 promozione only occasionale → ricorrente; ImprontaVocale unchanged; only TipoParlante and optionally Nome change"
     invariant_fields:
@@ -251,12 +273,17 @@ blocks:
       - "INV-14 registraImpronta con un VoceRef già presente sostituisce solo quella impronta; con un VoceRef nuovo la aggiunge senza toccare le altre"
       - "INV-18 promuovi su un ricorrente → Errore(PromozioneNonAmmessa); su un occasionale cambia solo tipo (e nome se dato) e lascia le impronte identiche"
       - "AC-22 Nome.di rifiuta testo vuoto; normalizzato = trim + minuscole Locale.ROOT ('  Marco ' e 'marco' hanno lo stesso normalizzato)"
+      - "INV-13 su un eliminato trasferisciImpronta non crea impronte: resta a zero impronte"
+      - "INV-14 trasferisciImpronta(da, a) ri-chiava l'impronta di da su a con la stessa Impronta, sorgente e modello, senza toccare le altre; senza impronta per da non fa nulla"
+      - "AC-268 registraImpronta conserva sorgente e modello; ImprontaVocale.obsoleta(chiaveCorrente, modelloCorrente) è vera se la sorgente differisce dalla chiave corrente o il modello differisce, falsa se coincidono entrambi"
+    notes: "AMENDED 2026-09-23 (ADR 0012 / 0009 Amendment (b)): ImprontaVocale carries sorgente (SorgenteImpronta.chiave) + modello (EstrattoreImpronta.modello); registraImpronta gains them; new trasferisciImpronta and the obsoleta predicate (pinned in agg-parlante); INV-13 text names the policy-only unire exception. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti"
   - id: "attribuzione"
     type: "aggregate"
     context: "parlanti"
     side: "app"
     wave: 2
+    release: "R2"
     module: ":parlanti:dominio"
     title: "Aggregato Attribuzione"
     consumes:
@@ -265,6 +292,7 @@ blocks:
     related_adrs:
       - "0003"
       - "0007"
+      - "0012"
     invariants:
       - "Structural: at most one Parlante per Voce — the root is keyed by VoceRef"
     invariant_fields:
@@ -275,12 +303,47 @@ blocks:
     tests_nl:
       - "AC-23 Structural l'Attribuzione ha come identità il VoceRef, quindi non può esistere una seconda Attribuzione per la stessa Voce (by-construction)"
       - "AC-24 cambia verso un altro Parlante emette AttribuzioneConfermata con precedente; cambia verso lo stesso Parlante → Ok senza evento"
+      - "AC-269 trasferisci(a) restituisce un'Attribuzione con chiave a e gli stessi parlanteId e progettoId, senza evento e senza consultare lo stato del Parlante (funziona anche per un Parlante eliminato); a di un'altra Registrazione → rifiutato (require)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 4): policy-only re-keying operation Attribuzione.trasferisci (pinned in agg-attribuzione) for the INV-21 unire inheritance, incl. onto an eliminato Parlante (explicit exception to INV-13/INV-17); no command may call it (gate on agg-attribuzione). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti"
+  - id: "sorgente-impronta"
+    type: "aggregate"
+    context: "parlanti"
+    side: "app"
+    wave: 2
+    release: "R2"
+    module: ":parlanti:dominio"
+    title: "SorgenteImpronta — selezione limitata dell'audio di una Voce (+ regola condivisa con EstrattoAudio)"
+    consumes:
+      - "kernel-pl"
+    depends_on: []
+    related_adrs:
+      - "0003"
+      - "0009"
+      - "0012"
+    invariants:
+      - "Selezione — selection rule (ADR 0012 Amendment (b) point 1): overlapping input intervals are first merged into their union; keep intervals >= DURATA_MINIMA_SEGMENTO_MS (1 000), or the single longest if none reaches it; take longest first (tie: earlier inizioMs) up to the budget (and maxIntervalli if given), trimming the crossing interval from its start to [inizio, inizio + resto]; return disjoint intervals in time order"
+      - "Chiave — chiave = the final intervals in time order encoded as \"<inizioMs>-<fineMs>\" joined by \",\" — exact, collision-free, no hashing; equal sources ⇔ equal chiavi"
+    invariant_fields: []
+    identity: "none — value object (no identity, no table; its chiave is stored by the Parlante's ImprontaVocale)"
+    tables: []
+    tests_nl:
+      - "AC-274 Selezione — filtro 1 000 ms: i Segmenti < 1 000 ms sono esclusi quando almeno uno raggiunge 1 000 ms; se nessuno li raggiunge si usa il solo Segmento più lungo (a parità, quello con inizio minore)"
+      - "AC-275 Selezione — scelta: il più lungo per primo, a parità di durata quello con inizioMs minore (test: due Segmenti di pari durata e un budget che ne ammette uno solo intero)"
+      - "AC-276 Selezione — budget: totale <= BUDGET_IMPRONTA_MS (30 000); l'intervallo che supera il budget è tagliato dal suo inizio a [inizio, inizio + resto]; una Voce di oltre 30 s dà un totale di esattamente 30 000 ms"
+      - "AC-277 Selezione — il risultato è in ordine temporale (per inizioMs) indipendentemente dall'ordine di scelta"
+      - "AC-278 Chiave — chiave = \"<inizioMs>-<fineMs>\" uniti da \",\" in ordine temporale (es. [1200-5400, 8000-15000] → \"1200-5400,8000-15000\"); due SorgenteImpronta hanno la stessa chiave se e solo se hanno gli stessi intervalli"
+      - "AC-279 Selezione — intervalli sovrapposti in ingresso (due Segmenti di una Voce unita che si sovrappongono nel tempo, es. 0-4000 e 3000-6000) sono prima fusi nella loro unione (0-6000) e solo dopo filtrati, scelti e troncati: il risultato è disgiunto, nessun millisecondo è contato o decodificato due volte, e la chiave è calcolata sugli intervalli finali disgiunti"
+      - "AC-280 Selezione — parametri EstrattoAudio: selezionaIntervalli(intervalli, BUDGET_ESTRATTO_MS = 10 000, MAX_INTERVALLI_ESTRATTO = 3) → al più 3 intervalli disgiunti, totale <= 10 000 ms, stessa regola (fusione delle sovrapposizioni, filtro 1 000 ms con ripiego sul più lungo, taglio dall'inizio, ordine temporale)"
+      - "AC-281 SorgenteImpronta.di su una lista vuota → IllegalArgumentException (require: una Voce ha sempre >= 1 intervallo, LettoreVoci)"
+    notes: "Derived owner (rule 11) of ErroreParlanti.VoceCambiata (in ErroriParlanti.kt) too (shared by conferma-attribuzione and salta-voce, same wave). BUDGET_IMPRONTA_MS is PROVISIONAL: spike impronta-vocale-affidabilita calibrates it and its closing ADR records the final value (changing it needs no migration: every print goes stale and RiallineaTutteLeImpronte re-derives it). Supersedes the looser '2–3 longest, about 10 s' reading of EstrattoAudio (R24). Overlap merge: LettoreVoci deliberately does not merge overlapping Segmenti of a Voce (api-trascritto code-review), so the union is taken HERE."
+    sources: "ADR 0012 Amendment (b) point 1, ADR 0009 Amendment (b), features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15, R24 EstrattoAudio)"
   - id: "porte-progetto"
     type: "port"
     context: "progetto"
     side: "app"
     wave: 3
+    release: "R0"
     module: ":progetto:applicazione (..porte) + testFixtures"
     title: "Porte del Progetto: repository, sonda/archivio audio, registro progetti"
     consumes:
@@ -294,13 +357,16 @@ blocks:
       - "AC-25 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le Finte (round-trip, delProgetto)"
       - "AC-26 SondaAudioContratto: file leggibile → durata > 0 e data del file; illeggibile → AudioNonLeggibile; formato non supportato → FormatoNonSupportato (passa contro SondaAudioFinta)"
       - "AC-27 ArchivioAudioContratto: copia → RiferimentoAudio 'audio/<registrazioneId>.<ext minuscola>'; copia fallita → CopiaFallita e nessun file residuo"
-      - "AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente"
+      - "AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna(percorso, …) cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente"
+      - "AC-325 RegistrazioneRepositoryContratto: titoliDelProgetto(id) restituisce i titoli di tutte e sole le Registrazioni di quel Progetto (lista vuota se nessuna, nessun ordine garantito) — passa contro RegistrazioneRepositoryFinta"
+    notes: "AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) — manifest drift fixed, no code change; (ii) new RegistrazioneRepository.titoliDelProgetto(id: ProgettoId): List<String> (repo-progetto) for the titolo uniqueness of AggiungiRegistrazione. FOLLOW-UP REQUIRED for (ii): merged before this amendment — the port, its Finta and RegistrazioneRepositoryContratto must gain titoliDelProgetto (AC-325)."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), dev-architecture-app.md #porta-contratto"
   - id: "porte-trascrizione"
     type: "port"
     context: "trascrizione"
     side: "app"
     wave: 3
+    release: "R1"
     module: ":trascrizione:applicazione (..porte) + testFixtures"
     title: "Porte della Trascrizione: repository e pipeline"
     consumes:
@@ -326,6 +392,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 3
+    release: "R2"
     module: ":parlanti:applicazione (..porte) + testFixtures"
     title: "Porte dei Parlanti: repository e ML"
     consumes:
@@ -336,18 +403,25 @@ blocks:
       - "0006"
       - "0007"
       - "0009"
+      - "0012"
     tests_nl:
       - "AC-37 ParlanteRepositoryContratto: un secondo attivo con lo stesso nome normalizzato nello stesso Progetto → NomeGiaInUso; il nome di un eliminato è accettato; round-trip con impronte (passa contro la Finta)"
       - "AC-38 AttribuzioneRepositoryContratto: chiave VoceRef, diRegistrazione, diParlante, rimuovi"
       - "AC-39 DecodificatoreAudioContratto (parlanti): campioni di più intervalli = concatenazione nell'ordine dato"
       - "AC-40 EstrattoreImprontaContratto: le stesse CampioniAudio producono la stessa Impronta, di dimensione costante"
       - "AC-41 ConfrontoImpronteContratto: impronta identica → FORTE; lista vuota → NESSUNA; restituisce la fascia migliore tra le impronte; SoglieFascia con forte <= debole rifiutate"
+      - "AC-270 ParlanteRepositoryContratto: aggiornaImpronta aggiorna la riga solo se esiste ancora con sorgente e modello uguali a quelli attesi (true); riga assente o sorgente/modello cambiati → false e nulla è scritto; non inserisce mai una riga (conteggio invariato)"
+      - "AC-271 ParlanteRepositoryContratto: impronteDiRegistrazione e impronteDelProgetto restituiscono tutte e sole le RigaImpronta (parlanteId, voceRef, sorgente, modello) della Registrazione / del Progetto; il round-trip di un Parlante conserva sorgente e modello di ogni impronta"
+      - "AC-272 EstrattoreImprontaFinta e DecodificatoreAudioFinta lanciano IllegalStateException se invocate mentre la UnitaDiLavoroFinta passata ha transazioneAperta = true; fuori dalla transazione rispondono normalmente"
+      - "AC-273 EstrattoreImprontaContratto: modello è non vuoto e costante per l'istanza"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; ParlanteRepository compare-and-set aggiornaImpronta + impronteDiRegistrazione / impronteDelProgetto (RigaImpronta); ML Finte guard against an open transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004/0009"
   - id: "porte-documento"
     type: "port"
     context: "documento"
     side: "app"
     wave: 3
+    release: "R1"
     module: ":documento:applicazione (..porte) + testFixtures"
     title: "Porta ScrittoreDocumento"
     consumes:
@@ -363,6 +437,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 3
+    release: "R1"
     module: ":trascrizione:applicazione (..porte) + testFixtures"
     title: "Porta LettoreRegistrazione (Trascrizione → Progetto)"
     consumes:
@@ -378,6 +453,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 3
+    release: "R2"
     module: ":parlanti:applicazione (..porte) + testFixtures"
     title: "Porta LettoreRegistrazione (Parlanti → Progetto)"
     consumes:
@@ -393,6 +469,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 3
+    release: "R2"
     module: ":parlanti:applicazione (..porte) + testFixtures"
     title: "Porta LettoreVoci (Parlanti → Trascrizione)"
     consumes:
@@ -411,6 +488,7 @@ blocks:
     context: "documento"
     side: "app"
     wave: 3
+    release: "R1"
     module: ":documento:applicazione (..porte) + testFixtures"
     title: "Porta LettoreTrascritto (Documento → Trascrizione + Progetto)"
     consumes:
@@ -428,6 +506,7 @@ blocks:
     context: "documento"
     side: "app"
     wave: 3
+    release: "R1"
     module: ":documento:applicazione (..porte) + testFixtures"
     title: "Porta LettoreNomi (Documento → Parlanti)"
     consumes:
@@ -444,6 +523,7 @@ blocks:
     context: "progetto"
     side: "app"
     wave: 4
+    release: "R0"
     module: ":progetto:applicazione (..comandi)"
     title: "CreaProgetto"
     consumes:
@@ -467,6 +547,7 @@ blocks:
     context: "progetto"
     side: "app"
     wave: 4
+    release: "R0"
     module: ":progetto:applicazione (..comandi)"
     title: "AggiungiRegistrazione, ModificaDataRegistrazione"
     consumes:
@@ -490,15 +571,20 @@ blocks:
       - "AC-58 Una copia fallita a metà → nulla creato (nessuna riga, nessun file parziale)"
       - "AC-59 L'audio è copiato in audio/<registrazioneId>.<ext> e il riferimento salvato è relativo alla cartella del progetto"
       - "AC-60 Se l'abbonato sincrono che accoda l'Elaborazione fallisce, la Registrazione non esiste (rollback dell'intero comando)"
-      - "AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi"
+      - "AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi; la seconda riceve il titolo '<nome> (2)' (AC-322)"
       - "AC-62 ModificaDataRegistrazione sostituisce la data e pubblica DataRegistrazioneModificata(precedente, nuova)"
       - "AC-63 ModificaDataRegistrazione su una Registrazione inesistente → RegistrazioneNonTrovata"
+      - "AC-322 AggiungiRegistrazione assegna un titolo UNICO nel Progetto: base = nome del file senza estensione (NFC, trim; vuoto → 'registrazione'); se chiave(base) coincide con chiave(t) di un titolo t di un'altra Registrazione dello stesso Progetto (titoliDelProgetto), prova 'base (2)', 'base (3)'… e assegna il primo libero; chiave(t) = pulisci(t) (la regola di nomeFile, vedi tec-scrittore-documento) in minuscolo con Locale.ROOT. Es.: esiste 'Riunione' → 'riunione.m4a' diventa 'riunione (2)'; esistono 'Riunione' e 'Riunione (2)' → 'Riunione (3)'; esiste 'Riunione*' → 'Riunione?' diventa 'Riunione? (2)' (stessa chiave 'riunione_')"
+      - "AC-323 Il titolo è deterministico e stabile: stessi titoli esistenti + stesso file → stesso titolo; una volta assegnato non cambia mai (ModificaDataRegistrazione non lo tocca); i titoli di Registrazioni di un ALTRO Progetto non contano (test con RegistrazioneRepositoryFinta che contiene 'Riunione' di un altro progettoId → il nuovo titolo resta 'Riunione')"
+      - "AC-324 Nomi lunghi: prima di aggiungere ' (n)' la base è troncata (su un confine di code point, poi rimossi spazi/punti finali) a 237 byte UTF-8 meno la lunghezza del suffisso, così il suffisso sopravvive sempre a pulisci e la ricerca termina: con un titolo esistente di 250 byte e un nuovo file con gli stessi primi 237 byte il nuovo titolo è '<primi 233 byte> (2)' e le due chiavi differiscono"
+    notes: "AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo UNIQUE per Progetto (AC-322..324) via the new RegistrazioneRepository.titoliDelProgetto (repo-progetto). Uniqueness holds BY CONSTRUCTION, no DB index: the read of titoliDelProgetto and the insert run in the same UnitaDiLavoro transaction, and a project has one writer process (ADR 0010 .lock); the key lives in Kotlin (pulisci + Locale.ROOT lowercase), not in SQL (SQLite lower() is ASCII-only). pulisci = the rule pinned in tec-scrittore-documento keys.nomeFile, implemented here as a private pure function of :progetto:applicazione with the same table rows as documento AC-320 (Progetto may not depend on Documento). FOLLOW-UP REQUIRED: merged before this amendment; the merged code does not yet satisfy AC-61 (amended) and AC-322..324 — a rework/fix block must land them (after porte-progetto's follow-up adds titoliDelProgetto)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Progetto (+ R2, R6, R24), ADR 0010"
   - id: "avvia-elaborazione"
     type: "application-service"
     context: "trascrizione"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":trascrizione:applicazione (..comandi)"
     title: "AvviaElaborazione (accodamento e riprova)"
     consumes:
@@ -528,6 +614,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":trascrizione:applicazione (..comandi)"
     title: "EseguiProssimaElaborazione + RecuperaElaborazioniInterrotte (pipeline)"
     consumes:
@@ -569,6 +656,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":trascrizione:applicazione (..comandi)"
     title: "UnisciVoci, DividiVoce, RiassegnaSegmento"
     consumes:
@@ -599,6 +687,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:applicazione (..comandi)"
     title: "ConfermaAttribuzione"
     consumes:
@@ -611,6 +700,7 @@ blocks:
       - "eventi-parlanti"
       - "tec-decodifica-parlanti"
       - "tec-estrattore-impronta"
+      - "sorgente-impronta-pl"
     depends_on: []
     related_adrs:
       - "0003"
@@ -620,9 +710,9 @@ blocks:
     commands:
       - "ConfermaAttribuzione"
     invariants:
-      - "INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo; a Proposta never writes the Galleria"
+      - "INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo; a Proposta never writes the Galleria; existence transactional, freshness after a Revisione eventual (ADR 0012 (b)); the print is extracted from SorgenteImpronta only, BEFORE the transaction"
       - "INV-16 Nome unique among the attivo Parlanti of a Progetto (trimmed, case-insensitive); an eliminato's Nome is reusable"
-      - "INV-17 an Attribuzione targets only an attivo Parlante of the SAME Progetto, and only a Voce of an existing Trascritto"
+      - "INV-17 an Attribuzione targets only an attivo Parlante of the SAME Progetto, and only a Voce of an existing Trascritto (policy-only exception: INV-21 unire re-keying — never from this command)"
       - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept with its other prints"
     tests_nl:
       - "AC-84 Confermare un Candidato → Attribuzione(v) = P, un'ImprontaVocale di P per v e l'evento AttribuzioneConfermata"
@@ -631,14 +721,20 @@ blocks:
       - "INV-15 cambiare l'attribuzione da P a Q: l'impronta di v passa a Q e P non ne ha più"
       - "INV-25 P occasionale rimasto senza Attribuzioni cessa di esistere; P ricorrente resta con le altre impronte"
       - "INV-17 Parlante eliminato o di un altro Progetto, Voce inesistente, Registrazione senza Trascritto → rifiutata"
-      - "AC-86 Se l'estrazione dell'impronta fallisce, rollback completo"
+      - "AC-86 Se la decodifica o l'estrazione dell'impronta fallisce, nessuna transazione viene aperta e nulla è scritto (l'errore infrastrutturale si propaga, ADR 0003)"
       - "AC-87 Riconfermare lo stesso Parlante → nessun cambiamento e nessun evento"
+      - "AC-282 L'impronta è estratta fuori transazione; poi la transazione rilegge la Voce: se SorgenteImpronta.di(intervalli attuali) differisce da quella estratta → Errore(VoceCambiata(voceRef)) e nulla è scritto (test: la Finta di LettoreVoci cambia gli intervalli tra la lettura e la transazione)"
+      - "AC-283 Per una Voce di oltre 30 s gli intervalli passati a DecodificatoreAudio.campioni sono esattamente SorgenteImpronta.di(intervalli della Voce).intervalli (totale 30 000 ms)"
+      - "AC-284 Nessuna chiamata a DecodificatoreAudio o EstrattoreImpronta avviene con una transazione aperta (le Finte, collegate alla UnitaDiLavoroFinta, lanciano se transazioneAperta)"
+      - "AC-285 La riga d'impronta scritta conserva sorgente = SorgenteImpronta.chiave e modello = EstrattoreImpronta.modello (anche nello spostamento P → Q)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 2, user option (c)): (i) outside any transaction read the Voce, s = SorgenteImpronta.di(intervalli), decode s.intervalli, extract (cheap refusals — VoceGiaAttribuita, Voce/Trascritto not found, re-confirm of the same Parlante — may answer before extracting); (ii) open the transaction, re-read the Voce, VoceCambiata if the source changed, run every invariant check authoritatively, write Attribuzione + print row (s.chiave, EstrattoreImpronta.modello). The in-flight cycle-1 code (extraction inside the transaction, R12) must be reworked to this shape."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15..17, INV-25, Q-7)"
   - id: "salta-voce"
     type: "application-service"
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:applicazione (..comandi)"
     title: "SaltaVoce"
     consumes:
@@ -651,6 +747,7 @@ blocks:
       - "eventi-parlanti"
       - "tec-decodifica-parlanti"
       - "tec-estrattore-impronta"
+      - "sorgente-impronta-pl"
     depends_on: []
     related_adrs:
       - "0003"
@@ -666,12 +763,19 @@ blocks:
       - "INV-19 il nome resta invariato dopo una ModificaDataRegistrazione"
       - "AC-88 SaltaVoce pubblica ParlanteCreato e AttribuzioneConfermata"
       - "AC-89 Saltare una Voce già attribuita → VoceGiaAttribuita e nulla cambia"
+      - "AC-286 L'impronta è estratta fuori transazione; poi la transazione rilegge la Voce: se SorgenteImpronta.di(intervalli attuali) differisce da quella estratta → Errore(VoceCambiata(voceRef)) e nulla è scritto (nessun Parlante creato)"
+      - "AC-287 Per una Voce di oltre 30 s gli intervalli passati a DecodificatoreAudio.campioni sono esattamente SorgenteImpronta.di(intervalli della Voce).intervalli (totale 30 000 ms)"
+      - "AC-288 Nessuna chiamata a DecodificatoreAudio o EstrattoreImpronta avviene con una transazione aperta (le Finte lanciano se transazioneAperta)"
+      - "AC-289 La riga d'impronta del nuovo occasionale conserva sorgente = SorgenteImpronta.chiave e modello = EstrattoreImpronta.modello"
+      - "AC-290 Se la decodifica o l'estrazione fallisce, nessuna transazione viene aperta e nulla è scritto (l'errore infrastrutturale si propaga, ADR 0003)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 2): same extract-then-transaction shape as conferma-attribuzione (cheap refusal VoceGiaAttribuita may answer before extracting; re-read + VoceCambiata inside the transaction; row stores sorgente + modello). Carry-over from its cycle-0 review: the decoded window must be pinned by the test (AC-287). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-19, Q-1, Q-5) + R21, R24"
   - id: "gestione-parlante"
     type: "application-service"
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:applicazione (..comandi)"
     title: "RinominaParlante, PromuoviParlante, EliminaParlante"
     consumes:
@@ -701,6 +805,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:applicazione (..politiche)"
     title: "Policy di Revisione dei Parlanti"
     consumes:
@@ -710,8 +815,6 @@ blocks:
       - "repo-parlanti"
       - "voci-per-parlanti"
       - "eventi-revisione"
-      - "tec-decodifica-parlanti"
-      - "tec-estrattore-impronta"
     depends_on: []
     related_adrs:
       - "0009"
@@ -719,21 +822,69 @@ blocks:
     commands:
       - "ApplicaRevisione"
     invariants:
-      - "INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins"
+      - "INV-21 after a Revisione (STRUCTURAL part only, inside the Revisione's transaction — ADR 0012 Amendment (b) point 3): a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce KEEPS its print row in the Revisione's transaction (possibly stale) and is re-derived AFTER commit by RiallineaImpronte; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins (B's Attribuzione and row go); same Parlante → A keeps its own row (stale), B's row and Attribuzione go; EXCEPTION (user decision 2026-09-23): in unire(A,B) with B attributed to P and A unattributed, A INHERITS the Attribuzione to P — B's Attribuzione is re-keyed to A (Attribuzione.trasferisci) and B's row of P is re-keyed to A in-transaction (Parlante.trasferisciImpronta, keeping its sorgente, so stale) and refreshed after commit; if P is eliminato only the tombstone Attribuzione is re-keyed, no row (policy-only exception to INV-13/INV-17) — so P is not left without Attribuzioni and INV-25 does not fire. The policy NEVER decodes nor extracts (ADR 0012 enforced_by)"
       - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept"
     tests_nl:
       - "INV-21 unire(A, B) con A e B attribuiti a Parlanti diversi → vince A; l'Attribuzione di B e l'impronta derivata da B sono cancellate"
-      - "INV-21 unire con A attribuita e B no → l'impronta di A è ri-derivata dai Segmenti correnti"
-      - "INV-21 dividere(A, S) → A' nasce senza Attribuzione; A la mantiene con l'impronta ri-derivata"
+      - "INV-21 unire con A attribuita e B no → A mantiene la sua riga d'impronta (ora obsoleta: la sorgente non corrisponde più), nessuna estrazione nella transazione; RiallineaImpronte la aggiorna dopo il commit"
+      - "INV-21 unire(A, B) con B attribuita a P attivo e A non attribuita → l'Attribuzione di B è ri-chiavata su A (Attribuzione(A) = P, nessuna Attribuzione per B) e la riga d'impronta di P per B è ri-chiavata su A conservando la sua sorgente_impronta (quindi obsoleta), aggiornata dopo il commit da RiallineaImpronte; P occasionale NON cessa (INV-25 non scatta)"
+      - "INV-21 idem con P eliminato → solo l'Attribuzione (tombstone) è ri-chiavata su A; nessuna riga d'impronta è creata (P resta a zero impronte, INV-13)"
+      - "INV-21 unire(A, B) con A e B attribuiti allo stesso Parlante P → A mantiene l'Attribuzione a P e la propria riga (obsoleta, aggiornata dopo il commit); l'Attribuzione e la riga di B sono cancellate; P non cessa"
+      - "INV-21 dividere(A, S) → A' nasce senza Attribuzione; A mantiene l'Attribuzione e la propria riga d'impronta (obsoleta, aggiornata dopo il commit)"
       - "INV-21 riassegnare → la sorgente svuotata perde Attribuzione e impronta; una destinazione nuova nasce senza Attribuzione"
       - "INV-25 un occasionale rimasto senza Attribuzioni cessa; un ricorrente resta"
-      - "AC-96 Un errore della policy restituisce Errore e annulla anche la Revisione"
+      - "AC-96 Un errore della policy (es. il repository della Finta fallisce) restituisce Errore e annulla anche la Revisione"
+      - "AC-291 La policy non decodifica né estrae: nessun riferimento a EstrattoreImpronta, DecodificatoreAudio, CampioniAudio o Impronta nel package politiche (enforced_by di ADR 0012 verde) e nessuna riga d'impronta è creata o ri-estratta dalla policy (le Finte ML non sono nemmeno collegate)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 3-4, user option (c)): structural part only; print freshness moved to riallinea-impronte (after commit, abbonato-riallineamento-impronte). ADR 0012 enforced_by (no EstrattoreImpronta/DecodificatoreAudio/CampioniAudio/Impronta under politiche/) is red on the in-flight branch (c2f1b72/af0540d import them) BY DESIGN — green once this rework lands. Uses Attribuzione.trasferisci + Parlante.trasferisciImpronta (follow-ups of attribuzione/parlante) for the inheritance."
+    model_hint: "deep"
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-21, INV-25, Q-2, Q-3), ADR 0012"
+  - id: "riallinea-impronte"
+    type: "application-service"
+    context: "parlanti"
+    side: "app"
+    wave: 4
+    release: "R2"
+    module: ":parlanti:applicazione (..comandi)"
+    title: "RiallineaImpronte / RiallineaTutteLeImpronte — freschezza delle impronte dopo il commit"
+    consumes:
+      - "kernel-pl"
+      - "agg-parlante"
+      - "repo-parlanti"
+      - "voci-per-parlanti"
+      - "tec-decodifica-parlanti"
+      - "tec-estrattore-impronta"
+      - "sorgente-impronta-pl"
+      - "eventi-parlanti"
+    depends_on: []
+    related_adrs:
+      - "0003"
+      - "0009"
+      - "0012"
+    model_hint: "deep"
+    commands:
+      - "RiallineaImpronte"
+      - "RiallineaTutteLeImpronte"
+    invariants:
+      - "INV-15 (freshness half, ADR 0012 Amendment (b)): a row is stale iff sorgente_impronta != SorgenteImpronta.di(current intervals of its Voce).chiave OR modello_impronta != EstrattoreImpronta.modello; only stale rows are re-derived, by compare-and-set UPDATE — existence is never changed here (never INSERT, so a purged print is never resurrected)"
+    tests_nl:
+      - "AC-292 RiallineaImpronte(registrazioneId) tocca solo le righe obsolete: con tre righe — fresca, sorgente cambiata, modello diverso — solo le ultime due sono decodificate, estratte e aggiornate; quella fresca non è nemmeno decodificata"
+      - "AC-293 La scrittura è un aggiornamento compare-and-set (aggiornaImpronta) in una transazione breve per Voce che rilegge la Voce; non avviene mai un inserimento (conteggio righe invariato)"
+      - "AC-294 Una riga cancellata tra l'estrazione e la scrittura (EliminaParlante, Attribuzione cambiata, INV-25) non è resuscitata: nessuna riga creata, esito Ok"
+      - "AC-295 Se la Voce cambia di nuovo durante l'estrazione (la sorgente ricalcolata nella transazione differisce da quella estratta) non scrive nulla per quella riga; una seconda esecuzione converge"
+      - "AC-296 Idempotente: una seconda esecuzione subito dopo non decodifica, non estrae, non scrive nulla e non pubblica ImpronteRiallineate"
+      - "AC-297 Nessuna transazione è aperta durante decodifica ed estrazione (le Finte ML lanciano se transazioneAperta)"
+      - "AC-298 Pubblica ImpronteRiallineate(registrazioneId) dopo il commit solo se almeno una riga è stata aggiornata"
+      - "AC-299 Una riga la cui Voce non esiste più (o Registrazione senza Trascritto) è saltata senza errore e senza scritture (la rimozione spetta alla revisione-policy)"
+      - "AC-300 RiallineaTutteLeImpronte(progettoId) esegue RiallineaImpronte per ogni Registrazione con almeno una riga d'impronta del Progetto (impronteDelProgetto); un fallimento su una Registrazione non impedisce le altre ed è riportato"
+      - "AC-301 Un'eccezione di decodifica o estrazione si propaga (ADR 0003, così l'abbonato riprova) dopo che le Voci già riallineate sono state committate; per la Voce fallita nulla è scritto"
+    notes: "ADR 0012 Amendment (b) point 3: run after commit by abbonato-riallineamento-impronte (coalesced per registrazioneId, retried) and at project open by avvio-composizione (RiallineaTutteLeImpronte, background, after RecuperaElaborazioniInterrotte). Staleness decided with the domain rule ImprontaVocale.obsoleta (never re-coded). An extracted Impronta that is not written is simply dropped (ADR 0009 Amendment (b)). Rows per Voce: at most one per Voce in practice (one Attribuzione per Voce), grouped per Voce anyway."
+    sources: "ADR 0012 Amendment (b) points 2-3, ADR 0009 Amendment (b), features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15, INV-21, Commands RiallineaImpronte)"
   - id: "catalogo-registrazioni"
     type: "read-model"
     context: "progetto"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":progetto:applicazione (..letture)"
     title: "CatalogoRegistrazioni (API pubblica del Progetto)"
     consumes:
@@ -758,6 +909,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":trascrizione:applicazione (..letture)"
     title: "VociDelTrascritto (API pubblica della Trascrizione)"
     consumes:
@@ -787,6 +939,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "NomiDelleVoci (API pubblica dei Parlanti)"
     consumes:
@@ -813,6 +966,7 @@ blocks:
     context: "documento"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":documento:applicazione"
     title: "Proiezione Documento (markdown puro)"
     consumes:
@@ -834,37 +988,45 @@ blocks:
     tests_nl:
       - "INV-23 stessi input → markdown byte-identico"
       - "INV-24 Voce non attribuita → 'Voce n'; Parlante eliminato → il suo Nome"
-      - "INV-24 Segmenti in ordine di inizio tra le Voci (a parità, segmentoId); testo IT/EN verbatim"
+      - "INV-24 Segmenti in ordine di inizio tra le Voci (a parità di inizioMs, per segmentoId); testo IT/EN verbatim — il test fornisce i Segmenti a pari inizioMs in ordine di segmentoId INVERSO nell'input (un ordinamento stabile che ignorasse il tie-break deve far fallire il test)"
       - "AC-103 Il markdown inizia con '# <titolo>' e l'intestazione 'Registrata il dd/MM/yyyy', poi una riga '**Nome** (mm:ss): testo' per ogni Segmento, e due Segmenti consecutivi della stessa Voce restano righe separate"
       - "AC-104 nomeFile(2026-09-12, 'Riunione') = '2026-09-12 Riunione.md'"
+      - "AC-320 nomeFile(data, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' (funzione pura, test a tabella con data 2026-09-12): 'Riunione 3/10: budget?' → '2026-09-12 Riunione 3_10_ budget_.md'; '  Nota finale.. ' → '2026-09-12 Nota finale.md'; 'a<b>c|d*e\"f' → '2026-09-12 a_b_c_d_e_f.md'; un carattere di controllo U+0007 → '_'; 'con' → '2026-09-12 con_.md'; '...' e '' → '2026-09-12 registrazione.md'; 'e' + U+0301 (NFD) → '2026-09-12 é.md' (NFC); un titolo già pulito resta invariato (idempotenza: nomeFile(d, pulisci(t)) = nomeFile(d, t))"
+      - "AC-321 Limite di lunghezza: per un titolo di 300 'è' (2 byte UTF-8) e per uno di 100 emoji (4 byte, coppie surrogate) nomeFile è lungo al più 251 byte UTF-8 (così nomeFile + '.tmp' ≤ 255), non spezza mai un code point né una coppia surrogata, e non termina con spazio o punto prima di '.md'"
+    notes: "AMENDED 2026-09-23 (user decision, open-questions/documento.md answered and cleared): the Documento file name is unique per Progetto because titolo is unique per Progetto (servizi-registrazione AC-322..324 assigns ' (2)', ' (3)'… at import) — nomeFile itself adds no tie-breaker (an ordinal computed here would break INV-23). nomeFile SANITIZES the titolo with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : \" / \\ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. The same rule text is pinned in tec-scrittore-documento keys.nomeFile and applied by servizi-registrazione to compute the uniqueness key — keep the two table tests' shared rows identical. LOW carry-over (code-review): format dates with explicit patterns, independent of the default Locale (Locale.ROOT). FOLLOW-UP: branch block/documento (8e7167f, parked) must be reworked to AC-320/321 and the reversed-input INV-24 tie-break test."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Documento (INV-23, INV-24) + R24 format, ADR 0010; format details USER-CONFIRMED 2026-09-23: date line 'Registrata il dd/MM/yyyy', a blank line between Segmento lines, mm = total minutes not wrapping at 60"
   - id: "estratto-audio"
     type: "read-model"
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "EstrattoAudio di una Voce"
     consumes:
       - "kernel-pl"
       - "voci-per-parlanti"
+      - "sorgente-impronta-pl"
     depends_on: []
     related_adrs:
       - "0005"
+      - "0012"
     view_shape:
       EstrattoRef: "registrazioneId, intervalli: List<IntervalloMs>"
     view_sources:
-      EstrattoRef: "← voci-per-parlanti (intervalli of the Voce) + the selection rule below"
+      EstrattoRef: "← voci-per-parlanti (intervalli of the Voce) through sorgente-impronta-pl selezionaIntervalli(intervalli, BUDGET_ESTRATTO_MS, MAX_INTERVALLI_ESTRATTO)"
     tests_nl:
-      - "AC-105 L'estratto usa i 2–3 Segmenti più lunghi della Voce per un totale di circa 10 s: mai più di 3 intervalli, totale <= 10 000 ms, ordinati per inizio"
+      - "AC-105 L'estratto applica la regola condivisa selezionaIntervalli(intervalli della Voce, 10 000 ms, 3): sovrapposizioni fuse, Segmenti >= 1 000 ms (altrimenti il solo più lungo), i più lunghi per primi (parità: inizio minore), mai più di 3 intervalli disgiunti, totale <= 10 000 ms, ordinati per inizio"
       - "AC-106 Una Voce con un solo Segmento di 30 s → un intervallo tagliato a 10 s dal suo inizio"
       - "AC-107 Voce inesistente o Registrazione senza Trascritto → nessun estratto (null)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 1): the selection is NOT re-implemented here — it calls the shared pure function of sorgente-impronta (supersedes the looser '2–3 longest, about 10 s' reading)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (EstrattoAudio) + R24"
   - id: "repository-sql-progetto"
     type: "adapter"
     context: "progetto"
     side: "app"
     wave: 4
+    release: "R0"
     module: ":progetto:adattatori (..persistenza)"
     title: "Repository SQL del Progetto"
     consumes:
@@ -878,12 +1040,14 @@ blocks:
     tests_nl:
       - "AC-108 Round-trip salva → trova per Progetto e Registrazione (stato osservabile uguale)"
       - "AC-109 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le implementazioni SQL su databaseInMemoria()"
+      - "AC-326 titoliDelProgetto su SQL legge la sola colonna titolo filtrata per progetto_id (nessuna ricostituzione di Registrazione) e passa RegistrazioneRepositoryContratto (AC-325)"
     sources: "ADR 0006, dev-architecture-app.md #repository"
   - id: "repository-sql-trascrizione"
     type: "adapter"
     context: "trascrizione"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":trascrizione:adattatori (..persistenza)"
     title: "Repository SQL della Trascrizione"
     consumes:
@@ -906,6 +1070,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:adattatori (..persistenza)"
     title: "Repository SQL dei Parlanti (+ purge biometrica)"
     consumes:
@@ -918,18 +1083,22 @@ blocks:
       - "0006"
       - "0007"
       - "0009"
+      - "0012"
     tests_nl:
-      - "AC-114 Round-trip di Parlante con impronte (BLOB float32 little-endian) e di Attribuzione"
+      - "AC-114 Round-trip di Parlante con impronte (BLOB float32 little-endian, sorgente_impronta e modello_impronta) e di Attribuzione"
       - "AC-115 Una violazione di parlante_nome_attivo_unico diventa NomeGiaInUso; due inserimenti concorrenti dello stesso nome attivo → uno solo riesce"
       - "AC-116 Dopo EliminaParlante non resta nessuna riga impronta_vocale di P nel DB e il checkpoint del WAL è eseguito dopo il commit"
       - "AC-117 rimuovi cancella il Parlante (solo per INV-25)"
       - "AC-118 I Contratti dei due repository passano contro le implementazioni SQL"
+      - "AC-302 aggiornaImpronta è un UPDATE compare-and-set (WHERE chiave della riga AND sorgente_impronta = attesa AND modello_impronta = atteso): con valori cambiati o riga assente → false e nessuna riga toccata; non esegue mai un INSERT (conteggio righe invariato)"
+      - "AC-303 impronteDiRegistrazione / impronteDelProgetto su SQL restituiscono i metadati (parlanteId, voceRef, sorgente, modello) senza leggere i BLOB"
     sources: "ADR 0006/0007/0009"
   - id: "registro-progetti-file"
     type: "adapter"
     context: "progetto"
     side: "app"
     wave: 4
+    release: "R0"
     module: ":progetto:adattatori"
     title: "Registro dei progetti recenti (file per utente)"
     consumes:
@@ -942,12 +1111,15 @@ blocks:
       - "AC-119 RegistroProgettiContratto passa contro l'implementazione su file (cartella temporanea)"
       - "AC-120 Il file viene riscritto in modo atomico: un crash simulato a metà scrittura lascia il contenuto precedente"
       - "AC-121 Un file illeggibile → elenco vuoto senza crash, e il prossimo registra lo riscrive valido"
+      - "AC-328 Più istanze dell'app (progetti diversi, ADR 0010) condividono il registro senza perdere aggiornamenti: ogni read-modify-write (registra, aggiorna, rimuovi) avviene sotto un FileChannel.lock() ESCLUSIVO su un file di lock fratello nella stessa cartella (es. progetti-recenti.lock, mai il file dati che viene sostituito dallo spostamento atomico), preso prima di leggere e rilasciato dopo lo spostamento; test: un processo figlio (JVM separata) e il test registrano N voci distinte ciascuno in parallelo → alla fine elenco() le contiene tutte 2N; dentro la stessa JVM il lock di file è affiancato dal lock in-processo (FileChannel.lock lancia OverlappingFileLockException se preso due volte dalla stessa JVM)"
+    notes: "AMENDED 2026-09-23 (user decision: multiple app instances on DIFFERENT projects are supported — ADR 0010 per-project .lock): cross-process FileChannel.lock() on a sibling lock file around each read-modify-write (AC-328). tec-registro-progetti re-pinned to the merged port aggiorna(percorso, …) (no code change). FOLLOW-UP REQUIRED: merged before this amendment — fix-batch-6 (already in flight: per-line tolerance, fsync, in-process lock, mid-write crash test) must also land AC-328."
     sources: "R3 (user decision 2026-09-23), ADR 0010"
   - id: "audio-ffmpeg"
     type: "adapter"
     context: "piattaforma"
     side: "app"
     wave: 4
+    release: "R0"
     module: ":audio"
     title: "Modulo :audio — sonda, decodifica, RiproduttoreWav"
     consumes:
@@ -967,6 +1139,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 4
+    release: "R2"
     module: ":parlanti:adattatori (..ml)"
     title: "ConfrontoImpronte (coseno + SoglieFascia, Kotlin puro)"
     consumes:
@@ -984,6 +1157,7 @@ blocks:
     context: "piattaforma"
     side: "app"
     wave: 4
+    release: "R1"
     module: ":modelli"
     title: "Catalogo e download dei modelli"
     consumes:
@@ -992,18 +1166,30 @@ blocks:
     related_adrs:
       - "0008"
     tests_nl:
-      - "AC-129 Un file con hash errato → HashNonValido e nessun file installato nella cache"
-      - "AC-130 Il download scrive in un file temporaneo e sposta atomicamente solo dopo la verifica"
+      - "AC-129 Un asset (archivio o file) con hash errato → HashNonValido(modelloId), il .part è eliminato (mai riusato) e nessuna directory è installata nella cache"
+      - "AC-130 Il download scrive in <id>.part; solo dopo la verifica dello sha256 l'asset è estratto/copiato in una directory temporanea accanto alla destinazione (<cartella>/<id>.tmp-<n>/) che è rinominata atomicamente in <cartella>/<id>/"
       - "AC-131 Un download interrotto riprende dal punto raggiunto"
       - "AC-132 Rete assente → ReteAssente; pronti() è false finché manca un modello del catalogo"
-      - "AC-133 La cartella cache segue il sistema operativo (macOS Application Support/snastro/modelli) e non è mai nel progetto"
+      - "AC-133 La cartella dei modelli segue il sistema operativo (funzione pura con os, env e user.home iniettati): macOS ~/Library/Application Support/snastro/modelli; Windows %LOCALAPPDATA%\\snastro\\modelli (mai %APPDATA%, roaming); Linux $XDG_DATA_HOME/snastro/modelli (mai XDG_CACHE_HOME); non è mai nel progetto"
       - "AC-134 I test usano una sorgente locale (nessuna rete reale nel gate)"
+      - "AC-330 Voce TAR_BZ2: un archivio .tar.bz2 costruito nel test con top/encoder.onnx e top/tokens.txt, servito dal server finto su loopback, è verificato ed estratto in <cartella>/<id>/encoder.onnx e <id>/tokens.txt (la directory di primo livello unica è rimossa); percorso(id) = <cartella>/<id>/ (una DIRECTORY); dopo l'installazione il .part non esiste più"
+      - "AC-331 Voce FILE: il file verificato è posto in <cartella>/<id>/<nome del file dell'url>; percorso(id) è comunque la directory"
+      - "AC-332 Un archivio con una voce che esce dalla destinazione ('../x', percorso assoluto) o con un link simbolico/fisico → ArchivioNonValido(modelloId), nulla è rinominato al posto della destinazione e nessuna directory temporanea resta"
+      - "AC-333 Marcatore <id>/.sha256 = hash dell'asset installato: installata(id) solo se la directory esiste E il marcatore coincide con lo sha256 del catalogo; marcatore diverso (hash del catalogo cambiato) o assente → la voce è in mancanti() e scarica la reinstalla sostituendo la vecchia directory (rinominata da parte, poi eliminata); le directory *.tmp-* rimaste da un crash sono eliminate all'avvio"
+      - "AC-334 Windows: LOCALAPPDATA assoluto → <LOCALAPPDATA>\\snastro\\modelli; LOCALAPPDATA assente, vuoto/solo spazi o RELATIVO → <user.home>\\AppData\\Local\\snastro\\modelli"
+      - "AC-335 Linux: XDG_DATA_HOME assoluto → <XDG_DATA_HOME>/snastro/modelli; assente, vuoto/solo spazi o RELATIVO → <user.home>/.local/share/snastro/modelli (spec XDG)"
+      - "AC-336 (code-review HIGH) I redirect HTTP sono seguiti: il server finto risponde 302 verso un secondo percorso che serve l'asset (come i release di GitHub) → download completato e verificato; un ciclo di redirect → DownloadFallito, mai un blocco"
+      - "AC-337 (code-review HIGH) Un .part bloccato si recupera: una richiesta Range a cui il server risponde 416, o un .part più grande di dimensioneByte, → il .part è scartato e il download riparte da 0 (una volta) e riesce; un upstream corto (la connessione si chiude prima di dimensioneByte / Content-Length) → DownloadFallito con il .part conservato, e lo scarica successivo riprende e completa"
+      - "AC-338 (code-review HIGH) Timeout di lettura/inattività: un server che smette di inviare byte a metà corpo → il download fallisce entro il timeout di inattività (iniettato, es. 200 ms nel test) con DownloadFallito, mai un blocco indefinito; il .part resta per la ripresa; anche la connessione ha un timeout"
+      - "AC-339 Un errore del disco (cartella non scrivibile, rinomina fallita) → ScritturaFallita(motivo), mai ReteAssente"
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c), user decisions: %LOCALAPPDATA% + ARCHIVE entries): VoceCatalogo describes the downloaded asset (url, sha256 and dimensioneByte OF THE ASSET, formato TAR_BZ2 | FILE); verify → extract into a temp dir next to the target → atomic dir rename; percorso(id) = the directory; <id>/.sha256 marker; blank/relative LOCALAPPDATA / XDG_DATA_HOME ignored. Extraction via Apache Commons Compress (org.apache.commons:commons-compress, Apache-2.0, add to gradle/libs.versions.toml; :modelli only; BZip2CompressorInputStream + TarArchiveInputStream) — the JDK has no bzip2/tar reader. HashNonValido field renamed id → modelloId (reconciled with tec-modelli-ui); ErroreModelli gains ArchivioNonValido + ScritturaFallita. FOLLOW-UP REQUIRED: the queued code-review CHANGES rework (cycle 1) must cover AC-129/130/133 (amended) and AC-330..339 — incl. the three HIGH items (AC-336 redirects, AC-337 stuck .part, AC-338 inactivity timeout) — plus the review's MED patches (unguarded file ops, body stream leak, concurrent scarica, M8 early-EOF test)."
     sources: "ADR 0008"
   - id: "registrazione-da-progetto-tr"
     type: "adapter"
     context: "trascrizione"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":trascrizione:adattatori (..porte)"
     title: "LettoreRegistrazione (trascrizione) da CatalogoRegistrazioni"
     consumes:
@@ -1021,6 +1207,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:adattatori (..porte)"
     title: "LettoreRegistrazione (parlanti) da CatalogoRegistrazioni"
     consumes:
@@ -1038,6 +1225,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:adattatori (..porte)"
     title: "LettoreVoci da VociDelTrascritto"
     consumes:
@@ -1055,6 +1243,7 @@ blocks:
     context: "documento"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":documento:adattatori (..porte)"
     title: "LettoreTrascritto da VociDelTrascritto + CatalogoRegistrazioni"
     consumes:
@@ -1073,6 +1262,7 @@ blocks:
     context: "documento"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":documento:adattatori (..porte)"
     title: "LettoreNomi da NomiDelleVoci"
     consumes:
@@ -1090,6 +1280,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":trascrizione:adattatori (..eventi)"
     title: "Abbonato sincrono a RegistrazioneAggiunta → AvviaElaborazione"
     consumes:
@@ -1108,6 +1299,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:adattatori (..eventi)"
     title: "Abbonato sincrono agli eventi di Revisione → revisione-policy"
     consumes:
@@ -1121,11 +1313,34 @@ blocks:
       - "AC-142 Ciascuno dei tre eventi invoca ApplicaRevisione dentro la transazione della Revisione"
       - "AC-143 Un Errore della policy annulla la Revisione (test end-to-end su databaseInMemoria)"
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy, ADR 0012"
+  - id: "abbonato-riallineamento-impronte"
+    type: "adapter"
+    context: "parlanti"
+    side: "app"
+    wave: 5
+    release: "R2"
+    module: ":parlanti:adattatori (..eventi)"
+    title: "Abbonato dopo-commit agli eventi di Revisione → RiallineaImpronte"
+    consumes:
+      - "kernel-pl"
+      - "eventi-revisione"
+    depends_on:
+      - "riallinea-impronte"
+    related_adrs:
+      - "0012"
+    tests_nl:
+      - "AC-304 VociUnite, VoceDivisa e SegmentoRiassegnato sono ricevuti da un AbbonatoDopoCommit che invoca RiallineaImpronte(registrazioneId) solo dopo il commit della Revisione"
+      - "AC-305 Una Revisione annullata (rollback, es. errore della revisione-policy) non innesca nessun RiallineaImpronte"
+      - "AC-306 Più eventi ravvicinati della stessa Registrazione sono coalescenti: al più un RiallineaImpronte in corso e uno in coda per registrazioneId"
+      - "AC-307 Un Errore o un'eccezione di RiallineaImpronte è ritentato con back-off limitato, senza toccare la Revisione già committata; esauriti i tentativi è riportato (la prossima apertura del progetto riallinea comunque)"
+    notes: "Same discipline as the Documento Rigenerazione subscriber (ADR 0012): after commit, background coroutine, coalesced per registrazioneId, idempotent, retried."
+    sources: "ADR 0012 Amendment (b) point 3, features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy"
   - id: "scrittore-documento-md"
     type: "adapter"
     context: "documento"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":documento:adattatori"
     title: "Scrittore atomico dei .md"
     consumes:
@@ -1138,12 +1353,14 @@ blocks:
       - "AC-144 ScrittoreDocumentoContratto passa contro l'implementazione su file"
       - "AC-145 Un errore simulato a metà scrittura lascia intatto il file precedente (mai un file parziale)"
       - "AC-146 Nessuna API di lettura nel modulo documento (regola enforced_by di ADR 0010)"
+      - "AC-340 Il file temporaneo della scrittura atomica è '<nomeFile>.tmp' nella stessa cartella documenti/ (mai un nome più lungo), così il limite di 255 byte di AC-321 vale anche per lui; con un nomeFile di 251 byte scrivi riesce"
     sources: "ADR 0010"
   - id: "audio-progetto"
     type: "adapter"
     context: "progetto"
     side: "app"
     wave: 5
+    release: "R0"
     module: ":progetto:adattatori (..audio)"
     title: "SondaAudio + ArchivioAudio su :audio"
     consumes:
@@ -1164,6 +1381,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":trascrizione:adattatori (..audio)"
     title: "DecodificatoreAudio (trascrizione) su :audio"
     consumes:
@@ -1184,6 +1402,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:adattatori (..audio)"
     title: "DecodificatoreAudio (parlanti) su :audio"
     consumes:
@@ -1204,6 +1423,7 @@ blocks:
     context: "documento"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":documento:applicazione (..politiche)"
     title: "Rigenerazione del Documento"
     consumes:
@@ -1222,7 +1442,8 @@ blocks:
     tests_nl:
       - "AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto"
       - "AC-154 RigeneraDocumento su una Registrazione senza Trascritto → nessuna scrittura, Ok"
-      - "AC-155 Con una DataRegistrazioneModificata il nuovo file è scritto e poi il vecchio è rimosso"
+      - "AC-155 Con una DataRegistrazioneModificata il nuovo file nomeFile(nuova, titolo) è scritto e poi il vecchio nomeFile(precedente, titolo) è rimosso — entrambi calcolati con la stessa funzione pulita di documento (AC-320)"
+      - "AC-327 Il vecchio file rimosso non appartiene mai a un'altra Registrazione: con 'Riunione' (data 2026-09-12) e 'Riunione (2)' (data 2026-09-13) spostare la data di 'Riunione (2)' al 2026-09-12 scrive '2026-09-12 Riunione (2).md', rimuove '2026-09-13 Riunione (2).md' e non tocca '2026-09-12 Riunione.md'; se precedente = nuova il file è riscritto e nulla è rimosso"
       - "AC-156 ParlanteRinominato → rigenerate tutte e sole le Registrazioni con un'Attribuzione a P; ParlantePromosso con nomeCambiato = false → nulla; ParlanteEliminato → nulla"
       - "AC-157 Un errore di scrittura → Esito.Errore (così l'abbonato può riprovare)"
       - "AC-158 RigeneraTuttiIDocumenti rigenera ogni Registrazione con Trascritto"
@@ -1232,6 +1453,7 @@ blocks:
     context: "progetto"
     side: "app"
     wave: 5
+    release: "R0"
     module: ":progetto:applicazione (..letture)"
     title: "ElencoProgetti (S1)"
     consumes:
@@ -1253,6 +1475,7 @@ blocks:
     context: "progetto"
     side: "app"
     wave: 5
+    release: "R0"
     module: ":progetto:applicazione (..letture)"
     title: "RegistrazioniDelProgetto — fetta Progetto (S2)"
     consumes:
@@ -1274,6 +1497,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":trascrizione:applicazione (..letture)"
     title: "StatiElaborazione — fetta Trascrizione (S2) + FasiInCorso"
     consumes:
@@ -1300,6 +1524,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "Voci da identificare per Registrazione — fetta Parlanti (S2)"
     consumes:
@@ -1322,6 +1547,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 5
+    release: "R1"
     module: ":trascrizione:applicazione (..letture)"
     title: "TrascrittoView — fetta Trascrizione (S3)"
     consumes:
@@ -1356,6 +1582,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "IdentificazioneVoci — fetta Parlanti (S3)"
     consumes:
@@ -1379,6 +1606,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "Proposta per Voce"
     consumes:
@@ -1390,15 +1618,18 @@ blocks:
       - "tec-decodifica-parlanti"
       - "tec-estrattore-impronta"
       - "tec-confronto-impronte"
+      - "sorgente-impronta-pl"
+      - "eventi-parlanti"
     depends_on:
       - "estratto-audio"
     related_adrs:
       - "0004"
       - "0009"
+      - "0012"
     view_shape:
       proposta: "{voceId, candidati: List<{parlanteId, nome, tipoParlante, fascia: Fascia, estratto: EstrattoRef}>}"
     view_sources:
-      proposta: "parlanteId, nome, tipoParlante ← Parlante (attivi con impronte, same progettoId via registrazione-per-parlanti); fascia ← ConfrontoImpronte(transient Impronta of the Voce from EstrattoreImpronta over DecodificatoreAudio.campioni(voci-per-parlanti intervals)); estratto ← estratto-audio(the best print's source VoceRef)"
+      proposta: "parlanteId, nome, tipoParlante ← Parlante (attivi con impronte, same progettoId via registrazione-per-parlanti); fascia ← ConfrontoImpronte(transient Impronta of the Voce from EstrattoreImpronta over DecodificatoreAudio.campioni(SorgenteImpronta.di(voci-per-parlanti intervals).intervalli), against only the Parlante's prints whose modello == EstrattoreImpronta.modello); estratto ← estratto-audio(the best print's source VoceRef)"
     invariants:
       - "INV-20 Candidati are only attivo Parlanti of the same Progetto with >= 1 ImprontaVocale; ranked ricorrente first then by Fascia (forte > debole > nessuna); every Candidato has an EstrattoAudio; no numeric score leaves the read-model"
     tests_nl:
@@ -1408,13 +1639,16 @@ blocks:
       - "INV-20 la vista espone voceId e per ogni Candidato parlanteId, nome, tipoParlante, fascia ed estratto — nessun numero (by-construction sul tipo; il test verifica la forma)"
       - "AC-171 Galleria vuota → lista di Candidati vuota"
       - "AC-172 Calcolare una Proposta non scrive nessuna riga (conteggio impronta_vocale invariato)"
-      - "AC-173 Dopo una Revisione o un'Attribuzione la Proposta è ricalcolata (cache invalidata)"
+      - "AC-173 Dopo una Revisione, un'Attribuzione o ImpronteRiallineate(registrazioneId) la Proposta è ricalcolata (cache invalidata)"
+      - "AC-308 L'impronta transitoria della Voce è estratta da SorgenteImpronta.di(intervalli della Voce): gli intervalli decodificati sono esattamente SorgenteImpronta.intervalli, e nessuna transazione è aperta durante decodifica ed estrazione"
+      - "AC-309 Le impronte con modello diverso da EstrattoreImpronta.modello sono ignorate nel confronto: un Parlante che ha solo impronte di un altro modello non è Candidato finché non sono riallineate"
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-20, Read-models), features/trascrizione-con-parlanti/architetture/architecture-overview.md (Arbitration), R24"
   - id: "proposta-unione"
     type: "read-model"
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "PropostaUnione per Registrazione"
     consumes:
@@ -1440,6 +1674,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "ParlantiAttivi ('altri ▾')"
     consumes:
@@ -1461,6 +1696,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 5
+    release: "R2"
     module: ":parlanti:applicazione (..letture)"
     title: "ParlantiDelProgetto (S4)"
     consumes:
@@ -1486,6 +1722,7 @@ blocks:
     context: "ui"
     side: "app"
     wave: 6
+    release: "R0"
     module: ":ui (snastro.ui, snastro.ui.testi)"
     title: "Fondamenta UI: tema, testi, shell, messaggi d'errore, porte di shell"
     consumes:
@@ -1502,12 +1739,15 @@ blocks:
       - "AC-179 Formattazione: 75 003 ms → '01:15'; 4 503 000 ms → '75:03'; 2026-09-12 → '12/09/2026'"
       - "AC-180 MessaggiErrore copre ogni errore di ogni contesto senza ramo else (un nuovo errore rompe la compilazione)"
       - "AC-181 Stati della shell: caricamento del progetto (indicatore), errore di apertura (messaggio) resi dal render-check"
+      - "AC-341 (R0) La shell riceve dalla composizione l'insieme delle sezioni disponibili: se la sezione Parlanti non è fornita (release R0 e R1) la voce di navigazione 'Parlanti' NON compare e nessuna schermata Parlanti è raggiungibile; se è fornita (R2) la shell si comporta come in AC-177 — test sul presenter della shell con e senza la sezione"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the shell sections are injected by the composition root (AC-341) so R0 (avvio-r0) and R1 (avvio-composizione) ship without the Parlanti section; AC-177 describes the R2 composition (avvio-parlanti). Added while the block is in doing: the composer must hand AC-341 to the in-flight worker (or land it as a follow-up before avvio-r0)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md App shell, dev-architecture-app.md #presenter, R8/R15"
   - id: "abbonato-documento"
     type: "adapter"
     context: "documento"
     side: "app"
     wave: 6
+    release: "R1"
     module: ":documento:adattatori (..eventi)"
     title: "Abbonato dopo-commit → Rigenerazione (coalescente, con retry)"
     consumes:
@@ -1532,18 +1772,17 @@ blocks:
     context: "ui"
     side: "app"
     wave: 7
+    release: "R0"
     module: ":ui (snastro.ui.lettore)"
     title: "Componente lettore-audio condiviso"
     consumes:
       - "kernel-pl"
       - "tec-shell-ui"
     depends_on:
-      - "estratto-audio"
       - "ui-fondamenta"
     related_adrs:
       - "0005"
-    consumes_rm:
-      - "estratto-audio"
+    consumes_rm: []
     triggers: []
     tests_nl:
       - "AC-187 play/pausa funzionano e la posizione avanza durante la riproduzione"
@@ -1551,12 +1790,14 @@ blocks:
       - "AC-189 Sorgente non disponibile → controlli disabilitati con messaggio"
       - "AC-190 Un nuovo play sostituisce la riproduzione in corso"
       - "AC-191 Stato di caricamento (WAV in preparazione) mostrato finché il lettore non è pronto"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the component plays an EstrattoRef (kernel-pl type) HANDED IN by the calling screen — S3/S4 consume the estratto-audio read-model and pass its EstrattoRef; the component itself never depends on the Parlanti read-model (dependency on estratto-audio removed so R0 playback does not need an R2 block). AC-188 is tested with a hand-built EstrattoRef. The LettoreAudio implementation (RiproduttoreWav + WAV rebuild, AC-241) lives in avvio-r0."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md (lettore-audio), ADR 0005"
   - id: "schermata-progetti"
     type: "ui"
     context: "ui"
     side: "app"
     wave: 8
+    release: "R0"
     module: ":ui (snastro.ui.progetti)"
     title: "S1 · Progetti"
     consumes:
@@ -1577,7 +1818,7 @@ blocks:
       - "AC-192 Vuoto: 'Nessun progetto. Crea il primo'"
       - "AC-193 Caricamento dell'elenco mostrato come indicatore"
       - "AC-194 Crea con nome vuoto → messaggio inline"
-      - "AC-195 Creazione fallita (cartella esistente) → errore inline"
+      - "AC-195 Creazione fallita (SessioneProgetto.crea restituisce un Esito.Errore diverso da NomeProgettoVuoto — nel presenter test un fake che restituisce es. CartellaNonValida) → errore inline e nessun progetto aperto; una cartella già esistente NON è un errore (AC-264: nome libero ' (2)', ' (3)'…)"
       - "AC-196 Aprire un progetto già aperto da un'altra istanza → 'progetto già aperto'"
       - "AC-197 'Apri progetto…' con una cartella non valida → errore inline"
       - "AC-198 La lista mostra nome, numero di registrazioni e ultima attività"
@@ -1587,17 +1828,19 @@ blocks:
     context: "ui"
     side: "app"
     wave: 8
+    release: "R0"
     module: ":ui (snastro.ui.registrazioni)"
     title: "S2 · Registrazioni del Progetto"
     consumes:
       - "kernel-pl"
+      - "tec-lettore-audio"
       - "tec-shell-ui"
     depends_on:
       - "registrazioni-del-progetto"
       - "stati-elaborazione"
-      - "identificazione-registrazioni"
       - "servizi-registrazione"
       - "avvia-elaborazione"
+      - "lettore-audio"
       - "ui-fondamenta"
     related_adrs:
       - "0003"
@@ -1605,7 +1848,6 @@ blocks:
     consumes_rm:
       - "registrazioni-del-progetto"
       - "stati-elaborazione"
-      - "identificazione-registrazioni"
     triggers:
       - "AggiungiRegistrazione"
       - "ModificaDataRegistrazione"
@@ -1616,15 +1858,19 @@ blocks:
       - "AC-201 Errore di aggiunta mostrato inline, nessuna riga nuova"
       - "AC-202 Ordinamento per data, dalla più recente"
       - "AC-203 in_attesa → 'In coda (n)'; in_corso → 'In corso · separazione voci · 3:12' (tempo da avviataAlle, nessuna percentuale); fallita → motivo + 'Riprova' (solo su fallita); completata apre S3"
-      - "AC-204 Badge '3 voci · 1 da identificare'"
       - "AC-205 La riga si aggiorna quando cambiano stato o fase"
       - "AC-206 Modifica della data inline"
+      - "AC-342 (R0 variant) Le sorgenti di Trascrizione sono OPZIONALI: il presenter costruito SENZA StatiElaborazione e AvviaElaborazione (R0, avvio-r0) mostra per ogni riga solo titolo, data (modificabile, AC-206), durata e '▶' (AC-343); nessuna colonna di stato, nessun 'Riprova'/'Trascrivi', nessun badge, e il click su una riga non apre S3 — test del presenter con le sole finte di RegistrazioniDelProgetto, AggiungiRegistrazione, ModificaDataRegistrazione e LettoreAudio; con le sorgenti fornite (R1, avvio-composizione) valgono AC-203/AC-205/AC-344"
+      - "AC-343 (R0) Ogni riga ha '▶' che riproduce la Registrazione dall'inizio via LettoreAudio.riproduciDa(id, 0); durante la riproduzione della riga il controllo diventa pausa (StatoLettore.registrazioneId = la riga), '▶' su un'altra riga sostituisce la riproduzione in corso; LettoreAudio.disponibile(id) = false → '▶' disabilitato con 'Audio non disponibile'"
+      - "AC-344 (R1) Con le sorgenti di Trascrizione fornite, una Registrazione senza Elaborazione (StatoElaborazioneVista.NON_AVVIATA — es. importata in R0) mostra 'Trascrivi' che invoca AvviaElaborazione; un errore del comando è mostrato inline sulla riga e nulla cambia"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 ships in R0 WITHOUT Trascrizione/Parlanti features: the Trascrizione sources (stati-elaborazione, avvia-elaborazione — both already merged, compile-time only) are optional presenter inputs, absent in R0 (AC-342) and supplied by avvio-composizione in R1. The identification badge (AC-204, Parlanti read-model identificazione-registrazioni, R2) MOVED to block schermata-registrazioni-identificazione (R2) so R0 needs no R2 block. NEW SURFACE (user decision: R0 = 'import, list and play'): a per-row '▶' over the LettoreAudio port (AC-343) — not in the original ux-proposal S2, recorded as a ux amendment. Carry (stati-elaborazione code-review): NON_AVVIATA must be rendered with an action → AC-344."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1)"
   - id: "schermata-registrazione"
     type: "ui"
     context: "ui"
     side: "app"
     wave: 8
+    release: "R1"
     module: ":ui (snastro.ui.registrazione)"
     title: "S3 · Registrazione (identificazione + Revisione)"
     consumes:
@@ -1660,6 +1906,8 @@ blocks:
       - "UnisciVoci"
       - "DividiVoce"
       - "RiassegnaSegmento"
+    gated_by:
+      - "ADR closing spike attesa-mutex-estrazione"
     tests_nl:
       - "AC-207 Caricamento: scheletro del trascritto"
       - "AC-208 Click su un Segmento → riproduzione dal suo inizio e Segmento evidenziato"
@@ -1674,13 +1922,16 @@ blocks:
       - "AC-217 Audio sorgente mancante → barra audio ed estratti disabilitati con messaggio, trascritto usabile"
       - "AC-218 'Apri documento' e 'Mostra nella cartella' usano il percorso del Documento"
       - "AC-219 Una Voce attribuita mostra 'cambia' e non 'salta'"
-    notes: "Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24)."
+      - "AC-318 Errore VoceCambiata su 'conferma' o 'salta' → messaggio in linguaggio semplice sulla card ('La voce è cambiata nel frattempo: riprova'), nulla cambia e il comando può essere ripetuto"
+      - "AC-319 Dopo ImpronteRiallineate della Registrazione aperta la Proposta visibile è ricaricata senza perdere la selezione"
+    notes: "Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): assigned to R1 (transcript view with 'Voce n' labels + Revisione) but it still hard-depends on R2 blocks (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, conferma-attribuzione, salta-voce) — R1 VARIANT PENDING: before R1 dispatch a targeted amendment must split the identification panel (AC-212/213/214/216/219/318/319 and the Parlanti half of AC-215/217) into an R2 block, like schermata-registrazioni did (AC-342). NOT done in this pass (needs the user: the attesa-mutex-estrazione gate the user put on R1 concerns print extraction, i.e. the R2 half)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24)"
   - id: "schermata-parlanti"
     type: "ui"
     context: "ui"
     side: "app"
     wave: 8
+    release: "R2"
     module: ":ui (snastro.ui.parlanti)"
     title: "S4 · Parlanti del Progetto"
     consumes:
@@ -1713,6 +1964,7 @@ blocks:
     context: "ui"
     side: "app"
     wave: 8
+    release: "R1"
     module: ":ui (snastro.ui.modelli)"
     title: "S5 · Modelli (onboarding download + licenze)"
     consumes:
@@ -1733,11 +1985,37 @@ blocks:
       - "AC-231 Licenze elencate dal catalogo (nome, ruolo, licenza, attribuzione)"
       - "AC-232 Modelli pronti → la schermata non blocca l'app"
     sources: "ADR 0008 (+ R10), UI/ux-proposal.md S5"
+  - id: "schermata-registrazioni-identificazione"
+    type: "ui"
+    context: "ui"
+    side: "app"
+    wave: 9
+    release: "R2"
+    module: ":ui (snastro.ui.registrazioni)"
+    title: "S2 · badge di identificazione delle Voci (fetta Parlanti)"
+    consumes:
+      - "kernel-pl"
+      - "tec-shell-ui"
+    depends_on:
+      - "schermata-registrazioni"
+      - "identificazione-registrazioni"
+      - "ui-fondamenta"
+    related_adrs:
+      - "0003"
+    consumes_rm:
+      - "identificazione-registrazioni"
+    triggers: []
+    tests_nl:
+      - "AC-204 Badge '3 voci · 1 da identificare'"
+      - "AC-345 La sorgente di identificazione è OPZIONALE per il presenter di S2: assente (R0/R1) o non ancora caricata → nessun badge (mai un conteggio provvisorio o '0 da identificare'); con numVociDaIdentificare = 0 → solo '3 voci'; l'errore di lettura della sorgente lascia la riga senza badge e il resto della riga utilizzabile"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): split out of schermata-registrazioni so S2 ships in R0 without the Parlanti read-model; extends the S2 presenter's row with the ux-proposal badge (S2 ⨝ identificazione-registrazioni, ux amendment R1). Wired by avvio-parlanti."
+    sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1), release pivot 2026-09-23"
   - id: "avvio-coda-elaborazioni"
     type: "adapter"
     context: "piattaforma"
     side: "app"
     wave: 9
+    release: "R1"
     module: ":avvio"
     title: "Coda seriale delle Elaborazioni e dispatcher della pipeline"
     consumes:
@@ -1752,49 +2030,95 @@ blocks:
       - "0004"
       - "0008"
       - "0012"
+    gated_by:
+      - "ADR closing spike attesa-mutex-estrazione"
     tests_nl:
       - "AC-233 All'avvio RecuperaElaborazioniInterrotte gira prima che la coda parta"
       - "AC-234 Con due in_attesa la seconda parte solo quando la prima è terminale"
       - "AC-235 Con i modelli mancanti le Elaborazioni restano in_attesa; quando diventano pronti la coda riparte"
-      - "AC-236 Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo (nessuna chiamata nativa concorrente)"
+      - "AC-236 Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo senza alcuna transazione aperta (nessuna chiamata nativa concorrente; il write lock di SQLite non è tenuto durante l'attesa)"
+      - "AC-312 (F-C) Se qualcosa sfugge a EseguiProssimaElaborazione.esegui (cancellazione, interrupt, Error come OutOfMemoryError, eccezione inattesa) il dispatcher esegue RecuperaElaborazioniInterrotte prima di prendere l'elemento successivo; lo esegue anche quando un progetto è riaperto senza riavviare l'app — nessuna Elaborazione resta in_corso mentre l'app gira"
+      - "AC-313 (F-G) Un abbonato sincrono che fallisce sempre su ElaborazioneAvviata annulla ogni volta la transazione di avvio: il dispatcher non gira a vuoto sull'elemento di testa (tentativi limitati con back-off, poi lo lascia in_attesa per la sessione e lo segnala) e gli altri elementi proseguono"
+      - "AC-314 Un solo dispatcher single-thread prende gli elementi: due richieste concorrenti di avanzamento non portano mai due Elaborazioni in_corso (la transizione in_attesa → in_corso non ha controllo di versione e si affida a questo)"
+    notes: "PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built. GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl."
     sources: "ADR 0004/0008/0012 (+ R12)"
+  - id: "avvio-r0"
+    type: "adapter"
+    context: "piattaforma"
+    side: "app"
+    wave: 9
+    release: "R0"
+    module: ":avvio"
+    title: "Composition root R0 (Archivio): main, sessione di progetto, import e riproduzione, S1/S2, smoke"
+    consumes:
+      - "kernel-pl"
+      - "eventi-progetto"
+      - "tec-registro-progetti"
+      - "tec-audio-api"
+      - "tec-lettore-audio"
+      - "tec-shell-ui"
+    depends_on:
+      - "ui-fondamenta"
+      - "lettore-audio"
+      - "schermata-progetti"
+      - "schermata-registrazioni"
+      - "persistenza-schema"
+      - "registro-progetti-file"
+      - "repository-sql-progetto"
+      - "audio-progetto"
+      - "audio-ffmpeg"
+    related_adrs:
+      - "0004"
+      - "0005"
+      - "0006"
+      - "0010"
+      - "0012"
+    tests_nl:
+      - "AC-237 --smoke apre il progetto fixture (con almeno una Registrazione importata) e salva uno screenshot di S1 e di S2 in avvio/build/smoke/, uscendo con 0 — senza nativi sherpa né modelli installati (R0); avvio-composizione e avvio-parlanti estendono lo smoke alle loro schermate"
+      - "AC-238 Una seconda istanza sullo stesso progetto riceve 'progetto già aperto'"
+      - "AC-239 SessioneProgetto.crea(cartellaGenitore, nome) crea in cartellaGenitore la cartella <nomeCartella>.snastro/ scelta secondo AC-263/AC-264, con audio/, documenti/, cache/audio/, progetto.db e .lock, e registra il progetto nel RegistroProgetti con percorso = percorso assoluto della cartella effettivamente creata"
+      - "AC-263 Il nome della cartella deriva da NomeProgetto (funzione pura, test a tabella): ogni carattere non valido su Windows/macOS/Linux (< > : \" / \\ | ? * e i caratteri di controllo U+0000–U+001F, U+007F) → '_'; spazi e punti iniziali/finali rimossi; troncato a 60 code point (mai spezzando una coppia surrogata) e poi di nuovo ripulito da spazi/punti finali; un nome riservato Windows (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, senza distinzione di maiuscole) riceve un '_' finale; risultato vuoto → 'progetto'; il suffisso '.snastro' è aggiunto dopo. Es.: 'Riunione 3/10: budget?' → 'Riunione 3_10_ budget_.snastro'; 'con' → 'con_.snastro'; '...' → 'progetto.snastro'; un nome di 80 caratteri → 60 caratteri + '.snastro'"
+      - "AC-264 Se <nomeCartella>.snastro esiste già in cartellaGenitore (cartella o file, con la semantica del filesystem: su APFS case-insensitive 'Budget' collide con 'budget'), SessioneProgetto.crea usa '<nomeCartella> (2).snastro', poi ' (3)'… fino al primo nome libero: mai errore, mai sovrascrittura né scrittura dentro la cartella preesistente (il suo contenuto resta byte-identico); la scelta è race-safe (createDirectory atomico, non exists-poi-crea: se il nome viene occupato nel frattempo si passa al numero successivo)"
+      - "AC-265 Il Progetto mantiene il nome digitato: CreaProgetto riceve il nome digitato (solo il trim di NomeProgetto, AC-16), mai il nome della cartella; ProgettoAperto.nome, VoceRegistro.nome e ProgettoCreato.nome valgono es. 'Riunione 3/10: budget?' mentre percorso termina con 'Riunione 3_10_ budget_ (2).snastro'; nome vuoto o di soli spazi → NomeProgettoVuoto e nessuna cartella creata"
+      - "AC-240 Alla chiusura il registro è aggiornato con numRegistrazioni e ultimaAttivita"
+      - "AC-241 Il LettoreAudio ricostruisce un WAV derivato mancante dalla sorgente; senza sorgente riporta non disponibile"
+      - "AC-242 Un comando completato produce un Cambiamento su AggiornamentiVista per la sua Registrazione — in R0: AggiungiRegistrazione e ModificaDataRegistrazione (dopo il commit, mai su rollback); S2 si aggiorna senza ricaricare a mano"
+      - "AC-350 (R0, vedi AC-341/AC-342) La composizione R0 non fornisce la sezione Parlanti alla shell, costruisce S2 SENZA sorgenti di Trascrizione (AC-342) e non rende raggiungibili S3/S4/S5: nessun abbonato né servizio di Trascrizione, Documento, Parlanti o Modelli è registrato; dopo AggiungiRegistrazione nessuna riga esiste in elaborazione; :avvio parte senza caricare i nativi sherpa e senza modelli installati"
+      - "AC-346 Ogni servizio di comando (CreaProgetto, AggiungiRegistrazione, ModificaDataRegistrazione) è costruito con eventi.unitaDiLavoro (la UnitaDiLavoro del DispatcherEventiInMemoria), mai con il delegato grezzo: test end-to-end su databaseInMemoria — AggiungiRegistrazione pubblica RegistrazioneAggiunta senza errore e un abbonato dopo-commit registrato nel test la riceve solo dopo il commit (e mai dopo un rollback)"
+      - "AC-347 Le chiamate al RegistroProgetti (registra, aggiorna, elenco, rimuovi) girano FUORI dal thread UI (il lock di file di AC-328 blocca) e un loro errore o eccezione (IOException, lock, file illeggibile) è registrato nel log e non annulla MAI crea/apri/chiudi: con un RegistroProgetti finto che lancia sempre, crea e apri restituiscono Ok con il progetto aperto, chiudi rilascia comunque il .lock, S1 mostra un elenco vuoto"
+      - "AC-348 Il file del registro dei progetti recenti sta nella cartella dati per utente del sistema operativo (funzione pura con os, env e user.home iniettati, stessa regola di AC-133/AC-334/AC-335 senza il suffisso modelli): macOS ~/Library/Application Support/snastro/; Windows <LOCALAPPDATA>\\snastro\\ (LOCALAPPDATA assente, vuoto o relativo → <user.home>\\AppData\\Local\\snastro\\); Linux <XDG_DATA_HOME>/snastro/ (assente, vuoto o relativo → <user.home>/.local/share/snastro/); mai dentro una cartella di progetto — test a tabella"
+      - "AC-349 SessioneProgetto.apri: una cartella senza progetto.db o non leggibile → CartellaNonValida; un progetto.db con versione di schema più recente → DatabasePiuRecente, senza modificarlo né lasciare il .lock; un progetto spostato viene aperto e ri-registrato con il nuovo percorso assoluto; chiudi rilascia il .lock così che la riapertura (anche da un'altra istanza) riesce"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R0 half of the former monolithic avvio-composizione. main(): manual wiring of the R0 graph only — SessioneProgetto crea/apri/chiudi (folder naming AC-263/264/265, .lock, apriDatabaseProgetto), RegistroProgetti (per-OS path AC-348, calls off the UI thread, errors logged and never aborting AC-347), CreaProgetto/AggiungiRegistrazione/ModificaDataRegistrazione over eventi.unitaDiLavoro (AC-346), ElencoProgetti + RegistrazioniDelProgetto read-models, SondaAudio/ArchivioAudio (audio-progetto) for import, LettoreAudio over RiproduttoreWav (WAV rebuilt from the source into cache/audio/, AC-241), ApriEsterno over java.awt.Desktop, AggiornamentiVista fed by after-commit Progetto events (AC-242), shell WITHOUT the Parlanti section (AC-341) and S2 WITHOUT Trascrizione sources (AC-342), --smoke for S1/S2 (AC-237). Carry-overs owned here: registry errors never abort open/create/close and never on the UI thread (fix-batch-6 code-review, mandatory); per-OS app-data path of the registry (registro-progetti-file code-review); eventi.unitaDiLavoro wiring (revisione code-review) — the same rule binds avvio-composizione and avvio-parlanti. USER DECISION 2026-09-23 (folder naming) as recorded on AC-263..265: 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 and NTFS's 255 UTF-16 units; SessioneProgetto.crea never produces CartellaGiaEsistente. The later blocks EXTEND this wiring (they never re-create SessioneProgetto, the dispatcher or LettoreAudio): avvio-composizione (R1) adds Trascrizione/Documento/Modelli, avvio-parlanti (R2) adds Parlanti. Pre-release (not gating): audio-ffmpeg fix-batch-7 (atomic WAV write, RiproduttoreWav playback token/position/flush) improves R0 playback robustness."
+    sources: "architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding, user decisions 2026-09-23 (folder naming; release pivot R0 Archivio)"
   - id: "avvio-composizione"
     type: "adapter"
     context: "piattaforma"
     side: "app"
     wave: 10
+    release: "R1"
     module: ":avvio"
-    title: "Composition root, sessione di progetto, adattatori UI, smoke"
+    title: "Composizione R1 (Trascrizione): coda, pipeline, Revisione, Documento, Modelli, S3/S5"
     consumes:
       - "kernel-pl"
       - "eventi-progetto"
       - "eventi-elaborazione"
       - "eventi-revisione"
-      - "eventi-parlanti"
-      - "tec-registro-progetti"
-      - "tec-audio-api"
+      - "nomi-per-documento"
       - "tec-modelli"
-      - "tec-lettore-audio"
       - "tec-shell-ui"
       - "tec-modelli-ui"
     depends_on:
+      - "avvio-r0"
       - "avvio-coda-elaborazioni"
-      - "ui-fondamenta"
-      - "lettore-audio"
-      - "schermata-progetti"
-      - "schermata-registrazioni"
       - "schermata-registrazione"
-      - "schermata-parlanti"
       - "schermata-modelli"
-      - "persistenza-schema"
-      - "registro-progetti-file"
-      - "repository-sql-progetto"
       - "repository-sql-trascrizione"
-      - "repository-sql-parlanti"
+      - "registrazione-da-progetto-tr"
+      - "decodifica-trascrizione"
+      - "lettore-trascritto-da-trascrizione"
+      - "scrittore-documento-md"
       - "abbonato-documento"
       - "abbonato-registrazione-aggiunta"
-      - "abbonato-revisione-parlanti"
-      - "audio-ffmpeg"
       - "modelli-provisioning"
     related_adrs:
       - "0004"
@@ -1804,18 +2128,60 @@ blocks:
       - "0010"
       - "0012"
     tests_nl:
-      - "AC-237 --smoke apre il progetto fixture e salva uno screenshot per ogni schermata S1–S5 in avvio/build/smoke/, uscendo con 0"
-      - "AC-238 Una seconda istanza sullo stesso progetto riceve 'progetto già aperto'"
-      - "AC-239 SessioneProgetto.crea crea audio/, documenti/, cache/audio/, progetto.db e registra il progetto; cartella esistente → CartellaGiaEsistente"
-      - "AC-240 Alla chiusura il registro è aggiornato con numRegistrazioni e ultimaAttivita"
-      - "AC-241 Il LettoreAudio ricostruisce un WAV derivato mancante dalla sorgente; senza sorgente riporta non disponibile"
-      - "AC-242 Un comando completato produce un Cambiamento su AggiornamentiVista per la sua Registrazione"
-    sources: "architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding"
+      - "AC-351 --smoke (esteso) salva anche gli screenshot di S3 (progetto fixture con un Trascritto completato, etichette 'Voce n') e di S5 in avvio/build/smoke/, uscendo con 0; S1/S2 restano come in AC-237"
+      - "AC-329 ServizioModelli (porta di :ui) è implementato in :avvio sopra ProvisioningModelli: ogni variante di snastro.modelli.ErroreModelli è mappata 1:1 nella variante omonima di ErroreServizioModelli (HashNonValido(modelloId), ArchivioNonValido(modelloId), ReteAssente, ScritturaFallita(motivo), DownloadFallito(motivo)) — test a tabella sul mapper; :ui non importa mai snastro.modelli (verificaDipendenzeModuli)"
+      - "AC-352 Un'eccezione che sfugge a ProvisioningModelli (IOException o InvalidPathException da scarica() o pronti()) è catturata in :avvio: scarica → StatoModelli.Errore(ScritturaFallita(motivo)), mai un crash né uno stato bloccato in InDownload, e 'Riprova' la ripete; pronti() che lancia all'avvio → Mancanti (l'app parte comunque) — test con un ProvisioningModelli finto che lancia"
+      - "AC-353 Una sola istanza di FasiInCorso per progetto aperto è passata sia alla pipeline (SegnalatoreFase di EseguiProssimaElaborazione) sia a StatiElaborazione: una fase segnalata dalla pipeline è visibile nella vista di S2 (test end-to-end con le Finte ML)"
+      - "AC-354 ElaborazioneAvviata/Completata/Fallita, VociUnite, VoceDivisa, SegmentoRiassegnato e OGNI cambio di fase di FasiInCorso producono un Cambiamento su AggiornamentiVista per la loro Registrazione (così S2 aggiorna stato e fase, AC-205, senza polling)"
+      - "AC-355 La composizione R1 fornisce a S2 le sorgenti di Trascrizione (AC-342 → colonna di stato, 'Trascrivi'/'Riprova', apertura di S3 su completata) e rende raggiungibile S5; abbonato-registrazione-aggiunta è registrato come AbbonatoSincrono (una nuova importazione accoda l'Elaborazione, AC-140) e abbonato-documento come AbbonatoDopoCommit; ogni servizio di comando della Trascrizione usa eventi.unitaDiLavoro (come AC-346); la sezione Parlanti resta assente (AC-341)"
+      - "AC-356 Senza Parlanti (R1) il Documento è generato con un LettoreNomi vuoto (nomi = mappa vuota, registrazioniCon = lista vuota): ogni Voce è resa 'Voce n' (INV-24) e una Revisione committata rigenera il Documento; nessuna classe di :parlanti è istanziata dalla composizione R1"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): this block is now the R1 (Trascrizione) half of the former monolithic composition root; the R0 half is avvio-r0 (SessioneProgetto, folder naming AC-239/263/264/265, registry AC-240/347/348, LettoreAudio AC-241, AggiornamentiVista AC-242, smoke S1/S2 AC-237, 'progetto già aperto' AC-238) and the R2 half is avvio-parlanti (AC-315/316/317). It EXTENDS avvio-r0's graph (never re-creates SessioneProgetto, the dispatcher or LettoreAudio): SQL repositories of Trascrizione, the serial queue (avvio-coda-elaborazioni), pipeline adapters with config-driven selection (Finte until the gated ML blocks land — diarizzatore/riconoscitore/vad wire themselves here), Revisione commands, Documento (rigenerazione after commit, empty LettoreNomi AC-356), ServizioModelli over :modelli (AC-329, exceptions caught AC-352), S3/S5. Carry-overs owned here: eventi.unitaDiLavoro wiring for every Trascrizione command (revisione code-review); FasiInCorso ONE shared instance for pipeline + read-model (stati-elaborazione, AC-353) and phase changes emitting a Cambiamento (stati-elaborazione code-review, AC-354); ServizioModelli must catch the IOExceptions escaping scarica()/pronti() (modelli-provisioning cycle-1 code-review, AC-352); RecuperaElaborazioniInterrotte strictly before the dispatcher (owned by avvio-coda-elaborazioni AC-233). tec-modelli percorso(id) is a DIRECTORY (ADR 0008 Amendment (c)); tec-modelli-ui error type is the UI-side ErroreServizioModelli (AC-329)."
+    sources: "architecture.md (:avvio), ADR 0004/0008/0010/0012, release pivot 2026-09-23 (R1 Trascrizione)"
+  - id: "avvio-parlanti"
+    type: "adapter"
+    context: "piattaforma"
+    side: "app"
+    wave: 11
+    release: "R2"
+    module: ":avvio"
+    title: "Composizione R2 (Parlanti): repository, abbonati, riallineamento impronte, S4, badge S2"
+    consumes:
+      - "kernel-pl"
+      - "eventi-revisione"
+      - "eventi-parlanti"
+      - "tec-shell-ui"
+    depends_on:
+      - "avvio-composizione"
+      - "schermata-parlanti"
+      - "schermata-registrazioni-identificazione"
+      - "repository-sql-parlanti"
+      - "registrazione-da-progetto-pa"
+      - "lettore-voci-da-trascrizione"
+      - "lettore-nomi-da-parlanti"
+      - "decodifica-parlanti"
+      - "confronto-impronte"
+      - "abbonato-revisione-parlanti"
+      - "abbonato-riallineamento-impronte"
+      - "riallinea-impronte"
+    related_adrs:
+      - "0004"
+      - "0009"
+      - "0012"
+    tests_nl:
+      - "AC-357 --smoke (esteso) salva anche lo screenshot di S4 e quello di S2 con il badge di identificazione, uscendo con 0; la shell mostra la sezione Parlanti (AC-341 con sezione fornita, AC-177)"
+      - "AC-315 abbonato-riallineamento-impronte è registrato come AbbonatoDopoCommit sul DispatcherEventi: una Revisione committata porta a un RiallineaImpronte della sua Registrazione (test end-to-end su databaseInMemoria con le Finte ML)"
+      - "AC-316 All'apertura del progetto RiallineaTutteLeImpronte gira in background DOPO RecuperaElaborazioniInterrotte, senza bloccare la UI (la schermata è usabile mentre gira)"
+      - "AC-317 ImpronteRiallineate(registrazioneId) produce un Cambiamento su AggiornamentiVista per quella Registrazione e invalida la cache della Proposta (nessuna Rigenerazione del Documento)"
+      - "AC-358 Un'eccezione di RiallineaTutteLeImpronte (all'apertura) o di RiallineaImpronte (abbonato dopo-commit) è catturata e registrata nel log: non termina lo scope di background né l'app, gli altri abbonati continuano; il job è cancellato alla chiusura del progetto (nessun accesso al DB dopo chiudi) — test con una finta che lancia"
+      - "AC-359 La composizione R2 registra revisione-policy come AbbonatoSincrono agli eventi di Revisione (una sua Errore annulla la Revisione) e sostituisce il LettoreNomi vuoto di R1 con lettore-nomi-da-parlanti (il Documento mostra i Nomi attribuiti); i comandi Parlanti e RiallineaImpronte ricevono la STESSA UnitaDiLavoro eventi.unitaDiLavoro"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here."
+    sources: "architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti)"
   - id: "ml-sherpa-motore"
     type: "adapter"
     context: "piattaforma"
     side: "app"
     wave: 11
+    release: "R1"
     module: ":ml-sherpa"
     title: "Motore sherpa-onnx: nativi, sessioni, wrapper"
     consumes:
@@ -1831,12 +2197,14 @@ blocks:
       - "AC-243 [@modelli] i nativi si caricano su macOS arm64 da ./gradlew :avvio:run"
       - "AC-244 [@modelli] ogni sessione è rilasciata dopo l'uso (nessuna handle nativa sopravvive a conSessione)"
       - "AC-245 com.k2fsa e System.load compaiono solo in :ml-sherpa (regola enforced_by di ADR 0004)"
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry."
     sources: "ADR 0004, spike packaging-modelli-desktop"
   - id: "allineatore"
     type: "adapter"
     context: "trascrizione"
     side: "app"
     wave: 11
+    release: "R1"
     module: ":trascrizione:adattatori (..ml)"
     title: "Allineatore (Kotlin puro) — strategia dallo spike"
     consumes:
@@ -1859,6 +2227,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 12
+    release: "R1"
     module: ":ml-sherpa + :trascrizione:adattatori (..ml)"
     title: "Diarizzatore reale su sherpa-onnx"
     consumes:
@@ -1882,6 +2251,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 12
+    release: "R1"
     module: ":ml-sherpa + :trascrizione:adattatori (..ml)"
     title: "RiconoscitoreParlato reale su sherpa-onnx"
     consumes:
@@ -1905,6 +2275,7 @@ blocks:
     context: "trascrizione"
     side: "app"
     wave: 12
+    release: "R1"
     module: ":ml-sherpa + :trascrizione:adattatori (..ml)"
     title: "Vad reale su sherpa-onnx"
     consumes:
@@ -1929,6 +2300,7 @@ blocks:
     context: "parlanti"
     side: "app"
     wave: 12
+    release: "R2"
     module: ":ml-sherpa + :parlanti:adattatori (..ml)"
     title: "EstrattoreImpronta reale su sherpa-onnx"
     consumes:
@@ -1936,22 +2308,27 @@ blocks:
       - "tec-estrattore-impronta"
       - "tec-ml-sherpa"
     depends_on:
-      - "avvio-composizione"
+      - "avvio-parlanti"
     related_adrs:
       - "0004"
       - "0008"
+      - "0012"
     gated_by:
       - "ADR closing spike impronta-vocale-affidabilita"
     tests_nl:
       - "AC-258 [@modelli] EstrattoreImprontaContratto passa contro l'adattatore reale su un campione di sample/"
       - "AC-259 La voce del modello nel catalogo ha URL, SHA-256 e licenza come da ADR dello spike"
       - "AC-260 Tutte le risorse native sono rilasciate a fine uso (use {})"
+      - "AC-310 modello = l'id della voce di catalogo del modello di embedding (ADR 0008), costante per l'istanza e uguale a quello registrato in :modelli"
+      - "AC-311 Il Mutex nativo è acquisito DENTRO estrai (mai dal chiamante, mai dentro una transazione) e rilasciato anche in caso di eccezione"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): wires itself into avvio-parlanti (R2), no longer the R1 composition."
     sources: "spike impronta-vocale-affidabilita, ADR 0004/0008"
   - id: "benchmark-elaborazione"
     type: "adapter"
     context: "piattaforma"
     side: "app"
     wave: 13
+    release: "R1"
     module: ":avvio (task benchmarkElaborazione)"
     title: "Benchmark NFR dell'Elaborazione (opt-in)"
     consumes:
@@ -1961,16 +2338,16 @@ blocks:
       - "riconoscitore-sherpa"
       - "vad-silero"
       - "allineatore"
-      - "estrattore-impronta-sherpa"
       - "avvio-composizione"
     related_adrs:
       - "0011"
     gated_by:
-      - "all five spike ADRs"
-      - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore, estrattore-impronta-sherpa merged"
+      - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop)"
+      - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
     tests_nl:
       - "AC-261 [opt-in, fuori gate] su un campione reale di 60 minuti con modelli scaricati, l'Elaborazione completa va da in_corso a completata in <= 600 s sull'M3 Pro; i tempi per fase sono stampati"
       - "AC-262 Il task fallisce se il tempo supera 600 s"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by."
     sources: "ADR 0011 (+ R17)"
 boundaries:
   - id: "kernel-pl"
@@ -1984,6 +2361,7 @@ boundaries:
       - "trascritto"
       - "parlante"
       - "attribuzione"
+      - "sorgente-impronta"
       - "porte-progetto"
       - "porte-trascrizione"
       - "porte-parlanti"
@@ -2002,6 +2380,7 @@ boundaries:
       - "salta-voce"
       - "gestione-parlante"
       - "revisione-policy"
+      - "riallinea-impronte"
       - "catalogo-registrazioni"
       - "api-trascritto"
       - "nomi-delle-voci"
@@ -2021,6 +2400,7 @@ boundaries:
       - "lettore-nomi-da-parlanti"
       - "abbonato-registrazione-aggiunta"
       - "abbonato-revisione-parlanti"
+      - "abbonato-riallineamento-impronte"
       - "scrittore-documento-md"
       - "audio-progetto"
       - "decodifica-trascrizione"
@@ -2053,6 +2433,9 @@ boundaries:
       - "vad-silero"
       - "estrattore-impronta-sherpa"
       - "benchmark-elaborazione"
+      - "avvio-r0"
+      - "avvio-parlanti"
+      - "schermata-registrazioni-identificazione"
     projection: "in-process"
     pinned_types:
       ProgettoId: "@JvmInline value class(valore: String) — UUID"
@@ -2150,7 +2533,7 @@ boundaries:
       - "0007"
     gates:
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(elaborazioneQueries)\\b' . | grep -vE '^\\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
-      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoElaborazione\\.' . | grep -vE '^\\./trascrizione/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
+      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoElaborazione\\.' . | grep -E '^\\./[^:]*/src/main/' | grep -vE '^\\./trascrizione/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
   - id: "agg-trascritto"
     owner: "trascritto"
     consumers:
@@ -2184,6 +2567,7 @@ boundaries:
       - "salta-voce"
       - "gestione-parlante"
       - "revisione-policy"
+      - "riallinea-impronte"
       - "repository-sql-parlanti"
       - "proposta"
       - "parlanti-del-progetto"
@@ -2197,7 +2581,9 @@ boundaries:
       "Parlante.rinomina": "(nome: Nome): Esito<ParlanteRinominato>"
       "Parlante.promuovi": "(nome: Nome?): Esito<ParlantePromosso>"
       "Parlante.elimina": "(): Esito<ParlanteEliminato> — purges every ImprontaVocale in the same call"
-      "Parlante.registraImpronta": "(voceRef: VoceRef, impronta: Impronta): Esito<Unit> — insert or replace the ONE print of that VoceRef, never touches others"
+      "Parlante.registraImpronta": "(voceRef: VoceRef, impronta: Impronta, sorgente: String /* SorgenteImpronta.chiave */, modello: String /* EstrattoreImpronta.modello */): Esito<Unit> — insert or replace the ONE print of that VoceRef, never touches others"
+      "Parlante.trasferisciImpronta": "(da: VoceRef, a: VoceRef): Unit — policy-only (INV-21 unire inheritance/re-keying): moves the print of `da` to key `a` keeping impronta, sorgente and modello (so it is stale by construction, refreshed after commit by RiallineaImpronte); no-op when there is no print for `da` (always so for an eliminato); require no print already present for `a`"
+      ImprontaVocale: "entity data class(voceRef: VoceRef, impronta: Impronta, sorgente: String, modello: String) in parlanti:dominio, exposed read-only via Parlante.impronte: List<ImprontaVocale>; fun obsoleta(chiaveCorrente: String, modelloCorrente: String): Boolean = sorgente != chiaveCorrente || modello != modelloCorrente (the ONE staleness rule, ADR 0012 (b)); same rule as companion ImprontaVocale.obsoleta(sorgente, modello, chiaveCorrente, modelloCorrente) for callers holding only row metadata"
       "Parlante.rimuoviImpronta": "(voceRef: VoceRef): Unit"
       Nome: "smart-constructor VO: Nome.di(String): Esito<Nome>; normalizzato = trim().lowercase(Locale.ROOT)"
       Impronta: "class(valori: FloatArray) in parlanti:dominio, explicit equals/hashCode"
@@ -2210,9 +2596,10 @@ boundaries:
       - "0003"
       - "0007"
       - "0009"
+      - "0012"
     gates:
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(parlanteQueries|improntaVocaleQueries)\\b' . | grep -vE '^\\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
-      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\\.' . | grep -vE '^\\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
+      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\\.' . | grep -E '^\\./[^:]*/src/main/' | grep -vE '^\\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
   - id: "agg-attribuzione"
     owner: "attribuzione"
     consumers:
@@ -2229,14 +2616,41 @@ boundaries:
     pinned_types:
       "Attribuzione.conferma": "(voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>"
       "Attribuzione.cambia": "(parlanteId): Esito<AttribuzioneConfermata?> — same parlante = Ok(null), no event"
+      "Attribuzione.trasferisci": "(a: VoceRef): Attribuzione — POLICY-ONLY re-keying (INV-21 unire inheritance, ADR 0012 Amendment (b) point 4): same parlanteId and progettoId, key = a; require a.registrazioneId == voceRef.registrazioneId; checks NO Parlante state (valid for an eliminato tombstone — the explicit INV-13/INV-17 exception); emits no event (consumers are reached via VociUnite); never used by ConfermaAttribuzione / SaltaVoce"
     keys:
       VoceRef: "composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts"
     contract_test: "invariant-test"
     related_adrs:
       - "0003"
       - "0007"
+      - "0012"
     gates:
+      - "! grep -rnE --include='*.kt' '\\.trasferisci(Impronta)?\\(' parlanti/applicazione/src/main | grep '/comandi/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(attribuzioneQueries)\\b' . | grep -vE '^\\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
+  - id: "sorgente-impronta-pl"
+    owner: "sorgente-impronta"
+    consumers:
+      - "conferma-attribuzione"
+      - "salta-voce"
+      - "riallinea-impronte"
+      - "estratto-audio"
+      - "proposta"
+    projection: "in-process"
+    pinned_types:
+      SorgenteImpronta: "data class(intervalli: List<IntervalloMs>) in snastro.parlanti.dominio — non-empty, pairwise disjoint, ordered by inizioMs; val chiave: String = intervalli joined as \"<inizioMs>-<fineMs>\" with \",\" (e.g. \"1200-5400,8000-15000\")"
+      "SorgenteImpronta.di": "(intervalliVoce: List<IntervalloMs>): SorgenteImpronta = SorgenteImpronta(selezionaIntervalli(intervalliVoce, BUDGET_IMPRONTA_MS, maxIntervalli = null)) — require intervalliVoce non-empty; the ONLY way any print (ConfermaAttribuzione, SaltaVoce, RiallineaImpronte, transient Proposta print) chooses the audio to decode"
+      selezionaIntervalli: "(intervalli: List<IntervalloMs>, budgetMs: Long, maxIntervalli: Int?): List<IntervalloMs> — the ONE shared pure selection function (parlanti:dominio): (1) merge overlapping intervals into their union; (2) keep those >= DURATA_MINIMA_SEGMENTO_MS, else the single longest; (3) longest first, tie earlier inizioMs; (4) accumulate up to budgetMs and at most maxIntervalli, the crossing interval trimmed from its start to [inizio, inizio + resto]; (5) return disjoint, in time order"
+      BUDGET_IMPRONTA_MS: "const val Long = 30_000L — PROVISIONAL (spike impronta-vocale-affidabilita calibrates it; final value in its closing ADR)"
+      DURATA_MINIMA_SEGMENTO_MS: "const val Long = 1_000L"
+      BUDGET_ESTRATTO_MS: "const val Long = 10_000L — EstrattoAudio budget"
+      MAX_INTERVALLI_ESTRATTO: "const val Int = 3 — EstrattoAudio interval cap"
+      "ErroreParlanti.VoceCambiata": "data class(voceRef: VoceRef) : ErroreParlanti (file ErroriParlanti.kt, parlanti:dominio) — the Voce's SorgenteImpronta changed between the extraction and the command's transaction; nothing written, the user retries"
+    keys:
+      chiave: "minted by SorgenteImpronta (sorgente-impronta) from its final disjoint intervals in time order, \"<inizioMs>-<fineMs>\" joined by \",\"; deterministic for equal intervals; changes whenever the Voce's Segmenti or BUDGET_IMPRONTA_MS change (that IS the staleness signal); stored as impronta_vocale.sorgente_impronta"
+    contract_test: "invariant-test"
+    related_adrs:
+      - "0009"
+      - "0012"
   - id: "repo-progetto"
     owner: "porte-progetto"
     consumers:
@@ -2248,7 +2662,7 @@ boundaries:
     projection: "in-process"
     pinned_types:
       ProgettoRepository: "interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB"
-      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; salva(r: Registrazione) }"
+      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }"
     keys: {}
     contract_test: "consumer-driven"
     related_adrs:
@@ -2279,6 +2693,7 @@ boundaries:
       - "salta-voce"
       - "gestione-parlante"
       - "revisione-policy"
+      - "riallinea-impronte"
       - "proposta"
       - "proposta-unione"
       - "parlanti-attivi"
@@ -2289,7 +2704,8 @@ boundaries:
       - "repository-sql-parlanti"
     projection: "in-process"
     pinned_types:
-      ParlanteRepository: "interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */ }"
+      ParlanteRepository: "interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */; impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>; impronteDelProgetto(id: ProgettoId): List<RigaImpronta>; aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean /* compare-and-set UPDATE of the ONE row (attesa.parlanteId, attesa.voceRef) only if it still exists with sorgente == attesa.sorgente AND modello == attesa.modello; true iff 1 row updated; NEVER inserts (ADR 0009/0012 Amendment (b): no resurrection) */ }"
+      RigaImpronta: "data class(parlanteId: ParlanteId, voceRef: VoceRef, sorgente: String, modello: String) in parlanti:applicazione.porte — print row metadata, never the embedding"
       AttribuzioneRepository: "interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }"
     keys: {}
     contract_test: "consumer-driven"
@@ -2297,6 +2713,7 @@ boundaries:
       - "0006"
       - "0007"
       - "0009"
+      - "0012"
   - id: "registrazione-per-trascrizione"
     owner: "porta-registrazione-trascrizione"
     supplier: "catalogo-registrazioni"
@@ -2346,6 +2763,7 @@ boundaries:
       - "conferma-attribuzione"
       - "salta-voce"
       - "revisione-policy"
+      - "riallinea-impronte"
       - "estratto-audio"
       - "proposta"
       - "identificazione-voci"
@@ -2392,6 +2810,7 @@ boundaries:
       - "rigenerazione-documento"
       - "lettore-nomi-da-parlanti"
       - "nomi-delle-voci"
+      - "avvio-composizione"
     projection: "in-process"
     pinned_types:
       LettoreNomi: "interface { fun nomi(id: RegistrazioneId): Map<VoceRef, String>; fun registrazioniCon(p: ParlanteId): List<RegistrazioneId> } — attributed Voci only; an eliminato Parlante still resolves to its Nome (INV-24)"
@@ -2410,6 +2829,7 @@ boundaries:
       - "abbonato-registrazione-aggiunta"
       - "abbonato-documento"
       - "avvio-composizione"
+      - "avvio-r0"
     projection: "in-process"
     pinned_types:
       ProgettoCreato: "data class(progettoId: ProgettoId, nome: String) : EventoPubblicato"
@@ -2447,8 +2867,10 @@ boundaries:
       - "revisione"
       - "revisione-policy"
       - "abbonato-revisione-parlanti"
+      - "abbonato-riallineamento-impronte"
       - "abbonato-documento"
       - "avvio-composizione"
+      - "avvio-parlanti"
     projection: "in-process"
     pinned_types:
       VociUnite: "data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato"
@@ -2461,16 +2883,18 @@ boundaries:
     contract_test: "consumer-driven"
     related_adrs:
       - "0012"
-    delivery: "Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard"
+    delivery: "Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard"
   - id: "eventi-parlanti"
     owner: "eventi-pubblicati"
-    supplier: "conferma-attribuzione, salta-voce, gestione-parlante"
+    supplier: "conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte"
     consumers:
       - "conferma-attribuzione"
       - "salta-voce"
       - "gestione-parlante"
+      - "riallinea-impronte"
+      - "proposta"
       - "abbonato-documento"
-      - "avvio-composizione"
+      - "avvio-parlanti"
     projection: "in-process"
     pinned_types:
       AttribuzioneConfermata: "data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato"
@@ -2478,8 +2902,10 @@ boundaries:
       ParlanteRinominato: "data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato"
       ParlantePromosso: "data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato"
       ParlanteEliminato: "data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change"
+      ImpronteRiallineate: "data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by riallinea-impronte after the commit of >= 1 refreshed print row (ADR 0012 Amendment (b)); consumers: proposta (cache invalidation), avvio-parlanti (AggiornamentiVista); NOT Documento (prints do not change it)"
       TipoParlanteVista: "enum RICORRENTE | OCCASIONALE (parlanti:applicazione)"
     keys:
+      RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
       VoceRef: "composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts"
       ParlanteId: "minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)"
       ProgettoId: "minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder"
@@ -2492,13 +2918,13 @@ boundaries:
     consumers:
       - "elenco-progetti"
       - "registro-progetti-file"
-      - "avvio-composizione"
+      - "avvio-r0"
     projection: "in-process"
     pinned_types:
-      RegistroProgetti: "interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant); rimuovi(percorso: String) }"
+      RegistroProgetti: "interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }"
       VoceRegistro: "data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)"
     keys:
-      percorso: "minted by avvio-composizione (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open"
+      percorso: "minted by avvio-r0 (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open"
       ProgettoId: "minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder"
     contract_test: "consumer-driven"
     related_adrs:
@@ -2536,16 +2962,18 @@ boundaries:
     consumers:
       - "conferma-attribuzione"
       - "salta-voce"
-      - "revisione-policy"
+      - "riallinea-impronte"
       - "proposta"
       - "decodifica-parlanti"
     projection: "in-process"
     pinned_types:
-      DecodificatoreAudio: "interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy)"
+      DecodificatoreAudio: "interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy); NEVER called while a UnitaDiLavoro transaction is open (ADR 0012 Amendment (b))"
+      DecodificatoreAudioFinta: "testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when campioni is invoked while transazioneAperta"
     keys: {}
     contract_test: "consumer-driven"
     related_adrs:
       - "0005"
+      - "0012"
   - id: "tec-diarizzatore"
     owner: "porte-trascrizione"
     consumers:
@@ -2619,12 +3047,13 @@ boundaries:
     consumers:
       - "conferma-attribuzione"
       - "salta-voce"
-      - "revisione-policy"
+      - "riallinea-impronte"
       - "proposta"
       - "estrattore-impronta-sherpa"
     projection: "in-process"
     pinned_types:
-      EstrattoreImpronta: "interface { fun estrai(c: CampioniAudio): Impronta } — native use serialized with the pipeline (ADR 0012 amendment, R12)"
+      EstrattoreImpronta: "interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5)"
+      EstrattoreImprontaFinta: "testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when estrai is invoked while transazioneAperta; modello configurable (default \"finto\")"
       Impronta: "see agg-parlante (parlanti:dominio)"
     keys: {}
     contract_test: "consumer-driven"
@@ -2655,7 +3084,7 @@ boundaries:
     pinned_types:
       ScrittoreDocumento: "interface { fun scrivi(nomeFile: String, markdown: String); fun rimuovi(nomeFile: String) } — write-only, never reads (ADR 0010)"
     keys:
-      nomeFile: "minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> <titolo>.md' under documenti/ — changes only when dataRegistrazione changes (titolo immutable)"
+      nomeFile: "minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' under documenti/, with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : \" / \\ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. UNIQUE per Progetto: titolo is unique per Progetto on the key pulisci(titolo).lowercase(Locale.ROOT) (servizi-registrazione AC-322) — so two Registrazioni never share a nomeFile whatever their dates; changes only when dataRegistrazione changes (titolo immutable). The atomic write's temp file is '<nomeFile>.tmp' in the same folder (AC-340)."
     contract_test: "consumer-driven"
     related_adrs:
       - "0010"
@@ -2665,7 +3094,7 @@ boundaries:
       - "audio-progetto"
       - "decodifica-trascrizione"
       - "decodifica-parlanti"
-      - "avvio-composizione"
+      - "avvio-r0"
     projection: "in-process"
     pinned_types:
       "snastro.audio.SondaFfmpeg": "fun sonda(file: Path): InfoFile(durataMs: Long, modificatoIl: LocalDate) — throws AudioIlleggibile / FormatoNonSupportato"
@@ -2684,10 +3113,12 @@ boundaries:
     projection: "in-process"
     pinned_types:
       "snastro.modelli.CatalogoModelli": "val voci: List<VoceCatalogo>"
-      VoceCatalogo: "data class(id: String, ruolo: String, url: String, sha256: String, dimensioneByte: Long, licenza: String, attribuzione: String)"
-      "snastro.modelli.ProvisioningModelli": "fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroreModelli (sealed : ErroreDominio, file ErroriModelli.kt): HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path"
+      VoceCatalogo: "data class(id: String, ruolo: String, url: String, sha256: String /* of the downloaded ASSET (the archive, or the single file) */, dimensioneByte: Long /* of the asset */, formato: FormatoVoce, licenza: String, attribuzione: String) — ADR 0008 Amendment (c)"
+      FormatoVoce: "enum class { TAR_BZ2 /* k2-fsa .tar.bz2 release: extracted, a single top-level directory stripped */, FILE /* single asset, placed as <id>/<file name of the url> */ }"
+      "snastro.modelli.ProvisioningModelli": "fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit>; fun percorso(id: String): Path /* the installed DIRECTORY <cartella>/<id>/ — never a file */"
+      "snastro.modelli.ErroreModelli": "sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String, motivo: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — declared in :modelli, NEVER referenced by :ui (avvio-composizione maps it to the :ui ErroreServizioModelli)"
     keys:
-      "VoceCatalogo.id": "minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across catalogue edits"
+      "VoceCatalogo.id": "minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across edits of licence/attribution text, but NEVER reused for different bytes: any change of the entry's sha256 MINTS A NEW id (ADR 0008 Amendment (c)) — the embedding model's id is EstrattoreImpronta.modello, and ADR 0012 (b) staleness (modello_impronta ≠ EstrattoreImpronta.modello) relies on it; also the installed directory name <cartella>/<id>/, whose .sha256 marker records the installed asset hash"
     contract_test: "consumer-driven"
     related_adrs:
       - "0008"
@@ -2711,7 +3142,8 @@ boundaries:
     consumers:
       - "schermata-registrazione"
       - "schermata-parlanti"
-      - "avvio-composizione"
+      - "schermata-registrazioni"
+      - "avvio-r0"
     projection: "in-process"
     pinned_types:
       LettoreAudio: "interface { fun disponibile(id: RegistrazioneId): Boolean; fun riproduciDa(id: RegistrazioneId, daMs: Long); fun riproduciEstratto(e: EstrattoRef); fun pausa(); val stato: StateFlow<StatoLettore> }"
@@ -2730,11 +3162,14 @@ boundaries:
       - "schermata-modelli"
       - "lettore-audio"
       - "avvio-composizione"
+      - "schermata-registrazioni-identificazione"
+      - "avvio-r0"
+      - "avvio-parlanti"
     projection: "in-process"
     pinned_types:
       SessioneProgetto: "interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }"
       ProgettoAperto: "data class(progettoId: ProgettoId, nome: String, percorso: String)"
-      ErroreSessione: "sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }"
+      ErroreSessione: "sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente } — no CartellaGiaEsistente: crea derives a free folder name (AC-264), re-pinned 2026-09-23 (user decision)"
       ApriEsterno: "interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }"
       AggiornamentiVista: "interface { val cambiamenti: Flow<Cambiamento> }"
       Cambiamento: "data class(registrazioneId: RegistrazioneId?) — null = everything may have changed"
@@ -2750,8 +3185,8 @@ boundaries:
     projection: "in-process"
     pinned_types:
       ServizioModelli: "interface { val stato: StateFlow<StatoModelli>; fun scarica(); fun licenze(): List<LicenzaVista> }"
-      StatoModelli: "sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreModelli) }"
-      ErroreModelli: "sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ReteAssente; DownloadFallito(motivo: String) }"
+      StatoModelli: "sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreServizioModelli) }"
+      ErroreServizioModelli: "sealed interface : ErroreDominio (file ErroriServizioModelli.kt in snastro.ui.modelli — declared on the UI side because :ui must not depend on :modelli) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — 1:1 image of snastro.modelli.ErroreModelli, mapped in :avvio (avvio-composizione AC-329); same field name modelloId on both sides"
       LicenzaVista: "data class(nome: String, ruolo: String, licenza: String, attribuzione: String)"
     keys: {}
     contract_test: "consumer-driven"
@@ -2760,15 +3195,21 @@ boundaries:
 build_order:
   - [scaffold-app]  # wave 0
   - [kernel]  # wave 1
-  - [persistenza-schema, eventi-pubblicati, progetto, registrazione, elaborazione, trascritto, parlante, attribuzione]  # wave 2
+  - [persistenza-schema, eventi-pubblicati, progetto, registrazione, elaborazione, trascritto, parlante, attribuzione, sorgente-impronta]  # wave 2
   - [porte-progetto, porte-trascrizione, porte-parlanti, porte-documento, porta-registrazione-trascrizione, porta-registrazione-parlanti, porta-lettore-voci, porta-lettore-trascritto, porta-lettore-nomi]  # wave 3
-  - [crea-progetto, servizi-registrazione, avvia-elaborazione, esegui-elaborazione, revisione, conferma-attribuzione, salta-voce, gestione-parlante, revisione-policy, catalogo-registrazioni, api-trascritto, nomi-delle-voci, documento, estratto-audio, repository-sql-progetto, repository-sql-trascrizione, repository-sql-parlanti, registro-progetti-file, audio-ffmpeg, confronto-impronte, modelli-provisioning]  # wave 4
-  - [registrazione-da-progetto-tr, registrazione-da-progetto-pa, lettore-voci-da-trascrizione, lettore-trascritto-da-trascrizione, lettore-nomi-da-parlanti, abbonato-registrazione-aggiunta, abbonato-revisione-parlanti, scrittore-documento-md, audio-progetto, decodifica-trascrizione, decodifica-parlanti, rigenerazione-documento, elenco-progetti, registrazioni-del-progetto, stati-elaborazione, identificazione-registrazioni, trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, parlanti-del-progetto]  # wave 5
+  - [crea-progetto, servizi-registrazione, avvia-elaborazione, esegui-elaborazione, revisione, conferma-attribuzione, salta-voce, gestione-parlante, revisione-policy, riallinea-impronte, catalogo-registrazioni, api-trascritto, nomi-delle-voci, documento, estratto-audio, repository-sql-progetto, repository-sql-trascrizione, repository-sql-parlanti, registro-progetti-file, audio-ffmpeg, confronto-impronte, modelli-provisioning]  # wave 4
+  - [registrazione-da-progetto-tr, registrazione-da-progetto-pa, lettore-voci-da-trascrizione, lettore-trascritto-da-trascrizione, lettore-nomi-da-parlanti, abbonato-registrazione-aggiunta, abbonato-revisione-parlanti, abbonato-riallineamento-impronte, scrittore-documento-md, audio-progetto, decodifica-trascrizione, decodifica-parlanti, rigenerazione-documento, elenco-progetti, registrazioni-del-progetto, stati-elaborazione, identificazione-registrazioni, trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, parlanti-del-progetto]  # wave 5
   - [ui-fondamenta, abbonato-documento]  # wave 6
   - [lettore-audio]  # wave 7
   - [schermata-progetti, schermata-registrazioni, schermata-registrazione, schermata-parlanti, schermata-modelli]  # wave 8
-  - [avvio-coda-elaborazioni]  # wave 9
+  - [avvio-r0, schermata-registrazioni-identificazione, avvio-coda-elaborazioni]  # wave 9
   - [avvio-composizione]  # wave 10
-  - [ml-sherpa-motore, allineatore]  # wave 11  # GATED on spike ADRs
+  - [avvio-parlanti, ml-sherpa-motore, allineatore]  # wave 11  # ML GATED on spike ADRs
   - [diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, estrattore-impronta-sherpa]  # wave 12  # GATED on spike ADRs
   - [benchmark-elaborazione]  # wave 13  # GATED on spike ADRs
+release_plan:
+  # RELEASE PIVOT 2026-09-23 (user decision). Every block carries `release:` = the minimal release that needs it.
+  # A release is the set of blocks with release <= it; build_order/waves stay the dependency order inside it.
+  R0: {name: "Archivio", scope: "native window; create/open a project (folder naming AC-263/264); import recordings (audio copied, titolo unique); list them (S2) and play them; real SQLite + real audio; NO ML, NO Trascrizione, NO Parlanti", composition_root: "avvio-r0"}
+  R1: {name: "Trascrizione", scope: "start a transcription; pipeline VAD/ASR/diarization/alignment with real ML adapters; S3 with 'Voce n'; Revisione; Documento .md", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching", "ADR closing spike scelta-diarizzatore", "ADR closing spike allineamento-parole-voci", "ADR closing spike packaging-modelli-desktop", "ADR closing spike attesa-mutex-estrazione"]}
+  R2: {name: "Parlanti", scope: "attribution, S4 speakers screen, voice prints, proposals, re-alignment", composition_root: "avvio-parlanti", status: "PAUSED"}

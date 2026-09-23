@@ -1,0 +1,12 @@
+-- Queries for `voce` — schema in migrations/1.sqm (ADR 0006 Amendment (a)). The repository
+-- replaces the full set of rows per Registrazione on salva (dev-architecture-app.md#repository),
+-- so no per-row update query is needed here.
+
+trovaDiTrascritto:
+SELECT * FROM voce WHERE registrazione_id = :registrazioneId ORDER BY numero;
+
+inserisci:
+INSERT INTO voce(registrazione_id, numero) VALUES (:registrazioneId, :numero);
+
+eliminaDiRegistrazione:
+DELETE FROM voce WHERE registrazione_id = :registrazioneId;

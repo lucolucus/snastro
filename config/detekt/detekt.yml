@@ -1,0 +1,46 @@
+# snastro — detekt config (code-rules.md: CR-6, CR-7, CR-11). No baseline (mechanical gate lint).
+# buildUponDefaultConfig = true (build-logic/ConventionUtils.kt): everything not overridden here
+# keeps detekt's own default active/inactive state.
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false # allWarningsAsErrors is the Kotlin compiler's job (CR-9); detekt fails the build via maxIssues: 0.
+
+potential-bugs:
+  UnsafeCallOnNullableType: # CR-6: no `!!`.
+    active: true
+
+exceptions:
+  TooGenericExceptionCaught: # CR-7: no swallowed failure.
+    active: true
+  TooGenericExceptionThrown:
+    active: true
+  SwallowedException:
+    active: true
+
+empty-blocks:
+  EmptyCatchBlock: # CR-7: no empty catch.
+    active: true
+
+formatting: # CR-11: official Kotlin style (ktlint rules via detekt-formatting).
+  active: true
+  android: false
+  autoCorrect: false
+  Filename: # dev-architecture-app.md#pacchetti names these files after the hierarchy/aggregate, not a single declaration.
+    excludes: ['**/Errori*.kt', '**/*Eventi.kt']
+
+complexity:
+  LongParameterList:
+    # `ricostituisci` takes exactly the persisted fields (dev-architecture-app.md#aggregato): exempt by annotation.
+    ignoreAnnotated: ['RicostituzioneDaPersistenza']
+    # Detekt's default thresholds apply everywhere else; a pinned wider signature is suppressed locally, with a reason.
+
+naming:
+  MatchingDeclarationName: # dev-architecture-app.md#pacchetti: `Errori<Contesto>.kt`, `<Aggregato>Eventi.kt`.
+    excludes: ['**/Errori*.kt', '**/*Eventi.kt']
+  FunctionNaming:
+    ignoreAnnotated: ["Composable"] # Compose convention: composables are PascalCase (screen/component names).

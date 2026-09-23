@@ -1,0 +1,15 @@
+-- Queries for `trascritto` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+
+trovaPerRegistrazione:
+SELECT * FROM trascritto WHERE registrazione_id = :registrazioneId;
+
+trovaRegistrazioniConTrascritto:
+SELECT registrazione_id FROM trascritto;
+
+inserisci:
+INSERT INTO trascritto(registrazione_id, prossima_voce, prossimo_segmento)
+VALUES (:registrazioneId, :prossimaVoce, :prossimoSegmento);
+
+aggiornaContatori:
+UPDATE trascritto SET prossima_voce = :prossimaVoce, prossimo_segmento = :prossimoSegmento
+    WHERE registrazione_id = :registrazioneId;

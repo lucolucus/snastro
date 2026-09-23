@@ -1,0 +1,23 @@
+-- Queries for `parlante` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+
+trovaPerId:
+SELECT * FROM parlante WHERE id = :id;
+
+trovaDelProgetto:
+SELECT * FROM parlante WHERE progetto_id = :progettoId;
+
+contaAttivoConNome:
+SELECT COUNT(*) FROM parlante
+    WHERE progetto_id = :progettoId AND nome_normalizzato = :nomeNormalizzato AND stato = 'attivo'
+        AND (:escluso IS NULL OR id != :escluso);
+
+inserisci:
+INSERT INTO parlante(id, progetto_id, nome, nome_normalizzato, tipo, stato)
+VALUES (:id, :progettoId, :nome, :nomeNormalizzato, :tipo, :stato);
+
+aggiorna:
+UPDATE parlante SET nome = :nome, nome_normalizzato = :nomeNormalizzato, tipo = :tipo, stato = :stato
+    WHERE id = :id;
+
+rimuovi:
+DELETE FROM parlante WHERE id = :id;

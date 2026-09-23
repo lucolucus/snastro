@@ -4,31 +4,36 @@ type: "read-model"
 context: "parlanti"
 side: "app"
 wave: 4
+release: "R2"
 module: ":parlanti:applicazione (..letture)"
 consumes:
   - "kernel-pl"
   - "voci-per-parlanti"
+  - "sorgente-impronta-pl"
 depends_on: []
 related_adrs:
   - "0002"
   - "0003"
   - "0005"
+  - "0009"
   - "0012"
 view_shape:
   EstrattoRef: "registrazioneId, intervalli: List<IntervalloMs>"
 view_sources:
-  EstrattoRef: "← voci-per-parlanti (intervalli of the Voce) + the selection rule below"
+  EstrattoRef: "← voci-per-parlanti (intervalli of the Voce) through sorgente-impronta-pl selezionaIntervalli(intervalli, BUDGET_ESTRATTO_MS, MAX_INTERVALLI_ESTRATTO)"
 ---
 # estratto-audio — EstrattoAudio di una Voce
 
 ## What to do
-estratto(voceRef): EstrattoRef? — take the Voce's intervals by duration descending (tie: earlier inizio), keep taking while fewer than 3 and total < 10 000 ms, clip the last so the total is <= 10 000 ms, return them ordered by inizio. Shared by proposta, parlanti-del-progetto and S3 (rule 11 → built before them).
+estratto(voceRef): EstrattoRef? — the Voce's intervals through the shared selezionaIntervalli(intervalli, BUDGET_ESTRATTO_MS = 10 000, MAX_INTERVALLI_ESTRATTO = 3) of sorgente-impronta (overlaps merged, >= 1 000 ms filter with single-longest fallback, longest first, last clipped from its start, time order). Shared by proposta, parlanti-del-progetto and S3 (rule 11 → built before them).
+
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 1): the selection is NOT re-implemented here — it calls the shared pure function of sorgente-impronta (supersedes the looser '2–3 longest, about 10 s' reading).
 
 ### view_shape (field ← source)
-- `EstrattoRef`: registrazioneId, intervalli: List<IntervalloMs> ← ← voci-per-parlanti (intervalli of the Voce) + the selection rule below
+- `EstrattoRef`: registrazioneId, intervalli: List<IntervalloMs> ← ← voci-per-parlanti (intervalli of the Voce) through sorgente-impronta-pl selezionaIntervalli(intervalli, BUDGET_ESTRATTO_MS, MAX_INTERVALLI_ESTRATTO)
 
 ## Tasks
-- AC-105 L'estratto usa i 2–3 Segmenti più lunghi della Voce per un totale di circa 10 s: mai più di 3 intervalli, totale <= 10 000 ms, ordinati per inizio
+- AC-105 L'estratto applica la regola condivisa selezionaIntervalli(intervalli della Voce, 10 000 ms, 3): sovrapposizioni fuse, Segmenti >= 1 000 ms (altrimenti il solo più lungo), i più lunghi per primi (parità: inizio minore), mai più di 3 intervalli disgiunti, totale <= 10 000 ms, ordinati per inizio
 - AC-106 Una Voce con un solo Segmento di 30 s → un intervallo tagliato a 10 s dal suo inizio
 - AC-107 Voce inesistente o Registrazione senza Trascritto → nessun estratto (null)
 
@@ -70,5 +75,17 @@ estratto(voceRef): EstrattoRef? — take the Voce's intervals by duration descen
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
+- **sorgente-impronta-pl** (consumed/implemented) — owner `sorgente-impronta`, projection in-process, contract_test **invariant-test**
+  - pinned types:
+    - `SorgenteImpronta`: data class(intervalli: List<IntervalloMs>) in snastro.parlanti.dominio — non-empty, pairwise disjoint, ordered by inizioMs; val chiave: String = intervalli joined as "<inizioMs>-<fineMs>" with "," (e.g. "1200-5400,8000-15000")
+    - `SorgenteImpronta.di`: (intervalliVoce: List<IntervalloMs>): SorgenteImpronta = SorgenteImpronta(selezionaIntervalli(intervalliVoce, BUDGET_IMPRONTA_MS, maxIntervalli = null)) — require intervalliVoce non-empty; the ONLY way any print (ConfermaAttribuzione, SaltaVoce, RiallineaImpronte, transient Proposta print) chooses the audio to decode
+    - `selezionaIntervalli`: (intervalli: List<IntervalloMs>, budgetMs: Long, maxIntervalli: Int?): List<IntervalloMs> — the ONE shared pure selection function (parlanti:dominio): (1) merge overlapping intervals into their union; (2) keep those >= DURATA_MINIMA_SEGMENTO_MS, else the single longest; (3) longest first, tie earlier inizioMs; (4) accumulate up to budgetMs and at most maxIntervalli, the crossing interval trimmed from its start to [inizio, inizio + resto]; (5) return disjoint, in time order
+    - `BUDGET_IMPRONTA_MS`: const val Long = 30_000L — PROVISIONAL (spike impronta-vocale-affidabilita calibrates it; final value in its closing ADR)
+    - `DURATA_MINIMA_SEGMENTO_MS`: const val Long = 1_000L
+    - `BUDGET_ESTRATTO_MS`: const val Long = 10_000L — EstrattoAudio budget
+    - `MAX_INTERVALLI_ESTRATTO`: const val Int = 3 — EstrattoAudio interval cap
+    - `ErroreParlanti.VoceCambiata`: data class(voceRef: VoceRef) : ErroreParlanti (file ErroriParlanti.kt, parlanti:dominio) — the Voce's SorgenteImpronta changed between the extraction and the command's transaction; nothing written, the user retries
+  - keys (minting rules):
+    - `chiave`: minted by SorgenteImpronta (sorgente-impronta) from its final disjoint intervals in time order, "<inizioMs>-<fineMs>" joined by ","; deterministic for equal intervals; changes whenever the Voce's Segmenti or BUDGET_IMPRONTA_MS change (that IS the staleness signal); stored as impronta_vocale.sorgente_impronta
 
-Sources: ADRs 0002, 0003, 0005, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (EstrattoAudio) + R24.
+Sources: ADRs 0002, 0003, 0005, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (EstrattoAudio) + R24.

@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R2"
 module: ":ui (snastro.ui.parlanti)"
 consumes:
   - "kernel-pl"
@@ -85,7 +86,7 @@ S4 managed Galleria.
   - pinned types:
     - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
     - `ProgettoAperto`: data class(progettoId: ProgettoId, nome: String, percorso: String)
-    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
+    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente } — no CartellaGiaEsistente: crea derives a free folder name (AC-264), re-pinned 2026-09-23 (user decision)
     - `ApriEsterno`: interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }
     - `AggiornamentiVista`: interface { val cambiamenti: Flow<Cambiamento> }
     - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed

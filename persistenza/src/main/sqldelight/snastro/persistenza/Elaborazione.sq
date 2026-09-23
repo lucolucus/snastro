@@ -1,0 +1,18 @@
+-- Queries for `elaborazione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+
+trovaDiRegistrazione:
+SELECT * FROM elaborazione WHERE registrazione_id = :registrazioneId ORDER BY creata_alle, id;
+
+trovaInAttesa:
+SELECT * FROM elaborazione WHERE stato = 'in_attesa' ORDER BY creata_alle, id;
+
+trovaInCorso:
+SELECT * FROM elaborazione WHERE stato = 'in_corso' ORDER BY creata_alle, id;
+
+inserisci:
+INSERT INTO elaborazione(id, registrazione_id, stato, creata_alle, avviata_alle, motivo_fallimento)
+VALUES (:id, :registrazioneId, :stato, :creataAlle, :avviataAlle, :motivoFallimento);
+
+aggiornaStato:
+UPDATE elaborazione SET stato = :stato, avviata_alle = :avviataAlle, motivo_fallimento = :motivoFallimento
+    WHERE id = :id;

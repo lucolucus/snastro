@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(class|interface|object)[[:space:]][^:]*:.*(ErroreDominio|Errore[A-Z][A-Za-z]*).*(Exception|Throwable|Error)[[:space:]]*\\(|(class|interface|object)[[:space:]][^:]*:.*(Exception|Throwable|Error)[[:space:]]*\\(.*(ErroreDominio|Errore[A-Z][A-Za-z]*)|(class|interface)[[:space:]]+ErroreDominio[^{]*(Exception|Throwable|Error)[[:space:]]*\\(' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-23   # R25 — see "Amendment 2026-09-23" (ErroreDominio non-sealed; enforced_by replaced)
+amended: 2026-09-23   # R25 — see "Amendment 2026-09-23" (ErroreDominio non-sealed; enforced_by replaced) + "Amendment 2026-09-23 (b)" (error placement)
 ---
 # 0003 — Error policy: expected failures are `Esito` values, exceptions only for bugs/infra
 
@@ -51,6 +51,7 @@ on 2026-09-23 **[user]**.
   of the module that raises it (its `dominio`, or `applicazione` for application-only errors), e.g.
   `sealed interface ErroreParlanti : ErroreDominio { data class NomeGiaInUso(val nome: String) : ErroreParlanti; … }`.
   Every direct subtype of `ErroreDominio` is such a sealed interface (Konsist, CR-8).
+  *(Placement clarified by "Amendment 2026-09-23 (b)" below.)*
 - **Exhaustiveness per context:** `MessaggiErrore.kt` (`:ui`) has one `messaggioPer(e: Errore<Contesto>)`
   per hierarchy with an exhaustive `when` and **no `else`**; the entry point
   `messaggioPer(e: ErroreDominio)` dispatches on the per-context types and its only `else` is a
@@ -64,3 +65,31 @@ on 2026-09-23 **[user]**.
   `Exception`/`Throwable`/`Error` supertype — the kernel declaration or any context subtype.
   Multi-line declarations are covered by Konsist (CR-8).
 
+## Amendment 2026-09-23 (b) — error PLACEMENT: rules and lookups in `dominio`, technical failures in `applicazione`
+**Why.** The first amendment said each context owns ONE sealed hierarchy "in its `dominio`, or
+`applicazione` for application-only errors". Read together, "one per context" and "or
+`applicazione`" were ambiguous — is a lookup miss raised by an application service
+"application-only"? — and the build produced divergent placements. Clarified with the user on
+2026-09-23 **[user]** (precedent: user decision D1 on `ErroreApplicazioneProgetto`).
+
+**Amended decision (replaces the placement clause of the first amendment; everything else stands).**
+- **Domain-rule errors AND lookup misses** — every `…NonTrovato` / `…GiaPresente`, even when only an
+  application service can detect it (e.g. `ErroreProgetto.ProgettoGiaPresente`,
+  `ErroreProgetto.RegistrazioneNonTrovata`, `ErroreTrascrizione.RegistrazioneNonTrovata`,
+  `ErroreTrascrizione.TrascrittoNonTrovato`, `ErroreParlanti.ParlanteNonTrovato`) — go in the
+  context's **single** sealed `Errore<Contesto>`, file **`:<ctx>:dominio/…/Errori<Contesto>.kt`**
+  (package `snastro.<ctx>.dominio`).
+- A **second** sealed hierarchy **`ErroreApplicazione<Contesto>`** in `:<ctx>:applicazione` is allowed
+  **only for technical/adapter failures** surfaced as expected outcomes (source unreadable, format
+  unsupported, copy failed …) — never for rules or lookups. At most **ONE per `applicazione`
+  module**, in ONE file `ErroriApplicazione<Contesto>.kt`, package **`snastro.<ctx>.applicazione.porte`**
+  (next to the ports whose adapters raise them). Precedent, as it exists in the code:
+  `progetto/applicazione/src/main/kotlin/snastro/progetto/applicazione/porte/ErroriApplicazioneProgetto.kt`
+  — `sealed interface ErroreApplicazioneProgetto : ErroreDominio { AudioNonLeggibile; FormatoNonSupportato; CopiaFallita }`.
+- **In short:** one sealed hierarchy per context for rules/lookups + at most one per `applicazione`
+  module for technical failures. Technical modules returning `Esito` outside a context (e.g.
+  `:modelli`) keep their one `Errore<Modulo>` as in the first amendment.
+- Both hierarchies are direct subtypes of `ErroreDominio`, named `Errore…` (CR-8 Konsist), and each
+  gets its own exhaustive `messaggioPer` in `MessaggiErrore.kt` plus a branch in the
+  `ErroreDominio` dispatcher (RC-4).
+- `enforced_by` unchanged; the placement is checked by code-review (CR-8), not by a grep.

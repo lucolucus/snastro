@@ -1,0 +1,139 @@
+-- 1.sqm (ADR 0006 Amendment (a) / CR-13): migrations ARE the schema (deriveSchemaFromMigrations) —
+-- this file is the FULL current schema, not a diff. SQLDelight numbers a migration file by the
+-- version it migrates FROM (1.sqm = the 1→2 step), so the baseline SnastroDatabase.Schema.version is
+-- 2, not 1: user_version 1 was never a real shipped state and is refused like a newer-than-supported
+-- schema (SchemaProgettoNonValidoException). This file may still change in place before v1 ships. A
+-- committed migration is never edited once shipped (forward-only, no down migrations); the next
+-- schema change is a new numbered <n>.sqm. `.sq` files (persistenza/src/main/sqldelight/snastro/
+-- persistenza/) hold queries only, compiled against the schema derived from here.
+--
+-- ADR 0007's three partial unique indexes are each on ONE line, greppable — do not reformat.
+-- Tables are ordered by FK dependency (a table only references one created above it); the three
+-- FKs to voce(registrazione_id, numero) are DEFERRABLE INITIALLY DEFERRED (checked at COMMIT, not
+-- per-statement): the Trascritto repository's salva replaces owned voce rows (DELETE then
+-- re-insert), and the synchronous Parlanti revisione-policy removes/re-keys attribuzione/
+-- impronta_vocale rows AFTER that salva, all in one transaction (ADR 0012) — an immediate FK would
+-- fail the mid-transaction DELETE on voce before the policy ever runs. FKs to parlante(id) stay
+-- immediate (conferma-attribuzione's save order relies on the Parlante already existing).
+
+-- Aggregate: Progetto (tactical-model.md § Progetto). One row per project database (ADR 0006).
+CREATE TABLE progetto (
+    id TEXT NOT NULL PRIMARY KEY,
+    nome TEXT NOT NULL
+);
+
+-- Aggregate: Registrazione (tactical-model.md § Progetto + R6 titolo). progetto_id is set at
+-- creation and never changes (INV-1); titolo (AC-360) and data_registrazione (INV-2) are the only
+-- mutable columns.
+CREATE TABLE registrazione (
+    id TEXT NOT NULL PRIMARY KEY,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id),
+    titolo TEXT NOT NULL,
+    riferimento_audio TEXT NOT NULL,
+    durata_ms INTEGER NOT NULL,
+    data_registrazione TEXT NOT NULL,
+    aggiunta_alle INTEGER NOT NULL   -- Instant, epoch millis (java.time.Instant.toEpochMilli())
+);
+
+CREATE INDEX registrazione_progetto ON registrazione(progetto_id);
+
+-- Aggregate: Parlante (tactical-model.md § Parlanti). nome_normalizzato is computed by the Nome
+-- VO (trim + lowercase Locale.ROOT), never in SQL (ADR 0007). INV-16 backed by the partial unique
+-- index below. rimuovi is the ONLY physical deletion of a Parlante (R25, INV-25 occasionale
+-- cessation) — the aggregate's own no-deletion rule stays a soft tombstone (stato = 'eliminato')
+-- for every other case.
+CREATE TABLE parlante (
+    id TEXT NOT NULL PRIMARY KEY,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id),
+    nome TEXT NOT NULL,
+    nome_normalizzato TEXT NOT NULL,
+    tipo TEXT NOT NULL CHECK (tipo IN ('ricorrente', 'occasionale')),
+    stato TEXT NOT NULL CHECK (stato IN ('attivo', 'eliminato'))
+);
+
+CREATE INDEX parlante_progetto ON parlante(progetto_id);
+
+CREATE UNIQUE INDEX parlante_nome_attivo_unico ON parlante(progetto_id, nome_normalizzato) WHERE stato = 'attivo';
+
+-- Aggregate: Trascritto (tactical-model.md § Trascrizione). Identity = registrazione_id (one
+-- Trascritto per Registrazione, INV-5). prossima_voce / prossimo_segmento are the persisted
+-- monotonic counters that guarantee INV-12 (voceId never reused) and segmentoId stability (INV-8).
+CREATE TABLE trascritto (
+    registrazione_id TEXT NOT NULL PRIMARY KEY REFERENCES registrazione(id),
+    prossima_voce INTEGER NOT NULL,
+    prossimo_segmento INTEGER NOT NULL
+);
+
+-- Entity: Voce, owned by Trascritto (INV-6). numero = the fixed "Voce n" label (never renumbered,
+-- never reused, INV-12). The repository replaces the full set of rows per Registrazione on salva
+-- (dev-architecture-app.md#repository), so no per-row update query is needed here.
+CREATE TABLE voce (
+    registrazione_id TEXT NOT NULL REFERENCES trascritto(registrazione_id),
+    numero INTEGER NOT NULL,
+    PRIMARY KEY (registrazione_id, numero)
+);
+
+-- Entity: Segmento, owned by Trascritto (INV-6/INV-7). numero = segmentoId, fixed at creation,
+-- never created afterwards (INV-8) — text is immutable in v1. Overlaps between Segmenti are
+-- allowed (INV-7): no uniqueness constraint on (voce_numero, inizio_ms/fine_ms).
+CREATE TABLE segmento (
+    registrazione_id TEXT NOT NULL,
+    numero INTEGER NOT NULL,
+    voce_numero INTEGER NOT NULL,
+    inizio_ms INTEGER NOT NULL,
+    fine_ms INTEGER NOT NULL,
+    testo TEXT NOT NULL,
+    PRIMARY KEY (registrazione_id, numero),
+    FOREIGN KEY (registrazione_id, voce_numero) REFERENCES voce(registrazione_id, numero) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE INDEX segmento_voce ON segmento(registrazione_id, voce_numero);
+
+-- Aggregate: Elaborazione (tactical-model.md § Trascrizione). StatoElaborazione persisted as
+-- lowercase canonical text (dev-architecture-app.md#pacchetti). INV-4 backed by ADR 0007's two
+-- partial unique indexes below.
+CREATE TABLE elaborazione (
+    id TEXT NOT NULL PRIMARY KEY,
+    registrazione_id TEXT NOT NULL REFERENCES registrazione(id),
+    stato TEXT NOT NULL CHECK (stato IN ('in_attesa', 'in_corso', 'completata', 'fallita')),
+    creata_alle INTEGER NOT NULL,   -- Instant, epoch millis (java.time.Instant.toEpochMilli())
+    avviata_alle INTEGER,           -- Instant, epoch millis; NULL until avviata
+    motivo_fallimento TEXT
+);
+
+CREATE INDEX elaborazione_registrazione ON elaborazione(registrazione_id);
+
+CREATE UNIQUE INDEX elaborazione_aperta_unica ON elaborazione(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso');
+
+CREATE UNIQUE INDEX elaborazione_completata_unica ON elaborazione(registrazione_id) WHERE stato = 'completata';
+
+-- Aggregate: Attribuzione (tactical-model.md § Parlanti). Identity = VoceRef (registrazione_id,
+-- voce_id) — "at most one Parlante per Voce" is structural (AC-23), guaranteed by the PRIMARY KEY.
+CREATE TABLE attribuzione (
+    registrazione_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id),
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    PRIMARY KEY (registrazione_id, voce_id),
+    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero) DEFERRABLE INITIALLY DEFERRED
+);
+
+CREATE INDEX attribuzione_parlante ON attribuzione(parlante_id);
+
+-- Entity: ImprontaVocale, owned by Parlante (INV-14). impronta = BLOB float32 little-endian
+-- (ADR 0009) — the app writes no other copy. UNIQUE(parlante_id, registrazione_id, voce_id) is the
+-- "at most one print per VoceRef" guard (AC-13). sorgente_impronta (SorgenteImpronta.chiave) and
+-- modello_impronta (extractor model id) are non-biometric metadata (ADR 0009 Amendment (b) / ADR
+-- 0012 Amendment (b)) purged with the row by every removal path.
+CREATE TABLE impronta_vocale (
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    registrazione_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    impronta BLOB NOT NULL,
+    sorgente_impronta TEXT NOT NULL,
+    modello_impronta TEXT NOT NULL,
+    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero) DEFERRABLE INITIALLY DEFERRED,
+    UNIQUE (parlante_id, registrazione_id, voce_id)
+);
+
+CREATE INDEX impronta_vocale_voce ON impronta_vocale(registrazione_id, voce_id);

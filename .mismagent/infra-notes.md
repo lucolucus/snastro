@@ -22,8 +22,10 @@
 ## Model weights (ADR 0008)
 - Not bundled, not in the repo. Downloaded on first run from the **k2-fsa sherpa-onnx GitHub
   releases** with **pinned SHA-256**, into the per-user cache
-  (`~/Library/Application Support/snastro/modelli/`; Windows `%APPDATA%\snastro\modelli`, Linux
-  `$XDG_DATA_HOME/snastro/modelli`), with a visible onboarding/progress step.
+  (`~/Library/Application Support/snastro/modelli/`; Windows `%LOCALAPPDATA%\snastro\modelli` — non-roaming,
+  ADR 0008 Amendment (c) —, Linux `$XDG_DATA_HOME/snastro/modelli`, never the XDG cache), with a visible
+  onboarding/progress step. Each catalogue entry is an archive (`.tar.bz2`) or single file, SHA-256 verified,
+  extracted into `<cartella>/<id>/` (Apache Commons Compress, Apache-2.0, `:modelli` only).
 - **No HF account / token:** the sherpa export of pyannote segmentation-3.0 is re-hosted ungated
   (MIT). The draft's HF-gated onboarding step is dropped.
 - After download the app works fully offline; network I/O exists only in `:modelli` (enforced_by).

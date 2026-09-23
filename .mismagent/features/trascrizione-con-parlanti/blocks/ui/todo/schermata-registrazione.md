@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R1"
 module: ":ui (snastro.ui.registrazione)"
 consumes:
   - "kernel-pl"
@@ -41,13 +42,15 @@ triggers:
   - "UnisciVoci"
   - "DividiVoce"
   - "RiassegnaSegmento"
+gated_by:
+  - "ADR closing spike attesa-mutex-estrazione"
 ---
 # schermata-registrazione — S3 · Registrazione (identificazione + Revisione)
 
 ## What to do
 S3 concept B: header with audio bar + 'Apri documento' / 'Mostra nella cartella' (ApriEsterno + documento.nomeFile), transcript centre, Voci panel right; presenter joins trascritto-view + identificazione-voci (R1).
 
-Note: Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24).
+Note: Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): assigned to R1 (transcript view with 'Voce n' labels + Revisione) but it still hard-depends on R2 blocks (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, conferma-attribuzione, salta-voce) — R1 VARIANT PENDING: before R1 dispatch a targeted amendment must split the identification panel (AC-212/213/214/216/219/318/319 and the Parlanti half of AC-215/217) into an R2 block, like schermata-registrazioni did (AC-342). NOT done in this pass (needs the user: the attesa-mutex-estrazione gate the user put on R1 concerns print extraction, i.e. the R2 half).
 
 ### Consumes read-models: trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, documento
 ### Triggers: ConfermaAttribuzione, SaltaVoce, UnisciVoci, DividiVoce, RiassegnaSegmento
@@ -66,9 +69,12 @@ Note: Declared: Documento content is never shown in-app (ux decision); 'salta' i
 - AC-217 Audio sorgente mancante → barra audio ed estratti disabilitati con messaggio, trascritto usabile
 - AC-218 'Apri documento' e 'Mostra nella cartella' usano il percorso del Documento
 - AC-219 Una Voce attribuita mostra 'cambia' e non 'salta'
+- AC-318 Errore VoceCambiata su 'conferma' o 'salta' → messaggio in linguaggio semplice sulla card ('La voce è cambiata nel frattempo: riprova'), nulla cambia e il comando può essere ripetuto
+- AC-319 Dopo ImpronteRiallineate della Registrazione aperta la Proposta visibile è ricaricata senza perdere la selezione
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
+- **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione
 - Blocks built first: `trascritto-view` (wave 5), `identificazione-voci` (wave 5), `proposta` (wave 5), `proposta-unione` (wave 5), `parlanti-attivi` (wave 5), `estratto-audio` (wave 4), `documento` (wave 4), `conferma-attribuzione` (wave 4), `salta-voce` (wave 4), `revisione` (wave 4), `ui-fondamenta` (wave 6)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -108,7 +114,7 @@ Note: Declared: Documento content is never shown in-app (ux decision); 'salta' i
   - pinned types:
     - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
     - `ProgettoAperto`: data class(progettoId: ProgettoId, nome: String, percorso: String)
-    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
+    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente } — no CartellaGiaEsistente: crea derives a free folder name (AC-264), re-pinned 2026-09-23 (user decision)
     - `ApriEsterno`: interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }
     - `AggiornamentiVista`: interface { val cambiamenti: Flow<Cambiamento> }
     - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed

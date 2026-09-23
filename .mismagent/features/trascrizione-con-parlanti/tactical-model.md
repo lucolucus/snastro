@@ -45,7 +45,8 @@
 - **Domain events:**
   - `ProgettoCreato` → `read-model` block: elenco dei Progetti (open/create screen)
   - `RegistrazioneAggiunta` → `read-model` block: Registrazioni del Progetto (with their
-    `StatoElaborazione`, joined from Trascrizione) + policy auto-start (below) [user, Q-6]
+    `StatoElaborazione`, joined from Trascrizione) ~~+ policy auto-start (below) [user, Q-6]~~
+    *(auto-start REMOVED 2026-09-23 [user], ADR 0014: no Trascrizione consumer)*
   - `DataRegistrazioneModificata` → `read-model` Registrazioni del Progetto. It does NOT change any
     `Nome`: a provisional "Ospite del <DataRegistrazione>" is a stored value fixed at creation and
     does not follow a later date change (the user can rename it) [user, Q-5]
@@ -53,12 +54,17 @@
   - `CreaProgetto` (actor: utente) → `application-service` block
   - `AggiungiRegistrazione` (actor: utente) → `application-service` block
   - `ModificaDataRegistrazione` (actor: utente) → `application-service` block
-- **Policy:** on `RegistrazioneAggiunta` → `AvviaElaborazione` (queued as `in_attesa`, processed
-  in order) [user, Q-6] → side-effect wired in the aggiungi-registrazione application-service
+- ~~**Policy:** on `RegistrazioneAggiunta` → `AvviaElaborazione` (queued as `in_attesa`, processed
+  in order) [user, Q-6] → side-effect wired in the aggiungi-registrazione application-service~~
+  **REMOVED 2026-09-23 [user] (ADR 0014; supersedes Q-6).** No transcription starts on import: a
+  new `Registrazione` has no `Elaborazione` (`NON_AVVIATA`) until the user starts one ("Trascrivi");
+  see `AvviaElaborazione` in Trascrizione.
 
 ## Tactical model — Trascrizione — every row names the consumer, or it is not written
 - **Aggregates / entities:**
-  - `Elaborazione` (root, one per run) guards `StatoElaborazione`, `registrazioneId`, failure reason.
+  - `Elaborazione` (root, one per run) guards `StatoElaborazione`, `registrazioneId`, failure reason,
+    and *(amended 2026-09-23 [user], ADR 0014)* the optional `NumeroPersone` (1..10), fixed at
+    creation and immutable, passed to the `Diarizzatore`.
     → manifest `aggregate` block (elaborazione) + architect decision (long-running execution:
     background worker/process, ML adapters from spikes `scelta-diarizzatore`,
     `scelta-asr-code-switching`, `allineamento-parole-voci`, `packaging-modelli-desktop`)
@@ -112,9 +118,12 @@
   - `SegmentoRiassegnato` (registrazioneId, segmento, da, a, da rimossa?, a nuova?) → Parlanti policy
     [INV-21] + Documento `Rigenerazione` policy + `read-model` Trascritto
 - **Commands (+ actor):**
-  - `AvviaElaborazione` (actors: the `RegistrazioneAggiunta` policy — automatic queueing — and the
-    utente only as retry after `fallita` [user, Q-6]) → `application-service` block (orchestrates the
-    local pipeline through ports: audio decoding, diarization, ASR, alignment into `Segmento`s)
+  - `AvviaElaborazione` (actor: utente — "Trascrivi" on a `Registrazione` with no `Elaborazione`,
+    "Riprova" after `fallita`; *amended 2026-09-23 [user], ADR 0014: the automatic
+    `RegistrazioneAggiunta` actor of Q-6 is removed*) with optional `NumeroPersone` (1..10; empty =
+    automatic clustering; "Riprova" prefilled with the failed `Elaborazione`'s value)
+    → `application-service` block (orchestrates the local pipeline through ports: audio decoding,
+    diarization, ASR, alignment into `Segmento`s)
   - `UnisciVoci` (actor: utente — directly, or one click on a `Proposta di unione`)
     → `application-service` block
   - `DividiVoce` (actor: utente) → `application-service` block
@@ -136,8 +145,10 @@
     **computed, not stored as truth** [user] → `read-model` blocks below, no aggregate.
 - **Invariants:**
   - [INV-13] `StatoParlante = eliminato` ⇒ zero `ImprontaVocale`s; `eliminato` is terminal: no
-    rinomina, no promozione, no new `Attribuzione`; its `Nome` and past `Attribuzione`s are kept
-    (name-only tombstone) [user]. → invariant-test on the parlante aggregate block
+    rinomina, no promozione, no new `Attribuzione` (sole, policy-only exception: in `unire` the
+    tombstone `Attribuzione` of the removed `Voce` is re-keyed onto the surviving one — [INV-21],
+    ADR 0012 Amendment (b); no `ImprontaVocale` is created); its `Nome` and past `Attribuzione`s are
+    kept (name-only tombstone) [user]. → invariant-test on the parlante aggregate block
   - [INV-14] a `Parlante` holds at most one `ImprontaVocale` per `VoceRef`; `ImprontaVocale`s are
     kept individually (adding one never replaces or averages the others).
     → invariant-test on the parlante aggregate block
@@ -145,6 +156,10 @@
     `Attribuzione(v) = P` exists and P is `attivo`; a `Proposta` never writes to the `Galleria`.
     Consequence: changing an `Attribuzione` from P to Q moves the evidence (P's `ImprontaVocale` for v
     removed, Q's derived); if P is thereby left without any `Attribuzione`, [INV-25] applies.
+    Existence is transactional; freshness after a `Revisione` is eventual (ADR 0012 (b)): the row
+    stores its `SorgenteImpronta.chiave` + model id and, if stale, is refreshed after commit by
+    `RiallineaImpronte`. Every print is extracted from `SorgenteImpronta` only, never inside a
+    transaction.
     → cross-aggregate (`Attribuzione` + `Parlante`, same local transaction):
     test on the **conferma-attribuzione application-service block**
   - [INV-16] `Nome` is unique among the `attivo` `Parlante`s of the same `Progetto` (compared trimmed
@@ -154,7 +169,8 @@
     → set rule: test on the crea/rinomina/promuovi/conferma-attribuzione application-service blocks
     + repository uniqueness (architect)
   - [INV-17] an `Attribuzione` targets only an `attivo` `Parlante` of the SAME `Progetto` as the
-    `Registrazione`, and only a `Voce` of an existing `Trascritto` ([INV-5]).
+    `Registrazione`, and only a `Voce` of an existing `Trascritto` ([INV-5]) (policy-only exception:
+    [INV-21] `unire` re-keying of a tombstone `Attribuzione`).
     → test on the conferma-attribuzione application-service block (fake port on Trascrizione)
   - [INV-18] promozione: only `occasionale → ricorrente`; the `ImprontaVocale`s are unchanged; only
     `TipoParlante` and (optionally) `Nome` change. → invariant-test on the parlante aggregate block
@@ -170,12 +186,21 @@
     `EstrattoAudio`; no numeric score leaves the read-model [user].
     → view test on the proposta `read-model` block
   - [INV-21] after a `Revisione`, per affected `VoceRef`: a removed `Voce` loses its `Attribuzione`
-    and the `ImprontaVocale` derived from it; a surviving/changed `Voce` with an `Attribuzione` gets
-    its `ImprontaVocale` re-derived from its current `Segmento`s; a NEW `Voce` A' (from `dividere` /
+    and the `ImprontaVocale` derived from it (save the `unire` inheritance exception below); a surviving/changed `Voce` with an `Attribuzione`
+    keeps its `ImprontaVocale` row in the `Revisione`'s transaction (now possibly stale); it is
+    re-derived from its current `SorgenteImpronta` after commit by `RiallineaImpronte`; a NEW `Voce` A' (from `dividere` /
     `riassegnare`) starts WITHOUT `Attribuzione` and gets its own `Proposta`, while A keeps its
     `Attribuzione` [user, Q-2]. In `unire(A, B)` with A and B attributed to DIFFERENT `Parlante`s,
     A's `Attribuzione` wins; B's `Attribuzione` and the `ImprontaVocale` derived from B are dropped
-    [user, Q-3]. A `Parlante` thereby left without any `Attribuzione` → [INV-25].
+    [user, Q-3]. Exception (amended 2026-09-23, user decision): in `unire(A, B)` with the removed B
+    attributed to `Parlante` P and the surviving A NOT attributed, A INHERITS B's `Attribuzione` to P
+    (B's `Attribuzione` is re-keyed to A; B's `ImprontaVocale` row of P is re-keyed to A
+    in-transaction, keeping its `sorgente_impronta` — so stale — and refreshed after commit; if P is
+    `eliminato` only the tombstone `Attribuzione` is re-keyed, no row [ADR 0012 (b) point 4, user]),
+    so P is not left without an `Attribuzione` and [INV-25] does not fire. Both attributed to the
+    same P → A keeps its own row (stale, refreshed after commit), B's row and `Attribuzione` go.
+    The revisione-policy never decodes nor extracts (ADR 0012 enforced_by). A `Parlante` thereby left without any `Attribuzione`
+    → [INV-25].
     → test on the Parlanti revisione-policy application-service block
   - [INV-25] a `Parlante` left without any `Attribuzione` (after a `Revisione` or a changed
     `Attribuzione`): if `occasionale` it ceases to exist entirely (nothing references it — no
@@ -197,6 +222,8 @@
   - `ParlantePromosso` → `read-model` Parlanti del Progetto + Documento `Rigenerazione` policy (only
     if the `Nome` changed)
   - `ParlanteEliminato` → `read-model` Parlanti del Progetto; NO `Documento` change [user]
+  - `ImpronteRiallineate` (registrazioneId) — published after `RiallineaImpronte` commits → `Proposta`
+    cache invalidation + `AggiornamentiVista`; NOT Documento (prints do not change it) [ADR 0012 (b)]
 - **Read-models (computed):**
   - `Proposta` per `Voce` (from the `Galleria`, the embedding of the not-yet-attributed `Voce` —
     transient, never written to the `Galleria` — and `SoglieFascia`, output of spike
@@ -210,13 +237,24 @@
     a `Candidato`, choosing another `Parlante`, naming a new one, or correcting a wrong one). A
     `Parlante` newly named here is `ricorrente` by default; the user may choose `occasionale`
     [user, Q-7]. → `application-service` block
-  - `SaltaVoce` (VoceRef) (actor: utente) → `application-service` block
+    Extracts the print from `SorgenteImpronta` BEFORE the transaction, then re-reads the `Voce`
+    in-transaction; expected error `VoceCambiata` if its `SorgenteImpronta` changed meanwhile
+    (nothing written) [ADR 0012 (b)].
+  - `SaltaVoce` (VoceRef) (actor: utente) → `application-service` block (same
+    extract-then-transaction shape; expected error `VoceCambiata`)
+  - `RiallineaImpronte` (registrazioneId) (actor: sistema — after commit of a `Revisione`, coalesced,
+    retried) and `RiallineaTutteLeImpronte` (progettoId) (actor: sistema — at project open, after
+    `RecuperaElaborazioniInterrotte`): re-derive stale prints only (sorgente or model mismatch),
+    extraction outside any transaction, compare-and-set UPDATE, never INSERT; emits
+    `ImpronteRiallineate` → `application-service` block (riallinea-impronte)
   - `RinominaParlante` (actor: utente) → `application-service` block
   - `PromuoviParlante` (actor: utente) → `application-service` block
   - `EliminaParlante` (actor: utente, explicit confirmation — privacy right) → `application-service`
     block (purges every `ImprontaVocale` in the same transaction as the tombstone)
 - **Policy:** on `VociUnite` / `VoceDivisa` / `SegmentoRiassegnato` → apply [INV-21]
   → `application-service` block (revisione-policy) consuming Trascrizione events in-process
+  (structural part only, in-transaction); **after commit** on the same events → `RiallineaImpronte`
+  (registrazioneId) → adapter block (abbonato-riallineamento-impronte) [ADR 0012 (b)]
 
 ## Tactical model — Documento — every row names the consumer, or it is not written
 - **Aggregates / entities:** none — `Documento` is a pure projection and owns no source of truth.
@@ -242,9 +280,14 @@
 Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
 - **R6 `titolo`:** `Registrazione` also guards `titolo` = the source file name without extension,
   set at `AggiungiRegistrazione`, immutable. It crosses to Trascrizione/Parlanti/Documento in `RegistrazioneVista`.
-- **R2 policy placement:** "on `RegistrazioneAggiunta` → `AvviaElaborazione`" is realized as a
+  *(Amended 2026-09-23, user decision:)* `titolo` is **unique per `Progetto`** — a set rule checked by
+  `AggiungiRegistrazione` inside its transaction (one writer process per project, ADR 0010 `.lock`): on a clash
+  of the file-safe case-insensitive key it appends " (2)", " (3)"… once, never changed afterwards; this keys the
+  `Documento` file name (manifest `servizi-registrazione` AC-322..324, `documento` AC-320/321).
+- ~~**R2 policy placement:** "on `RegistrazioneAggiunta` → `AvviaElaborazione`" is realized as a
   synchronous subscriber in Trascrizione (same transaction), NOT inside the aggiungi-registrazione
-  service (Progetto must not depend on Trascrizione).
+  service (Progetto must not depend on Trascrizione).~~ *SUPERSEDED 2026-09-23 [user] — the policy
+  no longer exists (ADR 0014; ADR 0012 Amendment (c)).*
 - **R17 AvviaElaborazione split:** `AvviaElaborazione` (queueing + retry, INV-4) and the internal
   commands `EseguiProssimaElaborazione` (pipeline, INV-5) and `RecuperaElaborazioniInterrotte`
   (the startup policy), actor: sistema.
@@ -262,10 +305,22 @@ Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
     use "cambia".
   - Guest name format: "Ospite del 12/09/2026" (dd/MM/yyyy).
   - `EstrattoAudio` = the 2–3 LONGEST `Segmento`s of the `Voce`, about 10 s in total (≤ 10 000 ms,
-    the last clipped), played as a sequence of intervals.
+    the last clipped), played as a sequence of intervals. *(Tightened by ADR 0012 (b): the same
+    selection function as `SorgenteImpronta` — `Segmento`s ≥ 1 000 ms, longest first, ≤ 3, budget
+    10 000 ms, crossing interval trimmed from its start, time order; fallback the single longest.)*
   - A `Candidato`'s `Fascia` = the BEST over the `Parlante`'s `ImprontaVocale`s; ties (same
     `TipoParlante` and `Fascia`) are ordered by `Nome` alphabetically.
   - `Documento` format: `# <titolo>`, a date line "Registrata il dd/MM/yyyy", then one line per
     `Segmento` `**Nome** (mm:ss): testo`; consecutive `Segmento`s of the same `Voce` stay separate lines.
 - **R25 (flag):** `INV-25` is realized with a repository `rimuovi` — the only physical deletion of a
   `Parlante` (the "no deletion" aggregate rule does not apply: nothing references it).
+
+## Amendment 2026-09-23 (c): no automatic start; Numero di persone [user] (ADR 0014)
+- **Q-6 superseded.** No `Elaborazione` is started on `RegistrazioneAggiunta`. The Progetto policy
+  and the R2 placement above are struck through. `AvviaElaborazione` has the utente as its only
+  actor, through "Trascrivi" (`NON_AVVIATA`) and "Riprova" (`fallita`). INV-4 is unchanged.
+- **`NumeroPersone` (optional, an integer from 1 to 10).** It is carried by `AvviaElaborazione`,
+  stored immutable on `Elaborazione`, and passed by the pipeline to the `Diarizzatore`. If it is
+  absent, clustering is automatic. A value outside 1..10 is rejected with
+  `NumeroPersoneFuoriIntervallo` → AC-tests on the avvia-elaborazione block, plus a VO table test
+  on the elaborazione block. "Riprova" prefills the value of the failed `Elaborazione`.

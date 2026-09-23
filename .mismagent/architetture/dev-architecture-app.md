@@ -37,7 +37,11 @@ hierarchy in `Errori<Contesto>.kt` (e.g. `ErroriParlanti.kt`).
 **Errors** *(amended 2026-09-23, R25 / ADR 0003 amendment)*: `:kernel` has `public interface
 ErroreDominio` — plain, **not sealed** (Kotlin forbids sealed subtypes across modules/packages),
 never a `Throwable`. Each context owns ONE sealed hierarchy, type `Errore<Contesto>`, in
-`Errori<Contesto>.kt` of the module that raises it:
+`:<ctx>:dominio`'s `Errori<Contesto>.kt` — rule violations AND lookup misses (`…NonTrovato`,
+`…GiaPresente`), even when only a service detects them. Technical/adapter failures only may go in at
+most one `ErroreApplicazione<Contesto>` per `applicazione` module, file
+`ErroriApplicazione<Contesto>.kt`, package `snastro.<ctx>.applicazione.porte` (e.g.
+`ErroreApplicazioneProgetto`) *(amended 2026-09-23 (b), ADR 0003)*:
 ```kotlin
 // :parlanti:dominio  ErroriParlanti.kt
 public sealed interface ErroreParlanti : ErroreDominio {
@@ -218,7 +222,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() { override fun con(
 
 - `:persistenza`: one `.sq` per table in `persistenza/src/main/sqldelight/snastro/persistenza/`
   with **named queries** (`trovaPerId`, `inserisci`, `aggiorna`, `eliminaImpronteDi`, …); each
-  `CREATE UNIQUE INDEX` on **one line** (ADR 0007); migrations `.sqm` + schema snapshots (ADR 0006);
+  `CREATE UNIQUE INDEX` on **one line** (ADR 0007); migrations `.sqm` are the schema, `.sq` = queries only (ADR 0006 (a));
   `apriDatabaseProgetto(cartella): SnastroDatabase` (WAL, `foreign_keys=ON`, `secure_delete=ON`);
   `UnitaDiLavoroSql`. testFixtures: `databaseInMemoria()`.
 - `<ctx>:adattatori.persistenza`: `class ParlanteRepositorySql(private val db: SnastroDatabase) : ParlanteRepository`.
