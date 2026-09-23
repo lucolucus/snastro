@@ -325,3 +325,8 @@
 2026-09-23T11:56:00Z	sorgente-impronta	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:56:00Z	fix-batch-6	worker	dispatch	cycle=0	tier=standard	model=sonnet	(registro-progetti-file follow-up)
 2026-09-23T11:56:10Z	esegui-elaborazione	verifier	result	cycle=2	tier=deep	model=opus	PASS (merged-tree gate green x2; M1/M6/M7 killed; notes: KDoc recovery "startup only" understates AC-312; double-fault motivo ends as interrotta)
+2026-09-23T11:57:09Z	modelli-provisioning	verifier	result	cycle=0	tier=deep	model=opus	PASS (7/8 mutants; M8 early-EOF branch untested; ADR 0008 --exclude-dir=modelli would also exclude a future ui/modelli package -> write-adr; manifest HashNonValido(id) vs (modelloId) + ErroreModelli in :ui) -> not eligible (review 3 HIGH) -> rework cycle=1 after user decisions A/B
+2026-09-23T11:57:09Z	audio-ffmpeg	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (61d05ba; javacv 1.5.14 + ffmpeg LGPL per-OS classifier; 9 gate + 8 opt-in modelli tests)
+2026-09-23T11:57:09Z	audio-ffmpeg	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:57:09Z	audio-ffmpeg	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:57:09Z	stati-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
