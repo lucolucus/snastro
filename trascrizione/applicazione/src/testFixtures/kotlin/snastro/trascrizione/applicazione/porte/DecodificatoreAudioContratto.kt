@@ -67,6 +67,20 @@ public abstract class DecodificatoreAudioContratto {
     }
 
     @Test
+    public fun `AC-31 un intervallo che inizia alla fine o oltre la durata restituisce solo silenzio`() {
+        val d = decodificato()
+        val durata = CampioniAudio(d.tutti(REGISTRAZIONE).campioni).durataMs()
+
+        listOf(IntervalloMs(durata, durata + 1), IntervalloMs(durata, durata + 5), IntervalloMs(durata + 10, durata + 12))
+            .forEach { i ->
+                val campioni = d.campioni(REGISTRAZIONE, i).campioni
+
+                assertEquals((i.fineMs - i.inizioMs).toInt() * CAMPIONI_PER_MS, campioni.size, "$i")
+                assertTrue(campioni.all { it == 0f }, "$i: oltre la fine solo silenzio")
+            }
+    }
+
+    @Test
     public fun `AC-31 una sorgente illeggibile lancia IOException`() {
         assertFailsWith<IOException> { decodificatore().decodifica(REGISTRAZIONE, sorgenteIlleggibile) }
     }
