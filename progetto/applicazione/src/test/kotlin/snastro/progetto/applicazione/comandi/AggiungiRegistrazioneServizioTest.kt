@@ -3,6 +3,7 @@ package snastro.progetto.applicazione.comandi
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
+import snastro.kernel.GeneratoreId
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -19,6 +20,7 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.progetto.dominio.NomeProgetto
 import snastro.progetto.dominio.Progetto
+import snastro.progetto.dominio.Registrazione
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -26,6 +28,7 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -154,16 +157,78 @@ class AggiungiRegistrazioneServizioTest {
     }
 
     @Test
-    fun `AC-61 aggiungere due volte lo stesso file crea due Registrazioni distinte senza blocchi`() {
+    fun `AC-61 aggiungere due volte lo stesso file crea due Registrazioni distinte, la seconda con titolo (2)`() {
         servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
         servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
 
         val salvate = registrazioni.delProgetto(progettoId)
         assertEquals(setOf(RegistrazioneId("id-1"), RegistrazioneId("id-2")), salvate.map { it.id }.toSet())
+        assertEquals("Seduta del 12 marzo", assertNotNull(registrazioni.trova(RegistrazioneId("id-1"))).titolo)
+        assertEquals("Seduta del 12 marzo (2)", assertNotNull(registrazioni.trova(RegistrazioneId("id-2"))).titolo)
         assertEquals(
             setOf(RiferimentoAudio("audio/id-1.m4a"), RiferimentoAudio("audio/id-2.m4a")),
             archivio.archiviati,
         )
+    }
+
+    @Test
+    fun `AC-322 un titolo con la stessa chiave nel Progetto riceve il primo suffisso libero`() {
+        conRegistrazione("Riunione")
+        assertEquals("riunione (2)", titoloAggiunto("/sorgenti/riunione.m4a"))
+
+        conRegistrazione("Altra")
+        assertEquals("Riunione (3)", titoloAggiunto("/sorgenti/Riunione.wav"))
+    }
+
+    @Test
+    fun `AC-322 la chiave confronta i titoli puliti, Riunione con asterisco e con punto interrogativo collidono`() {
+        conRegistrazione("Riunione*")
+
+        assertEquals("Riunione? (2)", titoloAggiunto("/sorgenti/Riunione?.m4a"))
+    }
+
+    @Test
+    fun `AC-322 la base e' il nome del file in NFC e senza spazi ai bordi`() {
+        conRegistrazione("\u00e9")
+
+        assertEquals("\u00e9 (2)", titoloAggiunto("/sorgenti/ e\u0301 .m4a"))
+    }
+
+    @Test
+    fun `AC-323 i titoli di un altro Progetto non contano`() {
+        conRegistrazione("Riunione", ProgettoId("altro-progetto"))
+
+        assertEquals("Riunione", titoloAggiunto("/sorgenti/Riunione.m4a"))
+    }
+
+    @Test
+    fun `AC-323 stessi titoli esistenti e stesso file danno lo stesso titolo, e il titolo assegnato non cambia piu'`() {
+        val esistente = conRegistrazione("Riunione")
+        val primo = titoloAggiunto("/sorgenti/Riunione.m4a")
+
+        val altroRepository = RegistrazioneRepositoryFinta()
+        altroRepository.salva(unaRegistrazione("Riunione", progettoId, esistente))
+        val secondo = titoloPer("/sorgenti/Riunione.m4a", altroRepository)
+
+        assertEquals("Riunione (2)", primo)
+        assertEquals(primo, secondo)
+        assertEquals("Riunione", assertNotNull(registrazioni.trova(esistente)).titolo)
+
+        ModificaDataRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, eventi)
+            .esegui(ModificaDataRegistrazione(RegistrazioneId("id-1"), LocalDate.of(2026, 1, 2))).atteso()
+        assertEquals("Riunione (2)", assertNotNull(registrazioni.trova(RegistrazioneId("id-1"))).titolo)
+    }
+
+    @Test
+    fun `AC-324 un nome lungo e' troncato prima del suffisso e le due chiavi differiscono`() {
+        val primi237 = "x".repeat(237)
+        val esistente = primi237 + "y".repeat(13) // 250 byte
+        conRegistrazione(esistente)
+
+        val titolo = titoloAggiunto("/sorgenti/${primi237}zzzzz.m4a")
+
+        assertEquals("x".repeat(233) + " (2)", titolo)
+        assertNotEquals(TitoloRegistrazione.chiave(esistente), TitoloRegistrazione.chiave(titolo))
     }
 
     @Test
@@ -182,16 +247,45 @@ class AggiungiRegistrazioneServizioTest {
         casi.forEach { caso -> assertEquals(caso.atteso, titoloPer(caso.percorso), caso.descrizione) }
     }
 
-    /** Runs AggiungiRegistrazione on a fresh service/fakes for [percorsoSorgente] and returns the saved titolo. */
-    private fun titoloPer(percorsoSorgente: String): String {
-        val registrazioniLocali = RegistrazioneRepositoryFinta()
+    /** Seeds [registrazioni] with an existing Registrazione titled [titolo] (of [progetto], default this one). */
+    private fun conRegistrazione(titolo: String, progetto: ProgettoId = progettoId): RegistrazioneId {
+        val id = RegistrazioneId("esistente-${registrazioni.delProgetto(progetto).size + 1}-${progetto.valore}")
+        registrazioni.salva(unaRegistrazione(titolo, progetto, id))
+        return id
+    }
+
+    private fun unaRegistrazione(titolo: String, progetto: ProgettoId, id: RegistrazioneId): Registrazione =
+        Registrazione.aggiungi(
+            id = id,
+            progettoId = progetto,
+            titolo = titolo,
+            riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
+            durataMs = 1_000L,
+            dataRegistrazione = LocalDate.of(2026, 1, 1),
+            aggiuntaAlle = Instant.parse("2026-01-01T00:00:00Z"),
+        ).aggregato
+
+    /** Runs AggiungiRegistrazione for [percorsoSorgente] on this test's [registrazioni]; returns the new titolo. */
+    private fun titoloAggiunto(percorsoSorgente: String): String =
+        titoloPer(percorsoSorgente, registrazioni, generatoreId)
+
+    /**
+     * Runs AggiungiRegistrazione on a fresh service/fakes over [registrazioniLocali] (default: an empty
+     * repository) for [percorsoSorgente] and returns the saved titolo of the new Registrazione.
+     */
+    private fun titoloPer(
+        percorsoSorgente: String,
+        registrazioniLocali: RegistrazioneRepositoryFinta = RegistrazioneRepositoryFinta(),
+        generatoreLocale: GeneratoreId = GeneratoreIdFinto(),
+    ): String {
+        val prima = registrazioniLocali.delProgetto(progettoId).map { it.id }.toSet()
         val eventiLocali = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniLocali))
         val progettiLocali = ProgettoRepositoryFinta().apply {
             salva(Progetto.crea(progettoId, NomeProgetto.di("Consiglio comunale").atteso()).aggregato)
         }
         val servizioLocale = AggiungiRegistrazioneServizio(
             eventiLocali.unitaDiLavoro,
-            GeneratoreIdFinto(),
+            generatoreLocale,
             clock,
             progettiLocali,
             registrazioniLocali,
@@ -206,7 +300,7 @@ class AggiungiRegistrazioneServizioTest {
 
         servizioLocale.esegui(AggiungiRegistrazione(percorsoSorgente)).atteso()
 
-        return assertNotNull(registrazioniLocali.trova(RegistrazioneId("id-1"))).titolo
+        return registrazioniLocali.delProgetto(progettoId).single { it.id !in prima }.titolo
     }
 
     private class GuastoDiProva : RuntimeException("guasto di prova")
