@@ -104,3 +104,5 @@
 2026-09-23T08:55:09Z	porta-registrazione-trascrizione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:55:09Z	porta-registrazione-trascrizione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:56:02Z	porta-lettore-trascritto	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:57:42Z	porta-registrazione-trascrizione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED patch: contract should cover modificaData after seeding; LOW: dev-arch #porta-contratto should document Ambiente/semina form)
+2026-09-23T08:57:51Z	porta-registrazione-trascrizione	verifier	result	cycle=0	tier=deep	model=opus	PASS (MED modificaData contract case -> follow-up fix batch)
