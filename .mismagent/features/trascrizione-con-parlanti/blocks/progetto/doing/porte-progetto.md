@@ -21,12 +21,12 @@ owns_boundaries:
     contract_test: "consumer-driven"
     pinned_types:
       ProgettoRepository: "interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB"
-      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; salva(r: Registrazione) }"
+      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }"
   tec-registro-progetti:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      RegistroProgetti: "interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant); rimuovi(percorso: String) }"
+      RegistroProgetti: "interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }"
       VoceRegistro: "data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)"
   tec-sonda-archivio:
     projection: "in-process"
@@ -41,20 +41,23 @@ owns_boundaries:
 ## What to do
 Declare ProgettoRepository, RegistrazioneRepository, SondaAudio, ArchivioAudio, RegistroProgetti (R3) with a Finta and an abstract Contratto each in testFixtures.
 
+Note: AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) — manifest drift fixed, no code change; (ii) new RegistrazioneRepository.titoliDelProgetto(id: ProgettoId): List<String> (repo-progetto) for the titolo uniqueness of AggiungiRegistrazione. FOLLOW-UP REQUIRED for (ii): merged before this amendment — the port, its Finta and RegistrazioneRepositoryContratto must gain titoliDelProgetto (AC-325).
+
 ## Tasks
 - AC-25 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le Finte (round-trip, delProgetto)
 - AC-26 SondaAudioContratto: file leggibile → durata > 0 e data del file; illeggibile → AudioNonLeggibile; formato non supportato → FormatoNonSupportato (passa contro SondaAudioFinta)
 - AC-27 ArchivioAudioContratto: copia → RiferimentoAudio 'audio/<registrazioneId>.<ext minuscola>'; copia fallita → CopiaFallita e nessun file residuo
-- AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente
+- AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna(percorso, …) cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente
+- AC-325 RegistrazioneRepositoryContratto: titoliDelProgetto(id) restituisce i titoli di tutte e sole le Registrazioni di quel Progetto (lista vuota se nessuna, nessun ordine garantito) — passa contro RegistrazioneRepositoryFinta
 
 ## Dependencies
 - **repo-progetto** (OWNED here — built before its consumers) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
-    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; salva(r: Registrazione) }
+    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }
 - **tec-registro-progetti** (OWNED here — built before its consumers) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant); rimuovi(percorso: String) }
+    - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }
     - `VoceRegistro`: data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)
   - keys (minting rules):
     - `percorso`: minted by avvio-composizione (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open

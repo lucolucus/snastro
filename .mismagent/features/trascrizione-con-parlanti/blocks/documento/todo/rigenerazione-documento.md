@@ -29,7 +29,8 @@ Policy/service: RigeneraDocumento(registrazioneId, dataPrecedente?) writes the d
 ## Tasks
 - AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto
 - AC-154 RigeneraDocumento su una Registrazione senza Trascritto → nessuna scrittura, Ok
-- AC-155 Con una DataRegistrazioneModificata il nuovo file è scritto e poi il vecchio è rimosso
+- AC-155 Con una DataRegistrazioneModificata il nuovo file nomeFile(nuova, titolo) è scritto e poi il vecchio nomeFile(precedente, titolo) è rimosso — entrambi calcolati con la stessa funzione pulita di documento (AC-320)
+- AC-327 Il vecchio file rimosso non appartiene mai a un'altra Registrazione: con 'Riunione' (data 2026-09-12) e 'Riunione (2)' (data 2026-09-13) spostare la data di 'Riunione (2)' al 2026-09-12 scrive '2026-09-12 Riunione (2).md', rimuove '2026-09-13 Riunione (2).md' e non tocca '2026-09-12 Riunione.md'; se precedente = nuova il file è riscritto e nulla è rimosso
 - AC-156 ParlanteRinominato → rigenerate tutte e sole le Registrazioni con un'Attribuzione a P; ParlantePromosso con nomeCambiato = false → nulla; ParlanteEliminato → nulla
 - AC-157 Un errore di scrittura → Esito.Errore (così l'abbonato può riprovare)
 - AC-158 RigeneraTuttiIDocumenti rigenera ogni Registrazione con Trascritto
@@ -85,6 +86,6 @@ Policy/service: RigeneraDocumento(registrazioneId, dataPrecedente?) writes the d
   - pinned types:
     - `ScrittoreDocumento`: interface { fun scrivi(nomeFile: String, markdown: String); fun rimuovi(nomeFile: String) } — write-only, never reads (ADR 0010)
   - keys (minting rules):
-    - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> <titolo>.md' under documenti/ — changes only when dataRegistrazione changes (titolo immutable)
+    - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' under documenti/, with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : " / \ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. UNIQUE per Progetto: titolo is unique per Progetto on the key pulisci(titolo).lowercase(Locale.ROOT) (servizi-registrazione AC-322) — so two Registrazioni never share a nomeFile whatever their dates; changes only when dataRegistrazione changes (titolo immutable). The atomic write's temp file is '<nomeFile>.tmp' in the same folder (AC-340).
 
 Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento Policy (+ R4, R5), ADR 0012.

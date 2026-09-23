@@ -27,11 +27,14 @@ owns_boundaries:
     pinned_types:
       "Attribuzione.conferma": "(voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>"
       "Attribuzione.cambia": "(parlanteId): Esito<AttribuzioneConfermata?> — same parlante = Ok(null), no event"
+      "Attribuzione.trasferisci": "(a: VoceRef): Attribuzione — POLICY-ONLY re-keying (INV-21 unire inheritance, ADR 0012 Amendment (b) point 4): same parlanteId and progettoId, key = a; require a.registrazioneId == voceRef.registrazioneId; checks NO Parlante state (valid for an eliminato tombstone — the explicit INV-13/INV-17 exception); emits no event (consumers are reached via VociUnite); never used by ConfermaAttribuzione / SaltaVoce"
 ---
 # attribuzione — Aggregato Attribuzione
 
 ## What to do
-Attribuzione root keyed by VoceRef with progettoId and parlanteId; conferma → AttribuzioneConfermata; cambia(same parlante) = Ok(null) without event (R24).
+Attribuzione root keyed by VoceRef with progettoId and parlanteId; conferma → AttribuzioneConfermata; cambia(same parlante) = Ok(null) without event (R24); policy-only trasferisci(a) re-keys it onto the surviving Voce of an unire (no event, no Parlante-state check — ADR 0012 (b) point 4).
+
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 4): policy-only re-keying operation Attribuzione.trasferisci (pinned in agg-attribuzione) for the INV-21 unire inheritance, incl. onto an eliminato Parlante (explicit exception to INV-13/INV-17); no command may call it (gate on agg-attribuzione). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
 
 ### Invariants owned here (one test each, name starts with the tag)
 - Structural: at most one Parlante per Voce — the root is keyed by VoceRef
@@ -39,15 +42,18 @@ Attribuzione root keyed by VoceRef with progettoId and parlanteId; conferma → 
 ## Tasks
 - AC-23 Structural l'Attribuzione ha come identità il VoceRef, quindi non può esistere una seconda Attribuzione per la stessa Voce (by-construction)
 - AC-24 cambia verso un altro Parlante emette AttribuzioneConfermata con precedente; cambia verso lo stesso Parlante → Ok senza evento
+- AC-269 trasferisci(a) restituisce un'Attribuzione con chiave a e gli stessi parlanteId e progettoId, senza evento e senza consultare lo stato del Parlante (funziona anche per un Parlante eliminato); a di un'altra Registrazione → rifiutato (require)
 
 ## Dependencies
 - **agg-attribuzione** (OWNED here — built before its consumers) — owner `attribuzione`, projection in-process, contract_test **invariant-test**
   - pinned types:
     - `Attribuzione.conferma`: (voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>
     - `Attribuzione.cambia`: (parlanteId): Esito<AttribuzioneConfermata?> — same parlante = Ok(null), no event
+    - `Attribuzione.trasferisci`: (a: VoceRef): Attribuzione — POLICY-ONLY re-keying (INV-21 unire inheritance, ADR 0012 Amendment (b) point 4): same parlanteId and progettoId, key = a; require a.registrazioneId == voceRef.registrazioneId; checks NO Parlante state (valid for an eliminato tombstone — the explicit INV-13/INV-17 exception); emits no event (consumers are reached via VociUnite); never used by ConfermaAttribuzione / SaltaVoce
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
   - §14 gates (must stay green):
+    - `! grep -rnE --include='*.kt' '\.trasferisci(Impronta)?\(' parlanti/applicazione/src/main | grep '/comandi/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\*|/\*)' | grep -q .`
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(attribuzioneQueries)\b' . | grep -vE '^\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:

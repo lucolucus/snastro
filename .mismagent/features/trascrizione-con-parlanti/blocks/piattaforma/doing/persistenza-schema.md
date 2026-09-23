@@ -19,9 +19,9 @@ related_adrs:
 # persistenza-schema — Schema SQLDelight v1, factory del driver, UnitaDiLavoroSql
 
 ## What to do
-Derived owner of the single persistence schema (rule 11): one .sq per table (progetto, registrazione, elaborazione, trascritto, voce, segmento, parlante, impronta_vocale, attribuzione) with named queries, the three ADR 0007 partial unique indexes each on ONE line, PRIMARY KEY attribuzione(registrazione_id, voce_id), UNIQUE impronta_vocale(parlante_id, registrazione_id, voce_id), schema snapshot 1.db, apriDatabaseProgetto(cartella) with WAL + foreign_keys=ON + secure_delete=ON, refusal of a newer user_version, UnitaDiLavoroSql, and the testFixture databaseInMemoria().
+Derived owner of the single persistence schema (rule 11): one .sq per table (progetto, registrazione, elaborazione, trascritto, voce, segmento, parlante, impronta_vocale, attribuzione) with named queries, the three ADR 0007 partial unique indexes each on ONE line, PRIMARY KEY attribuzione(registrazione_id, voce_id), UNIQUE impronta_vocale(parlante_id, registrazione_id, voce_id), impronta_vocale.sorgente_impronta TEXT NOT NULL + modello_impronta TEXT NOT NULL (ADR 0009 Amendment (b), straight into the unreleased v1), the compare-and-set print UPDATE and the print-metadata reads (AC-267), schema snapshot 1.db, apriDatabaseProgetto(cartella) with WAL + foreign_keys=ON + secure_delete=ON, refusal of a newer user_version, UnitaDiLavoroSql, and the testFixture databaseInMemoria().
 
-Note: ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema).
+Note: ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema). AMENDED 2026-09-23 (ADR 0009/0012 Amendment (b)): schema v1 is UNRELEASED — the two columns go straight into v1, no migration; regenerate the committed 1.db snapshot (AC-8 stays green).
 
 ## Tasks
 - AC-8 verifySqlDelightMigration è verde con lo snapshot 1.db committato
@@ -29,7 +29,8 @@ Note: ADR 0007 and ADR 0009 presence rules become exigible when this block is me
 - AC-10 Il driver apre il DB con journal WAL, foreign_keys=ON e secure_delete=ON (pragma letti nel test)
 - AC-11 UnitaDiLavoroSql passa UnitaDiLavoroContratto: rollback su Errore e su eccezione
 - AC-12 Un DB con versione di schema più recente dell'app viene rifiutato con un errore chiaro, senza modificarlo
-- AC-13 attribuzione ha chiave (registrazione_id, voce_id) e impronta_vocale rifiuta una seconda riga con stessi (parlante_id, registrazione_id, voce_id)
+- AC-13 attribuzione ha chiave (registrazione_id, voce_id) e impronta_vocale rifiuta una seconda riga con stessi (parlante_id, registrazione_id, voce_id); impronta_vocale ha le colonne sorgente_impronta TEXT NOT NULL e modello_impronta TEXT NOT NULL (un inserimento senza una delle due è rifiutato)
+- AC-267 impronta_vocale.sq espone: l'UPDATE compare-and-set di UNA riga (SET impronta, sorgente_impronta, modello_impronta WHERE parlante_id, registrazione_id, voce_id AND sorgente_impronta = :attesa AND modello_impronta = :atteso — nessun INSERT) e le letture dei metadati (parlante_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta, senza BLOB) per registrazione e per progetto; test SQL: l'UPDATE con valori attesi cambiati tocca 0 righe
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**

@@ -10,7 +10,8 @@ import kotlin.test.assertTrue
 
 /**
  * Consumer-driven contract of [EstrattoreImpronta] (boundary `tec-estrattore-impronta`, ADR 0004/0009):
- * deterministic (same [CampioniAudio] → same Impronta), constant, non-zero dimension, input untouched.
+ * deterministic (same [CampioniAudio] → same Impronta), constant, non-zero dimension, input untouched; a
+ * non-empty [EstrattoreImpronta.modello], constant for the instance (AC-273).
  * One subclass per implementation; the real adapter's subclass is `@Tag("modelli")`.
  */
 public abstract class EstrattoreImprontaContratto {
@@ -49,6 +50,18 @@ public abstract class EstrattoreImprontaContratto {
         estrattore().estrai(campioni)
 
         assertContentEquals(copia, campioni.campioni)
+    }
+
+    @Test
+    public fun `AC-273 modello e non vuoto e costante per l istanza`() {
+        val e = estrattore()
+        val prima = e.modello
+
+        e.estrai(tono(FREQUENZA_BASSA, SECONDI_BREVE))
+        e.estrai(tono(FREQUENZA_ALTA, SECONDI_LUNGO))
+
+        assertTrue(prima.isNotBlank(), "modello vuoto")
+        assertEquals(prima, e.modello)
     }
 
     private fun tono(frequenza: Double, secondi: Double): CampioniAudio =

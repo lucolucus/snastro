@@ -25,8 +25,8 @@ owns_boundaries:
     contract_test: "consumer-driven"
     pinned_types:
       ServizioModelli: "interface { val stato: StateFlow<StatoModelli>; fun scarica(); fun licenze(): List<LicenzaVista> }"
-      StatoModelli: "sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreModelli) }"
-      ErroreModelli: "sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ReteAssente; DownloadFallito(motivo: String) }"
+      StatoModelli: "sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreServizioModelli) }"
+      ErroreServizioModelli: "sealed interface : ErroreDominio (file ErroriServizioModelli.kt in snastro.ui.modelli — declared on the UI side because :ui must not depend on :modelli) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — 1:1 image of snastro.modelli.ErroreModelli, mapped in :avvio (avvio-composizione AC-329); same field name modelloId on both sides"
       LicenzaVista: "data class(nome: String, ruolo: String, licenza: String, attribuzione: String)"
 ---
 # schermata-modelli — S5 · Modelli (onboarding download + licenze)
@@ -51,8 +51,8 @@ S5 (R10, added to the ux-proposal): shown at startup when models are missing; do
 - **tec-modelli-ui** (OWNED here — built before its consumers) — owner `schermata-modelli`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ServizioModelli`: interface { val stato: StateFlow<StatoModelli>; fun scarica(); fun licenze(): List<LicenzaVista> }
-    - `StatoModelli`: sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreModelli) }
-    - `ErroreModelli`: sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ReteAssente; DownloadFallito(motivo: String) }
+    - `StatoModelli`: sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreServizioModelli) }
+    - `ErroreServizioModelli`: sealed interface : ErroreDominio (file ErroriServizioModelli.kt in snastro.ui.modelli — declared on the UI side because :ui must not depend on :modelli) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — 1:1 image of snastro.modelli.ErroreModelli, mapped in :avvio (avvio-composizione AC-329); same field name modelloId on both sides
     - `LicenzaVista`: data class(nome: String, ruolo: String, licenza: String, attribuzione: String)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:

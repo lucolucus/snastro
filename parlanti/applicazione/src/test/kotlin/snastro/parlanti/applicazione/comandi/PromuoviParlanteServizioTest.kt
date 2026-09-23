@@ -42,7 +42,7 @@ class PromuoviParlanteServizioTest {
     @Test
     fun `AC-92 un occasionale promosso senza rinomina diventa ricorrente con impronte invariate`() {
         val p = unParlante("id-1", "Ospite del 12-09-2026")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "finto").atteso()
         repo.salva(p).atteso()
 
         servizio.esegui(PromuoviParlante(ParlanteId("id-1"), nome = null)).atteso()
@@ -60,7 +60,7 @@ class PromuoviParlanteServizioTest {
     @Test
     fun `AC-92 un occasionale promosso con rinomina diventa ricorrente col nuovo Nome e nomeCambiato vero`() {
         val p = unParlante("id-1", "Ospite del 12-09-2026")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "finto").atteso()
         repo.salva(p).atteso()
 
         servizio.esegui(PromuoviParlante(ParlanteId("id-1"), nome = "Giulia")).atteso()

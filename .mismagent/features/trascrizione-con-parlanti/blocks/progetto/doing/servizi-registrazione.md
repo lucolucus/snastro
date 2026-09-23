@@ -26,7 +26,9 @@ commands:
 # servizi-registrazione — AggiungiRegistrazione, ModificaDataRegistrazione
 
 ## What to do
-AggiungiRegistrazione: sonda → copia → Registrazione.aggiungi (titolo = file name without extension, durata from the probe, date = file date) → save → publish RegistrazioneAggiunta (whose SYNC subscriber queues the Elaborazione, R2). ModificaDataRegistrazione publishes DataRegistrazioneModificata.
+AggiungiRegistrazione: sonda → copia → Registrazione.aggiungi (titolo = file name without extension, made UNIQUE in the Progetto with ' (2)', ' (3)'… on a clash of its file-safe case-insensitive key, durata from the probe, date = file date) → save → publish RegistrazioneAggiunta (whose SYNC subscriber queues the Elaborazione, R2). ModificaDataRegistrazione publishes DataRegistrazioneModificata.
+
+Note: AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo UNIQUE per Progetto (AC-322..324) via the new RegistrazioneRepository.titoliDelProgetto (repo-progetto). Uniqueness holds BY CONSTRUCTION, no DB index: the read of titoliDelProgetto and the insert run in the same UnitaDiLavoro transaction, and a project has one writer process (ADR 0010 .lock); the key lives in Kotlin (pulisci + Locale.ROOT lowercase), not in SQL (SQLite lower() is ASCII-only). pulisci = the rule pinned in tec-scrittore-documento keys.nomeFile, implemented here as a private pure function of :progetto:applicazione with the same table rows as documento AC-320 (Progetto may not depend on Documento). FOLLOW-UP REQUIRED: merged before this amendment; the merged code does not yet satisfy AC-61 (amended) and AC-322..324 — a rework/fix block must land them (after porte-progetto's follow-up adds titoliDelProgetto).
 
 ## Tasks
 - AC-56 AggiungiRegistrazione con un file leggibile crea la Registrazione con titolo = nome del file senza estensione, durata dalla sonda e DataRegistrazione = data del file, e pubblica RegistrazioneAggiunta
@@ -34,9 +36,12 @@ AggiungiRegistrazione: sonda → copia → Registrazione.aggiungi (titolo = file
 - AC-58 Una copia fallita a metà → nulla creato (nessuna riga, nessun file parziale)
 - AC-59 L'audio è copiato in audio/<registrazioneId>.<ext> e il riferimento salvato è relativo alla cartella del progetto
 - AC-60 Se l'abbonato sincrono che accoda l'Elaborazione fallisce, la Registrazione non esiste (rollback dell'intero comando)
-- AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi
+- AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi; la seconda riceve il titolo '<nome> (2)' (AC-322)
 - AC-62 ModificaDataRegistrazione sostituisce la data e pubblica DataRegistrazioneModificata(precedente, nuova)
 - AC-63 ModificaDataRegistrazione su una Registrazione inesistente → RegistrazioneNonTrovata
+- AC-322 AggiungiRegistrazione assegna un titolo UNICO nel Progetto: base = nome del file senza estensione (NFC, trim; vuoto → 'registrazione'); se chiave(base) coincide con chiave(t) di un titolo t di un'altra Registrazione dello stesso Progetto (titoliDelProgetto), prova 'base (2)', 'base (3)'… e assegna il primo libero; chiave(t) = pulisci(t) (la regola di nomeFile, vedi tec-scrittore-documento) in minuscolo con Locale.ROOT. Es.: esiste 'Riunione' → 'riunione.m4a' diventa 'riunione (2)'; esistono 'Riunione' e 'Riunione (2)' → 'Riunione (3)'; esiste 'Riunione*' → 'Riunione?' diventa 'Riunione? (2)' (stessa chiave 'riunione_')
+- AC-323 Il titolo è deterministico e stabile: stessi titoli esistenti + stesso file → stesso titolo; una volta assegnato non cambia mai (ModificaDataRegistrazione non lo tocca); i titoli di Registrazioni di un ALTRO Progetto non contano (test con RegistrazioneRepositoryFinta che contiene 'Riunione' di un altro progettoId → il nuovo titolo resta 'Riunione')
+- AC-324 Nomi lunghi: prima di aggiungere ' (n)' la base è troncata (su un confine di code point, poi rimossi spazi/punti finali) a 237 byte UTF-8 meno la lunghezza del suffisso, così il suffisso sopravvive sempre a pulisci e la ricerca termina: con un titolo esistente di 250 byte e un nuovo file con gli stessi primi 237 byte il nuovo titolo è '<primi 233 byte> (2)' e le due chiavi differiscono
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -82,7 +87,7 @@ AggiungiRegistrazione: sonda → copia → Registrazione.aggiungi (titolo = file
 - **repo-progetto** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
-    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; salva(r: Registrazione) }
+    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }
 - **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
