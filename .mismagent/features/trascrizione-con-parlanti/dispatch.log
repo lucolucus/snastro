@@ -557,3 +557,4 @@
 2026-09-23T23:10:28Z	decodifica-trascrizione	verifier	result	cycle=0	-	composer	PASS (light: gate green, modelliTest 6/6 uncached, ADR rules green, code read)
 2026-09-23T23:10:28Z	decodifica-trascrizione	composer	merge	cycle=0	-	-	MERGED c6450ce
 2026-09-23T23:10:28Z	decodifica-trascrizione	composer	pre-release	cycle=0	-	-	LOW AC-149 text says sample/ (synthetic used, amend wording); LOW rebuilt WAV not atomic (fix-batch-7 item)
+2026-09-23T23:10:35Z	avvio-coda-elaborazioni	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
