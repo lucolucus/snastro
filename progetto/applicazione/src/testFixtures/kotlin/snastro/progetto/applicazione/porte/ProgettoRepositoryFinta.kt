@@ -11,6 +11,10 @@ public class ProgettoRepositoryFinta : ProgettoRepository, Ripristinabile {
     override fun trova(): Progetto? = salvato
 
     override fun salva(p: Progetto) {
+        val presente = salvato
+        check(presente == null || presente.id == p.id) {
+            "il database ha gia il Progetto ${presente?.id?.valore}: non puo salvarne un altro (${p.id.valore})"
+        }
         salvato = p
     }
 

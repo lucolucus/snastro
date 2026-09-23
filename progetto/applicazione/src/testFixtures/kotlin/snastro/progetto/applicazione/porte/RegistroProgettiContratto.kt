@@ -32,16 +32,38 @@ public abstract class RegistroProgettiContratto {
     }
 
     @Test
-    public fun `AC-28 aggiorna cambia numRegistrazioni e ultimaAttivita solo del Progetto indicato`() {
+    public fun `AC-28 aggiorna cambia numRegistrazioni e ultimaAttivita solo della voce di quel percorso`() {
         val registro = registro()
         val altra = unaVoce(ProgettoId("id-2"), "Assemblea", "/progetti/Assemblea.snastro", ORA.minusSeconds(60))
         registro.registra(unaVoce())
         registro.registra(altra)
-        registro.aggiorna(ProgettoId("id-1"), numRegistrazioni = 3, ultimaAttivita = ORA.plusSeconds(120))
+        registro.aggiorna(PERCORSO, numRegistrazioni = 3, ultimaAttivita = ORA.plusSeconds(120))
         assertEquals(
             listOf(unaVoce().copy(numRegistrazioni = 3, ultimaAttivita = ORA.plusSeconds(120)), altra),
             registro.elenco(),
         )
+    }
+
+    @Test
+    public fun `AC-28 due cartelle dello stesso Progetto sono voci indipendenti`() {
+        val registro = registro()
+        val copia = unaVoce(percorso = "/copie/Consiglio comunale.snastro", ultimaAttivita = ORA.minusSeconds(60))
+        registro.registra(unaVoce())
+        registro.registra(copia)
+        registro.aggiorna(copia.percorso, numRegistrazioni = 5, ultimaAttivita = ORA.plusSeconds(120))
+        registro.rimuovi(PERCORSO)
+        assertEquals(
+            listOf(copia.copy(numRegistrazioni = 5, ultimaAttivita = ORA.plusSeconds(120))),
+            registro.elenco(),
+        )
+    }
+
+    @Test
+    public fun `AC-28 aggiorna un percorso sconosciuto non cambia nulla`() {
+        val registro = registro()
+        registro.registra(unaVoce())
+        registro.aggiorna("/progetti/Sconosciuto.snastro", numRegistrazioni = 3, ultimaAttivita = ORA.plusSeconds(120))
+        assertEquals(listOf(unaVoce()), registro.elenco())
     }
 
     @Test

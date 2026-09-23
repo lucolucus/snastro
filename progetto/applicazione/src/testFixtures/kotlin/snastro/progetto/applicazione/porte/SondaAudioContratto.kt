@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
  * (`SondaAudioFinta` here, the `:audio`-backed adapter in `:progetto:adattatori`, tagged `modelli`).
  */
 public abstract class SondaAudioContratto {
-    /** Three source files prepared by the implementation under test (paths are opaque strings). */
+    /** Source files prepared by the implementation under test (paths are opaque strings). */
     public interface Ambiente {
         public val sonda: SondaAudio
 
@@ -22,8 +22,17 @@ public abstract class SondaAudioContratto {
         /** The date of [fileLeggibile] as the file system reports it. */
         public val dataDelFileLeggibile: LocalDate
 
-        /** A file that cannot be read as audio (e.g. corrupted or missing). */
+        /** An existing file that cannot be decoded as audio (e.g. corrupted). */
         public val fileIlleggibile: String
+
+        /** An existing file of zero length, with a supported extension. */
+        public val fileVuoto: String
+
+        /** A directory, not a file. */
+        public val cartella: String
+
+        /** A path where nothing exists. */
+        public val fileInesistente: String
 
         /** A readable file whose format is not supported. */
         public val fileFormatoNonSupportato: String
@@ -42,15 +51,37 @@ public abstract class SondaAudioContratto {
     @Test
     public fun `AC-26 un file illeggibile da AudioNonLeggibile`() {
         val a = ambiente()
-        val errore = a.sonda.sonda(a.fileIlleggibile).erroreAtteso<ErroreAudioProgetto.AudioNonLeggibile>()
-        assertEquals(a.fileIlleggibile, errore.percorsoSorgente)
+        assertNonLeggibile(a, a.fileIlleggibile)
+    }
+
+    @Test
+    public fun `AC-26 un file vuoto da AudioNonLeggibile`() {
+        val a = ambiente()
+        assertNonLeggibile(a, a.fileVuoto)
+    }
+
+    @Test
+    public fun `AC-26 una cartella da AudioNonLeggibile`() {
+        val a = ambiente()
+        assertNonLeggibile(a, a.cartella)
+    }
+
+    @Test
+    public fun `AC-26 un file inesistente da AudioNonLeggibile`() {
+        val a = ambiente()
+        assertNonLeggibile(a, a.fileInesistente)
     }
 
     @Test
     public fun `AC-26 un formato non supportato da FormatoNonSupportato`() {
         val a = ambiente()
         val errore = a.sonda.sonda(a.fileFormatoNonSupportato)
-            .erroreAtteso<ErroreAudioProgetto.FormatoNonSupportato>()
+            .erroreAtteso<ErroreApplicazioneProgetto.FormatoNonSupportato>()
         assertEquals(a.fileFormatoNonSupportato, errore.percorsoSorgente)
+    }
+
+    private fun assertNonLeggibile(a: Ambiente, percorso: String) {
+        val errore = a.sonda.sonda(percorso).erroreAtteso<ErroreApplicazioneProgetto.AudioNonLeggibile>()
+        assertEquals(percorso, errore.percorsoSorgente)
     }
 }

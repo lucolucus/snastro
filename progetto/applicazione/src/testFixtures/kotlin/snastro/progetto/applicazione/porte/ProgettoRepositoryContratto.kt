@@ -10,6 +10,7 @@ import snastro.kernel.erroreAtteso
 import snastro.progetto.dominio.NomeProgetto
 import snastro.progetto.dominio.Progetto
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
@@ -35,10 +36,7 @@ public abstract class ProgettoRepositoryContratto {
     @Test
     public fun `AC-25 salva poi trova restituisce lo stesso Progetto`() {
         val a = ambiente()
-        a.unitaDiLavoro.inTransazione {
-            a.progetti.salva(unProgetto())
-            Esito.Ok(Unit)
-        }.atteso()
+        a.salva(unProgetto())
         val trovato = assertNotNull(a.progetti.trova())
         assertEquals(ProgettoId("id-1"), trovato.id)
         assertEquals("Consiglio comunale", trovato.nome.valore)
@@ -54,6 +52,31 @@ public abstract class ProgettoRepositoryContratto {
         assertNull(a.progetti.trova())
     }
 
-    private fun unProgetto(): Progetto =
-        Progetto.crea(ProgettoId("id-1"), NomeProgetto.di("Consiglio comunale").atteso()).aggregato
+    @Test
+    public fun `AC-25 salvare di nuovo lo stesso Progetto lo conserva`() {
+        val a = ambiente()
+        a.salva(unProgetto())
+        a.salva(unProgetto())
+        assertEquals(ProgettoId("id-1"), assertNotNull(a.progetti.trova()).id)
+    }
+
+    @Test
+    public fun `AC-25 salvare un secondo Progetto con un altro id e un errore di programmazione`() {
+        val a = ambiente()
+        a.salva(unProgetto())
+        assertFailsWith<IllegalStateException> { a.salva(unProgetto(ProgettoId("id-2"), "Assemblea")) }
+        val trovato = assertNotNull(a.progetti.trova())
+        assertEquals(ProgettoId("id-1"), trovato.id)
+        assertEquals("Consiglio comunale", trovato.nome.valore)
+    }
+
+    private fun Ambiente.salva(p: Progetto) {
+        unitaDiLavoro.inTransazione {
+            progetti.salva(p)
+            Esito.Ok(Unit)
+        }.atteso()
+    }
+
+    private fun unProgetto(id: ProgettoId = ProgettoId("id-1"), nome: String = "Consiglio comunale"): Progetto =
+        Progetto.crea(id, NomeProgetto.di(nome).atteso()).aggregato
 }

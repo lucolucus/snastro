@@ -1,6 +1,5 @@
 package snastro.progetto.applicazione.porte
 
-import snastro.kernel.ProgettoId
 import java.time.Instant
 
 /** In-memory [RegistroProgetti], keyed by percorso. */
@@ -13,13 +12,9 @@ public class RegistroProgettiFinta : RegistroProgetti {
         voci[v.percorso] = v
     }
 
-    override fun aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant) {
-        voci.replaceAll { _, v ->
-            if (v.progettoId == progettoId) {
-                v.copy(numRegistrazioni = numRegistrazioni, ultimaAttivita = ultimaAttivita)
-            } else {
-                v
-            }
+    override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) {
+        voci.computeIfPresent(percorso) { _, v ->
+            v.copy(numRegistrazioni = numRegistrazioni, ultimaAttivita = ultimaAttivita)
         }
     }
 
