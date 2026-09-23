@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build '(com\\.k2fsa|System\\.load)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=architettura-test '(com\\.k2fsa|System\\.load)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+amended: 2026-09-23   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test)
 ---
 # 0004 — ML runtime: sherpa-onnx (JNI) in-process, confined to `:ml-sherpa`, serial pipeline
 
@@ -52,3 +53,17 @@ open (spikes `scelta-diarizzatore`, `scelta-asr-code-switching`, `impronta-vocal
 - The gate needs no native libs and no weights: every ML port is tested against fakes; real-adapter
   contract tests are `@Tag("modelli")` and run via `./gradlew modelliTest` (opt-in).
 - Adapter selection (which model per port) is configuration read by `:avvio`, not code in the domain.
+
+## Amendment 2026-09-23 — `enforced_by` scoped out of `architettura-test`
+**Why.** The rule was red on a clean tree for a reason unrelated to the decision: the Konsist suite
+`architettura-test/src/test/kotlin/snastro/architettura/RegoleArchitetturaliTest.kt` **names** the
+forbidden packages as string literals (`"com.k2fsa"`) in order to check this very confinement, and
+the grep matched those literals. Approved by the user on 2026-09-23 **[user]**.
+
+**Amended rule.** Identical, plus `--exclude-dir=architettura-test` on the `*.kt` scan.
+The decision itself (what is confined, and where) is unchanged. Validated via `bash -c` on
+2026-09-23: exit 0 on the tree; exit 1 with a probe `import` of a forbidden package placed in a
+non-excluded module (probe removed).
+
+**Known blind spot.** `architettura-test` itself is no longer scanned; it is a test-only module
+holding the architecture rules, and its imports are reviewed by code-review.

@@ -40,7 +40,9 @@ owns_boundaries:
 # kernel — Shared kernel: ids, VO del Published Language, Esito, porte di kernel
 
 ## What to do
-Implement the shared kernel pinned by boundary kernel-pl: aggregate ids (UUID value classes), VoceId/SegmentoId Int value classes, VoceRef, IntervalloMs, RiferimentoAudio, CampioniAudio, EstrattoRef, Esito API, ErroreDominio (plain interface), EventoDominio/EventoPubblicato markers, Creato, RicostituzioneDaPersistenza, the ports GeneratoreId/UnitaDiLavoro/DispatcherEventi with their Finta + Contratto in testFixtures, the in-memory DispatcherEventi implementation (sync subscribers in-transaction, after-commit queue) and the test helpers atteso()/erroreAtteso().
+Implement the shared kernel pinned by boundary kernel-pl: aggregate ids (UUID value classes), VoceId/SegmentoId Int value classes, VoceRef, IntervalloMs, RiferimentoAudio, CampioniAudio, EstrattoRef, Esito API, ErroreDominio (plain interface), EventoDominio/EventoPubblicato markers, Creato, RicostituzioneDaPersistenza, the ports GeneratoreId/UnitaDiLavoro/DispatcherEventi with their Finta + Contratto in testFixtures, the in-memory DispatcherEventi implementation (sync subscribers in-transaction, after-commit queue) and the test helpers atteso()/erroreAtteso(). Amended (ADR 0012 (b)): UnitaDiLavoroFinta exposes `transazioneAperta` (AC-266).
+
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): testFixtures UnitaDiLavoroFinta exposes `val transazioneAperta: Boolean` (testFixtures surface, AC-266 — deliberately not re-pinned in kernel-pl, which would re-seed every block file for a fixture detail) — read by the Parlanti ML Finte (porte-parlanti) to throw when invoked inside a transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
 
 ## Tasks
 - AC-1 Esito.poi propaga il primo Errore senza eseguire i passi successivi; mappa trasforma solo Ok
@@ -50,6 +52,7 @@ Implement the shared kernel pinned by boundary kernel-pl: aggregate ids (UUID va
 - AC-5 IntervalloMs rifiuta inizio >= fine o inizio < 0 (require — errore di programmazione)
 - AC-6 CampioniAudio ed EstrattoRef sono uguali per valore (stesso contenuto → equals e hashCode uguali)
 - AC-7 Nessun sottotipo di ErroreDominio estende Throwable (Konsist CR-8)
+- AC-266 UnitaDiLavoroFinta espone transazioneAperta: false fuori da inTransazione, true dentro il blocco, di nuovo false dopo il commit e dopo il rollback (su Errore e su eccezione)
 
 ## Dependencies
 - **kernel-pl** (OWNED here — built before its consumers) — owner `kernel`, projection in-process, contract_test **consumer-driven**
