@@ -3,7 +3,7 @@ allineatore: related_adrs +0013 +0014 +0015; gated_by satisfied by ADR 0015.
 - REWRITE AC-248: turno > 25 s spezzato con il Vad; nessuna chiamata ASR > 25 s (intervalli Vad > 25 s ritagliati) (regola 3)
 - KEEP AC-246, AC-247
 - NEW: unione turni stessa voce con distanza < 1000 ms (o sovrapposti); voce diversa in mezzo impedisce l'unione; voci diverse mai unite/tagliate/eliminate (regola 1)
-- NEW: turno unito < DURATA_MINIMA_TURNO_MS → nessuna chiamata ASR né SegmentoGrezzo (regola 2; valore da confermare con l'utente, default 500)
+- NEW: turno unito < DURATA_MINIMA_TURNO_MS → nessuna chiamata ASR né SegmentoGrezzo (regola 2; DURATA_MINIMA_TURNO_MS = 500, confermato dall utente 2026-09-24)
 - NEW: intervallo Vad < 200 ms → nessuna chiamata ASR (regola 4)
 - NEW: testo vuoto/spazi → nessun SegmentoGrezzo; tutti vuoti → lista vuota senza eccezioni (regola 7)
 - NEW: un SegmentoGrezzo per turno unito, intervallo del turno anche se spezzato; testo = concatenazione con spazio dei pezzi non vuoti (regole 6, 8)
