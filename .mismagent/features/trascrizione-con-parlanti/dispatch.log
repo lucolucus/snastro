@@ -585,3 +585,10 @@
 2026-09-23T23:30:54Z	fix-batch-15	composer	merge	cycle=0	-	-	MERGED 1b428d9
 2026-09-23T23:34:05Z	lettore-trascritto-da-trascrizione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 99a9040
 2026-09-23T23:34:05Z	lettore-trascritto-da-trascrizione	composer	merge	cycle=0	-	-	MERGED 0fa3879 (light verify; build file conflict resolved)
+2026-09-23T23:34:51Z	avvio-coda-elaborazioni	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW a1eb779
+2026-09-23T23:34:51Z	avvio-coda-elaborazioni	verifier	dispatch	cycle=0	tier=deep	model=opus	focused review (concurrency)
+2026-09-23T23:37:03Z	avvio-coda-elaborazioni	verifier	result	cycle=0	tier=deep	model=opus	FAIL (HIGH AC-313 other items must proceed; queue halts)
+2026-09-23T23:37:03Z	avvio-coda-elaborazioni	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: skip refused/escaping heads (esegui exclusion), per-head escape count, runInterruptible, clear interrupt
+2026-09-23T23:37:03Z	avvio-composizione	composer	carry	-	-	-	chiudi must cancel coda and join lavoro (timeout) BEFORE chiudiDb/lock release
+2026-09-23T23:45:21Z	rigenerazione-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW f1d1f50
+2026-09-23T23:45:21Z	rigenerazione-documento	composer	merge	cycle=0	-	-	MERGED 3333164 (light verify); delta saved for AC-155bis + rename trigger
