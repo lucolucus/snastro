@@ -7,7 +7,10 @@ import snastro.kernel.VoceRef
 
 /** Expected rule violations of the Parlanti context (ADR 0003, CR-8). Later blocks add their members here. */
 public sealed interface ErroreParlanti : ErroreDominio {
-    /** The command's `parlanteId` matches no Parlante of the Progetto (active or `eliminato`). */
+    /**
+     * The command's `parlanteId` matches no Parlante of the Progetto (active or `eliminato`).
+     * [INV-17] (conferma-attribuzione) also folds a Parlante of another Progetto into this case.
+     */
     public data class ParlanteNonTrovato(val id: ParlanteId) : ErroreParlanti
 
     /** [INV-13] an `eliminato` Parlante is terminal. */
@@ -21,9 +24,6 @@ public sealed interface ErroreParlanti : ErroreDominio {
 
     /** AC-22 a Nome is never empty. */
     public data object NomeVuoto : ErroreParlanti
-
-    /** No Parlante with that id exists, or it belongs to another Progetto ([INV-17], conferma-attribuzione). */
-    public data class ParlanteNonTrovato(val id: ParlanteId) : ErroreParlanti
 
     /** [INV-17] the Registrazione has no Trascritto (unknown id, or no Elaborazione completata, [INV-5]). */
     public data class TrascrittoNonTrovato(val registrazioneId: RegistrazioneId) : ErroreParlanti
