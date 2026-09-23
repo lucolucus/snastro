@@ -52,16 +52,20 @@ internal class LettoreAudioReale(
 
     override fun riproduciDa(id: RegistrazioneId, daMs: Long) {
         val wav = assicuraWavDerivato(id) ?: return
+        // Prima di avviare: un sorvegliante superato non puo' piu' scrivere inRiproduzione=false.
+        val miaGenerazione = generazione.incrementAndGet()
         riproduttore.riproduci(wav, null, daMs)
         _stato.value = StatoLettore(id, daMs, inRiproduzione = true)
-        sorvegliaFinePlayback()
+        sorvegliaFinePlayback(miaGenerazione)
     }
 
     override fun riproduciEstratto(e: EstrattoRef) {
         val wav = assicuraWavDerivato(e.registrazioneId) ?: return
+        // Prima di avviare: un sorvegliante superato non puo' piu' scrivere inRiproduzione=false.
+        val miaGenerazione = generazione.incrementAndGet()
         riproduttore.riproduci(wav, e.intervalli.map { it.inizioMs to it.fineMs }, 0)
         _stato.value = StatoLettore(e.registrazioneId, 0, inRiproduzione = true)
-        sorvegliaFinePlayback()
+        sorvegliaFinePlayback(miaGenerazione)
     }
 
     override fun pausa() {
@@ -88,8 +92,7 @@ internal class LettoreAudioReale(
         return wav
     }
 
-    private fun sorvegliaFinePlayback() {
-        val miaGenerazione = generazione.incrementAndGet()
+    private fun sorvegliaFinePlayback(miaGenerazione: Long) {
         Thread({
             while (riproduttore.inRiproduzione() && generazione.get() == miaGenerazione) {
                 Thread.sleep(PASSO_SORVEGLIANZA_MS)

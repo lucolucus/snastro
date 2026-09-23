@@ -14,8 +14,10 @@ import snastro.progetto.applicazione.porte.VoceRegistro
 import snastro.ui.ErroreSessione
 import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoContratto
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -25,6 +27,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -247,7 +250,7 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
     fun `H3 un progetto db corrotto restituisce CartellaNonValida e rilascia il lock`() {
         val cartellaProgetto = cartella.resolve("Corrotto.snastro").also(Files::createDirectories)
         // Byte casuali: un file esistente, leggibile, ma non un database SQLite valido — l'apertura
-        // reale (apriDatabaseProgetto) lancia un java.sql.SQLException leggendo `PRAGMA user_version`.
+        // reale (apriDatabaseProgetto) lancia un'eccezione SQL leggendo `PRAGMA user_version`.
         Files.write(cartellaProgetto.resolve("progetto.db"), ByteArray(64) { it.toByte() })
 
         val sessione = con()
@@ -268,17 +271,20 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
             generatoreId = GeneratoreIdFinto(),
             clock = Clock.fixed(ORA, ZoneOffset.UTC),
             scopeGenitore = scopeDiProva(),
-            seams = SessioneProgettoSeams(apriDatabase = { throw java.sql.SQLException("errore di prova") }),
+            seams = SessioneProgettoSeams(apriDatabase = { throw IllegalStateException("errore di prova") }),
         )
 
         val errore = sessioneRotta.crea(cartella.toString(), "Prova").erroreAtteso<ErroreSessione>()
         assertEquals(ErroreSessione.CartellaNonValida, errore)
 
-        // Il lock non e' rimasto trattenuto sulla cartella appena creata: apri sulla stessa cartella
-        // (senza un progetto.db valido, mai completato) fallisce per CartellaNonValida, mai
-        // ProgettoGiaAperto.
-        val erroreApri = con().apri(cartellaFallita.toString()).erroreAtteso<ErroreSessione>()
-        assertEquals(ErroreSessione.CartellaNonValida, erroreApri)
+        // Il lock non e' rimasto trattenuto sulla cartella appena creata: prova diretta, si acquisisce
+        // `<cartella>/.lock` (se fosse ancora detenuto in questa JVM, tryLock lancerebbe
+        // OverlappingFileLockException).
+        FileChannel.open(cartellaFallita.resolve(".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+            .use { canale ->
+                val lock = assertNotNull(canale.tryLock(), "il .lock e' ancora detenuto dopo il crea fallito")
+                lock.release()
+            }
     }
 
     // --- AC-264 race: N thread in gara sullo stesso nome, mai una collisione --------------------

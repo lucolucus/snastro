@@ -154,7 +154,7 @@ internal class SessioneProgettoImpl(
             throw e
         } catch (
             // H3 (AC-349): un progetto.db corrotto o illeggibile lancia (tipicamente un
-            // java.sql.SQLException) — mai un lock trattenuto per sempre.
+            // un'eccezione SQL del driver) — mai un lock trattenuto per sempre.
             @Suppress("TooGenericExceptionCaught") e: Exception,
         ) {
             log.log(Level.WARNING, "apertura del database fallita in apri", e)
