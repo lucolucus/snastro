@@ -152,3 +152,14 @@
 2026-09-23T09:27:51Z	porte-trascrizione	code-review	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T09:29:55Z	porte-trascrizione	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (MED defer to decodifica-trascrizione: assert tutti duration vs source (sample rate); LOW port KDoc, past-end interval, spike B note -> next fix batch)
 2026-09-23T09:30:40Z	porte-trascrizione	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-23T09:31:48Z	fix-batch-2	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T09:31:48Z	fix-batch-2	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:31:48Z	fix-batch-2	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:35:03Z	fix-batch-2	code-review	result	cycle=0	tier=deep	model=opus	APPROVE w/ MED Patch: global LongParameterList threshold 9 is an unapproved gate relaxation -> revert to local suppress; MED Impronta non-copying reads
+2026-09-23T09:35:03Z	fix-batch-2	worker	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T09:36:47Z	fix-batch-2	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T09:36:47Z	fix-batch-2	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T09:36:47Z	fix-batch-2	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T09:38:00Z	fix-batch-2	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH; LOW trascrizione redundant suppress -> batch-3)
+2026-09-23T09:38:15Z	fix-batch-2	verifier	result	cycle=0	tier=deep	model=opus	PASS on b736eea (superseded; cycle-1 verifier on 849c4b6 pending; threshold revert in 1f406c5 is the intended rework, not a spec breach)
+2026-09-23T09:41:15Z	fix-batch-2	verifier	result	cycle=1	tier=deep	model=opus	PASS
