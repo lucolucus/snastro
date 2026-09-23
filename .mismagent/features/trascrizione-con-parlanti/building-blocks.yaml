@@ -20,10 +20,16 @@
 # decisions 2026-09-23/24): NO automatic start on import — block abbonato-registrazione-aggiunta (+AC-140/141) REMOVED; optional
 # NumeroPersone (1..10) carried by AvviaElaborazione, stored on Elaborazione, passed to Diarizzatore; eventi-progetto,
 # agg-elaborazione, tec-diarizzatore re-pinned; new AC-367..AC-378 (ex AC-NP1..NP10); AC-162/203/250/253/256/344/355/60 rewritten.
+# AMENDED 2026-09-24 (manifest deltas 2026-09-24-allineamento (ADR 0015, DURATA_MINIMA_TURNO_MS = 500 confirmed by the user) and
+# 2026-09-24-packaging (ADR 0016 + user decisions 2026-09-24)): allineatore strategy A per turn; ml-sherpa-motore owns the
+# pinned sherpa-onnx 1.13.8 fetch + explicit native load; spike gates scelta-asr/scelta-diarizzatore/allineamento/packaging
+# SATISFIED (ADR 0013/0014/0015/0016); the attesa-mutex-estrazione gate MOVED to R2 (AC-236 → avvio-parlanti); S3 in R1 is
+# READ-ONLY (variant A): the identification panel + Revisione UI moved to the new R2 block schermata-registrazione-identificazione
+# (distinct from the S2 badge block schermata-registrazioni-identificazione). New AC-379..AC-405.
 # `depends_on` = non-boundary build dependencies (read-models a ui consumes, services a subscriber calls, suppliers an adapter wraps).
 feature: trascrizione-con-parlanti
 profile: .mismagent/profile.md
-ac_scheme: "AC-1..AC-378 feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
+ac_scheme: "AC-1..AC-405 feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
 blocks:
   - id: "scaffold-app"
     type: "scaffold"
@@ -652,6 +658,7 @@ blocks:
       - "0011"
       - "0012"
       - "0014"
+      - "0015"
     commands:
       - "EseguiProssimaElaborazione"
       - "RecuperaElaborazioniInterrotte"
@@ -668,7 +675,9 @@ blocks:
       - "AC-74 RecuperaElaborazioniInterrotte: un'in_corso senza esecuzione viva diventa fallita 'interrotta' ed è riprovabile"
       - "AC-75 RecuperaElaborazioniInterrotte non tocca le Elaborazioni in_attesa, completata o fallita"
       - "AC-370 (ex AC-NP4) La pipeline passa a Diarizzatore.diarizza esattamente il numeroPersone dell'Elaborazione eseguita (assente → assente), anche per un'Elaborazione riletta dal repository dopo un riavvio (DiarizzatoreFinta che registra l'argomento)"
-    notes: "The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here. AMENDED 2026-09-24 (ADR 0014): diarizza(campioni, elaborazione.numeroPersone)."
+      - "AC-386 (estende AC-72, ADR 0015 regola 7) Se l'Allineatore restituisce una lista vuota (ogni turno scartato perché corto o senza testo) l'Elaborazione diventa fallita con motivo 'nessun parlato rilevato' e nessun Trascritto esiste (AllineatoreFinto che restituisce emptyList)"
+      - "AC-387 (INV-7, ADR 0015 regola 9) SegmentoGrezzo sovrapposti di Voci diverse arrivano TUTTI nel Trascritto: nessuno è tagliato, unito o scartato dalla pipeline (AllineatoreFinto con due segmenti sovrapposti di voceIndice diversi → due Segmenti con gli stessi intervalli)"
+    notes: "The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here. AMENDED 2026-09-24 (ADR 0014): diarizza(campioni, elaborazione.numeroPersone). AMENDED 2026-09-24 (ADR 0015): the Allineatore may legitimately return an empty list (rules 2/7) → the pipeline fails with 'nessun parlato rilevato' (AC-386); overlapping SegmentoGrezzo of different voices pass through untouched (AC-387)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-5, startup policy), ADR 0004/0012, architecture.md § Pipeline"
   - id: "revisione"
     type: "application-service"
@@ -1880,60 +1889,30 @@ blocks:
     wave: 8
     release: "R1"
     module: ":ui (snastro.ui.registrazione)"
-    title: "S3 · Registrazione (identificazione + Revisione)"
+    title: "S3 · Registrazione (trascritto per Voce, sola lettura in R1)"
     consumes:
       - "kernel-pl"
       - "tec-lettore-audio"
       - "tec-shell-ui"
     depends_on:
       - "trascritto-view"
-      - "identificazione-voci"
-      - "proposta"
-      - "proposta-unione"
-      - "parlanti-attivi"
-      - "estratto-audio"
       - "documento"
-      - "conferma-attribuzione"
-      - "salta-voce"
-      - "revisione"
       - "ui-fondamenta"
     related_adrs:
       - "0003"
       - "0005"
     consumes_rm:
       - "trascritto-view"
-      - "identificazione-voci"
-      - "proposta"
-      - "proposta-unione"
-      - "parlanti-attivi"
-      - "estratto-audio"
       - "documento"
-    triggers:
-      - "ConfermaAttribuzione"
-      - "SaltaVoce"
-      - "UnisciVoci"
-      - "DividiVoce"
-      - "RiassegnaSegmento"
-    gated_by:
-      - "ADR closing spike attesa-mutex-estrazione"
+    triggers: []
     tests_nl:
       - "AC-207 Caricamento: scheletro del trascritto"
       - "AC-208 Click su un Segmento → riproduzione dal suo inizio e Segmento evidenziato"
-      - "AC-209 La selezione è limitata a una Voce"
-      - "AC-210 'Dividi voce' disabilitato con spiegazione se la selezione è l'intera Voce"
-      - "AC-211 Riassegna verso una Voce esistente o 'nuova voce'"
-      - "AC-212 Galleria vuota → solo 'nuovo…' / 'salta' con il suggerimento 'Prima registrazione: dai un nome alle voci'"
-      - "AC-213 Tutti i Candidati 'nessuna' → lista mostrata e 'nuovo…' evidenziato"
-      - "AC-214 Fascia come barra, mai un numero"
-      - "AC-215 Errore di comando (es. nome già usato) → messaggio inline sulla card e nulla cambia"
-      - "AC-216 Banner di proposta di unione: un click unisce e il banner scompare quando la condizione cade"
-      - "AC-217 Audio sorgente mancante → barra audio ed estratti disabilitati con messaggio, trascritto usabile"
+      - "AC-217 (REWRITTEN 2026-09-24, metà R1; la metà estratti delle Voci è AC-403) Audio sorgente mancante (LettoreAudio.disponibile = false) → barra audio disabilitata con messaggio, il click su un Segmento non riproduce, il trascritto resta leggibile"
       - "AC-218 'Apri documento' e 'Mostra nella cartella' usano il percorso del Documento"
-      - "AC-219 Una Voce attribuita mostra 'cambia' e non 'salta'"
-      - "AC-318 Errore VoceCambiata su 'conferma' o 'salta' → messaggio in linguaggio semplice sulla card ('La voce è cambiata nel frattempo: riprova'), nulla cambia e il comando può essere ripetuto"
-      - "AC-319 Dopo ImpronteRiallineate della Registrazione aperta la Proposta visibile è ricaricata senza perdere la selezione"
-    notes: "Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): assigned to R1 (transcript view with 'Voce n' labels + Revisione) but it still hard-depends on R2 blocks (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, conferma-attribuzione, salta-voce) — R1 VARIANT PENDING: before R1 dispatch a targeted amendment must split the identification panel (AC-212/213/214/216/219/318/319 and the Parlanti half of AC-215/217) into an R2 block, like schermata-registrazioni did (AC-342). NOT done in this pass (needs the user: the attesa-mutex-estrazione gate the user put on R1 concerns print extraction, i.e. the R2 half)."
-    sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24)"
+      - "AC-402 (R1, specchio di AC-342/AC-345) Le sorgenti Parlanti del presenter di S3 (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio) e i comandi ConfermaAttribuzione, SaltaVoce, UnisciVoci, DividiVoce e RiassegnaSegmento sono OPZIONALI: il presenter costruito senza di essi (R1, avvio-composizione) mostra i Segmenti in ordine di tempo attraverso le Voci, ciascuno con il pallino colorato e l'etichetta 'Voce n' di trascritto-view, e '▶'/click da ogni Segmento; nessun pannello Voci, card, banner di unione, 'conferma'/'salta'/'cambia'/'Unisci con', selezione multipla né barra di selezione, nessun '▶ estratto'; mai un conteggio provvisorio né una galleria vuota; nessuna azione della schermata raggiunge il Mutex nativo — test del presenter con le sole finte di TrascrittoView, Documento, LettoreAudio e ApriEsterno"
+    notes: "Declared: Documento content is never shown in-app (ux decision). AMENDED 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A, READ-ONLY): R1 S3 only reads — text by Voce with 'Voce n' labels, play from each Segmento, open/show the Documento. NO gated_by: the attesa-mutex-estrazione gate moved to R2 with the Parlanti features. EXPLICIT CUT (rule 9, ux-proposal amendment 2026-09-24 S3): the Voci panel (AC-212/213/214/216/219/318/319, AC-215, excerpts half of AC-217 = AC-403) AND the Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con' — AC-209/210/211, Revisione error = AC-404) moved to the R2 block schermata-registrazione-identificazione (S3 panel; NOT schermata-registrazioni-identificazione, which is the S2 badge). The already-built revisione domain block stays in R1 with no UI. 'Voce n' labels only (no Nome) — the Nome/colour join from identificazione-voci is R2."
+    sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (User decisions 2026-09-24)"
   - id: "schermata-parlanti"
     type: "ui"
     context: "ui"
@@ -2018,6 +1997,64 @@ blocks:
       - "AC-345 La sorgente di identificazione è OPZIONALE per il presenter di S2: assente (R0/R1) o non ancora caricata → nessun badge (mai un conteggio provvisorio o '0 da identificare'); con numVociDaIdentificare = 0 → solo '3 voci'; l'errore di lettura della sorgente lascia la riga senza badge e il resto della riga utilizzabile"
     notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): split out of schermata-registrazioni so S2 ships in R0 without the Parlanti read-model; extends the S2 presenter's row with the ux-proposal badge (S2 ⨝ identificazione-registrazioni, ux amendment R1). Wired by avvio-parlanti."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1), release pivot 2026-09-23"
+  - id: "schermata-registrazione-identificazione"
+    type: "ui"
+    context: "ui"
+    side: "app"
+    wave: 9
+    release: "R2"
+    module: ":ui (snastro.ui.registrazione)"
+    title: "S3 · pannello Voci e Revisione (fetta Parlanti di S3)"
+    consumes:
+      - "kernel-pl"
+      - "tec-lettore-audio"
+      - "tec-shell-ui"
+    depends_on:
+      - "schermata-registrazione"
+      - "identificazione-voci"
+      - "proposta"
+      - "proposta-unione"
+      - "parlanti-attivi"
+      - "estratto-audio"
+      - "conferma-attribuzione"
+      - "salta-voce"
+      - "revisione"
+      - "ui-fondamenta"
+    related_adrs:
+      - "0003"
+      - "0005"
+      - "0012"
+    consumes_rm:
+      - "identificazione-voci"
+      - "proposta"
+      - "proposta-unione"
+      - "parlanti-attivi"
+      - "estratto-audio"
+    triggers:
+      - "ConfermaAttribuzione"
+      - "SaltaVoce"
+      - "UnisciVoci"
+      - "DividiVoce"
+      - "RiassegnaSegmento"
+    gated_by:
+      - "ADR closing spike attesa-mutex-estrazione"
+    tests_nl:
+      - "AC-209 La selezione è limitata a una Voce"
+      - "AC-210 'Dividi voce' disabilitato con spiegazione se la selezione è l'intera Voce"
+      - "AC-211 Riassegna verso una Voce esistente o 'nuova voce'"
+      - "AC-212 Galleria vuota → solo 'nuovo…' / 'salta' con il suggerimento 'Prima registrazione: dai un nome alle voci'"
+      - "AC-213 Tutti i Candidati 'nessuna' → lista mostrata e 'nuovo…' evidenziato"
+      - "AC-214 Fascia come barra, mai un numero"
+      - "AC-215 Errore di comando (es. nome già usato) → messaggio inline sulla card e nulla cambia"
+      - "AC-216 Banner di proposta di unione: un click unisce e il banner scompare quando la condizione cade"
+      - "AC-219 Una Voce attribuita mostra 'cambia' e non 'salta'"
+      - "AC-318 Errore VoceCambiata su 'conferma' o 'salta' → messaggio in linguaggio semplice sulla card ('La voce è cambiata nel frattempo: riprova'), nulla cambia e il comando può essere ripetuto"
+      - "AC-319 Dopo ImpronteRiallineate della Registrazione aperta la Proposta visibile è ricaricata senza perdere la selezione"
+      - "AC-403 (ex metà estratti di AC-217) Audio sorgente mancante → i '▶ estratto' delle Voci e dei Candidati sono disabilitati con messaggio; il pannello resta utilizzabile per conferma/salta/nuovo"
+      - "AC-404 (ex metà Revisione di AC-215) Un errore di un comando di Revisione (UnisciVoci, DividiVoce, RiassegnaSegmento → Esito.Errore) è mostrato come messaggio in linguaggio semplice inline nel trascritto; il trascritto e la selezione restano invariati"
+      - "AC-405 (stati del pannello) Con le sorgenti Parlanti fornite (R2) ma non ancora caricate il pannello mostra un indicatore di caricamento per card, mai un conteggio provvisorio né una galleria vuota; un errore di lettura di una sorgente mostra un messaggio nella card interessata e lascia il trascritto (AC-402) utilizzabile; le etichette mostrano il Nome attribuito (identificazione-voci) al posto di 'Voce n'"
+    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24)."
+    sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (Part 3 (b), User decisions 2026-09-24)"
   - id: "avvio-coda-elaborazioni"
     type: "adapter"
     context: "piattaforma"
@@ -2038,17 +2075,14 @@ blocks:
       - "0004"
       - "0008"
       - "0012"
-    gated_by:
-      - "ADR closing spike attesa-mutex-estrazione"
     tests_nl:
       - "AC-233 All'avvio RecuperaElaborazioniInterrotte gira prima che la coda parta"
       - "AC-234 Con due in_attesa la seconda parte solo quando la prima è terminale"
       - "AC-235 Con i modelli mancanti le Elaborazioni restano in_attesa; quando diventano pronti la coda riparte"
-      - "AC-236 Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo senza alcuna transazione aperta (nessuna chiamata nativa concorrente; il write lock di SQLite non è tenuto durante l'attesa)"
       - "AC-312 (F-C) Se qualcosa sfugge a EseguiProssimaElaborazione.esegui (cancellazione, interrupt, Error come OutOfMemoryError, eccezione inattesa) il dispatcher esegue RecuperaElaborazioniInterrotte prima di prendere l'elemento successivo; lo esegue anche quando un progetto è riaperto senza riavviare l'app — nessuna Elaborazione resta in_corso mentre l'app gira"
       - "AC-313 (F-G) Un abbonato sincrono che fallisce sempre su ElaborazioneAvviata annulla ogni volta la transazione di avvio: il dispatcher non gira a vuoto sull'elemento di testa (tentativi limitati con back-off, poi lo lascia in_attesa per la sessione e lo segnala) e gli altri elementi proseguono"
       - "AC-314 Un solo dispatcher single-thread prende gli elementi: due richieste concorrenti di avanzamento non portano mai due Elaborazioni in_corso (la transizione in_attesa → in_corso non ha controllo di versione e si affida a questo)"
-    notes: "PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built. GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl."
+    notes: "PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. Mutex-wait gate scoped to R2 (delta 2026-09-24-packaging, user decision 2026-09-24): AC-236 moved to avvio-parlanti. In R1 the only native user is the Elaborazione pipeline on this single dispatcher (AC-314); the R1 half of the Mutex contract (serialization, release on exception) is ml-sherpa-motore AC-401."
     sources: "ADR 0004/0008/0012 (+ R12)"
   - id: "avvio-r0"
     type: "adapter"
@@ -2144,7 +2178,7 @@ blocks:
       - "AC-355 La composizione R1 fornisce a S2 le sorgenti di Trascrizione (AC-342 → colonna di stato, campo 'Numero di persone' + 'Trascrivi'/'Riprova', apertura di S3 su completata) e rende raggiungibile S5; NESSUN abbonato sincrono è registrato su RegistrazioneAggiunta (nessun avvio automatico, ADR 0014) e abbonato-documento è registrato come AbbonatoDopoCommit; ogni servizio di comando della Trascrizione usa eventi.unitaDiLavoro (come AC-346); la sezione Parlanti resta assente (AC-341) — REWRITTEN 2026-09-24 (ADR 0014)"
       - "AC-371 (ex AC-NP5, e2e) In R1 AggiungiRegistrazione non crea alcuna Elaborazione: dopo un'importazione nella composizione R1 la tabella elaborazione non ha righe per quella Registrazione, la vista StatiElaborazione la dà NON_AVVIATA e S2 mostra 'Trascrivi' (test end-to-end con la composizione R1 e le Finte ML)"
       - "AC-356 Senza Parlanti (R1) il Documento è generato con un LettoreNomi vuoto (nomi = mappa vuota, registrazioniCon = lista vuota): ogni Voce è resa 'Voce n' (INV-24) e una Revisione committata rigenera il Documento; nessuna classe di :parlanti è istanziata dalla composizione R1"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): this block is now the R1 (Trascrizione) half of the former monolithic composition root; the R0 half is avvio-r0 (SessioneProgetto, folder naming AC-239/263/264/265, registry AC-240/347/348, LettoreAudio AC-241, AggiornamentiVista AC-242, smoke S1/S2 AC-237, 'progetto già aperto' AC-238) and the R2 half is avvio-parlanti (AC-315/316/317). It EXTENDS avvio-r0's graph (never re-creates SessioneProgetto, the dispatcher or LettoreAudio): SQL repositories of Trascrizione, the serial queue (avvio-coda-elaborazioni), pipeline adapters with config-driven selection (Finte until the gated ML blocks land — diarizzatore/riconoscitore/vad wire themselves here), Revisione commands, Documento (rigenerazione after commit, empty LettoreNomi AC-356), ServizioModelli over :modelli (AC-329, exceptions caught AC-352), S3/S5. Carry-overs owned here: eventi.unitaDiLavoro wiring for every Trascrizione command (revisione code-review); FasiInCorso ONE shared instance for pipeline + read-model (stati-elaborazione, AC-353) and phase changes emitting a Cambiamento (stati-elaborazione code-review, AC-354); ServizioModelli must catch the IOExceptions escaping scarica()/pronti() (modelli-provisioning cycle-1 code-review, AC-352); RecuperaElaborazioniInterrotte strictly before the dispatcher (owned by avvio-coda-elaborazioni AC-233). AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): abbonato-registrazione-aggiunta is REMOVED — the composition registers no sync subscriber on RegistrazioneAggiunta; AvviaElaborazione is reached only from S2 ('Trascrivi'/'Riprova' with the optional Numero di persone). tec-modelli percorso(id) is a DIRECTORY (ADR 0008 Amendment (c)); tec-modelli-ui error type is the UI-side ErroreServizioModelli (AC-329)."
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): this block is now the R1 (Trascrizione) half of the former monolithic composition root; the R0 half is avvio-r0 (SessioneProgetto, folder naming AC-239/263/264/265, registry AC-240/347/348, LettoreAudio AC-241, AggiornamentiVista AC-242, smoke S1/S2 AC-237, 'progetto già aperto' AC-238) and the R2 half is avvio-parlanti (AC-315/316/317). It EXTENDS avvio-r0's graph (never re-creates SessioneProgetto, the dispatcher or LettoreAudio): SQL repositories of Trascrizione, the serial queue (avvio-coda-elaborazioni), pipeline adapters with config-driven selection (Finte until the gated ML blocks land — diarizzatore/riconoscitore/vad wire themselves here), Revisione commands, Documento (rigenerazione after commit, empty LettoreNomi AC-356), ServizioModelli over :modelli (AC-329, exceptions caught AC-352), S3/S5. Carry-overs owned here: eventi.unitaDiLavoro wiring for every Trascrizione command (revisione code-review); FasiInCorso ONE shared instance for pipeline + read-model (stati-elaborazione, AC-353) and phase changes emitting a Cambiamento (stati-elaborazione code-review, AC-354); ServizioModelli must catch the IOExceptions escaping scarica()/pronti() (modelli-provisioning cycle-1 code-review, AC-352); RecuperaElaborazioniInterrotte strictly before the dispatcher (owned by avvio-coda-elaborazioni AC-233). AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): abbonato-registrazione-aggiunta is REMOVED — the composition registers no sync subscriber on RegistrazioneAggiunta; AvviaElaborazione is reached only from S2 ('Trascrivi'/'Riprova' with the optional Numero di persone). tec-modelli percorso(id) is a DIRECTORY (ADR 0008 Amendment (c)); tec-modelli-ui error type is the UI-side ErroreServizioModelli (AC-329). AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): S3 is built READ-ONLY in R1 (variant A) — the composition supplies it trascritto-view, documento, LettoreAudio and ApriEsterno only (no Parlanti sources, no Revisione commands: explicit cut, the Revisione UI arrives in R2 with schermata-registrazione-identificazione). The Revisione services and their events stay wired (AC-354/AC-356 are proved end-to-end by tests, not from the UI). avvio-coda-elaborazioni is no longer gated (Mutex gate scoped to R2), so this block is buildable once its depends_on are merged. The real ML adapters (ml-sherpa-motore wave 11, the three sherpa adapters wave 12) are built after it and wire themselves here; until then the pipeline runs on the Finte."
     sources: "architecture.md (:avvio), ADR 0004/0008/0010/0012, release pivot 2026-09-23 (R1 Trascrizione)"
   - id: "avvio-parlanti"
     type: "adapter"
@@ -2153,7 +2187,7 @@ blocks:
     wave: 11
     release: "R2"
     module: ":avvio"
-    title: "Composizione R2 (Parlanti): repository, abbonati, riallineamento impronte, S4, badge S2"
+    title: "Composizione R2 (Parlanti): repository, abbonati, riallineamento impronte, S4, badge S2, pannello S3"
     consumes:
       - "kernel-pl"
       - "eventi-revisione"
@@ -2163,6 +2197,7 @@ blocks:
       - "avvio-composizione"
       - "schermata-parlanti"
       - "schermata-registrazioni-identificazione"
+      - "schermata-registrazione-identificazione"
       - "repository-sql-parlanti"
       - "registrazione-da-progetto-pa"
       - "lettore-voci-da-trascrizione"
@@ -2176,6 +2211,8 @@ blocks:
       - "0004"
       - "0009"
       - "0012"
+    gated_by:
+      - "ADR closing spike attesa-mutex-estrazione"
     tests_nl:
       - "AC-357 --smoke (esteso) salva anche lo screenshot di S4 e quello di S2 con il badge di identificazione, uscendo con 0; la shell mostra la sezione Parlanti (AC-341 con sezione fornita, AC-177)"
       - "AC-315 abbonato-riallineamento-impronte è registrato come AbbonatoDopoCommit sul DispatcherEventi: una Revisione committata porta a un RiallineaImpronte della sua Registrazione (test end-to-end su databaseInMemoria con le Finte ML)"
@@ -2183,7 +2220,8 @@ blocks:
       - "AC-317 ImpronteRiallineate(registrazioneId) produce un Cambiamento su AggiornamentiVista per quella Registrazione e invalida la cache della Proposta (nessuna Rigenerazione del Documento)"
       - "AC-358 Un'eccezione di RiallineaTutteLeImpronte (all'apertura) o di RiallineaImpronte (abbonato dopo-commit) è catturata e registrata nel log: non termina lo scope di background né l'app, gli altri abbonati continuano; il job è cancellato alla chiusura del progetto (nessun accesso al DB dopo chiudi) — test con una finta che lancia"
       - "AC-359 La composizione R2 registra revisione-policy come AbbonatoSincrono agli eventi di Revisione (una sua Errore annulla la Revisione) e sostituisce il LettoreNomi vuoto di R1 con lettore-nomi-da-parlanti (il Documento mostra i Nomi attribuiti); i comandi Parlanti e RiallineaImpronte ricevono la STESSA UnitaDiLavoro eventi.unitaDiLavoro"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here."
+      - "AC-236 (MOVED 2026-09-24 from avvio-coda-elaborazioni, Mutex gate scoped to R2) Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo senza alcuna transazione aperta (nessuna chiamata nativa concorrente; il write lock di SQLite non è tenuto durante l'attesa) — the ADR closing attesa-mutex-estrazione rewrites this AC with the chosen behaviour (separate session, chunked release, or 'occupato' UI state)"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1)."
     sources: "architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti)"
   - id: "ml-sherpa-motore"
     type: "adapter"
@@ -2191,7 +2229,7 @@ blocks:
     side: "app"
     wave: 11
     release: "R1"
-    module: ":ml-sherpa"
+    module: ":ml-sherpa + root build.gradle.kts (tasks scaricaJarSherpa, scaricaNativiSherpa, modelliTest edge) + avvio/build.gradle.kts (only nativeDistributions.appResourcesRootDir and task edges) + gradle/libs.versions.toml (sherpa-onnx version)"
     title: "Motore sherpa-onnx: nativi, sessioni, wrapper"
     consumes:
       - "kernel-pl"
@@ -2200,14 +2238,27 @@ blocks:
     related_adrs:
       - "0004"
       - "0008"
+      - "0016"
     gated_by:
-      - "ADR closing spike packaging-modelli-desktop"
+      - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
     tests_nl:
-      - "AC-243 [@modelli] i nativi si caricano su macOS arm64 da ./gradlew :avvio:run"
+      - "AC-243 (REWRITTEN 2026-09-24, ADR 0016) [@modelli] i nativi si caricano su macOS arm64 da ./gradlew :avvio:run (compose.application.resources.dir) e da ./gradlew modelliTest (sherpa_onnx.native.path impostato dal task di test a <appResourcesRootDir>/macos-arm64/)"
       - "AC-244 [@modelli] ogni sessione è rilasciata dopo l'uso (nessuna handle nativa sopravvive a conSessione)"
       - "AC-245 com.k2fsa e System.load compaiono solo in :ml-sherpa (regola enforced_by di ADR 0004)"
-    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry."
-    sources: "ADR 0004, spike packaging-modelli-desktop"
+      - "AC-390 gradle/libs.versions.toml dichiara sherpa-onnx = \"1.13.8\"; URL e SHA-256 del jar (77b7b047…a63b) e di osx-arm64-jni.tar.bz2 (2505fd9b…31ad) compaiono una sola volta negli script di build, uguali ad ADR 0016 §1"
+      - "AC-391 scaricaJarSherpa scarica sherpa-onnx-jvm-1.13.8.jar in native-cache/sherpa-onnx-1.13.8/ e ne verifica lo SHA-256; :ml-sherpa compila contro di esso via files(...).builtBy(scaricaJarSherpa); la cache sopravvive a ./gradlew clean"
+      - "AC-392 scaricaNativiSherpa scarica osx-arm64-jni.tar.bz2, ne verifica lo SHA-256 ed estrae SOLO libonnxruntime.dylib e libsherpa-onnx-jni.dylib, piatti (senza prefisso lib/), in appResourcesRootDir/macos-arm64/ di :avvio (directory generata sotto avvio/build/); nessun altro membro dell'archivio è estratto"
+      - "AC-393 SHA-256 non corrispondente (prova negativa usa-e-getta durante il blocco con un hash atteso sbagliato, non committata) → il task fallisce, il file scaricato è cancellato e nulla finisce sul classpath né in appResourcesRootDir"
+      - "AC-394 Una seconda esecuzione con i file presenti è UP-TO-DATE e non fa chiamate di rete (input e output dichiarati)"
+      - "AC-395 :avvio:run, :avvio:createDistributable, :avvio:prepareAppResources e modelliTest dipendono da scaricaNativiSherpa; check NO: ./gradlew check --dry-run non elenca scaricaNativiSherpa, ./gradlew :avvio:run --dry-run lo elenca; il gate resta verde con native-cache/ svuotata delle dylib"
+      - "AC-396 Su un host os-arch senza asset fissato (tutto tranne macOS arm64 in v1) scaricaNativiSherpa fallisce con un messaggio che nomina l'asset mancante, mai un salto silenzioso (verificato in code review; i nomi Windows/Linux sono documentati in ADR 0016 §5 e non cablati)"
+      - "AC-397 MotoreSherpa.caricaNativi() risolve la directory in quest'ordine: sherpa_onnx.native.path se già impostata, altrimenti compose.application.resources.dir; poi imposta sherpa_onnx.native.path e chiama LibraryUtils.load(); java.library.path non è mai letta né impostata. Nel gate: senza nessuna delle due proprietà, o con una directory priva delle due librerie, caricaNativi fallisce con un messaggio che nomina entrambe le proprietà e LibraryUtils.load() non è invocata"
+      - "AC-398 [@modelli] caricaNativi() è idempotente: due chiamate, o due conSessione, caricano i nativi una sola volta, senza errori"
+      - "AC-399 conSessione chiama caricaNativi() in modo pigro, prima della creazione del primo oggetto sherpa; nessun codice di :avvio né alcun adattatore consumatore chiama LibraryUtils o System.load (ADR 0004 enforced_by, AC-245); nessun test del gate carica i nativi"
+      - "AC-400 ConfigSessione.provider vale \"cpu\" per default; R1 non espone alcuna impostazione utente per un altro provider (ADR 0016 §6)"
+      - "AC-401 conSessione serializza: due conSessione concorrenti non si sovrappongono mai (la seconda attende il Mutex nativo) e il Mutex è rilasciato anche su eccezione — parte R1 del contratto del Mutex, con un solo detentore (la pipeline), indipendente dalla decisione attesa-mutex-estrazione; testabile nel gate se la factory della sessione è sostituibile, altrimenti [@modelli]"
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta."
+    sources: "ADR 0004, ADR 0016 (§1 pinned artifacts, §2-§6), spike packaging-modelli-desktop, research/spike-packaging-modelli-desktop.md"
   - id: "allineatore"
     type: "adapter"
     context: "trascrizione"
@@ -2215,7 +2266,7 @@ blocks:
     wave: 11
     release: "R1"
     module: ":trascrizione:adattatori (..ml)"
-    title: "Allineatore (Kotlin puro) — strategia dallo spike"
+    title: "Allineatore (Kotlin puro) — strategia A, trascrizione per turno (ADR 0015)"
     consumes:
       - "kernel-pl"
       - "tec-riconoscitore"
@@ -2224,13 +2275,24 @@ blocks:
     depends_on: []
     related_adrs:
       - "0004"
+      - "0013"
+      - "0014"
+      - "0015"
     gated_by:
-      - "ADR closing spike allineamento-parole-voci"
+      - "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015 (accepted 2026-09-24)"
     tests_nl:
       - "AC-246 AllineatoreContratto passa contro l'implementazione con RiconoscitoreParlato e Vad finti (nel gate)"
       - "AC-247 Turni sovrapposti producono Segmenti sovrapposti, entrambi conservati"
-      - "AC-248 Un turno più lungo di 30 s è spezzato con il VAD (se strategia A)"
-    sources: "spike allineamento-parole-voci, INV-7"
+      - "AC-248 (REWRITTEN 2026-09-24, ADR 0015 regola 3) Un turno unito più lungo di 25 s è passato a Vad.parlato sui suoi soli campioni e sono riconosciuti solo gli intervalli restituiti; nessuna chiamata a RiconoscitoreParlato riceve più di 25 000 ms di audio, qualunque cosa restituisca il Vad (un intervallo Vad > 25 s è tagliato in pezzi consecutivi uguali, ciascuno <= 25 s); un turno <= 25 s è riconosciuto intero, senza Vad"
+      - "AC-379 (ADR 0015 regola 1) Unione dei turni: ordinati per (inizio, voceIndice, fine), un turno si unisce al turno unito precedente solo se è l'immediato precedente in quell'ordine, ha lo stesso voceIndice e inizio − fine_precedente < 1000 ms (sovrapposto = distanza negativa → unito); intervallo unito = (inizio del primo, max fine); una voce diversa in mezzo impedisce l'unione; turni di voci diverse non sono mai uniti, tagliati o eliminati perché sovrapposti (test a tabella: distanza 999 ms → unito, 1000 ms → separato)"
+      - "AC-380 (ADR 0015 regola 2) Un turno unito più corto di DURATA_MINIMA_TURNO_MS = 500 ms non produce alcuna chiamata ASR né alcun SegmentoGrezzo e non è unito a un vicino (499 ms → scartato, 500 ms → riconosciuto; verifica sulle chiamate del RiconoscitoreParlato finto)"
+      - "AC-381 (ADR 0015 regola 4) Un intervallo Vad più corto di 200 ms non produce alcuna chiamata ASR (199 ms → nessuna chiamata, 200 ms → chiamata)"
+      - "AC-382 (ADR 0015 regola 7) Un turno il cui testo unito è vuoto o di soli spazi non produce alcun SegmentoGrezzo; se tutti i turni sono vuoti o corti il risultato è una lista vuota, senza eccezioni"
+      - "AC-383 (ADR 0015 regole 5, 6, 8) Un SegmentoGrezzo per turno unito, con il voceIndice del turno e l'intervallo del TURNO UNITO anche quando è stato spezzato dal Vad; il testo è la concatenazione, con un solo spazio e in ordine di tempo, dei testi (trim) dei pezzi non vuoti; i campioni passati all'ASR sono tagliati esattamente ai limiti del turno o del pezzo (nessun padding); Riconoscimento.token è ignorato"
+      - "AC-384 (ADR 0015 regola 10) L'output è ordinato per (inizio, voceIndice, fine) ed è deterministico: lo stesso input dà sempre la stessa lista; l'Allineatore non numera Voci né Segmenti"
+      - "AC-385 (ADR 0015) Le costanti GAP_UNIONE_TURNI_MS = 1000, DURATA_MINIMA_TURNO_MS = 500, DURATA_MASSIMA_CHIAMATA_MS = 25000 e DURATA_MINIMA_CHIAMATA_MS = 200 sono valori con nome definiti una sola volta nell'adattatore (code review; nessun letterale duplicato)"
+    notes: "AMENDED 2026-09-24 (ADR 0015, manifest delta 2026-09-24-allineamento): strategy A (transcribe per merged turn), rules 1-10 of ADR 0015; DURATA_MINIMA_TURNO_MS = 500 confirmed by the user 2026-09-24 (re-measure trigger in ADR 0015 Consequences may tune it by amendment). The recognizer is loaded once per Elaborazione by riconoscitore-sherpa (AC-388), not here. The tec-allineatore port is unchanged."
+    sources: "ADR 0015 (Decision, rules 1-10), spike allineamento-parole-voci, INV-7"
   - id: "diarizzatore-sherpa"
     type: "adapter"
     context: "trascrizione"
@@ -2249,6 +2311,7 @@ blocks:
       - "0004"
       - "0008"
       - "0014"
+      - "0016"
     gated_by:
       - "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014 (accepted 2026-09-23)"
     tests_nl:
@@ -2276,13 +2339,17 @@ blocks:
       - "0004"
       - "0008"
       - "0013"
+      - "0015"
+      - "0016"
     gated_by:
       - "ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013 (accepted)"
     tests_nl:
       - "AC-252 [@modelli] RiconoscitoreParlatoContratto passa contro l'adattatore reale su un campione di sample/"
       - "AC-253 La voce di catalogo di :modelli asr-parakeet-tdt-0.6b-v3-int8 (TAR_BZ2; file usati encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt) ha url, sha256, dimensioneByte, licenza (CC-BY-4.0) e attribuzione esattamente come nella tabella di ADR 0013 § ':modelli catalogue entries' — REWRITTEN 2026-09-24"
       - "AC-254 Tutte le risorse native sono rilasciate a fine uso (use {})"
-    sources: "spike scelta-asr-code-switching, ADR 0004/0008/0013"
+      - "AC-388 [@modelli] (ADR 0015 Consequences) Il modello ASR è caricato una sola volta per Elaborazione, riusato per tutte le chiamate per turno di quella Elaborazione e rilasciato alla sua fine (mai un caricamento per chiamata): N chiamate a riconosci nella stessa Elaborazione → 1 caricamento"
+    notes: "AMENDED 2026-09-24 (ADR 0015): about 1000 per-turn calls per hour — reloading the model per call (0.9 s) would break ADR 0011, hence AC-388. ADR 0016: native load via MotoreSherpa (tec-ml-sherpa), never here."
+    sources: "spike scelta-asr-code-switching, ADR 0004/0008/0013/0015/0016"
   - id: "vad-silero"
     type: "adapter"
     context: "trascrizione"
@@ -2301,14 +2368,17 @@ blocks:
       - "0004"
       - "0008"
       - "0013"
+      - "0015"
+      - "0016"
     gated_by:
-      - "ADR closing spike allineamento-parole-voci"
-      - "ADR closing spike packaging-modelli-desktop"
+      - "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015 (accepted 2026-09-24)"
+      - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
     tests_nl:
       - "AC-255 [@modelli] VadContratto passa contro l'adattatore reale su un campione di sample/"
       - "AC-256 La voce di catalogo di :modelli vad-silero (FILE, silero_vad.onnx) ha url, sha256, dimensioneByte, licenza (MIT) e attribuzione esattamente come nella tabella VAD di ADR 0013 § ':modelli catalogue entries' (id proposto da ADR 0013; se il blocco lo cambia, lo registra con un emendamento) — REWRITTEN 2026-09-24"
       - "AC-257 Tutte le risorse native sono rilasciate a fine uso (use {})"
-    sources: "spike allineamento-parole-voci, ADR 0004/0008/0013"
+      - "AC-389 (ADR 0015 regola 3) L'adattatore configura Silero con threshold 0.5, minSilenceDuration 0.25 s e maxSpeechDuration 25 s (valori con nome, verificati con un test sulla configurazione costruita)"
+    sources: "spike allineamento-parole-voci, ADR 0004/0008/0013/0015/0016"
   - id: "estrattore-impronta-sherpa"
     type: "adapter"
     context: "parlanti"
@@ -2355,8 +2425,12 @@ blocks:
       - "avvio-composizione"
     related_adrs:
       - "0011"
+      - "0013"
+      - "0014"
+      - "0015"
+      - "0016"
     gated_by:
-      - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop)"
+      - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016"
       - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
     tests_nl:
       - "AC-261 [opt-in, fuori gate] su un campione reale di 60 minuti con modelli scaricati, l'Elaborazione completa va da in_corso a completata in <= 600 s sull'M3 Pro; i tempi per fase sono stampati"
@@ -2449,6 +2523,7 @@ boundaries:
       - "avvio-r0"
       - "avvio-parlanti"
       - "schermata-registrazioni-identificazione"
+      - "schermata-registrazione-identificazione"
     projection: "in-process"
     pinned_types:
       ProgettoId: "@JvmInline value class(valore: String) — UUID"
@@ -3162,6 +3237,7 @@ boundaries:
       - "schermata-parlanti"
       - "schermata-registrazioni"
       - "avvio-r0"
+      - "schermata-registrazione-identificazione"
     projection: "in-process"
     pinned_types:
       LettoreAudio: "interface { fun disponibile(id: RegistrazioneId): Boolean; fun riproduciDa(id: RegistrazioneId, daMs: Long); fun riproduciEstratto(e: EstrattoRef); fun pausa(); val stato: StateFlow<StatoLettore> }"
@@ -3183,6 +3259,7 @@ boundaries:
       - "schermata-registrazioni-identificazione"
       - "avvio-r0"
       - "avvio-parlanti"
+      - "schermata-registrazione-identificazione"
     projection: "in-process"
     pinned_types:
       SessioneProgetto: "interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }"
@@ -3220,14 +3297,16 @@ build_order:
   - [ui-fondamenta, abbonato-documento]  # wave 6
   - [lettore-audio]  # wave 7
   - [schermata-progetti, schermata-registrazioni, schermata-registrazione, schermata-parlanti, schermata-modelli]  # wave 8
-  - [avvio-r0, schermata-registrazioni-identificazione, avvio-coda-elaborazioni]  # wave 9
+  - [avvio-r0, schermata-registrazioni-identificazione, schermata-registrazione-identificazione, avvio-coda-elaborazioni]  # wave 9
   - [avvio-composizione]  # wave 10
-  - [avvio-parlanti, ml-sherpa-motore, allineatore]  # wave 11  # ML GATED on spike ADRs
-  - [diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, estrattore-impronta-sherpa]  # wave 12  # GATED on spike ADRs
-  - [benchmark-elaborazione]  # wave 13  # GATED on spike ADRs
+  - [avvio-parlanti, ml-sherpa-motore, allineatore]  # wave 11  # R1 ML spike gates satisfied (ADR 0013-0016); avvio-parlanti gated (R2)
+  - [diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, estrattore-impronta-sherpa]  # wave 12  # R1 gates satisfied; estrattore-impronta-sherpa gated (R2)
+  - [benchmark-elaborazione]  # wave 13  # spike gates satisfied; waits on the wave-12 R1 adapters merged
 release_plan:
   # RELEASE PIVOT 2026-09-23 (user decision). Every block carries `release:` = the minimal release that needs it.
   # A release is the set of blocks with release <= it; build_order/waves stay the dependency order inside it.
   R0: {name: "Archivio", scope: "native window; create/open a project (folder naming AC-263/264); import recordings (audio copied, titolo unique); list them (S2) and play them; real SQLite + real audio; NO ML, NO Trascrizione, NO Parlanti", composition_root: "avvio-r0"}
-  R1: {name: "Trascrizione", scope: "start a transcription; pipeline VAD/ASR/diarization/alignment with real ML adapters; S3 with 'Voce n'; Revisione; Documento .md", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching", "ADR closing spike scelta-diarizzatore", "ADR closing spike allineamento-parole-voci", "ADR closing spike packaging-modelli-desktop", "ADR closing spike attesa-mutex-estrazione"]}
-  R2: {name: "Parlanti", scope: "attribution, S4 speakers screen, voice prints, proposals, re-alignment", composition_root: "avvio-parlanti", status: "PAUSED"}
+  # AMENDED 2026-09-24 (user decisions, delta 2026-09-24-packaging): R1 spike gates satisfied by ADR 0013/0014/0015/0016;
+  # the attesa-mutex-estrazione gate MOVED to R2; S3 in R1 is READ-ONLY (variant A) with an explicit cut of the Revisione UI.
+  R1: {name: "Trascrizione", scope: "start a transcription (S2 'Trascrivi' + optional Numero di persone); pipeline VAD/ASR/diarization/alignment (strategy A per turn, ADR 0015) with real ML adapters on pinned sherpa-onnx 1.13.8 natives (ADR 0016); S3 READ-ONLY: transcript by Voce with 'Voce n' labels, play from each Segmento, open the Documento; Documento .md", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013", "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014", "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015", "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016"], cut: ["Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con'; AC-209/210/211, AC-404): the revisione domain block (UnisciVoci/DividiVoce/RiassegnaSegmento) is built in R1 WITHOUT UI — its commands are reachable only from tests (AC-354/AC-356); the UI arrives in R2 with schermata-registrazione-identificazione (user decision 2026-09-24, rule 9)", "S3 Voci panel / identification (AC-212..216, 219, 318, 319, 403, 405): R2, schermata-registrazione-identificazione", "packaging O-1 (JDK for jpackage) and O-2 (signing/notarization): deferred, R1 runs via ./gradlew :avvio:run (ADR 0016 OPEN)", "benchmark CoreML opt-in AC (packaging delta Part 2, optional): not folded, pending the user"]}
+  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa"]}

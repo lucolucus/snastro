@@ -19,8 +19,12 @@ related_adrs:
   - "0003"
   - "0011"
   - "0012"
+  - "0013"
+  - "0014"
+  - "0015"
+  - "0016"
 gated_by:
-  - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop)"
+  - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016"
   - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
 ---
 # benchmark-elaborazione — Benchmark NFR dell'Elaborazione (opt-in)
@@ -35,7 +39,7 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the
 - AC-262 Il task fallisce se il tempo supera 600 s
 
 ## Dependencies
-- **GATED — not ready until:** the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop); diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged
+- **GATED — not ready until:** the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016; diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged
 - Blocks built first: `diarizzatore-sherpa` (wave 12), `riconoscitore-sherpa` (wave 12), `vad-silero` (wave 12), `allineatore` (wave 11), `avvio-composizione` (wave 10)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -68,4 +72,4 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0011, 0012 (.mismagent/decisions/); ADR 0011 (+ R17).
+Sources: ADRs 0002, 0003, 0011, 0012, 0013, 0014, 0015, 0016 (.mismagent/decisions/); ADR 0011 (+ R17).

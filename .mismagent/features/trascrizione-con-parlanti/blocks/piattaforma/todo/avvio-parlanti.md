@@ -15,6 +15,7 @@ depends_on:
   - "avvio-composizione"
   - "schermata-parlanti"
   - "schermata-registrazioni-identificazione"
+  - "schermata-registrazione-identificazione"
   - "repository-sql-parlanti"
   - "registrazione-da-progetto-pa"
   - "lettore-voci-da-trascrizione"
@@ -31,13 +32,15 @@ related_adrs:
   - "0009"
   - "0010"
   - "0012"
+gated_by:
+  - "ADR closing spike attesa-mutex-estrazione"
 ---
-# avvio-parlanti — Composizione R2 (Parlanti): repository, abbonati, riallineamento impronte, S4, badge S2
+# avvio-parlanti — Composizione R2 (Parlanti): repository, abbonati, riallineamento impronte, S4, badge S2, pannello S3
 
 ## What to do
-R2 composition (release Parlanti, PAUSED): EXTENDS avvio-composizione's graph with the Parlanti SQL repositories and adapters, the revisione-policy sync subscriber, abbonato-revisione-parlanti and abbonato-riallineamento-impronte after commit, RiallineaTutteLeImpronte in background at project open (after RecuperaElaborazioniInterrotte, exceptions caught and logged, cancelled on close), lettore-nomi-da-parlanti replacing the empty LettoreNomi, the Parlanti shell section (S4), the S2 identification badge, and the --smoke extension for S4.
+R2 composition (release Parlanti, PAUSED): EXTENDS avvio-composizione's graph with the Parlanti SQL repositories and adapters, the revisione-policy sync subscriber, abbonato-revisione-parlanti and abbonato-riallineamento-impronte after commit, RiallineaTutteLeImpronte in background at project open (after RecuperaElaborazioniInterrotte, exceptions caught and logged, cancelled on close), lettore-nomi-da-parlanti replacing the empty LettoreNomi, the Parlanti shell section (S4), the S2 identification badge, the S3 Voci panel + Revisione UI (Parlanti sources and commands supplied to the S3 presenter), the native-Mutex wait of print extraction (AC-236), and the --smoke extension for S4.
 
-Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here.
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1).
 
 ## Tasks
 - AC-357 --smoke (esteso) salva anche lo screenshot di S4 e quello di S2 con il badge di identificazione, uscendo con 0; la shell mostra la sezione Parlanti (AC-341 con sezione fornita, AC-177)
@@ -46,9 +49,11 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 
 - AC-317 ImpronteRiallineate(registrazioneId) produce un Cambiamento su AggiornamentiVista per quella Registrazione e invalida la cache della Proposta (nessuna Rigenerazione del Documento)
 - AC-358 Un'eccezione di RiallineaTutteLeImpronte (all'apertura) o di RiallineaImpronte (abbonato dopo-commit) è catturata e registrata nel log: non termina lo scope di background né l'app, gli altri abbonati continuano; il job è cancellato alla chiusura del progetto (nessun accesso al DB dopo chiudi) — test con una finta che lancia
 - AC-359 La composizione R2 registra revisione-policy come AbbonatoSincrono agli eventi di Revisione (una sua Errore annulla la Revisione) e sostituisce il LettoreNomi vuoto di R1 con lettore-nomi-da-parlanti (il Documento mostra i Nomi attribuiti); i comandi Parlanti e RiallineaImpronte ricevono la STESSA UnitaDiLavoro eventi.unitaDiLavoro
+- AC-236 (MOVED 2026-09-24 from avvio-coda-elaborazioni, Mutex gate scoped to R2) Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo senza alcuna transazione aperta (nessuna chiamata nativa concorrente; il write lock di SQLite non è tenuto durante l'attesa) — the ADR closing attesa-mutex-estrazione rewrites this AC with the chosen behaviour (separate session, chunked release, or 'occupato' UI state)
 
 ## Dependencies
-- Blocks built first: `avvio-composizione` (wave 10), `schermata-parlanti` (wave 8), `schermata-registrazioni-identificazione` (wave 9), `repository-sql-parlanti` (wave 4), `registrazione-da-progetto-pa` (wave 5), `lettore-voci-da-trascrizione` (wave 5), `lettore-nomi-da-parlanti` (wave 5), `decodifica-parlanti` (wave 5), `confronto-impronte` (wave 4), `abbonato-revisione-parlanti` (wave 5), `abbonato-riallineamento-impronte` (wave 5), `riallinea-impronte` (wave 4)
+- **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione
+- Blocks built first: `avvio-composizione` (wave 10), `schermata-parlanti` (wave 8), `schermata-registrazioni-identificazione` (wave 9), `schermata-registrazione-identificazione` (wave 9), `repository-sql-parlanti` (wave 4), `registrazione-da-progetto-pa` (wave 5), `lettore-voci-da-trascrizione` (wave 5), `lettore-nomi-da-parlanti` (wave 5), `decodifica-parlanti` (wave 5), `confronto-impronte` (wave 4), `abbonato-revisione-parlanti` (wave 5), `abbonato-riallineamento-impronte` (wave 5), `riallinea-impronte` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID

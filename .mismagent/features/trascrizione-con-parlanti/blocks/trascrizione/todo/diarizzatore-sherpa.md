@@ -19,6 +19,7 @@ related_adrs:
   - "0008"
   - "0012"
   - "0014"
+  - "0016"
 gated_by:
   - "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014 (accepted 2026-09-23)"
 ---
@@ -36,7 +37,7 @@ Note: AMENDED 2026-09-24 (ADR 0014): runtime config and catalogue entries are pi
 - AC-251 Tutte le risorse native sono rilasciate a fine uso (use {})
 
 ## Dependencies
-- **GATED — not ready until:** ADR closing spike scelta-diarizzatore
+- **GATED — not ready until:** ADR closing spike scelta-diarizzatore — satisfied: ADR 0014 (accepted 2026-09-23)
 - Blocks built first: `avvio-composizione` (wave 10)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -80,4 +81,4 @@ Note: AMENDED 2026-09-24 (ADR 0014): runtime config and catalogue entries are pi
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0014 (.mismagent/decisions/); spike scelta-diarizzatore, ADR 0004/0008/0014.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0014, 0016 (.mismagent/decisions/); spike scelta-diarizzatore, ADR 0004/0008/0014.

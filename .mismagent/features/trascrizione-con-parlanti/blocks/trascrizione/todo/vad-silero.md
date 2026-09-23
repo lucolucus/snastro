@@ -19,22 +19,25 @@ related_adrs:
   - "0008"
   - "0012"
   - "0013"
+  - "0015"
+  - "0016"
 gated_by:
-  - "ADR closing spike allineamento-parole-voci"
-  - "ADR closing spike packaging-modelli-desktop"
+  - "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015 (accepted 2026-09-24)"
+  - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
 ---
 # vad-silero — Vad reale su sherpa-onnx
 
 ## What to do
-Real Vad adapter with the model chosen by the spike ADR (catalogue entry URL + SHA-256 + licence added to :modelli in the same block); registered in :avvio's adapter-selection config (W12 blocks merged serially: they share that config file).
+Real Vad adapter on Silero (ADR 0013 catalogue entry URL + SHA-256 + licence added to :modelli in the same block), configured as measured by ADR 0015 (threshold 0.5, min silence 0.25 s, max speech 25 s); registered in :avvio's adapter-selection config (W12 blocks merged serially: they share that config file).
 
 ## Tasks
 - AC-255 [@modelli] VadContratto passa contro l'adattatore reale su un campione di sample/
 - AC-256 La voce di catalogo di :modelli vad-silero (FILE, silero_vad.onnx) ha url, sha256, dimensioneByte, licenza (MIT) e attribuzione esattamente come nella tabella VAD di ADR 0013 § ':modelli catalogue entries' (id proposto da ADR 0013; se il blocco lo cambia, lo registra con un emendamento) — REWRITTEN 2026-09-24
 - AC-257 Tutte le risorse native sono rilasciate a fine uso (use {})
+- AC-389 (ADR 0015 regola 3) L'adattatore configura Silero con threshold 0.5, minSilenceDuration 0.25 s e maxSpeechDuration 25 s (valori con nome, verificati con un test sulla configurazione costruita)
 
 ## Dependencies
-- **GATED — not ready until:** ADR closing spike allineamento-parole-voci; ADR closing spike packaging-modelli-desktop
+- **GATED — not ready until:** ADR closing spike allineamento-parole-voci — satisfied: ADR 0015 (accepted 2026-09-24); ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)
 - Blocks built first: `avvio-composizione` (wave 10)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -74,4 +77,4 @@ Real Vad adapter with the model chosen by the spike ADR (catalogue entry URL + S
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013 (.mismagent/decisions/); spike allineamento-parole-voci, ADR 0004/0008/0013.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013, 0015, 0016 (.mismagent/decisions/); spike allineamento-parole-voci, ADR 0004/0008/0013/0015/0016.

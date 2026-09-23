@@ -19,6 +19,8 @@ related_adrs:
   - "0008"
   - "0012"
   - "0013"
+  - "0015"
+  - "0016"
 gated_by:
   - "ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013 (accepted)"
 ---
@@ -27,13 +29,16 @@ gated_by:
 ## What to do
 Real RiconoscitoreParlato adapter with the model chosen by the spike ADR (catalogue entry URL + SHA-256 + licence added to :modelli in the same block); registered in :avvio's adapter-selection config (W12 blocks merged serially: they share that config file).
 
+Note: AMENDED 2026-09-24 (ADR 0015): about 1000 per-turn calls per hour — reloading the model per call (0.9 s) would break ADR 0011, hence AC-388. ADR 0016: native load via MotoreSherpa (tec-ml-sherpa), never here.
+
 ## Tasks
 - AC-252 [@modelli] RiconoscitoreParlatoContratto passa contro l'adattatore reale su un campione di sample/
 - AC-253 La voce di catalogo di :modelli asr-parakeet-tdt-0.6b-v3-int8 (TAR_BZ2; file usati encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt) ha url, sha256, dimensioneByte, licenza (CC-BY-4.0) e attribuzione esattamente come nella tabella di ADR 0013 § ':modelli catalogue entries' — REWRITTEN 2026-09-24
 - AC-254 Tutte le risorse native sono rilasciate a fine uso (use {})
+- AC-388 [@modelli] (ADR 0015 Consequences) Il modello ASR è caricato una sola volta per Elaborazione, riusato per tutte le chiamate per turno di quella Elaborazione e rilasciato alla sua fine (mai un caricamento per chiamata): N chiamate a riconosci nella stessa Elaborazione → 1 caricamento
 
 ## Dependencies
-- **GATED — not ready until:** ADR closing spike scelta-asr-code-switching
+- **GATED — not ready until:** ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013 (accepted)
 - Blocks built first: `avvio-composizione` (wave 10)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -75,4 +80,4 @@ Real RiconoscitoreParlato adapter with the model chosen by the spike ADR (catalo
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013 (.mismagent/decisions/); spike scelta-asr-code-switching, ADR 0004/0008/0013.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013, 0015, 0016 (.mismagent/decisions/); spike scelta-asr-code-switching, ADR 0004/0008/0013/0015/0016.

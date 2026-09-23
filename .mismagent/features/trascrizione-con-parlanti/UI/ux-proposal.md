@@ -53,6 +53,8 @@ and **Parlanti**. There is no global menu logic beyond this.
   "Riprova", with the optional `numeroPersone` — amended 2026-09-24).
 
 ## Screen S3 · Registrazione (the core: identification + Revisione), concept B [user]
+*(amended 2026-09-24: in R1 S3 is READ-ONLY, without the Voci panel and the Revisione UI; see "Amendment 2026-09-24 (S3 read-only in R1)" below)*
+
 Layout: a header, the transcript in the center, and the **Voci** panel on the right.
 
 - **Header:** title, `DataRegistrazione`, an **audio bar** (play/pause, position) [user], and
@@ -211,3 +213,19 @@ Source: ADR 0014 (single home), ADR 0012 Amendment (c), ADR 0004 Amendment (b), 
   unchanged: no field, no "Trascrivi".
 - **Blocks:** `schermata-registrazioni` (field, validation, prefill), `stati-elaborazione` (`numeroPersone` in the
   view), `avvia-elaborazione` (`AvviaElaborazione(registrazioneId, numeroPersone: Int? = null)`).
+
+## Amendment 2026-09-24 (S3 read-only in R1; Voci panel and Revisione UI in R2) [user]
+Source: user decisions 2026-09-24 recorded in `manifest-deltas/2026-09-24-packaging.md` (variant A), ADR 0016 (context),
+the release pivot of 2026-09-23. The S3 text above stays the target design; this amendment says what each release shows.
+- **R1 (block `schermata-registrazione`, AC-207/208/217/218/402):** header (title, date, audio bar, "Apri documento" /
+  "Mostra nella cartella") and the transcript: `Segmento`s in time order across `Voce`s, each with its colour dot and
+  the label "Voce n" (no `Nome`: no Parlanti in R1), and click/"▶" on a `Segmento` plays from its `inizio`. **No Voci
+  panel, no selection, no "Riassegna a" / "Dividi voce" / "Unisci con", no "▶ estratto".** States: loading skeleton;
+  audio source missing → audio bar disabled with a message, the transcript stays readable.
+- **Explicit cut (rule 9):** the Revisione UI is not in R1. The `revisione` domain block (UnisciVoci, DividiVoce,
+  RiassegnaSegmento) is built in R1 without a UI; its UI arrives in R2.
+- **R2 (block `schermata-registrazione-identificazione` — the S3 panel; not `schermata-registrazioni-identificazione`,
+  which is the S2 badge):** the Voci panel (cards, Proposta, Fascia bar, "Conferma" / "altri" / "nuovo…" / "salta" /
+  "cambia", "Unisci con", merge banner, "▶ estratto"), the selection toolbar ("Riassegna a", "Dividi voce"), the
+  attributed `Nome` in the labels, and the command errors (AC-209..216, 219, 318, 319, 403, 404, 405). It is gated on
+  the spike `attesa-mutex-estrazione`, which decides how the UI shows the wait for the native Mutex.
