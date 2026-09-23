@@ -103,3 +103,4 @@
 2026-09-23T08:55:09Z	porta-registrazione-trascrizione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
 2026-09-23T08:55:09Z	porta-registrazione-trascrizione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:55:09Z	porta-registrazione-trascrizione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:56:02Z	porta-lettore-trascritto	worker	dispatch	cycle=0	tier=deep	model=opus
