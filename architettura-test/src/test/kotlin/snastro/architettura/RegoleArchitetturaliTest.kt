@@ -364,7 +364,8 @@ class RegoleArchitetturaliTest {
                 pubbliche.size == 1 &&
                     pubbliche.first().name == "esegui" &&
                     !pubbliche.first().hasSuspendModifier &&
-                    pubbliche.first().returnType?.name == "Esito"
+                    // `returnType.name` is the full type text (e.g. "Esito<Unit>"): compare the raw name.
+                    pubbliche.first().returnType?.name?.substringBefore('<') == "Esito"
             }
     }
 
