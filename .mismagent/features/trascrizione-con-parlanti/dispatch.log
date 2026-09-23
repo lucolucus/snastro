@@ -592,3 +592,4 @@
 2026-09-23T23:37:03Z	avvio-composizione	composer	carry	-	-	-	chiudi must cancel coda and join lavoro (timeout) BEFORE chiudiDb/lock release
 2026-09-23T23:45:21Z	rigenerazione-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW f1d1f50
 2026-09-23T23:45:21Z	rigenerazione-documento	composer	merge	cycle=0	-	-	MERGED 3333164 (light verify); delta saved for AC-155bis + rename trigger
+2026-09-23T23:45:27Z	abbonato-documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 (+ rename trigger)
