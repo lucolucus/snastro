@@ -215,6 +215,86 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     @Test
+    fun `INV-25 un ricorrente con una sola Attribuzione non cessa di esistere quando la perde`() {
+        val p = unParlante(ParlanteId("p-1"), "Piero") // RICORRENTE di default
+        val q = unParlante(ParlanteId("p-2"), "Quinto")
+        val parlanti = ParlanteRepositoryFinta().apply {
+            salva(p).atteso()
+            salva(q).atteso()
+        }
+        val ambiente = Ambiente(parlanti = parlanti)
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(q.id))).atteso()
+
+        val pOra = assertNotNull(
+            ambiente.parlanti.trova(p.id),
+            "il ricorrente NON cessa di esistere, a differenza dell'occasionale",
+        )
+        assertTrue(pOra.attivo)
+        assertEquals(emptyList(), pOra.impronte, "P non ha piu' nessuna impronta")
+        assertEquals(emptyList(), ambiente.attribuzioni.diParlante(p.id))
+    }
+
+    @Test
+    fun `INV-25 un occasionale che perde una Voce ma ne mantiene un altra resta con la sua impronta`() {
+        val occasionale = unParlante(ParlanteId("p-1"), "Ospite del 20-09-2026", tipo = TipoParlante.OCCASIONALE)
+        val q = unParlante(ParlanteId("p-2"), "Quinto")
+        val parlanti = ParlanteRepositoryFinta().apply {
+            salva(occasionale).atteso()
+            salva(q).atteso()
+        }
+        val ambiente = Ambiente(
+            parlanti = parlanti,
+            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2)))),
+        )
+        ambiente.servizio.esegui(
+            ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(occasionale.id)),
+        ).atteso()
+        ambiente.servizio.esegui(
+            ConfermaAttribuzione(VOCE_2, ObiettivoAttribuzione.ParlanteEsistente(occasionale.id)),
+        ).atteso()
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(q.id))).atteso()
+
+        val occasionaleOra = assertNotNull(
+            ambiente.parlanti.trova(occasionale.id),
+            "l occasionale resta: ha ancora un altra Attribuzione (Voce 2)",
+        )
+        assertTrue(occasionaleOra.attivo)
+        assertEquals(listOf(VOCE_2), occasionaleOra.impronte.map { it.voceRef })
+        assertEquals(listOf(VOCE_2), ambiente.attribuzioni.diParlante(occasionale.id).map { it.voceRef })
+    }
+
+    @Test
+    fun `INV-25 un occasionale gia eliminato non viene ri-rimosso quando la sua ultima Attribuzione si sposta`() {
+        val eliminato = unParlante(ParlanteId("p-1"), "Ospite del 20-09-2026", tipo = TipoParlante.OCCASIONALE)
+        val q = unParlante(ParlanteId("p-2"), "Quinto")
+        val parlanti = ParlanteRepositoryFinta().apply {
+            salva(eliminato).atteso()
+            salva(q).atteso()
+        }
+        val ambiente = Ambiente(parlanti = parlanti)
+        ambiente.servizio.esegui(
+            ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(eliminato.id)),
+        ).atteso()
+        // Simula EliminaParlante (sibling block, gestione-parlante): purga le impronte, marca
+        // ELIMINATO, MA non tocca l'Attribuzione — resta un tombstone referenziato da Attribuzione(v).
+        val tombstone = assertNotNull(ambiente.parlanti.trova(eliminato.id))
+        tombstone.elimina().atteso()
+        ambiente.parlanti.salva(tombstone).atteso()
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(q.id))).atteso()
+
+        val tombstoneOra = assertNotNull(
+            ambiente.parlanti.trova(eliminato.id),
+            "il tombstone eliminato NON viene rimosso da INV-25 (quella si applica solo a un attivo)",
+        )
+        assertTrue(tombstoneOra.eliminato)
+        assertEquals(q.id, ambiente.attribuzioni.trova(VOCE_1)?.parlanteId)
+    }
+
+    @Test
     fun `INV-17 un Parlante eliminato viene rifiutato`() {
         val eliminato = unParlante(ParlanteId("p-1"), "Marco").also { it.elimina().atteso() }
         val ambiente = Ambiente(parlanti = ParlanteRepositoryFinta().apply { salva(eliminato).atteso() })

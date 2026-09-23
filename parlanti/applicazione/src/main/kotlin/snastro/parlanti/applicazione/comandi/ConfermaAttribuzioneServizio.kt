@@ -138,13 +138,17 @@ public class ConfermaAttribuzioneServizio(
     private fun liberaPrecedenteSeServe(precedenteId: ParlanteId?, voceRef: VoceRef): Esito<Unit> =
         if (precedenteId == null) Esito.Ok(Unit) else liberaPrecedente(precedenteId, voceRef)
 
-    /** [INV-15] removes the print; [INV-25]: an `occasionale` left without any Attribuzione ceases to exist. */
+    /**
+     * [INV-15] removes the print; [INV-25]: an `attivo occasionale` left without any Attribuzione
+     * ceases to exist — an already-`eliminato` tombstone (its print purged at elimination, ADR 0009)
+     * is never re-removed here, it stays a tombstone (revisione-policy).
+     */
     private fun liberaPrecedente(precedenteId: ParlanteId, voceRef: VoceRef): Esito<Unit> {
         val precedente = checkNotNull(parlanti.trova(precedenteId)) {
             "un'Attribuzione precedente riferisce un Parlante inesistente: $precedenteId"
         }
         precedente.rimuoviImpronta(voceRef)
-        return if (precedente.occasionale && attribuzioni.diParlante(precedenteId).isEmpty()) {
+        return if (precedente.attivo && precedente.occasionale && attribuzioni.diParlante(precedenteId).isEmpty()) {
             parlanti.rimuovi(precedenteId)
             Esito.Ok(Unit)
         } else {
