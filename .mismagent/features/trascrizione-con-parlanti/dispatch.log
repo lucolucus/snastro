@@ -129,3 +129,4 @@
 2026-09-23T09:06:11Z	porta-registrazione-parlanti	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T09:07:55Z	porta-registrazione-parlanti	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (LOW: 3 unused view fields -> manifest note; D2 ambient must use ModificaDataRegistrazione)
 2026-09-23T09:09:39Z	porta-registrazione-parlanti	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T09:09:47Z	porta-lettore-voci	worker	dispatch	cycle=0	tier=deep	model=opus
