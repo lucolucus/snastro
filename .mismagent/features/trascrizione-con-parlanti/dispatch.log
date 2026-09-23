@@ -1,2 +1,3 @@
 2026-09-23T07:00:05Z	scaffold-app	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-23T07:43:28Z	scaffold-app	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (gate GREEN 70/70, accepted by gate)
+2026-09-23T07:43:37Z	kernel	worker	dispatch	cycle=0	tier=deep	model=opus
