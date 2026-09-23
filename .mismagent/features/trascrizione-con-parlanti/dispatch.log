@@ -314,3 +314,7 @@
 2026-09-23T11:50:52Z	esegui-elaborazione	verifier	dispatch	cycle=2	tier=deep	model=opus
 2026-09-23T11:50:52Z	esegui-elaborazione	code-review	dispatch	cycle=2	tier=deep	model=opus
 2026-09-23T11:50:52Z	sorgente-impronta	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:51:49Z	modelli-provisioning	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (43a5995; JDK-only, loopback fake server, catalogue empty until spike ADRs)
+2026-09-23T11:51:49Z	modelli-provisioning	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:51:49Z	modelli-provisioning	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:51:49Z	fix-batch-5	worker	dispatch	cycle=0	tier=deep	model=opus	(option c foundations on merged blocks: kernel AC-266, eventi-pubblicati ImpronteRiallineate AC-14, parlante registraImpronta/trasferisciImpronta/ImprontaVocale sorgente+modello/obsoleta, attribuzione trasferisci AC-269, porte-parlanti AC-270..273)
