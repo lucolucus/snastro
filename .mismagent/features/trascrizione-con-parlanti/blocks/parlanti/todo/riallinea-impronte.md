@@ -1,5 +1,5 @@
 ---
-id: "salta-voce"
+id: "riallinea-impronte"
 type: "application-service"
 context: "parlanti"
 side: "app"
@@ -8,14 +8,12 @@ module: ":parlanti:applicazione (..comandi)"
 consumes:
   - "kernel-pl"
   - "agg-parlante"
-  - "agg-attribuzione"
   - "repo-parlanti"
-  - "registrazione-per-parlanti"
   - "voci-per-parlanti"
-  - "eventi-parlanti"
   - "tec-decodifica-parlanti"
   - "tec-estrattore-impronta"
   - "sorgente-impronta-pl"
+  - "eventi-parlanti"
 depends_on: []
 related_adrs:
   - "0002"
@@ -26,32 +24,34 @@ related_adrs:
   - "0007"
   - "0009"
   - "0012"
+model_hint: "deep"
 commands:
-  - "SaltaVoce"
+  - "RiallineaImpronte"
+  - "RiallineaTutteLeImpronte"
 invariants:
-  - "INV-19 skipping a Voce = confirming it as a NEW occasionale 'Ospite del <DataRegistrazione>' (dd/MM/yyyy); if taken, first free '(2)', '(3)', …; stored at creation, never follows a later date change; its ImprontaVocale is kept"
+  - "INV-15 (freshness half, ADR 0012 Amendment (b)): a row is stale iff sorgente_impronta != SorgenteImpronta.di(current intervals of its Voce).chiave OR modello_impronta != EstrattoreImpronta.modello; only stale rows are re-derived, by compare-and-set UPDATE — existence is never changed here (never INSERT, so a purged print is never resurrected)"
 ---
-# salta-voce — SaltaVoce
+# riallinea-impronte — RiallineaImpronte / RiallineaTutteLeImpronte — freschezza delle impronte dopo il commit
 
 ## What to do
-Create the occasionale guest + Attribuzione + print; publishes ParlanteCreato and AttribuzioneConfermata (R21). Not offered on an already-attributed Voce. Amended (ADR 0012 (b)): extract first from SorgenteImpronta outside any transaction, then a transaction that re-reads the Voce (VoceCambiata) and writes the row with sorgente + modello.
+RiallineaImpronte(registrazioneId): list the Registrazione's print rows, keep the stale ones (ImprontaVocale.obsoleta vs SorgenteImpronta.di(current intervals).chiave and EstrattoreImpronta.modello), decode + extract each OUTSIDE any transaction, then per Voce one short transaction that re-reads the Voce and calls the compare-and-set aggiornaImpronta (never INSERT); publish ImpronteRiallineate when >= 1 row changed. RiallineaTutteLeImpronte(progettoId) runs it for every Registrazione of the Progetto with prints.
 
-Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 2): same extract-then-transaction shape as conferma-attribuzione (cheap refusal VoceGiaAttribuita may answer before extracting; re-read + VoceCambiata inside the transaction; row stores sorgente + modello). Carry-over from its cycle-0 review: the decoded window must be pinned by the test (AC-287). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
+Note: ADR 0012 Amendment (b) point 3: run after commit by abbonato-riallineamento-impronte (coalesced per registrazioneId, retried) and at project open by avvio-composizione (RiallineaTutteLeImpronte, background, after RecuperaElaborazioniInterrotte). Staleness decided with the domain rule ImprontaVocale.obsoleta (never re-coded). An extracted Impronta that is not written is simply dropped (ADR 0009 Amendment (b)). Rows per Voce: at most one per Voce in practice (one Attribuzione per Voce), grouped per Voce anyway.
 
 ### Invariants owned here (one test each, name starts with the tag)
-- INV-19 skipping a Voce = confirming it as a NEW occasionale 'Ospite del <DataRegistrazione>' (dd/MM/yyyy); if taken, first free '(2)', '(3)', …; stored at creation, never follows a later date change; its ImprontaVocale is kept
+- INV-15 (freshness half, ADR 0012 Amendment (b)): a row is stale iff sorgente_impronta != SorgenteImpronta.di(current intervals of its Voce).chiave OR modello_impronta != EstrattoreImpronta.modello; only stale rows are re-derived, by compare-and-set UPDATE — existence is never changed here (never INSERT, so a purged print is never resurrected)
 
 ## Tasks
-- INV-19 crea un occasionale 'Ospite del 12/09/2026' con l'impronta conservata e attribuisce la Voce
-- INV-19 se il nome è già preso da un attivo (confronto normalizzato) → '(2)', poi '(3)'
-- INV-19 il nome resta invariato dopo una ModificaDataRegistrazione
-- AC-88 SaltaVoce pubblica ParlanteCreato e AttribuzioneConfermata
-- AC-89 Saltare una Voce già attribuita → VoceGiaAttribuita e nulla cambia
-- AC-286 L'impronta è estratta fuori transazione; poi la transazione rilegge la Voce: se SorgenteImpronta.di(intervalli attuali) differisce da quella estratta → Errore(VoceCambiata(voceRef)) e nulla è scritto (nessun Parlante creato)
-- AC-287 Per una Voce di oltre 30 s gli intervalli passati a DecodificatoreAudio.campioni sono esattamente SorgenteImpronta.di(intervalli della Voce).intervalli (totale 30 000 ms)
-- AC-288 Nessuna chiamata a DecodificatoreAudio o EstrattoreImpronta avviene con una transazione aperta (le Finte lanciano se transazioneAperta)
-- AC-289 La riga d'impronta del nuovo occasionale conserva sorgente = SorgenteImpronta.chiave e modello = EstrattoreImpronta.modello
-- AC-290 Se la decodifica o l'estrazione fallisce, nessuna transazione viene aperta e nulla è scritto (l'errore infrastrutturale si propaga, ADR 0003)
+- AC-292 RiallineaImpronte(registrazioneId) tocca solo le righe obsolete: con tre righe — fresca, sorgente cambiata, modello diverso — solo le ultime due sono decodificate, estratte e aggiornate; quella fresca non è nemmeno decodificata
+- AC-293 La scrittura è un aggiornamento compare-and-set (aggiornaImpronta) in una transazione breve per Voce che rilegge la Voce; non avviene mai un inserimento (conteggio righe invariato)
+- AC-294 Una riga cancellata tra l'estrazione e la scrittura (EliminaParlante, Attribuzione cambiata, INV-25) non è resuscitata: nessuna riga creata, esito Ok
+- AC-295 Se la Voce cambia di nuovo durante l'estrazione (la sorgente ricalcolata nella transazione differisce da quella estratta) non scrive nulla per quella riga; una seconda esecuzione converge
+- AC-296 Idempotente: una seconda esecuzione subito dopo non decodifica, non estrae, non scrive nulla e non pubblica ImpronteRiallineate
+- AC-297 Nessuna transazione è aperta durante decodifica ed estrazione (le Finte ML lanciano se transazioneAperta)
+- AC-298 Pubblica ImpronteRiallineate(registrazioneId) dopo il commit solo se almeno una riga è stata aggiornata
+- AC-299 Una riga la cui Voce non esiste più (o Registrazione senza Trascritto) è saltata senza errore e senza scritture (la rimozione spetta alla revisione-policy)
+- AC-300 RiallineaTutteLeImpronte(progettoId) esegue RiallineaImpronte per ogni Registrazione con almeno una riga d'impronta del Progetto (impronteDelProgetto); un fallimento su una Registrazione non impedisce le altre ed è riportato
+- AC-301 Un'eccezione di decodifica o estrazione si propaga (ADR 0003, così l'abbonato riprova) dopo che le Voci già riallineate sono state committate; per la Voce fallita nulla è scritto
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -103,29 +103,11 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 2): same extract-then-tra
   - §14 gates (must stay green):
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(parlanteQueries|improntaVocaleQueries)\b' . | grep -vE '^\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
     - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -E '^\./[^:]*/src/main/' | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
-- **agg-attribuzione** (consumed/implemented) — owner `attribuzione`, projection in-process, contract_test **invariant-test**
-  - pinned types:
-    - `Attribuzione.conferma`: (voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>
-    - `Attribuzione.cambia`: (parlanteId): Esito<AttribuzioneConfermata?> — same parlante = Ok(null), no event
-    - `Attribuzione.trasferisci`: (a: VoceRef): Attribuzione — POLICY-ONLY re-keying (INV-21 unire inheritance, ADR 0012 Amendment (b) point 4): same parlanteId and progettoId, key = a; require a.registrazioneId == voceRef.registrazioneId; checks NO Parlante state (valid for an eliminato tombstone — the explicit INV-13/INV-17 exception); emits no event (consumers are reached via VociUnite); never used by ConfermaAttribuzione / SaltaVoce
-  - keys (minting rules):
-    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
-  - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' '\.trasferisci(Impronta)?\(' parlanti/applicazione/src/main | grep '/comandi/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\*|/\*)' | grep -q .`
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(attribuzioneQueries)\b' . | grep -vE '^\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
 - **repo-parlanti** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ParlanteRepository`: interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */; impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>; impronteDelProgetto(id: ProgettoId): List<RigaImpronta>; aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean /* compare-and-set UPDATE of the ONE row (attesa.parlanteId, attesa.voceRef) only if it still exists with sorgente == attesa.sorgente AND modello == attesa.modello; true iff 1 row updated; NEVER inserts (ADR 0009/0012 Amendment (b): no resurrection) */ }
     - `RigaImpronta`: data class(parlanteId: ParlanteId, voceRef: VoceRef, sorgente: String, modello: String) in parlanti:applicazione.porte — print row metadata, never the embedding
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
-- **registrazione-per-parlanti** (consumed/implemented) — owner `porta-registrazione-parlanti`, supplier `catalogo-registrazioni`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `LettoreRegistrazione`: interface { fun registrazione(id: RegistrazioneId): RegistrazioneVista? } — Parlanti's own copy
-    - `RegistrazioneVista`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId, titolo: String, riferimentoAudio: RiferimentoAudio, dataRegistrazione: LocalDate, durataMs: Long) — progettoId scopes INV-17, dataRegistrazione feeds 'Ospite del dd/MM/yyyy' (INV-19)
-  - keys (minting rules):
-    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
-    - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>? } — null iff no Trascritto (INV-5); Voci ordered by voceId
@@ -133,21 +115,6 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 2): same extract-then-tra
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-- **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `AttribuzioneConfermata`: data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato
-    - `ParlanteCreato`: data class(parlanteId: ParlanteId, progettoId: ProgettoId, nome: String, tipo: TipoParlanteVista) : EventoPubblicato
-    - `ParlanteRinominato`: data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato
-    - `ParlantePromosso`: data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato
-    - `ParlanteEliminato`: data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change
-    - `ImpronteRiallineate`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by riallinea-impronte after the commit of >= 1 refreshed print row (ADR 0012 Amendment (b)); consumers: proposta (cache invalidation), avvio-composizione (AggiornamentiVista); NOT Documento (prints do not change it)
-    - `TipoParlanteVista`: enum RICORRENTE | OCCASIONALE (parlanti:applicazione)
-  - keys (minting rules):
-    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
-    - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
-  - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 - **tec-decodifica-parlanti** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `DecodificatoreAudio`: interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy); NEVER called while a UnitaDiLavoro transaction is open (ADR 0012 Amendment (b))
@@ -169,5 +136,20 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) point 2): same extract-then-tra
     - `ErroreParlanti.VoceCambiata`: data class(voceRef: VoceRef) : ErroreParlanti (file ErroriParlanti.kt, parlanti:dominio) — the Voce's SorgenteImpronta changed between the extraction and the command's transaction; nothing written, the user retries
   - keys (minting rules):
     - `chiave`: minted by SorgenteImpronta (sorgente-impronta) from its final disjoint intervals in time order, "<inizioMs>-<fineMs>" joined by ","; deterministic for equal intervals; changes whenever the Voce's Segmenti or BUDGET_IMPRONTA_MS change (that IS the staleness signal); stored as impronta_vocale.sorgente_impronta
+- **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `AttribuzioneConfermata`: data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato
+    - `ParlanteCreato`: data class(parlanteId: ParlanteId, progettoId: ProgettoId, nome: String, tipo: TipoParlanteVista) : EventoPubblicato
+    - `ParlanteRinominato`: data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato
+    - `ParlantePromosso`: data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato
+    - `ParlanteEliminato`: data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change
+    - `ImpronteRiallineate`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by riallinea-impronte after the commit of >= 1 refreshed print row (ADR 0012 Amendment (b)); consumers: proposta (cache invalidation), avvio-composizione (AggiornamentiVista); NOT Documento (prints do not change it)
+    - `TipoParlanteVista`: enum RICORRENTE | OCCASIONALE (parlanti:applicazione)
+  - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
+    - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
+    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
+  - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-19, Q-1, Q-5) + R21, R24.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); ADR 0012 Amendment (b) points 2-3, ADR 0009 Amendment (b), features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15, INV-21, Commands RiallineaImpronte).

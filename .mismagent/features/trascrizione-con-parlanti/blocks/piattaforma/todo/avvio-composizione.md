@@ -34,6 +34,8 @@ depends_on:
   - "abbonato-documento"
   - "abbonato-registrazione-aggiunta"
   - "abbonato-revisione-parlanti"
+  - "abbonato-riallineamento-impronte"
+  - "riallinea-impronte"
   - "audio-ffmpeg"
   - "modelli-provisioning"
 related_adrs:
@@ -51,7 +53,7 @@ related_adrs:
 ## What to do
 main(): manual wiring; SessioneProgetto (folder layout <nome>.snastro/, .lock, apriDatabaseProgetto, CreaProgetto, RegistroProgetti registra/aggiorna on close); registration of sync/after-commit subscribers; LettoreAudio over RiproduttoreWav (rebuilds a missing WAV, else unavailable); ApriEsterno over java.awt.Desktop; AggiornamentiVista fed by after-commit events + phase changes; ServizioModelli over :modelli; config-driven adapter selection (fakes until the ML blocks land); --smoke <fixture-dir> with a fixture-project generator.
 
-Note: USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (variant removed from tec-shell-ui's pinned ErroreSessione, re-pinned 2026-09-23, user decision). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime.
+Note: USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (variant removed from tec-shell-ui's pinned ErroreSessione, re-pinned 2026-09-23, user decision). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime. AMENDED 2026-09-23 (ADR 0012 Amendment (b)): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte.
 
 ## Tasks
 - AC-237 --smoke apre il progetto fixture e salva uno screenshot per ogni schermata S1–S5 in avvio/build/smoke/, uscendo con 0
@@ -63,9 +65,12 @@ Note: USER DECISION 2026-09-23 (dispatch.log): project folder name derived from 
 - AC-240 Alla chiusura il registro è aggiornato con numRegistrazioni e ultimaAttivita
 - AC-241 Il LettoreAudio ricostruisce un WAV derivato mancante dalla sorgente; senza sorgente riporta non disponibile
 - AC-242 Un comando completato produce un Cambiamento su AggiornamentiVista per la sua Registrazione
+- AC-315 abbonato-riallineamento-impronte è registrato come AbbonatoDopoCommit sul DispatcherEventi: una Revisione committata porta a un RiallineaImpronte della sua Registrazione (test end-to-end su databaseInMemoria con le Finte ML)
+- AC-316 All'apertura del progetto RiallineaTutteLeImpronte gira in background DOPO RecuperaElaborazioniInterrotte, senza bloccare la UI (la schermata è usabile mentre gira)
+- AC-317 ImpronteRiallineate(registrazioneId) produce un Cambiamento su AggiornamentiVista per quella Registrazione e invalida la cache della Proposta (nessuna Rigenerazione del Documento)
 
 ## Dependencies
-- Blocks built first: `avvio-coda-elaborazioni` (wave 9), `ui-fondamenta` (wave 6), `lettore-audio` (wave 7), `schermata-progetti` (wave 8), `schermata-registrazioni` (wave 8), `schermata-registrazione` (wave 8), `schermata-parlanti` (wave 8), `schermata-modelli` (wave 8), `persistenza-schema` (wave 2), `registro-progetti-file` (wave 4), `repository-sql-progetto` (wave 4), `repository-sql-trascrizione` (wave 4), `repository-sql-parlanti` (wave 4), `abbonato-documento` (wave 6), `abbonato-registrazione-aggiunta` (wave 5), `abbonato-revisione-parlanti` (wave 5), `audio-ffmpeg` (wave 4), `modelli-provisioning` (wave 4)
+- Blocks built first: `avvio-coda-elaborazioni` (wave 9), `ui-fondamenta` (wave 6), `lettore-audio` (wave 7), `schermata-progetti` (wave 8), `schermata-registrazioni` (wave 8), `schermata-registrazione` (wave 8), `schermata-parlanti` (wave 8), `schermata-modelli` (wave 8), `persistenza-schema` (wave 2), `registro-progetti-file` (wave 4), `repository-sql-progetto` (wave 4), `repository-sql-trascrizione` (wave 4), `repository-sql-parlanti` (wave 4), `abbonato-documento` (wave 6), `abbonato-registrazione-aggiunta` (wave 5), `abbonato-revisione-parlanti` (wave 5), `abbonato-riallineamento-impronte` (wave 5), `riallinea-impronte` (wave 4), `audio-ffmpeg` (wave 4), `modelli-provisioning` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -122,16 +127,18 @@ Note: USER DECISION 2026-09-23 (dispatch.log): project folder name derived from 
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
     - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
-  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
-- **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante`, projection in-process, contract_test **consumer-driven**
+  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+- **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `AttribuzioneConfermata`: data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato
     - `ParlanteCreato`: data class(parlanteId: ParlanteId, progettoId: ProgettoId, nome: String, tipo: TipoParlanteVista) : EventoPubblicato
     - `ParlanteRinominato`: data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato
     - `ParlantePromosso`: data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato
     - `ParlanteEliminato`: data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change
+    - `ImpronteRiallineate`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by riallinea-impronte after the commit of >= 1 refreshed print row (ADR 0012 Amendment (b)); consumers: proposta (cache invalidation), avvio-composizione (AggiornamentiVista); NOT Documento (prints do not change it)
     - `TipoParlanteVista`: enum RICORRENTE | OCCASIONALE (parlanti:applicazione)
   - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder

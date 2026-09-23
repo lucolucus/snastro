@@ -23,13 +23,18 @@ related_adrs:
 # avvio-coda-elaborazioni — Coda seriale delle Elaborazioni e dispatcher della pipeline
 
 ## What to do
-Serial FIFO on a single-thread pipeline dispatcher that calls EseguiProssimaElaborazione; holds while ModelliPronti is false; calls RecuperaElaborazioniInterrotte before starting; wires FasiInCorso as SegnalatoreFase; one Mutex serializes every native use (pipeline + EstrattoreImpronta, R12).
+Serial FIFO on a single-thread pipeline dispatcher that calls EseguiProssimaElaborazione; holds while ModelliPronti is false; calls RecuperaElaborazioniInterrotte before starting, after anything escapes esegui and on project re-open; does not spin on a head item whose start keeps failing; wires FasiInCorso as SegnalatoreFase; one Mutex serializes every native use (pipeline + EstrattoreImpronta), always acquired outside any transaction (ADR 0012 (b) point 5).
+
+Note: PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built.
 
 ## Tasks
 - AC-233 All'avvio RecuperaElaborazioniInterrotte gira prima che la coda parta
 - AC-234 Con due in_attesa la seconda parte solo quando la prima è terminale
 - AC-235 Con i modelli mancanti le Elaborazioni restano in_attesa; quando diventano pronti la coda riparte
-- AC-236 Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo (nessuna chiamata nativa concorrente)
+- AC-236 Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo senza alcuna transazione aperta (nessuna chiamata nativa concorrente; il write lock di SQLite non è tenuto durante l'attesa)
+- AC-312 (F-C) Se qualcosa sfugge a EseguiProssimaElaborazione.esegui (cancellazione, interrupt, Error come OutOfMemoryError, eccezione inattesa) il dispatcher esegue RecuperaElaborazioniInterrotte prima di prendere l'elemento successivo; lo esegue anche quando un progetto è riaperto senza riavviare l'app — nessuna Elaborazione resta in_corso mentre l'app gira
+- AC-313 (F-G) Un abbonato sincrono che fallisce sempre su ElaborazioneAvviata annulla ogni volta la transazione di avvio: il dispatcher non gira a vuoto sull'elemento di testa (tentativi limitati con back-off, poi lo lascia in_attesa per la sessione e lo segnala) e gli altri elementi proseguono
+- AC-314 Un solo dispatcher single-thread prende gli elementi: due richieste concorrenti di avanzamento non portano mai due Elaborazioni in_corso (la transizione in_attesa → in_corso non ha controllo di versione e si affida a questo)
 
 ## Dependencies
 - Blocks built first: `esegui-elaborazione` (wave 4), `stati-elaborazione` (wave 5), `modelli-provisioning` (wave 4)

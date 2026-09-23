@@ -1,43 +1,35 @@
 ---
-id: "revisione"
-type: "application-service"
-context: "trascrizione"
+id: "abbonato-riallineamento-impronte"
+type: "adapter"
+context: "parlanti"
 side: "app"
-wave: 4
-module: ":trascrizione:applicazione (..comandi)"
+wave: 5
+module: ":parlanti:adattatori (..eventi)"
 consumes:
   - "kernel-pl"
-  - "agg-trascritto"
-  - "repo-trascrizione"
   - "eventi-revisione"
-depends_on: []
+depends_on:
+  - "riallinea-impronte"
 related_adrs:
   - "0002"
   - "0003"
-  - "0006"
-  - "0007"
   - "0012"
-commands:
-  - "UnisciVoci"
-  - "DividiVoce"
-  - "RiassegnaSegmento"
 ---
-# revisione — UnisciVoci, DividiVoce, RiassegnaSegmento
+# abbonato-riallineamento-impronte — Abbonato dopo-commit agli eventi di Revisione → RiallineaImpronte
 
 ## What to do
-Thin services over the trascritto root; each publishes its revisione event, whose SYNC Parlanti subscriber runs in the same transaction.
+AbbonatoDopoCommit on VociUnite / VoceDivisa / SegmentoRiassegnato → RiallineaImpronte(registrazioneId) on a background coroutine, coalesced per registrazioneId, retried with bounded back-off; nothing on a rolled-back Revisione.
+
+Note: Same discipline as the Documento Rigenerazione subscriber (ADR 0012): after commit, background coroutine, coalesced per registrazioneId, idempotent, retried.
 
 ## Tasks
-- AC-76 UnisciVoci valido pubblica VociUnite esattamente una volta con il payload fissato
-- AC-77 UnisciVoci(A, A) → UnioneNonAmmessa e nessun evento
-- AC-78 DividiVoce valido pubblica VoceDivisa con i segmenti spostati
-- AC-79 DividiVoce con l'intera Voce → DivisioneNonAmmessa e nessun evento
-- AC-80 RiassegnaSegmento valido pubblica SegmentoRiassegnato con daRimossa / aNuova corretti
-- AC-81 RiassegnaSegmento verso la stessa Voce → rifiutato e nessun evento
-- AC-82 Su una Registrazione senza Trascritto → TrascrittoNonTrovato
-- AC-83 Se un abbonato sincrono restituisce Errore la Revisione è annullata (Trascritto invariato)
+- AC-304 VociUnite, VoceDivisa e SegmentoRiassegnato sono ricevuti da un AbbonatoDopoCommit che invoca RiallineaImpronte(registrazioneId) solo dopo il commit della Revisione
+- AC-305 Una Revisione annullata (rollback, es. errore della revisione-policy) non innesca nessun RiallineaImpronte
+- AC-306 Più eventi ravvicinati della stessa Registrazione sono coalescenti: al più un RiallineaImpronte in corso e uno in coda per registrazioneId
+- AC-307 Un Errore o un'eccezione di RiallineaImpronte è ritentato con back-off limitato, senza toccare la Revisione già committata; esauriti i tentativi è riportato (la prossima apertura del progetto riallinea comunque)
 
 ## Dependencies
+- Blocks built first: `riallinea-impronte` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -68,23 +60,6 @@ Thin services over the trascritto root; each publishes its revisione event, whos
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **agg-trascritto** (consumed/implemented) — owner `trascritto`, projection in-process, contract_test **invariant-test**
-  - pinned types:
-    - `Trascritto.crea`: (registrazioneId, durataMs: Long, segmenti: List<SegmentoIniziale>): Esito<Creato<Trascritto, TrascrittoCreato>> — Errore(NessunParlatoRilevato) on empty input
-    - `SegmentoIniziale`: data class(voceIndice: Int, intervallo: IntervalloMs, testo: String) — trascrizione:dominio input VO
-    - `Trascritto.unisci`: (sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite>
-    - `Trascritto.dividi`: (origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa>
-    - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce
-    - `read accessors`: voci: List<Voce>, segmenti: List<Segmento> (read-only copies)
-  - keys (minting rules):
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
-  - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(trascrittoQueries|voceQueries|segmentoQueries)\b' . | grep -vE '^\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q .`
-- **repo-trascrizione** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta | ElaborazioneGiaCompletata) from the ADR 0007 indexes */ }
-    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento
 - **eventi-revisione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `revisione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `VociUnite`: data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato
@@ -96,4 +71,4 @@ Thin services over the trascritto root; each publishes its revisione event, whos
     - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
   - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (Commands).
+Sources: ADRs 0002, 0003, 0012 (.mismagent/decisions/); ADR 0012 Amendment (b) point 3, features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy.

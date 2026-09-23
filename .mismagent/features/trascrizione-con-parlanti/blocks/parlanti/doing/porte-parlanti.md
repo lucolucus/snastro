@@ -22,18 +22,21 @@ owns_boundaries:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      ParlanteRepository: "interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */ }"
+      ParlanteRepository: "interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */; impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>; impronteDelProgetto(id: ProgettoId): List<RigaImpronta>; aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean /* compare-and-set UPDATE of the ONE row (attesa.parlanteId, attesa.voceRef) only if it still exists with sorgente == attesa.sorgente AND modello == attesa.modello; true iff 1 row updated; NEVER inserts (ADR 0009/0012 Amendment (b): no resurrection) */ }"
+      RigaImpronta: "data class(parlanteId: ParlanteId, voceRef: VoceRef, sorgente: String, modello: String) in parlanti:applicazione.porte — print row metadata, never the embedding"
       AttribuzioneRepository: "interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }"
   tec-decodifica-parlanti:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      DecodificatoreAudio: "interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy)"
+      DecodificatoreAudio: "interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy); NEVER called while a UnitaDiLavoro transaction is open (ADR 0012 Amendment (b))"
+      DecodificatoreAudioFinta: "testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when campioni is invoked while transazioneAperta"
   tec-estrattore-impronta:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      EstrattoreImpronta: "interface { fun estrai(c: CampioniAudio): Impronta } — native use serialized with the pipeline (ADR 0012 amendment, R12)"
+      EstrattoreImpronta: "interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5)"
+      EstrattoreImprontaFinta: "testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when estrai is invoked while transazioneAperta; modello configurable (default \"finto\")"
       Impronta: "see agg-parlante (parlanti:dominio)"
   tec-confronto-impronte:
     projection: "in-process"
@@ -46,7 +49,9 @@ owns_boundaries:
 # porte-parlanti — Porte dei Parlanti: repository e ML
 
 ## What to do
-Declare ParlanteRepository (incl. rimuovi for INV-25), AttribuzioneRepository, DecodificatoreAudio (own copy), EstrattoreImpronta, ConfrontoImpronte (+ Fascia, SoglieFascia) with Finta + Contratto each; ParlanteRepositoryFinta honours INV-16 like the index.
+Declare ParlanteRepository (incl. rimuovi for INV-25, the compare-and-set aggiornaImpronta and the RigaImpronta reads per registrazione / per progetto), AttribuzioneRepository, DecodificatoreAudio (own copy), EstrattoreImpronta (+ modello), ConfrontoImpronte (+ Fascia, SoglieFascia) with Finta + Contratto each; ParlanteRepositoryFinta honours INV-16 like the index; EstrattoreImprontaFinta / DecodificatoreAudioFinta throw when invoked while the UnitaDiLavoroFinta has a transaction open.
+
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; ParlanteRepository compare-and-set aggiornaImpronta + impronteDiRegistrazione / impronteDelProgetto (RigaImpronta); ML Finte guard against an open transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
 
 ## Tasks
 - AC-37 ParlanteRepositoryContratto: un secondo attivo con lo stesso nome normalizzato nello stesso Progetto → NomeGiaInUso; il nome di un eliminato è accettato; round-trip con impronte (passa contro la Finta)
@@ -54,18 +59,25 @@ Declare ParlanteRepository (incl. rimuovi for INV-25), AttribuzioneRepository, D
 - AC-39 DecodificatoreAudioContratto (parlanti): campioni di più intervalli = concatenazione nell'ordine dato
 - AC-40 EstrattoreImprontaContratto: le stesse CampioniAudio producono la stessa Impronta, di dimensione costante
 - AC-41 ConfrontoImpronteContratto: impronta identica → FORTE; lista vuota → NESSUNA; restituisce la fascia migliore tra le impronte; SoglieFascia con forte <= debole rifiutate
+- AC-270 ParlanteRepositoryContratto: aggiornaImpronta aggiorna la riga solo se esiste ancora con sorgente e modello uguali a quelli attesi (true); riga assente o sorgente/modello cambiati → false e nulla è scritto; non inserisce mai una riga (conteggio invariato)
+- AC-271 ParlanteRepositoryContratto: impronteDiRegistrazione e impronteDelProgetto restituiscono tutte e sole le RigaImpronta (parlanteId, voceRef, sorgente, modello) della Registrazione / del Progetto; il round-trip di un Parlante conserva sorgente e modello di ogni impronta
+- AC-272 EstrattoreImprontaFinta e DecodificatoreAudioFinta lanciano IllegalStateException se invocate mentre la UnitaDiLavoroFinta passata ha transazioneAperta = true; fuori dalla transazione rispondono normalmente
+- AC-273 EstrattoreImprontaContratto: modello è non vuoto e costante per l'istanza
 
 ## Dependencies
 - **repo-parlanti** (OWNED here — built before its consumers) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `ParlanteRepository`: interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */ }
+    - `ParlanteRepository`: interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */; impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>; impronteDelProgetto(id: ProgettoId): List<RigaImpronta>; aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean /* compare-and-set UPDATE of the ONE row (attesa.parlanteId, attesa.voceRef) only if it still exists with sorgente == attesa.sorgente AND modello == attesa.modello; true iff 1 row updated; NEVER inserts (ADR 0009/0012 Amendment (b): no resurrection) */ }
+    - `RigaImpronta`: data class(parlanteId: ParlanteId, voceRef: VoceRef, sorgente: String, modello: String) in parlanti:applicazione.porte — print row metadata, never the embedding
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
 - **tec-decodifica-parlanti** (OWNED here — built before its consumers) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `DecodificatoreAudio`: interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy)
+    - `DecodificatoreAudio`: interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy); NEVER called while a UnitaDiLavoro transaction is open (ADR 0012 Amendment (b))
+    - `DecodificatoreAudioFinta`: testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when campioni is invoked while transazioneAperta
 - **tec-estrattore-impronta** (OWNED here — built before its consumers) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `EstrattoreImpronta`: interface { fun estrai(c: CampioniAudio): Impronta } — native use serialized with the pipeline (ADR 0012 amendment, R12)
+    - `EstrattoreImpronta`: interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5)
+    - `EstrattoreImprontaFinta`: testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when estrai is invoked while transazioneAperta; modello configurable (default "finto")
     - `Impronta`: see agg-parlante (parlanti:dominio)
 - **tec-confronto-impronte** (OWNED here — built before its consumers) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
