@@ -14,6 +14,8 @@ mockk = "1.14.11"
 sqlite-jdbc = "3.53.4.0"
 bytedeco-javacv = "1.5.14"
 bytedeco-ffmpeg = "8.1.2-1.5.14"
+# Archive extraction (:modelli only, ADR 0008 Amendment (c)) — the JDK has no bzip2/tar reader.
+commons-compress = "1.28.0"
 
 [libraries]
 # Gradle-plugin marker artifacts consumed by build-logic/build.gradle.kts to author
@@ -42,6 +44,9 @@ sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
 # Audio decode/probe (:audio, ADR 0005) — LGPL build, never the `-gpl` artifacts (AC-126).
 bytedeco-javacv = { module = "org.bytedeco:javacv", version.ref = "bytedeco-javacv" }
 bytedeco-ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "bytedeco-ffmpeg" }
+
+# Archive extraction (:modelli, ADR 0008 Amendment (c)) — Apache-2.0.
+commons-compress = { module = "org.apache.commons:commons-compress", version.ref = "commons-compress" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
