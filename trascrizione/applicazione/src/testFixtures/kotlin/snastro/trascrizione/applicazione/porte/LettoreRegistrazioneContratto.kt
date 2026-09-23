@@ -10,6 +10,7 @@ import kotlin.test.assertNull
 /**
  * Consumer-driven contract of [LettoreRegistrazione] (boundary `registrazione-per-trascrizione`):
  * one subclass per implementation — the fake (D1) and `registrazione-da-progetto-tr` (D2).
+ * Every read reflects the CURRENT state of the supplier (e.g. a changed `dataRegistrazione`).
  */
 public abstract class LettoreRegistrazioneContratto {
     /** A fresh supplier with one Progetto and no Registrazione. */
@@ -64,6 +65,22 @@ public abstract class LettoreRegistrazioneContratto {
             ambiente.lettore.registrazione(seconda),
         )
         assertEquals("Riunione di lunedi", ambiente.lettore.registrazione(prima)?.titolo)
+    }
+
+    @Test
+    public fun `AC-43 dopo una modifica della data restituisce la dataRegistrazione corrente`() {
+        val ambiente = ambiente()
+        val id = ambiente.semina(RIUNIONE)
+        val altra = ambiente.semina(INTERVISTA)
+        val lettore = ambiente.lettore
+        lettore.registrazione(id)
+
+        ambiente.modificaData(id, LocalDate.of(2026, 1, 5))
+
+        assertEquals(LocalDate.of(2026, 1, 5), lettore.registrazione(id)?.dataRegistrazione)
+        assertEquals(LocalDate.of(2026, 1, 5), ambiente.lettore.registrazione(id)?.dataRegistrazione)
+        assertEquals(ambiente.progettoId, ambiente.lettore.registrazione(id)?.progettoId)
+        assertEquals(LocalDate.of(2025, 12, 31), ambiente.lettore.registrazione(altra)?.dataRegistrazione)
     }
 
     private companion object {

@@ -4,6 +4,7 @@ import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import java.time.LocalDate
 import java.util.Locale
 
 class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
@@ -16,8 +17,7 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
 
         override val progettoId = ProgettoId(generatore.nuovo())
 
-        override val lettore: LettoreRegistrazione
-            get() = LettoreRegistrazioneFinta(registrazioni.toMap())
+        override val lettore: LettoreRegistrazione = LettoreRegistrazioneFinta(registrazioni)
 
         override fun semina(seme: SemeRegistrazione): RegistrazioneId {
             val id = RegistrazioneId(generatore.nuovo())
@@ -30,6 +30,10 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
                 durataMs = seme.durataMs,
             )
             return id
+        }
+
+        override fun modificaData(id: RegistrazioneId, data: LocalDate) {
+            registrazioni.computeIfPresent(id) { _, vista -> vista.copy(dataRegistrazione = data) }
         }
     }
 }
