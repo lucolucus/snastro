@@ -107,3 +107,12 @@
 2026-09-23T08:57:42Z	porta-registrazione-trascrizione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED patch: contract should cover modificaData after seeding; LOW: dev-arch #porta-contratto should document Ambiente/semina form)
 2026-09-23T08:57:51Z	porta-registrazione-trascrizione	verifier	result	cycle=0	tier=deep	model=opus	PASS (MED modificaData contract case -> follow-up fix batch)
 2026-09-23T08:58:13Z	porte-trascrizione	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:58:52Z	porte-parlanti	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:58:52Z	porte-parlanti	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:58:52Z	porte-parlanti	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:59:14Z	porte-progetto	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:59:14Z	porte-progetto	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:59:14Z	porte-progetto	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T09:01:04Z	porte-parlanti	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (MED: righeImpronte should be abstract -> follow-up batch before repository-sql-parlanti; note: SQL seeding must derive unique names + minimal elaborazione/trascritto)
+2026-09-23T09:01:09Z	porte-progetto	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (LOW notes: audio/<id> minting to pin; FFmpeg content detection in :audio; scarta IO-failure policy for services)
+2026-09-23T09:01:21Z	porte-progetto	verifier	result	cycle=1	tier=deep	model=opus	PASS
