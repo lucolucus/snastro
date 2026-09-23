@@ -37,10 +37,7 @@ complexity:
   LongParameterList:
     # `ricostituisci` takes exactly the persisted fields (dev-architecture-app.md#aggregato): exempt by annotation.
     ignoreAnnotated: ['RicostituzioneDaPersistenza']
-    # Aggregate creation factories (`aggiungi`) and private root constructors take one parameter per
-    # field of the root; up to 8 fields pass (threshold = count that triggers). Beyond 8 → introduce a VO.
-    functionThreshold: 9
-    constructorThreshold: 9
+    # Detekt's default thresholds apply everywhere else; a pinned wider signature is suppressed locally, with a reason.
 
 naming:
   MatchingDeclarationName: # dev-architecture-app.md#pacchetti: `Errori<Contesto>.kt`, `<Aggregato>Eventi.kt`.
