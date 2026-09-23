@@ -261,3 +261,8 @@ identificazione delle Voci (fetta Parlanti)".
   - under B: the same, plus AC-209, AC-210, AC-211 and the NEW Revisione-error AC.
 - **`avvio-coda-elaborazioni` (R1):** AC-233, AC-234, AC-235, AC-312, AC-313, AC-314 (AC-236 moves
   to `avvio-parlanti`, R2).
+
+## User decisions 2026-09-24
+- Mutex gate (attesa-mutex-estrazione) MOVED from R1 to R2: avvio-coda-elaborazioni loses the gate (keeps AC-233..235, 312..314); AC-236 moves to avvio-parlanti (R2), which takes the gate.
+- S3 in R1 = variant **A, READ-ONLY**: text grouped by Voce (Voce 1, Voce 2…), ▶ from each Segmento, no Revisione UI in R1. AC-209/210/211 (selection, 'Dividi voce', Riassegna) and all identification ACs move to the R2 block `schermata-registrazione-identificazione` (which takes the Mutex gate). The already-built `revisione` domain block stays as is (its UI arrives in R2); record this as an explicit cut in the R1 release plan (rule 9).
+- O-1 JDK for packaging and O-2 signing: deferred (not needed for R1, which runs via ./gradlew :avvio:run).

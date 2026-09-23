@@ -547,3 +547,4 @@
 2026-09-23T22:40:44Z	fix-batch-14	composer	merge	cycle=0	-	-	MERGED d415a52
 2026-09-23T22:40:44Z	fix-batch-14	composer	pre-release	cycle=0	-	-	LOW ui 1..10 const duplicated (test parity); LOW "+4"/"04" accepted; LOW FALLITA equality on motivo only; NOTE repository-sql-trascrizione must map via NumeroPersone.di
 2026-09-23T22:43:08Z	spike-packaging-modelli-desktop	architect	result	-	deep	opus	ADR 0016 closes spike; ADR 0004/0005 amended; packaging delta saved; user: mutex gate R1->R2, S3 R1 variant A/B, O-1 JDK, O-2 signing
+2026-09-23T22:48:25Z	(r1-plan)	decision	result	-	-	-	USER DECISION: mutex gate -> R2; S3 R1 read-only (Revisione UI -> R2)
