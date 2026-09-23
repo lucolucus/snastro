@@ -15,27 +15,60 @@ class CartellaCacheModelliTest {
     }
 
     @Test
-    fun `AC-133 su Windows la cartella segue APPDATA`() {
+    fun `AC-133 il rilevamento del sistema operativo usa startsWith, mai una sottostringa`() {
+        // "win" e' una sottostringa di "darwin" (d-a-r-W-I-N): un controllo con `in` scambierebbe
+        // Darwin per Windows. La risoluzione usa `startsWith`, mai `in` — "darwin" non inizia per
+        // "mac" ne' per "windows", quindi cade nel ramo Linux/XDG (comportamento onesto: un
+        // os.name imprevisto non finisce silenziosamente sul ramo sbagliato).
         val cartella = CartellaCacheModelli.risolvi(
-            sistemaOperativo = "Windows 11",
-            cartellaUtente = "C:\\Users\\prova",
-            appData = "C:\\Users\\prova\\AppData\\Roaming",
+            sistemaOperativo = "Darwin",
+            cartellaUtente = "/home/prova",
         )
-        assertEquals("C:\\Users\\prova\\AppData\\Roaming\\snastro\\modelli", cartella.toString())
+        assertEquals("/home/prova/.local/share/snastro/modelli", cartella.toString())
     }
 
     @Test
-    fun `AC-133 su Windows senza APPDATA la cartella e derivata dalla cartella utente`() {
+    fun `AC-334 Windows con LOCALAPPDATA assoluto usa LOCALAPPDATA, mai APPDATA`() {
         val cartella = CartellaCacheModelli.risolvi(
             sistemaOperativo = "Windows 11",
             cartellaUtente = "C:\\Users\\prova",
-            appData = null,
+            localAppData = "C:\\Users\\prova\\AppData\\Local",
         )
-        assertEquals("C:\\Users\\prova\\AppData\\Roaming\\snastro\\modelli", cartella.toString())
+        assertEquals("C:\\Users\\prova\\AppData\\Local\\snastro\\modelli", cartella.toString())
     }
 
     @Test
-    fun `AC-133 su Linux la cartella segue XDG_DATA_HOME`() {
+    fun `AC-334 Windows senza LOCALAPPDATA la cartella e derivata dalla cartella utente`() {
+        val cartella = CartellaCacheModelli.risolvi(
+            sistemaOperativo = "Windows 11",
+            cartellaUtente = "C:\\Users\\prova",
+            localAppData = null,
+        )
+        assertEquals("C:\\Users\\prova\\AppData\\Local\\snastro\\modelli", cartella.toString())
+    }
+
+    @Test
+    fun `AC-334 Windows con LOCALAPPDATA vuoto o solo spazi usa il fallback`() {
+        val cartella = CartellaCacheModelli.risolvi(
+            sistemaOperativo = "Windows 11",
+            cartellaUtente = "C:\\Users\\prova",
+            localAppData = "   ",
+        )
+        assertEquals("C:\\Users\\prova\\AppData\\Local\\snastro\\modelli", cartella.toString())
+    }
+
+    @Test
+    fun `AC-334 Windows con LOCALAPPDATA relativo usa il fallback`() {
+        val cartella = CartellaCacheModelli.risolvi(
+            sistemaOperativo = "Windows 11",
+            cartellaUtente = "C:\\Users\\prova",
+            localAppData = "AppData\\Local",
+        )
+        assertEquals("C:\\Users\\prova\\AppData\\Local\\snastro\\modelli", cartella.toString())
+    }
+
+    @Test
+    fun `AC-335 su Linux la cartella segue XDG_DATA_HOME`() {
         val cartella = CartellaCacheModelli.risolvi(
             sistemaOperativo = "Linux",
             cartellaUtente = "/home/prova",
@@ -45,11 +78,31 @@ class CartellaCacheModelliTest {
     }
 
     @Test
-    fun `AC-133 su Linux senza XDG_DATA_HOME la cartella e derivata dalla cartella utente`() {
+    fun `AC-335 Linux senza XDG_DATA_HOME la cartella e derivata dalla cartella utente`() {
         val cartella = CartellaCacheModelli.risolvi(
             sistemaOperativo = "Linux",
             cartellaUtente = "/home/prova",
             xdgDataHome = null,
+        )
+        assertEquals("/home/prova/.local/share/snastro/modelli", cartella.toString())
+    }
+
+    @Test
+    fun `AC-335 Linux con XDG_DATA_HOME vuoto o solo spazi usa il fallback`() {
+        val cartella = CartellaCacheModelli.risolvi(
+            sistemaOperativo = "Linux",
+            cartellaUtente = "/home/prova",
+            xdgDataHome = "   ",
+        )
+        assertEquals("/home/prova/.local/share/snastro/modelli", cartella.toString())
+    }
+
+    @Test
+    fun `AC-335 Linux con XDG_DATA_HOME relativo usa il fallback`() {
+        val cartella = CartellaCacheModelli.risolvi(
+            sistemaOperativo = "Linux",
+            cartellaUtente = "/home/prova",
+            xdgDataHome = "relativo/share",
         )
         assertEquals("/home/prova/.local/share/snastro/modelli", cartella.toString())
     }
