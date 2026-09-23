@@ -20,6 +20,7 @@ import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.RigaImpronta
 import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
@@ -38,6 +39,9 @@ import kotlin.test.assertTrue
 class ApplicaRevisionePoliticaTest {
     private val parlanti = ParlanteRepositoryFinta()
     private val attribuzioni = AttribuzioneRepositoryFinta()
+
+    // TODO(option-c follow-up): ML Finte built WITHOUT the UnitaDiLavoroFinta (no in-transaction guard, AC-272)
+    // because this service still extracts inside its transaction; the option-(c) rework passes the uow.
     private val decodificatore = DecodificatoreAudioFinta()
     private val estrattore = EstrattoreImprontaFinta()
 
@@ -63,8 +67,8 @@ class ApplicaRevisionePoliticaTest {
         val pb = unParlante("id-pb")
         val voceA = unaVoce(1)
         val voceB = unaVoce(2)
-        pa.registraImpronta(voceA, Impronta(floatArrayOf(0f, 0f))).atteso()
-        pb.registraImpronta(voceB, Impronta(floatArrayOf(1f, 1f))).atteso()
+        pa.registraImpronta(voceA, Impronta(floatArrayOf(0f, 0f)), "0-1000", "finto").atteso()
+        pb.registraImpronta(voceB, Impronta(floatArrayOf(1f, 1f)), "0-1000", "finto").atteso()
         parlanti.salva(pa).atteso()
         parlanti.salva(pb).atteso()
         attribuzioni.salva(attribuisci(voceA, pa.id))
@@ -93,7 +97,7 @@ class ApplicaRevisionePoliticaTest {
         val voceA = unaVoce(1)
         val voceB = unaVoce(2)
         val improntaIniziale = Impronta(floatArrayOf(0f, 0f, 0f))
-        pa.registraImpronta(voceA, improntaIniziale).atteso()
+        pa.registraImpronta(voceA, improntaIniziale, "0-1000", "finto").atteso()
         parlanti.salva(pa).atteso()
         attribuzioni.salva(attribuisci(voceA, pa.id))
         val intervalliCorrenti = listOf(IntervalloMs(0, 5000))
@@ -114,7 +118,7 @@ class ApplicaRevisionePoliticaTest {
         val voceOrigine = unaVoce(1)
         val voceNuova = unaVoce(2)
         val improntaIniziale = Impronta(floatArrayOf(2f, 2f))
-        pa.registraImpronta(voceOrigine, improntaIniziale).atteso()
+        pa.registraImpronta(voceOrigine, improntaIniziale, "0-1000", "finto").atteso()
         parlanti.salva(pa).atteso()
         attribuzioni.salva(attribuisci(voceOrigine, pa.id))
         val intervalliRidotti = listOf(IntervalloMs(0, 2000))
@@ -136,7 +140,7 @@ class ApplicaRevisionePoliticaTest {
         val pda = unParlante("id-pda", tipo = TipoParlante.RICORRENTE)
         val voceDa = unaVoce(1)
         val voceDestinazione = unaVoce(2)
-        pda.registraImpronta(voceDa, Impronta(floatArrayOf(3f, 3f))).atteso()
+        pda.registraImpronta(voceDa, Impronta(floatArrayOf(3f, 3f)), "0-1000", "finto").atteso()
         parlanti.salva(pda).atteso()
         attribuzioni.salva(attribuisci(voceDa, pda.id))
         val pol = politica()
@@ -162,8 +166,8 @@ class ApplicaRevisionePoliticaTest {
         val ricorrente = unParlante("id-ric", tipo = TipoParlante.RICORRENTE)
         val voceOcc = unaVoce(1)
         val voceRic = unaVoce(2)
-        occasionale.registraImpronta(voceOcc, Impronta(floatArrayOf(4f))).atteso()
-        ricorrente.registraImpronta(voceRic, Impronta(floatArrayOf(5f))).atteso()
+        occasionale.registraImpronta(voceOcc, Impronta(floatArrayOf(4f)), "0-1000", "finto").atteso()
+        ricorrente.registraImpronta(voceRic, Impronta(floatArrayOf(5f)), "0-1000", "finto").atteso()
         parlanti.salva(occasionale).atteso()
         parlanti.salva(ricorrente).atteso()
         attribuzioni.salva(attribuisci(voceOcc, occasionale.id))
@@ -341,7 +345,7 @@ class ApplicaRevisionePoliticaTest {
         val pDest = unParlante("id-dest")
         val voceDestinazione = unaVoce(2)
         val improntaIniziale = Impronta(floatArrayOf(6f, 6f))
-        pDest.registraImpronta(voceDestinazione, improntaIniziale).atteso()
+        pDest.registraImpronta(voceDestinazione, improntaIniziale, "0-1000", "finto").atteso()
         parlanti.salva(pDest).atteso()
         attribuzioni.salva(attribuisci(voceDestinazione, pDest.id))
         val intervalliCorrenti = listOf(IntervalloMs(0, 3000))
@@ -368,7 +372,7 @@ class ApplicaRevisionePoliticaTest {
         val pSrc = unParlante("id-src")
         val voceDa = unaVoce(1)
         val improntaIniziale = Impronta(floatArrayOf(7f, 7f, 7f))
-        pSrc.registraImpronta(voceDa, improntaIniziale).atteso()
+        pSrc.registraImpronta(voceDa, improntaIniziale, "0-1000", "finto").atteso()
         parlanti.salva(pSrc).atteso()
         attribuzioni.salva(attribuisci(voceDa, pSrc.id))
         val intervalliRidotti = listOf(IntervalloMs(0, 1500))
@@ -403,7 +407,7 @@ class ApplicaRevisionePoliticaTest {
         val pb = unParlante("id-pb", tipo = TipoParlante.OCCASIONALE)
         val voceA = unaVoce(1)
         val voceB = unaVoce(2)
-        pb.registraImpronta(voceB, Impronta(floatArrayOf(8f))).atteso()
+        pb.registraImpronta(voceB, Impronta(floatArrayOf(8f)), "0-1000", "finto").atteso()
         parlanti.salva(pb).atteso()
         attribuzioni.salva(attribuisci(voceB, pb.id))
         val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
@@ -465,8 +469,8 @@ class ApplicaRevisionePoliticaTest {
         val p = unParlante("id-p", tipo = TipoParlante.OCCASIONALE)
         val voceA = unaVoce(1)
         val voceB = unaVoce(2)
-        p.registraImpronta(voceA, Impronta(floatArrayOf(9f))).atteso()
-        p.registraImpronta(voceB, Impronta(floatArrayOf(10f))).atteso()
+        p.registraImpronta(voceA, Impronta(floatArrayOf(9f)), "0-1000", "finto").atteso()
+        p.registraImpronta(voceB, Impronta(floatArrayOf(10f)), "0-1000", "finto").atteso()
         parlanti.salva(p).atteso()
         attribuzioni.salva(attribuisci(voceA, p.id))
         attribuzioni.salva(attribuisci(voceB, p.id))
@@ -491,7 +495,7 @@ class ApplicaRevisionePoliticaTest {
         val pOcc = unParlante("id-occ", tipo = TipoParlante.OCCASIONALE)
         val voceDa = unaVoce(1)
         val voceAltrove = VoceRef(RegistrazioneId("registrazione-2"), VoceId(1))
-        pOcc.registraImpronta(voceDa, Impronta(floatArrayOf(11f))).atteso()
+        pOcc.registraImpronta(voceDa, Impronta(floatArrayOf(11f)), "0-1000", "finto").atteso()
         parlanti.salva(pOcc).atteso()
         attribuzioni.salva(attribuisci(voceDa, pOcc.id))
         attribuzioni.salva(Attribuzione.conferma(voceAltrove, PROGETTO, pOcc.id).aggregato)
@@ -527,10 +531,20 @@ class ApplicaRevisionePoliticaTest {
         override fun salva(p: Parlante): Esito<Unit> = Esito.Errore(ErroreParlanti.NomeGiaInUso(p.nome.valore))
 
         override fun rimuovi(id: ParlanteId) = delegato.rimuovi(id)
+
+        override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> =
+            delegato.impronteDiRegistrazione(id)
+
+        override fun impronteDelProgetto(id: ProgettoId): List<RigaImpronta> = delegato.impronteDelProgetto(id)
+
+        override fun aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String) =
+            delegato.aggiornaImpronta(attesa, impronta, sorgente, modello)
     }
 
     /** [EstrattoreImpronta] che lancia sempre, come un guasto nativo dell'estrattore (AC-96). */
     private object EstrattoreImprontaCheLancia : EstrattoreImpronta {
+        override val modello: String = "finto"
+
         override fun estrai(c: CampioniAudio): Impronta = error("guasto nativo dell'estrattore")
     }
 

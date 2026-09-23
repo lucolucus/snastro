@@ -129,7 +129,9 @@ public class ConfermaAttribuzioneServizio(
         // the Parlante MUST be saved before the Attribuzione: persistenza-schema's
         // attribuzione.parlante_id REFERENCES parlante(id) is an immediate FK (SQLite
         // foreign_keys=ON) — for a brand new Parlante the row must exist first.
-        return risolto.parlante.registraImpronta(voceRef, impronta)
+        // TODO(option-c follow-up): extraction still inside the transaction; sorgente = the intervals decoded above.
+        val sorgente = chiaveSorgenteProvvisoria(intervalli)
+        return risolto.parlante.registraImpronta(voceRef, impronta, sorgente, estrattore.modello)
             .poi { parlanti.salva(risolto.parlante) }
             .poi {
                 attribuzioni.salva(cambiamento.attribuzione)

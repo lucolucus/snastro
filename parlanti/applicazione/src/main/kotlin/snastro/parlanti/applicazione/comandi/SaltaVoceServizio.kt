@@ -70,7 +70,9 @@ public class SaltaVoceServizio(
             Parlante.crea(ParlanteId(generatoreId.nuovo()), registrazione.progettoId, nome, TipoParlante.OCCASIONALE)
         val campioni = decodificatore.campioni(voceRef.registrazioneId, voce.intervalli)
         // Un Parlante appena creato e sempre attivo: registraImpronta non puo rifiutare la richiesta.
-        check(parlante.registraImpronta(voceRef, estrattore.estrai(campioni)) is Esito.Ok)
+        // TODO(option-c follow-up): extraction still inside the transaction; sorgente = the intervals decoded above.
+        val sorgente = chiaveSorgenteProvvisoria(voce.intervalli)
+        check(parlante.registraImpronta(voceRef, estrattore.estrai(campioni), sorgente, estrattore.modello) is Esito.Ok)
         val (attribuzione, evAttribuzione) = Attribuzione.conferma(voceRef, registrazione.progettoId, parlante.id)
 
         parlanti.salva(parlante).poi {

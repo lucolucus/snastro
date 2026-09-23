@@ -45,6 +45,9 @@ import kotlin.test.assertTrue
 class SaltaVoceServizioTest {
     private val parlanti = ParlanteRepositoryFinta()
     private val attribuzioni = AttribuzioneRepositoryFinta()
+
+    // TODO(option-c follow-up): ML Finte built WITHOUT the UnitaDiLavoroFinta (no in-transaction guard, AC-272)
+    // because this service still extracts inside its transaction; the option-(c) rework passes the uow.
     private val decodificatore = DecodificatoreAudioFinta()
     private val estrattore = EstrattoreImprontaFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(parlanti, attribuzioni))

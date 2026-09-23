@@ -30,6 +30,7 @@ import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
+import snastro.parlanti.applicazione.porte.RigaImpronta
 import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
@@ -478,6 +479,13 @@ class ConfermaAttribuzioneServizioTest {
         override fun salva(p: Parlante): Esito<Unit> = Esito.Errore(ErroreParlanti.NomeGiaInUso(p.nome.valore))
 
         override fun rimuovi(id: ParlanteId) = Unit
+
+        override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> = emptyList()
+
+        override fun impronteDelProgetto(id: ProgettoId): List<RigaImpronta> = emptyList()
+
+        override fun aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String) =
+            false
     }
 
     /**
@@ -500,6 +508,13 @@ class ConfermaAttribuzioneServizioTest {
         }
 
         override fun rimuovi(id: ParlanteId) = Unit
+
+        override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> = emptyList()
+
+        override fun impronteDelProgetto(id: ProgettoId): List<RigaImpronta> = emptyList()
+
+        override fun aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String) =
+            false
     }
 
     /** Records every call (Registrazione, intervalli) it is asked to decode, delegating for real samples. */
@@ -546,6 +561,8 @@ class ConfermaAttribuzioneServizioTest {
     private class GuastoEstrazioneDiProva(messaggio: String) : RuntimeException(messaggio)
 
     private class EstrattoreImprontaCheFallisce : EstrattoreImpronta {
+        override val modello: String = "finto"
+
         override fun estrai(c: CampioniAudio): Impronta = throw GuastoEstrazioneDiProva("estrazione fallita")
     }
 
@@ -553,6 +570,8 @@ class ConfermaAttribuzioneServizioTest {
         EstrattoreImpronta {
         var chiamate: Int = 0
             private set
+
+        override val modello: String get() = delegato.modello
 
         override fun estrai(c: CampioniAudio): Impronta {
             chiamate++
@@ -573,6 +592,8 @@ class ConfermaAttribuzioneServizioTest {
         ),
         lettoreVoci: LettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
         generatoreId: GeneratoreIdFinto = GeneratoreIdFinto(),
+        // TODO(option-c follow-up): ML Finte WITHOUT the UnitaDiLavoroFinta (no in-transaction guard, AC-272)
+        // because ConfermaAttribuzioneServizio still extracts inside its transaction.
         decodificatore: DecodificatoreAudio = DecodificatoreAudioFinta(),
         estrattore: EstrattoreImpronta = EstrattoreImprontaFinta(),
     ) {
