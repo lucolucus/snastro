@@ -1,6 +1,5 @@
 package snastro.parlanti.applicazione.politiche
 
-import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import snastro.kernel.CampioniAudio
@@ -207,8 +206,6 @@ class ApplicaRevisionePoliticaTest {
         val intervalli = listOf(IntervalloMs(0, 1000))
         val decodificatoreMock = mockk<DecodificatoreAudio>()
         val estrattoreMock = mockk<EstrattoreImpronta>()
-        every { decodificatoreMock.campioni(any(), any()) } returns CampioniAudio(floatArrayOf(0f))
-        every { estrattoreMock.estrai(any()) } returns Impronta(floatArrayOf(0f))
         val pol = ApplicaRevisionePolitica(
             parlanti,
             attribuzioni,
@@ -242,8 +239,6 @@ class ApplicaRevisionePoliticaTest {
         val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
         val decodificatoreMock = mockk<DecodificatoreAudio>()
         val estrattoreMock = mockk<EstrattoreImpronta>()
-        every { decodificatoreMock.campioni(any(), any()) } returns CampioniAudio(floatArrayOf(0f))
-        every { estrattoreMock.estrai(any()) } returns Impronta(floatArrayOf(0f))
         val pol = ApplicaRevisionePolitica(
             parlanti,
             attribuzioni,
@@ -270,8 +265,6 @@ class ApplicaRevisionePoliticaTest {
         val intervalli = listOf(IntervalloMs(0, 1000))
         val decodificatoreMock = mockk<DecodificatoreAudio>()
         val estrattoreMock = mockk<EstrattoreImpronta>()
-        every { decodificatoreMock.campioni(any(), any()) } returns CampioniAudio(floatArrayOf(0f))
-        every { estrattoreMock.estrai(any()) } returns Impronta(floatArrayOf(0f))
         val pol = ApplicaRevisionePolitica(
             parlanti,
             attribuzioni,
@@ -328,8 +321,7 @@ class ApplicaRevisionePoliticaTest {
         val voceOrigine = unaVoce(1)
         attribuzioni.salva(attribuisci(voceOrigine, pa.id))
         val intervalli = listOf(IntervalloMs(0, 1000))
-        val estrattoreCheLancia = mockk<EstrattoreImpronta>()
-        every { estrattoreCheLancia.estrai(any()) } throws RuntimeException("guasto nativo dell'estrattore")
+        val estrattoreCheLancia = EstrattoreImprontaCheLancia
         val pol = ApplicaRevisionePolitica(
             parlanti,
             attribuzioni,
@@ -338,7 +330,7 @@ class ApplicaRevisionePoliticaTest {
             estrattoreCheLancia,
         )
 
-        assertFailsWith<RuntimeException> { pol.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)) }
+        assertFailsWith<IllegalStateException> { pol.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)) }
     }
 
     // --- F3 (code-review SHOULD, rami mancanti su comportamento gia implementato): niente da
@@ -446,8 +438,6 @@ class ApplicaRevisionePoliticaTest {
         val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
         val decodificatoreMock = mockk<DecodificatoreAudio>()
         val estrattoreMock = mockk<EstrattoreImpronta>()
-        every { decodificatoreMock.campioni(any(), any()) } returns CampioniAudio(floatArrayOf(0f))
-        every { estrattoreMock.estrai(any()) } returns Impronta(floatArrayOf(0f))
         val pol = ApplicaRevisionePolitica(
             parlanti,
             attribuzioni,
@@ -537,6 +527,11 @@ class ApplicaRevisionePoliticaTest {
         override fun salva(p: Parlante): Esito<Unit> = Esito.Errore(ErroreParlanti.NomeGiaInUso(p.nome.valore))
 
         override fun rimuovi(id: ParlanteId) = delegato.rimuovi(id)
+    }
+
+    /** [EstrattoreImpronta] che lancia sempre, come un guasto nativo dell'estrattore (AC-96). */
+    private object EstrattoreImprontaCheLancia : EstrattoreImpronta {
+        override fun estrai(c: CampioniAudio): Impronta = error("guasto nativo dell'estrattore")
     }
 
     private companion object {
