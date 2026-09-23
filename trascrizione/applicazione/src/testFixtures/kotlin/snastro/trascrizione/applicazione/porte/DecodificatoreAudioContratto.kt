@@ -14,7 +14,8 @@ import kotlin.test.assertTrue
 /**
  * Consumer-driven contract of Trascrizione's [DecodificatoreAudio] (boundary `tec-decodifica-trascrizione`,
  * ADR 0005): `campioni(intervallo)` has exactly `(fine - inizio) × 16` samples — that slice of `tutti`,
- * zero-padded past its end (a trailing partial millisecond included); an unreadable source throws `IOException`. One subclass per implementation; the real adapter's subclass is `@Tag("modelli")`.
+ * zero-padded past its end (a trailing partial millisecond included); an unreadable source throws
+ * `IOException`. One subclass per implementation; the real adapter's subclass is `@Tag("modelli")`.
  */
 public abstract class DecodificatoreAudioContratto {
     /** A fresh decoder; nothing decoded yet. */
@@ -71,13 +72,17 @@ public abstract class DecodificatoreAudioContratto {
         val d = decodificato()
         val durata = CampioniAudio(d.tutti(REGISTRAZIONE).campioni).durataMs()
 
-        listOf(IntervalloMs(durata, durata + 1), IntervalloMs(durata, durata + 5), IntervalloMs(durata + 10, durata + 12))
-            .forEach { i ->
-                val campioni = d.campioni(REGISTRAZIONE, i).campioni
+        val oltre = listOf(
+            IntervalloMs(durata, durata + 1),
+            IntervalloMs(durata, durata + 5),
+            IntervalloMs(durata + 10, durata + 12),
+        )
+        oltre.forEach { i ->
+            val campioni = d.campioni(REGISTRAZIONE, i).campioni
 
-                assertEquals((i.fineMs - i.inizioMs).toInt() * CAMPIONI_PER_MS, campioni.size, "$i")
-                assertTrue(campioni.all { it == 0f }, "$i: oltre la fine solo silenzio")
-            }
+            assertEquals((i.fineMs - i.inizioMs).toInt() * CAMPIONI_PER_MS, campioni.size, "$i")
+            assertTrue(campioni.all { it == 0f }, "$i: oltre la fine solo silenzio")
+        }
     }
 
     @Test
