@@ -9,4 +9,7 @@ dependencies {
 
     // AC-14/AC-15 shape checks of the published events read their declarations (CR-5 via Konsist).
     testImplementation(libs.konsist)
+
+    // LettoreRegistrazioneFintaTest mints ids like the supplier, with the kernel's GeneratoreIdFinto.
+    testImplementation(testFixtures(project(":kernel")))
 }
