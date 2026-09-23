@@ -348,3 +348,4 @@
 2026-09-23T12:06:42Z	stati-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:06:42Z	stati-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:06:42Z	registrazioni-del-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T12:07:14Z	fix-batch-5	verifier	result	cycle=0	tier=deep	model=opus	PASS (merged tree 569 tests green; 9 mutants caught; chiaveSorgenteProvvisoria byte-identical to SorgenteImpronta.chiave -> remove in option-c follow-ups)
