@@ -230,3 +230,9 @@
 2026-09-23T11:01:34Z	conferma-attribuzione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:01:34Z	conferma-attribuzione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:01:34Z	salta-voce	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:03:32Z	revisione-policy	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (1 HIGH: F1 revisione on Voce attributed to eliminato Parlante always rolled back via registraImpronta; MED patch F2 AC-96 test enshrines bug, F3 untested branches; MED defer F4 uncapped print re-derivation in transaction -> architect/spike across conferma/salta-voce/revisione-policy; LOW F5 product confirm unire B-only, F6 INV-25 predicate duplicated w/ conferma, F7 spec naming)
+2026-09-23T11:04:03Z	revisione-policy	verifier	result	cycle=0	tier=deep	model=opus	PASS (merged-tree gate green; confirms eliminato-Parlante behaviour issue) -> not eligible (code-review HIGH F1) -> rework cycle=1 queued (worker cap 4/4)
+2026-09-23T11:04:34Z	fix-batch-4	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (a851dd3)
+2026-09-23T11:04:34Z	fix-batch-4	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:04:34Z	fix-batch-4	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:04:34Z	revisione-policy	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: code-review HIGH F1 eliminato Parlante, MED F2 AC-96 test, F3 missing branches)
