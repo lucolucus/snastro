@@ -258,3 +258,7 @@
 2026-09-23T11:21:41Z	revisione-policy	verifier	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T11:21:41Z	revisione-policy	code-review	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T11:21:41Z	api-trascritto	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:23:27Z	catalogo-registrazioni	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (ff6b90e; no out-of-block touches)
+2026-09-23T11:23:27Z	catalogo-registrazioni	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:23:27Z	catalogo-registrazioni	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:23:27Z	documento	worker	dispatch	cycle=0	tier=standard	model=sonnet
