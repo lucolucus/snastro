@@ -5,6 +5,9 @@ import snastro.kernel.ParlanteId
 
 /** Expected rule violations of the Parlanti context (ADR 0003, CR-8). Later blocks add their members here. */
 public sealed interface ErroreParlanti : ErroreDominio {
+    /** The command's `parlanteId` matches no Parlante of the Progetto (active or `eliminato`). */
+    public data class ParlanteNonTrovato(val id: ParlanteId) : ErroreParlanti
+
     /** [INV-13] an `eliminato` Parlante is terminal. */
     public data class ParlanteEliminatoNonModificabile(val id: ParlanteId) : ErroreParlanti
 
