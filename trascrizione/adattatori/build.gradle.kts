@@ -20,15 +20,18 @@ tasks.register<Test>("modelliTest") {
 }
 
 dependencies {
-    // DecodificatoreAudio (port) + kernel Published Language types (RegistrazioneId, RiferimentoAudio,
-    // CampioniAudio, IntervalloMs) reached transitively (applicazione exposes :kernel as `api`).
+    // Ports + kernel Published Language types (RegistrazioneId, RiferimentoAudio, CampioniAudio,
+    // IntervalloMs) reached transitively (applicazione exposes :kernel as `api`):
+    // DecodificatoreAudio (decodifica-trascrizione); Allineatore + RiconoscitoreParlato / Vad / Turno /
+    // SegmentoGrezzo (allineatore).
     implementation(project(":trascrizione:applicazione"))
 
     // DecodificatoreAudioFfmpeg delegates to :audio's real FFmpeg decode/probe, never touching
     // org.bytedeco/javax.sound directly (ADR 0005, CR-3 confinement).
     implementation(project(":audio"))
 
-    // DecodificatoreAudioContratto (testFixtures) — D2: this adapter's test extends the contract
-    // (dev-architecture-app.md#porta-contratto).
+    // The ports' contracts + fakes (DecodificatoreAudioContratto, AllineatoreContratto,
+    // RiconoscitoreParlatoFinta / VadFinta, synthetic-signal helpers) — D2: this module's adapter tests
+    // extend the port contracts (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
 }
