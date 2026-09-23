@@ -401,21 +401,73 @@ class ApplicaRevisionePoliticaTest {
         assertNotEquals(improntaIniziale, improntaSalvata)
     }
 
+    // user decision 2026-09-23: unire(A sopravvissuta, B rimossa) con SOLO B attribuita — A EREDITA il
+    // Parlante di B (non resta senza Attribuzione): nuova Attribuzione(A -> P) confermata come
+    // conferma-attribuzione, l'Attribuzione+impronta di B sparisce, l'impronta di P e ri-derivata per A
+    // dai Segmenti correnti. P mantiene cosi un'Attribuzione (quella ereditata): un occasionale P NON
+    // cessa (INV-25 non si applica qui).
     @Test
-    fun `INV-21 unire con B attribuita e A no, B perde Attribuzione e impronta, A resta senza Attribuzione`() {
+    fun `INV-21 unire con B attribuita e A no, A eredita il Parlante di B con l impronta ri-derivata`() {
         val pb = unParlante("id-pb", tipo = TipoParlante.OCCASIONALE)
         val voceA = unaVoce(1)
         val voceB = unaVoce(2)
         pb.registraImpronta(voceB, Impronta(floatArrayOf(8f))).atteso()
         parlanti.salva(pb).atteso()
         attribuzioni.salva(attribuisci(voceB, pb.id))
-        val pol = politica()
+        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
+        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged))))
 
         pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(attribuzioni.trova(voceB), "B perde l'Attribuzione")
-        assertNull(attribuzioni.trova(voceA), "A non l'aveva e non la guadagna (INV-21 letterale)")
-        assertNull(parlanti.trova(pb.id), "l'occasionale rimasto senza Attribuzioni cessa (INV-25)")
+        val attribuzioneA = assertNotNull(attribuzioni.trova(voceA), "A eredita il Parlante di B")
+        assertEquals(pb.id, attribuzioneA.parlanteId)
+        val pbSalvato = assertNotNull(
+            parlanti.trova(pb.id),
+            "occasionale, ma mantiene l'Attribuzione ereditata: non cessa",
+        )
+        val improntaSalvata = pbSalvato.impronte.single { it.voceRef == voceA }.impronta
+        assertEquals(
+            improntaAttesa(intervalliMerged),
+            improntaSalvata,
+            "l'impronta di P e ri-derivata dai Segmenti di A",
+        )
+        assertEquals(1, pbSalvato.impronte.size, "l'impronta di B (rimossa) non resta")
+    }
+
+    @Test
+    fun `INV-21 unire con B attribuita a un Parlante eliminato e A no, A eredita l Attribuzione senza impronta`() {
+        val pb = unParlante("id-pb")
+        pb.elimina().atteso()
+        parlanti.salva(pb).atteso()
+        val voceA = unaVoce(1)
+        val voceB = unaVoce(2)
+        attribuzioni.salva(attribuisci(voceB, pb.id))
+        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
+        val decodificatoreMock = mockk<DecodificatoreAudio>()
+        val estrattoreMock = mockk<EstrattoreImpronta>()
+        every { decodificatoreMock.campioni(any(), any()) } returns CampioniAudio(floatArrayOf(0f))
+        every { estrattoreMock.estrai(any()) } returns Impronta(floatArrayOf(0f))
+        val pol = ApplicaRevisionePolitica(
+            parlanti,
+            attribuzioni,
+            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged)))),
+            decodificatoreMock,
+            estrattoreMock,
+        )
+
+        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+
+        assertNull(attribuzioni.trova(voceB), "B perde l'Attribuzione")
+        val attribuzioneA = assertNotNull(attribuzioni.trova(voceA), "A eredita l'Attribuzione, anche se P e eliminato")
+        assertEquals(pb.id, attribuzioneA.parlanteId)
+        assertEquals(
+            emptyList(),
+            assertNotNull(parlanti.trova(pb.id)).impronte,
+            "nessuna impronta per un eliminato (INV-15)",
+        )
+        verify(exactly = 0) { decodificatoreMock.campioni(any(), any()) }
+        verify(exactly = 0) { estrattoreMock.estrai(any()) }
     }
 
     @Test

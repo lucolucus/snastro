@@ -11,6 +11,7 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
+import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Parlante
 
@@ -37,14 +38,28 @@ public class ApplicaRevisionePolitica(
     private val estrattore: EstrattoreImpronta,
 ) {
     /**
-     * `VociUnite`: [rimossa] disappears into [sopravvissuta]. [rimossa] loses its Attribuzione and
-     * derived print; if [sopravvissuta] is attributed its print is re-derived (its Segmenti changed) —
-     * this is how "A's Attribuzione wins" when A and B were attributed to different Parlanti: B's is
-     * simply dropped, A's is untouched but re-derived from the merged Segmenti.
+     * `VociUnite`: [rimossa] disappears into [sopravvissuta]. If [rimossa] is attributed, its
+     * Attribuzione and derived print are removed. If [sopravvissuta] already had its OWN Attribuzione
+     * (to the same or a different Parlante) it WINS ([INV-21]) and is simply re-derived from the merged
+     * Segmenti. If [sopravvissuta] had none of its own but [rimossa] did, [sopravvissuta] INHERITS that
+     * Parlante — a new Attribuzione is confirmed for it, same path `conferma-attribuzione` uses, then
+     * that Parlante's print is re-derived from [sopravvissuta]'s current Segmenti, unless the Parlante
+     * is `eliminato` (F1: inherited, no print). Either way [rimossa]'s former Parlante keeps an
+     * Attribuzione (its own, or [sopravvissuta]'s inherited one), so [INV-25] never cessa it here
+     * (user decision 2026-09-23).
      */
-    public fun applicaVociUnite(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId): Esito<Unit> =
-        rimuoviSePresente(VoceRef(registrazioneId, rimossa))
-            .poi { riderivaSePresente(VoceRef(registrazioneId, sopravvissuta)) }
+    public fun applicaVociUnite(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId): Esito<Unit> {
+        val perSopravvissuta = VoceRef(registrazioneId, sopravvissuta)
+        val sopravvissutaGiaAttribuita = attribuzioni.trova(perSopravvissuta) != null
+        return rimuoviAttribuzioneEImpronta(VoceRef(registrazioneId, rimossa)).poi { parlanteRimosso ->
+            val esito = if (parlanteRimosso != null && !sopravvissutaGiaAttribuita) {
+                ereditaAttribuzione(perSopravvissuta, parlanteRimosso)
+            } else {
+                riderivaSePresente(perSopravvissuta)
+            }
+            esito.mappa { if (parlanteRimosso != null) cessaSeOccasionaleSenzaAttribuzioni(parlanteRimosso) }
+        }
+    }
 
     /**
      * `VoceDivisa`: the new `Voce` (`nuova`) starts without Attribuzione — no call needed: no
@@ -75,14 +90,34 @@ public class ApplicaRevisionePolitica(
     }
 
     /** [INV-21] the removed [voceRef] loses its Attribuzione and derived print; cascades [INV-25]. */
-    private fun rimuoviSePresente(voceRef: VoceRef): Esito<Unit> {
-        val attribuzione = attribuzioni.trova(voceRef) ?: return Esito.Ok(Unit)
+    private fun rimuoviSePresente(voceRef: VoceRef): Esito<Unit> =
+        rimuoviAttribuzioneEImpronta(voceRef).mappa { parlante ->
+            if (parlante != null) cessaSeOccasionaleSenzaAttribuzioni(parlante)
+        }
+
+    /**
+     * Removes [voceRef]'s Attribuzione and the derived print of the Parlante it pointed to, if any;
+     * returns that Parlante (its print already updated) so the caller decides [INV-25] cessation /
+     * [INV-21] `unire` inheritance — `null` if [voceRef] had no Attribuzione.
+     */
+    private fun rimuoviAttribuzioneEImpronta(voceRef: VoceRef): Esito<Parlante?> {
+        val attribuzione = attribuzioni.trova(voceRef) ?: return Esito.Ok(null)
         attribuzioni.rimuovi(voceRef)
         val parlante = checkNotNull(parlanti.trova(attribuzione.parlanteId)) {
             "Attribuzione($voceRef) punta al Parlante inesistente ${attribuzione.parlanteId}"
         }
         parlante.rimuoviImpronta(voceRef)
-        return parlanti.salva(parlante).mappa { cessaSeOccasionaleSenzaAttribuzioni(parlante) }
+        return parlanti.salva(parlante).mappa { parlante }
+    }
+
+    /**
+     * [INV-21] `unire`: [voceRef] (the surviving Voce, unattributed so far) inherits [parlante] — a new
+     * Attribuzione is confirmed, then [parlante]'s print is re-derived for [voceRef]'s current Segmenti
+     * via [riderivaSePresente] (which already skips re-derivation, F1, if [parlante] is `eliminato`).
+     */
+    private fun ereditaAttribuzione(voceRef: VoceRef, parlante: Parlante): Esito<Unit> {
+        attribuzioni.salva(Attribuzione.conferma(voceRef, parlante.progettoId, parlante.id).aggregato)
+        return riderivaSePresente(voceRef)
     }
 
     /**
