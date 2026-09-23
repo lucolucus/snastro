@@ -566,3 +566,8 @@
 2026-09-23T23:15:29Z	repository-sql-trascrizione	verifier	result	cycle=0	-	composer	PASS (light: contracts pass real-on-real, full gate green after composer conflict resolution)
 2026-09-23T23:15:29Z	repository-sql-trascrizione	composer	merge	cycle=0	-	-	MERGED 0f3f26f
 2026-09-23T23:15:29Z	avvio-composizione	composer	carry	-	-	-	MUST FIX: avvio/src/test/.../AggiungiRegistrazioneR0Test.kt:44 uses elaborazioneQueries (breaks agg-elaborazione §14 confinement gate) → use ElaborazioneRepositorySql
+2026-09-23T23:15:40Z	schermata-registrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW d3d29df
+2026-09-23T23:15:40Z	schermata-registrazione	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review (light budget)
+2026-09-23T23:17:20Z	schermata-registrazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (no HIGH)
+2026-09-23T23:17:20Z	schermata-registrazione	composer	merge	cycle=0	-	-	MERGED c15f136
+2026-09-23T23:17:20Z	schermata-registrazione	composer	pre-release	cycle=0	-	-	MED two quick clicks can play out of order (reuse LettorePresenter supersession); MED disponibile()/documento() failure turns whole S3 into Errore (degrade instead); LOW overlap highlights all containing segments; LOW highlight lost on pause; LOW row ▶ not dimmed when audio unavailable; LOW riprova no Caricamento; LOW pause icon emoji mismatch (BarraLettore)
