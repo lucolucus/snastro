@@ -205,3 +205,5 @@
 2026-09-23T10:38:20Z	revisione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:38:20Z	revisione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:38:20Z	conferma-attribuzione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:40:09Z	revisione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; 5 LOW defer: AC-80 daRimossa=true path, prossimaVoce rollback assert, AC-83 exception path covered by kernel contract, named args in PL mappers, carry to avvio-composizione: wire eventi.unitaDiLavoro not the raw delegate)
+2026-09-23T10:40:33Z	revisione	verifier	result	cycle=0	tier=deep	model=opus	PASS
