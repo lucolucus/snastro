@@ -113,10 +113,10 @@ public abstract class ParlanteRepositoryContratto {
     }
 
     @Test
-    public fun `AC-37 round-trip con impronte`() {
+    public fun `AC-37 AC-271 round-trip con impronte conserva sorgente e modello`() {
         val p = unParlante("id-1", "Marco", tipo = TipoParlante.OCCASIONALE)
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(0.1f, 0.2f, 0.3f))).atteso()
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(-1.5f, 0f, 2.25f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(0.1f, 0.2f, 0.3f)), "1200-5400,8000-15000", "m-a").atteso()
+        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(-1.5f, 0f, 2.25f)), SORGENTE, MODELLO).atteso()
 
         repo.salva(p).atteso()
 
@@ -126,7 +126,7 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 round-trip di un eliminato conserva il nome e nessuna impronta`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
         p.elimina().atteso()
 
@@ -142,16 +142,16 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 salva sostituisce le impronte possedute senza duplicare il Parlante`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f))).atteso()
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f)), SORGENTE, MODELLO).atteso()
+        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f)), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
         p.rimuoviImpronta(VOCE_1)
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f))).atteso()
+        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f)), SORGENTE, MODELLO).atteso()
 
         repo.salva(p).atteso()
 
         val impronte = assertNotNull(repo.trova(p.id)).impronte
-        assertEquals(listOf(ImprontaVocale(VOCE_2, Impronta(floatArrayOf(3f)))), impronte)
+        assertEquals(listOf(ImprontaVocale(VOCE_2, Impronta(floatArrayOf(3f)), SORGENTE, MODELLO)), impronte)
         assertEquals(1, repo.delProgetto(PROGETTO).size)
         assertRigheImpronte(1, p.id)
     }
@@ -161,12 +161,12 @@ public abstract class ParlanteRepositoryContratto {
         val marco = unParlante("id-1", "Marco")
         repo.salva(marco).atteso()
         val anna = unParlante("id-2", "Anna")
-        anna.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 1f))).atteso()
+        anna.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 1f)), SORGENTE, MODELLO).atteso()
         repo.salva(anna).atteso()
         val modificata = assertNotNull(repo.trova(anna.id))
         modificata.rimuoviImpronta(VOCE_1)
-        modificata.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f, 2f))).atteso()
-        modificata.registraImpronta(VOCE_3, Impronta(floatArrayOf(3f, 3f))).atteso()
+        modificata.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f, 2f)), SORGENTE, MODELLO).atteso()
+        modificata.registraImpronta(VOCE_3, Impronta(floatArrayOf(3f, 3f)), SORGENTE, MODELLO).atteso()
         modificata.rinomina(nome(" MARCO")).atteso()
 
         repo.salva(modificata).erroreAtteso<ErroreParlanti.NomeGiaInUso>()
@@ -180,7 +180,7 @@ public abstract class ParlanteRepositoryContratto {
     public fun `AC-37 lo stato salvato non cambia con modifiche non salvate all aggregato o ai suoi array`() {
         val valori = floatArrayOf(1f, 2f)
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(valori)).atteso()
+        p.registraImpronta(VOCE_1, Impronta(valori), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
 
         p.rinomina(nome("Luca")).atteso()
@@ -190,14 +190,14 @@ public abstract class ParlanteRepositoryContratto {
 
         val riletto = assertNotNull(repo.trova(p.id))
         assertEquals("Marco", riletto.nome.valore)
-        assertEquals(listOf(ImprontaVocale(VOCE_1, Impronta(floatArrayOf(1f, 2f)))), riletto.impronte)
+        assertEquals(listOf(ImprontaVocale(VOCE_1, Impronta(floatArrayOf(1f, 2f)), SORGENTE, MODELLO)), riletto.impronte)
     }
 
     @Test
     public fun `AC-37 salva non modifica gli array delle impronte ricevute`() {
         val valori = floatArrayOf(0.5f, -0.5f)
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(valori)).atteso()
+        p.registraImpronta(VOCE_1, Impronta(valori), SORGENTE, MODELLO).atteso()
 
         repo.salva(p).atteso()
 
@@ -225,7 +225,7 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 rimuovi cancella il Parlante con le sue impronte e ne libera il nome`() {
         val p = unParlante("id-1", "Marco", tipo = TipoParlante.OCCASIONALE)
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f)), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
 
         repo.rimuovi(p.id)
@@ -235,6 +235,119 @@ public abstract class ParlanteRepositoryContratto {
         assertEquals(emptyList(), repo.delProgetto(PROGETTO))
         assertFalse(repo.nomeAttivoInUso(PROGETTO, nome("Marco"), escluso = null))
         repo.salva(unParlante("id-2", "Marco")).atteso()
+    }
+
+    @Test
+    public fun `AC-270 aggiornaImpronta aggiorna la riga se esiste ancora con sorgente e modello attesi`() {
+        val p = conImpronte("id-1", "Marco", VOCE_1, VOCE_2)
+        val attesa = RigaImpronta(p.id, VOCE_1, SORGENTE, MODELLO)
+
+        val aggiornata = repo.aggiornaImpronta(attesa, Impronta(floatArrayOf(7f, 7f)), "0-2000", "m-nuovo")
+
+        assertTrue(aggiornata)
+        val impronte = assertNotNull(repo.trova(p.id)).impronte.associateBy { it.voceRef }
+        assertEquals(ImprontaVocale(VOCE_1, Impronta(floatArrayOf(7f, 7f)), "0-2000", "m-nuovo"), impronte[VOCE_1])
+        assertEquals(ImprontaVocale(VOCE_2, Impronta(floatArrayOf(2f)), SORGENTE, MODELLO), impronte[VOCE_2])
+        assertRigheImpronte(2, p.id)
+    }
+
+    @Test
+    public fun `AC-270 aggiornaImpronta con sorgente o modello cambiati restituisce false e non scrive nulla`() {
+        val p = conImpronte("id-1", "Marco", VOCE_1)
+        val prima = assertNotNull(repo.trova(p.id)).impronte
+
+        val esiti = listOf(
+            RigaImpronta(p.id, VOCE_1, "altra-sorgente", MODELLO),
+            RigaImpronta(p.id, VOCE_1, SORGENTE, "altro-modello"),
+        ).map { repo.aggiornaImpronta(it, Impronta(floatArrayOf(9f)), "0-2000", "m-nuovo") }
+
+        assertEquals(listOf(false, false), esiti)
+        assertEquals(prima, assertNotNull(repo.trova(p.id)).impronte)
+        assertRigheImpronte(1, p.id)
+    }
+
+    @Test
+    public fun `AC-270 aggiornaImpronta su una riga assente restituisce false e non inserisce mai`() {
+        val p = conImpronte("id-1", "Marco", VOCE_1)
+        val eliminato = conImpronte("id-2", "Anna", VOCE_2)
+        eliminato.elimina().atteso()
+        repo.salva(eliminato).atteso()
+
+        val esiti = listOf(
+            RigaImpronta(p.id, VOCE_2, SORGENTE, MODELLO),
+            RigaImpronta(eliminato.id, VOCE_2, SORGENTE, MODELLO),
+            RigaImpronta(ParlanteId("id-sconosciuto"), VOCE_1, SORGENTE, MODELLO),
+        ).map { repo.aggiornaImpronta(it, Impronta(floatArrayOf(9f)), SORGENTE, MODELLO) }
+
+        assertEquals(listOf(false, false, false), esiti)
+        assertRigheImpronte(1, p.id)
+        assertRigheImpronte(0, eliminato.id)
+        assertEquals(listOf(VOCE_1), assertNotNull(repo.trova(p.id)).impronte.map { it.voceRef })
+        assertEquals(emptyList(), assertNotNull(repo.trova(eliminato.id)).impronte)
+    }
+
+    @Test
+    public fun `AC-271 impronteDiRegistrazione restituisce tutte e sole le righe della Registrazione`() {
+        val marco = conImpronte("id-1", "Marco", VOCE_1, VOCE_ALTRA_REGISTRAZIONE)
+        val anna = conImpronte("id-2", "Anna", VOCE_2)
+        conImpronte("id-3", "Luca", VOCE_ALTRO_PROGETTO, progettoId = ALTRO_PROGETTO)
+
+        val righe = repo.impronteDiRegistrazione(REGISTRAZIONE)
+
+        assertEquals(
+            setOf(RigaImpronta(marco.id, VOCE_1, SORGENTE, MODELLO), RigaImpronta(anna.id, VOCE_2, SORGENTE, MODELLO)),
+            righe.toSet(),
+        )
+        assertEquals(2, righe.size)
+        assertEquals(emptyList(), repo.impronteDiRegistrazione(RegistrazioneId("registrazione-vuota")))
+    }
+
+    @Test
+    public fun `AC-271 impronteDelProgetto restituisce tutte e sole le righe dei Parlanti del Progetto`() {
+        val marco = conImpronte("id-1", "Marco", VOCE_1, VOCE_ALTRA_REGISTRAZIONE)
+        conImpronte("id-3", "Luca", VOCE_ALTRO_PROGETTO, progettoId = ALTRO_PROGETTO)
+        repo.salva(unParlante("id-4", "Senza impronte")).atteso()
+
+        val righe = repo.impronteDelProgetto(PROGETTO)
+
+        assertEquals(
+            setOf(
+                RigaImpronta(marco.id, VOCE_1, SORGENTE, MODELLO),
+                RigaImpronta(marco.id, VOCE_ALTRA_REGISTRAZIONE, SORGENTE, MODELLO),
+            ),
+            righe.toSet(),
+        )
+        assertEquals(2, righe.size)
+        assertEquals(
+            listOf(RigaImpronta(ParlanteId("id-3"), VOCE_ALTRO_PROGETTO, SORGENTE, MODELLO)),
+            repo.impronteDelProgetto(ALTRO_PROGETTO),
+        )
+    }
+
+    @Test
+    public fun `AC-271 le righe riportano la sorgente e il modello di ogni impronta`() {
+        val p = unParlante("id-1", "Marco")
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f)), "1200-5400", "m-a").atteso()
+        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f)), "0-3000,4000-9000", "m-b").atteso()
+        repo.salva(p).atteso()
+
+        assertEquals(
+            setOf(RigaImpronta(p.id, VOCE_1, "1200-5400", "m-a"), RigaImpronta(p.id, VOCE_2, "0-3000,4000-9000", "m-b")),
+            repo.impronteDelProgetto(PROGETTO).toSet(),
+        )
+    }
+
+    /** Saves an attivo Parlante with one print per [voci] (values 1f, 2f, … in order, [SORGENTE]/[MODELLO]). */
+    private fun conImpronte(
+        id: String,
+        nome: String,
+        vararg voci: VoceRef,
+        progettoId: ProgettoId = PROGETTO,
+    ): Parlante {
+        val p = unParlante(id, nome, progettoId)
+        voci.forEachIndexed { i, v -> p.registraImpronta(v, Impronta(floatArrayOf(i + 1f)), SORGENTE, MODELLO).atteso() }
+        repo.salva(p).atteso()
+        return p
     }
 
     private fun assertStessoStato(atteso: Parlante, trovato: Parlante) {
@@ -268,12 +381,22 @@ public abstract class ParlanteRepositoryContratto {
         public val VOCE_1: VoceRef = VoceRef(REGISTRAZIONE, VoceId(1))
         public val VOCE_2: VoceRef = VoceRef(REGISTRAZIONE, VoceId(2))
         public val VOCE_3: VoceRef = VoceRef(REGISTRAZIONE, VoceId(3))
+        public val ALTRA_REGISTRAZIONE: RegistrazioneId = RegistrazioneId("registrazione-2")
+        public val REGISTRAZIONE_ALTRO_PROGETTO: RegistrazioneId = RegistrazioneId("registrazione-3")
+        public val VOCE_ALTRA_REGISTRAZIONE: VoceRef = VoceRef(ALTRA_REGISTRAZIONE, VoceId(1))
+        public val VOCE_ALTRO_PROGETTO: VoceRef = VoceRef(REGISTRAZIONE_ALTRO_PROGETTO, VoceId(1))
+        public const val SORGENTE: String = "0-1000"
+        public const val MODELLO: String = "finto"
 
-        /** Every id this contract uses (prints only on Parlanti of [PROGETTO]). */
+        /** Every id this contract uses (a print's Voce always belongs to its Parlante's Progetto). */
         public val PREDISPOSIZIONE: PredisposizioneParlanti = PredisposizioneParlanti(
             progetti = setOf(PROGETTO, ALTRO_PROGETTO),
-            registrazioni = mapOf(REGISTRAZIONE to PROGETTO),
-            voci = setOf(VOCE_1, VOCE_2, VOCE_3),
+            registrazioni = mapOf(
+                REGISTRAZIONE to PROGETTO,
+                ALTRA_REGISTRAZIONE to PROGETTO,
+                REGISTRAZIONE_ALTRO_PROGETTO to ALTRO_PROGETTO,
+            ),
+            voci = setOf(VOCE_1, VOCE_2, VOCE_3, VOCE_ALTRA_REGISTRAZIONE, VOCE_ALTRO_PROGETTO),
             parlanti = emptyMap(),
         )
     }
