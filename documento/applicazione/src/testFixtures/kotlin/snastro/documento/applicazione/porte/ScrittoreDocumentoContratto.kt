@@ -2,6 +2,7 @@ package snastro.documento.applicazione.porte
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 /**
  * Consumer-driven contract of [ScrittoreDocumento] (AC-42, ADR 0010). One subclass per
@@ -63,10 +64,31 @@ public abstract class ScrittoreDocumentoContratto {
         assertEquals(mapOf(ALTRO_NOME to ALTRO_MARKDOWN), a.documenti())
     }
 
+    @Test
+    public fun `AC-42 un nomeFile che esce da documenti o non e un singolo md viene rifiutato senza effetti`() {
+        val a = ambiente()
+        a.scrittore.scrivi(NOME, MARKDOWN)
+        val prima = a.documenti()
+        for (nome in NOMI_NON_VALIDI) {
+            assertFailsWith<IllegalArgumentException>(nome) { a.scrittore.scrivi(nome, ALTRO_MARKDOWN) }
+            assertFailsWith<IllegalArgumentException>(nome) { a.scrittore.rimuovi(nome) }
+        }
+        assertEquals(prima, a.documenti())
+    }
+
+    @Test
+    public fun `AC-42 un titolo con puntini di sospensione resta un nomeFile valido`() {
+        val a = ambiente()
+        a.scrittore.scrivi(CON_PUNTINI, MARKDOWN)
+        assertEquals(mapOf(CON_PUNTINI to MARKDOWN), a.documenti())
+    }
+
     private companion object {
         const val NOME = "2026-09-23 Riunione di progetto.md"
         const val ALTRO_NOME = "2026-09-22 Intervista.md"
         const val MARKDOWN = "# Riunione di progetto\n\n**Marco:** buongiorno a tutti.\n"
         const val ALTRO_MARKDOWN = "# Intervista\n\n**Voce 1:** è così, àèìòù.\n"
+        const val CON_PUNTINI = "2026-09-23 Riunione... finale.md"
+        val NOMI_NON_VALIDI = listOf("../x.md", "a/b.md", "a\\b.md", "..", "a\u0000.md", " ", "", "nota.txt")
     }
 }
