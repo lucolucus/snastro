@@ -296,3 +296,7 @@
 2026-09-23T11:33:51Z	esegui-elaborazione	verifier	result	cycle=1	tier=deep	model=opus	FAIL (merged tree does not compile: motivoTrascritto when missing RegistrazioneNonTrovata/TrascrittoNonTrovato added on integration line; AC-70: throwing LettoreRegistrazione / segnalatore.fase escape esegui -> in_corso) -> rework cycle=2 (deep/opus, LAST) queued; integration line merged into block branch first
 2026-09-23T11:35:03Z	documento	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED (HIGH decision: nomeFile collision (AC-61 x AC-155) overwrites/deletes another Documento; MED decision: sanitize/length-cap nomeFile; LOW defer markdown escaping; LOW patch Locale.ROOT, test gaps) -> PARKED doing->todo with open-questions/documento.md (branch kept)
 2026-09-23T11:35:54Z	documento	verifier	result	cycle=0	tier=deep	model=opus	FAIL (INV-24 tie-break untested: tied pair already in order, stable sort survives mutation — reverse the input order) -> folded into the rework after the parked decision
+2026-09-23T11:37:13Z	nomi-delle-voci	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (728bd7d)
+2026-09-23T11:37:13Z	nomi-delle-voci	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:37:13Z	nomi-delle-voci	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:37:13Z	esegui-elaborazione	worker	dispatch	cycle=2	tier=deep	model=opus	(LAST cycle: verifier FAIL merged-tree when + AC-70 throwing lettore/fase; code-review HIGH F-A, MED F-B, LOW F-D/F-H)
