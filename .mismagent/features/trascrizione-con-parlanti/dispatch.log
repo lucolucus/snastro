@@ -562,3 +562,7 @@
 2026-09-23T23:12:46Z	allineatore	verifier	result	cycle=0	-	composer	PASS (light: algorithm read vs ADR 0015 rules 1-10; 18 tests + module check green)
 2026-09-23T23:12:46Z	allineatore	composer	merge	cycle=0	-	-	MERGED 89f5509 (build.gradle.kts conflict with decodifica resolved by composer)
 2026-09-23T23:12:53Z	registrazione-da-progetto-tr	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:15:29Z	repository-sql-trascrizione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 5c9157a
+2026-09-23T23:15:29Z	repository-sql-trascrizione	verifier	result	cycle=0	-	composer	PASS (light: contracts pass real-on-real, full gate green after composer conflict resolution)
+2026-09-23T23:15:29Z	repository-sql-trascrizione	composer	merge	cycle=0	-	-	MERGED 0f3f26f
+2026-09-23T23:15:29Z	avvio-composizione	composer	carry	-	-	-	MUST FIX: avvio/src/test/.../AggiungiRegistrazioneR0Test.kt:44 uses elaborazioneQueries (breaks agg-elaborazione §14 confinement gate) → use ElaborazioneRepositorySql
