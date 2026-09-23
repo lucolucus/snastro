@@ -7,7 +7,10 @@ import snastro.kernel.VoceRef
 
 /** Expected rule violations of the Parlanti context (ADR 0003, CR-8). Later blocks add their members here. */
 public sealed interface ErroreParlanti : ErroreDominio {
-    /** The command's `parlanteId` matches no Parlante of the Progetto (active or `eliminato`). */
+    /**
+     * The command's `parlanteId` matches no Parlante of the Progetto (active or `eliminato`).
+     * [INV-17] (conferma-attribuzione) also folds a Parlante of another Progetto into this case.
+     */
     public data class ParlanteNonTrovato(val id: ParlanteId) : ErroreParlanti
 
     /** [INV-5] the Registrazione behind a `voceRef` has no Trascritto: unknown id, or no Elaborazione completata. */
