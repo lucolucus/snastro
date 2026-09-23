@@ -31,7 +31,7 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:parlanti:adattatori` | `snastro.parlanti.adattatori` | repositories, port adapters (→ Trascrizione / Progetto API, → `:ml-sherpa`), pure `ConfrontoImpronte` |
 | `:documento:applicazione` | `snastro.documento.applicazione` | `Documento` projection (pure: inputs → markdown string), `Rigenerazione` policy, ports (`LettoreTrascritto`, `LettoreNomi`, `ScrittoreDocumento`) |
 | `:documento:adattatori` | `snastro.documento.adattatori` | port adapters (→ Trascrizione / Parlanti API), atomic `.md` writer |
-| `:persistenza` | `snastro.persistenza` | SQLDelight schema `.sq`, migrations `.sqm`, schema snapshots, driver factory (WAL, FK, `secure_delete`), `UnitaDiLavoro` impl |
+| `:persistenza` | `snastro.persistenza` | SQLDelight schema `.sq`, migrations `.sqm` (source of the schema, ADR 0006 (a)), driver factory (WAL, FK, `secure_delete`), `UnitaDiLavoro` impl |
 | `:audio` | `snastro.audio` | bytedeco FFmpeg `sonda`/`decodifica` → derived WAV; javax.sound player `RiproduttoreWav` (adapted to `:ui`'s `LettoreAudio` by `:avvio`) |
 | `:ml-sherpa` | `snastro.ml` | native-lib loading, sherpa session config, `AutoCloseable` wrappers, diarization/ASR/VAD/embedding engines |
 | `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |

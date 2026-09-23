@@ -470,3 +470,10 @@
 2026-09-23T15:24:10Z	lettore-audio	composer	merge	cycle=1	-	-	MERGED cb94f58
 2026-09-23T15:24:10Z	lettore-audio	composer	pre-release	cycle=1	-	-	MED port-thrown CancellationException w/o job cancel leaves Caricamento (ensureActive then generic error); LOW document single-thread scope; LOW test for superseded late-throw; LOW NonDisponibile on transient error disables retry
 2026-09-23T15:24:10Z	schermata-registrazioni	worker	dispatch	cycle=0	tier=standard	model=sonnet	R0 variant
+2026-09-23T15:53:13Z	persistenza-schema	composer	anomaly	cycle=1	-	-	verifyMigration hung 35min (java-object-diff blowup on 1.db mismatch); killed worktree gradle PIDs; told worker to regenerate 1.db baseline + use timeouts
+2026-09-23T16:00:17Z	schermata-registrazioni	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 53f941c
+2026-09-23T16:00:17Z	schermata-registrazioni	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + code-review combined
+2026-09-23T16:04:21Z	schermata-registrazioni	verifier	result	cycle=0	tier=deep	model=opus	FAIL (H1 percent-decoder breaks non-ASCII paths; H2 lettore exceptions kill collectors)
+2026-09-23T16:04:21Z	schermata-registrazioni	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework H1,H2 + R0-visible M1,M4,M5, multi-drop, AC strings
+2026-09-23T16:04:21Z	schermata-registrazioni	composer	pre-release	cycle=0	-	-	MED rifletti stale lettore state after reload; MED trascorsoMs no ticker (R1); LOW record function-typed collaborators as dev-architecture §7 amendment; LOW AggiornamentiVistaFinta tryEmit drop; LOW Windows /C:/ path
+2026-09-23T16:17:15Z	(persistenza)	decision	result	-	-	-	USER DECISION: FluentMigrator-style migrations — ADR 0006 (a) deriveSchemaFromMigrations, verifyMigrations off, no .db snapshots, fast migration test; implemented by persistenza-schema rework c1

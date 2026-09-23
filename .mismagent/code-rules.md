@@ -95,9 +95,11 @@ technical scaffolding may be English. The context-map's "Not:" synonyms (e.g. `S
 **CR-12 · Build files reference projects with `project(":…")` only** (no type-safe accessors), so the
 edge check sees every edge. → gate lint: `verificaDipendenzeModuli`.
 
-**CR-13 · Migrations are forward-only and verified.** New schema = a new `.sqm` + regenerated
-snapshot; a committed `.sqm` is never edited. → gate lint: `verifySqlDelightMigration`; the
-"never edited" half is a **review criterion** (diff touches an existing `.sqm` → finding).
+**CR-13 · Migrations are forward-only and are the schema (ADR 0006 (a)).** New schema = a new `.sqm`
+(`deriveSchemaFromMigrations`; `.sq` = queries only); a shipped `.sqm` is never edited. → gate: the
+`:persistenza:test` migration test (empty DB → current version, integrity + every query) and the
+query compilation against the derived schema; the "never edited" half is a **review criterion**
+(diff touches a shipped `.sqm` → finding).
 
 **CR-14 · No wall clock in the inner layers.** `*:dominio` and `*:applicazione` never call
 `Instant.now()`, `LocalDate.now()`, `LocalDateTime.now()`, `ZonedDateTime.now()`,
