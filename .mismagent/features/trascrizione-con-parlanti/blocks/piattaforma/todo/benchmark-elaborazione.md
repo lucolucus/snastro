@@ -4,6 +4,7 @@ type: "adapter"
 context: "piattaforma"
 side: "app"
 wave: 13
+release: "R1"
 module: ":avvio (task benchmarkElaborazione)"
 consumes:
   - "kernel-pl"
@@ -12,7 +13,6 @@ depends_on:
   - "riconoscitore-sherpa"
   - "vad-silero"
   - "allineatore"
-  - "estrattore-impronta-sherpa"
   - "avvio-composizione"
 related_adrs:
   - "0002"
@@ -20,21 +20,23 @@ related_adrs:
   - "0011"
   - "0012"
 gated_by:
-  - "all five spike ADRs"
-  - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore, estrattore-impronta-sherpa merged"
+  - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop)"
+  - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
 ---
 # benchmark-elaborazione — Benchmark NFR dell'Elaborazione (opt-in)
 
 ## What to do
 Wire ./gradlew benchmarkElaborazione -Pcampione=<path> to run one real Elaborazione with the real adapters, print per-phase timings and fail above 600 s (ADR 0011, R17). Not part of check.
 
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by.
+
 ## Tasks
 - AC-261 [opt-in, fuori gate] su un campione reale di 60 minuti con modelli scaricati, l'Elaborazione completa va da in_corso a completata in <= 600 s sull'M3 Pro; i tempi per fase sono stampati
 - AC-262 Il task fallisce se il tempo supera 600 s
 
 ## Dependencies
-- **GATED — not ready until:** all five spike ADRs; diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore, estrattore-impronta-sherpa merged
-- Blocks built first: `diarizzatore-sherpa` (wave 12), `riconoscitore-sherpa` (wave 12), `vad-silero` (wave 12), `allineatore` (wave 11), `estrattore-impronta-sherpa` (wave 12), `avvio-composizione` (wave 10)
+- **GATED — not ready until:** the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop); diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged
+- Blocks built first: `diarizzatore-sherpa` (wave 12), `riconoscitore-sherpa` (wave 12), `vad-silero` (wave 12), `allineatore` (wave 11), `avvio-composizione` (wave 10)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID

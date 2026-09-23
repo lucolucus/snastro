@@ -4,6 +4,7 @@ type: "adapter"
 context: "progetto"
 side: "app"
 wave: 5
+release: "R0"
 module: ":progetto:adattatori (..audio)"
 consumes:
   - "kernel-pl"

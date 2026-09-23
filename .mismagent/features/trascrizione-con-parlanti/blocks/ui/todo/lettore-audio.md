@@ -4,12 +4,12 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 7
+release: "R0"
 module: ":ui (snastro.ui.lettore)"
 consumes:
   - "kernel-pl"
   - "tec-shell-ui"
 depends_on:
-  - "estratto-audio"
   - "ui-fondamenta"
 related_adrs:
   - "0002"
@@ -17,8 +17,7 @@ related_adrs:
   - "0005"
   - "0010"
   - "0012"
-consumes_rm:
-  - "estratto-audio"
+consumes_rm: []
 triggers: []
 owns_boundaries:
   tec-lettore-audio:
@@ -33,7 +32,9 @@ owns_boundaries:
 ## What to do
 Shared audio bar + '▶' control: LettorePresenter over the LettoreAudio port (declared here); play/pause, position, extract as a sequence of intervals, unavailable state.
 
-### Consumes read-models: estratto-audio
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the component plays an EstrattoRef (kernel-pl type) HANDED IN by the calling screen — S3/S4 consume the estratto-audio read-model and pass its EstrattoRef; the component itself never depends on the Parlanti read-model (dependency on estratto-audio removed so R0 playback does not need an R2 block). AC-188 is tested with a hand-built EstrattoRef. The LettoreAudio implementation (RiproduttoreWav + WAV rebuild, AC-241) lives in avvio-r0.
+
+### Consumes read-models: —
 ### Triggers: —
 
 ## Tasks
@@ -45,7 +46,7 @@ Shared audio bar + '▶' control: LettorePresenter over the LettoreAudio port (d
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
-- Blocks built first: `estratto-audio` (wave 4), `ui-fondamenta` (wave 6)
+- Blocks built first: `ui-fondamenta` (wave 6)
 - **tec-lettore-audio** (OWNED here — built before its consumers) — owner `lettore-audio`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `LettoreAudio`: interface { fun disponibile(id: RegistrazioneId): Boolean; fun riproduciDa(id: RegistrazioneId, daMs: Long); fun riproduciEstratto(e: EstrattoRef); fun pausa(); val stato: StateFlow<StatoLettore> }

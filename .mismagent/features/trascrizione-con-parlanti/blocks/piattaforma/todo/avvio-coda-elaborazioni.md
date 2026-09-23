@@ -4,6 +4,7 @@ type: "adapter"
 context: "piattaforma"
 side: "app"
 wave: 9
+release: "R1"
 module: ":avvio"
 consumes:
   - "kernel-pl"

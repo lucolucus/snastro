@@ -4,6 +4,7 @@ type: "adapter"
 context: "progetto"
 side: "app"
 wave: 4
+release: "R0"
 module: ":progetto:adattatori"
 consumes:
   - "kernel-pl"
@@ -64,7 +65,7 @@ Note: AMENDED 2026-09-23 (user decision: multiple app instances on DIFFERENT pro
     - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }
     - `VoceRegistro`: data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)
   - keys (minting rules):
-    - `percorso`: minted by avvio-composizione (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open
+    - `percorso`: minted by avvio-r0 (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
 
 Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); R3 (user decision 2026-09-23), ADR 0010.

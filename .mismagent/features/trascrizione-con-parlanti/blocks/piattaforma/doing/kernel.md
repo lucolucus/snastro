@@ -4,6 +4,7 @@ type: "port"
 context: "piattaforma"
 side: "app"
 wave: 1
+release: "R0"
 module: ":kernel"
 consumes: []
 depends_on: []

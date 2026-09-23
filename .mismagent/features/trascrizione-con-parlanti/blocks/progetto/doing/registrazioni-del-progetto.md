@@ -4,6 +4,7 @@ type: "read-model"
 context: "progetto"
 side: "app"
 wave: 5
+release: "R0"
 module: ":progetto:applicazione (..letture)"
 consumes:
   - "kernel-pl"

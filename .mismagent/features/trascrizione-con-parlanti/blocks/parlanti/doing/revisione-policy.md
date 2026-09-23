@@ -4,6 +4,7 @@ type: "application-service"
 context: "parlanti"
 side: "app"
 wave: 4
+release: "R2"
 module: ":parlanti:applicazione (..politiche)"
 consumes:
   - "kernel-pl"

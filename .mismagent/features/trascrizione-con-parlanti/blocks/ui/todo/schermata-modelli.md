@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R1"
 module: ":ui (snastro.ui.modelli)"
 consumes:
   - "kernel-pl"

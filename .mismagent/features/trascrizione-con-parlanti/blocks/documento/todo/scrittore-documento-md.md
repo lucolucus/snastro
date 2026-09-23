@@ -4,6 +4,7 @@ type: "adapter"
 context: "documento"
 side: "app"
 wave: 5
+release: "R1"
 module: ":documento:adattatori"
 consumes:
   - "kernel-pl"

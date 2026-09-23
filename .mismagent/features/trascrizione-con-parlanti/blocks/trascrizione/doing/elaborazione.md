@@ -4,6 +4,7 @@ type: "aggregate"
 context: "trascrizione"
 side: "app"
 wave: 2
+release: "R1"
 module: ":trascrizione:dominio"
 consumes:
   - "kernel-pl"

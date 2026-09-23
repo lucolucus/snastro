@@ -4,6 +4,7 @@ type: "read-model"
 context: "trascrizione"
 side: "app"
 wave: 4
+release: "R1"
 module: ":trascrizione:applicazione (..letture)"
 consumes:
   - "kernel-pl"

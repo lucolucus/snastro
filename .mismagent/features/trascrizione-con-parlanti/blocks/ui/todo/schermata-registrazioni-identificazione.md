@@ -1,46 +1,44 @@
 ---
-id: "audio-ffmpeg"
-type: "adapter"
-context: "piattaforma"
+id: "schermata-registrazioni-identificazione"
+type: "ui"
+context: "ui"
 side: "app"
-wave: 4
-release: "R0"
-module: ":audio"
+wave: 9
+release: "R2"
+module: ":ui (snastro.ui.registrazioni)"
 consumes:
   - "kernel-pl"
-depends_on: []
+  - "tec-shell-ui"
+depends_on:
+  - "schermata-registrazioni"
+  - "identificazione-registrazioni"
+  - "ui-fondamenta"
 related_adrs:
   - "0002"
   - "0003"
-  - "0005"
+  - "0010"
   - "0012"
-owns_boundaries:
-  tec-audio-api:
-    projection: "in-process"
-    contract_test: "consumer-driven"
-    pinned_types:
-      "snastro.audio.SondaFfmpeg": "fun sonda(file: Path): InfoFile(durataMs: Long, modificatoIl: LocalDate) — throws AudioIlleggibile / FormatoNonSupportato"
-      "snastro.audio.DecodificaFfmpeg": "fun decodificaInWav(sorgente: Path, destinazione: Path) — 16 kHz mono 16-bit PCM; fun leggiCampioni(wav: Path, inizioMs: Long, fineMs: Long): FloatArray"
-      "snastro.audio.RiproduttoreWav": "AutoCloseable { riproduci(wav: Path, intervalli: List<Pair<Long, Long>>?, daMs: Long); pausa(); posizioneMs(): Long; inRiproduzione(): Boolean }"
+consumes_rm:
+  - "identificazione-registrazioni"
+triggers: []
 ---
-# audio-ffmpeg — Modulo :audio — sonda, decodifica, RiproduttoreWav
+# schermata-registrazioni-identificazione — S2 · badge di identificazione delle Voci (fetta Parlanti)
 
 ## What to do
-bytedeco FFmpeg (LGPL) sonda + decode to 16 kHz mono WAV + sample reads; javax.sound RiproduttoreWav with exact sample seek and interval sequences. Real tests @Tag("modelli").
+R2 extension of the S2 presenter row: joins the Parlanti slice identificazione-registrazioni (numVociDaIdentificare) by registrazioneId and renders the badge '3 voci · 1 da identificare'; the identification source is optional so S2 without it (R0/R1) shows no badge.
+
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): split out of schermata-registrazioni so S2 ships in R0 without the Parlanti read-model; extends the S2 presenter's row with the ux-proposal badge (S2 ⨝ identificazione-registrazioni, ux amendment R1). Wired by avvio-parlanti.
+
+### Consumes read-models: identificazione-registrazioni
+### Triggers: —
 
 ## Tasks
-- AC-122 [@modelli] sonda su un .m4a di sample/ restituisce durata > 0 e la data del file
-- AC-123 [@modelli] decodificaInWav produce un WAV 16 kHz mono 16-bit la cui durata coincide con la sonda (±50 ms)
-- AC-124 [@modelli] leggiCampioni(inizio, fine) restituisce (fine - inizio) × 16 campioni
-- AC-125 [@modelli] RiproduttoreWav parte dall'offset richiesto e, con una lista di intervalli, li riproduce in sequenza fermandosi alla fine dell'ultimo
-- AC-126 Nessun artefatto FFmpeg -gpl nel version catalog (regola enforced_by di ADR 0005)
+- AC-204 Badge '3 voci · 1 da identificare'
+- AC-345 La sorgente di identificazione è OPZIONALE per il presenter di S2: assente (R0/R1) o non ancora caricata → nessun badge (mai un conteggio provvisorio o '0 da identificare'); con numVociDaIdentificare = 0 → solo '3 voci'; l'errore di lettura della sorgente lascia la riga senza badge e il resto della riga utilizzabile
+- (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
-- **tec-audio-api** (OWNED here — built before its consumers) — owner `audio-ffmpeg`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `snastro.audio.SondaFfmpeg`: fun sonda(file: Path): InfoFile(durataMs: Long, modificatoIl: LocalDate) — throws AudioIlleggibile / FormatoNonSupportato
-    - `snastro.audio.DecodificaFfmpeg`: fun decodificaInWav(sorgente: Path, destinazione: Path) — 16 kHz mono 16-bit PCM; fun leggiCampioni(wav: Path, inizioMs: Long, fineMs: Long): FloatArray
-    - `snastro.audio.RiproduttoreWav`: AutoCloseable { riproduci(wav: Path, intervalli: List<Pair<Long, Long>>?, daMs: Long); pausa(); posizioneMs(): Long; inRiproduzione(): Boolean }
+- Blocks built first: `schermata-registrazioni` (wave 8), `identificazione-registrazioni` (wave 5), `ui-fondamenta` (wave 6)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -71,5 +69,15 @@ bytedeco FFmpeg (LGPL) sonda + decode to 16 kHz mono WAV + sample reads; javax.s
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
+- **tec-shell-ui** (consumed/implemented) — owner `ui-fondamenta`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
+    - `ProgettoAperto`: data class(progettoId: ProgettoId, nome: String, percorso: String)
+    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente } — no CartellaGiaEsistente: crea derives a free folder name (AC-264), re-pinned 2026-09-23 (user decision)
+    - `ApriEsterno`: interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }
+    - `AggiornamentiVista`: interface { val cambiamenti: Flow<Cambiamento> }
+    - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed
+  - keys (minting rules):
+    - `percorso`: see tec-registro-progetti
 
-Sources: ADRs 0002, 0003, 0005, 0012 (.mismagent/decisions/); ADR 0005.
+Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1), release pivot 2026-09-23.
