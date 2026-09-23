@@ -12,6 +12,26 @@ dependencies {
     // while `--smoke` lives in `main()`; accepted trade-off, reusing a vetted mechanism over a
     // hand-rolled `ComposeScene` driver (frugality rung 3).
     implementation(compose.desktop.uiTestJUnit4)
+
+    // R0 composition root (avvio-r0): manual wiring of the whole R0 graph.
+    implementation(project(":kernel"))
+    implementation(project(":persistenza"))
+    implementation(project(":audio"))
+    implementation(project(":progetto:applicazione"))
+    implementation(project(":progetto:adattatori"))
+    implementation(project(":ui"))
+    // RegistrazioniPresenter's optional `statiElaborazione`/`avviaElaborazione` parameters (both left
+    // `null` in R0, AC-350) are typed over `:trascrizione:applicazione` — `:ui` depends on it only as
+    // `implementation` (never `api`), so it is not on `:avvio`'s classpath transitively.
+    implementation(project(":trascrizione:applicazione"))
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.coroutines.swing)
+
+    testImplementation(testFixtures(project(":kernel")))
+    testImplementation(testFixtures(project(":persistenza")))
+    testImplementation(testFixtures(project(":progetto:applicazione")))
+    testImplementation(testFixtures(project(":ui")))
+    testImplementation(project(":progetto:dominio"))
 }
 
 compose.desktop {
