@@ -42,9 +42,12 @@ public class ApplicaRevisionePolitica(
      * Attribuzione and derived print are removed. If [sopravvissuta] already had its OWN Attribuzione
      * (to the same or a different Parlante) it WINS ([INV-21]) and is simply re-derived from the merged
      * Segmenti. If [sopravvissuta] had none of its own but [rimossa] did, [sopravvissuta] INHERITS that
-     * Parlante — a new Attribuzione is confirmed for it, same path `conferma-attribuzione` uses, then
-     * that Parlante's print is re-derived from [sopravvissuta]'s current Segmenti, unless the Parlante
-     * is `eliminato` (F1: inherited, no print). Either way [rimossa]'s former Parlante keeps an
+     * Parlante — a new Attribuzione is written for it directly (NOT the `conferma-attribuzione` path:
+     * the INV-17 `attivo` check is deliberately skipped, so inheritance happens even from an `eliminato`
+     * Parlante — user decision, explicit exception to INV-13/INV-17 — and no `AttribuzioneConfermata`
+     * is published, downstream being refreshed via `VociUnite`), then that Parlante's print is
+     * re-derived from [sopravvissuta]'s current Segmenti, unless the Parlante is `eliminato` (F1:
+     * inherited, no print). Either way [rimossa]'s former Parlante keeps an
      * Attribuzione (its own, or [sopravvissuta]'s inherited one), so [INV-25] never cessa it here
      * (user decision 2026-09-23).
      */
