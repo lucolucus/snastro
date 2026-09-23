@@ -6,7 +6,7 @@
 > **enforcement channel**; a rule with no channel is not written here.
 > Style and module map: `architecture.md`. Stack: Kotlin/JVM, Compose Desktop (ADR 0001).
 > Codebase conventions (style memory): `architetture/dev-architecture-app.md`.
-> **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9.
+> **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9 · 2026-09-23 (R25 amendment) — CR-8, RC-4.
 
 Channels:
 - **gate lint** — runs inside `./gradlew check` (the worker's own loop, verifier step 2, CI). Tools and
@@ -54,10 +54,13 @@ in a class with explicit `equals`/`hashCode` (e.g. `Impronta`, `CampioniAudio`).
 `runCatching` whose failure is ignored. → gate lint: detekt `EmptyCatchBlock`, `SwallowedException`,
 `TooGenericExceptionCaught`, `TooGenericExceptionThrown`.
 
-**CR-8 · Expected failures are values.** `ErroreDominio` is a sealed interface, never a `Throwable`;
-aggregate methods / application services return `Esito` for expected rule violations (ADR 0003).
-→ gate lint: Konsist (no subtype of `ErroreDominio` extends `Throwable`; public functions of
-`*:applicazione` command handlers return `Esito`) + ADR 0003 `enforced_by`.
+**CR-8 · Expected failures are values.** `ErroreDominio` is a plain (non-sealed) interface in
+`:kernel`, never a `Throwable`; each context owns one sealed hierarchy `Errore<Contesto> : ErroreDominio`
+in `Errori<Contesto>.kt`; aggregate methods / application services return `Esito` for expected rule
+violations (ADR 0003). → gate lint: Konsist (no subtype of `ErroreDominio` extends `Throwable`;
+every direct subtype of `ErroreDominio` is a `sealed interface` named `Errore<X>`; public functions
+of `*:applicazione` command handlers return `Esito`) + ADR 0003 `enforced_by`.
+*(amended 2026-09-23, R25 — was "`ErroreDominio` is a sealed interface")*
 
 **CR-9 · Warnings are errors; public API is explicit.** → gate lint: compiler
 (`allWarningsAsErrors`, `explicitApi()` on `:kernel` + `*:applicazione`).
@@ -112,8 +115,10 @@ contain no domain rule. Composables render presenter state and forward events �
 **RC-3 · Ports speak Published Language.** Port and published-event signatures use kernel VOs /
 primitives / the wrappers of CR-5 — never sherpa, FFmpeg, SQLDelight, Compose or `java.nio` types.
 
-**RC-4 · Exhaustive error mapping.** A `when` over an `ErroreDominio` hierarchy has no `else`
-branch (a new error type must break compilation where it is not handled).
+**RC-4 · Exhaustive error mapping.** A `when` over a context hierarchy `Errore<Contesto>` has no
+`else` branch (a new error type must break compilation where it is not handled). The single
+dispatch over `ErroreDominio` (non-sealed) may have exactly one `else`, which is a programmer error
+(`error(…)`), never a generic user message. *(amended 2026-09-23, R25)*
 
 **RC-5 · Native resources are released.** Every sherpa/FFmpeg native object is used via `use {}` or
 an `AutoCloseable` wrapper and never escapes its adapter (ADR 0004/0005).

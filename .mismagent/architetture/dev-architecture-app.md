@@ -34,6 +34,22 @@ Sections: [#pacchetti](#pacchetti) · [#valori-id](#valori-id) · [#aggregato](#
 hierarchy in one file · an aggregate's domain events in `<Aggregato>Eventi.kt` · a context's error
 hierarchy in `Errori<Contesto>.kt` (e.g. `ErroriParlanti.kt`).
 
+**Errors** *(amended 2026-09-23, R25 / ADR 0003 amendment)*: `:kernel` has `public interface
+ErroreDominio` — plain, **not sealed** (Kotlin forbids sealed subtypes across modules/packages),
+never a `Throwable`. Each context owns ONE sealed hierarchy, type `Errore<Contesto>`, in
+`Errori<Contesto>.kt` of the module that raises it:
+```kotlin
+// :parlanti:dominio  ErroriParlanti.kt
+public sealed interface ErroreParlanti : ErroreDominio {
+    public data class NomeGiaInUso(val nome: String) : ErroreParlanti
+    public data class ParlanteNonTrovato(val id: ParlanteId) : ErroreParlanti
+    public data class ParlanteEliminatoNonModificabile(val id: ParlanteId) : ErroreParlanti
+    public data object NomeVuoto : ErroreParlanti
+}
+```
+Code refers to errors qualified (`ErroreParlanti.NomeGiaInUso`) or via an import of the hierarchy's
+members; the unqualified names in the sketches below are shorthand.
+
 **Naming** (canonical Italian, ASCII — CR-10):
 | Kind | Pattern | Example |
 |---|---|---|
@@ -254,8 +270,19 @@ public sealed interface RegistrazioneUiStato {
   `Azioni<X>` (lambdas, **one per user action** [user K-c]) · stateless `Schermata<X>` · one-line
   `<X>Route`. Presenters call only `applicazione` (RC-2); composables hold no logic and no I/O.
 - `:ui:renderCheck` renders `Schermata<X>` directly from fixture `UiStato` values (every state).
-- UI strings in `snastro.ui.testi` (Italian only, v1). `messaggioPer(ErroreDominio)` in
-  `MessaggiErrore.kt` is an exhaustive `when` with no `else` (RC-4).
+- UI strings in `snastro.ui.testi` (Italian only, v1). `MessaggiErrore.kt` *(amended 2026-09-23,
+  R25)*: one `messaggioPer(e: Errore<Contesto>)` per context hierarchy, each an exhaustive `when`
+  with **no `else`** (RC-4); plus the entry point
+  ```kotlin
+  public fun messaggioPer(e: ErroreDominio): String = when (e) {
+      is ErroreProgetto -> messaggioPer(e)
+      is ErroreTrascrizione -> messaggioPer(e)
+      is ErroreParlanti -> messaggioPer(e)
+      // … one branch per Errore<X> hierarchy
+      else -> error("ErroreDominio non mappato: $e")   // unreachable: CR-8 Konsist + MessaggiErroreTest
+  }
+  ```
+  `MessaggiErroreTest` maps one instance of every hierarchy.
 
 ---
 

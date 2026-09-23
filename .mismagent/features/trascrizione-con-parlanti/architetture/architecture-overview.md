@@ -10,7 +10,7 @@
 |---|---|---|---|
 | D-1 | All-Kotlin, Compose Desktop, JBR 21, no Python | one language/gate; user's choice after 3 iterations | 0001 |
 | D-2 | Hexagonal, module set per context, edges table | ML swappable, compiler-enforced boundaries | 0002 |
-| D-3 | `Esito` + sealed `ErroreDominio`; exceptions only bugs/infra | idiomatic Kotlin, exhaustive UI mapping | 0003 |
+| D-3 | `Esito` + `ErroreDominio` (plain interface) with one sealed `Errore<Contesto>` hierarchy per context *(amended 2026-09-23, R25)*; exceptions only bugs/infra | idiomatic Kotlin, exhaustive UI mapping per context | 0003 |
 | D-4 | sherpa-onnx in-process, single-thread serial pipeline, CPU default | no IPC; Whisperheim precedent; crash → startup recovery | 0004 |
 | D-5 | bytedeco FFmpeg (LGPL) → derived 16 kHz WAV; javax.sound playback | one decoder, exact seek, no system ffmpeg | 0005 |
 | D-6 | SQLDelight + sqlite-jdbc, DB per Progetto, forward-only verified migrations | explicit SQL, build-time verification | 0006 |
