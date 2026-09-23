@@ -32,6 +32,7 @@ dependencies {
     testImplementation(testFixtures(project(":progetto:applicazione")))
     testImplementation(testFixtures(project(":ui")))
     testImplementation(project(":progetto:dominio"))
+    testImplementation(libs.kotlinx.coroutines.test) // CodaElaborazioniTest: StandardTestDispatcher (dev-architecture #dipendenze-test)
 }
 
 compose.desktop {
