@@ -54,7 +54,7 @@ public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
     private fun Parlante.copia(): Parlante {
         val copia = Parlante.crea(id, progettoId, nome, tipo).aggregato
         impronte.forEach {
-            check(copia.registraImpronta(it.voceRef, Impronta(it.impronta.valori.copyOf())) is Esito.Ok)
+            check(copia.registraImpronta(it.voceRef, it.impronta) is Esito.Ok)
         }
         if (eliminato) check(copia.elimina() is Esito.Ok)
         return copia
