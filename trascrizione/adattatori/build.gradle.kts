@@ -21,17 +21,29 @@ tasks.register<Test>("modelliTest") {
 
 dependencies {
     // Ports + kernel Published Language types (RegistrazioneId, RiferimentoAudio, CampioniAudio,
-    // IntervalloMs) reached transitively (applicazione exposes :kernel as `api`):
+    // IntervalloMs) reached transitively (applicazione exposes :kernel and its own dominio as `api`):
     // DecodificatoreAudio (decodifica-trascrizione); Allineatore + RiconoscitoreParlato / Vad / Turno /
-    // SegmentoGrezzo (allineatore).
+    // SegmentoGrezzo (allineatore); ElaborazioneRepository / TrascrittoRepository + the Elaborazione /
+    // Trascritto aggregates (repository-sql-trascrizione).
     implementation(project(":trascrizione:applicazione"))
 
     // DecodificatoreAudioFfmpeg delegates to :audio's real FFmpeg decode/probe, never touching
     // org.bytedeco/javax.sound directly (ADR 0005, CR-3 confinement).
     implementation(project(":audio"))
 
+    // The generated SnastroDatabase queries + UnitaDiLavoro impl (ADR 0006/0012).
+    implementation(project(":persistenza"))
+
+    // org.sqlite.SQLiteException/SQLiteErrorCode: mapping a unique-constraint violation (INV-4, ADR
+    // 0007) to ElaborazioneGiaAperta/ElaborazioneGiaCompletata (CR-3 confinement allows org.sqlite here).
+    implementation(libs.sqlite.jdbc)
+
     // The ports' contracts + fakes (DecodificatoreAudioContratto, AllineatoreContratto,
-    // RiconoscitoreParlatoFinta / VadFinta, synthetic-signal helpers) — D2: this module's adapter tests
-    // extend the port contracts (dev-architecture-app.md#porta-contratto).
+    // ElaborazioneRepositoryContratto, TrascrittoRepositoryContratto, RiconoscitoreParlatoFinta /
+    // VadFinta, synthetic-signal helpers, dominio fixtures) — D2: this module's adapter tests extend
+    // the port contracts (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
+
+    // databaseInMemoria() (testFixtures) — a fresh in-memory SnastroDatabase per contract test.
+    testImplementation(testFixtures(project(":persistenza")))
 }
