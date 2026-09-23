@@ -234,12 +234,28 @@ class RegoleArchitetturaliTest {
 
     // --- CR-15 - Reconstitution only from persistence adapters ----------------------------------
 
+    private fun KoFileDeclaration.isAdattatorePersistenza(): Boolean =
+        packagee?.name?.contains(".adattatori.persistenza") == true
+
+    /** The opt-in (and so every caller of `ricostituisci`) lives only in persistence adapters. */
     @Test
     fun `CR-15 RicostituzioneDaPersistenza compare solo negli adattatori di persistenza`() {
         Konsist.scopeFromProject()
             .files
+            .filter { !it.isRegolaArchitetturale() && it.text.contains("OptIn(RicostituzioneDaPersistenza") }
+            .assertTrue { it.isAdattatorePersistenza() }
+    }
+
+    /** Besides the opt-in: only the kernel declaration and the `dominio` `ricostituisci` it marks. */
+    @Test
+    fun `CR-15 l annotazione RicostituzioneDaPersistenza marca solo i ricostituisci del dominio`() {
+        Konsist.scopeFromProject()
+            .files
             .filter { !it.isRegolaArchitetturale() && it.text.contains("RicostituzioneDaPersistenza") }
-            .assertTrue { file -> file.packagee?.name?.contains(".adattatori.persistenza") == true }
+            .assertTrue { file ->
+                file.isAdattatorePersistenza() || file.packagee?.name == "snastro.kernel" ||
+                    Regex("""^snastro\.[a-z]+\.dominio(\..+)?$""").matches(file.packagee?.name.orEmpty())
+            }
     }
 
     // --- CR-16 - Command services expose only `esegui` ------------------------------------------
