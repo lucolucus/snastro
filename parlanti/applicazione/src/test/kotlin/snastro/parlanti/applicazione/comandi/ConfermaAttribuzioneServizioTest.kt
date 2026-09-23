@@ -9,6 +9,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -37,6 +38,7 @@ import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
+import snastro.parlanti.dominio.SorgenteImpronta
 import snastro.parlanti.dominio.TipoParlante
 import java.time.LocalDate
 import kotlin.test.Test
@@ -124,7 +126,8 @@ class ConfermaAttribuzioneServizioTest {
     @Test
     fun `INV-16 se l indice segnala la violazione il servizio restituisce lo stesso NomeGiaInUso`() {
         val attribuzioni = AttribuzioneRepositoryFinta()
-        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(attribuzioni))
+        val uow = UnitaDiLavoroFinta(attribuzioni)
+        val eventi = DispatcherEventiFinta(uow)
         val servizio = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
@@ -132,8 +135,8 @@ class ConfermaAttribuzioneServizioTest {
             LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
             ParlanteRepositoryCheSegnalaLaGara(),
             attribuzioni,
-            DecodificatoreAudioFinta(),
-            EstrattoreImprontaFinta(),
+            DecodificatoreAudioFinta(uow),
+            EstrattoreImprontaFinta(unitaDiLavoro = uow),
             eventi,
         )
 
@@ -148,7 +151,8 @@ class ConfermaAttribuzioneServizioTest {
     fun `INV-16 il servizio pre-verifica il Nome prima di salvare, non si appoggia solo al repository`() {
         val stub = ParlanteRepositoryCheNonSiAutoverifica()
         val attribuzioni = AttribuzioneRepositoryFinta()
-        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(attribuzioni))
+        val uow = UnitaDiLavoroFinta(attribuzioni)
+        val eventi = DispatcherEventiFinta(uow)
         val servizio = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
@@ -156,8 +160,8 @@ class ConfermaAttribuzioneServizioTest {
             LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
             stub,
             attribuzioni,
-            DecodificatoreAudioFinta(),
-            EstrattoreImprontaFinta(),
+            DecodificatoreAudioFinta(uow),
+            EstrattoreImprontaFinta(unitaDiLavoro = uow),
             eventi,
         )
 
@@ -356,21 +360,35 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     @Test
-    fun `AC-86 se l estrazione dell impronta fallisce il rollback e completo`() {
+    fun `AC-86 se l estrazione dell impronta fallisce nessuna transazione e aperta e nulla e scritto`() {
         val p = unParlante(ParlanteId("p-1"), "Marco")
         val ambiente = Ambiente(
             parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() },
-            estrattore = EstrattoreImprontaCheFallisce(),
+            estrattore = { EstrattoreImprontaCheFallisce() },
         )
 
         assertFailsWith<GuastoEstrazioneDiProva> {
             ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id)))
         }
 
+        assertEquals(0, ambiente.transazioniAperte, "l estrazione fallisce prima di aprire la transazione")
         assertNull(ambiente.attribuzioni.trova(VOCE_1))
         val pOra = assertNotNull(ambiente.parlanti.trova(p.id))
         assertEquals(emptyList(), pOra.impronte)
         assertEquals(emptyList(), ambiente.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-86 se la decodifica fallisce nessuna transazione e aperta e nulla e scritto`() {
+        val ambiente = Ambiente(decodificatore = { DecodificatoreCheFallisce })
+
+        assertFailsWith<GuastoEstrazioneDiProva> {
+            ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Giulia")))
+        }
+
+        assertEquals(0, ambiente.transazioniAperte)
+        assertEquals(emptyList(), ambiente.parlanti.delProgetto(PROGETTO), "nessun Parlante creato")
+        assertNull(ambiente.attribuzioni.trova(VOCE_1))
     }
 
     @Test
@@ -390,7 +408,7 @@ class ConfermaAttribuzioneServizioTest {
         val cambioConGuasto = Ambiente(
             parlanti = parlanti,
             attribuzioni = attribuzioni,
-            estrattore = EstrattoreImprontaCheFallisce(),
+            estrattore = { EstrattoreImprontaCheFallisce() },
         )
         assertFailsWith<GuastoEstrazioneDiProva> {
             cambioConGuasto.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(q.id)))
@@ -402,19 +420,22 @@ class ConfermaAttribuzioneServizioTest {
         val qOra = assertNotNull(parlanti.trova(q.id))
         assertEquals(emptyList(), qOra.impronte, "Q non riceve nulla")
         assertEquals(emptyList(), cambioConGuasto.eventi.pubblicati, "nulla viene pubblicato")
+        assertEquals(0, cambioConGuasto.transazioniAperte)
     }
 
     @Test
     fun `AC-84 il decodificatore riceve esattamente e solo gli intervalli della Voce confermata, in ordine`() {
         val p = unParlante(ParlanteId("p-1"), "Marco")
-        val intervalliVoce2 = listOf(IntervalloMs(5_000, 6_000), IntervalloMs(9_000, 9_500))
-        val decodificatore = DecodificatoreAudioCheRegistra()
+        val intervalliVoce2 = listOf(IntervalloMs(5_000, 6_000), IntervalloMs(9_000, 10_500))
+        lateinit var decodificatore: DecodificatoreAudioCheRegistra
         val ambiente = Ambiente(
             parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() },
             lettoreVoci = LettoreVociFinta(
                 mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2, intervalliVoce2))),
             ),
-            decodificatore = decodificatore,
+            decodificatore = { uow ->
+                DecodificatoreAudioCheRegistra(DecodificatoreAudioFinta(uow)).also { decodificatore = it }
+            },
         )
 
         ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_2, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
@@ -430,7 +451,8 @@ class ConfermaAttribuzioneServizioTest {
     fun `AC-85 il nuovo Parlante viene salvato prima della sua Attribuzione (vincolo FK sqlite)`() {
         val parlanti = ParlanteRepositoryFinta()
         val attribuzioni = AttribuzioneRepositoryConVincoloFK(parlanti)
-        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(parlanti, attribuzioni))
+        val uow = UnitaDiLavoroFinta(parlanti, attribuzioni)
+        val eventi = DispatcherEventiFinta(uow)
         val servizio = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
@@ -438,8 +460,8 @@ class ConfermaAttribuzioneServizioTest {
             LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
             parlanti,
             attribuzioni,
-            DecodificatoreAudioFinta(),
-            EstrattoreImprontaFinta(),
+            DecodificatoreAudioFinta(uow),
+            EstrattoreImprontaFinta(unitaDiLavoro = uow),
             eventi,
         )
 
@@ -452,10 +474,12 @@ class ConfermaAttribuzioneServizioTest {
     @Test
     fun `AC-87 riconfermare lo stesso Parlante non cambia nulla, non pubblica eventi e non ri-estrae l impronta`() {
         val p = unParlante(ParlanteId("p-1"), "Marco")
-        val estrattore = EstrattoreImprontaCheConta()
+        lateinit var estrattore: EstrattoreImprontaCheConta
         val ambiente = Ambiente(
             parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() },
-            estrattore = estrattore,
+            estrattore = { uow ->
+                EstrattoreImprontaCheConta(EstrattoreImprontaFinta(unitaDiLavoro = uow)).also { estrattore = it }
+            },
         )
         ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
         val improntaPrima = assertNotNull(ambiente.parlanti.trova(p.id)).impronte
@@ -466,6 +490,100 @@ class ConfermaAttribuzioneServizioTest {
         assertEquals(improntaPrima, assertNotNull(ambiente.parlanti.trova(p.id)).impronte)
         assertEquals(pubblicatiPrima, ambiente.eventi.pubblicati, "nessun nuovo evento")
         assertEquals(1, estrattore.chiamate, "il riconferma non ri-estrae l'impronta")
+    }
+
+    @Test
+    fun `AC-282 se la Voce cambia tra l estrazione e la transazione e VoceCambiata e nulla e scritto`() {
+        val p = unParlante(ParlanteId("p-1"), "Marco")
+        val lettoreVoci = LettoreVociCheCambia(
+            primaLettura = listOf(unaVoceVista(1, listOf(IntervalloMs(0, 2_000)))),
+            poi = listOf(unaVoceVista(1, listOf(IntervalloMs(0, 2_000), IntervalloMs(3_000, 6_000)))),
+        )
+        val ambiente = Ambiente(
+            parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() },
+            lettoreVoci = lettoreVoci,
+        )
+
+        val errore = ambiente.servizio
+            .esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id)))
+            .erroreAtteso<ErroreParlanti.VoceCambiata>()
+
+        assertEquals(ErroreParlanti.VoceCambiata(VOCE_1), errore)
+        assertNull(ambiente.attribuzioni.trova(VOCE_1))
+        assertEquals(emptyList(), assertNotNull(ambiente.parlanti.trova(p.id)).impronte)
+        assertEquals(emptyList(), ambiente.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-282 VoceCambiata su un nuovo Parlante non crea nessun Parlante`() {
+        val lettoreVoci = LettoreVociCheCambia(
+            primaLettura = listOf(unaVoceVista(1, listOf(IntervalloMs(0, 2_000)))),
+            poi = listOf(unaVoceVista(1, listOf(IntervalloMs(0, 1_500)))),
+        )
+        val ambiente = Ambiente(lettoreVoci = lettoreVoci)
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Giulia")))
+            .erroreAtteso<ErroreParlanti.VoceCambiata>()
+
+        assertEquals(emptyList(), ambiente.parlanti.delProgetto(PROGETTO))
+        assertNull(ambiente.attribuzioni.trova(VOCE_1))
+    }
+
+    @Test
+    fun `AC-283 per una Voce di oltre 30 s si decodifica solo SorgenteImpronta, 30 000 ms in tutto`() {
+        val intervalliVoce = listOf(IntervalloMs(0, 20_000), IntervalloMs(25_000, 45_000), IntervalloMs(50_000, 50_500))
+        lateinit var decodificatore: DecodificatoreAudioCheRegistra
+        val ambiente = Ambiente(
+            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1, intervalliVoce)))),
+            decodificatore = { uow ->
+                DecodificatoreAudioCheRegistra(DecodificatoreAudioFinta(uow)).also { decodificatore = it }
+            },
+        )
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Giulia"))).atteso()
+
+        val decodificati = decodificatore.chiamate.single().second
+        assertEquals(listOf(IntervalloMs(0, 20_000), IntervalloMs(25_000, 35_000)), decodificati)
+        assertEquals(SorgenteImpronta.di(intervalliVoce).intervalli, decodificati)
+        assertEquals(30_000L, decodificati.sumOf { it.fineMs - it.inizioMs })
+    }
+
+    @Test
+    fun `AC-284 nessuna decodifica ne estrazione con una transazione aperta, anche nello spostamento P Q`() {
+        val p = unParlante(ParlanteId("p-1"), "Piero")
+        val ambiente = Ambiente(parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() })
+
+        // the ML fakes are wired to the UnitaDiLavoroFinta: they would throw inside the transaction
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Quinto"))).atteso()
+
+        assertEquals(ParlanteId("id-1"), ambiente.attribuzioni.trova(VOCE_1)?.parlanteId)
+    }
+
+    @Test
+    fun `AC-285 la riga d impronta conserva sorgente = chiave e modello dell estrattore, anche spostata da P a Q`() {
+        val p = unParlante(ParlanteId("p-1"), "Piero")
+        val q = unParlante(ParlanteId("p-2"), "Quinto")
+        val intervalli = listOf(IntervalloMs(1_200, 5_400), IntervalloMs(8_000, 15_000))
+        val ambiente = Ambiente(
+            parlanti = ParlanteRepositoryFinta().apply {
+                salva(p).atteso()
+                salva(q).atteso()
+            },
+            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1, intervalli)))),
+            estrattore = { uow -> EstrattoreImprontaFinta(unitaDiLavoro = uow, modello = "modello-x") },
+        )
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
+        val rigaP = assertNotNull(ambiente.parlanti.trova(p.id)).impronte.single()
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(q.id))).atteso()
+        val rigaQ = assertNotNull(ambiente.parlanti.trova(q.id)).impronte.single()
+
+        for (riga in listOf(rigaP, rigaQ)) {
+            assertEquals("1200-5400,8000-15000", riga.sorgente)
+            assertEquals(SorgenteImpronta.di(intervalli).chiave, riga.sorgente)
+            assertEquals("modello-x", riga.modello)
+        }
     }
 
     /** Pre-check passes (`nomeAttivoInUso` = false) but `salva` refuses, like the ADR 0007 index would. */
@@ -518,9 +636,7 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     /** Records every call (Registrazione, intervalli) it is asked to decode, delegating for real samples. */
-    private class DecodificatoreAudioCheRegistra(
-        private val delegato: DecodificatoreAudio = DecodificatoreAudioFinta(),
-    ) : DecodificatoreAudio {
+    private class DecodificatoreAudioCheRegistra(private val delegato: DecodificatoreAudio) : DecodificatoreAudio {
         val chiamate: MutableList<Pair<RegistrazioneId, List<IntervalloMs>>> = mutableListOf()
 
         override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio {
@@ -560,14 +676,18 @@ class ConfermaAttribuzioneServizioTest {
     /** A dedicated type (not a generic [RuntimeException]) so [assertFailsWith] can target it precisely. */
     private class GuastoEstrazioneDiProva(messaggio: String) : RuntimeException(messaggio)
 
+    private object DecodificatoreCheFallisce : DecodificatoreAudio {
+        override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio =
+            throw GuastoEstrazioneDiProva("decodifica fallita")
+    }
+
     private class EstrattoreImprontaCheFallisce : EstrattoreImpronta {
         override val modello: String = "finto"
 
         override fun estrai(c: CampioniAudio): Impronta = throw GuastoEstrazioneDiProva("estrazione fallita")
     }
 
-    private class EstrattoreImprontaCheConta(private val delegato: EstrattoreImpronta = EstrattoreImprontaFinta()) :
-        EstrattoreImpronta {
+    private class EstrattoreImprontaCheConta(private val delegato: EstrattoreImpronta) : EstrattoreImpronta {
         var chiamate: Int = 0
             private set
 
@@ -579,9 +699,31 @@ class ConfermaAttribuzioneServizioTest {
         }
     }
 
+    /** Counts the transactions actually opened (AC-86: a failed extraction opens none). */
+    private class UnitaDiLavoroCheConta(private val delegata: UnitaDiLavoro) : UnitaDiLavoro {
+        var aperte: Int = 0
+            private set
+
+        override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> {
+            aperte++
+            return delegata.inTransazione(blocco)
+        }
+    }
+
+    /** [LettoreVoci] whose Voci change after the first read: the Voce is edited between extraction and write. */
+    private class LettoreVociCheCambia(
+        private val primaLettura: List<VoceVista>,
+        private val poi: List<VoceVista>,
+    ) : LettoreVoci {
+        private var letture = 0
+
+        override fun voci(id: RegistrazioneId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
+    }
+
     /**
      * Wires a [ConfermaAttribuzioneServizio] with the standard fakes, `eventi` correctly wrapping
-     * [parlanti]/[attribuzioni] (so rollback and `pubblica` see the same transaction).
+     * [parlanti]/[attribuzioni] (so rollback and `pubblica` see the same transaction). The ML fakes are
+     * built WITH the [UnitaDiLavoroFinta]: any decode/extract inside a transaction throws (AC-284).
      */
     @Suppress("LongParameterList") // one parameter per collaborator, mirrors the servizio's own constructor
     private class Ambiente(
@@ -592,21 +734,22 @@ class ConfermaAttribuzioneServizioTest {
         ),
         lettoreVoci: LettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
         generatoreId: GeneratoreIdFinto = GeneratoreIdFinto(),
-        // TODO(option-c follow-up): ML Finte WITHOUT the UnitaDiLavoroFinta (no in-transaction guard, AC-272)
-        // because ConfermaAttribuzioneServizio still extracts inside its transaction.
-        decodificatore: DecodificatoreAudio = DecodificatoreAudioFinta(),
-        estrattore: EstrattoreImpronta = EstrattoreImprontaFinta(),
+        decodificatore: (UnitaDiLavoroFinta) -> DecodificatoreAudio = { DecodificatoreAudioFinta(it) },
+        estrattore: (UnitaDiLavoroFinta) -> EstrattoreImpronta = { EstrattoreImprontaFinta(unitaDiLavoro = it) },
     ) {
-        val eventi: DispatcherEventiFinta = DispatcherEventiFinta(UnitaDiLavoroFinta(parlanti, attribuzioni))
+        private val uow = UnitaDiLavoroFinta(parlanti, attribuzioni)
+        val eventi: DispatcherEventiFinta = DispatcherEventiFinta(uow)
+        private val contatore = UnitaDiLavoroCheConta(eventi.unitaDiLavoro)
+        val transazioniAperte: Int get() = contatore.aperte
         val servizio: ConfermaAttribuzioneServizio = ConfermaAttribuzioneServizio(
-            eventi.unitaDiLavoro,
+            contatore,
             generatoreId,
             registrazioni,
             lettoreVoci,
             parlanti,
             attribuzioni,
-            decodificatore,
-            estrattore,
+            decodificatore(uow),
+            estrattore(uow),
             eventi,
         )
     }
