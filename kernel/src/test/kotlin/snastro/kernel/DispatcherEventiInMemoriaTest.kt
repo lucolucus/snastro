@@ -66,4 +66,20 @@ class DispatcherEventiInMemoriaTest : DispatcherEventiContratto() {
         assertEquals(listOf(Evento, seguito), ricevuti)
         assertEquals(setOf("rigenerato"), effetti.visibili())
     }
+
+    @Test
+    fun `un Errore annidato condanna il comando anche se la delegata non lo propaga`() {
+        val ingenua = object : UnitaDiLavoro {
+            override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> = blocco()
+        }
+        val dispatcher = DispatcherEventiInMemoria(ingenua)
+        val ricevuti = mutableListOf<EventoPubblicato>()
+        dispatcher.registraDopoCommit { ricevuti += it }
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(Evento)
+            dispatcher.unitaDiLavoro.inTransazione<Unit> { Esito.Errore(ErroreDiProva.Fallito("annidato")) }
+            Esito.Ok(Unit)
+        }.erroreAtteso<ErroreDiProva.Fallito>()
+        assertEquals(emptyList(), ricevuti)
+    }
 }

@@ -100,7 +100,70 @@ public abstract class UnitaDiLavoroContratto {
         assertEquals(setOf("esterno", "interno"), a.effetti())
     }
 
-    private class GuastoDiProva : IllegalStateException("guasto di prova")
+    @Test
+    public fun `AC-2 un Errore annidato condanna la transazione esterna anche se questa restituisce Ok`() {
+        val a = ambiente()
+        val esito = a.unitaDiLavoro.inTransazione {
+            a.scrivi("esterno")
+            a.unitaDiLavoro.inTransazione<Unit> {
+                a.scrivi("interno")
+                Esito.Errore(ERRORE)
+            }
+            a.scrivi("dopo")
+            Esito.Ok(VALORE)
+        }
+        assertEquals(ERRORE, esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
+    public fun `AC-2 un eccezione annidata si propaga e annulla la transazione esterna`() {
+        val a = ambiente()
+        assertFailsWith<GuastoDiProva> {
+            a.unitaDiLavoro.inTransazione {
+                a.scrivi("esterno")
+                a.unitaDiLavoro.inTransazione<Unit> {
+                    a.scrivi("interno")
+                    throw GuastoDiProva()
+                }
+            }
+        }
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
+    public fun `AC-2 un eccezione annidata intercettata dall esterna annulla comunque tutto e non riporta Ok`() {
+        val a = ambiente()
+        assertFailsWith<IllegalStateException> {
+            a.unitaDiLavoro.inTransazione {
+                a.scrivi("esterno")
+                assertFailsWith<GuastoDiProva> {
+                    a.unitaDiLavoro.inTransazione<Unit> {
+                        a.scrivi("interno")
+                        throw GuastoDiProva()
+                    }
+                }
+                Esito.Ok(VALORE)
+            }
+        }
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
+    public fun `AC-2 dopo una transazione condannata la successiva riparte pulita`() {
+        val a = ambiente()
+        a.unitaDiLavoro.inTransazione {
+            a.unitaDiLavoro.inTransazione<Unit> { Esito.Errore(ERRORE) }
+            Esito.Ok(Unit)
+        }.erroreAtteso<ErroreDiProva.Fallito>()
+        a.unitaDiLavoro.inTransazione {
+            a.scrivi("dopo")
+            Esito.Ok(Unit)
+        }.atteso()
+        assertEquals(setOf("dopo"), a.effetti())
+    }
+
+    private class GuastoDiProva : RuntimeException("guasto di prova")
 
     private companion object {
         const val VALORE = 42

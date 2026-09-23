@@ -3,6 +3,7 @@ package snastro.kernel
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 /**
  * Contract of [DispatcherEventi] (ADR 0012): synchronous subscribers run in publication order
@@ -127,9 +128,48 @@ public abstract class DispatcherEventiContratto {
         assertEquals(emptyList(), ricevuti, "gli eventi annullati non trapelano nella transazione successiva")
     }
 
+    @Test
+    public fun `AC-3 un Errore di una transazione annidata annulla il comando e gli abbonati dopo-commit`() {
+        val a = ambiente()
+        val ricevuti = mutableListOf<EventoPubblicato>()
+        a.registraDopoCommit { ricevuti += it }
+        val esito = a.unitaDiLavoro.inTransazione {
+            a.scrivi("comando")
+            a.dispatcher.pubblica(EventoDiProva(1))
+            a.unitaDiLavoro.inTransazione<Unit> { Esito.Errore(ERRORE) }
+            Esito.Ok(Unit)
+        }
+        assertEquals(ERRORE, esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertEquals(emptySet(), a.effetti())
+        assertEquals(emptyList(), ricevuti)
+    }
+
+    @Test
+    public fun `AC-3 un abbonato dopo-commit che lancia non impedisce la consegna agli altri`() {
+        val a = ambiente()
+        val ricevuti = mutableListOf<String>()
+        val primo = GuastoDiProva()
+        val secondo = GuastoDiProva()
+        a.registraDopoCommit { throw primo }
+        a.registraDopoCommit { ricevuti += "sano-${(it as EventoDiProva).n}" }
+        a.registraDopoCommit { if ((it as EventoDiProva).n == 2) throw secondo }
+        val lanciata = assertFailsWith<GuastoDiProva> {
+            a.unitaDiLavoro.inTransazione {
+                a.scrivi("comando")
+                a.dispatcher.pubblica(EventoDiProva(1))
+                a.dispatcher.pubblica(EventoDiProva(2))
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(primo, lanciata)
+        assertEquals(listOf<Throwable>(secondo), lanciata.suppressed.toList())
+        assertEquals(listOf("sano-1", "sano-2"), ricevuti)
+        assertEquals(setOf("comando"), a.effetti(), "il comando resta confermato")
+    }
+
     private data class EventoDiProva(val n: Int) : EventoPubblicato
 
-    private class GuastoDiProva : IllegalStateException("guasto di prova")
+    private class GuastoDiProva : RuntimeException("guasto di prova")
 
     private companion object {
         val ERRORE = ErroreDiProva.Fallito("politica violata")
