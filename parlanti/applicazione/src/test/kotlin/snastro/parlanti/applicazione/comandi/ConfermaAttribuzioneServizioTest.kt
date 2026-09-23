@@ -371,6 +371,37 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     @Test
+    fun `AC-86 estrazione fallita in un cambio di attribuzione, P invariato e nulla pubblicato`() {
+        val p = unParlante(ParlanteId("p-1"), "Piero")
+        val q = unParlante(ParlanteId("p-2"), "Quinto")
+        val parlanti = ParlanteRepositoryFinta().apply {
+            salva(p).atteso()
+            salva(q).atteso()
+        }
+        val attribuzioni = AttribuzioneRepositoryFinta()
+        val primaConferma = Ambiente(parlanti = parlanti, attribuzioni = attribuzioni)
+        primaConferma.servizio.esegui(
+            ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id)),
+        ).atteso()
+
+        val cambioConGuasto = Ambiente(
+            parlanti = parlanti,
+            attribuzioni = attribuzioni,
+            estrattore = EstrattoreImprontaCheFallisce(),
+        )
+        assertFailsWith<GuastoEstrazioneDiProva> {
+            cambioConGuasto.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(q.id)))
+        }
+
+        assertEquals(p.id, attribuzioni.trova(VOCE_1)?.parlanteId, "l Attribuzione resta a P, invariata")
+        val pOra = assertNotNull(parlanti.trova(p.id))
+        assertEquals(listOf(VOCE_1), pOra.impronte.map { it.voceRef }, "l impronta di P resta invariata")
+        val qOra = assertNotNull(parlanti.trova(q.id))
+        assertEquals(emptyList(), qOra.impronte, "Q non riceve nulla")
+        assertEquals(emptyList(), cambioConGuasto.eventi.pubblicati, "nulla viene pubblicato")
+    }
+
+    @Test
     fun `AC-84 il decodificatore riceve esattamente e solo gli intervalli della Voce confermata, in ordine`() {
         val p = unParlante(ParlanteId("p-1"), "Marco")
         val intervalliVoce2 = listOf(IntervalloMs(5_000, 6_000), IntervalloMs(9_000, 9_500))
