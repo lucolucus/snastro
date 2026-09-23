@@ -30,6 +30,21 @@ class AperturaDatabaseTest {
     }
 
     @Test
+    fun `chiudi rilascia il driver, non lascia file wal aperti e permette di riaprire`(@TempDir cartella: Path) {
+        val db = apriDatabaseProgetto(cartella.toFile())
+        db.database.progettoQueries.inserisci("id-1", "Prova")
+
+        db.chiudi()
+
+        assertFalse(File(cartella.toFile(), "progetto.db-wal").exists(), "nessun file -wal deve restare aperto")
+        assertFalse(File(cartella.toFile(), "progetto.db-shm").exists(), "nessun file -shm deve restare aperto")
+
+        val riaperto = apriDatabaseProgetto(cartella.toFile())
+        assertEquals("id-1", riaperto.database.progettoQueries.trova().executeAsOne().id)
+        riaperto.chiudi()
+    }
+
+    @Test
     fun `AC-12 uno schema piu recente di quello supportato viene rifiutato senza modificare il file`(
         @TempDir cartella: Path,
     ) {
@@ -55,6 +70,27 @@ class AperturaDatabaseTest {
 
         val driverVerifica = JdbcSqliteDriver("jdbc:sqlite:${file.absolutePath}")
         assertEquals("999", pragma(driverVerifica, "user_version"))
+    }
+
+    @Test
+    fun `uno schema a user_version 1 e rifiutato come mai rilasciato, senza modificare il file`(
+        @TempDir cartella: Path,
+    ) {
+        val file = File(cartella.toFile(), "progetto.db")
+        val driverSetup = JdbcSqliteDriver("jdbc:sqlite:${file.absolutePath}")
+        driverSetup.execute(null, "PRAGMA user_version = 1", 0)
+        driverSetup.close()
+        val contenutoPrima = file.readBytes()
+
+        val eccezione = assertFailsWith<SchemaProgettoNonValidoException> {
+            apriDatabaseProgetto(cartella.toFile())
+        }
+
+        assertEquals(1L, eccezione.versioneTrovata)
+        assertTrue(eccezione.message?.isNotBlank() == true, "il messaggio deve essere chiaro")
+        assertContentEquals(contenutoPrima, file.readBytes(), "il file non deve essere modificato")
+        assertFalse(File(cartella.toFile(), "progetto.db-wal").exists(), "nessun file -wal deve comparire")
+        assertFalse(File(cartella.toFile(), "progetto.db-shm").exists(), "nessun file -shm deve comparire")
     }
 
     private fun pragma(driver: JdbcSqliteDriver, nome: String): String =

@@ -39,6 +39,11 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -244,14 +249,30 @@ private fun ControlloRiproduzione(riga: RigaRegistrazione, azioni: AzioniRegistr
  * from [RigaRegistrazione.titolo] on every real change, submitted only on Enter or on losing focus and
  * only when it differs from the titolo shown. Disabled while a row operation is in flight (M3, the
  * presenter's own guard backs it); a refused rename (blank, titolo already used) comes back as the
- * row's inline `erroreRiga` and the row keeps its old titolo.
+ * row's inline `erroreRiga` and the row keeps its old titolo — fix-batch-12 #3: `remember(riga.titolo)`
+ * alone never resyncs [testo] in that case (a refusal leaves [RigaRegistrazione.titolo] UNCHANGED, so
+ * the `remember` key never changes either). [inviato] is OUR OWN "a submit of this exact buffer is in
+ * flight" flag — read directly in the composable body (not a `LaunchedEffect` keyed on
+ * [RigaRegistrazione.operazioneInCorso]: a fast refusal can flip it true→false inside the SAME
+ * recomposition batch this composable observes, so the `true` value is never actually seen as a
+ * distinct frame to key an effect off) — so it resyncs on the very first recomposition that shows the
+ * operation settled, whether or not an intermediate `true` frame ever rendered. Esc reverts the same
+ * way, without submitting.
  */
 @Composable
 private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     var testo by remember(riga.titolo) { mutableStateOf(riga.titolo) }
     var eraFocalizzato by remember(riga.titolo) { mutableStateOf(false) }
+    var inviato by remember(riga.titolo) { mutableStateOf(false) }
+    if (inviato && !riga.operazioneInCorso) {
+        testo = riga.titolo
+        inviato = false
+    }
     fun sottometti() {
-        if (testo != riga.titolo) azioni.rinomina(riga.registrazioneId, testo)
+        if (testo != riga.titolo) {
+            inviato = true
+            azioni.rinomina(riga.registrazioneId, testo)
+        }
     }
     OutlinedTextField(
         value = testo,
@@ -266,6 +287,14 @@ private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
             .onFocusChanged { stato ->
                 if (eraFocalizzato && !stato.isFocused) sottometti()
                 eraFocalizzato = stato.isFocused
+            }
+            .onPreviewKeyEvent { evento ->
+                if (evento.type == KeyEventType.KeyDown && evento.key == Key.Escape) {
+                    testo = riga.titolo
+                    true
+                } else {
+                    false
+                }
             }
             .testTag("registrazioni-titolo-${riga.registrazioneId.valore}"),
     )

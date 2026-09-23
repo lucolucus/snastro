@@ -229,16 +229,30 @@ class LettorePresenterTest {
         }
 
     @Test
-    fun `HIGH-2 una CancellationException del lettore non diventa un errore generico`() = runTest {
-        val fake = LettoreAudioCheEsplode(eccezione = { CancellationException("annullato") })
-        val presenter = presentatore(this, fake)
+    fun `fix-batch-12 7 una CancellationException del lettore mentre il job e attivo diventa un errore generico`() =
+        runTest {
+            // The job is never actually cancelled here (nothing calls `.cancel()`) — a spurious
+            // CancellationException thrown BY THE PORT itself must not leave `_stato` stuck on
+            // Caricamento forever: `ensureActive()` lets a REAL cancellation through unchanged, but
+            // this one becomes the same generic error every other port fault does (HIGH-2).
+            val fake = LettoreAudioCheEsplode(
+                eccezione = { CancellationException("annullato") },
+                falliscePer = REGISTRAZIONE_ID,
+            )
+            val presenter = presentatore(this, fake)
 
-        presenter.riproduci(REGISTRAZIONE_ID, 0)
-        advanceUntilIdle()
+            presenter.riproduci(REGISTRAZIONE_ID, 0)
+            advanceUntilIdle()
 
-        // Rethrown, not swallowed: never turned into a NonDisponibile message.
-        assertEquals(LettoreUiStato.Caricamento, presenter.stato.value)
-    }
+            val stato = assertIs<LettoreUiStato.NonDisponibile>(presenter.stato.value)
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.messaggio)
+
+            // the `stato` collector survived the fault: a later, successful request still resolves.
+            val altro = RegistrazioneId("id-2")
+            presenter.riproduci(altro, 0)
+            advanceUntilIdle()
+            assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
+        }
 
     @Test
     fun `HIGH-1 un comando lento non viene mai eseguito in concorrenza con uno piu recente`() {

@@ -13,6 +13,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.ProgettoId
+import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SchemaProgettoPiuRecenteException
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
@@ -42,6 +43,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.time.Clock
+import java.util.concurrent.Executors
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -77,15 +79,19 @@ internal class SessioneProgettoImpl(
 
     // `scope` is not repeated here: it is `collaboratori.scope` (the very value handed to `:avvio`'s
     // own presenter wiring) — keeping ONE source of truth for it, and this constructor's own param
-    // count down (LongParameterList), the same reason `collaboratori`/`ContestoDatabase` are bundles.
+    // count down (LongParameterList), the same reason `collaboratori`/`ContestoDatabase`/[RisorseDaChiudere]
+    // are bundles.
     private class SessioneAperta(
         val cartella: Path,
         val lockCartella: LockCartella,
         val registrazioni: RegistrazioneRepository,
         val progettoId: ProgettoId,
         val collaboratori: CollaboratoriProgettoAperto,
-        val lettoreAudio: LettoreAudioReale,
+        val risorse: RisorseDaChiudere,
     )
+
+    /** [SessioneProgettoImpl.chiudi]'s own two resources (LongParameterList, mirrors [ContestoDatabase]). */
+    private class RisorseDaChiudere(val lettoreAudio: LettoreAudioReale, val chiudiDb: () -> Unit)
 
     /** The currently open Progetto's collaborators, or `null` if none is open. */
     fun collaboratoriCorrenti(): CollaboratoriProgettoAperto? = aperta?.collaboratori
@@ -122,20 +128,28 @@ internal class SessioneProgettoImpl(
             rilasciaLock(lockCartella)
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
-        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db))
-        val progetti = ProgettoRepositorySql(db)
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db.database))
+        val progetti = ProgettoRepositorySql(db.database)
         val esitoCrea = CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
             .esegui(CreaProgetto(nomeProgetto))
         if (esitoCrea is Esito.Errore) {
             // H3: CreaProgetto puo' fallire (es. NomeProgettoVuoto tramite NomeProgetto.di, o
-            // ProgettoGiaPresente in teoria) — mai un lock trattenuto o un IllegalStateException da
-            // `progetti.trova() ?: error(...)` sotto.
+            // ProgettoGiaPresente in teoria) — mai un lock trattenuto, ne' un database aperto lasciato
+            // indietro (item fix-batch-12 #2), o un IllegalStateException da `progetti.trova() ?:
+            // error(...)` sotto.
             rilasciaLock(lockCartella)
+            db.chiudi()
             return esitoCrea
         }
         val progetto = progetti.trova() ?: error("CreaProgetto non ha creato il Progetto")
 
-        return apriGrafo(cartella, lockCartella, ContestoDatabase(db, dispatcher), progetto.id, progetto.nome.valore)
+        return apriGrafo(
+            cartella,
+            lockCartella,
+            ContestoDatabase(db.database, dispatcher, db::chiudi),
+            progetto.id,
+            progetto.nome.valore,
+        )
     }
 
     @Suppress("ReturnCount") // guard clauses, one per ErroreSessione — mapping each is clearer than nesting
@@ -163,15 +177,22 @@ internal class SessioneProgettoImpl(
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
-        val progetti = ProgettoRepositorySql(db)
+        val progetti = ProgettoRepositorySql(db.database)
         val progetto = progetti.trova()
         if (progetto == null) {
             rilasciaLock(lockCartella)
+            db.chiudi() // fix-batch-12 #2: mai un database aperto lasciato indietro su un fallimento
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
-        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db))
-        return apriGrafo(cartella, lockCartella, ContestoDatabase(db, dispatcher), progetto.id, progetto.nome.valore)
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db.database))
+        return apriGrafo(
+            cartella,
+            lockCartella,
+            ContestoDatabase(db.database, dispatcher, db::chiudi),
+            progetto.id,
+            progetto.nome.valore,
+        )
     }
 
     override fun chiudi() {
@@ -192,9 +213,11 @@ internal class SessioneProgettoImpl(
         ) {
             log.log(Level.WARNING, "lettura delle Registrazioni fallita in chiudi", e)
         } finally {
-            // H2/H3: fermare il lettore, cancellare lo scope della sessione, rilasciare il lock e
-            // azzerare `corrente` accadono SEMPRE — anche se la lettura di `delProgetto` sopra lancia.
-            sessione.lettoreAudio.chiudi()
+            // H2/H3: fermare il lettore, chiudere il database, cancellare lo scope della sessione,
+            // rilasciare il lock e azzerare `corrente` accadono SEMPRE — anche se la lettura di
+            // `delProgetto` sopra lancia.
+            sessione.risorse.lettoreAudio.chiudi()
+            sessione.risorse.chiudiDb() // fix-batch-12 #2
             sessione.collaboratori.scope.cancel()
             rilasciaLock(sessione.lockCartella)
             _corrente.value = null
@@ -209,7 +232,7 @@ internal class SessioneProgettoImpl(
         progettoId: ProgettoId,
         nomeProgetto: String,
     ): Esito<ProgettoAperto> {
-        val (db, dispatcher) = contesto
+        val (db, dispatcher, chiudiDb) = contesto
         val registrazioni = seams.costruisciRegistrazioni(db)
         val progetti = ProgettoRepositorySql(db)
         // H2: uno scope FIGLIO di scopeGenitore (stesso dispatcher, un SupervisorJob proprio) —
@@ -250,15 +273,26 @@ internal class SessioneProgettoImpl(
             it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, clock.instant()))
         }
 
-        aperta = SessioneAperta(cartella, lockCartella, registrazioni, progettoId, collaboratori, lettoreAudio)
+        aperta = SessioneAperta(
+            cartella,
+            lockCartella,
+            registrazioni,
+            progettoId,
+            collaboratori,
+            RisorseDaChiudere(lettoreAudio, chiudiDb),
+        )
         val progettoAperto = ProgettoAperto(progettoId, nomeProgetto, percorso)
         _corrente.value = progettoAperto
         return Esito.Ok(progettoAperto)
     }
 }
 
-/** [SessioneProgettoImpl.apriGrafo]'s two persistence collaborators, bundled to keep its param count down. */
-private data class ContestoDatabase(val db: SnastroDatabase, val dispatcher: DispatcherEventiInMemoria)
+/** [SessioneProgettoImpl.apriGrafo]'s persistence collaborators, bundled to keep its param count down. */
+private data class ContestoDatabase(
+    val db: SnastroDatabase,
+    val dispatcher: DispatcherEventiInMemoria,
+    val chiudiDb: () -> Unit,
+)
 
 /**
  * [SessioneProgettoImpl]'s replaceable collaborators for the green-on-its-own tests (`apriDatabase`
@@ -267,7 +301,7 @@ private data class ContestoDatabase(val db: SnastroDatabase, val dispatcher: Dis
  * `LongParameterList` (mirrors [ContestoDatabase]).
  */
 internal data class SessioneProgettoSeams(
-    val apriDatabase: (File) -> SnastroDatabase = ::apriDatabaseProgetto,
+    val apriDatabase: (File) -> DatabaseProgetto = ::apriDatabaseProgetto,
     val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql,
     val riproduttoreFabbrica: () -> RiproduttoreWav = ::RiproduttoreWav,
 )
@@ -328,9 +362,16 @@ private val log: Logger = Logger.getLogger(SessioneProgettoImpl::class.java.name
  * elsewhere in the codebase for this kind of best-effort failure (cf.
  * `snastro.progetto.adattatori.porte.RegistroProgettiFile`'s own KDoc); `java.util.logging` is the
  * JDK's own facility (frugality rung 3 — no new dependency for a handful of log lines).
+ *
+ * fix-batch-12 #6: all these calls run on [eseguitoreRegistro], ONE single-thread executor shared by
+ * every [SessioneProgettoImpl] — a plain `Thread(...).start()` per call gave no ordering guarantee
+ * between two calls fired in quick succession (e.g. `crea`'s `registra` and a `chiudi` right after
+ * it), so a fast `aggiorna` could run on its own thread BEFORE the slower `registra` had landed and
+ * be silently dropped ("an unknown percorso is a no-op"). A single-thread executor processes
+ * submissions strictly FIFO, so `registra` always completes before `aggiorna` even starts.
  */
 private fun fuoriDalThreadUi(registro: RegistroProgetti, azione: (RegistroProgetti) -> Unit) {
-    Thread({
+    eseguitoreRegistro.execute {
         try {
             azione(registro)
         } catch (
@@ -338,5 +379,9 @@ private fun fuoriDalThreadUi(registro: RegistroProgetti, azione: (RegistroProget
         ) {
             log.log(Level.WARNING, "operazione sul RegistroProgetti fallita", e)
         }
-    }, "registro-progetti-io").apply { isDaemon = true }.start()
+    }
+}
+
+private val eseguitoreRegistro = Executors.newSingleThreadExecutor { runnable ->
+    Thread(runnable, "registro-progetti-io").apply { isDaemon = true }
 }

@@ -52,14 +52,16 @@ private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 /**
  * Thin view of S1 · Progetti (RC-2): only renders [stato] and forwards [azioni]'s events — the
  * folder pickers below are OS integration, not a decision ([sceltaCartella] always hands its result
- * straight to an [azioni] lambda, never branches on it beyond null-cancelled).
+ * straight to an [azioni] lambda, never branches on it beyond null-cancelled). [cartellaGenitorePredefinita]
+ * (ADR 0010: `~/Documents/snastro`) is `:avvio`'s own injected default for `FormNuovoProgetto`'s initial
+ * value — fix-batch-12 #4: never `System.getProperty` inside this composable.
  */
 @Composable
-fun SchermataProgetti(stato: ProgettiUiStato, azioni: AzioniProgetti) {
+fun SchermataProgetti(stato: ProgettiUiStato, azioni: AzioniProgetti, cartellaGenitorePredefinita: String) {
     SnastroTema {
         when (stato) {
             ProgettiUiStato.Caricamento -> IndicatoreCaricamentoProgetti()
-            is ProgettiUiStato.Dati -> ContenutoProgetti(stato, azioni)
+            is ProgettiUiStato.Dati -> ContenutoProgetti(stato, azioni, cartellaGenitorePredefinita)
         }
     }
 }
@@ -72,9 +74,18 @@ private fun IndicatoreCaricamentoProgetti() {
 }
 
 @Composable
-private fun ContenutoProgetti(stato: ProgettiUiStato.Dati, azioni: AzioniProgetti) {
+private fun ContenutoProgetti(
+    stato: ProgettiUiStato.Dati,
+    azioni: AzioniProgetti,
+    cartellaGenitorePredefinita: String,
+) {
     Column(modifier = Modifier.fillMaxSize().padding(PADDING_SCHERMO)) {
-        FormNuovoProgetto(inCorso = stato.inCorso, erroreCrea = stato.erroreCrea, azioni = azioni)
+        FormNuovoProgetto(
+            inCorso = stato.inCorso,
+            erroreCrea = stato.erroreCrea,
+            azioni = azioni,
+            cartellaGenitorePredefinita = cartellaGenitorePredefinita,
+        )
         Spacer(modifier = Modifier.height(PADDING_SEZIONE))
         AzioneApriProgetto(inCorso = stato.inCorso, erroreApri = stato.erroreApri, azioni = azioni)
         Spacer(modifier = Modifier.height(PADDING_SEZIONE))
@@ -87,8 +98,13 @@ private fun ContenutoProgetti(stato: ProgettiUiStato.Dati, azioni: AzioniProgett
 }
 
 @Composable
-private fun FormNuovoProgetto(inCorso: Boolean, erroreCrea: String?, azioni: AzioniProgetti) {
-    var cartella by remember { mutableStateOf(System.getProperty("user.home").orEmpty()) }
+private fun FormNuovoProgetto(
+    inCorso: Boolean,
+    erroreCrea: String?,
+    azioni: AzioniProgetti,
+    cartellaGenitorePredefinita: String,
+) {
+    var cartella by remember { mutableStateOf(cartellaGenitorePredefinita) }
     var nome by remember { mutableStateOf("") }
 
     Text(text = ETICHETTA_NUOVO_PROGETTO, style = MaterialTheme.typography.titleMedium)

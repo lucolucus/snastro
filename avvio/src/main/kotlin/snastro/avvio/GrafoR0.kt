@@ -25,6 +25,7 @@ internal class GrafoR0(
     val clock: Clock,
     val sessione: SessioneProgettoImpl,
     val elencoProgetti: ElencoProgetti,
+    val cartellaProgettiPredefinita: String,
 )
 
 /** The real per-OS, per-user app-data folder (AC-348) — `main()`'s own binding. */
@@ -34,6 +35,14 @@ internal fun cartellaDatiRegistroProgettiReale(): Path = CartellaDatiRegistroPro
     localAppData = System.getenv("LOCALAPPDATA"),
     xdgDataHome = System.getenv("XDG_DATA_HOME"),
 )
+
+/**
+ * ADR 0010: S1's default parent folder for new projects — `main()`'s own binding (fix-batch-12 #4:
+ * `:ui:schermata-progetti` never calls `System.getProperty` itself). v1 is Mac-only (ADR 0010), so no
+ * per-OS resolver is needed here (unlike [CartellaDatiRegistroProgetti]).
+ */
+internal fun cartellaProgettiPredefinitaReale(): String =
+    "${System.getProperty("user.home").orEmpty()}/Documents/snastro"
 
 /**
  * [cartellaRegistro] defaults to the real per-user app-data folder ([cartellaDatiRegistroProgettiReale])
@@ -50,5 +59,5 @@ internal fun costruisciGrafoR0(cartellaRegistro: Path = cartellaDatiRegistroProg
     val sessione = SessioneProgettoImpl(registro, generatoreId, clock, scopeGenitore = scope)
     val elencoProgetti = ElencoProgetti(registro)
 
-    return GrafoR0(scope, io, clock, sessione, elencoProgetti)
+    return GrafoR0(scope, io, clock, sessione, elencoProgetti, cartellaProgettiPredefinitaReale())
 }

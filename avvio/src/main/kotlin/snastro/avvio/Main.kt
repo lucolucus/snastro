@@ -74,7 +74,7 @@ internal fun ContenutoApp(grafo: GrafoR0) {
             val progettiPresenter = remember {
                 ProgettiPresenter(grafo.scope, grafo.io, grafo.elencoProgetti, grafo.sessione)
             }
-            ProgettiRoute(progettiPresenter)
+            ProgettiRoute(progettiPresenter, grafo.cartellaProgettiPredefinita)
         },
         contenuto = { conProgetto ->
             val collaboratori = grafo.sessione.collaboratoriCorrenti()

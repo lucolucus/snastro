@@ -32,6 +32,7 @@ private const val LARGHEZZA_PICCOLA_PX = 1024
 private const val ALTEZZA_PICCOLA_PX = 640
 
 private val AZIONI_VUOTE = AzioniProgetti(crea = { _, _ -> }, apri = {}, chiudiErroreCrea = {}, chiudiErroreApri = {})
+private const val CARTELLA_GENITORE_DI_PROVA = "/tmp/snastro"
 private val UN_PROGETTO = ProgettoVista(
     progettoId = ProgettoId("id-1"),
     nome = "Consiglio comunale",
@@ -99,14 +100,24 @@ class ProgettiRenderCheckTest {
         verificaErroreApri(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent { SchermataProgetti(stato = ProgettiUiStato.Caricamento, azioni = AZIONI_VUOTE) }
+        setContent {
+            SchermataProgetti(
+                stato = ProgettiUiStato.Caricamento,
+                azioni = AZIONI_VUOTE,
+                cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+            )
+        }
         onNodeWithTag("progetti-indicatore-caricamento").assertIsDisplayed()
         catturaPng("progetti-caricamento", width, height)
     }
 
     private fun verificaListaVuota(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent {
-            SchermataProgetti(stato = ProgettiUiStato.Dati(progetti = emptyList()), azioni = AZIONI_VUOTE)
+            SchermataProgetti(
+                stato = ProgettiUiStato.Dati(progetti = emptyList()),
+                azioni = AZIONI_VUOTE,
+                cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+            )
         }
         onNodeWithText(MESSAGGIO_PROGETTI_VUOTO).assertIsDisplayed()
         onNodeWithText(ETICHETTA_NUOVO_PROGETTO).assertIsDisplayed()
@@ -116,7 +127,11 @@ class ProgettiRenderCheckTest {
 
     private fun verificaLista(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent {
-            SchermataProgetti(stato = ProgettiUiStato.Dati(progetti = listOf(UN_PROGETTO)), azioni = AZIONI_VUOTE)
+            SchermataProgetti(
+                stato = ProgettiUiStato.Dati(progetti = listOf(UN_PROGETTO)),
+                azioni = AZIONI_VUOTE,
+                cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+            )
         }
         onNodeWithText(UN_PROGETTO.nome).assertIsDisplayed()
         val dataUltimaAttivita = formattaData(UN_PROGETTO.ultimaAttivita.atZone(ZoneId.systemDefault()).toLocalDate())
@@ -130,6 +145,7 @@ class ProgettiRenderCheckTest {
             SchermataProgetti(
                 stato = ProgettiUiStato.Dati(progetti = emptyList(), inCorso = true),
                 azioni = AZIONI_VUOTE,
+                cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
             )
         }
         // `inCorso` is one shared flag (M3: guards ANY new crea/apri while one is in flight) — both
@@ -146,6 +162,7 @@ class ProgettiRenderCheckTest {
             SchermataProgetti(
                 stato = ProgettiUiStato.Dati(progetti = emptyList(), erroreCrea = messaggio),
                 azioni = AZIONI_VUOTE,
+                cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
             )
         }
         onNodeWithTag("progetti-errore-crea").assertIsDisplayed()
@@ -159,6 +176,7 @@ class ProgettiRenderCheckTest {
             SchermataProgetti(
                 stato = ProgettiUiStato.Dati(progetti = listOf(UN_PROGETTO), erroreApri = messaggio),
                 azioni = AZIONI_VUOTE,
+                cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
             )
         }
         onNodeWithTag("progetti-errore-apri").assertIsDisplayed()

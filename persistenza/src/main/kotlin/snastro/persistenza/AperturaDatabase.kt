@@ -16,21 +16,21 @@ import java.sql.SQLException
  * file into WAL (which itself writes the file header and creates `-wal`/`-shm`) — [driverSqlite]
  * below is only ever constructed once the version is known safe.
  */
-public fun apriDatabaseProgetto(cartella: File): SnastroDatabase {
+public fun apriDatabaseProgetto(cartella: File): DatabaseProgetto {
     val file = File(cartella, "progetto.db")
     rifiutaSeSchemaPiuRecente(file)
     val driver = driverSqlite("jdbc:sqlite:${file.absolutePath}")
     val db = SnastroDatabase(driver)
     try {
         allineaSchema(driver, db)
-    } catch (e: SchemaProgettoPiuRecenteException) {
+    } catch (e: SchemaProgettoRifiutatoException) {
         driver.close()
         throw e
     } catch (e: SQLException) {
         driver.close()
         throw e
     }
-    return db
+    return DatabaseProgetto(db, driver)
 }
 
 /**
@@ -63,7 +63,8 @@ internal fun driverSqlite(url: String): JdbcSqliteDriver {
 private const val BUSY_TIMEOUT_MS = 5_000
 
 /**
- * AC-12: refuses a schema newer than [SnastroDatabase.Schema]'s WITHOUT ever touching the file — a
+ * AC-12: refuses a schema newer than [SnastroDatabase.Schema]'s, or exactly [VERSIONE_MAI_RILASCIATA]
+ * (a baseline this app never shipped — ADR 0006 Amendment (a)), WITHOUT ever touching the file — a
  * plain connection, opened `READONLY` (so a missing file is never created) and with no
  * `journal_mode`/`foreign_keys`/`secure_delete` pragma set (those either write the file header or
  * are irrelevant to a single read), just reads `PRAGMA user_version`. A brand-new project (no file
@@ -76,6 +77,9 @@ private fun rifiutaSeSchemaPiuRecente(file: File) {
     try {
         val versioneTrovata = versioneSchema(driver)
         val versioneAttesa = SnastroDatabase.Schema.version
+        if (versioneTrovata == VERSIONE_MAI_RILASCIATA) {
+            throw SchemaProgettoNonValidoException(versioneTrovata)
+        }
         if (versioneTrovata > versioneAttesa) {
             throw SchemaProgettoPiuRecenteException(versioneTrovata, versioneAttesa)
         }
@@ -83,6 +87,10 @@ private fun rifiutaSeSchemaPiuRecente(file: File) {
         driver.close()
     }
 }
+
+/** ADR 0006 Amendment (a) / CR-13: `1.sqm` is the 1→2 step — `user_version = 1` was never a real
+ * shipped state (see [SchemaProgettoNonValidoException]). */
+private const val VERSIONE_MAI_RILASCIATA = 1L
 
 /**
  * `versioneTrovata > versioneAttesa` is re-checked here as a defensive backstop even though
@@ -95,6 +103,7 @@ private fun allineaSchema(driver: SqlDriver, db: SnastroDatabase) {
     val versioneAttesa = SnastroDatabase.Schema.version
     val versioneTrovata = versioneSchema(driver)
     when {
+        versioneTrovata == VERSIONE_MAI_RILASCIATA -> throw SchemaProgettoNonValidoException(versioneTrovata)
         versioneTrovata > versioneAttesa -> throw SchemaProgettoPiuRecenteException(versioneTrovata, versioneAttesa)
         versioneTrovata == 0L -> db.transaction {
             SnastroDatabase.Schema.create(driver)

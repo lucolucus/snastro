@@ -2,6 +2,7 @@ package snastro.persistenza
 
 import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlDriver
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
@@ -29,10 +30,38 @@ class MigrazioneSchemaTest {
         assertEquals("ok", pragmaString(driver, "integrity_check"))
         assertEquals(0, contaRighePragma(driver, "foreign_key_check"), "nessuna violazione FK su un DB vuoto")
 
-        eseguiOgniQueryUnaVolta(db)
+        eseguiOgniQueryUnaVolta(db.database)
 
         driver.close()
+        db.chiudi()
     }
+
+    /**
+     * CR-13: `1.sqm` is SQLDelight's 1→2 step, so `Schema.migrate` starting from the (never really
+     * shipped) version 1 on an EMPTY database must land on exactly the same schema `Schema.create`
+     * produces directly — the baseline is `Schema.version` (2), not 1.
+     */
+    @Test
+    fun `Schema migrate da 1 su un DB vuoto produce lo stesso schema di Schema create`() {
+        val driverMigrato = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        val driverCreato = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
+        try {
+            SnastroDatabase.Schema.migrate(driverMigrato, 1L, SnastroDatabase.Schema.version)
+            SnastroDatabase.Schema.create(driverCreato)
+
+            assertEquals(schemaSql(driverCreato), schemaSql(driverMigrato))
+        } finally {
+            driverMigrato.close()
+            driverCreato.close()
+        }
+    }
+
+    private fun schemaSql(driver: SqlDriver): List<String> =
+        driver.executeQuery(null, "SELECT sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY name", { cursore ->
+            val righe = mutableListOf<String>()
+            while (cursore.next().value) righe += checkNotNull(cursore.getString(0))
+            QueryResult.Value(righe)
+        }, 0).value
 
     private val progettoId = "progetto-1"
     private val registrazioneId = "reg-1"

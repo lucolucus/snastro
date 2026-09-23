@@ -5,7 +5,7 @@ package snastro.persistenza
  * the file is left untouched, nothing is created or migrated.
  */
 public class SchemaProgettoPiuRecenteException(public val versioneTrovata: Long, public val versioneSupportata: Long) :
-    RuntimeException(
+    SchemaProgettoRifiutatoException(
         "Il file di progetto e stato salvato da una versione piu recente dell'app " +
             "(schema $versioneTrovata, questa versione supporta fino a $versioneSupportata): " +
             "aggiorna l'app prima di aprire questo progetto.",
