@@ -230,7 +230,7 @@ class RegistroProgettiFileRobustezzaTest {
     @Test
     fun `F7 un tmp abbandonato da una scrittura precedente e spazzato via alla scrittura successiva`() {
         val file = cartella.resolve("progetti-recenti")
-        val abbandonato = cartella.resolve("progetti-recenti1234567890.tmp")
+        val abbandonato = cartella.resolve("progetti-recenti.1234567890.tmp")
         Files.writeString(abbandonato, "resti di un crash precedente")
         val registro = RegistroProgettiFile(file)
 
@@ -286,6 +286,60 @@ class RegistroProgettiFileRobustezzaTest {
 
         assertEquals(listOf(unaVoce(percorso = "/a/progetto.snastro")), registroA.elenco())
         assertEquals(listOf(unaVoce(percorso = "/b/progetto.snastro")), registroB.elenco())
+    }
+
+    @Test
+    fun `F7 la pulizia di registro non cancella il tmp in scrittura di registro-b che ne condivide il prefisso`() {
+        val file = cartella.resolve("registro")
+        val fileB = cartella.resolve("registro-b")
+        val bTempCreato = CountDownLatch(1)
+        val bPuoContinuare = CountDownLatch(1)
+        val bTemporaneo = AtomicReference<Path>()
+        val registroB = RegistroProgettiFile(fileB) { temporaneo, righe ->
+            Files.write(temporaneo, righe)
+            bTemporaneo.set(temporaneo)
+            bTempCreato.countDown()
+            assertTrue(bPuoContinuare.await(5, TimeUnit.SECONDS))
+        }
+        val registro = RegistroProgettiFile(file)
+        val esecutore = Executors.newSingleThreadExecutor()
+        try {
+            val futuro = esecutore.submit { registroB.registra(unaVoce(percorso = "/b/progetto.snastro")) }
+            assertTrue(bTempCreato.await(5, TimeUnit.SECONDS))
+
+            // "registro" e prefisso di "registro-b": la pulizia di `registro` deve toccare SOLO
+            // `registro.<cifre>.tmp`, mai `registro-b.<cifre>.tmp` ancora in scrittura.
+            registro.registra(unaVoce(percorso = "/a/progetto.snastro"))
+
+            assertTrue(Files.exists(bTemporaneo.get()), "tmp in volo di registro-b cancellato: ${bTemporaneo.get()}")
+
+            bPuoContinuare.countDown()
+            futuro.get(5, TimeUnit.SECONDS)
+        } finally {
+            esecutore.shutdown()
+        }
+
+        assertEquals(listOf(unaVoce(percorso = "/a/progetto.snastro")), registro.elenco())
+        assertEquals(listOf(unaVoce(percorso = "/b/progetto.snastro")), registroB.elenco())
+    }
+
+    @Test
+    fun `F7 la pulizia spazza solo nome-punto-cifre-tmp e lascia i tmp dei registri con prefisso comune`() {
+        val file = cartella.resolve("registro")
+        val proprio = Files.writeString(cartella.resolve("registro.42.tmp"), "resti di un crash")
+        val altrui = listOf(
+            "registro-b.42.tmp",
+            "registro-b42.tmp",
+            "registro.1.42.tmp",
+            "registro.x.tmp",
+            "registro..tmp",
+        )
+            .map { Files.writeString(cartella.resolve(it), "tmp di un altro registro") }
+
+        RegistroProgettiFile(file).registra(unaVoce())
+
+        assertEquals(false, Files.exists(proprio))
+        altrui.forEach { assertTrue(Files.exists(it), "cancellato per errore: $it") }
     }
 
     @Test

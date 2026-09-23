@@ -141,8 +141,11 @@ public class RegistroProgettiFile internal constructor(
     private fun scrivi(voci: List<VoceRegistro>) {
         val cartella = requireNotNull(file.toAbsolutePath().parent) { "registro senza cartella: $file" }
         Files.createDirectories(cartella)
-        ripulisciTemporaneiObsoleti(cartella, file.fileName.toString())
-        val temporaneo = Files.createTempFile(cartella, file.fileName.toString(), SUFFISSO_TEMPORANEO)
+        // prefisso DELIMITATO da un punto: `<nomeFile>.<cifre>.tmp`, mai confondibile con il tmp di
+        // un registro dal nome prefisso-correlato (`registro` vs `registro-b`) — vedi la pulizia.
+        val prefisso = "${file.fileName}."
+        ripulisciTemporaneiObsoleti(cartella, prefisso)
+        val temporaneo = Files.createTempFile(cartella, prefisso, SUFFISSO_TEMPORANEO)
         try {
             scriviRighe(temporaneo, voci.map(::riga))
             Files.move(temporaneo, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
@@ -256,18 +259,24 @@ private fun forzaCartella(cartella: Path) {
 }
 
 /**
- * Sweeps every file in [cartella] whose name starts with [nomeFile] and ends with `.tmp`, left by
- * an earlier crashed write (F7) — run before creating a fresh temp file, so anything matched here
- * necessarily predates the current write. A plain directory listing filtered by
- * `startsWith`/`endsWith`, not a glob built from [nomeFile]: a raw file name can itself contain
- * glob metacharacters (`[`, `*`, `?`…), which a glob pattern would misinterpret. Best effort: never
- * blocks or fails the write in progress.
+ * Sweeps every file in [cartella] named EXACTLY `<prefisso><digits>.tmp` — [prefisso] is the
+ * dot-delimited `<nomeFile>.` that [RegistroProgettiFile.scrivi] also hands to
+ * `Files.createTempFile`, so these are this registry's own temp files, left by an earlier crashed
+ * write (F7) — run before creating a fresh temp file, so anything matched here necessarily
+ * predates the current write. A plain directory listing with an exact prefix/digits/suffix check,
+ * not a glob built from the name: a raw file name can itself contain glob metacharacters (`[`,
+ * `*`, `?`…). The delimiter plus the digits-only middle keep a prefix-related registry's in-flight
+ * temp (`registro-b.<digits>.tmp` for `registro`, or `registro.1.<digits>.tmp` for `registro`)
+ * out of the sweep. Best effort: never blocks or fails the write in progress.
  */
-private fun ripulisciTemporaneiObsoleti(cartella: Path, nomeFile: String) {
+private fun ripulisciTemporaneiObsoleti(cartella: Path, prefisso: String) {
     try {
         Files.newDirectoryStream(cartella) { candidato ->
             val nome = candidato.fileName.toString()
-            nome.startsWith(nomeFile) && nome.endsWith(SUFFISSO_TEMPORANEO)
+            nome.startsWith(prefisso) &&
+                nome.endsWith(SUFFISSO_TEMPORANEO) &&
+                nome.length > prefisso.length + SUFFISSO_TEMPORANEO.length &&
+                nome.substring(prefisso.length, nome.length - SUFFISSO_TEMPORANEO.length).all { it in '0'..'9' }
         }.use { obsoleti -> obsoleti.forEach { Files.deleteIfExists(it) } }
     } catch (ignored: IOException) {
         // best effort (F7): un tmp non eliminabile, o la cartella non elencabile, non blocca la scrittura
