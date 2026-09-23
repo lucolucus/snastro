@@ -6,6 +6,7 @@ package snastro.trascrizione.dominio
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDominio
 import snastro.kernel.IntervalloMs
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 
@@ -17,6 +18,12 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
         val da: StatoElaborazione,
         val verso: StatoElaborazione,
     ) : ErroreTrascrizione
+
+    /** INV-4 (ADR 0007, `elaborazione_aperta_unica`): the Registrazione already has an open Elaborazione. */
+    public data class ElaborazioneGiaAperta(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
+
+    /** INV-4 (ADR 0007, `elaborazione_completata_unica`): the Registrazione already has a `completata` one. */
+    public data class ElaborazioneGiaCompletata(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
 
     /** AC-21: the pipeline produced no Segmento, so no [Trascritto] can exist. */
     public data object NessunParlatoRilevato : ErroreTrascrizione
