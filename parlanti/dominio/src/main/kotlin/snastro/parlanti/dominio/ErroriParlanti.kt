@@ -33,4 +33,10 @@ public sealed interface ErroreParlanti : ErroreDominio {
 
     /** [INV-19]/AC-89 SaltaVoce refuses an already-attributed Voce; nothing changes. */
     public data class VoceGiaAttribuita(val voceRef: VoceRef) : ErroreParlanti
+
+    /**
+     * ADR 0012 Amendment (b) point 2: the Voce's [SorgenteImpronta] changed between the print extraction
+     * and the command's transaction; nothing written, the user retries.
+     */
+    public data class VoceCambiata(val voceRef: VoceRef) : ErroreParlanti
 }
