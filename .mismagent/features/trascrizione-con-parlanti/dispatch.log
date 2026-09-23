@@ -495,3 +495,17 @@
 2026-09-23T16:53:09Z	repository-sql-progetto	composer	merge	cycle=0	-	-	MERGED 9a43a84
 2026-09-23T16:53:09Z	repository-sql-progetto	composer	pre-release	cycle=0	-	-	MED aggiuntaAlle truncated to ms (avvio-r0 wires Clock.tick 1ms; add sub-ms contract case); LOW salva read-then-write could be UPSERT
 2026-09-23T16:53:09Z	avvio-r0	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T17:32:51Z	avvio-r0	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 08f5763
+2026-09-23T17:32:51Z	avvio-r0	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + code-review combined
+2026-09-23T17:36:54Z	avvio-r0	verifier	result	cycle=0	tier=deep	model=opus	FAIL (H1 AC-350/264/347 tests missing; H2 audio keeps playing after chiudi + presenter collectors leak; H3 .lock held on exceptions)
+2026-09-23T17:36:54Z	avvio-r0	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework H1-H3 + M2 (visible) + L2 default folder
+2026-09-23T17:36:54Z	avvio-r0	composer	pre-release	cycle=0	-	-	MED DB driver never closed on chiudi (persistenza must expose close); MED registry calls out of order (single-thread executor); LOW chiudi DB read on UI thread; LOW partial WAV (fix-batch-7 atomic write); LOW modelliTest opt-in task is a stub
+2026-09-23T18:10:06Z	avvio-r0	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 79527ce
+2026-09-23T18:10:06Z	avvio-r0	verifier	dispatch	cycle=1	tier=deep	model=opus	re-verify
+2026-09-23T18:10:20Z	schermata-progetti	composer	pre-release	-	-	-	LOW S1 default parent folder hardcoded user.home in SchermataProgetti.kt; ADR 0010 wants ~/Documents/snastro (avvio creates parent if missing)
+2026-09-23T18:13:20Z	avvio-r0	verifier	result	cycle=1	tier=deep	model=opus	FAIL (only H-A: ADR 0006 hit, java.sql.SQLException in test line 271; H1-H3 resolved)
+2026-09-23T18:13:20Z	avvio-r0	worker	dispatch	cycle=2	tier=deep	model=opus	LAST cycle: one-line ADR fix + crea lock-release test + generation bump
+2026-09-23T18:16:19Z	avvio-r0	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW 83f3e9d
+2026-09-23T18:16:19Z	avvio-r0	verifier	result	cycle=2	-	composer	PASS (gate --rerun-tasks green, all ADR enforced_by exit 0)
+2026-09-23T18:16:19Z	avvio-r0	composer	merge	cycle=2	-	-	MERGED 9242ffa — R0 RUNNABLE
+2026-09-23T18:16:19Z	avvio-r0	composer	pre-release	cycle=2	-	-	LOW chiudi joins player up to 2s on UI thread
