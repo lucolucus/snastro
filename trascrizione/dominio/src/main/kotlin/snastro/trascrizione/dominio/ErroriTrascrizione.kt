@@ -1,6 +1,3 @@
-// dev-architecture-app.md#pacchetti pins the file name `Errori<Contesto>.kt` for a context's error hierarchy.
-@file:Suppress("MatchingDeclarationName", "Filename")
-
 package snastro.trascrizione.dominio
 
 import snastro.kernel.ElaborazioneId
