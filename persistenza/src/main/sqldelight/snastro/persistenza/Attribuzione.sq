@@ -1,0 +1,20 @@
+-- Queries for `attribuzione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+
+trova:
+SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+
+trovaDiRegistrazione:
+SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId;
+
+trovaDiParlante:
+SELECT * FROM attribuzione WHERE parlante_id = :parlanteId;
+
+inserisci:
+INSERT INTO attribuzione(registrazione_id, voce_id, progetto_id, parlante_id)
+VALUES (:registrazioneId, :voceId, :progettoId, :parlanteId);
+
+aggiornaParlante:
+UPDATE attribuzione SET parlante_id = :parlanteId WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+
+rimuovi:
+DELETE FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;

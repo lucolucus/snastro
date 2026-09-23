@@ -27,14 +27,13 @@ out/
 *.class
 local.properties
 
-# databases — EXCEPTION: SQLDelight schema snapshots (schema only, no data) that
-# verifySqlDelightMigration needs (ADR 0006, scoped profile exception)
+# databases — no exception (ADR 0006 Amendment (a): migrations ARE the schema, no committed
+# snapshot to un-ignore any more)
 *.db
 *.db-journal
 *.db-wal
 *.db-shm
 *.sqlite
-!persistenza/src/main/sqldelight/databases/*.db
 
 # audio
 *.m4a
