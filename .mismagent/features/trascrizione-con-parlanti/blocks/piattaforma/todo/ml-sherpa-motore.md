@@ -4,6 +4,7 @@ type: "adapter"
 context: "piattaforma"
 side: "app"
 wave: 11
+release: "R1"
 module: ":ml-sherpa"
 consumes:
   - "kernel-pl"

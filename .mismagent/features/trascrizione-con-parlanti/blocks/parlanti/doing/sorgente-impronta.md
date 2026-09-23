@@ -4,6 +4,7 @@ type: "aggregate"
 context: "parlanti"
 side: "app"
 wave: 2
+release: "R2"
 module: ":parlanti:dominio"
 consumes:
   - "kernel-pl"

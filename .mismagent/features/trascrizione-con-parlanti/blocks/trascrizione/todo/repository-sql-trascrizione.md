@@ -4,6 +4,7 @@ type: "adapter"
 context: "trascrizione"
 side: "app"
 wave: 4
+release: "R1"
 module: ":trascrizione:adattatori (..persistenza)"
 consumes:
   - "kernel-pl"

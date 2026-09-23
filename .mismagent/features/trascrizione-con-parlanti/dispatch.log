@@ -422,3 +422,21 @@
 2026-09-23T13:11:52Z	modelli-provisioning	verifier	result	cycle=1	tier=deep	model=opus	PASS (37 tests; mutants killed; notes to cleanup list: absolute-path tar entry untested, uncaught FS errors, connect timeout untested)
 2026-09-23T13:16:11Z	(release-plan)	decision	result	-	-	-	USER DECISION: pivot to functional releases — R0 Archivio (projects, import, list, play; no ML), R1 Trascrizione (ASR+diarization+alignment, S3, Documento), R2 Parlanti (paused). R0 + R1 spikes in parallel; only HIGH findings gate merges, MED/LOW -> pre-release cleanup list
 2026-09-23T13:16:11Z	elenco-progetti	worker	dispatch	cycle=0	tier=standard	model=sonnet	(R0)
+2026-09-23T13:16:25Z	ui-fondamenta	worker	dispatch	cycle=0	tier=standard	model=sonnet	(R0)
+2026-09-23T13:23:23Z	elenco-progetti	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (4b2c3c7; ProgettoVista; order delegated to RegistroProgetti.elenco AC-28)
+2026-09-23T13:23:23Z	elenco-progetti	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode: small read-model -> verifier only, HIGH-only gating)
+2026-09-23T13:25:59Z	elenco-progetti	verifier	result	cycle=0	tier=deep	model=opus	PASS (2 mutants killed)
+2026-09-23T13:27:17Z	audio-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	(R0 critical path)
+2026-09-23T13:41:56Z	audio-progetto	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (6ac6507; SondaAudioFfmpeg + ArchivioAudioFile; 6 gate + 6 opt-in contract tests; NOTE worker ran gradlew --stop which kills shared daemons of sibling builds -> forbid in future prompts)
+2026-09-23T13:41:56Z	audio-progetto	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode)
+2026-09-23T13:43:54Z	fix-batch-9	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW (12d3143; titoliDelProgetto + contract; TitoloRegistrazione unico/chiave/pulisci mirrored with documento; 13 mutants killed)
+2026-09-23T13:43:54Z	fix-batch-9	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode: verifier only)
+2026-09-23T13:46:32Z	audio-progetto	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-148 interrupted copy untested: fixture uses a missing source, mutant (no verify + no temp cleanup) survives; production correct) -> rework cycle=1 (test seam, small)
+2026-09-23T13:46:32Z	audio-progetto	worker	dispatch	cycle=1	tier=standard	model=sonnet
+2026-09-23T13:56:36Z	audio-progetto	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (f0ae2dd; test-only seam; 3 mutants red)
+2026-09-23T13:56:36Z	audio-progetto	verifier	result	cycle=1	-	-	RELEASE MODE: composer gate on merged tree instead of a full verifier (test-only cycle, worker mutation evidence)
+2026-09-23T13:59:29Z	fix-batch-9	verifier	result	cycle=0	tier=deep	model=opus	PASS (pulisci parity checked on 200k random inputs; cleanup list: class-level @Timeout on AggiungiRegistrazioneServizioTest, manifest key wording uppercase().lowercase(), add 7 extra rows to documento table, leading-space edge)
+2026-09-23T14:02:00Z	ui-fondamenta	worker	result	cycle=0	tier=standard	model=sonnet	BOUNCED (c5721d5; all ACs done except AC-180 partial: Konsist CR-1 forbids snastro.ui.* self-imports and dominio Errore* imports from :ui)
+2026-09-23T14:02:00Z	(cr1-konsist)	decision	result	-	-	-	COMPOSER DECISION (technical, reported to user): amend CR-1 — allow snastro.ui.* imports inside :ui and, from :ui only, imports of snastro.<ctx>.dominio.Errore<Ctx> sealed hierarchies (ADR 0003 amended places them in dominio for MessaggiErrore) -> fix-batch-10
+2026-09-23T14:02:00Z	fix-batch-10	worker	dispatch	cycle=0	tier=standard	model=sonnet	(CR-1 Konsist + code-rules prose)
+2026-09-23T14:07:46Z	fix-batch-10	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (292c9bf; sabotage-checked) -> RELEASE MODE: composer gate + merge

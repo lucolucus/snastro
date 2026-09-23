@@ -4,13 +4,14 @@ type: "adapter"
 context: "parlanti"
 side: "app"
 wave: 12
+release: "R2"
 module: ":ml-sherpa + :parlanti:adattatori (..ml)"
 consumes:
   - "kernel-pl"
   - "tec-estrattore-impronta"
   - "tec-ml-sherpa"
 depends_on:
-  - "avvio-composizione"
+  - "avvio-parlanti"
 related_adrs:
   - "0002"
   - "0003"
@@ -26,7 +27,7 @@ gated_by:
 ## What to do
 Real EstrattoreImpronta adapter with the model chosen by the spike ADR (catalogue entry URL + SHA-256 + licence added to :modelli in the same block); `modello` = that catalogue id; takes the native Mutex INSIDE estrai; registered in :avvio's adapter-selection config (W12 blocks merged serially: they share that config file). Also sets the calibrated SoglieFascia values in the config.
 
-Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction.
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): wires itself into avvio-parlanti (R2), no longer the R1 composition.
 
 ## Tasks
 - AC-258 [@modelli] EstrattoreImprontaContratto passa contro l'adattatore reale su un campione di sample/
@@ -37,7 +38,7 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies Estratto
 
 ## Dependencies
 - **GATED — not ready until:** ADR closing spike impronta-vocale-affidabilita
-- Blocks built first: `avvio-composizione` (wave 10)
+- Blocks built first: `avvio-parlanti` (wave 11)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID

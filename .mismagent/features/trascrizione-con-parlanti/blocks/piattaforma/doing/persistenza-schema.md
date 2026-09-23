@@ -4,6 +4,7 @@ type: "adapter"
 context: "piattaforma"
 side: "app"
 wave: 2
+release: "R0"
 module: ":persistenza"
 consumes:
   - "kernel-pl"

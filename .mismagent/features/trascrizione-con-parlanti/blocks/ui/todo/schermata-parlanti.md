@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R2"
 module: ":ui (snastro.ui.parlanti)"
 consumes:
   - "kernel-pl"

@@ -4,6 +4,7 @@ type: "application-service"
 context: "documento"
 side: "app"
 wave: 5
+release: "R1"
 module: ":documento:applicazione (..politiche)"
 consumes:
   - "kernel-pl"

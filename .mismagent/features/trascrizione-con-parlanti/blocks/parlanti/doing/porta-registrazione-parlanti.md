@@ -4,6 +4,7 @@ type: "port"
 context: "parlanti"
 side: "app"
 wave: 3
+release: "R2"
 module: ":parlanti:applicazione (..porte) + testFixtures"
 consumes:
   - "kernel-pl"

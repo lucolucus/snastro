@@ -4,6 +4,7 @@ type: "aggregate"
 context: "progetto"
 side: "app"
 wave: 2
+release: "R0"
 module: ":progetto:dominio"
 consumes:
   - "kernel-pl"

@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R1"
 module: ":ui (snastro.ui.registrazione)"
 consumes:
   - "kernel-pl"
@@ -49,7 +50,7 @@ gated_by:
 ## What to do
 S3 concept B: header with audio bar + 'Apri documento' / 'Mostra nella cartella' (ApriEsterno + documento.nomeFile), transcript centre, Voci panel right; presenter joins trascritto-view + identificazione-voci (R1).
 
-Note: Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl.
+Note: Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): assigned to R1 (transcript view with 'Voce n' labels + Revisione) but it still hard-depends on R2 blocks (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, conferma-attribuzione, salta-voce) — R1 VARIANT PENDING: before R1 dispatch a targeted amendment must split the identification panel (AC-212/213/214/216/219/318/319 and the Parlanti half of AC-215/217) into an R2 block, like schermata-registrazioni did (AC-342). NOT done in this pass (needs the user: the attesa-mutex-estrazione gate the user put on R1 concerns print extraction, i.e. the R2 half).
 
 ### Consumes read-models: trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, documento
 ### Triggers: ConfermaAttribuzione, SaltaVoce, UnisciVoci, DividiVoce, RiassegnaSegmento

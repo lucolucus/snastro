@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R0"
 module: ":ui (snastro.ui.progetti)"
 consumes:
   - "kernel-pl"

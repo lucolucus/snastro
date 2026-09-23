@@ -4,6 +4,7 @@ type: "adapter"
 context: "piattaforma"
 side: "app"
 wave: 4
+release: "R1"
 module: ":modelli"
 consumes:
   - "kernel-pl"

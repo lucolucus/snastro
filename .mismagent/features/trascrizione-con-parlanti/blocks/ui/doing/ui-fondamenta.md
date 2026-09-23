@@ -4,6 +4,7 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 6
+release: "R0"
 module: ":ui (snastro.ui, snastro.ui.testi)"
 consumes:
   - "kernel-pl"
@@ -32,6 +33,8 @@ owns_boundaries:
 ## What to do
 Derived owner (rule 11) of what every screen shares: Material 3 theme, snastro.ui.testi, MessaggiErrore.kt (one exhaustive when per context error hierarchy, R25), palette(voceId) stable by number, mm:ss and dd/MM/yyyy formatting, the app shell (left nav: Progetto selector, Registrazioni, Parlanti; no project open → S1 only), the ports SessioneProgetto, ApriEsterno, AggiornamentiVista (R15), and the render-check harness + fixtures.
 
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the shell sections are injected by the composition root (AC-341) so R0 (avvio-r0) and R1 (avvio-composizione) ship without the Parlanti section; AC-177 describes the R2 composition (avvio-parlanti). Added while the block is in doing: the composer must hand AC-341 to the in-flight worker (or land it as a follow-up before avvio-r0).
+
 ### Consumes read-models: —
 ### Triggers: —
 
@@ -41,6 +44,7 @@ Derived owner (rule 11) of what every screen shares: Material 3 theme, snastro.u
 - AC-179 Formattazione: 75 003 ms → '01:15'; 4 503 000 ms → '75:03'; 2026-09-12 → '12/09/2026'
 - AC-180 MessaggiErrore copre ogni errore di ogni contesto senza ramo else (un nuovo errore rompe la compilazione)
 - AC-181 Stati della shell: caricamento del progetto (indicatore), errore di apertura (messaggio) resi dal render-check
+- AC-341 (R0) La shell riceve dalla composizione l'insieme delle sezioni disponibili: se la sezione Parlanti non è fornita (release R0 e R1) la voce di navigazione 'Parlanti' NON compare e nessuna schermata Parlanti è raggiungibile; se è fornita (R2) la shell si comporta come in AC-177 — test sul presenter della shell con e senza la sezione
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies

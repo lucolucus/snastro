@@ -4,6 +4,7 @@ type: "adapter"
 context: "documento"
 side: "app"
 wave: 6
+release: "R1"
 module: ":documento:adattatori (..eventi)"
 consumes:
   - "kernel-pl"
@@ -96,7 +97,7 @@ AbbonatoDopoCommit on the event boundaries relevant to Documento; coalesces per 
     - `ParlanteRinominato`: data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato
     - `ParlantePromosso`: data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato
     - `ParlanteEliminato`: data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change
-    - `ImpronteRiallineate`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by riallinea-impronte after the commit of >= 1 refreshed print row (ADR 0012 Amendment (b)); consumers: proposta (cache invalidation), avvio-composizione (AggiornamentiVista); NOT Documento (prints do not change it)
+    - `ImpronteRiallineate`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by riallinea-impronte after the commit of >= 1 refreshed print row (ADR 0012 Amendment (b)); consumers: proposta (cache invalidation), avvio-parlanti (AggiornamentiVista); NOT Documento (prints do not change it)
     - `TipoParlanteVista`: enum RICORRENTE | OCCASIONALE (parlanti:applicazione)
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef

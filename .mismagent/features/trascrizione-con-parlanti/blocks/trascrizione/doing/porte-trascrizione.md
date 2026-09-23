@@ -4,6 +4,7 @@ type: "port"
 context: "trascrizione"
 side: "app"
 wave: 3
+release: "R1"
 module: ":trascrizione:applicazione (..porte) + testFixtures"
 consumes:
   - "kernel-pl"

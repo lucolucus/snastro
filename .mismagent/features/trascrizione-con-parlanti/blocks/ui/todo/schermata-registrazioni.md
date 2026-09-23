@@ -4,27 +4,29 @@ type: "ui"
 context: "ui"
 side: "app"
 wave: 8
+release: "R0"
 module: ":ui (snastro.ui.registrazioni)"
 consumes:
   - "kernel-pl"
+  - "tec-lettore-audio"
   - "tec-shell-ui"
 depends_on:
   - "registrazioni-del-progetto"
   - "stati-elaborazione"
-  - "identificazione-registrazioni"
   - "servizi-registrazione"
   - "avvia-elaborazione"
+  - "lettore-audio"
   - "ui-fondamenta"
 related_adrs:
   - "0002"
   - "0003"
   - "0004"
+  - "0005"
   - "0010"
   - "0012"
 consumes_rm:
   - "registrazioni-del-progetto"
   - "stati-elaborazione"
-  - "identificazione-registrazioni"
 triggers:
   - "AggiungiRegistrazione"
   - "ModificaDataRegistrazione"
@@ -33,9 +35,11 @@ triggers:
 # schermata-registrazioni — S2 · Registrazioni del Progetto
 
 ## What to do
-S2: the presenter joins the three slices by registrazioneId (R1); drag-and-drop + file picker; live refresh via AggiornamentiVista; elapsed time from avviataAlle with an injected Clock.
+S2: the presenter joins the slices by registrazioneId (R1); drag-and-drop + file picker; per-row '▶' over the LettoreAudio port; live refresh via AggiornamentiVista; elapsed time from avviataAlle with an injected Clock. The Trascrizione sources are optional (R0 variant, AC-342): without them the row shows only titolo, data, durata and '▶'.
 
-### Consumes read-models: registrazioni-del-progetto, stati-elaborazione, identificazione-registrazioni
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 ships in R0 WITHOUT Trascrizione/Parlanti features: the Trascrizione sources (stati-elaborazione, avvia-elaborazione — both already merged, compile-time only) are optional presenter inputs, absent in R0 (AC-342) and supplied by avvio-composizione in R1. The identification badge (AC-204, Parlanti read-model identificazione-registrazioni, R2) MOVED to block schermata-registrazioni-identificazione (R2) so R0 needs no R2 block. NEW SURFACE (user decision: R0 = 'import, list and play'): a per-row '▶' over the LettoreAudio port (AC-343) — not in the original ux-proposal S2, recorded as a ux amendment. Carry (stati-elaborazione code-review): NON_AVVIATA must be rendered with an action → AC-344.
+
+### Consumes read-models: registrazioni-del-progetto, stati-elaborazione
 ### Triggers: AggiungiRegistrazione, ModificaDataRegistrazione, AvviaElaborazione
 
 ## Tasks
@@ -44,13 +48,15 @@ S2: the presenter joins the three slices by registrazioneId (R1); drag-and-drop 
 - AC-201 Errore di aggiunta mostrato inline, nessuna riga nuova
 - AC-202 Ordinamento per data, dalla più recente
 - AC-203 in_attesa → 'In coda (n)'; in_corso → 'In corso · separazione voci · 3:12' (tempo da avviataAlle, nessuna percentuale); fallita → motivo + 'Riprova' (solo su fallita); completata apre S3
-- AC-204 Badge '3 voci · 1 da identificare'
 - AC-205 La riga si aggiorna quando cambiano stato o fase
 - AC-206 Modifica della data inline
+- AC-342 (R0 variant) Le sorgenti di Trascrizione sono OPZIONALI: il presenter costruito SENZA StatiElaborazione e AvviaElaborazione (R0, avvio-r0) mostra per ogni riga solo titolo, data (modificabile, AC-206), durata e '▶' (AC-343); nessuna colonna di stato, nessun 'Riprova'/'Trascrivi', nessun badge, e il click su una riga non apre S3 — test del presenter con le sole finte di RegistrazioniDelProgetto, AggiungiRegistrazione, ModificaDataRegistrazione e LettoreAudio; con le sorgenti fornite (R1, avvio-composizione) valgono AC-203/AC-205/AC-344
+- AC-343 (R0) Ogni riga ha '▶' che riproduce la Registrazione dall'inizio via LettoreAudio.riproduciDa(id, 0); durante la riproduzione della riga il controllo diventa pausa (StatoLettore.registrazioneId = la riga), '▶' su un'altra riga sostituisce la riproduzione in corso; LettoreAudio.disponibile(id) = false → '▶' disabilitato con 'Audio non disponibile'
+- AC-344 (R1) Con le sorgenti di Trascrizione fornite, una Registrazione senza Elaborazione (StatoElaborazioneVista.NON_AVVIATA — es. importata in R0) mostra 'Trascrivi' che invoca AvviaElaborazione; un errore del comando è mostrato inline sulla riga e nulla cambia
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
-- Blocks built first: `registrazioni-del-progetto` (wave 5), `stati-elaborazione` (wave 5), `identificazione-registrazioni` (wave 5), `servizi-registrazione` (wave 4), `avvia-elaborazione` (wave 4), `ui-fondamenta` (wave 6)
+- Blocks built first: `registrazioni-del-progetto` (wave 5), `stati-elaborazione` (wave 5), `servizi-registrazione` (wave 4), `avvia-elaborazione` (wave 4), `lettore-audio` (wave 7), `ui-fondamenta` (wave 6)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -81,6 +87,10 @@ S2: the presenter joins the three slices by registrazioneId (R1); drag-and-drop 
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
+- **tec-lettore-audio** (consumed/implemented) — owner `lettore-audio`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `LettoreAudio`: interface { fun disponibile(id: RegistrazioneId): Boolean; fun riproduciDa(id: RegistrazioneId, daMs: Long); fun riproduciEstratto(e: EstrattoRef); fun pausa(); val stato: StateFlow<StatoLettore> }
+    - `StatoLettore`: data class(registrazioneId: RegistrazioneId?, posizioneMs: Long, inRiproduzione: Boolean)
 - **tec-shell-ui** (consumed/implemented) — owner `ui-fondamenta`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
@@ -92,4 +102,4 @@ S2: the presenter joins the three slices by registrazioneId (R1); drag-and-drop 
   - keys (minting rules):
     - `percorso`: see tec-registro-progetti
 
-Sources: ADRs 0002, 0003, 0004, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1).
+Sources: ADRs 0002, 0003, 0004, 0005, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1).
