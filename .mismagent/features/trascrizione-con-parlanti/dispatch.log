@@ -292,3 +292,4 @@
 2026-09-23T11:32:54Z	documento	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:32:54Z	documento	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:32:54Z	nomi-delle-voci	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:33:27Z	conferma-attribuzione	verifier	result	cycle=1	tier=deep	model=opus	PASS (merged-tree gate green with ErroriParlanti hunk = HEAD side; 9 mutants caught; NOTE ADR 0012 (b) not yet implemented — follows in option-c series)
