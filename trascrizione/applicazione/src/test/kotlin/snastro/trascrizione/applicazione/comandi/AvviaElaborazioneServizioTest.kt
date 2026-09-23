@@ -20,7 +20,9 @@ import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
+import snastro.trascrizione.dominio.ErroreTrascrizione.NumeroPersoneFuoriIntervallo
 import snastro.trascrizione.dominio.ErroreTrascrizione.RegistrazioneNonTrovata
+import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.unaElaborazione
 import java.time.Clock
@@ -28,6 +30,7 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class AvviaElaborazioneServizioTest {
 
@@ -117,6 +120,60 @@ class AvviaElaborazioneServizioTest {
 
         assertEquals(RegistrazioneNonTrovata(REGISTRAZIONE), errore)
         assertEquals(emptyList(), elaborazioni.diRegistrazione(REGISTRAZIONE))
+    }
+
+    @Test
+    fun `AC-369 senza numeroPersone l Elaborazione in_attesa non ha numero`() {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+
+        unServizio(elaborazioni = elaborazioni).esegui(AvviaElaborazione(REGISTRAZIONE)).atteso()
+
+        val creata = elaborazioni.diRegistrazione(REGISTRAZIONE).single()
+        assertEquals(StatoElaborazione.IN_ATTESA, creata.stato)
+        assertNull(creata.numeroPersone)
+    }
+
+    @Test
+    fun `AC-369 con numeroPersone 4 l Elaborazione in_attesa ha numeroPersone 4`() {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+
+        unServizio(elaborazioni = elaborazioni).esegui(AvviaElaborazione(REGISTRAZIONE, numeroPersone = 4)).atteso()
+
+        val creata = elaborazioni.diRegistrazione(REGISTRAZIONE).single()
+        assertEquals(StatoElaborazione.IN_ATTESA, creata.stato)
+        assertEquals(4, creata.numeroPersone?.valore)
+    }
+
+    @Test
+    fun `AC-369 con numeroPersone 0 o 11 restituisce NumeroPersoneFuoriIntervallo e non crea righe`() {
+        listOf(0, 11).forEach { n ->
+            val elaborazioni = ElaborazioneRepositoryFinta()
+
+            val errore = unServizio(elaborazioni = elaborazioni)
+                .esegui(AvviaElaborazione(REGISTRAZIONE, numeroPersone = n))
+                .erroreAtteso<NumeroPersoneFuoriIntervallo>()
+
+            assertEquals(NumeroPersoneFuoriIntervallo(n), errore)
+            assertEquals(emptyList(), elaborazioni.diRegistrazione(REGISTRAZIONE), "n = $n")
+        }
+    }
+
+    @Test
+    fun `AC-369 la riprova dopo una fallita salva il valore inviato e la fallita resta invariata`() {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val vecchia = ElaborazioneId("elaborazione-vecchia")
+        val tre = NumeroPersone.di(3).atteso()
+        elaborazioni.salva(
+            unaElaborazione(StatoElaborazione.FALLITA, vecchia, REGISTRAZIONE, numeroPersone = tre),
+        ).atteso()
+
+        unServizio(elaborazioni = elaborazioni).esegui(AvviaElaborazione(REGISTRAZIONE, numeroPersone = 5)).atteso()
+
+        val tutte = elaborazioni.diRegistrazione(REGISTRAZIONE).associateBy { it.id }
+        assertEquals(StatoElaborazione.FALLITA, tutte.getValue(vecchia).stato)
+        assertEquals(tre, tutte.getValue(vecchia).numeroPersone)
+        assertEquals(StatoElaborazione.IN_ATTESA, tutte.getValue(ElaborazioneId("id-1")).stato)
+        assertEquals(5, tutte.getValue(ElaborazioneId("id-1")).numeroPersone?.valore)
     }
 
     /** A double that lets the pre-check pass (empty) but refuses `salva` like the ADR 0007 index would (AC-66). */

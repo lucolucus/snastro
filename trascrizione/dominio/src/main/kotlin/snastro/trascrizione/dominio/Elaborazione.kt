@@ -16,11 +16,14 @@ import java.time.Instant
  * One run of the local pipeline on a `Registrazione`. Owns INV-3: [stato] moves only
  * `in_attesa → in_corso → completata | fallita`; every other move is [TransizioneNonAmmessa] and
  * leaves the state unchanged. The per-Registrazione set rule (INV-4) is not checked here (ADR 0007).
+ * [numeroPersone] is fixed by [accoda] (may be absent) and never changed by a transition (ADR 0014).
  */
+@Suppress("LongParameterList") // one parameter per field of the root
 public class Elaborazione private constructor(
     public val id: ElaborazioneId,
     public val registrazioneId: RegistrazioneId,
     public val creataAlle: Instant,
+    public val numeroPersone: NumeroPersone?,
     stato: StatoElaborazione,
     avviataAlle: Instant?,
     motivoFallimento: String?,
@@ -73,8 +76,17 @@ public class Elaborazione private constructor(
             id: ElaborazioneId,
             registrazioneId: RegistrazioneId,
             creataAlle: Instant,
+            numeroPersone: NumeroPersone?,
         ): Creato<Elaborazione, ElaborazioneAccodata> = Creato(
-            Elaborazione(id, registrazioneId, creataAlle, IN_ATTESA, avviataAlle = null, motivoFallimento = null),
+            Elaborazione(
+                id,
+                registrazioneId,
+                creataAlle,
+                numeroPersone,
+                IN_ATTESA,
+                avviataAlle = null,
+                motivoFallimento = null,
+            ),
             ElaborazioneAccodata(id, registrazioneId, creataAlle),
         )
 
@@ -84,9 +96,11 @@ public class Elaborazione private constructor(
             id: ElaborazioneId,
             registrazioneId: RegistrazioneId,
             creataAlle: Instant,
+            numeroPersone: NumeroPersone?,
             stato: StatoElaborazione,
             avviataAlle: Instant?,
             motivoFallimento: String?,
-        ): Elaborazione = Elaborazione(id, registrazioneId, creataAlle, stato, avviataAlle, motivoFallimento)
+        ): Elaborazione =
+            Elaborazione(id, registrazioneId, creataAlle, numeroPersone, stato, avviataAlle, motivoFallimento)
     }
 }

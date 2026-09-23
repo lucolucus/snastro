@@ -3,10 +3,12 @@ package snastro.ui.registrazioni
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -16,10 +18,12 @@ import org.junit.jupiter.api.Test
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
+import snastro.ui.testi.ETICHETTA_NUMERO_PERSONE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
+import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.messaggioPer
@@ -39,6 +43,7 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     riproduci = {},
     pausa = {},
     avviaElaborazione = {},
+    modificaNumeroPersone = { _, _ -> },
     apriRiga = {},
     chiudiErrore = {},
     chiudiErroreRiga = {},
@@ -67,7 +72,9 @@ private fun unaRiga(
  * fixture at both sizes — sizing/overflow/contrast/state-rendering. R0 (AC-199/200/201/342/343): empty,
  * list with '▶', a playing row, an unavailable row, an import error, an editable (long) titolo with a
  * row-level rename error (AC-363). R1 (AC-203/344): the status
- * column, a failed/retry row, a NON_AVVIATA row with 'Trascrivi'. [SchermataRegistrazioni] renders
+ * column, a failed/retry row with its prefilled 'Numero di persone' field, a NON_AVVIATA row with the empty
+ * field + 'Trascrivi' (no 'Trascrivi tutte'), an invalid field with its inline message (ADR 0014,
+ * AC-372/375/376). [SchermataRegistrazioni] renders
  * directly from fixture `UiStato` values (dev-architecture `#presenter`).
  */
 @OptIn(ExperimentalTestApi::class)
@@ -140,20 +147,28 @@ class RegistrazioniRenderCheckTest {
         verificaColonnaStato(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
-    fun `AC-203 una riga fallita mostra il motivo e Riprova a 1280x800`() =
+    fun `AC-203 AC-376 una riga fallita mostra il motivo, il campo precompilato e Riprova a 1280x800`() =
         verificaFallitaConRiprova(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
-    fun `AC-203 una riga fallita mostra il motivo e Riprova a 1024x640`() =
+    fun `AC-203 AC-376 una riga fallita mostra il motivo, il campo precompilato e Riprova a 1024x640`() =
         verificaFallitaConRiprova(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
-    fun `AC-344 NON_AVVIATA mostra Trascrivi a 1280x800`() =
+    fun `AC-344 AC-372 NON_AVVIATA mostra il campo vuoto e Trascrivi, senza Trascrivi tutte a 1280x800`() =
         verificaNonAvviataConTrascrivi(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
-    fun `AC-344 NON_AVVIATA mostra Trascrivi a 1024x640`() =
+    fun `AC-344 AC-372 NON_AVVIATA mostra il campo vuoto e Trascrivi, senza Trascrivi tutte a 1024x640`() =
         verificaNonAvviataConTrascrivi(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-375 un numero di persone non valido mostra il messaggio inline a 1280x800`() =
+        verificaNumeroPersoneNonValido(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-375 un numero di persone non valido mostra il messaggio inline a 1024x640`() =
+        verificaNumeroPersoneNonValido(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
     fun `AC-363 il titolo e un campo modificabile e l errore di rinomina e inline sulla riga a 1280x800`() =
@@ -260,12 +275,20 @@ class RegistrazioniRenderCheckTest {
         setContent {
             SchermataRegistrazioni(
                 stato = RegistrazioniUiStato.Dati(
-                    righe = listOf(unaRiga(elaborazione = StatoElaborazioneRiga.Fallita("audio illeggibile"))),
+                    righe = listOf(
+                        unaRiga(elaborazione = StatoElaborazioneRiga.Fallita("audio illeggibile"))
+                            .copy(numeroPersone = "3"),
+                    ),
                 ),
                 azioni = AZIONI_VUOTE,
             )
         }
         onNodeWithText("audio illeggibile").assertIsDisplayed()
+        onNodeWithTag("registrazioni-numero-persone-${REG_1.valore}", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .assertTextEquals("3")
+        onNodeWithText(ETICHETTA_NUMERO_PERSONE, useUnmergedTree = true).assertIsDisplayed()
         onNodeWithText(ETICHETTA_RIPROVA).assertIsDisplayed()
         catturaPng("registrazioni-fallita-riprova", width, height)
     }
@@ -278,8 +301,24 @@ class RegistrazioniRenderCheckTest {
                 azioni = AZIONI_VUOTE,
             )
         }
+        onNodeWithTag("registrazioni-numero-persone-${REG_1.valore}", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertIsEnabled()
         onNodeWithText(ETICHETTA_TRASCRIVI).assertIsDisplayed()
+        onAllNodesWithText("Trascrivi tutte", substring = true).assertCountEquals(0)
         catturaPng("registrazioni-non-avviata-trascrivi", width, height)
+    }
+
+    private fun verificaNumeroPersoneNonValido(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            val riga = unaRiga(elaborazione = StatoElaborazioneRiga.NonAvviata)
+                .copy(numeroPersone = "11", erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO)
+            SchermataRegistrazioni(stato = RegistrazioniUiStato.Dati(righe = listOf(riga)), azioni = AZIONI_VUOTE)
+        }
+        onNodeWithTag("registrazioni-numero-persone-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithText(MESSAGGIO_NUMERO_PERSONE_NON_VALIDO).assertIsDisplayed()
+        onNodeWithText(ETICHETTA_TRASCRIVI).assertIsDisplayed()
+        catturaPng("registrazioni-numero-persone-non-valido", width, height)
     }
 
     private fun verificaTitoloModificabileConErrore(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {

@@ -39,7 +39,9 @@ sealed interface RegistrazioniUiStato {
  * supplied to the presenter (R0 variant, AC-342): no status column, no 'Trascrivi'/'Riprova', a row
  * click does nothing. [operazioneInCorso] guards a second `modificaData`/`avviaElaborazione` on this
  * row while one is in flight (M3); [erroreRiga], when set, is a dismissible inline message for the
- * last failed one (H1, AC-206/AC-344 — "nulla cambia" beyond this).
+ * last failed one (H1, AC-206/AC-344 — "nulla cambia" beyond this). [numeroPersone] is the text of the
+ * optional 'Numero di persone' field shown next to 'Trascrivi'/'Riprova' (ADR 0014): presenter state only,
+ * prefilled on a failed row from its Elaborazione (AC-376), validated when the action fires (AC-375).
  */
 data class RigaRegistrazione(
     val registrazioneId: RegistrazioneId,
@@ -50,6 +52,7 @@ data class RigaRegistrazione(
     val riproduzione: StatoRiproduzioneRiga = StatoRiproduzioneRiga.Disponibile,
     val operazioneInCorso: Boolean = false,
     val erroreRiga: String? = null,
+    val numeroPersone: String = "",
 )
 
 /** AC-343: this row's playback over the shared [snastro.ui.lettore.LettoreAudio]. */
@@ -66,7 +69,7 @@ sealed interface StatoRiproduzioneRiga {
 
 /** AC-203/AC-344 (R1, Trascrizione sources supplied): the row's processing state, joined from `stati-elaborazione`. */
 sealed interface StatoElaborazioneRiga {
-    /** AC-344: no Elaborazione yet for this Registrazione — shows 'Trascrivi'. */
+    /** AC-344: no Elaborazione yet for this Registrazione — shows the 'Numero di persone' field + 'Trascrivi'. */
     data object NonAvviata : StatoElaborazioneRiga
 
     /** AC-203: "In coda ([posizione])". */
@@ -75,7 +78,7 @@ sealed interface StatoElaborazioneRiga {
     /** AC-203: "In corso · [faseEtichetta] · <mm:ss>" — [trascorsoMs] is measured from `avviataAlle`. */
     data class InCorso(val faseEtichetta: String, val trascorsoMs: Long) : StatoElaborazioneRiga
 
-    /** AC-203: [motivo] + 'Riprova'. */
+    /** AC-203: [motivo] + the 'Numero di persone' field (prefilled, AC-376) + 'Riprova'. */
     data class Fallita(val motivo: String) : StatoElaborazioneRiga
 
     /** AC-203: a row click opens S3 (the presenter's injected `apriRegistrazione`, out of this block's scope). */

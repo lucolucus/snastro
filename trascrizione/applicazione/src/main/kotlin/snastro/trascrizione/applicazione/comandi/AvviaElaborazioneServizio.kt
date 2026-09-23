@@ -5,12 +5,14 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
+import snastro.kernel.poi
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.ErroreTrascrizione.RegistrazioneNonTrovata
+import snastro.trascrizione.dominio.NumeroPersone
 import java.time.Clock
 
 /**
@@ -18,7 +20,8 @@ import java.time.Clock
  * INV-4 is owned by [Elaborazione] / [ElaborazioneRepository] (RC-1): this service only PRE-CHECKS it
  * from [ElaborazioneRepository.diRegistrazione] (ADR 0007) — the partial unique indexes are the
  * backstop, surfaced by [ElaborazioneRepository.salva] as the same `ErroreTrascrizione`, returned
- * unchanged (AC-66).
+ * unchanged (AC-66). [AvviaElaborazione.numeroPersone] is validated by [NumeroPersone.di] before any write
+ * and fixed on the new Elaborazione (AC-369, ADR 0014).
  */
 public class AvviaElaborazioneServizio(
     private val uow: UnitaDiLavoro,
@@ -32,17 +35,19 @@ public class AvviaElaborazioneServizio(
         if (registrazioni.registrazione(registrazioneId) == null) {
             return@inTransazione Esito.Errore(RegistrazioneNonTrovata(registrazioneId))
         }
-        creaSeAssente(registrazioneId)
+        numeroPersone(comando.numeroPersone).poi { creaSeAssente(registrazioneId, it) }
     }
 
-    private fun creaSeAssente(registrazioneId: RegistrazioneId): Esito<Unit> {
+    private fun numeroPersone(n: Int?): Esito<NumeroPersone?> = n?.let(NumeroPersone::di) ?: Esito.Ok(null)
+
+    private fun creaSeAssente(registrazioneId: RegistrazioneId, numeroPersone: NumeroPersone?): Esito<Unit> {
         val esistenti = elaborazioni.diRegistrazione(registrazioneId)
         return when {
             esistenti.any { it.aperta } -> Esito.Errore(ElaborazioneGiaAperta(registrazioneId))
             esistenti.any { it.completata } -> Esito.Errore(ElaborazioneGiaCompletata(registrazioneId))
             else -> {
                 val id = ElaborazioneId(generatoreId.nuovo())
-                val creata = Elaborazione.accoda(id, registrazioneId, orologio.instant())
+                val creata = Elaborazione.accoda(id, registrazioneId, orologio.instant(), numeroPersone)
                 elaborazioni.salva(creata.aggregato)
             }
         }

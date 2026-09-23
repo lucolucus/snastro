@@ -20,9 +20,10 @@ import java.time.Clock
  * `audio/` (ADR 0010: verified copy, then commit the row — a failed copy creates nothing), creates
  * the Registrazione (titolo = source file name without extension, made unique in the Progetto with
  * ` (2)`, ` (3)`… by [TitoloRegistrazione] — AC-322..324; durata/data from the probe) and
- * publishes `RegistrazioneAggiunta` — whose SYNC subscriber auto-starts the Elaborazione (ADR 0012
- * R2, out of scope here). If the transaction does not commit after a successful copy — a sync
- * subscriber's `Esito.Errore` (AC-60) or a thrown exception (sync subscriber throw, or any
+ * publishes `RegistrazioneAggiunta` (after-commit consumers only; no composition registers a sync
+ * subscriber and importing starts no Elaborazione, ADR 0014 — the dispatcher's sync mechanism stays,
+ * ADR 0012). If the transaction does not commit after a successful copy — ANY sync subscriber's
+ * `Esito.Errore` (AC-60) or a thrown exception (sync subscriber throw, or any
  * SQLite/IO fault at save/commit) — the copied file is discarded so no file is left behind without
  * its Registrazione; the discard runs from a `finally` so it still happens when the transaction
  * throws instead of returning.

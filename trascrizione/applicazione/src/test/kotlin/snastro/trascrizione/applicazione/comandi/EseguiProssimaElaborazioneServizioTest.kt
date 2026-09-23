@@ -39,6 +39,7 @@ import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
+import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unaElaborazione
@@ -452,7 +453,7 @@ class EseguiProssimaElaborazioneServizioTest {
             trascritti,
             pipeline(registrazioni = registrazioni, decodificatore = decodificatore),
         )
-        elaborazioni.salva(Elaborazione.accoda(elaborazioneId, id, CREATA_VECCHIA).aggregato).atteso()
+        elaborazioni.salva(Elaborazione.accoda(elaborazioneId, id, CREATA_VECCHIA, null).aggregato).atteso()
 
         servizio.esegui(EseguiProssimaElaborazione).atteso()
 
@@ -716,7 +717,7 @@ class EseguiProssimaElaborazioneServizioTest {
         )
 
     private fun unaInAttesa(id: RegistrazioneId, creataAlle: Instant = CREATA_VECCHIA): Elaborazione =
-        Elaborazione.accoda(ElaborazioneId("elab-${id.valore}"), id, creataAlle).aggregato
+        Elaborazione.accoda(ElaborazioneId("elab-${id.valore}"), id, creataAlle, numeroPersone = null).aggregato
 
     private companion object {
         const val DURATA = 2_000L
@@ -771,9 +772,9 @@ private class DiarizzatoreSorvegliato(
     private val sorveglia: SorvegliaTransazione,
     private val letteDurante: MutableList<Boolean>,
 ) : Diarizzatore {
-    override fun diarizza(c: CampioniAudio): List<Turno> {
+    override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
         letteDurante += sorveglia.aperta
-        return delegata.diarizza(c)
+        return delegata.diarizza(c, numeroPersone)
     }
 }
 
@@ -805,7 +806,7 @@ private class DecodificatoreCheFallisceSuTutti(private val delegata: Decodificat
 private class DiarizzatoreCheLancia(
     private val guasto: Exception = GuastoDiPortaDiProva("diarizza()"),
 ) : Diarizzatore {
-    override fun diarizza(c: CampioniAudio): List<Turno> = throw guasto
+    override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> = throw guasto
 }
 
 /** [Allineatore] that always throws [guasto] (AC-70: allineamento guasto; F4: interruption). */

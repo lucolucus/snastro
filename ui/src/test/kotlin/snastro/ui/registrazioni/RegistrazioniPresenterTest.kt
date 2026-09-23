@@ -60,7 +60,8 @@ private fun statoVista(
     motivoFallimento: String? = null,
     posizioneInCoda: Int? = null,
     numVoci: Int? = null,
-) = StatoRegistrazioneVista(id, stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci)
+    numeroPersone: Int? = null,
+) = StatoRegistrazioneVista(id, stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci, numeroPersone)
 
 /**
  * AC-342: the R0 variant is exercised by simply omitting `stati`/`avvia` from [presentatore] (their
@@ -457,17 +458,25 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `AC-203 FALLITA espone il motivo`() = runTest {
+    fun `AC-203 FALLITA espone il motivo e il campo Numero di persone precompilato`() = runTest {
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
             stati = { ids ->
-                ids.map { statoVista(it, StatoElaborazioneVista.FALLITA, motivoFallimento = "audio illeggibile") }
+                ids.map {
+                    statoVista(
+                        it,
+                        StatoElaborazioneVista.FALLITA,
+                        motivoFallimento = "audio illeggibile",
+                        numeroPersone = 2,
+                    )
+                }
             },
         )
         advanceUntilIdle()
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
         assertEquals(StatoElaborazioneRiga.Fallita("audio illeggibile"), riga.elaborazione)
+        assertEquals("2", riga.numeroPersone)
     }
 
     @Test
@@ -513,7 +522,7 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `AC-344 Trascrivi invoca AvviaElaborazione e ricarica la lista`() = runTest {
+    fun `AC-344 Trascrivi con il campo vuoto invoca AvviaElaborazione senza numero e ricarica la lista`() = runTest {
         var chiamata: AvviaElaborazione? = null
         var statoCorrente = StatoElaborazioneVista.NON_AVVIATA
         val presenter = presentatore(
@@ -531,7 +540,7 @@ class RegistrazioniPresenterTest {
         presenter.azioni.avviaElaborazione(REG_1)
         advanceUntilIdle()
 
-        assertEquals(AvviaElaborazione(REG_1), chiamata)
+        assertEquals(AvviaElaborazione(REG_1, numeroPersone = null), chiamata)
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
         assertIs<StatoElaborazioneRiga.InAttesa>(riga.elaborazione)
     }

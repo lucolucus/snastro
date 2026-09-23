@@ -15,9 +15,9 @@ import snastro.ui.Cambiamento
  * [AggiornamentiVista] fed by `RegistrazioneAggiunta`/`DataRegistrazioneModificata`/
  * `RegistrazioneRinominata` (AC-242, AC-366 — R0's Registrazione commands): registers itself as an
  * [snastro.kernel.AbbonatoDopoCommit] of [dispatcher] —
- * AFTER commit, never on rollback, even though `RegistrazioneAggiunta`'s OWN `eventi-progetto`
- * delivery is synchronous (its R2 auto-start-Elaborazione consumer, not built here) — this
- * subscriber only ever fires post-commit. `replay = 1`: a collector that starts AFTER a
+ * AFTER commit, never on rollback, like every consumer of `RegistrazioneAggiunta` (it has no
+ * synchronous subscriber: importing never auto-starts an Elaborazione, that policy is removed, not
+ * deferred — ADR 0014). `replay = 1`: a collector that starts AFTER a
  * [Cambiamento] already fired (a screen mounted between the commit and its own `init`) still sees it
  * once and refreshes — never stuck showing a stale list.
  */

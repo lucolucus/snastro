@@ -8,6 +8,7 @@ import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * CR-13 / ADR 0006 Amendment (a): the fast gate that REPLACES the retired `verifySqlDelightMigration`
@@ -53,6 +54,50 @@ class MigrazioneSchemaTest {
         } finally {
             driverMigrato.close()
             driverCreato.close()
+        }
+    }
+
+    /**
+     * AC-377 / ADR 0006 (a): R0 shipped at version 2; `2.sqm` (the 2→3 step) adds `elaborazione.numero_persone`
+     * forward-only. A project DB written by R0 (built here from `1.sqm` alone, exactly R0's schema) with an
+     * Elaborazione opens, migrates to the current version and keeps the row, with `numero_persone` NULL.
+     */
+    @Test
+    fun `AC-377 un DB alla versione 2 con un Elaborazione migra alla corrente e la riga ha numero_persone NULL`(
+        @TempDir cartella: Path,
+    ) {
+        val url = "jdbc:sqlite:${cartella.resolve("progetto.db").absolutePathString()}"
+        val r0 = JdbcSqliteDriver(url)
+        SnastroDatabase.Schema.migrate(r0, 1L, VERSIONE_R0)
+        r0.execute(null, "PRAGMA user_version = $VERSIONE_R0", 0)
+        r0.execute(null, "INSERT INTO progetto(id, nome) VALUES ('$progettoId', 'Progetto R0')", 0)
+        r0.execute(
+            null,
+            "INSERT INTO registrazione(id, progetto_id, titolo, riferimento_audio, durata_ms, data_registrazione, " +
+                "aggiunta_alle) VALUES ('$registrazioneId', '$progettoId', 't', 'audio/r.wav', 1000, '2026-09-23', 0)",
+            0,
+        )
+        r0.execute(
+            null,
+            "INSERT INTO elaborazione(id, registrazione_id, stato, creata_alle, avviata_alle, motivo_fallimento) " +
+                "VALUES ('$elaborazioneId', '$registrazioneId', 'fallita', 0, 1, 'interrotta')",
+            0,
+        )
+        r0.close()
+
+        val db = apriDatabaseProgetto(cartella.toFile())
+        val driver = driverSqlite(url)
+        try {
+            assertEquals(SnastroDatabase.Schema.version, pragmaLong(driver, "user_version"))
+            assertEquals(VERSIONE_R0 + 1, SnastroDatabase.Schema.version)
+            val riga = db.database.elaborazioneQueries.trovaDiRegistrazione(registrazioneId).executeAsOne()
+            assertEquals(elaborazioneId, riga.id)
+            assertEquals("interrotta", riga.motivo_fallimento)
+            assertNull(riga.numero_persone)
+            assertEquals("ok", pragmaString(driver, "integrity_check"))
+        } finally {
+            driver.close()
+            db.chiudi()
         }
     }
 
@@ -118,7 +163,7 @@ class MigrazioneSchemaTest {
         db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao")
         db.segmentoQueries.trovaDiTrascritto(registrazioneId).executeAsList()
 
-        db.elaborazioneQueries.inserisci(elaborazioneId, registrazioneId, "in_attesa", 0L, null, null)
+        db.elaborazioneQueries.inserisci(elaborazioneId, registrazioneId, "in_attesa", 0L, null, null, null)
         db.elaborazioneQueries.trovaDiRegistrazione(registrazioneId).executeAsList()
         db.elaborazioneQueries.trovaInAttesa().executeAsList()
         db.elaborazioneQueries.trovaInCorso().executeAsList()
@@ -169,4 +214,9 @@ class MigrazioneSchemaTest {
             while (cursore.next().value) conteggio++
             QueryResult.Value(conteggio)
         }, 0).value
+
+    private companion object {
+        /** The schema version R0 shipped (ADR 0006 (a)): `1.sqm` only. */
+        const val VERSIONE_R0 = 2L
+    }
 }

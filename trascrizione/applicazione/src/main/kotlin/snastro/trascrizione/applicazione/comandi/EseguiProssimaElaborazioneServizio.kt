@@ -76,7 +76,7 @@ public class EseguiProssimaElaborazioneServizio(
         val registrazioneId = elaborazione.registrazioneId
         val elaborazioneId = elaborazione.id
         try {
-            val risultato = eseguiPipeline(registrazioneId)
+            val risultato = eseguiPipeline(elaborazione)
             val esitoFinale = inTransazioneTentata {
                 concludi(registrazioneId, elaborazioneId) { fresca ->
                     when (risultato) {
@@ -105,7 +105,8 @@ public class EseguiProssimaElaborazioneServizio(
      * clause per step (readable, each mapped to its own fixed `motivo`) — `@Suppress`: deliberate.
      */
     @Suppress("ReturnCount")
-    private fun eseguiPipeline(id: RegistrazioneId): RisultatoPipeline {
+    private fun eseguiPipeline(elaborazione: Elaborazione): RisultatoPipeline {
+        val id = elaborazione.registrazioneId
         val letta = eseguiFase { Lettura(pipeline.registrazioni.registrazione(id)) }
             ?: return RisultatoPipeline.Fallita(MOTIVO_LETTURA_REGISTRAZIONE)
         val vista = letta.vista ?: return RisultatoPipeline.Fallita(MOTIVO_REGISTRAZIONE_MANCANTE)
@@ -118,7 +119,7 @@ public class EseguiProssimaElaborazioneServizio(
 
         val turni = eseguiFase {
             pipeline.segnalatore.fase(id, DIARIZZAZIONE)
-            pipeline.diarizzatore.diarizza(campioni)
+            pipeline.diarizzatore.diarizza(campioni, elaborazione.numeroPersone) // AC-370, ADR 0014
         } ?: return RisultatoPipeline.Fallita(MOTIVO_DIARIZZAZIONE)
 
         val grezzi = eseguiFase {
@@ -250,6 +251,7 @@ public class EseguiProssimaElaborazioneServizio(
         const val MOTIVO_UNIONE_NON_AMMESSA = "unione di voci non consentita"
         const val MOTIVO_DIVISIONE_NON_AMMESSA = "divisione di voce non consentita"
         const val MOTIVO_RIASSEGNAZIONE_NON_AMMESSA = "riassegnazione del segmento non consentita"
+        const val MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO = "numero di persone non valido"
 
         /** 16 kHz mono (`DecodificatoreAudio`, ADR 0005): samples per millisecond. */
         const val CAMPIONI_PER_MS = 16
@@ -273,6 +275,7 @@ public class EseguiProssimaElaborazioneServizio(
             is ErroreTrascrizione.UnioneNonAmmessa -> MOTIVO_UNIONE_NON_AMMESSA
             is ErroreTrascrizione.DivisioneNonAmmessa -> MOTIVO_DIVISIONE_NON_AMMESSA
             is ErroreTrascrizione.RiassegnazioneNonAmmessa -> MOTIVO_RIASSEGNAZIONE_NON_AMMESSA
+            is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO
         }
 
         /**
