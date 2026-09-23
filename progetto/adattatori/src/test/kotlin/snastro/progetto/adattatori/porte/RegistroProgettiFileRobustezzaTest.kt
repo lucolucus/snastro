@@ -59,6 +59,52 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `F2 una riga malformata tra righe valide non cancella le altre e il prossimo registra le conserva`() {
+        val file = cartella.resolve("progetti-recenti")
+        val buona1 = "id-1\tConsiglio comunale\t/progetti/Consiglio comunale.snastro\t1\t2026-09-23T10:15:30Z"
+        val campiSbagliati = "solo\tdue-campi"
+        val numeroNonValido = "id-2\tAssemblea\t/progetti/Assemblea.snastro\tNON-UN-NUMERO\t2026-09-23T10:15:30Z"
+        val dataNonValida = "id-3\tComitato\t/progetti/Comitato.snastro\t1\tnon-una-data"
+        val buona2 = "id-4\tConsulta\t/progetti/Consulta.snastro\t2\t2026-09-23T09:00:00Z"
+        val righe = listOf(buona1, campiSbagliati, numeroNonValido, dataNonValida, buona2)
+        Files.writeString(file, righe.joinToString("\n"))
+        val registro = RegistroProgettiFile(file)
+
+        assertEquals(
+            setOf("/progetti/Consiglio comunale.snastro", "/progetti/Consulta.snastro"),
+            registro.elenco().map { it.percorso }.toSet(),
+        )
+
+        registro.registra(unaVoce(progettoId = ProgettoId("id-5"), percorso = "/progetti/Nuovo.snastro"))
+
+        val dopo = RegistroProgettiFile(file)
+        assertEquals(
+            setOf("/progetti/Consiglio comunale.snastro", "/progetti/Consulta.snastro", "/progetti/Nuovo.snastro"),
+            dopo.elenco().map { it.percorso }.toSet(),
+        )
+    }
+
+    @Test
+    fun `F2 un file con BOM UTF-8 iniziale e leggibile`() {
+        val file = cartella.resolve("progetti-recenti")
+        val bom = byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte())
+        val riga = "id-1\tConsiglio comunale\t/progetti/Consiglio comunale.snastro\t1\t2026-09-23T10:15:30Z\n"
+        Files.write(file, bom + riga.toByteArray(Charsets.UTF_8))
+        val registro = RegistroProgettiFile(file)
+
+        assertEquals(listOf(unaVoce()), registro.elenco())
+    }
+
+    @Test
+    fun `F2 un file non decodificabile come UTF-8 produce un elenco vuoto`() {
+        val file = cartella.resolve("progetti-recenti")
+        Files.write(file, byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x82.toByte()))
+        val registro = RegistroProgettiFile(file)
+
+        assertEquals(emptyList(), registro.elenco())
+    }
+
+    @Test
     fun `F8 una scape sconosciuta nel file mantiene entrambi i caratteri`() {
         val file = cartella.resolve("progetti-recenti")
         // riga scritta a mano (mai prodotta da `blocca`): `\x` non e una scape riconosciuta.
