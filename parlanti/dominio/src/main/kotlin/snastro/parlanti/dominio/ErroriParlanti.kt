@@ -1,6 +1,3 @@
-// Named per dev-architecture-app.md#pacchetti (context error hierarchy file), not after its single declaration.
-@file:Suppress("MatchingDeclarationName", "Filename")
-
 package snastro.parlanti.dominio
 
 import snastro.kernel.ErroreDominio

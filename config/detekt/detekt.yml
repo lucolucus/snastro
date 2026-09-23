@@ -30,7 +30,20 @@ formatting: # CR-11: official Kotlin style (ktlint rules via detekt-formatting).
   active: true
   android: false
   autoCorrect: false
+  Filename: # dev-architecture-app.md#pacchetti names these files after the hierarchy/aggregate, not a single declaration.
+    excludes: ['**/Errori*.kt', '**/*Eventi.kt']
+
+complexity:
+  LongParameterList:
+    # `ricostituisci` takes exactly the persisted fields (dev-architecture-app.md#aggregato): exempt by annotation.
+    ignoreAnnotated: ['RicostituzioneDaPersistenza']
+    # Aggregate creation factories (`aggiungi`) and private root constructors take one parameter per
+    # field of the root; up to 8 fields pass (threshold = count that triggers). Beyond 8 → introduce a VO.
+    functionThreshold: 9
+    constructorThreshold: 9
 
 naming:
+  MatchingDeclarationName: # dev-architecture-app.md#pacchetti: `Errori<Contesto>.kt`, `<Aggregato>Eventi.kt`.
+    excludes: ['**/Errori*.kt', '**/*Eventi.kt']
   FunctionNaming:
     ignoreAnnotated: ["Composable"] # Compose convention: composables are PascalCase (screen/component names).

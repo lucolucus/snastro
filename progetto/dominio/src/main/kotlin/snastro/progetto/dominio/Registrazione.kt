@@ -14,9 +14,7 @@ import java.time.LocalDate
  * INV-1: [progettoId] is fixed at creation. INV-2: [dataRegistrazione] is always set, changed only by [modificaData].
  * [titolo] (source file name without extension) is immutable (R6).
  */
-public class Registrazione
-@Suppress("LongParameterList") // one parameter per field of the root
-private constructor(
+public class Registrazione private constructor(
     public val id: RegistrazioneId,
     public val progettoId: ProgettoId,
     public val titolo: String,
@@ -37,7 +35,6 @@ private constructor(
 
     public companion object {
         /** [dataRegistrazione] defaults, at the caller, to the source file's date (INV-2). */
-        @Suppress("LongParameterList") // the pinned signature of agg-registrazione
         public fun aggiungi(
             id: RegistrazioneId,
             progettoId: ProgettoId,
@@ -54,7 +51,6 @@ private constructor(
 
         /** Rebuilds a persisted Registrazione; the database is trusted, nothing is re-validated (CR-15). */
         @RicostituzioneDaPersistenza
-        @Suppress("LongParameterList") // one parameter per persisted column
         public fun ricostituisci(
             id: RegistrazioneId,
             progettoId: ProgettoId,
