@@ -477,3 +477,9 @@
 2026-09-23T16:04:21Z	schermata-registrazioni	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework H1,H2 + R0-visible M1,M4,M5, multi-drop, AC strings
 2026-09-23T16:04:21Z	schermata-registrazioni	composer	pre-release	cycle=0	-	-	MED rifletti stale lettore state after reload; MED trascorsoMs no ticker (R1); LOW record function-typed collaborators as dev-architecture §7 amendment; LOW AggiornamentiVistaFinta tryEmit drop; LOW Windows /C:/ path
 2026-09-23T16:17:15Z	(persistenza)	decision	result	-	-	-	USER DECISION: FluentMigrator-style migrations — ADR 0006 (a) deriveSchemaFromMigrations, verifyMigrations off, no .db snapshots, fast migration test; implemented by persistenza-schema rework c1
+2026-09-23T16:30:00Z	schermata-registrazioni	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 4e3a79c
+2026-09-23T16:30:00Z	schermata-registrazioni	verifier	dispatch	cycle=1	tier=deep	model=opus	verify + re-review
+2026-09-23T16:30:05Z	schermata-registrazioni	composer	pre-release	cycle=1	-	-	SPEC inconsistency: AC-179 formattaDurata "01:15" (leading zero) vs AC-203 example "3:12" — pick one (build-manifest)
+2026-09-23T16:32:19Z	schermata-registrazioni	verifier	result	cycle=1	tier=deep	model=opus	PASS (H1,H2 resolved)
+2026-09-23T16:32:19Z	schermata-registrazioni	composer	merge	cycle=1	-	-	MERGED 36035e0
+2026-09-23T16:32:19Z	schermata-registrazioni	composer	pre-release	cycle=1	-	-	MED refresh-error banner sticks after later success; MED generation guard drops older successful load when newer fails (imported row hidden, error nulled); MED no view test for date Enter/blur submit; LOW %+1 accepted / invalid UTF-8 -> U+FFFD; LOW riprova no Caricamento feedback
