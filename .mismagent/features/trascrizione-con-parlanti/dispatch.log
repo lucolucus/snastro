@@ -192,3 +192,4 @@
 2026-09-23T10:27:33Z	gestione-parlante	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:27:33Z	gestione-parlante	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:27:55Z	avvia-elaborazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (pre-existing mis-scoped reds, not from this diff: ADR 0004 enforced_by matches "com.k2fsa" literals in architettura-test; agg-elaborazione §14 StatoElaborazione\. matches test/testFixtures → re-scope to src/main via write-adr/build-manifest)
+2026-09-23T10:28:36Z	revisione	worker	dispatch	cycle=0	tier=standard	model=sonnet
