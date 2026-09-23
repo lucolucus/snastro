@@ -19,6 +19,7 @@ related_adrs:
   - "0006"
   - "0007"
   - "0012"
+  - "0014"
 ---
 # repository-sql-trascrizione — Repository SQL della Trascrizione
 
@@ -30,6 +31,7 @@ ElaborazioneRepositorySql, TrascrittoRepositorySql (root + voce/segmento childre
 - AC-111 Una violazione di elaborazione_aperta_unica / elaborazione_completata_unica diventa ElaborazioneGiaAperta / ElaborazioneGiaCompletata, mai un'eccezione grezza
 - AC-112 Due inserimenti concorrenti di un'Elaborazione aperta per la stessa Registrazione → uno solo riesce
 - AC-113 I Contratti dei due repository passano contro le implementazioni SQL
+- AC-378 (ex AC-NP10, repository) Round-trip di Elaborazione con numeroPersone assente (NULL) e con 4: il valore riletto è identico e un'Elaborazione ricostituita lo conserva
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -64,7 +66,9 @@ ElaborazioneRepositorySql, TrascrittoRepositorySql (root + voce/segmento childre
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **agg-elaborazione** (consumed/implemented) — owner `elaborazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
-    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant): Creato<Elaborazione, ElaborazioneAccodata>
+    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)
+    - `Elaborazione.numeroPersone`: NumeroPersone? — read-only accessor; set only by accoda (and by the persistence reconstitution); no transition changes it
+    - `NumeroPersone`: @JvmInline value class(valore: Int) in :trascrizione:dominio — 1..10 inclusive; factory NumeroPersone.di(n: Int): Esito<NumeroPersone> → Errore(NumeroPersoneFuoriIntervallo) outside 1..10 (sealed ErroreTrascrizione, ErroriTrascrizione.kt); the only way to build one (ADR 0014)
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
@@ -92,4 +96,4 @@ ElaborazioneRepositorySql, TrascrittoRepositorySql (root + voce/segmento childre
     - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta | ElaborazioneGiaCompletata) from the ADR 0007 indexes */ }
     - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento
 
-Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012 (.mismagent/decisions/); ADR 0006/0007.
+Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014 (.mismagent/decisions/); ADR 0006/0007/0014.

@@ -33,19 +33,24 @@ and **Parlanti**. There is no global menu logic beyond this.
   Each row shows the title (source file name), `DataRegistrazione` (editable inline →
   `ModificaDataRegistrazione`), duration, the processing state and an identification badge
   ("3 voci · 1 da identificare"). There is an "Aggiungi registrazione" action (file picker +
-  drag-and-drop onto the window → `AggiungiRegistrazione`; processing is queued automatically, per Q-6).
+  drag-and-drop onto the window → `AggiungiRegistrazione`; ~~processing is queued automatically, per Q-6~~ —
+  *amended 2026-09-24: no automatic start; see "Amendment 2026-09-24" below*).
 - **Processing state per row** [user]:
   - `in_attesa`: "In coda" (position in queue).
   - `in_corso`: **stage + elapsed time**, e.g. "In corso · separazione voci · 3:12". There is no
     percentage bar.
   - `completata`: opens S3.
-  - `fallita`: the reason in plain words + a "Riprova" button (→ `AvviaElaborazione`, retry).
+  - `fallita`: the reason in plain words + a "Riprova" button (→ `AvviaElaborazione`, retry) — *amended
+    2026-09-24: with the "Numero di persone" field, prefilled*.
+  - *(added 2026-09-24)* `NON_AVVIATA` (no `Elaborazione` yet — every new import): the "Numero di persone"
+    field + a "Trascrivi" button (→ `AvviaElaborazione`).
 - **States:** *empty*: "Nessuna registrazione. Trascina qui un file audio". *Error adding*
   (unreadable file / unsupported format): an inline message and nothing is created.
 - **Data view `RegistrazioniDelProgetto`:** `[{ registrazioneId, titolo, dataRegistrazione,
   durataMs, stato: StatoElaborazione, fase?: FaseElaborazione, avviataAlle?, motivoFallimento?,
   posizioneInCoda?, numVoci?, numVociDaIdentificare? }]`.
-- **Commands:** `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` (retry).
+- **Commands:** `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` (~~retry~~ "Trascrivi" and
+  "Riprova", with the optional `numeroPersone` — amended 2026-09-24).
 
 ## Screen S3 · Registrazione (the core: identification + Revisione), concept B [user]
 Layout: a header, the transcript in the center, and the **Voci** panel on the right.
@@ -188,3 +193,21 @@ separate spike.
   and play"; AC-342/343); no processing state, no badge, no S3. R1 adds the processing state plus a **"Trascrivi"**
   action for a Registrazione with no Elaborazione yet (e.g. imported in R0; AC-344). R2 adds the identification
   badge (block `schermata-registrazioni-identificazione`, AC-204/345).
+
+## Amendment 2026-09-24 (S2: no automatic start; "Numero di persone" on the row) [user]
+Source: ADR 0014 (single home), ADR 0012 Amendment (c), ADR 0004 Amendment (b), user decisions 2026-09-23 and
+2026-09-24; manifest delta `manifest-deltas/2026-09-23-numero-persone.md`. Supersedes the struck-through
+"queued automatically, per Q-6" above.
+- **No automatic start.** Importing a file (`AggiungiRegistrazione`) creates no `Elaborazione`: the new row is
+  `NON_AVVIATA` and shows "Trascrivi" (manifest AC-344, AC-371/372). The user starts every transcription.
+- **"Numero di persone" is a plain fillable field on the S2 row**, next to "Trascrivi" (`NON_AVVIATA` rows) and
+  "Riprova" (`fallita` rows) — not a dialog. Empty = automatic (no count); otherwise an integer from 1 to 10. Any
+  other input shows the inline message "Da 1 a 10, oppure lascia vuoto" and no command is sent (AC-375).
+- **"Riprova" is prefilled** with the `numeroPersone` of the failed `Elaborazione` (empty if it had none); the user
+  may change or clear it, and the new `Elaborazione` stores what was submitted (AC-376). The value comes from the
+  `stati-elaborazione` view (`numeroPersone: Int?`, AC-162).
+- **No "Trascrivi tutte"** [user 2026-09-24]: transcriptions are started one row at a time only (explicit cut).
+- Rows `in_attesa`, `in_corso`, `completata` show no field. The R0 variant (no Trascrizione sources, AC-342) is
+  unchanged: no field, no "Trascrivi".
+- **Blocks:** `schermata-registrazioni` (field, validation, prefill), `stati-elaborazione` (`numeroPersone` in the
+  view), `avvia-elaborazione` (`AvviaElaborazione(registrazioneId, numeroPersone: Int? = null)`).

@@ -24,6 +24,7 @@ related_adrs:
   - "0005"
   - "0010"
   - "0012"
+  - "0014"
 consumes_rm:
   - "registrazioni-del-progetto"
   - "stati-elaborazione"
@@ -37,7 +38,9 @@ triggers:
 ## What to do
 S2: the presenter joins the slices by registrazioneId (R1); drag-and-drop + file picker; per-row '▶' over the LettoreAudio port; live refresh via AggiornamentiVista; elapsed time from avviataAlle with an injected Clock. The Trascrizione sources are optional (R0 variant, AC-342): without them the row shows only titolo, data, durata and '▶'.
 
-Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 ships in R0 WITHOUT Trascrizione/Parlanti features: the Trascrizione sources (stati-elaborazione, avvia-elaborazione — both already merged, compile-time only) are optional presenter inputs, absent in R0 (AC-342) and supplied by avvio-composizione in R1. The identification badge (AC-204, Parlanti read-model identificazione-registrazioni, R2) MOVED to block schermata-registrazioni-identificazione (R2) so R0 needs no R2 block. NEW SURFACE (user decision: R0 = 'import, list and play'): a per-row '▶' over the LettoreAudio port (AC-343) — not in the original ux-proposal S2, recorded as a ux amendment. Carry (stati-elaborazione code-review): NON_AVVIATA must be rendered with an action → AC-344.
+REWORK 2026-09-24 (ADR 0014): the R1 row gets a plain fillable 'Numero di persone' field next to 'Trascrivi' (NON_AVVIATA) and 'Riprova' (fallita): presenter-side validation (empty → null, 1..10 → n, else inline 'Da 1 a 10, oppure lascia vuoto' and no command, AC-375), 'Riprova' prefilled from StatiElaborazione.numeroPersone (AC-376), AvviaElaborazione invoked with (id, numeroPersone); no 'Trascrivi tutte'; no command after AggiungiRegistrazione (AC-372). AC-203/AC-344 tests updated. R0 variant (AC-342) unchanged: no field without the Trascrizione sources.
+
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 ships in R0 WITHOUT Trascrizione/Parlanti features: the Trascrizione sources (stati-elaborazione, avvia-elaborazione — both already merged, compile-time only) are optional presenter inputs, absent in R0 (AC-342) and supplied by avvio-composizione in R1. The identification badge (AC-204, Parlanti read-model identificazione-registrazioni, R2) MOVED to block schermata-registrazioni-identificazione (R2) so R0 needs no R2 block. NEW SURFACE (user decision: R0 = 'import, list and play'): a per-row '▶' over the LettoreAudio port (AC-343) — not in the original ux-proposal S2, recorded as a ux amendment. Carry (stati-elaborazione code-review): NON_AVVIATA must be rendered with an action → AC-344. AMENDED 2026-09-24 (ADR 0014, user decisions 2026-09-23/24; ux-proposal.md S2 amendment 2026-09-24): no automatic start on import — every new Registrazione is NON_AVVIATA; the row carries a plain fillable 'Numero di persone' field (not a dialog) next to 'Trascrivi' (NON_AVVIATA) and 'Riprova' (fallita), validated by the presenter (AC-375), prefilled on 'Riprova' (AC-376); NO 'Trascrivi tutte' (explicit cut, user 2026-09-24: transcriptions start one row at a time). The field is state of the presenter only (not a read-model): its source for 'Riprova' is stati-elaborazione.numeroPersone.
 
 ### Consumes read-models: registrazioni-del-progetto, stati-elaborazione
 ### Triggers: AggiungiRegistrazione, ModificaDataRegistrazione, AvviaElaborazione
@@ -47,12 +50,15 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 
 - AC-200 Caricamento mostrato come indicatore
 - AC-201 Errore di aggiunta mostrato inline, nessuna riga nuova
 - AC-202 Ordinamento per data, dalla più recente
-- AC-203 in_attesa → 'In coda (n)'; in_corso → 'In corso · separazione voci · 3:12' (tempo da avviataAlle, nessuna percentuale); fallita → motivo + 'Riprova' (solo su fallita); completata apre S3
+- AC-203 in_attesa → 'In coda (n)'; in_corso → 'In corso · separazione voci · 3:12' (tempo da avviataAlle, nessuna percentuale); fallita → motivo + campo 'Numero di persone' + 'Riprova' (solo su fallita; campo precompilato, AC-376); completata apre S3 — REWRITTEN 2026-09-24 (ADR 0014)
 - AC-205 La riga si aggiorna quando cambiano stato o fase
 - AC-206 Modifica della data inline
 - AC-342 (R0 variant) Le sorgenti di Trascrizione sono OPZIONALI: il presenter costruito SENZA StatiElaborazione e AvviaElaborazione (R0, avvio-r0) mostra per ogni riga solo titolo, data (modificabile, AC-206), durata e '▶' (AC-343); nessuna colonna di stato, nessun 'Riprova'/'Trascrivi', nessun badge, e il click su una riga non apre S3 — test del presenter con le sole finte di RegistrazioniDelProgetto, AggiungiRegistrazione, ModificaDataRegistrazione e LettoreAudio; con le sorgenti fornite (R1, avvio-composizione) valgono AC-203/AC-205/AC-344
 - AC-343 (R0) Ogni riga ha '▶' che riproduce la Registrazione dall'inizio via LettoreAudio.riproduciDa(id, 0); durante la riproduzione della riga il controllo diventa pausa (StatoLettore.registrazioneId = la riga), '▶' su un'altra riga sostituisce la riproduzione in corso; LettoreAudio.disponibile(id) = false → '▶' disabilitato con 'Audio non disponibile'
-- AC-344 (R1) Con le sorgenti di Trascrizione fornite, una Registrazione senza Elaborazione (StatoElaborazioneVista.NON_AVVIATA — es. importata in R0) mostra 'Trascrivi' che invoca AvviaElaborazione; un errore del comando è mostrato inline sulla riga e nulla cambia
+- AC-344 (R1) Con le sorgenti di Trascrizione fornite, una Registrazione senza Elaborazione (StatoElaborazioneVista.NON_AVVIATA — ogni Registrazione importata, in R0 come in R1: nessun avvio automatico, ADR 0014) mostra sulla riga il campo 'Numero di persone' (vuoto = automatico) e 'Trascrivi', che invoca AvviaElaborazione(registrazioneId, numeroPersone); un errore del comando è mostrato inline sulla riga e nulla cambia; non esiste un'azione 'Trascrivi tutte' — REWRITTEN 2026-09-24 (ADR 0014)
+- AC-372 (ex AC-NP5, parte S2) Una Registrazione appena aggiunta con le sorgenti di Trascrizione fornite resta NON_AVVIATA: il presenter non invoca AvviaElaborazione dopo AggiungiRegistrazione (nessuna chiamata sulla finta) e la riga mostra 'Trascrivi' con il campo vuoto
+- AC-375 (ex AC-NP8) 'Trascrivi' e 'Riprova' leggono il campo 'Numero di persone' della riga: vuoto → AvviaElaborazione(id, null); 1..10 → AvviaElaborazione(id, n); altro (0, 11, testo, decimale) → messaggio inline 'Da 1 a 10, oppure lascia vuoto' e nessun comando invocato (test a tabella sul presenter)
+- AC-376 (ex AC-NP9) Su una riga fallita il campo è precompilato con il numeroPersone dell'Elaborazione fallita (StatiElaborazione.numeroPersone; vuoto se assente) ed è modificabile: 'Riprova' invia il valore presente nel campo al momento del click
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
@@ -102,4 +108,4 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 
   - keys (minting rules):
     - `percorso`: see tec-registro-progetti
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1).
+Sources: ADRs 0002, 0003, 0004, 0005, 0010, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1, amendment 2026-09-24), ADR 0014.

@@ -27,6 +27,7 @@ related_adrs:
   - "0007"
   - "0011"
   - "0012"
+  - "0014"
 commands:
   - "EseguiProssimaElaborazione"
   - "RecuperaElaborazioniInterrotte"
@@ -38,7 +39,9 @@ invariants:
 ## What to do
 Internal commands (actor: sistema, R17). EseguiProssimaElaborazione takes the oldest in_attesa, marks it in_corso, runs decodifica → diarizzazione → trascrizione/allineamento through the ports OUTSIDE any transaction, reporting each FaseElaborazione, then commits completata + Trascritto in one short transaction, or fallita(motivo). RecuperaElaborazioniInterrotte (startup) turns every in_corso without a live run into fallita('interrotta').
 
-Note: The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here.
+REWORK 2026-09-24 (ADR 0014): the pipeline calls diarizzatore.diarizza(campioni, elaborazione.numeroPersone) instead of diarizza(campioni) — the value of the Elaborazione being run, also after a restart. New test AC-370.
+
+Note: The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here. AMENDED 2026-09-24 (ADR 0014): diarizza(campioni, elaborazione.numeroPersone).
 
 ### Invariants owned here (one test each, name starts with the tag)
 - INV-5 a Trascritto exists iff its Registrazione has a completata Elaborazione; created atomically with the transition to completata
@@ -53,6 +56,7 @@ Note: The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here.
 - AC-73 Nessuna transazione è aperta mentre le porte ML/audio lavorano (verifica di interazione)
 - AC-74 RecuperaElaborazioniInterrotte: un'in_corso senza esecuzione viva diventa fallita 'interrotta' ed è riprovabile
 - AC-75 RecuperaElaborazioniInterrotte non tocca le Elaborazioni in_attesa, completata o fallita
+- AC-370 (ex AC-NP4) La pipeline passa a Diarizzatore.diarizza esattamente il numeroPersone dell'Elaborazione eseguita (assente → assente), anche per un'Elaborazione riletta dal repository dopo un riavvio (DiarizzatoreFinta che registra l'argomento)
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -87,7 +91,9 @@ Note: The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here.
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **agg-elaborazione** (consumed/implemented) — owner `elaborazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
-    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant): Creato<Elaborazione, ElaborazioneAccodata>
+    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)
+    - `Elaborazione.numeroPersone`: NumeroPersone? — read-only accessor; set only by accoda (and by the persistence reconstitution); no transition changes it
+    - `NumeroPersone`: @JvmInline value class(valore: Int) in :trascrizione:dominio — 1..10 inclusive; factory NumeroPersone.di(n: Int): Esito<NumeroPersone> → Errore(NumeroPersoneFuoriIntervallo) outside 1..10 (sealed ErroreTrascrizione, ErroriTrascrizione.kt); the only way to build one (ADR 0014)
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
@@ -136,7 +142,8 @@ Note: The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here.
     - `DecodificatoreAudio`: interface { fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio); fun tutti(id: RegistrazioneId): CampioniAudio; fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio } — infra faults throw (ADR 0003); campioni count = (fine-inizio)*16
 - **tec-diarizzatore** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio): List<Turno> }
+    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)
+    - `NumeroPersone`: see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)
     - `Turno`: data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index
   - keys (minting rules):
     - `voceIndice`: minted by the Diarizzatore adapter per run — transient, NEVER persisted; the trascritto aggregate maps it to VoceId by first appearance
@@ -150,4 +157,4 @@ Note: The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here.
     - `SegnalatoreFase`: interface { fun fase(id: RegistrazioneId, f: FaseElaborazione); fun terminata(id: RegistrazioneId) }
     - `FaseElaborazione`: enum DECODIFICA | DIARIZZAZIONE | TRASCRIZIONE | ALLINEAMENTO (trascrizione:applicazione) — progress only, not guarded state
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0011, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-5, startup policy), ADR 0004/0012, architecture.md § Pipeline.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0011, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-5, startup policy), ADR 0004/0012, architecture.md § Pipeline.

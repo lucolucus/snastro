@@ -18,6 +18,7 @@ related_adrs:
   - "0006"
   - "0010"
   - "0012"
+  - "0014"
 commands:
   - "CreaProgetto"
 ---
@@ -25,6 +26,8 @@ commands:
 
 ## What to do
 CreaProgettoServizio: on a freshly opened project DB validates NomeProgetto, refuses a second Progetto, saves it and publishes ProgettoCreato. Folder layout + DB opening + registry are done by SessioneProgetto in avvio-composizione (R3).
+
+REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progetto pin changed (RegistrazioneAggiunta after-commit only); ProgettoCreato is untouched.
 
 ## Tasks
 - AC-53 CreaProgetto con nome valido salva il Progetto e pubblica ProgettoCreato
@@ -77,11 +80,11 @@ CreaProgettoServizio: on a freshly opened project DB validates NomeProgetto, ref
 - **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
-    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — SYNC consumer: abbonato-registrazione-aggiunta
+    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))
     - `DataRegistrazioneModificata`: data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-  - delivery: RegistrazioneAggiunta → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Others → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+  - delivery: All three events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012)
 
-Sources: ADRs 0002, 0003, 0006, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto.
+Sources: ADRs 0002, 0003, 0006, 0010, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto.

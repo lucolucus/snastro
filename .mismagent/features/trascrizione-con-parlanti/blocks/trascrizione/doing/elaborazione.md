@@ -15,6 +15,7 @@ related_adrs:
   - "0004"
   - "0007"
   - "0012"
+  - "0014"
 invariants:
   - "INV-3 StatoElaborazione moves only in_attesa → in_corso → completata | fallita; completata and fallita are terminal"
 invariant_fields:
@@ -29,7 +30,9 @@ owns_boundaries:
     projection: "in-process"
     contract_test: "invariant-test"
     pinned_types:
-      "Elaborazione.accoda": "(id: ElaborazioneId, registrazioneId, creataAlle: Instant): Creato<Elaborazione, ElaborazioneAccodata>"
+      "Elaborazione.accoda": "(id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)"
+      "Elaborazione.numeroPersone": "NumeroPersone? — read-only accessor; set only by accoda (and by the persistence reconstitution); no transition changes it"
+      NumeroPersone: "@JvmInline value class(valore: Int) in :trascrizione:dominio — 1..10 inclusive; factory NumeroPersone.di(n: Int): Esito<NumeroPersone> → Errore(NumeroPersoneFuoriIntervallo) outside 1..10 (sealed ErroreTrascrizione, ErroriTrascrizione.kt); the only way to build one (ADR 0014)"
       "Elaborazione.avvia": "(alle: Instant): Esito<ElaborazioneAvviata>"
       "Elaborazione.completa": "(): Esito<ElaborazioneCompletata>"
       "Elaborazione.fallisci": "(motivo: String): Esito<ElaborazioneFallita>"
@@ -40,6 +43,10 @@ owns_boundaries:
 ## What to do
 Elaborazione root: accoda (in_attesa, creataAlle), avvia(alle) → in_corso, completa, fallisci(motivo); named predicates aperta/completata/fallita/terminale. Built BEFORE trascritto (shared ErroriTrascrizione.kt, R20).
 
+REWORK 2026-09-24 (ADR 0014): add the VO NumeroPersone (@JvmInline value class(valore: Int), NumeroPersone.di(n) → Esito, 1..10, else Errore(NumeroPersoneFuoriIntervallo) added to ErroriTrascrizione.kt); Elaborazione gains the immutable optional field numeroPersone (read-only accessor), taken by accoda(..., numeroPersone) and by the persistence reconstitution; transitions never touch it. New tests AC-367, AC-368.
+
+Note: AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..10, NumeroPersoneFuoriIntervallo in ErroriTrascrizione.kt) and the immutable optional field numeroPersone live here; accoda takes it, the reconstitution restores it.
+
 ### Invariants owned here (one test each, name starts with the tag)
 - INV-3 StatoElaborazione moves only in_attesa → in_corso → completata | fallita; completata and fallita are terminal
 
@@ -47,11 +54,15 @@ Elaborazione root: accoda (in_attesa, creataAlle), avvia(alle) → in_corso, com
 - INV-3 da in_attesa si passa solo a in_corso; da in_corso a completata o fallita (ogni transizione ammessa restituisce il suo evento)
 - INV-3 ogni transizione da completata o fallita, e ogni salto (in_attesa → completata), restituisce Errore(TransizioneNonAmmessa) e lo stato non cambia
 - AC-19 fallisci conserva il motivo; avvia registra avviataAlle
+- AC-367 (ex AC-NP1) Elaborazione.accoda fissa numeroPersone (anche assente) alla creazione; è immutabile e di sola lettura: nessuna transizione (avvia, completa, fallisci) lo cambia
+- AC-368 (ex AC-NP2) NumeroPersone.di: 1 e 10 → Ok; 0, -1 e 11 → Errore(NumeroPersoneFuoriIntervallo) (test a tabella)
 
 ## Dependencies
 - **agg-elaborazione** (OWNED here — built before its consumers) — owner `elaborazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
-    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant): Creato<Elaborazione, ElaborazioneAccodata>
+    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)
+    - `Elaborazione.numeroPersone`: NumeroPersone? — read-only accessor; set only by accoda (and by the persistence reconstitution); no transition changes it
+    - `NumeroPersone`: @JvmInline value class(valore: Int) in :trascrizione:dominio — 1..10 inclusive; factory NumeroPersone.di(n: Int): Esito<NumeroPersone> → Errore(NumeroPersoneFuoriIntervallo) outside 1..10 (sealed ErroreTrascrizione, ErroriTrascrizione.kt); the only way to build one (ADR 0014)
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
@@ -92,4 +103,4 @@ Elaborazione root: accoda (in_attesa, creataAlle), avvia(alle) → in_corso, com
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0004, 0007, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione.
+Sources: ADRs 0002, 0003, 0004, 0007, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (+ Amendment 2026-09-23 (c)), ADR 0014.

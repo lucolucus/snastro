@@ -18,17 +18,21 @@ related_adrs:
   - "0004"
   - "0008"
   - "0012"
+  - "0014"
 gated_by:
-  - "ADR closing spike scelta-diarizzatore"
+  - "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014 (accepted 2026-09-23)"
 ---
 # diarizzatore-sherpa — Diarizzatore reale su sherpa-onnx
 
 ## What to do
 Real Diarizzatore adapter with the model chosen by the spike ADR (catalogue entry URL + SHA-256 + licence added to :modelli in the same block); registered in :avvio's adapter-selection config (W12 blocks merged serially: they share that config file).
 
+Note: AMENDED 2026-09-24 (ADR 0014): runtime config and catalogue entries are pinned by ADR 0014; the adapter implements diarizza(c, numeroPersone).
+
 ## Tasks
 - AC-249 [@modelli] DiarizzatoreContratto passa contro l'adattatore reale su un campione di sample/
-- AC-250 La voce del modello nel catalogo ha URL, SHA-256 e licenza come da ADR dello spike
+- AC-250 Le voci di catalogo di :modelli segmentazione-pyannote-3.0 (TAR_BZ2, file usato model.int8.onnx) e embedding-wespeaker-resnet34-lm (FILE, wespeaker_en_voxceleb_resnet34_LM.onnx) hanno url, sha256, dimensioneByte, licenza (MIT / CC-BY-4.0) e attribuzione esattamente come nella tabella di ADR 0014 § ':modelli catalogue entries' — REWRITTEN 2026-09-24
+- AC-373 (ex AC-NP6) [@modelli] numeroPersone = k → l'adattatore configura numClusters = k e restituisce al più k voceIndice distinti; assente → numClusters = -1 e threshold 0.4 (config di ADR 0014: segmentation-3.0 int8, windowShiftRatio 0.5, minDurationOn 0.3, minDurationOff 0.5); un k superiore a quanto l'audio supporta non fa fallire l'Elaborazione (se sherpa rifiuta k, fallback automatico a numClusters = -1)
 - AC-251 Tutte le risorse native sono rilasciate a fine uso (use {})
 
 ## Dependencies
@@ -66,7 +70,8 @@ Real Diarizzatore adapter with the model chosen by the spike ADR (catalogue entr
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **tec-diarizzatore** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio): List<Turno> }
+    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)
+    - `NumeroPersone`: see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)
     - `Turno`: data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index
   - keys (minting rules):
     - `voceIndice`: minted by the Diarizzatore adapter per run — transient, NEVER persisted; the trascritto aggregate maps it to VoceId by first appearance
@@ -75,4 +80,4 @@ Real Diarizzatore adapter with the model chosen by the spike ADR (catalogue entr
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012 (.mismagent/decisions/); spike scelta-diarizzatore, ADR 0004/0008.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0014 (.mismagent/decisions/); spike scelta-diarizzatore, ADR 0004/0008/0014.

@@ -20,21 +20,26 @@ related_adrs:
   - "0006"
   - "0007"
   - "0012"
+  - "0014"
 view_shape:
-  stati: "List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?}>"
+  stati: "List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?}>"
 view_sources:
-  stati: "stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto"
+  stati: "stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto; numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA)"
 ---
 # stati-elaborazione — StatiElaborazione — fetta Trascrizione (S2) + FasiInCorso
 
 ## What to do
 Trascrizione slice of S2 (R1 split) + the in-memory FasiInCorso holder (implements SegnalatoreFase; wired by :avvio).
 
+REWORK 2026-09-24 (ADR 0014): each stati item gains numeroPersone: Int? = the latest Elaborazione's numeroPersone?.valore (null when absent or NON_AVVIATA); AC-162 test extended.
+
+Note: AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewritten).
+
 ### view_shape (field ← source)
-- `stati`: List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?}> ← stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto
+- `stati`: List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?}> ← stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto; numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA)
 
 ## Tasks
-- AC-162 La vista espone stato, fase, avviataAlle, motivoFallimento, posizioneInCoda e numVoci per Registrazione
+- AC-162 La vista espone stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci e numeroPersone per Registrazione (numeroPersone = quello dell'ultima Elaborazione, null se assente o se NON_AVVIATA; serve a precompilare 'Riprova', AC-376) — REWRITTEN 2026-09-24 (ADR 0014)
 - AC-163 posizioneInCoda segue l'ordine FIFO delle in_attesa (1 = la prossima)
 - AC-164 fase è presente solo per in_corso e riflette l'ultima fase segnalata; scompare quando l'Elaborazione termina
 - AC-165 numVoci è presente solo per completata
@@ -72,7 +77,9 @@ Trascrizione slice of S2 (R1 split) + the in-memory FasiInCorso holder (implemen
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **agg-elaborazione** (consumed/implemented) — owner `elaborazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
-    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant): Creato<Elaborazione, ElaborazioneAccodata>
+    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)
+    - `Elaborazione.numeroPersone`: NumeroPersone? — read-only accessor; set only by accoda (and by the persistence reconstitution); no transition changes it
+    - `NumeroPersone`: @JvmInline value class(valore: Int) in :trascrizione:dominio — 1..10 inclusive; factory NumeroPersone.di(n: Int): Esito<NumeroPersone> → Errore(NumeroPersoneFuoriIntervallo) outside 1..10 (sealed ErroreTrascrizione, ErroriTrascrizione.kt); the only way to build one (ADR 0014)
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
@@ -104,4 +111,4 @@ Trascrizione slice of S2 (R1 split) + the in-memory FasiInCorso holder (implemen
     - `SegnalatoreFase`: interface { fun fase(id: RegistrazioneId, f: FaseElaborazione); fun terminata(id: RegistrazioneId) }
     - `FaseElaborazione`: enum DECODIFICA | DIARIZZAZIONE | TRASCRIZIONE | ALLINEAMENTO (trascrizione:applicazione) — progress only, not guarded state
 
-Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1), architecture.md § Pipeline.
+Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1, amendment 2026-09-24), architecture.md § Pipeline, ADR 0014.

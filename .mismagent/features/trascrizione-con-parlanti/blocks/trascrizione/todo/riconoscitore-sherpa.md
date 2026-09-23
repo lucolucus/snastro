@@ -18,8 +18,9 @@ related_adrs:
   - "0004"
   - "0008"
   - "0012"
+  - "0013"
 gated_by:
-  - "ADR closing spike scelta-asr-code-switching"
+  - "ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013 (accepted)"
 ---
 # riconoscitore-sherpa — RiconoscitoreParlato reale su sherpa-onnx
 
@@ -28,7 +29,7 @@ Real RiconoscitoreParlato adapter with the model chosen by the spike ADR (catalo
 
 ## Tasks
 - AC-252 [@modelli] RiconoscitoreParlatoContratto passa contro l'adattatore reale su un campione di sample/
-- AC-253 La voce del modello nel catalogo ha URL, SHA-256 e licenza come da ADR dello spike
+- AC-253 La voce di catalogo di :modelli asr-parakeet-tdt-0.6b-v3-int8 (TAR_BZ2; file usati encoder.int8.onnx, decoder.int8.onnx, joiner.int8.onnx, tokens.txt) ha url, sha256, dimensioneByte, licenza (CC-BY-4.0) e attribuzione esattamente come nella tabella di ADR 0013 § ':modelli catalogue entries' — REWRITTEN 2026-09-24
 - AC-254 Tutte le risorse native sono rilasciate a fine uso (use {})
 
 ## Dependencies
@@ -74,4 +75,4 @@ Real RiconoscitoreParlato adapter with the model chosen by the spike ADR (catalo
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012 (.mismagent/decisions/); spike scelta-asr-code-switching, ADR 0004/0008.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013 (.mismagent/decisions/); spike scelta-asr-code-switching, ADR 0004/0008/0013.

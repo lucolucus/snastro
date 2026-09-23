@@ -534,3 +534,4 @@
 2026-09-23T22:13:29Z	fix-batch-13	composer	merge	cycle=0	-	-	MERGED 60e5ecb
 2026-09-23T22:13:29Z	(release)	composer	release	-	-	-	R0 Archivio released: feature -> main, tag r0 (user yes)
 2026-09-23T22:15:01Z	(r1-plan)	decision	result	-	-	-	USER DECISION: no Trascrivi tutte; Numero di persone = fillable field on the S2 row
+2026-09-23T22:22:29Z	(manifest)	build-manifest	result	-	deep	opus	DELTA folded: -abbonato-registrazione-aggiunta; re-pinned eventi-progetto/agg-elaborazione/tec-diarizzatore; AC-367..378; catalogue AC-250/253/256; ux amendment; REWORK: elaborazione, porte-trascrizione, avvia-elaborazione, esegui-elaborazione, stati-elaborazione, persistenza-schema, schermata-registrazioni (+ comment-only eventi-pubblicati, servizi-registrazione, avvio-r0)

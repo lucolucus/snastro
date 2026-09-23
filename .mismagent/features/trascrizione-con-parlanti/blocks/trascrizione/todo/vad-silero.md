@@ -18,6 +18,7 @@ related_adrs:
   - "0004"
   - "0008"
   - "0012"
+  - "0013"
 gated_by:
   - "ADR closing spike allineamento-parole-voci"
   - "ADR closing spike packaging-modelli-desktop"
@@ -29,7 +30,7 @@ Real Vad adapter with the model chosen by the spike ADR (catalogue entry URL + S
 
 ## Tasks
 - AC-255 [@modelli] VadContratto passa contro l'adattatore reale su un campione di sample/
-- AC-256 La voce del modello nel catalogo ha URL, SHA-256 e licenza come da ADR dello spike
+- AC-256 La voce di catalogo di :modelli vad-silero (FILE, silero_vad.onnx) ha url, sha256, dimensioneByte, licenza (MIT) e attribuzione esattamente come nella tabella VAD di ADR 0013 § ':modelli catalogue entries' (id proposto da ADR 0013; se il blocco lo cambia, lo registra con un emendamento) — REWRITTEN 2026-09-24
 - AC-257 Tutte le risorse native sono rilasciate a fine uso (use {})
 
 ## Dependencies
@@ -73,4 +74,4 @@ Real Vad adapter with the model chosen by the spike ADR (catalogue entry URL + S
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012 (.mismagent/decisions/); spike allineamento-parole-voci, ADR 0004/0008.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013 (.mismagent/decisions/); spike allineamento-parole-voci, ADR 0004/0008/0013.

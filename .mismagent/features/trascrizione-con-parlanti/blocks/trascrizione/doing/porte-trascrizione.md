@@ -17,6 +17,7 @@ related_adrs:
   - "0006"
   - "0007"
   - "0012"
+  - "0014"
 owns_boundaries:
   repo-trascrizione:
     projection: "in-process"
@@ -33,7 +34,8 @@ owns_boundaries:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      Diarizzatore: "interface { fun diarizza(c: CampioniAudio): List<Turno> }"
+      Diarizzatore: "interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)"
+      NumeroPersone: "see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)"
       Turno: "data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index"
   tec-riconoscitore:
     projection: "in-process"
@@ -66,6 +68,10 @@ owns_boundaries:
 ## What to do
 Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diarizzatore, RiconoscitoreParlato, Vad, Allineatore, SegnalatoreFase (+ FaseElaborazione) with Finta + Contratto each; the ElaborazioneRepositoryFinta honours INV-4 like the indexes.
 
+REWORK 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: NumeroPersone?; DiarizzatoreFinta records the last numeroPersone received and never returns more than k distinct voceIndice; DiarizzatoreContratto gains the k case (AC-374). Every existing caller/fake of diarizza must be updated.
+
+Note: AMENDED 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: NumeroPersone?; the DiarizzatoreFinta records the argument it received (used by esegui-elaborazione AC-370) and never returns more than k distinct voceIndice.
+
 ## Tasks
 - AC-29 ElaborazioneRepositoryContratto: una seconda Elaborazione aperta per la stessa Registrazione → ElaborazioneGiaAperta; una seconda completata → ElaborazioneGiaCompletata; inAttesa in ordine FIFO di creazione (passa contro la Finta)
 - AC-30 TrascrittoRepositoryContratto: round-trip completo incluse Voci, Segmenti, prossimaVoce e prossimoSegmento
@@ -75,6 +81,7 @@ Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diari
 - AC-34 VadContratto: intervalli ordinati, non sovrapposti, entro la durata
 - AC-35 AllineatoreContratto: ogni SegmentoGrezzo ha inizio < fine entro la durata, un voceIndice presente nei turni, e le sovrapposizioni tra turni non vengono tagliate né eliminate
 - AC-36 SegnalatoreFaseFinta registra la sequenza di fasi ricevute
+- AC-374 (ex AC-NP7) DiarizzatoreContratto: con numeroPersone = k i Turni hanno al più k voceIndice distinti; con numeroPersone assente vale AC-32 (passa contro la DiarizzatoreFinta, che registra l'ultimo numeroPersone ricevuto)
 
 ## Dependencies
 - **repo-trascrizione** (OWNED here — built before its consumers) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
@@ -86,7 +93,8 @@ Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diari
     - `DecodificatoreAudio`: interface { fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio); fun tutti(id: RegistrazioneId): CampioniAudio; fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio } — infra faults throw (ADR 0003); campioni count = (fine-inizio)*16
 - **tec-diarizzatore** (OWNED here — built before its consumers) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio): List<Turno> }
+    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)
+    - `NumeroPersone`: see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)
     - `Turno`: data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index
   - keys (minting rules):
     - `voceIndice`: minted by the Diarizzatore adapter per run — transient, NEVER persisted; the trascritto aggregate maps it to VoceId by first appearance
@@ -138,4 +146,4 @@ Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diari
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004, ADR 0014.

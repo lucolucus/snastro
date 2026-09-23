@@ -31,11 +31,14 @@ related_adrs:
   - "0006"
   - "0010"
   - "0012"
+  - "0014"
 ---
 # avvio-r0 — Composition root R0 (Archivio): main, sessione di progetto, import e riproduzione, S1/S2, smoke
 
 ## What to do
 R0 composition root (release Archivio): main() with manual wiring of the R0 graph only — SessioneProgetto crea/apri/chiudi (folder naming AC-263/264/265, <nome>.snastro/ layout, .lock, apriDatabaseProgetto), RegistroProgetti on the per-OS app-data path with every call off the UI thread and errors logged, never aborting open/create/close; CreaProgetto/AggiungiRegistrazione/ModificaDataRegistrazione over eventi.unitaDiLavoro; ElencoProgetti + RegistrazioniDelProgetto; SondaAudio/ArchivioAudio for import; LettoreAudio over RiproduttoreWav (WAV rebuilt from the source); ApriEsterno over java.awt.Desktop; AggiornamentiVista fed by after-commit Progetto events; shell without the Parlanti section and S2 without Trascrizione sources; --smoke <fixture-dir> for S1/S2.
+
+REWORK 2026-09-24 (ADR 0014): no behaviour change (R0 registers no sync subscriber on RegistrazioneAggiunta, and R1 will not either); fix the comments that call the auto-start of the Elaborazione a future (R2) behaviour: avvio/src/main/kotlin/snastro/avvio/AggiornamentiVistaEventi.kt and avvio/src/test/kotlin/snastro/avvio/AggiungiRegistrazioneR0Test.kt — it is removed, not deferred.
 
 Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R0 half of the former monolithic avvio-composizione. main(): manual wiring of the R0 graph only — SessioneProgetto crea/apri/chiudi (folder naming AC-263/264/265, .lock, apriDatabaseProgetto), RegistroProgetti (per-OS path AC-348, calls off the UI thread, errors logged and never aborting AC-347), CreaProgetto/AggiungiRegistrazione/ModificaDataRegistrazione over eventi.unitaDiLavoro (AC-346), ElencoProgetti + RegistrazioniDelProgetto read-models, SondaAudio/ArchivioAudio (audio-progetto) for import, LettoreAudio over RiproduttoreWav (WAV rebuilt from the source into cache/audio/, AC-241), ApriEsterno over java.awt.Desktop, AggiornamentiVista fed by after-commit Progetto events (AC-242), shell WITHOUT the Parlanti section (AC-341) and S2 WITHOUT Trascrizione sources (AC-342), --smoke for S1/S2 (AC-237). Carry-overs owned here: registry errors never abort open/create/close and never on the UI thread (fix-batch-6 code-review, mandatory); per-OS app-data path of the registry (registro-progetti-file code-review); eventi.unitaDiLavoro wiring (revisione code-review) — the same rule binds avvio-composizione and avvio-parlanti. USER DECISION 2026-09-23 (folder naming) as recorded on AC-263..265: 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 and NTFS's 255 UTF-16 units; SessioneProgetto.crea never produces CartellaGiaEsistente. The later blocks EXTEND this wiring (they never re-create SessioneProgetto, the dispatcher or LettoreAudio): avvio-composizione (R1) adds Trascrizione/Documento/Modelli, avvio-parlanti (R2) adds Parlanti. Pre-release (not gating): audio-ffmpeg fix-batch-7 (atomic WAV write, RiproduttoreWav playback token/position/flush) improves R0 playback robustness.
 
@@ -90,12 +93,12 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R0 
 - **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
-    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — SYNC consumer: abbonato-registrazione-aggiunta
+    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))
     - `DataRegistrazioneModificata`: data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-  - delivery: RegistrazioneAggiunta → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Others → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+  - delivery: All three events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012)
 - **tec-registro-progetti** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }
@@ -123,4 +126,4 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R0 
   - keys (minting rules):
     - `percorso`: see tec-registro-progetti
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0010, 0012 (.mismagent/decisions/); architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding, user decisions 2026-09-23 (folder naming; release pivot R0 Archivio).
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0010, 0012, 0014 (.mismagent/decisions/); architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding, user decisions 2026-09-23 (folder naming; release pivot R0 Archivio).

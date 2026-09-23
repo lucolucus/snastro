@@ -20,6 +20,7 @@ related_adrs:
   - "0006"
   - "0010"
   - "0012"
+  - "0014"
 commands:
   - "AggiungiRegistrazione"
   - "ModificaDataRegistrazione"
@@ -27,7 +28,9 @@ commands:
 # servizi-registrazione — AggiungiRegistrazione, ModificaDataRegistrazione
 
 ## What to do
-AggiungiRegistrazione: sonda → copia → Registrazione.aggiungi (titolo = file name without extension, made UNIQUE in the Progetto with ' (2)', ' (3)'… on a clash of its file-safe case-insensitive key, durata from the probe, date = file date) → save → publish RegistrazioneAggiunta (whose SYNC subscriber queues the Elaborazione, R2). ModificaDataRegistrazione publishes DataRegistrazioneModificata.
+AggiungiRegistrazione: sonda → copia → Registrazione.aggiungi (titolo = file name without extension, made UNIQUE in the Progetto with ' (2)', ' (3)'… on a clash of its file-safe case-insensitive key, durata from the probe, date = file date) → save → publish RegistrazioneAggiunta (~~whose SYNC subscriber queues the Elaborazione, R2~~ — amended 2026-09-24, ADR 0014: no subscriber starts an Elaborazione; after-commit consumers only). ModificaDataRegistrazione publishes DataRegistrazioneModificata.
+
+REWORK 2026-09-24 (ADR 0014): no behaviour change; AC-60 rephrased (rollback on ANY sync subscriber failure, tested with a fake subscriber — no composition registers one). Fix the KDoc of AggiungiRegistrazioneServizio.kt ('whose SYNC subscriber auto-starts the Elaborazione') and rename the AC-60 test if it names the Elaborazione subscriber.
 
 Note: AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo UNIQUE per Progetto (AC-322..324) via the new RegistrazioneRepository.titoliDelProgetto (repo-progetto). Uniqueness holds BY CONSTRUCTION, no DB index: the read of titoliDelProgetto and the insert run in the same UnitaDiLavoro transaction, and a project has one writer process (ADR 0010 .lock); the key lives in Kotlin (pulisci + Locale.ROOT lowercase), not in SQL (SQLite lower() is ASCII-only). pulisci = the rule pinned in tec-scrittore-documento keys.nomeFile, implemented here as a private pure function of :progetto:applicazione with the same table rows as documento AC-320 (Progetto may not depend on Documento). FOLLOW-UP REQUIRED: merged before this amendment; the merged code does not yet satisfy AC-61 (amended) and AC-322..324 — a rework/fix block must land them (after porte-progetto's follow-up adds titoliDelProgetto).
 
@@ -36,7 +39,7 @@ Note: AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo
 - AC-57 Un file illeggibile o in formato non supportato → errore, nessuna Registrazione creata e nessun file lasciato in audio/
 - AC-58 Una copia fallita a metà → nulla creato (nessuna riga, nessun file parziale)
 - AC-59 L'audio è copiato in audio/<registrazioneId>.<ext> e il riferimento salvato è relativo alla cartella del progetto
-- AC-60 Se l'abbonato sincrono che accoda l'Elaborazione fallisce, la Registrazione non esiste (rollback dell'intero comando)
+- AC-60 Se un abbonato sincrono a RegistrazioneAggiunta restituisce Errore o lancia, la Registrazione non esiste e nessun file resta in audio/ (rollback dell'intero comando) — test con un abbonato sincrono finto; nessuna composizione ne registra uno (nessun avvio automatico, ADR 0014), il meccanismo resta (ADR 0012) — REWRITTEN 2026-09-24
 - AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi; la seconda riceve il titolo '<nome> (2)' (AC-322)
 - AC-62 ModificaDataRegistrazione sostituisce la data e pubblica DataRegistrazioneModificata(precedente, nuova)
 - AC-63 ModificaDataRegistrazione su una Registrazione inesistente → RegistrazioneNonTrovata
@@ -92,12 +95,12 @@ Note: AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo
 - **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
-    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — SYNC consumer: abbonato-registrazione-aggiunta
+    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))
     - `DataRegistrazioneModificata`: data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-  - delivery: RegistrazioneAggiunta → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Others → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+  - delivery: All three events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012)
 - **tec-sonda-archivio** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `SondaAudio`: interface { fun sonda(percorsoSorgente: String): Esito<InfoAudio> } — Errore(AudioNonLeggibile | FormatoNonSupportato)
@@ -106,4 +109,4 @@ Note: AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo
   - keys (minting rules):
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0005, 0006, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto (+ R2, R6, R24), ADR 0010.
+Sources: ADRs 0002, 0003, 0005, 0006, 0010, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto (+ R2, R6, R24), ADR 0010.

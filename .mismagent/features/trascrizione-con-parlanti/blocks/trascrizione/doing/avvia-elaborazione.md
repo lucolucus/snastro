@@ -19,6 +19,7 @@ related_adrs:
   - "0006"
   - "0007"
   - "0012"
+  - "0014"
 commands:
   - "AvviaElaborazione"
 invariants:
@@ -27,7 +28,11 @@ invariants:
 # avvia-elaborazione — AvviaElaborazione (accodamento e riprova)
 
 ## What to do
-Enqueue an Elaborazione in_attesa (actors: the RegistrazioneAggiunta sync subscriber and the user's retry after fallita). INV-4 pre-check + index backstop (ADR 0007).
+Enqueue an Elaborazione in_attesa (actor: the utente only — 'Trascrivi' on a NON_AVVIATA row and 'Riprova' after fallita; ~~the RegistrazioneAggiunta sync subscriber~~ is removed, ADR 0014). AvviaElaborazione(registrazioneId, numeroPersone: Int? = null): numeroPersone is validated via NumeroPersone.di before any write and passed to Elaborazione.accoda. INV-4 pre-check + index backstop (ADR 0007).
+
+REWORK 2026-09-24 (ADR 0014): the command gains numeroPersone: Int? = null (validated with NumeroPersone.di → NumeroPersoneFuoriIntervallo, no row on error) and passes it to Elaborazione.accoda; a retry after fallita stores the submitted value. Remove any KDoc/comment naming the RegistrazioneAggiunta subscriber as an actor. New test AC-369.
+
+Note: AMENDED 2026-09-24 (ADR 0014, ADR 0012 Amendment (c)): signature AvviaElaborazione(registrazioneId, numeroPersone: Int? = null); the ONLY actor is the utente ('Trascrivi' on NON_AVVIATA, 'Riprova' on fallita) — no subscriber calls it (Q-6 superseded); numeroPersone is validated via NumeroPersone.di BEFORE any write.
 
 ### Invariants owned here (one test each, name starts with the tag)
 - INV-4 per Registrazione at most one Elaborazione in_attesa|in_corso and at most one completata; a new one only if every previous one is fallita
@@ -39,6 +44,7 @@ Enqueue an Elaborazione in_attesa (actors: the RegistrazioneAggiunta sync subscr
 - AC-65 Dopo una fallita → nuova Elaborazione in_attesa; la fallita resta nello storico
 - AC-66 Se il repository segnala la violazione dell'indice, il servizio restituisce lo stesso ErroreDominio (mai un'eccezione grezza)
 - AC-67 Registrazione inesistente → RegistrazioneNonTrovata
+- AC-369 (ex AC-NP3) AvviaElaborazione con numeroPersone assente → Elaborazione in_attesa senza numero; con 4 → in_attesa con numeroPersone 4; con 0 o 11 → Errore(NumeroPersoneFuoriIntervallo) e nessuna riga nuova; la riprova dopo una fallita salva il valore inviato (la fallita resta invariata)
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -73,7 +79,9 @@ Enqueue an Elaborazione in_attesa (actors: the RegistrazioneAggiunta sync subscr
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **agg-elaborazione** (consumed/implemented) — owner `elaborazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
-    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant): Creato<Elaborazione, ElaborazioneAccodata>
+    - `Elaborazione.accoda`: (id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)
+    - `Elaborazione.numeroPersone`: NumeroPersone? — read-only accessor; set only by accoda (and by the persistence reconstitution); no transition changes it
+    - `NumeroPersone`: @JvmInline value class(valore: Int) in :trascrizione:dominio — 1..10 inclusive; factory NumeroPersone.di(n: Int): Esito<NumeroPersone> → Errore(NumeroPersoneFuoriIntervallo) outside 1..10 (sealed ErroreTrascrizione, ErroriTrascrizione.kt); the only way to build one (ADR 0014)
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
@@ -97,4 +105,4 @@ Enqueue an Elaborazione in_attesa (actors: the RegistrazioneAggiunta sync subscr
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
     - `titolo`: minted by servizi-registrazione: source file name without extension; immutable
 
-Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-4, Q-6), ADR 0007.
+Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-4, Q-6 superseded by Amendment 2026-09-23 (c)), ADR 0007, ADR 0014.

@@ -13,13 +13,14 @@ related_adrs:
   - "0002"
   - "0003"
   - "0012"
+  - "0014"
 owns_boundaries:
   eventi-progetto:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
       ProgettoCreato: "data class(progettoId: ProgettoId, nome: String) : EventoPubblicato"
-      RegistrazioneAggiunta: "data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — SYNC consumer: abbonato-registrazione-aggiunta"
+      RegistrazioneAggiunta: "data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))"
       DataRegistrazioneModificata: "data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento"
   eventi-elaborazione:
     projection: "in-process"
@@ -52,6 +53,8 @@ owns_boundaries:
 ## What to do
 Derived owner (rule 11) of every published event data class of the four event boundaries (eventi-progetto, eventi-elaborazione, eventi-revisione, eventi-parlanti — now incl. ImpronteRiallineate) plus TipoParlanteVista. Data classes only, implementing EventoPubblicato; the domain→published mapping pubblicato() stays with each service.
 
+REWORK 2026-09-24 (ADR 0014): no behaviour change — RegistrazioneAggiunta has no synchronous subscriber any more (delivery re-pinned: after-commit only); fix the KDoc of progetto/applicazione/.../eventi/RegistrazioneAggiunta.kt that says it is delivered SYNCHRONOUSLY for the auto-start of the Elaborazione. The dispatcher's sync mechanism stays (ADR 0012).
+
 Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
 
 ## Tasks
@@ -62,12 +65,12 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteR
 - **eventi-progetto** (OWNED here — built before its consumers) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
-    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — SYNC consumer: abbonato-registrazione-aggiunta
+    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))
     - `DataRegistrazioneModificata`: data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-  - delivery: RegistrazioneAggiunta → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Others → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+  - delivery: All three events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012)
 - **eventi-elaborazione** (OWNED here — built before its consumers) — owner `eventi-pubblicati`, supplier `esegui-elaborazione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ElaborazioneAvviata`: data class(registrazioneId: RegistrazioneId, avviataAlle: Instant) : EventoPubblicato
@@ -132,4 +135,4 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteR
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012.
+Sources: ADRs 0002, 0003, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012.
