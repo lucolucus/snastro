@@ -201,3 +201,7 @@
 2026-09-23T10:34:26Z	gestione-parlante	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL error placement + code-review MED F1/F2, LOW F5)
 2026-09-23T10:35:59Z	servizi-registrazione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED patch F1 exception path leaves orphan audio file — try/finally with success flag, no generic catch; MED carry F2 -> rigenerazione-documento: same-date modificaData must not delete regenerated Documento; LOW patch F3 titoloDa blank -> fallback nomeFile; LOW F4 requireNotNull ok)
 2026-09-23T10:36:45Z	servizi-registrazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (ADR 0004/0005/0008 enforced_by red only on architettura-test literals — mis-scoped, pre-existing)
+2026-09-23T10:38:20Z	revisione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (c4f567f; out-of-block: ErroreTrascrizione.TrascrittoNonTrovato)
+2026-09-23T10:38:20Z	revisione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:38:20Z	revisione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:38:20Z	conferma-attribuzione	worker	dispatch	cycle=0	tier=standard	model=sonnet
