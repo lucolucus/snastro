@@ -265,3 +265,7 @@
 2026-09-23T11:24:10Z	revisione-policy	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; LOW defer: inherited AttribuzioneConfermata dropped — consumers reached via VociUnite today, note for future incremental projections; LOW patch-later: KDoc names the INV-13/17 exception, drop dead MockK every-stubs, hand-written throwing extractor)
 2026-09-23T11:24:43Z	catalogo-registrazioni	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; LOW defer: KDoc durataMs = probe duration (+-50ms, AC-123) not a segment bound — already routed to esegui-elaborazione F5; architecture-overview.md:32 boundary row missing titolo (doc drift))
 2026-09-23T11:25:12Z	revisione-policy	verifier	result	cycle=1	tier=deep	model=opus	FAIL (RC-9: AC-96 exception test stubs EstrattoreImpronta with MockK throws — port has a fake; use hand-written throwing double; also drop dead every-stubs) -> rework cycle=2 queued (tier +1 -> deep/opus, LAST cycle; worker cap 4/4)
+2026-09-23T11:25:34Z	conferma-attribuzione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (90d5c4a; V1 dedupe, V2/F2/F7 INV-25 guards, F3 decoded intervals, AC-86 P->Q, FK order; mutation-checked)
+2026-09-23T11:25:34Z	conferma-attribuzione	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:25:34Z	conferma-attribuzione	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:25:34Z	revisione-policy	worker	dispatch	cycle=2	tier=deep	model=opus	(LAST cycle: RC-9 throwing fake + drop dead every-stubs; scope limited, option c comes as a fresh series)
