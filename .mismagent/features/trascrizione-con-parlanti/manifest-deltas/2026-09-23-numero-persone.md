@@ -18,3 +18,7 @@ AC-NP8 'Trascrivi' e 'Riprova' offrono 'Numero di persone' facoltativo: vuoto â†
 AC-NP9 'Riprova' precompila con il numeroPersone dell'Elaborazione fallita (vuoto se assente); modificabile.
 AC-NP10 Migrazione forward-only: elaborazione.numero_persone INTEGER NULL CHECK (BETWEEN 1 AND 10); righe esistenti NULL; round-trip repository.
 Open UX: field presentation (ux-proposal.md:36 still says auto-queue); no 'Trascrivi tutte' (would be a new user decision).
+
+## User decisions 2026-09-24 (close the open UX points)
+- NO 'Trascrivi tutte': transcriptions are started one row at a time only.
+- 'Numero di persone' is a plain fillable field on the S2 row (next to 'Trascrivi' / 'Riprova'), not a dialog: empty = automatic; 1..10; invalid â†’ inline message, no command (AC-NP8). ux-proposal.md:36 must be amended accordingly (no auto-queue; field on the row).
