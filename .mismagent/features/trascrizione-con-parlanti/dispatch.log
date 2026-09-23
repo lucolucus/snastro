@@ -362,3 +362,8 @@
 2026-09-23T12:13:32Z	registrazioni-del-progetto	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:13:32Z	registrazioni-del-progetto	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T12:13:32Z	fix-batch-8	worker	dispatch	cycle=0	tier=deep	model=opus	(option c restructure of merged conferma-attribuzione + salta-voce + revisione-policy)
+2026-09-23T12:14:26Z	(adr-manifest)	result	result	-	-	-	applied 5 user decisions (b29255f); open-questions/documento cleared -> documento unparked (rework on its branch); follow-ups needed: servizi-registrazione AC-61/322-324 + porte-progetto titoliDelProgetto AC-325, registro-progetti-file AC-328, modelli-provisioning AC-129/130/133/330-339 + HashNonValido(modelloId); notes: ADR 0004 --exclude-dir=ml-sherpa same blind spot; avvio-composizione missing carry-overs (registry per-OS path, registry IOException must not abort open)
+2026-09-23T12:14:26Z	fix-batch-6	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (f80e1df; F1-F4,F7-F9; AC-328 cross-process lock added to spec after dispatch -> separate follow-up)
+2026-09-23T12:14:26Z	fix-batch-6	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:14:26Z	fix-batch-6	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:14:26Z	trascritto-view	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: AC-167 test strength — alternating Voci + VoceId gap)
