@@ -141,9 +141,12 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
 
         sessione.chiudi()
 
-        // SQLite's own WAL checkpoint-and-delete on the last connection's close is not guaranteed to
-        // be reflected in the filesystem the instant `driver.close()` returns — a bounded poll, same
-        // pattern as this file's other eventually-consistent checks (`attendi`), not an immediate assert.
+        // DatabaseProgetto.chiudi()'s own `PRAGMA wal_checkpoint(TRUNCATE)` runs synchronously (there
+        // is no "last connection closes" auto-checkpoint here — SQLDelight 2.1.0's ThreadedConnectionManager
+        // never keeps a connection open long enough to be a last one, its own `close()` is a no-op), but
+        // the resulting filesystem state is not guaranteed to be visible the instant the call returns on
+        // every OS/filesystem — a bounded poll, same pattern as this file's other eventually-consistent
+        // checks (`attendi`), not an immediate assert.
         attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-wal")) }
         attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-shm")) }
     }

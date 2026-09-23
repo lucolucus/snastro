@@ -61,8 +61,11 @@ import java.util.logging.Logger
  * this Progetto's presenters on [CollaboratoriProgettoAperto.scope], never on [scopeGenitore]
  * directly. H3: every failure path after [acquisisciLock] releases the `.lock` — including a
  * `.lock` already held (early return, nothing to release) — before returning; [chiudi] releases it
- * (and stops [SessioneAperta.lettoreAudio]) in a `finally`, even if reading the Progetto's own
- * Registrazioni fails.
+ * (and stops [SessioneAperta.lettoreAudio], cancels the session's scope, and closes the database)
+ * in a `finally`, even if reading the Progetto's own Registrazioni fails. fix-batch-13: stopping the
+ * lettore and closing the database are each guarded on their own (logged at WARNING, never
+ * rethrown) — a checkpoint failure (full disk, a deleted folder, `SQLITE_BUSY`) must never leave
+ * the scope un-cancelled, the lock retained, or [chiudi] itself throwing to the UI (AC-347).
  */
 internal class SessioneProgettoImpl(
     private val registro: RegistroProgetti,
@@ -136,9 +139,12 @@ internal class SessioneProgettoImpl(
             // H3: CreaProgetto puo' fallire (es. NomeProgettoVuoto tramite NomeProgetto.di, o
             // ProgettoGiaPresente in teoria) — mai un lock trattenuto, ne' un database aperto lasciato
             // indietro (item fix-batch-12 #2), o un IllegalStateException da `progetti.trova() ?:
-            // error(...)` sotto.
+            // error(...)` sotto. fix-batch-13: un chiudiDb che lancia (es. checkpoint fallito) non deve
+            // mai mascherare esitoCrea con un'eccezione propria.
             rilasciaLock(lockCartella)
-            db.chiudi()
+            chiudiSilenziosamente("chiusura del database fallita in crea dopo un errore di CreaProgetto") {
+                seams.chiudiDatabase(db)
+            }
             return esitoCrea
         }
         val progetto = progetti.trova() ?: error("CreaProgetto non ha creato il Progetto")
@@ -146,7 +152,7 @@ internal class SessioneProgettoImpl(
         return apriGrafo(
             cartella,
             lockCartella,
-            ContestoDatabase(db.database, dispatcher, db::chiudi),
+            ContestoDatabase(db.database, dispatcher, { seams.chiudiDatabase(db) }),
             progetto.id,
             progetto.nome.valore,
         )
@@ -181,7 +187,11 @@ internal class SessioneProgettoImpl(
         val progetto = progetti.trova()
         if (progetto == null) {
             rilasciaLock(lockCartella)
-            db.chiudi() // fix-batch-12 #2: mai un database aperto lasciato indietro su un fallimento
+            // fix-batch-12 #2: mai un database aperto lasciato indietro su un fallimento. fix-batch-13:
+            // un chiudiDb che lancia non deve mai mascherare CartellaNonValida con un'eccezione propria.
+            chiudiSilenziosamente("chiusura del database fallita in apri (progetto non trovato)") {
+                seams.chiudiDatabase(db)
+            }
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
@@ -189,7 +199,7 @@ internal class SessioneProgettoImpl(
         return apriGrafo(
             cartella,
             lockCartella,
-            ContestoDatabase(db.database, dispatcher, db::chiudi),
+            ContestoDatabase(db.database, dispatcher, { seams.chiudiDatabase(db) }),
             progetto.id,
             progetto.nome.valore,
         )
@@ -213,12 +223,22 @@ internal class SessioneProgettoImpl(
         ) {
             log.log(Level.WARNING, "lettura delle Registrazioni fallita in chiudi", e)
         } finally {
-            // H2/H3: fermare il lettore, chiudere il database, cancellare lo scope della sessione,
+            // H2/H3: fermare il lettore, cancellare lo scope della sessione, chiudere il database,
             // rilasciare il lock e azzerare `corrente` accadono SEMPRE — anche se la lettura di
-            // `delProgetto` sopra lancia.
-            sessione.risorse.lettoreAudio.chiudi()
-            sessione.risorse.chiudiDb() // fix-batch-12 #2
+            // `delProgetto` sopra lancia. fix-batch-13: lo scope va cancellato PRIMA del checkpoint del
+            // database (ferma le coroutine della sessione, che potrebbero ancora usare il database,
+            // prima che chiudiDb() tenti di allinearlo); fermare il lettore e chiudere il database sono
+            // ciascuno isolati nel proprio try/catch (chiudiSilenziosamente) — un checkpoint fallito
+            // (disco pieno, cartella cancellata, SQLITE_BUSY) non deve MAI lasciare lo scope attivo, il
+            // lock trattenuto, o `corrente` non azzerato, ne' far lanciare chiudi() verso il chiamante
+            // (AC-347).
+            chiudiSilenziosamente("chiusura del lettore audio fallita in chiudi") {
+                sessione.risorse.lettoreAudio.chiudi()
+            }
             sessione.collaboratori.scope.cancel()
+            chiudiSilenziosamente("chiusura del database fallita in chiudi") {
+                sessione.risorse.chiudiDb() // fix-batch-12 #2
+            }
             rilasciaLock(sessione.lockCartella)
             _corrente.value = null
         }
@@ -296,14 +316,17 @@ private data class ContestoDatabase(
 
 /**
  * [SessioneProgettoImpl]'s replaceable collaborators for the green-on-its-own tests (`apriDatabase`
- * already existed; `costruisciRegistrazioni`/`riproduttoreFabbrica` are new, H2/H3) — bundled into
- * ONE constructor param to keep [SessioneProgettoImpl]'s own param count under detekt's
- * `LongParameterList` (mirrors [ContestoDatabase]).
+ * already existed; `costruisciRegistrazioni`/`riproduttoreFabbrica` are new, H2/H3; `chiudiDatabase`
+ * is new, fix-batch-13 — lets a test make the database's own close (the WAL checkpoint) throw,
+ * without `:avvio` reaching into `:persistenza`'s internals beyond [DatabaseProgetto]'s already-public
+ * `chiudi`) — bundled into ONE constructor param to keep [SessioneProgettoImpl]'s own param count
+ * under detekt's `LongParameterList` (mirrors [ContestoDatabase]).
  */
 internal data class SessioneProgettoSeams(
     val apriDatabase: (File) -> DatabaseProgetto = ::apriDatabaseProgetto,
     val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql,
     val riproduttoreFabbrica: () -> RiproduttoreWav = ::RiproduttoreWav,
+    val chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
 )
 
 /** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */
@@ -349,6 +372,25 @@ private fun rilasciaLock(lockCartella: LockCartella) {
         lockCartella.lock.release()
     } finally {
         lockCartella.canale.close()
+    }
+}
+
+/**
+ * fix-batch-13: runs [azione], logging any failure at WARNING (prefixed [messaggio]) and swallowing
+ * it — never rethrown, except [CancellationException] (a coroutine cancellation must still
+ * propagate). Used to guard [SessioneProgettoImpl.chiudi]'s own cleanup (AC-347: `chiudi` never
+ * throws) and the `crea`/`apri` failure paths that close an already-open database without letting a
+ * throwing close mask the original [ErroreSessione] or leak the `.lock`.
+ */
+private fun chiudiSilenziosamente(messaggio: String, azione: () -> Unit) {
+    try {
+        azione()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+    ) {
+        log.log(Level.WARNING, messaggio, e)
     }
 }
 
