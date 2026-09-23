@@ -209,16 +209,19 @@ class RegistroProgettiFileRobustezzaTest {
         val registroUno = RegistroProgettiFile(file)
         val registroDue = RegistroProgettiFile(file)
         val perIstanza = 25
+        val via = CountDownLatch(1) // barriera di partenza: le due istanze scrivono davvero in parallelo
         val esecutore = Executors.newFixedThreadPool(2)
         try {
-            val compiti = (0 until perIstanza).map { i ->
-                val voce = unaVoce(progettoId = ProgettoId("u1-$i"), percorso = "/u1/progetto-$i.snastro")
-                esecutore.submit { registroUno.registra(voce) }
-            } + (0 until perIstanza).map { i ->
-                val voce = unaVoce(progettoId = ProgettoId("u2-$i"), percorso = "/u2/progetto-$i.snastro")
-                esecutore.submit { registroDue.registra(voce) }
+            val compiti = listOf(registroUno to "u1", registroDue to "u2").map { (registro, prefisso) ->
+                esecutore.submit {
+                    assertTrue(via.await(10, TimeUnit.SECONDS))
+                    (0 until perIstanza).forEach { i ->
+                        registro.registra(unaVoce(ProgettoId("$prefisso-$i"), percorso = "/$prefisso/p-$i.snastro"))
+                    }
+                }
             }
-            compiti.forEach { it.get() }
+            via.countDown()
+            compiti.forEach { it.get(60, TimeUnit.SECONDS) }
         } finally {
             esecutore.shutdown()
         }
@@ -360,6 +363,56 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `AC-328 un processo figlio in una JVM separata e il test registrano in parallelo e nessuna voce va persa`() {
+        val file = cartella.resolve("progetti-recenti")
+        val pronto = cartella.resolve("figlio.pronto")
+        val via = cartella.resolve("figlio.via")
+        val perProcesso = 40
+        val java = Path.of(System.getProperty("java.home"), "bin", "java").toString()
+        val figlio = ProcessBuilder(
+            java,
+            "-cp",
+            System.getProperty("java.class.path"),
+            SCRITTORE_FIGLIO,
+            file.toString(),
+            pronto.toString(),
+            via.toString(),
+            perProcesso.toString(),
+        ).redirectErrorStream(true)
+            .redirectOutput(cartella.resolve("figlio.log").toFile())
+            .start()
+        try {
+            val registro = RegistroProgettiFile(file)
+            val scadenza = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
+            while (!Files.exists(pronto)) {
+                assertTrue(figlio.isAlive, "il figlio e uscito prima di essere pronto: ${logFiglio()}")
+                assertTrue(System.nanoTime() < scadenza, "il figlio non e diventato pronto in tempo")
+                Thread.sleep(10)
+            }
+
+            Files.createFile(via) // il segnale di partenza condiviso: da qui scrivono entrambi
+            (0 until perProcesso).forEach { i ->
+                registro.registra(unaVoce(progettoId = ProgettoId("padre-$i"), percorso = "/padre/progetto-$i.snastro"))
+            }
+
+            assertTrue(figlio.waitFor(120, TimeUnit.SECONDS), "il figlio non ha terminato in tempo")
+            assertEquals(0, figlio.exitValue(), "il figlio e uscito con errore: ${logFiglio()}")
+
+            val attesi = (0 until perProcesso).flatMap { i ->
+                listOf("/padre/progetto-$i.snastro", "/figlio/progetto-$i.snastro")
+            }.toSet()
+            val percorsi = registro.elenco().map { it.percorso }
+            assertEquals(2 * perProcesso, percorsi.size)
+            assertEquals(attesi, percorsi.toSet())
+        } finally {
+            figlio.destroyForcibly()
+        }
+    }
+
+    private fun logFiglio(): String =
+        cartella.resolve("figlio.log").let { if (Files.exists(it)) Files.readString(it) else "" }
+
+    @Test
     fun `il percorso attraversa verbatim scrittura e rilettura su file - spazi parentesi unicode separatori Windows`() {
         val file = cartella.resolve("progetti-recenti")
         val percorsi = listOf(
@@ -386,3 +439,6 @@ class RegistroProgettiFileRobustezzaTest {
         ultimaAttivita: Instant = Instant.parse("2026-09-23T10:15:30Z"),
     ): VoceRegistro = VoceRegistro(progettoId, nome, percorso, numRegistrazioni = 1, ultimaAttivita = ultimaAttivita)
 }
+
+/** Il `main` del processo figlio di AC-328 — vedi [ScrittoreRegistroFiglio]. */
+private const val SCRITTORE_FIGLIO = "snastro.progetto.adattatori.porte.ScrittoreRegistroFiglio"

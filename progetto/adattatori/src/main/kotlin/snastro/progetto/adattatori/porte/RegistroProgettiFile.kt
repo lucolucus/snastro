@@ -62,7 +62,7 @@ import java.util.concurrent.locks.ReentrantLock
  * [scriviRighe] is the temp-file-write step of [scrivi], defaulted to [scriviRigheSuDisco];
  * [leggiBytes] is the raw-bytes-read step of [leggiRighe], defaulted to [leggiBytesDaDisco]. The
  * `internal` constructor lets a test substitute either with one that fails on demand, to prove
- * AC-120/AC-121/AC-328 without non-portable tricks (permission bits, real second JVMs) (F1).
+ * AC-120/AC-121 without non-portable tricks (permission bits) (F1).
  */
 public class RegistroProgettiFile internal constructor(
     private val file: Path,
