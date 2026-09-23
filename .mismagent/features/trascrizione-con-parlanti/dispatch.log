@@ -410,3 +410,6 @@
 2026-09-23T12:48:19Z	fix-batch-6	code-review	result	cycle=1	tier=deep	model=opus	CHANGES (1 HIGH: AC-328 requires a child-JVM test — removing canale.lock() leaves suite green; LOW patch: strip trailing CR per line (CRLF file), start barrier in in-JVM test; carry to avvio-composizione (now mandatory): wrap registry calls, never abort open/create/close, not on UI thread (lock() blocks); defer: realPath lock key, sweep prefix, AC-121 reading) -> rework cycle=2 (deep, LAST) after verifier
 2026-09-23T12:50:43Z	fix-batch-6	verifier	result	cycle=1	tier=deep	model=opus	FAIL (AC-328 child-JVM test missing — canale.lock() removal survives; sweep prefix collision deletes registro-b temp from registro sweep)
 2026-09-23T12:50:43Z	fix-batch-6	worker	dispatch	cycle=2	tier=deep	model=opus	(LAST cycle: child-JVM AC-328 test + start barrier, delimited temp prefix + exact sweep match, strip trailing CR)
+2026-09-23T12:58:48Z	fix-batch-6	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW (49182ec; child-JVM AC-328 test, delimited temp prefix + exact sweep, CRLF strip; mutants M1/M1b/M2/M2b/M3 red)
+2026-09-23T12:58:48Z	fix-batch-6	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-23T12:58:48Z	fix-batch-6	code-review	dispatch	cycle=2	tier=deep	model=opus
