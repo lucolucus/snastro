@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=audio --exclude-dir=build '(org\\.bytedeco|javax\\.sound)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q . && ! grep -rnE --include='*.kts' --include='*.toml' --exclude-dir=build 'ffmpeg[^\"]*-gpl' . | grep -q ."
+enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=audio --exclude-dir=build --exclude-dir=architettura-test '(org\\.bytedeco|javax\\.sound)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q . && ! grep -rnE --include='*.kts' --include='*.toml' --exclude-dir=build 'ffmpeg[^\"]*-gpl' . | grep -q ."
+amended: 2026-09-23   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test)
 ---
 # 0005 — Audio: decode once with bytedeco FFmpeg (LGPL) to a derived WAV; play via javax.sound
 
@@ -35,3 +36,17 @@ pure-JVM AAC decoders (JCodec/JAAD — incomplete HE-AAC, abandoned) · a bundle
 - Playback of a new `Registrazione` is available only after the `decodifica` phase (seconds).
 - LGPL obligations: dynamic linking (bytedeco ships shared libs) + licence notice in the app's
   licences screen (ADR 0008).
+
+## Amendment 2026-09-23 — `enforced_by` scoped out of `architettura-test`
+**Why.** The rule was red on a clean tree for a reason unrelated to the decision: the Konsist suite
+`architettura-test/src/test/kotlin/snastro/architettura/RegoleArchitetturaliTest.kt` **names** the
+forbidden packages as string literals (`"org.bytedeco"`, `"javax.sound"`) in order to check this very confinement, and
+the grep matched those literals. Approved by the user on 2026-09-23 **[user]**.
+
+**Amended rule.** Identical, plus `--exclude-dir=architettura-test` on the `*.kt` scan. The second clause (`-gpl` artifacts in `*.kts`/`*.toml`) is unchanged: it never matched that module.
+The decision itself (what is confined, and where) is unchanged. Validated via `bash -c` on
+2026-09-23: exit 0 on the tree; exit 1 with a probe `import` of a forbidden package placed in a
+non-excluded module (probe removed).
+
+**Known blind spot.** `architettura-test` itself is no longer scanned; it is a test-only module
+holding the architecture rules, and its imports are reviewed by code-review.
