@@ -28,9 +28,11 @@ import snastro.trascrizione.applicazione.porte.FaseElaborazione.ALLINEAMENTO
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.TRASCRIZIONE
+import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
+import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
@@ -44,9 +46,12 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class EseguiProssimaElaborazioneServizioTest {
@@ -160,7 +165,7 @@ class EseguiProssimaElaborazioneServizioTest {
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
                 decodificatore = decodificaGuasto,
-                diarizzatore = DiarizzatoreCheFallisce(),
+                diarizzatore = DiarizzatoreCheLancia(),
             ),
         )
     }
@@ -173,7 +178,7 @@ class EseguiProssimaElaborazioneServizioTest {
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
                 decodificatore = decodificaGuasto,
-                allineatore = AllineatoreCheFallisce(),
+                allineatore = AllineatoreCheLancia(),
             ),
         )
     }
@@ -183,11 +188,11 @@ class EseguiProssimaElaborazioneServizioTest {
         motivoAtteso: String,
         faseAttesa: List<FaseElaborazione>,
         portePipeline: PortePipeline,
+        segnalatore: SegnalatoreFaseFinta = portePipeline.segnalatore as SegnalatoreFaseFinta,
     ) {
         val elaborazioni = ElaborazioneRepositoryFinta()
         val trascritti = TrascrittoRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
-        val segnalatore = portePipeline.segnalatore as SegnalatoreFaseFinta
         val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, portePipeline)
         elaborazioni.salva(unaInAttesa(REGISTRAZIONE_GUASTO)).atteso()
 
@@ -495,6 +500,194 @@ class EseguiProssimaElaborazioneServizioTest {
         assertEquals(1, trascritti.trova(id)?.segmenti?.size)
     }
 
+    @Test
+    fun `AC-70 (F-A) LettoreRegistrazione guasto diventa fallita con motivo semplice distinto dalla mancanza`() {
+        verificaGuastoDiPipeline(
+            motivoAtteso = "impossibile leggere i dati della registrazione",
+            faseAttesa = emptyList(),
+            portePipeline = pipeline(registrazioni = LettoreRegistrazioneCheLancia()),
+        )
+    }
+
+    @Test
+    fun `AC-70 (F-A) un segnale di fase guasto e fatale come ogni porta con il motivo della sua fase`() {
+        val registro = SegnalatoreFaseFinta()
+        verificaGuastoDiPipeline(
+            motivoAtteso = "errore nella separazione delle voci",
+            faseAttesa = listOf(DECODIFICA),
+            portePipeline = pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = decodificaGuasto,
+                segnalatore = SegnalatoreCheFallisceSu(DIARIZZAZIONE, registro),
+            ),
+            segnalatore = registro,
+        )
+    }
+
+    @Test
+    fun `AC-70 (F-A) il segnale della fase allineamento guasto diventa fallita`() {
+        val registro = SegnalatoreFaseFinta()
+        verificaGuastoDiPipeline(
+            motivoAtteso = "errore nell'allineamento del testo",
+            faseAttesa = listOf(DECODIFICA, DIARIZZAZIONE, TRASCRIZIONE),
+            portePipeline = pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = decodificaGuasto,
+                segnalatore = SegnalatoreCheFallisceSu(ALLINEAMENTO, registro),
+            ),
+            segnalatore = registro,
+        )
+    }
+
+    @Test
+    fun `INV-7 un segmento oltre la durata decodificata diventa fallita con motivo semplice`() {
+        verificaGuastoDiPipeline(
+            motivoAtteso = "un segmento supera la durata della registrazione",
+            faseAttesa = listOf(DECODIFICA, DIARIZZAZIONE, TRASCRIZIONE, ALLINEAMENTO),
+            portePipeline = pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = decodificaGuasto,
+                allineatore = AllineatoreFisso(IntervalloMs(0, DURATA + 500)),
+            ),
+        )
+    }
+
+    @Test
+    fun `F4 una cancellazione non e un guasto di porta propaga e terminata e comunque segnalata`() {
+        verificaInterruzioneNonGuasto(
+            CancellationException::class.java,
+            pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = decodificaGuasto,
+                diarizzatore = DiarizzatoreCheLancia(CancellationException("annullata")),
+            ),
+        )
+    }
+
+    @Test
+    fun `F4 un'interruzione non e un guasto di porta propaga ripristina il flag e terminata e segnalata`() {
+        try {
+            verificaInterruzioneNonGuasto(
+                InterruptedException::class.java,
+                pipeline(
+                    registrazioni = vistaGuasto,
+                    decodificatore = decodificaGuasto,
+                    allineatore = AllineatoreCheLancia(InterruptedException("interrotto")),
+                ),
+            )
+            assertTrue(Thread.currentThread().isInterrupted, "il flag di interruzione deve essere ripristinato")
+        } finally {
+            Thread.interrupted() // pulisce il flag per i test successivi
+        }
+    }
+
+    private fun verificaInterruzioneNonGuasto(atteso: Class<out Exception>, portePipeline: PortePipeline) {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        val segnalatore = portePipeline.segnalatore as SegnalatoreFaseFinta
+        val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, portePipeline)
+        elaborazioni.salva(unaInAttesa(REGISTRAZIONE_GUASTO)).atteso()
+
+        val lanciata = runCatching { servizio.esegui(EseguiProssimaElaborazione) }.exceptionOrNull()
+
+        assertTrue(atteso.isInstance(lanciata), "atteso ${atteso.simpleName}, ottenuto $lanciata")
+        val salvata = elaborazioni.diRegistrazione(REGISTRAZIONE_GUASTO).single()
+        assertFalse(salvata.fallita, "una cancellazione/interruzione non va registrata come fallita")
+        assertEquals(listOf(REGISTRAZIONE_GUASTO), segnalatore.terminate, "terminata sempre segnalata")
+        assertEquals(listOf(ElaborazioneAvviata(REGISTRAZIONE_GUASTO, OROLOGIO.instant())), eventi.pubblicati)
+    }
+
+    @Test
+    fun `F-B completamento e compensazione lanciano entrambi il guasto della compensazione propaga`() {
+        val guastoCompletamento = GuastoDiPortaDiProva("salva(completata)")
+        val guastoCompensazione = GuastoDiPortaDiProva("salva(fallita)")
+        val esecuzione = eseguiConConclusioneGuasta { e ->
+            throw if (e.completata) guastoCompletamento else guastoCompensazione
+        }
+
+        val lanciata = esecuzione.lanciata
+        assertEquals(guastoCompensazione, lanciata, "il guasto della compensazione non deve sparire")
+        assertEquals(listOf<Throwable>(guastoCompletamento), lanciata?.suppressed?.toList(), "il primo e' soppresso")
+        verificaLasciataInCorso(esecuzione)
+    }
+
+    @Test
+    fun `F-B completamento e compensazione entrambi rifiutati il rifiuto propaga col primo soppresso`() {
+        val esecuzione = eseguiConConclusioneGuasta { e ->
+            Esito.Errore(ErroreTrascrizione.ElaborazioneGiaCompletata(e.registrazioneId))
+        }
+
+        val lanciata = esecuzione.lanciata
+        assertIs<IllegalStateException>(lanciata, "un rifiuto della compensazione non deve sparire")
+        assertTrue(lanciata.message.orEmpty().startsWith("compensazione rifiutata"))
+        val soppressa = lanciata.suppressed.single()
+        assertTrue(soppressa.message.orEmpty().startsWith("transazione finale rifiutata"))
+        verificaLasciataInCorso(esecuzione)
+    }
+
+    private data class EsecuzioneGuasta(
+        val lanciata: Throwable?,
+        val elaborazioni: ElaborazioneRepositoryFinta,
+        val segnalatore: SegnalatoreFaseFinta,
+        val eventi: DispatcherEventiFinta,
+    )
+
+    private fun eseguiConConclusioneGuasta(conclusione: (Elaborazione) -> Esito<Unit>): EsecuzioneGuasta {
+        val elaborazioniReali = ElaborazioneRepositoryFinta()
+        val elaborazioni = ElaborazioneRepositoryCheRifiutaLaConclusione(elaborazioniReali, conclusione)
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        val segnalatore = SegnalatoreFaseFinta()
+        val servizio = servizio(
+            eventi.unitaDiLavoro,
+            eventi,
+            elaborazioni,
+            trascritti,
+            pipeline(registrazioni = vistaGuasto, decodificatore = decodificaGuasto, segnalatore = segnalatore),
+        )
+        elaborazioniReali.salva(unaInAttesa(REGISTRAZIONE_GUASTO)).atteso()
+
+        val lanciata = runCatching { servizio.esegui(EseguiProssimaElaborazione) }.exceptionOrNull()
+
+        assertNull(trascritti.trova(REGISTRAZIONE_GUASTO), "nessun Trascritto: rollback (INV-5)")
+        return EsecuzioneGuasta(lanciata, elaborazioniReali, segnalatore, eventi)
+    }
+
+    /** Left `in_corso` for RecuperaElaborazioniInterrotte; terminata already signalled; no terminal event. */
+    private fun verificaLasciataInCorso(esecuzione: EsecuzioneGuasta) {
+        assertEquals(listOf(REGISTRAZIONE_GUASTO), esecuzione.elaborazioni.inCorso().map { it.registrazioneId })
+        assertEquals(listOf(REGISTRAZIONE_GUASTO), esecuzione.segnalatore.terminate, "terminata prima di propagare")
+        assertEquals(
+            listOf(ElaborazioneAvviata(REGISTRAZIONE_GUASTO, OROLOGIO.instant())),
+            esecuzione.eventi.pubblicati,
+        )
+    }
+
+    @Test
+    fun `F5 un millisecondo parziale di campioni decodificati conta come millisecondo intero`() {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        // 2000 ms + 1 campione (16 kHz): la durata e' 2001 ms, un segmento che finisce a 2001 ms e' valido.
+        val servizio = servizio(
+            eventi.unitaDiLavoro,
+            eventi,
+            elaborazioni,
+            trascritti,
+            pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = DecodificatoreConCampioni(DURATA.toInt() * CAMPIONI_PER_MS + 1),
+                allineatore = AllineatoreFisso(IntervalloMs(0, DURATA + 1)),
+            ),
+        )
+        elaborazioni.salva(unaInAttesa(REGISTRAZIONE_GUASTO)).atteso()
+
+        servizio.esegui(EseguiProssimaElaborazione).atteso()
+
+        assertTrue(elaborazioni.diRegistrazione(REGISTRAZIONE_GUASTO).single().completata)
+    }
+
     private fun servizio(
         uow: UnitaDiLavoro,
         eventi: DispatcherEventiFinta,
@@ -505,11 +698,11 @@ class EseguiProssimaElaborazioneServizioTest {
         EseguiProssimaElaborazioneServizio(uow, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)
 
     private fun pipeline(
-        registrazioni: LettoreRegistrazioneFinta = LettoreRegistrazioneFinta(),
+        registrazioni: LettoreRegistrazione = LettoreRegistrazioneFinta(),
         decodificatore: DecodificatoreAudio = DecodificatoreAudioFinta(emptyMap()),
         diarizzatore: Diarizzatore = DiarizzatoreFinta(),
         allineatore: Allineatore = AllineatoreFinta(),
-        segnalatore: SegnalatoreFaseFinta = SegnalatoreFaseFinta(),
+        segnalatore: SegnalatoreFase = SegnalatoreFaseFinta(),
     ): PortePipeline = PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore)
 
     private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio, durataMs: Long): RegistrazioneVista =
@@ -527,6 +720,7 @@ class EseguiProssimaElaborazioneServizioTest {
 
     private companion object {
         const val DURATA = 2_000L
+        const val CAMPIONI_PER_MS = 16
         val OROLOGIO: Clock = Clock.fixed(Instant.parse("2026-09-23T10:10:00Z"), ZoneOffset.UTC)
         val CREATA_VECCHIA: Instant = Instant.parse("2026-09-23T09:00:00Z")
         val CREATA_RECENTE: Instant = Instant.parse("2026-09-23T09:05:00Z")
@@ -607,15 +801,71 @@ private class DecodificatoreCheFallisceSuTutti(private val delegata: Decodificat
         delegata.campioni(id, intervallo)
 }
 
-/** [Diarizzatore] that always throws (AC-70: diarizzazione guasta). */
-private class DiarizzatoreCheFallisce : Diarizzatore {
-    override fun diarizza(c: CampioniAudio): List<Turno> = throw GuastoDiPortaDiProva("diarizza()")
+/** [Diarizzatore] that always throws [guasto] (AC-70: diarizzazione guasta; F4: cancellation). */
+private class DiarizzatoreCheLancia(
+    private val guasto: Exception = GuastoDiPortaDiProva("diarizza()"),
+) : Diarizzatore {
+    override fun diarizza(c: CampioniAudio): List<Turno> = throw guasto
 }
 
-/** [Allineatore] that always throws (AC-70: allineamento guasto). */
-private class AllineatoreCheFallisce : Allineatore {
+/** [Allineatore] that always throws [guasto] (AC-70: allineamento guasto; F4: interruption). */
+private class AllineatoreCheLancia(
+    private val guasto: Exception = GuastoDiPortaDiProva("allinea()"),
+) : Allineatore {
+    override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = throw guasto
+}
+
+/** [LettoreRegistrazione] whose lookup always throws (AC-70/F-A: a fault, not a miss). */
+private class LettoreRegistrazioneCheLancia : LettoreRegistrazione {
+    override fun registrazione(id: RegistrazioneId): RegistrazioneVista? =
+        throw GuastoDiPortaDiProva("registrazione()")
+}
+
+/** [SegnalatoreFase] that throws on [guasta] (F-A), recording every other signal into [registro]. */
+private class SegnalatoreCheFallisceSu(
+    private val guasta: FaseElaborazione,
+    private val registro: SegnalatoreFaseFinta,
+) : SegnalatoreFase {
+    override fun fase(id: RegistrazioneId, f: FaseElaborazione) {
+        if (f == guasta) throw GuastoDiPortaDiProva("fase($f)")
+        registro.fase(id, f)
+    }
+
+    override fun terminata(id: RegistrazioneId): Unit = registro.terminata(id)
+}
+
+/** [Allineatore] that returns ONE Segmento over [intervallo], whatever the audio (INV-7, F5). */
+private class AllineatoreFisso(private val intervallo: IntervalloMs) : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> =
-        throw GuastoDiPortaDiProva("allinea()")
+        listOf(SegmentoGrezzo(0, intervallo, "parlato"))
+}
+
+/** [DecodificatoreAudio] that decodes exactly [quanti] non-silent samples (F5: partial millisecond). */
+private class DecodificatoreConCampioni(private val quanti: Int) : DecodificatoreAudio {
+    override fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio): Unit = Unit
+
+    override fun tutti(id: RegistrazioneId): CampioniAudio = CampioniAudio(FloatArray(quanti) { 0.5f })
+
+    override fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio = tutti(id)
+}
+
+/**
+ * [ElaborazioneRepository] whose `salva` of a TERMINAL row (completata or its compensating fallita)
+ * runs [conclusione] instead — throwing or refusing (F-B: completion AND compensation both fail).
+ */
+private class ElaborazioneRepositoryCheRifiutaLaConclusione(
+    private val delegata: ElaborazioneRepositoryFinta,
+    private val conclusione: (Elaborazione) -> Esito<Unit>,
+) : ElaborazioneRepository, Ripristinabile {
+    override fun diRegistrazione(id: RegistrazioneId): List<Elaborazione> = delegata.diRegistrazione(id)
+
+    override fun inAttesa(): List<Elaborazione> = delegata.inAttesa()
+
+    override fun inCorso(): List<Elaborazione> = delegata.inCorso()
+
+    override fun salva(e: Elaborazione): Esito<Unit> = if (e.terminale) conclusione(e) else delegata.salva(e)
+
+    override fun istantanea(): () -> Unit = delegata.istantanea()
 }
 
 /** [Allineatore] that never produces a Segmento, whatever the Turni (AC-72/F12: zero parlato). */

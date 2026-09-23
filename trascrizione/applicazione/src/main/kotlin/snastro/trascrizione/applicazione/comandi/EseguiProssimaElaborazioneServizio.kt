@@ -4,6 +4,7 @@ import snastro.kernel.CampioniAudio
 import snastro.kernel.Creato
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.ElaborazioneId
+import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
@@ -17,6 +18,7 @@ import snastro.trascrizione.applicazione.porte.FaseElaborazione.ALLINEAMENTO
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.TRASCRIZIONE
+import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
@@ -39,12 +41,12 @@ import kotlin.coroutines.cancellation.CancellationException
  * reused). If that final transaction itself fails — `Esito.Errore`, or an exception (the store refuses
  * the `completata` row after the Trascritto was already written in the SAME transaction: the whole
  * transaction rolls back, INV-5) — a COMPENSATING transaction re-reads the Elaborazione again and
- * marks it `fallita`; the fault never escapes uncaught (ADR 0003). If the compensation itself fails
- * too, the Elaborazione is left `in_corso`: [RecuperaElaborazioniInterrotte] (startup) recovers it as
- * `fallita('interrotta')`. [PortePipeline.segnalatore]`.terminata` always fires, in a `finally`,
- * whatever the outcome. Never decodes the whole Registrazione as an interval:
- * [PortePipeline.decodificatore]`.tutti` reads the whole audio, `.campioni(intervallo)` is for
- * turn/Segmento-scoped work elsewhere (review finding).
+ * marks it `fallita`. If the compensation itself fails too, its fault PROPAGATES to the caller with
+ * the original fault attached (`addSuppressed`) — never dropped — and the Elaborazione is left
+ * `in_corso`: [RecuperaElaborazioniInterrotte] (startup) recovers it as `fallita('interrotta')`.
+ * [PortePipeline.segnalatore]`.terminata` always fires, in a `finally`, whatever the outcome. Never
+ * decodes the whole Registrazione as an interval: [PortePipeline.decodificatore]`.tutti` reads the
+ * whole audio, `.campioni(intervallo)` is for turn/Segmento-scoped work elsewhere (review finding).
  */
 public class EseguiProssimaElaborazioneServizio(
     private val uow: UnitaDiLavoro,
@@ -73,105 +75,126 @@ public class EseguiProssimaElaborazioneServizio(
     private fun eseguiSu(elaborazione: Elaborazione): Esito<Unit> {
         val registrazioneId = elaborazione.registrazioneId
         val elaborazioneId = elaborazione.id
-        return try {
+        try {
             val risultato = eseguiPipeline(registrazioneId)
-            val commesso = concludi(registrazioneId, elaborazioneId) { fresca ->
-                when (risultato) {
-                    is RisultatoPipeline.Successo ->
-                        concludiConSuccesso(fresca, risultato.durataMs, risultato.segmenti)
-                    is RisultatoPipeline.Fallita -> concludiConFallimento(fresca, risultato.motivo)
+            val esitoFinale = inTransazioneTentata {
+                concludi(registrazioneId, elaborazioneId) { fresca ->
+                    when (risultato) {
+                        is RisultatoPipeline.Successo ->
+                            concludiConSuccesso(fresca, risultato.durataMs, risultato.segmenti)
+                        is RisultatoPipeline.Fallita -> concludiConFallimento(fresca, risultato.motivo)
+                    }
                 }
             }
-            // F2: la transazione finale e' fallita (Errore o eccezione) -> compensazione a fallita, mai
-            // un'eccezione che sfugge non gestita. Se anche la compensazione fallisce, l'Elaborazione
-            // resta `in_corso`: RecuperaElaborazioniInterrotte (avvio) la recupera come 'interrotta'.
-            if (!commesso) {
-                concludi(registrazioneId, elaborazioneId) { concludiConFallimento(it, MOTIVO_SALVATAGGIO_FALLITO) }
-            }
-            Esito.Ok(Unit)
+            // F2: la transazione finale e' fallita (Errore o eccezione) -> compensazione a fallita.
+            if (esitoFinale !is TransazioneFinale.Confermata) compensa(registrazioneId, elaborazioneId, esitoFinale)
+            return Esito.Ok(Unit)
         } finally {
             pipeline.segnalatore.terminata(registrazioneId) // sempre segnalata, qualunque sia l'esito
         }
     }
 
     /**
-     * Runs the pipeline (never inside a transaction, AC-73) up to a [RisultatoPipeline]. One guard
-     * clause per phase (readable, each mapped to its own fixed `motivo`) — `@Suppress`: deliberate.
+     * Runs the pipeline (never inside a transaction, AC-73) up to a [RisultatoPipeline]. EVERY port
+     * call — the [PortePipeline.registrazioni] lookup and each [PortePipeline.segnalatore]`.fase` signal
+     * included — runs inside [eseguiFase], so a fault of any port in any phase becomes `fallita` with
+     * that step's fixed `motivo` (AC-70), never an exception escaping with the Elaborazione left
+     * `in_corso`. A throwing `fase` signal is FATAL like any other port fault (its contract,
+     * `SegnalatoreFaseContratto`, says it never throws; if it does, dropping the fault would be a
+     * swallowed failure, CR-7). A lookup MISS (`null`) is not a fault: its own motivo (F7). One guard
+     * clause per step (readable, each mapped to its own fixed `motivo`) — `@Suppress`: deliberate.
      */
     @Suppress("ReturnCount")
     private fun eseguiPipeline(id: RegistrazioneId): RisultatoPipeline {
-        val vista = pipeline.registrazioni.registrazione(id) // lookup miss atteso: niente error()
-            ?: return RisultatoPipeline.Fallita(MOTIVO_REGISTRAZIONE_MANCANTE)
+        val letta = eseguiFase { Lettura(pipeline.registrazioni.registrazione(id)) }
+            ?: return RisultatoPipeline.Fallita(MOTIVO_LETTURA_REGISTRAZIONE)
+        val vista = letta.vista ?: return RisultatoPipeline.Fallita(MOTIVO_REGISTRAZIONE_MANCANTE)
 
-        pipeline.segnalatore.fase(id, DECODIFICA)
         val campioni = eseguiFase {
+            pipeline.segnalatore.fase(id, DECODIFICA)
             pipeline.decodificatore.decodifica(id, vista.riferimentoAudio)
             pipeline.decodificatore.tutti(id)
         } ?: return RisultatoPipeline.Fallita(MOTIVO_DECODIFICA)
 
-        pipeline.segnalatore.fase(id, DIARIZZAZIONE)
-        val turni = eseguiFase { pipeline.diarizzatore.diarizza(campioni) }
-            ?: return RisultatoPipeline.Fallita(MOTIVO_DIARIZZAZIONE)
+        val turni = eseguiFase {
+            pipeline.segnalatore.fase(id, DIARIZZAZIONE)
+            pipeline.diarizzatore.diarizza(campioni)
+        } ?: return RisultatoPipeline.Fallita(MOTIVO_DIARIZZAZIONE)
 
-        pipeline.segnalatore.fase(id, TRASCRIZIONE)
-        val grezzi = eseguiFase { pipeline.allineatore.allinea(campioni, turni) }
-            ?: return RisultatoPipeline.Fallita(MOTIVO_TRASCRIZIONE)
+        val grezzi = eseguiFase {
+            pipeline.segnalatore.fase(id, TRASCRIZIONE)
+            pipeline.allineatore.allinea(campioni, turni)
+        } ?: return RisultatoPipeline.Fallita(MOTIVO_TRASCRIZIONE)
 
-        pipeline.segnalatore.fase(id, ALLINEAMENTO)
+        eseguiFase { pipeline.segnalatore.fase(id, ALLINEAMENTO) }
+            ?: return RisultatoPipeline.Fallita(MOTIVO_ALLINEAMENTO)
         val segmenti = grezzi.map { SegmentoIniziale(it.voceIndice, it.intervallo, it.testo) } // AC-71: voceIndice kept
         return RisultatoPipeline.Successo(durataDecodificata(campioni), segmenti)
     }
 
     /**
-     * Runs [blocco]; a fault of the port (I/O, native ML — ADR 0003) becomes `null`. Its technical
-     * cause is dropped on purpose: the caller picks the one FIXED, plain-Italian `motivo` the user
-     * sees (never raw exception text/paths/ids), and this codebase has no logging sink to hand it to.
-     * Coroutine cancellation and thread interruption are never a "port fault": rethrown, the interrupt
-     * flag restored — they must not be reported as a `fallita` Elaborazione.
-     */
-    private fun <T> eseguiFase(blocco: () -> T): T? = try {
-        blocco()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: InterruptedException) {
-        Thread.currentThread().interrupt()
-        throw e
-    } catch (
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-    ) {
-        null
-    }
-
-    /**
-     * True iff the transaction committed. Re-reads the Elaborazione BY ID first (the in-memory
-     * instance mutated earlier is never reused): if it is no longer `in_corso`, something else already
-     * concluded it (e.g. [RecuperaElaborazioniInterrotte] recovered it) — [seNonTerminale] never runs.
-     * Shared by the completion transaction AND its compensation (same re-read/skip-if-terminale shape).
+     * Re-reads the Elaborazione BY ID first (the in-memory instance mutated earlier is never reused):
+     * if it is no longer `in_corso`, something else already concluded it (e.g.
+     * [RecuperaElaborazioniInterrotte] recovered it) — [seNonTerminale] never runs. Shared by the
+     * completion transaction AND its compensation (same re-read/skip-if-terminale shape).
      */
     private fun concludi(
         registrazioneId: RegistrazioneId,
         elaborazioneId: ElaborazioneId,
         seNonTerminale: (Elaborazione) -> Esito<Unit>,
-    ): Boolean = transazioneSicura {
+    ): Esito<Unit> {
         val fresca = elaborazioni.diRegistrazione(registrazioneId).firstOrNull { it.id == elaborazioneId }
-        if (fresca == null || fresca.terminale) Esito.Ok(Unit) else seNonTerminale(fresca)
+        return if (fresca == null || fresca.terminale) Esito.Ok(Unit) else seNonTerminale(fresca)
     }
 
     /**
-     * Runs [blocco] in one transaction; a thrown fault is treated like a failed commit, never
-     * Cancellation/Interrupted.
+     * Runs the completion transaction; a refusal ([Esito.Errore]) or a thrown fault is KEPT (not
+     * dropped) so that, should the compensation fail too, it travels with it ([compensa]).
+     * Cancellation/Interrupted are rethrown, an [Error] is never caught.
      */
-    private fun transazioneSicura(blocco: () -> Esito<Unit>): Boolean = try {
-        uow.inTransazione(blocco) is Esito.Ok
+    private fun inTransazioneTentata(blocco: () -> Esito<Unit>): TransazioneFinale = try {
+        when (val esito = uow.inTransazione(blocco)) {
+            is Esito.Ok -> TransazioneFinale.Confermata
+            is Esito.Errore -> TransazioneFinale.Rifiutata(esito)
+        }
     } catch (e: CancellationException) {
         throw e
     } catch (e: InterruptedException) {
         Thread.currentThread().interrupt()
         throw e
     } catch (
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        @Suppress("TooGenericExceptionCaught") e: Exception,
     ) {
-        false
+        TransazioneFinale.Lanciata(e)
+    }
+
+    /**
+     * F-B: the COMPENSATING transaction (re-read by id, `fallita` with a fixed motivo). If it fails
+     * too, the fault never vanishes: its exception propagates — a refusal becomes a
+     * [TransazioneRifiutata] — with the ORIGINAL fault of [originale] attached via `addSuppressed`,
+     * so the dispatcher sees both; `terminata` has already fired in [eseguiSu]'s `finally`. The
+     * Elaborazione is then left `in_corso` and recovered by [RecuperaElaborazioniInterrotte] (startup).
+     */
+    private fun compensa(
+        registrazioneId: RegistrazioneId,
+        elaborazioneId: ElaborazioneId,
+        originale: TransazioneFinale,
+    ) {
+        val esito = try {
+            uow.inTransazione {
+                concludi(registrazioneId, elaborazioneId) { concludiConFallimento(it, MOTIVO_SALVATAGGIO_FALLITO) }
+            }
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception, // rethrown below, only enriched
+        ) {
+            originale.comeEccezione()?.takeIf { it !== e }?.let(e::addSuppressed) // no self-suppression
+            throw e
+        }
+        if (esito is Esito.Errore) {
+            throw TransazioneRifiutata("compensazione", esito.errore).apply {
+                originale.comeEccezione()?.let(::addSuppressed)
+            }
+        }
     }
 
     private fun concludiConSuccesso(
@@ -182,8 +205,10 @@ public class EseguiProssimaElaborazioneServizio(
         when (val creato = Trascritto.crea(elaborazione.registrazioneId, durataMs, segmenti)) {
             is Esito.Ok -> completa(elaborazione, creato.valore)
             is Esito.Errore -> {
-                val motivo = motivoTrascritto(creato.errore as ErroreTrascrizione)
-                concludiConFallimento(elaborazione, motivo)
+                // F-D: Trascritto.crea only returns ErroreTrascrizione; any other ErroreDominio is a
+                // programmer error, surfaced with its OWN motivo — never disguised as another failure.
+                val errore = creato.errore as? ErroreTrascrizione
+                concludiConFallimento(elaborazione, errore?.let(::motivoTrascritto) ?: MOTIVO_ERRORE_INTERNO)
             }
         }
 
@@ -207,9 +232,12 @@ public class EseguiProssimaElaborazioneServizio(
 
     private companion object {
         const val MOTIVO_REGISTRAZIONE_MANCANTE = "registrazione non più disponibile"
+        const val MOTIVO_LETTURA_REGISTRAZIONE = "impossibile leggere i dati della registrazione"
         const val MOTIVO_DECODIFICA = "impossibile leggere l'audio"
         const val MOTIVO_DIARIZZAZIONE = "errore nella separazione delle voci"
         const val MOTIVO_TRASCRIZIONE = "errore nella trascrizione"
+        const val MOTIVO_ALLINEAMENTO = "errore nell'allineamento del testo"
+        const val MOTIVO_ERRORE_INTERNO = "errore interno imprevisto"
         const val MOTIVO_SALVATAGGIO_FALLITO = "salvataggio del risultato non riuscito"
         const val MOTIVO_NESSUN_PARLATO = "nessun parlato rilevato"
         const val MOTIVO_SEGMENTO_OLTRE_DURATA = "un segmento supera la durata della registrazione"
@@ -257,6 +285,47 @@ public class EseguiProssimaElaborazioneServizio(
             (campioni.campioni.size.toLong() + CAMPIONI_PER_MS - 1) / CAMPIONI_PER_MS
     }
 }
+
+/**
+ * Runs [blocco]; a fault of the port (I/O, native ML — ADR 0003) becomes `null`. Its technical
+ * cause is dropped on purpose: the caller picks the one FIXED, plain-Italian `motivo` the user
+ * sees (never raw exception text/paths/ids), and this codebase has no logging sink to hand it to.
+ * Coroutine cancellation and thread interruption are never a "port fault": rethrown, the interrupt
+ * flag restored — they must not be reported as a `fallita` Elaborazione. An [Error] is never caught.
+ */
+private fun <T : Any> eseguiFase(blocco: () -> T): T? = try {
+    blocco()
+} catch (e: CancellationException) {
+    throw e
+} catch (e: InterruptedException) {
+    Thread.currentThread().interrupt()
+    throw e
+} catch (
+    @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+) {
+    null
+}
+
+/** The Registrazione lookup's outcome: [vista] `null` is a MISS (F7), distinct from a port fault. */
+private class Lettura(val vista: RegistrazioneVista?)
+
+/** Outcome of the completion transaction; a failure keeps its fault for [TransazioneFinale.comeEccezione]. */
+private sealed interface TransazioneFinale {
+    data object Confermata : TransazioneFinale
+    data class Rifiutata(val esito: Esito.Errore) : TransazioneFinale
+    data class Lanciata(val eccezione: Exception) : TransazioneFinale
+
+    /** The original fault as a Throwable to attach (suppressed) to a failing compensation. */
+    fun comeEccezione(): Throwable? = when (this) {
+        Confermata -> null
+        is Rifiutata -> TransazioneRifiutata("transazione finale", esito.errore)
+        is Lanciata -> eccezione
+    }
+}
+
+/** A transaction refused with an [Esito.Errore], as a Throwable for the dispatcher (never user-facing). */
+private class TransazioneRifiutata(quale: String, errore: ErroreDominio) :
+    IllegalStateException("$quale rifiutata: $errore")
 
 /** The pipeline's outcome (never inside a transaction): a Trascritto candidate, or a fixed `motivo`. */
 private sealed interface RisultatoPipeline {
