@@ -21,6 +21,7 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
         private val attribuzioni = mutableMapOf<VoceRef, ParlanteId>()
         private val nomi = mutableMapOf<ParlanteId, String>()
         private val eliminati = mutableSetOf<ParlanteId>()
+        private val occasionali = mutableSetOf<ParlanteId>()
 
         override val lettore: LettoreNomi = LettoreNomiFinta(attribuzioni, nomi)
 
@@ -32,17 +33,23 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
             return RegistrazioneConiata(id, refs)
         }
 
-        override fun confermaNuovoParlante(voce: VoceRef, nome: String): ParlanteId {
+        override fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean): ParlanteId {
             richiediNomeLibero(nome, escluso = null)
             val p = ParlanteId(generatore.nuovo())
             nomi[p] = nome
+            if (occasionale) occasionali += p
             conferma(voce, p)
             return p
         }
 
         override fun conferma(voce: VoceRef, parlante: ParlanteId) {
             require(voce in voci && parlante in nomi && parlante !in eliminati)
-            attribuzioni[voce] = parlante
+            val precedente = attribuzioni.put(voce, parlante)
+            // INV-25: an occasionale left with no Voce is removed.
+            if (precedente in occasionali && precedente !in attribuzioni.values) {
+                nomi.remove(precedente)
+                occasionali.remove(precedente)
+            }
         }
 
         override fun rinomina(parlante: ParlanteId, nome: String) {
