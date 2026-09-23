@@ -283,7 +283,7 @@ private fun riga(v: VoceRegistro): String = listOf(
 ).joinToString(SEPARATORE)
 
 private const val SEPARATORE = "\t"
-private const val BOM = "﻿"
+private const val BOM = "\uFEFF"
 private const val SUFFISSO_TEMPORANEO = ".tmp"
 private const val SUFFISSO_LOCK = ".lock"
 private const val LF: Byte = '\n'.code.toByte()

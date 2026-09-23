@@ -4,11 +4,8 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.porte.VoceRegistro
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -17,12 +14,12 @@ import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * AC-120 (atomic rewrite), AC-121 (a corrupt file never crashes the caller) and the round-trip
- * guarantee for `percorso` (spaces, parentheses, Unicode, Windows `\` separators — R3, AC-263/264).
+ * AC-120 (atomic rewrite), AC-121 (a corrupt/unreadable file never crashes the caller), AC-328
+ * (cross-process + in-process locking) and the round-trip guarantee for `percorso` (spaces,
+ * parentheses, Unicode, Windows `\` separators — R3, AC-263/264).
  */
 class RegistroProgettiFileRobustezzaTest {
     @TempDir
@@ -49,28 +46,6 @@ class RegistroProgettiFileRobustezzaTest {
         val presentiInCartella = Files.list(cartella).use { it.toList() }
         // il file dati e il file di lock del locking incrociato (AC-328) — nessun *.tmp abbandonato.
         assertEquals(setOf(file, cartella.resolve("progetti-recenti.lock")), presentiInCartella.toSet())
-    }
-
-    @Test
-    fun `una scrittura diretta senza file temporaneo lascerebbe contenuto parziale in caso di guasto`() {
-        // Contrasto con AC-120: SENZA la disciplina scrivi-su-temporaneo-poi-rinomina, un guasto a
-        // meta scrittura mischia il contenuto vecchio e quello nuovo nello stesso file finale.
-        val file = cartella.resolve("scrittura-diretta")
-        val originale = "contenuto-originale-integro"
-        Files.writeString(file, originale)
-
-        try {
-            FileChannel.open(file, StandardOpenOption.WRITE).use { canale ->
-                canale.write(ByteBuffer.wrap("NUOVO".toByteArray(Charsets.UTF_8)))
-                throw IOException("crash simulato a meta scrittura diretta")
-            }
-        } catch (ignored: IOException) {
-            // atteso: la scrittura diretta e stata interrotta a meta
-        }
-
-        val dopoIlGuasto = Files.readString(file)
-        assertNotEquals(originale, dopoIlGuasto) // non e piu il contenuto di partenza...
-        assertNotEquals("NUOVO", dopoIlGuasto) // ...ne il contenuto nuovo per intero: e un mischione
     }
 
     @Test
