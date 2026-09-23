@@ -2,6 +2,7 @@ package snastro.architettura
 
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
+import com.lemonappdev.konsist.api.declaration.KoParentDeclaration
 import com.lemonappdev.konsist.api.ext.list.classes
 import com.lemonappdev.konsist.api.ext.list.functions
 import com.lemonappdev.konsist.api.ext.list.interfaces
@@ -161,20 +162,42 @@ class RegoleArchitetturaliTest {
 
     // --- CR-8 - Expected failures are values ---------------------------------------------------
 
+    private val nomeGerarchiaErrori = Regex("^Errore[A-Z][A-Za-z0-9]*$")
+    private val nomeThrowable = Regex("^(Throwable|[A-Za-z0-9]*(Exception|Error))$")
+
+    private fun nomeSemplice(nome: String): String = nome.substringBefore('<').substringAfterLast('.').trim()
+
+    /** (name, direct parent names, direct + indirect parent names) of every class, object and interface. */
+    private fun tipiConGenitori(): List<Triple<String, List<String>, List<String>>> {
+        val scope = Konsist.scopeFromProject()
+        fun riga(nome: String, diretti: List<KoParentDeclaration>, tutti: List<KoParentDeclaration>) =
+            Triple(nome, diretti.map { nomeSemplice(it.name) }, tutti.map { nomeSemplice(it.name) })
+        return scope.classes().map { riga(it.name, it.parents(), it.parents(indirectParents = true)) } +
+            scope.objects().map { riga(it.name, it.parents(), it.parents(indirectParents = true)) } +
+            scope.interfaces().map { riga(it.name, it.parents(), it.parents(indirectParents = true)) }
+    }
+
     @Test
-    fun `CR-8 i sottotipi di ErroreDominio non estendono Throwable`() {
-        Konsist.scopeFromProject()
-            .interfaces()
-            .filter { it.hasParentInterfaceWithName("ErroreDominio") }
-            .assertFalse { it.hasParentWithName("Throwable", "Exception", "RuntimeException") }
+    fun `CR-8 nessun tipo errore estende Throwable`() {
+        val violazioni = tipiConGenitori()
+            .filter { (_, _, tutti) -> tutti.any { it == "ErroreDominio" || nomeGerarchiaErrori.matches(it) } }
+            .filter { (_, _, tutti) -> tutti.any { nomeThrowable.matches(it) } }
+            .map { it.first }
+        kotlin.test.assertTrue(violazioni.isEmpty(), "Errori che estendono Throwable (CR-8): $violazioni")
     }
 
     @Test
     fun `CR-8 ogni sottotipo diretto di ErroreDominio e un interfaccia sealed Errore-Contesto`() {
-        Konsist.scopeFromProject()
-            .interfaces()
-            .filter { it.hasParentInterfaceWithName("ErroreDominio") }
-            .assertTrue { it.hasSealedModifier && it.hasNameMatching(Regex("^Errore[A-Z][A-Za-z0-9]*$")) }
+        val scope = Konsist.scopeFromProject()
+        fun diretto(genitori: List<KoParentDeclaration>) = genitori.any { nomeSemplice(it.name) == "ErroreDominio" }
+        val classiDirette = scope.classes().filter { diretto(it.parents()) }.map { it.name }
+        val oggettiDiretti = scope.objects().filter { diretto(it.parents()) }.map { it.name }
+        val interfacceNonConformi = scope.interfaces()
+            .filter { diretto(it.parents()) }
+            .filterNot { it.hasSealedModifier && nomeGerarchiaErrori.matches(it.name) }
+            .map { it.name }
+        val violazioni = classiDirette + oggettiDiretti + interfacceNonConformi
+        kotlin.test.assertTrue(violazioni.isEmpty(), "Sottotipi diretti non conformi (CR-8): $violazioni")
     }
 
     // --- CR-10 - Ubiquitous-language names (K6) -----------------------------------------------
@@ -234,12 +257,79 @@ class RegoleArchitetturaliTest {
 
     // --- CR-15 - Reconstitution only from persistence adapters ----------------------------------
 
+    private fun KoFileDeclaration.isAdattatorePersistenza(): Boolean =
+        packagee?.name?.contains(".adattatori.persistenza") == true
+
+    private fun KoFileDeclaration.isDominio(): Boolean =
+        Regex("""^snastro\.[a-z]+\.dominio(\..+)?$""").matches(packagee?.name.orEmpty())
+
+    private fun KoFileDeclaration.isDichiarazioneRicostituzione(): Boolean =
+        path.replace('\\', '/').endsWith("kernel/src/main/kotlin/snastro/kernel/RicostituzioneDaPersistenza.kt")
+
+    /** Source text without comments (a KDoc mention is not a use). */
+    private fun KoFileDeclaration.codice(): String =
+        text.replace(Regex("""/\*[\s\S]*?\*/"""), "").replace(Regex("""//[^\n]*"""), "")
+
+    private val optInRicostituzione =
+        Regex("""OptIn\s*\((?:[^()]|\([^()]*\))*(?:\([^()]*)?RicostituzioneDaPersistenza""")
+    private val aliasRicostituzione = Regex(
+        """import\s+snastro\.kernel\.RicostituzioneDaPersistenza\s+as\s""" +
+            """|typealias\s+\w+\s*=\s*(snastro\.kernel\.)?RicostituzioneDaPersistenza\b""",
+    )
+    private val importRicostituzione = Regex("""import\s+snastro\.kernel\.RicostituzioneDaPersistenza\s*\n""")
+    private val marcaRicostituisci = Regex(
+        """@(snastro\.kernel\.)?RicostituzioneDaPersistenza\s+""" +
+            """(?:@\w+\s+|(?:public|internal|protected|private)\s+)*fun\s+ricostituisci\b""",
+    )
+
+    /** Opting in (any form: FQN, multi-marker, markerClass, @file:) only in persistence adapters. */
     @Test
     fun `CR-15 RicostituzioneDaPersistenza compare solo negli adattatori di persistenza`() {
         Konsist.scopeFromProject()
             .files
-            .filter { !it.isRegolaArchitetturale() && it.text.contains("RicostituzioneDaPersistenza") }
-            .assertTrue { file -> file.packagee?.name?.contains(".adattatori.persistenza") == true }
+            .filter { !it.isRegolaArchitetturale() && optInRicostituzione.containsMatchIn(it.codice()) }
+            .assertTrue { it.isAdattatorePersistenza() }
+    }
+
+    @Test
+    fun `CR-15 RicostituzioneDaPersistenza non si aggira con alias o opzioni del compilatore`() {
+        Konsist.scopeFromProject()
+            .files
+            .filter { !it.isRegolaArchitetturale() }
+            .assertFalse { aliasRicostituzione.containsMatchIn(it.codice()) }
+        val radice = java.io.File(System.getProperty("user.dir")).parentFile
+        val buildConOptIn = radice.walkTopDown()
+            .onEnter { it.name !in setOf("build", ".gradle", ".git", ".mismagent") }
+            .filter { it.isFile && it.name.endsWith(".gradle.kts") }
+            .filter { it.readText().contains("RicostituzioneDaPersistenza") }
+            .toList()
+        kotlin.test.assertTrue(buildConOptIn.isEmpty(), "Opt-in nei build file (CR-15): $buildConOptIn")
+    }
+
+    /** Outside persistence adapters and its declaration, the marker only MARKS `dominio` `fun ricostituisci`. */
+    @Test
+    fun `CR-15 l annotazione RicostituzioneDaPersistenza marca solo i ricostituisci del dominio`() {
+        Konsist.scopeFromProject()
+            .files
+            .filterNot { it.isRegolaArchitetturale() || it.isAdattatorePersistenza() }
+            .filterNot { it.isDichiarazioneRicostituzione() }
+            .assertFalse { file ->
+                val codice = file.codice()
+                val residuo = if (file.isDominio()) {
+                    codice.replace(importRicostituzione, "").replace(marcaRicostituisci, "")
+                } else {
+                    codice
+                }
+                residuo.contains("RicostituzioneDaPersistenza")
+            }
+    }
+
+    @Test
+    fun `CR-15 ogni ricostituisci del dominio porta RicostituzioneDaPersistenza`() {
+        Konsist.scopeFromProject()
+            .functions()
+            .filter { it.name == "ricostituisci" && it.resideInPackage("..dominio..") }
+            .assertTrue { f -> f.annotations.any { nomeSemplice(it.name) == "RicostituzioneDaPersistenza" } }
     }
 
     // --- CR-16 - Command services expose only `esegui` ------------------------------------------
