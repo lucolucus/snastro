@@ -364,7 +364,7 @@ class RegoleArchitetturaliTest {
                 pubbliche.size == 1 &&
                     pubbliche.first().name == "esegui" &&
                     !pubbliche.first().hasSuspendModifier &&
-                    pubbliche.first().returnType?.name == "Esito"
+                    nomeSemplice(pubbliche.first().returnType?.name.orEmpty()) == "Esito"
             }
     }
 
