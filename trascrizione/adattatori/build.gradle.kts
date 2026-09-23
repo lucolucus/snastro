@@ -26,6 +26,11 @@ dependencies {
     // SegmentoGrezzo (allineatore).
     implementation(project(":trascrizione:applicazione"))
 
+    // CatalogoRegistrazioni (Progetto's public read API) + its RegistrazioneVista — the supplier
+    // side of LettoreRegistrazioneDaProgetto (boundary registrazione-per-trascrizione, ADR 0002:
+    // consumer:adattatori -> supplier:applicazione only, never supplier:adattatori).
+    implementation(project(":progetto:applicazione"))
+
     // DecodificatoreAudioFfmpeg delegates to :audio's real FFmpeg decode/probe, never touching
     // org.bytedeco/javax.sound directly (ADR 0005, CR-3 confinement).
     implementation(project(":audio"))
@@ -34,4 +39,10 @@ dependencies {
     // RiconoscitoreParlatoFinta / VadFinta, synthetic-signal helpers) — D2: this module's adapter tests
     // extend the port contracts (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
+
+    // Progetto's own commands (CreaProgettoServizio, AggiungiRegistrazioneServizio,
+    // ModificaDataRegistrazioneServizio) + its port fakes (RegistrazioneRepositoryFinta,
+    // ProgettoRepositoryFinta, SondaAudioFinta, ArchivioAudioFinta) — LettoreRegistrazioneDaProgettoTest
+    // (D2) seeds the supplier only through ITS OWN commands, never by constructing its aggregates.
+    testImplementation(testFixtures(project(":progetto:applicazione")))
 }
