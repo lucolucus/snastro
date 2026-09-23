@@ -403,3 +403,6 @@
 2026-09-23T12:46:27Z	fix-batch-6	verifier	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T12:46:27Z	fix-batch-6	code-review	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T12:46:27Z	(load)	note	result	-	-	-	machine load avg ~55: holding worker slots at 2-3 until persistenza-schema D1 completes
+2026-09-23T12:47:05Z	persistenza-schema	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: immediate FKs to voce break the replace-child-rows Trascritto salva + policy-after-salva order -> DEFERRABLE INITIALLY DEFERRED; UnitaDiLavoroSql nesting state shared across threads -> ThreadLocal/currentTransaction; MED: BEGIN IMMEDIATE + busy_timeout, AC-12 probe user_version read-only before WAL, schema create/migrate + user_version in one tx, CHECK constraints on enum columns; LOW: close driver on failure, file-backed contract subclass, Instant unit, WAL checkpoint after purges (ADR 0009), re-key query)
+2026-09-23T12:47:05Z	persistenza-schema	verifier	result	cycle=0	tier=deep	model=opus	STOPPED by composer (superseded by rework; machine load)
+2026-09-23T12:47:05Z	persistenza-schema	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: 2 HIGH + MED 3-6 + LOW 7-8)
