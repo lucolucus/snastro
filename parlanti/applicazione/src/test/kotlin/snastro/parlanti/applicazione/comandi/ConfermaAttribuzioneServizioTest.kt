@@ -371,6 +371,28 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     @Test
+    fun `AC-84 il decodificatore riceve esattamente e solo gli intervalli della Voce confermata, in ordine`() {
+        val p = unParlante(ParlanteId("p-1"), "Marco")
+        val intervalliVoce2 = listOf(IntervalloMs(5_000, 6_000), IntervalloMs(9_000, 9_500))
+        val decodificatore = DecodificatoreAudioCheRegistra()
+        val ambiente = Ambiente(
+            parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() },
+            lettoreVoci = LettoreVociFinta(
+                mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2, intervalliVoce2))),
+            ),
+            decodificatore = decodificatore,
+        )
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_2, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
+
+        assertEquals(
+            listOf(REGISTRAZIONE to intervalliVoce2),
+            decodificatore.chiamate,
+            "solo gli intervalli della Voce 2 confermata, in ordine — mai l intera Registrazione ne quelli di Voce 1",
+        )
+    }
+
+    @Test
     fun `AC-87 riconfermare lo stesso Parlante non cambia nulla, non pubblica eventi e non ri-estrae l impronta`() {
         val p = unParlante(ParlanteId("p-1"), "Marco")
         val estrattore = EstrattoreImprontaCheConta()
@@ -422,6 +444,18 @@ class ConfermaAttribuzioneServizioTest {
         }
 
         override fun rimuovi(id: ParlanteId) = Unit
+    }
+
+    /** Records every call (Registrazione, intervalli) it is asked to decode, delegating for real samples. */
+    private class DecodificatoreAudioCheRegistra(
+        private val delegato: DecodificatoreAudio = DecodificatoreAudioFinta(),
+    ) : DecodificatoreAudio {
+        val chiamate: MutableList<Pair<RegistrazioneId, List<IntervalloMs>>> = mutableListOf()
+
+        override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio {
+            chiamate += id to intervalli
+            return delegato.campioni(id, intervalli)
+        }
     }
 
     /** A dedicated type (not a generic [RuntimeException]) so [assertFailsWith] can target it precisely. */
