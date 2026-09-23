@@ -330,3 +330,5 @@
 2026-09-23T11:57:09Z	audio-ffmpeg	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:57:09Z	audio-ffmpeg	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:57:09Z	stati-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:58:25Z	sorgente-impronta	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED defer -> spike impronta-vocale-affidabilita: merge TOUCHING/near-touching Segmenti (gap <= N ms) before the 1s filter; LOW defer: sub-second trimmed piece (esp. EstrattoAudio blip), centre-trim vs head, defensive copy of intervalli)
+2026-09-23T11:59:28Z	sorgente-impronta	verifier	result	cycle=0	tier=deep	model=opus	PASS (head-trim and no-touch-merge both pinned by ADR/spec; 4 mutants killed)
