@@ -12,6 +12,7 @@ import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
+import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
@@ -74,6 +75,7 @@ class RegistrazioniPresenterTest {
         registrazioni: () -> List<RegistrazioneDelProgettoVista> = { emptyList() },
         aggiungi: (AggiungiRegistrazione) -> Esito<Unit> = { error("aggiungi non atteso in questo test") },
         modificaData: (ModificaDataRegistrazione) -> Esito<Unit> = { error("modificaData non atteso in questo test") },
+        rinomina: (RinominaRegistrazione) -> Esito<Unit> = { error("rinomina non atteso in questo test") },
         lettore: LettoreAudio = LettoreAudioFinta(),
         aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
         clock: Clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
@@ -88,6 +90,7 @@ class RegistrazioniPresenterTest {
             registrazioni,
             aggiungi,
             modificaData,
+            rinomina,
             lettore,
             aggiornamenti,
             clock,

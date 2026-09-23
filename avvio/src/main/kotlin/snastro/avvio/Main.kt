@@ -104,6 +104,7 @@ internal fun costruisciRegistrazioniPresenter(
     registrazioni = collaboratori.registrazioni,
     aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
     modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,
+    rinominaRegistrazione = collaboratori.rinominaRegistrazione,
     lettore = collaboratori.lettoreAudio,
     aggiornamenti = collaboratori.aggiornamentiVista,
     clock = grafo.clock,

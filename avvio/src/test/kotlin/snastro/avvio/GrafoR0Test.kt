@@ -82,6 +82,7 @@ class GrafoR0Test {
             },
             aggiungiRegistrazione = { Esito.Ok(Unit) },
             modificaDataRegistrazione = { Esito.Ok(Unit) },
+            rinominaRegistrazione = { Esito.Ok(Unit) },
             lettoreAudio = LettoreAudioFinta(),
             aggiornamentiVista = AggiornamentiVistaFinta(),
             scope = scope,

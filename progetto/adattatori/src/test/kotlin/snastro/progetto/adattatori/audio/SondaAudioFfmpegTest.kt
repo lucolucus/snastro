@@ -9,6 +9,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -37,8 +38,10 @@ class SondaAudioFfmpegTest : SondaAudioContratto() {
             .also { scriviWavSintetico(it, durataMs = 1_500) }
             .toString()
 
+        // AC-364: a synthetic WAV has no `creation_time` tag, so the file's birth time decides.
         override val dataDelFileLeggibile: LocalDate = Files
-            .getLastModifiedTime(Path.of(fileLeggibile))
+            .readAttributes(Path.of(fileLeggibile), BasicFileAttributes::class.java)
+            .creationTime()
             .toInstant()
             .atZone(ZoneId.systemDefault())
             .toLocalDate()

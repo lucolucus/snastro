@@ -7,12 +7,14 @@ import snastro.kernel.EventoPubblicato
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
+import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.ui.AggiornamentiVista
 import snastro.ui.Cambiamento
 
 /**
- * [AggiornamentiVista] fed by `RegistrazioneAggiunta`/`DataRegistrazioneModificata` (AC-242, R0's
- * only two commands): registers itself as an [snastro.kernel.AbbonatoDopoCommit] of [dispatcher] —
+ * [AggiornamentiVista] fed by `RegistrazioneAggiunta`/`DataRegistrazioneModificata`/
+ * `RegistrazioneRinominata` (AC-242, AC-366 — R0's Registrazione commands): registers itself as an
+ * [snastro.kernel.AbbonatoDopoCommit] of [dispatcher] —
  * AFTER commit, never on rollback, even though `RegistrazioneAggiunta`'s OWN `eventi-progetto`
  * delivery is synchronous (its R2 auto-start-Elaborazione consumer, not built here) — this
  * subscriber only ever fires post-commit. `replay = 1`: a collector that starts AFTER a
@@ -31,6 +33,7 @@ internal class AggiornamentiVistaEventi(dispatcher: DispatcherEventiInMemoria) :
         val registrazioneId: RegistrazioneId = when (evento) {
             is RegistrazioneAggiunta -> evento.registrazioneId
             is DataRegistrazioneModificata -> evento.registrazioneId
+            is RegistrazioneRinominata -> evento.registrazioneId
             else -> return
         }
         _cambiamenti.tryEmit(Cambiamento(registrazioneId))

@@ -25,6 +25,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazioneServizio
+import snastro.progetto.applicazione.comandi.RinominaRegistrazioneServizio
 import snastro.progetto.applicazione.letture.RegistrazioniDelProgetto
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgetti
@@ -226,6 +227,7 @@ internal class SessioneProgettoImpl(
             dispatcher,
         )
         val modificaServizio = ModificaDataRegistrazioneServizio(dispatcher.unitaDiLavoro, registrazioni, dispatcher)
+        val rinominaServizio = RinominaRegistrazioneServizio(dispatcher.unitaDiLavoro, registrazioni, dispatcher)
         val registrazioniDelProgetto = RegistrazioniDelProgetto(registrazioni)
         val lettoreAudio = LettoreAudioReale(
             cartella,
@@ -236,6 +238,7 @@ internal class SessioneProgettoImpl(
             registrazioni = { registrazioniDelProgetto.delProgetto(progettoId) },
             aggiungiRegistrazione = aggiungiServizio::esegui,
             modificaDataRegistrazione = modificaServizio::esegui,
+            rinominaRegistrazione = rinominaServizio::esegui,
             lettoreAudio = lettoreAudio,
             aggiornamentiVista = AggiornamentiVistaEventi(dispatcher),
             scope = scopeSessione,

@@ -1,5 +1,5 @@
 // TooManyFunctions: one screen split into many small, single-purpose composables (RC-2 thin view) —
-// the natural shape of a row with a play control, an inline date field and a per-state status column.
+// the natural shape of a row with a play control, inline titolo/date fields and a per-state status column.
 @file:Suppress("TooManyFunctions")
 
 package snastro.ui.registrazioni
@@ -187,7 +187,7 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
             ControlloRiproduzione(riga, azioni)
             Spacer(modifier = Modifier.width(PADDING_RIGA))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = riga.titolo, style = MaterialTheme.typography.bodyLarge)
+                CampoTitolo(riga, azioni)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CampoData(riga, azioni)
                     Spacer(modifier = Modifier.width(PADDING_RIGA))
@@ -237,6 +237,38 @@ private fun ControlloRiproduzione(riga: RigaRegistrazione, azioni: AzioniRegistr
                 )
             }
     }
+}
+
+/**
+ * AC-363: the titolo, editable inline exactly like [CampoData] (AC-206): a local text buffer resynced
+ * from [RigaRegistrazione.titolo] on every real change, submitted only on Enter or on losing focus and
+ * only when it differs from the titolo shown. Disabled while a row operation is in flight (M3, the
+ * presenter's own guard backs it); a refused rename (blank, titolo already used) comes back as the
+ * row's inline `erroreRiga` and the row keeps its old titolo.
+ */
+@Composable
+private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    var testo by remember(riga.titolo) { mutableStateOf(riga.titolo) }
+    var eraFocalizzato by remember(riga.titolo) { mutableStateOf(false) }
+    fun sottometti() {
+        if (testo != riga.titolo) azioni.rinomina(riga.registrazioneId, testo)
+    }
+    OutlinedTextField(
+        value = testo,
+        onValueChange = { testo = it },
+        singleLine = true,
+        enabled = !riga.operazioneInCorso,
+        textStyle = MaterialTheme.typography.bodyLarge,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { sottometti() }),
+        modifier = Modifier
+            .fillMaxWidth()
+            .onFocusChanged { stato ->
+                if (eraFocalizzato && !stato.isFocused) sottometti()
+                eraFocalizzato = stato.isFocused
+            }
+            .testTag("registrazioni-titolo-${riga.registrazioneId.valore}"),
+    )
 }
 
 /**

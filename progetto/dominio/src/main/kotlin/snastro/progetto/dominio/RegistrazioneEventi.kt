@@ -14,3 +14,10 @@ public data class DataRegistrazioneModificata(
     val precedente: LocalDate,
     val nuova: LocalDate,
 ) : EventoDominio
+
+/** The user renamed a [Registrazione] (AC-360): only its titolo changed, never its audio file (AC-362). */
+public data class RegistrazioneRinominata(
+    val id: RegistrazioneId,
+    val precedente: String,
+    val nuovo: String,
+) : EventoDominio

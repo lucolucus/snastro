@@ -59,9 +59,20 @@ class EventiProgettoTest {
     }
 
     @Test
+    fun `AC-360 RegistrazioneRinominata ha registrazioneId, precedente e nuovo`() {
+        val evento: EventoPubblicato =
+            RegistrazioneRinominata(registrazioneId = RegistrazioneId("id-2"), precedente = "Vecchio", nuovo = "Nuovo")
+        assertEquals(RegistrazioneRinominata(RegistrazioneId("id-2"), "Vecchio", "Nuovo"), evento)
+        assertEquals(
+            listOf("registrazioneId: RegistrazioneId", "precedente: String", "nuovo: String"),
+            formaDi("RegistrazioneRinominata"),
+        )
+    }
+
+    @Test
     fun `AC-15 gli eventi pubblicati di Progetto sono data class di soli val che implementano EventoPubblicato`() {
         assertEquals(
-            setOf("ProgettoCreato", "RegistrazioneAggiunta", "DataRegistrazioneModificata"),
+            setOf("ProgettoCreato", "RegistrazioneAggiunta", "DataRegistrazioneModificata", "RegistrazioneRinominata"),
             eventi.map { it.name }.toSet(),
         )
         eventi.forEach { evento ->

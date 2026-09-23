@@ -4,11 +4,13 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.atteso
+import snastro.kernel.erroreAtteso
 import java.lang.reflect.Modifier
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class RegistrazioneTest {
@@ -67,7 +69,6 @@ class RegistrazioneTest {
         assertEquals(RegistrazioneAggiunta(id, progettoId), creato.evento)
     }
 
-    // AC-18 is by construction (no method changes titolo); this test only documents it, it is not coverage.
     @Test
     fun `AC-18 il titolo resta quello dato ad aggiungi dopo modificaData`() {
         val registrazione = unaRegistrazione().aggregato
@@ -75,5 +76,56 @@ class RegistrazioneTest {
         registrazione.modificaData(dataScelta).atteso()
 
         assertEquals("Intervista Marco", registrazione.titolo)
+    }
+
+    // --- AC-360: rinomina -----------------------------------------------------------------------
+
+    @Test
+    fun `AC-360 rinomina cambia il titolo ed emette RegistrazioneRinominata con precedente e nuovo`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        val evento = registrazione.rinomina("Intervista a Marco Rossi").atteso()
+
+        assertEquals(RegistrazioneRinominata(id, "Intervista Marco", "Intervista a Marco Rossi"), evento)
+        assertEquals("Intervista a Marco Rossi", registrazione.titolo)
+    }
+
+    @Test
+    fun `AC-360 rinomina toglie gli spazi iniziali e finali`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        val evento = registrazione.rinomina("  Seduta di marzo \t").atteso()
+
+        assertEquals("Seduta di marzo", evento?.nuovo)
+        assertEquals("Seduta di marzo", registrazione.titolo)
+    }
+
+    @Test
+    fun `AC-360 un titolo vuoto o di soli spazi restituisce TitoloVuoto e il titolo resta`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        registrazione.rinomina("").erroreAtteso<ErroreProgetto.TitoloVuoto>()
+        registrazione.rinomina("   ").erroreAtteso<ErroreProgetto.TitoloVuoto>()
+
+        assertEquals("Intervista Marco", registrazione.titolo)
+    }
+
+    @Test
+    fun `AC-360 lo stesso titolo, anche con spazi attorno, e un no-op senza evento`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        assertNull(registrazione.rinomina("Intervista Marco").atteso())
+        assertNull(registrazione.rinomina(" Intervista Marco ").atteso())
+        assertEquals("Intervista Marco", registrazione.titolo)
+    }
+
+    @Test
+    fun `AC-362 rinomina non tocca il riferimento audio ne la data`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        registrazione.rinomina("Altro titolo").atteso()
+
+        assertEquals(RiferimentoAudio("audio/id-1.m4a"), registrazione.riferimentoAudio)
+        assertEquals(dataFile, registrazione.dataRegistrazione)
     }
 }

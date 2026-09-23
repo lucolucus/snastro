@@ -11,8 +11,9 @@ inserisci:
 INSERT INTO registrazione(id, progetto_id, titolo, riferimento_audio, durata_ms, data_registrazione, aggiunta_alle)
 VALUES (:id, :progettoId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazione, :aggiuntaAlle);
 
-aggiornaData:
-UPDATE registrazione SET data_registrazione = :dataRegistrazione WHERE id = :id;
+-- The two columns that change after creation: titolo (AC-360) and data_registrazione (INV-2).
+aggiorna:
+UPDATE registrazione SET titolo = :titolo, data_registrazione = :dataRegistrazione WHERE id = :id;
 
 -- AC-326: single-column select — the repository never reconstitutes a Registrazione from this row.
 titoliDelProgetto:

@@ -19,7 +19,7 @@ public abstract class SondaAudioContratto {
         /** A readable audio file of a supported format. */
         public val fileLeggibile: String
 
-        /** The date of [fileLeggibile] as the file system reports it. */
+        /** The recording date of [fileLeggibile] (AC-364: metadata `creation_time`, else birth, else modified). */
         public val dataDelFileLeggibile: LocalDate
 
         /** An existing file that cannot be decoded as audio (e.g. corrupted). */

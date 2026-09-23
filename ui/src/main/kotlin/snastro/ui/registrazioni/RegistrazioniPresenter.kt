@@ -12,6 +12,7 @@ import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
+import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
@@ -34,9 +35,9 @@ import java.time.LocalDate
  * are `null` in R0: no status column, no 'Trascrivi'/'Riprova', row click does nothing), keeps a
  * per-row reflection of the shared [LettoreAudio] (AC-343: [LettoreAudio.disponibile] is checked once
  * per refresh, [LettoreAudio.stato] is collected live so the play/pause control never goes stale) and
- * refreshes on [AggiornamentiVista] (R15) or after a successful import/`modificaData`/
- * `avviaElaborazione` (never after a failure — H1, AC-201/AC-206/AC-344: "nulla cambia" beyond the
- * inline message). M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato]
+ * refreshes on [AggiornamentiVista] (R15) or after a successful import/`modificaData`/`rinomina`/
+ * `avviaElaborazione` (never after a failure — H1, AC-201/AC-206/AC-363/AC-344: "nulla cambia" beyond
+ * the inline message). M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato]
  * instead of rebuilding it from scratch, so a refresh landing mid-flight of an unrelated in-progress
  * operation never wipes [RegistrazioniUiStato.Dati.importoInCorso]/`errore` or a row's
  * `operazioneInCorso`/`erroreRiga`; a generation counter drops a [carica] result that resolves after a
@@ -45,8 +46,8 @@ import java.time.LocalDate
  * message.
  *
  * Depends on `applicazione` through PLAIN FUNCTION TYPES ([registrazioni]/[aggiungiRegistrazione]/
- * [modificaDataRegistrazione]/[statiElaborazione]/[avviaElaborazione]) rather than the concrete
- * read-model/service classes: `:avvio` binds the real shape (`RegistrazioniDelProgetto::delProgetto`,
+ * [modificaDataRegistrazione]/[rinominaRegistrazione]/[statiElaborazione]/[avviaElaborazione]) rather
+ * than the concrete read-model/service classes: `:avvio` binds the real shape (`RegistrazioniDelProgetto::delProgetto`,
  * `<Comando>Servizio::esegui`). This keeps every one of this presenter's own test doubles a plain
  * lambda over Published-Language DTOs (`RegistrazioneDelProgettoVista`, `StatoRegistrazioneVista`,
  * `Esito`) — `:ui` never needs a `*:dominio` aggregate to build a fixture for them (CR-1(b): a
@@ -61,6 +62,7 @@ class RegistrazioniPresenter(
     private val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
     private val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     private val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
+    private val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,
     private val lettore: LettoreAudio,
     private val aggiornamenti: AggiornamentiVista,
     private val clock: Clock,
@@ -239,6 +241,13 @@ class RegistrazioniPresenter(
     fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) =
         suRiga(id) { withContext(io) { modificaDataRegistrazione(ModificaDataRegistrazione(id, nuovaData)) } }
 
+    /**
+     * AC-363: renames the Registrazione from the row's inline titolo field — same row guard (M3) and
+     * inline error as [modificaData]; the list refreshes only after a success.
+     */
+    fun rinomina(id: RegistrazioneId, nuovoTitolo: String) =
+        suRiga(id) { withContext(io) { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) } }
+
     /** AC-344/AC-203: 'Trascrivi' (NON_AVVIATA) and 'Riprova' (FALLITA) both land here. */
     fun avviaElaborazione(id: RegistrazioneId) {
         val comando = avviaElaborazione ?: return // R0: the button isn't rendered either (elaborazione == null)
@@ -331,6 +340,7 @@ class RegistrazioniPresenter(
     val azioni: AzioniRegistrazioni = AzioniRegistrazioni(
         importa = ::importa,
         modificaData = ::modificaData,
+        rinomina = ::rinomina,
         riproduci = ::riproduci,
         pausa = ::pausa,
         avviaElaborazione = ::avviaElaborazione,

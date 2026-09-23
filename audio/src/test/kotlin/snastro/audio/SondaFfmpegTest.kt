@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.BasicFileAttributes
+import java.time.Clock
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.test.Test
@@ -52,9 +54,40 @@ class SondaFfmpegTest {
         val info = sonda.sonda(file)
 
         assertTrue(info.durataMs > 0, "durata ${info.durataMs} ms")
-        val dataAttesa = Files.getLastModifiedTime(file).toInstant().atZone(ZoneId.systemDefault()).toLocalDate()
-        assertEquals(dataAttesa, info.modificatoIl)
-        assertTrue(info.modificatoIl <= LocalDate.now(), "la data del file non e nel futuro")
+        // AC-364: a WAV has no `creation_time` tag, so the file's birth time decides.
+        val nascita = Files.readAttributes(file, BasicFileAttributes::class.java).creationTime().toInstant()
+        assertEquals(nascita.atZone(ZoneId.systemDefault()).toLocalDate(), info.dataRegistrazione)
+        assertTrue(info.dataRegistrazione <= LocalDate.now(), "la data del file non e nel futuro")
+    }
+
+    /**
+     * AC-364 end to end on real FFmpeg: an m4a whose `mvhd` carries `creation_time` (written at test
+     * time by [scriviM4aSintetico] — never a committed sample) gets THAT date, not the file's own
+     * (today's) birth/modified date; converted in the probe's time zone.
+     */
+    @Test
+    @Tag("modelli")
+    fun `AC-364 un m4a con creation_time prende la data dal metadato`(@TempDir dir: Path) {
+        val file = dir.resolve("sintetico.m4a")
+        scriviM4aSintetico(file, creationTime = "2026-03-21T22:30:00Z")
+        val tokyo = Clock.system(ZoneId.of("Asia/Tokyo"))
+
+        val info = SondaFfmpeg(tokyo).sonda(file)
+
+        assertTrue(info.durataMs > 0, "durata ${info.durataMs} ms")
+        assertEquals(LocalDate.of(2026, 3, 22), info.dataRegistrazione)
+    }
+
+    @Test
+    @Tag("modelli")
+    fun `AC-364 un m4a con creation_time epoch zero ripiega sulla data di nascita del file`(@TempDir dir: Path) {
+        val file = dir.resolve("orologio-non-impostato.m4a")
+        scriviM4aSintetico(file, creationTime = "1970-01-01T00:00:00Z")
+
+        val info = sonda.sonda(file)
+
+        val nascita = Files.readAttributes(file, BasicFileAttributes::class.java).creationTime().toInstant()
+        assertEquals(nascita.atZone(ZoneId.systemDefault()).toLocalDate(), info.dataRegistrazione)
     }
 
     @Test
