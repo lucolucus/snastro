@@ -83,3 +83,10 @@
 2026-09-23T08:48:16Z	porte-parlanti	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:48:16Z	porte-parlanti	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:48:52Z	porta-registrazione-trascrizione	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:50:02Z	trascritto	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:50:02Z	trascritto	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:50:02Z	trascritto	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:50:11Z	porte-documento	code-review	result	cycle=1	tier=deep	model=opus	BLOCKED (Decision F1: titolo from user file names can violate port name guard -> who sanitizes; 0 HIGH)
+2026-09-23T08:50:51Z	porte-documento	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-23T08:50:51Z	(documento)	decision	result	-	-	-	USER DECISION: Documento sanitizes titolo when minting nomeFile (invalid chars -> _, trim length, suffix after sanitizing, uniqueness case-insensitive + Unicode-normalized); port guard stays strict -> build-manifest for documento
+2026-09-23T08:50:51Z	porte-documento	code-review	result	cycle=1	tier=deep	model=opus	APPROVE after user Decision
