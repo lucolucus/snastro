@@ -43,8 +43,17 @@ import java.time.format.DateTimeParseException
  * The four operations are `@Synchronized` on this instance (F4): two threads sharing one
  * [RegistroProgettiFile] never interleave a read-modify-write into a lost update. Two SEPARATE
  * instances (e.g. two app processes) are NOT coordinated — out of scope pending a user decision.
+ *
+ * [scriviRighe] is the temp-file-write step of [scrivi], defaulted to [scriviRigheSuDisco]; the
+ * `internal` constructor lets a test substitute it with one that fails PART-WAY through, to prove
+ * AC-120 without the non-portable "deny write permission on the folder" trick (F1).
  */
-public class RegistroProgettiFile(private val file: Path) : RegistroProgetti {
+public class RegistroProgettiFile internal constructor(
+    private val file: Path,
+    private val scriviRighe: (Path, List<String>) -> Unit,
+) : RegistroProgetti {
+
+    public constructor(file: Path) : this(file, ::scriviRigheSuDisco)
 
     @Synchronized
     override fun elenco(): List<VoceRegistro> = leggi().sortedByDescending { it.ultimaAttivita }
@@ -91,7 +100,7 @@ public class RegistroProgettiFile(private val file: Path) : RegistroProgetti {
         Files.createDirectories(cartella)
         val temporaneo = Files.createTempFile(cartella, file.fileName.toString(), SUFFISSO_TEMPORANEO)
         try {
-            scriviRigheSuDisco(temporaneo, voci.map(::riga))
+            scriviRighe(temporaneo, voci.map(::riga))
             Files.move(temporaneo, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
             forzaCartella(cartella)
         } finally {

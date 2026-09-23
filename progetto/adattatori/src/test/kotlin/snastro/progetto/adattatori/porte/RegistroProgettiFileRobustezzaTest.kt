@@ -4,13 +4,17 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.porte.VoceRegistro
 import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNotEquals
 
 /**
  * AC-120 (atomic rewrite), AC-121 (a corrupt file never crashes the caller) and the round-trip
@@ -21,24 +25,47 @@ class RegistroProgettiFileRobustezzaTest {
     lateinit var cartella: Path
 
     @Test
-    fun `AC-120 un guasto durante la riscrittura lascia intatto il contenuto precedente`() {
+    fun `AC-120 un guasto a meta scrittura del file temporaneo lascia intatto il contenuto precedente`() {
         val file = cartella.resolve("progetti-recenti")
         val registro = RegistroProgettiFile(file)
         registro.registra(unaVoce())
         val contenutoPrimaDelGuasto = Files.readString(file)
 
-        // Simula un crash a meta scrittura: nega il permesso di scrittura sulla cartella, cosi la
-        // creazione del file temporaneo (primo passo di `scrivi`) fallisce prima che il file finale
-        // venga toccato — mai una scrittura parziale, mai il rename atomico.
-        cartella.toFile().setWritable(false)
-        try {
-            assertFailsWith<IOException> { registro.registra(unaVoce(percorso = "/altro/Assemblea.snastro")) }
-        } finally {
-            cartella.toFile().setWritable(true)
+        // F1: sostituisce il passo di scrittura del temporaneo con uno che ne scrive SOLO una parte
+        // e poi fallisce — un crash a meta scrittura, non prima di scrivere nulla (il permesso negato
+        // sulla cartella non e portabile e non prova il caso "meta file").
+        val registroGuasto = RegistroProgettiFile(file) { temporaneo, righe ->
+            Files.write(temporaneo, righe.take(1))
+            throw IOException("crash simulato a meta scrittura del file temporaneo")
         }
+        assertFailsWith<IOException> { registroGuasto.registra(unaVoce(percorso = "/altro/Assemblea.snastro")) }
 
         assertEquals(contenutoPrimaDelGuasto, Files.readString(file))
         assertEquals(listOf(unaVoce()), registro.elenco())
+        val presentiInCartella = Files.list(cartella).use { it.toList() }
+        assertEquals(listOf(file), presentiInCartella) // nessun *.tmp abbandonato
+    }
+
+    @Test
+    fun `una scrittura diretta senza file temporaneo lascerebbe contenuto parziale in caso di guasto`() {
+        // Contrasto con AC-120: SENZA la disciplina scrivi-su-temporaneo-poi-rinomina, un guasto a
+        // meta scrittura mischia il contenuto vecchio e quello nuovo nello stesso file finale.
+        val file = cartella.resolve("scrittura-diretta")
+        val originale = "contenuto-originale-integro"
+        Files.writeString(file, originale)
+
+        try {
+            FileChannel.open(file, StandardOpenOption.WRITE).use { canale ->
+                canale.write(ByteBuffer.wrap("NUOVO".toByteArray(Charsets.UTF_8)))
+                throw IOException("crash simulato a meta scrittura diretta")
+            }
+        } catch (ignored: IOException) {
+            // atteso: la scrittura diretta e stata interrotta a meta
+        }
+
+        val dopoIlGuasto = Files.readString(file)
+        assertNotEquals(originale, dopoIlGuasto) // non e piu il contenuto di partenza...
+        assertNotEquals("NUOVO", dopoIlGuasto) // ...ne il contenuto nuovo per intero: e un mischione
     }
 
     @Test
