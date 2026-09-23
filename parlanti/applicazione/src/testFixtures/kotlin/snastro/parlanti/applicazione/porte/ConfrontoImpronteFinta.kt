@@ -17,10 +17,13 @@ public class ConfrontoImpronteFinta(private val programmate: Map<Impronta, Fasci
 
     private fun fasciaDi(voce: Impronta, impronta: Impronta): Fascia =
         when {
-            !confrontabile(impronta) || impronta.valori.size != voce.valori.size -> Fascia.NESSUNA
+            !confrontabile(impronta) || impronta.dimensione != voce.dimensione -> Fascia.NESSUNA
             impronta == voce -> Fascia.FORTE
             else -> programmate[impronta] ?: Fascia.NESSUNA
         }
 
-    private fun confrontabile(i: Impronta): Boolean = i.valori.all { it.isFinite() } && i.valori.any { it != 0f }
+    private fun confrontabile(i: Impronta): Boolean {
+        val indici = 0 until i.dimensione
+        return indici.all { i[it].isFinite() } && indici.any { i[it] != 0f }
+    }
 }

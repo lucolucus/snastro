@@ -3,6 +3,7 @@ package snastro.parlanti.dominio
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 
@@ -26,6 +27,20 @@ class ImprontaTest {
         assertContentEquals(floatArrayOf(1f, 2f), impronta.valori)
         assertEquals(Impronta(floatArrayOf(1f, 2f)), impronta)
         assertEquals(hashIniziale, impronta.hashCode())
+    }
+
+    @Test
+    fun `dimensione restituisce il numero di valori`() {
+        assertEquals(3, Impronta(floatArrayOf(1f, 2f, 3f)).dimensione)
+        assertEquals(0, Impronta(FloatArray(0)).dimensione)
+    }
+
+    @Test
+    fun `get legge il valore alla posizione e fuori intervallo fallisce`() {
+        val impronta = Impronta(floatArrayOf(0.5f, -1.5f))
+
+        assertEquals(listOf(0.5f, -1.5f), (0 until impronta.dimensione).map { impronta[it] })
+        assertFailsWith<IndexOutOfBoundsException> { impronta[2] }
     }
 
     @Test
