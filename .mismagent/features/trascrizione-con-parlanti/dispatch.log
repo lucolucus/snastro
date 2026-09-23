@@ -193,3 +193,11 @@
 2026-09-23T10:27:33Z	gestione-parlante	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:27:55Z	avvia-elaborazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (pre-existing mis-scoped reds, not from this diff: ADR 0004 enforced_by matches "com.k2fsa" literals in architettura-test; agg-elaborazione §14 StatoElaborazione\. matches test/testFixtures → re-scope to src/main via write-adr/build-manifest)
 2026-09-23T10:28:36Z	revisione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:29:27Z	gestione-parlante	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED patch F1 self-rename untested, F2 ADR0007 backstop path untested; MED decision F3 error placement diverges across contexts (ADR 0003 wording) -> user/architect; LOW F4 reuse via command, F5 pre-check before root rules bends AC-91/93 error precedence, F6 same-name rename publishes)
+2026-09-23T10:30:30Z	gestione-parlante	verifier	result	cycle=0	tier=deep	model=opus	FAIL (ADR 0003/CR-8: ParlanteNonTrovato must join ErroreParlanti in dominio; delete ErroriApplicazioneParlanti) -> rework cycle=1 queued (worker cap 4/4)
+2026-09-23T10:34:26Z	servizi-registrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (b90444b; out-of-block: ErroreProgetto.RegistrazioneNonTrovata + duplicate CR-16 fix)
+2026-09-23T10:34:26Z	servizi-registrazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:34:26Z	servizi-registrazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:34:26Z	gestione-parlante	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL error placement + code-review MED F1/F2, LOW F5)
+2026-09-23T10:35:59Z	servizi-registrazione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED patch F1 exception path leaves orphan audio file — try/finally with success flag, no generic catch; MED carry F2 -> rigenerazione-documento: same-date modificaData must not delete regenerated Documento; LOW patch F3 titoloDa blank -> fallback nomeFile; LOW F4 requireNotNull ok)
+2026-09-23T10:36:45Z	servizi-registrazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (ADR 0004/0005/0008 enforced_by red only on architettura-test literals — mis-scoped, pre-existing)
