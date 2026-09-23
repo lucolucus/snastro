@@ -528,3 +528,8 @@
 2026-09-23T21:34:56Z	fix-batch-12	verifier	result	cycle=0	tier=deep	model=opus	PASS (991 tests; modelli + render green)
 2026-09-23T21:34:56Z	fix-batch-12	composer	merge	cycle=0	-	-	MERGED f7e662d
 2026-09-23T21:34:56Z	fix-batch-12	composer	pre-release	cycle=0	-	-	MED chiudiDb() in finally unguarded (checkpoint throw skips lock release) + cancel scope before checkpoint; LOW DatabaseProgetto KDoc; LOW CampoTitolo one-frame flicker; LOW initial-load error shown under crea form, no retry; LOW registry queue dropped on exit (Main never calls chiudi); LOW user_version 1 shows CartellaNonValida
+2026-09-23T21:59:29Z	fix-batch-13	worker	dispatch	cycle=0	tier=standard	model=sonnet	guard chiudiDb + cancel scope before checkpoint; then main + tag r0 (user yes)
+2026-09-23T22:13:29Z	fix-batch-13	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 94566a2
+2026-09-23T22:13:29Z	fix-batch-13	verifier	result	cycle=0	-	composer	PASS (diff reviewed; gate --rerun-tasks green; ADR rules green)
+2026-09-23T22:13:29Z	fix-batch-13	composer	merge	cycle=0	-	-	MERGED 60e5ecb
+2026-09-23T22:13:29Z	(release)	composer	release	-	-	-	R0 Archivio released: feature -> main, tag r0 (user yes)
