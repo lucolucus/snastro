@@ -8,8 +8,9 @@ import snastro.kernel.VoceId
  * The supplier side of [LettoreVociContratto]: one implementation per subclass seeds its supplier
  * (the fake's data in D1; Progetto and Trascrizione through THEIR commands for the real adapter — D2)
  * and hands back the ids the supplier minted. The contract asks only for what the Trascrizione rules
- * allow: every seeded interval ends by 60 000 ms, Revisioni only on a completata Elaborazione, and never
- * a riassegna to a new Voce of the only Segmento of its Voce.
+ * allow: every seeded interval ends by 60 000 ms, turni may overlap or repeat the same interval (INV-7
+ * allows overlap), Revisioni only on a completata Elaborazione, and never a riassegna to a new Voce of
+ * the only Segmento of its Voce (refused by the Trascritto).
  */
 public interface AmbienteLettoreVoci {
     /** The implementation under contract, reading everything seeded so far (and later). */

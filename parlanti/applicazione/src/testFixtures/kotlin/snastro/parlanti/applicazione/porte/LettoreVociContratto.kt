@@ -102,6 +102,33 @@ public abstract class LettoreVociContratto {
     }
 
     @Test
+    public fun `AC-46 Segmenti sovrapposti o con lo stesso intervallo danno un intervallo ciascuno senza fusioni`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val id = a.aggiungiRegistrazione()
+        // INV-7 allows overlap: two overlapping and two identical Segmenti in the same Voce.
+        val turni = listOf(
+            SemeTurno(0, IntervalloMs(8_000, 10_000)),
+            SemeTurno(0, IntervalloMs(2_000, 6_000)),
+            SemeTurno(1, IntervalloMs(3_000, 5_000)),
+            SemeTurno(0, IntervalloMs(0, 4_000)),
+            SemeTurno(0, IntervalloMs(8_000, 10_000)),
+        )
+        val c = a.completaElaborazione(id, turni)
+
+        val voci = lettore.voci(id)
+
+        assertEquals(
+            listOf(
+                VoceVista(VoceRef(id, c[0].voceId), listOf(3, 1, 0, 4).map { turni[it].intervallo }),
+                VoceVista(VoceRef(id, c[2].voceId), listOf(turni[2].intervallo)),
+            ).sortedBy { it.voceRef.voceId.numero },
+            voci,
+        )
+        assertEquals(turni.size, voci?.sumOf { it.intervalli.size }, "un intervallo per Segmento: $voci")
+    }
+
+    @Test
     public fun `AC-46 ogni Registrazione restituisce le proprie Voci`() {
         val a = ambiente()
         val lettore = a.lettore
