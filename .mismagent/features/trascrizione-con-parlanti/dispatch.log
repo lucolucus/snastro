@@ -240,3 +240,10 @@
 2026-09-23T11:06:02Z	conferma-attribuzione	verifier	result	cycle=0	tier=deep	model=opus	FAIL (merged tree: ParlanteNonTrovato declared twice -> compile error; INV-25 ricorrente branch untested, mutation survived) -> rework cycle=1 queued (worker cap 4/4); integration line merged into block branch first
 2026-09-23T11:06:37Z	fix-batch-4	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED defer: after-commit subscriber throw would discard audio of a COMMITTED Registrazione — latent, no after-commit consumer of RegistrazioneAggiunta; decision on UnitaDiLavoro/Dispatcher contract if one is ever added; MED patch-later: scarta throwing in finally masks original exception (addSuppressed form); LOW titoloDa whitespace, nested tx)
 2026-09-23T11:06:52Z	fix-batch-4	verifier	result	cycle=0	tier=deep	model=opus	PASS (mutation-checked F1/F3 tests)
+2026-09-23T11:13:02Z	(tec-shell-ui)	decision	result	-	-	-	USER DECISION: remove ErroreSessione.CartellaGiaEsistente from tec-shell-ui pin (dead after folder-naming rule) -> build-manifest
+2026-09-23T11:13:02Z	(revisione-policy)	decision	result	-	-	-	USER DECISION: INV-21 unire where only the REMOVED Voce B is attributed -> keep the attributed one: surviving Voce A inherits B's Attribuzione (print re-derived from A's segments); B's own Attribuzione/print removed -> build-manifest + revisione-policy rework
+2026-09-23T11:13:02Z	(impronta-estrazione)	decision	result	-	-	-	USER DECISION: route uncapped in-transaction print extraction (conferma-attribuzione, revisione-policy, salta-voce; ADR 0012 R12 premise) to the architect
+2026-09-23T11:13:42Z	salta-voce	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (c2079a3; ErroreParlanti +TrascrittoNonTrovato/VoceNonTrovata (same shapes as conferma) +VoceGiaAttribuita)
+2026-09-23T11:13:42Z	salta-voce	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:13:42Z	salta-voce	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:13:42Z	conferma-attribuzione	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL duplicate ParlanteNonTrovato + INV-25 ricorrente; code-review HIGH F1, MED F2/F3, LOW F7)
