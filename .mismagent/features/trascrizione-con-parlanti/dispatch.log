@@ -517,3 +517,4 @@
 2026-09-23T19:58:14Z	fix-batch-11	composer	merge	cycle=0	-	-	MERGED abe8fee
 2026-09-23T19:58:14Z	fix-batch-11	composer	pre-release	cycle=0	-	-	MED rejected titolo text stays in the field after a refused rename (reset on error / Esc); LOW Enter+blur may repeat error; LOW 1970 plausibility floor; LOW 1.sqm comment "only mutable column" outdated (fix before freeze)
 2026-09-23T20:06:28Z	(release)	composer	tag	-	-	-	r0-preview-1 on 402baf1 (user request)
+2026-09-23T20:30:55Z	spike-r1-asr-diarizzazione	user	result	-	-	-	USER: Parakeet full transcript best; Via Roquel = 4 speakers (diar 10); background music transcribed/clustered; style later

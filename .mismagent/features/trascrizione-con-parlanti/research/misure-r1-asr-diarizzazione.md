@@ -224,3 +224,9 @@ model loads.
    (`sherpa-onnx-native-lib-osx-aarch64` jar ORT arch; the pip wheel's ORT is arm64-only 1.28.2).
 6. Not run: Whisper turbo, CAM++ / TitaNet embeddings, Qwen3 with the `it` hint (the Python
    factory exposes no language parameter, only `hotwords`).
+
+## User judgement (2026-09-23)
+- Transcript quality of Parakeet on the full Via Roquel run is judged **good / the best** of the runs (the t6 and t10 files are byte-identical: threads change speed only).
+- Via Roquel had **4 real speakers**; the diarizer produced 10 clusters (8 with substantial speech) → over-count confirmed.
+- The recording has **background music**; the user reports it was picked up too — i.e. music passages are transcribed as speech and very likely split into extra "voices" (the short English fragments seen in the excerpt are consistent with sung lyrics).
+- Open for R1: music/non-speech rejection before ASR+diarization, and speaker-count control (known number of speakers, or merge of small/near clusters).
