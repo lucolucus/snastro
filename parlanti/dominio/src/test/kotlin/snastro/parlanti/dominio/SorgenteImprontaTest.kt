@@ -22,8 +22,16 @@ class SorgenteImprontaTest {
     }
 
     @Test
-    fun `AC-274 Selezione se nessun segmento raggiunge 1000 ms usa il solo piu lungo, a parita quello con inizio minore`() {
-        assertEquals(listOf(i(1_000, 1_900)), SorgenteImpronta.di(listOf(i(0, 500), i(1_000, 1_900), i(3_000, 3_200))).intervalli)
+    fun `AC-274 Selezione un segmento di esattamente 1000 ms supera il filtro`() {
+        val sorgente = SorgenteImpronta.di(listOf(i(0, 1_000), i(2_000, 3_500), i(4_000, 4_999)))
+
+        assertEquals(listOf(i(0, 1_000), i(2_000, 3_500)), sorgente.intervalli)
+    }
+
+    @Test
+    fun `AC-274 Selezione se nessuno raggiunge 1000 ms usa il solo piu lungo, a parita il primo`() {
+        val corti = listOf(i(0, 500), i(1_000, 1_900), i(3_000, 3_200))
+        assertEquals(listOf(i(1_000, 1_900)), SorgenteImpronta.di(corti).intervalli)
         assertEquals(listOf(i(1_000, 1_900)), SorgenteImpronta.di(listOf(i(1_000, 1_900), i(3_000, 3_900))).intervalli)
     }
 
@@ -43,7 +51,7 @@ class SorgenteImprontaTest {
     }
 
     @Test
-    fun `AC-276 Selezione budget una Voce di oltre 30 s da esattamente 30000 ms e l intervallo eccedente e tagliato dal suo inizio`() {
+    fun `AC-276 Selezione budget oltre 30 s da esattamente 30000 ms, eccedente tagliato dal suo inizio`() {
         val sorgente = SorgenteImpronta.di(listOf(i(0, 12_000), i(20_000, 45_000), i(50_000, 60_000)))
 
         assertEquals(BUDGET_IMPRONTA_MS, sorgente.intervalli.totaleMs)
@@ -103,19 +111,28 @@ class SorgenteImprontaTest {
         // 600 + 700 ms overlapping -> 0-1100 passes the 1000 ms filter only once merged;
         // 20-40 s and 25-45 s -> 20-45 s (25 s), then the budget trims the next one.
         val sorgente = SorgenteImpronta.di(
-            listOf(i(0, 600), i(400, 1_100), i(20_000, 40_000), i(25_000, 45_000), i(50_000, 60_000), i(52_000, 55_000)),
+            listOf(
+                i(0, 600),
+                i(400, 1_100),
+                i(20_000, 40_000),
+                i(25_000, 45_000),
+                i(50_000, 60_000),
+                i(52_000, 55_000),
+            ),
         )
 
         assertEquals(listOf(i(20_000, 45_000), i(50_000, 55_000)), sorgente.intervalli)
         assertEquals(BUDGET_IMPRONTA_MS, sorgente.intervalli.totaleMs)
         assertEquals("20000-45000,50000-55000", sorgente.chiave)
-        assertEquals(listOf(i(0, 1_100)), selezionaIntervalli(listOf(i(0, 600), i(400, 1_100), i(2_000, 2_900)), BUDGET_IMPRONTA_MS, null))
+        val cortiSovrapposti = listOf(i(0, 600), i(400, 1_100), i(2_000, 2_900))
+        assertEquals(listOf(i(0, 1_100)), selezionaIntervalli(cortiSovrapposti, BUDGET_IMPRONTA_MS, null))
     }
 
     @Test
-    fun `AC-279 Selezione un intervallo contenuto in un altro non allunga l unione e intervalli adiacenti restano distinti`() {
+    fun `AC-279 Selezione un intervallo contenuto non allunga l unione e gli adiacenti restano distinti`() {
         assertEquals(listOf(i(0, 6_000)), SorgenteImpronta.di(listOf(i(0, 6_000), i(1_000, 2_000))).intervalli)
-        assertEquals(listOf(i(0, 2_000), i(2_000, 4_000)), SorgenteImpronta.di(listOf(i(0, 2_000), i(2_000, 4_000))).intervalli)
+        val adiacenti = listOf(i(0, 2_000), i(2_000, 4_000))
+        assertEquals(adiacenti, SorgenteImpronta.di(adiacenti).intervalli)
     }
 
     @Test
@@ -140,7 +157,8 @@ class SorgenteImprontaTest {
         assertEquals(listOf(i(0, 4_500), i(10_000, 11_500), i(30_000, 34_000)), estratto)
         assertEquals(BUDGET_ESTRATTO_MS, estratto.totaleMs)
         assertTrue(estratto.disgiuntiInOrdine())
-        assertEquals(listOf(i(100, 900)), selezionaIntervalli(listOf(i(100, 900), i(1_000, 1_500)), BUDGET_ESTRATTO_MS, MAX_INTERVALLI_ESTRATTO))
+        val corti = listOf(i(100, 900), i(1_000, 1_500))
+        assertEquals(listOf(i(100, 900)), selezionaIntervalli(corti, BUDGET_ESTRATTO_MS, MAX_INTERVALLI_ESTRATTO))
     }
 
     @Test

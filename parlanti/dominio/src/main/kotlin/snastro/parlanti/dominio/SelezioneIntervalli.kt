@@ -28,7 +28,11 @@ public const val MAX_INTERVALLI_ESTRATTO: Int = 3
  *    crosses the budget is trimmed from its start to `[inizio, inizio + resto]`;
  * 5. the result is disjoint and in time order. Empty input gives an empty result.
  */
-public fun selezionaIntervalli(intervalli: List<IntervalloMs>, budgetMs: Long, maxIntervalli: Int?): List<IntervalloMs> {
+public fun selezionaIntervalli(
+    intervalli: List<IntervalloMs>,
+    budgetMs: Long,
+    maxIntervalli: Int?,
+): List<IntervalloMs> {
     require(budgetMs > 0) { "budgetMs deve essere positivo: $budgetMs" }
     require(maxIntervalli == null || maxIntervalli > 0) { "maxIntervalli deve essere positivo: $maxIntervalli" }
     val uniti = unisciSovrapposti(intervalli)
@@ -38,7 +42,11 @@ public fun selezionaIntervalli(intervalli: List<IntervalloMs>, budgetMs: Long, m
     var resto = budgetMs
     for (intervallo in candidati.sortedWith(PIU_LUNGO_PRIMA)) {
         if (resto == 0L || (maxIntervalli != null && scelti.size == maxIntervalli)) break
-        val preso = if (intervallo.durataMs <= resto) intervallo else IntervalloMs(intervallo.inizioMs, intervallo.inizioMs + resto)
+        val preso = if (intervallo.durataMs <= resto) {
+            intervallo
+        } else {
+            IntervalloMs(intervallo.inizioMs, intervallo.inizioMs + resto)
+        }
         scelti += preso
         resto -= preso.durataMs
     }
