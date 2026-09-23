@@ -336,3 +336,7 @@
 2026-09-23T12:01:07Z	(mutex-wait)	decision	result	-	-	-	USER DECISION: the deferred Mutex-wait question becomes a formal readiness gate (spike node) blocking avvio-coda-elaborazioni and schermata-registrazione
 2026-09-23T12:01:07Z	(multi-istanza)	decision	result	-	-	-	USER DECISION (composer default under "come consigli"): multiple app instances on different projects are supported (ADR 0010 per-project .lock); registro-progetti gets a cross-process file lock
 2026-09-23T12:01:07Z	(modelli)	decision	result	-	-	-	USER DECISION: Windows models dir = %LOCALAPPDATA% (ADR 0008 amendment); catalogue entries are ARCHIVES: download + hash-verify + extract, percorso(id) = extracted directory
+2026-09-23T12:01:16Z	fix-batch-5	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW (7fce6bb; 5 merged blocks to option-c specs; callers minimally adapted with chiaveSorgenteProvvisoria + TODO(option-c follow-up); intermediate commits c90a1af/4be49fc do not compile alone)
+2026-09-23T12:01:16Z	fix-batch-5	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:01:16Z	fix-batch-5	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:01:16Z	trascritto-view	worker	dispatch	cycle=0	tier=standard	model=sonnet
