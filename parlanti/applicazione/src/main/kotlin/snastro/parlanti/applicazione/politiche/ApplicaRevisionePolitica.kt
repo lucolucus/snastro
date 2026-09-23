@@ -85,20 +85,30 @@ public class ApplicaRevisionePolitica(
         return parlanti.salva(parlante).mappa { cessaSeOccasionaleSenzaAttribuzioni(parlante) }
     }
 
-    /** [INV-21] a surviving/changed attributed [voceRef] gets its print re-derived from its CURRENT Segmenti. */
+    /**
+     * [INV-21] a surviving/changed attributed [voceRef] gets its print re-derived from its CURRENT Segmenti —
+     * UNLESS the attributed Parlante is `eliminato`: past its tombstone ([INV-13]) the Attribuzione is kept
+     * as-is (name-only), but a print may never exist for it again ([INV-15]: a print exists only while
+     * `attivo`, ADR 0009). So no decode, no extraction, no write — `Ok`, nothing else happens.
+     */
     private fun riderivaSePresente(voceRef: VoceRef): Esito<Unit> {
         val attribuzione = attribuzioni.trova(voceRef) ?: return Esito.Ok(Unit)
         val parlante = checkNotNull(parlanti.trova(attribuzione.parlanteId)) {
             "Attribuzione($voceRef) punta al Parlante inesistente ${attribuzione.parlanteId}"
         }
-        val voci = checkNotNull(lettoreVoci.voci(voceRef.registrazioneId)) {
-            "nessun Trascritto per ${voceRef.registrazioneId} durante una Revisione in corso"
+        return if (parlante.eliminato) {
+            Esito.Ok(Unit)
+        } else {
+            val voci = checkNotNull(lettoreVoci.voci(voceRef.registrazioneId)) {
+                "nessun Trascritto per ${voceRef.registrazioneId} durante una Revisione in corso"
+            }
+            val voce = checkNotNull(voci.firstOrNull { it.voceRef == voceRef }) {
+                "Voce $voceRef assente tra le Voci correnti durante una Revisione in corso"
+            }
+            val impronta: Impronta =
+                estrattore.estrai(decodificatore.campioni(voceRef.registrazioneId, voce.intervalli))
+            parlante.registraImpronta(voceRef, impronta).poi { parlanti.salva(parlante) }
         }
-        val voce = checkNotNull(voci.firstOrNull { it.voceRef == voceRef }) {
-            "Voce $voceRef assente tra le Voci correnti durante una Revisione in corso"
-        }
-        val impronta: Impronta = estrattore.estrai(decodificatore.campioni(voceRef.registrazioneId, voce.intervalli))
-        return parlante.registraImpronta(voceRef, impronta).poi { parlanti.salva(parlante) }
     }
 
     /** [INV-25] an `occasionale` left without any Attribuzione ceases to exist; a `ricorrente` is kept. */
