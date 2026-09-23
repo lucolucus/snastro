@@ -439,3 +439,4 @@
 2026-09-23T14:02:00Z	ui-fondamenta	worker	result	cycle=0	tier=standard	model=sonnet	BOUNCED (c5721d5; all ACs done except AC-180 partial: Konsist CR-1 forbids snastro.ui.* self-imports and dominio Errore* imports from :ui)
 2026-09-23T14:02:00Z	(cr1-konsist)	decision	result	-	-	-	COMPOSER DECISION (technical, reported to user): amend CR-1 — allow snastro.ui.* imports inside :ui and, from :ui only, imports of snastro.<ctx>.dominio.Errore<Ctx> sealed hierarchies (ADR 0003 amended places them in dominio for MessaggiErrore) -> fix-batch-10
 2026-09-23T14:02:00Z	fix-batch-10	worker	dispatch	cycle=0	tier=standard	model=sonnet	(CR-1 Konsist + code-rules prose)
+2026-09-23T14:07:46Z	fix-batch-10	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (292c9bf; sabotage-checked) -> RELEASE MODE: composer gate + merge
