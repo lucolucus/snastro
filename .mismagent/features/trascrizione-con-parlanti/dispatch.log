@@ -226,3 +226,7 @@
 2026-09-23T11:00:51Z	revisione-policy	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:00:51Z	revisione-policy	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T11:00:51Z	esegui-elaborazione	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL INV-5 test + AC-70; code-review HIGH F1/F2, MED F3-F7, LOW F9/F12)
+2026-09-23T11:01:34Z	conferma-attribuzione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (af22ade; out-of-block: ErroreParlanti +ParlanteNonTrovato/TrascrittoNonTrovato/VoceNonTrovata)
+2026-09-23T11:01:34Z	conferma-attribuzione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:01:34Z	conferma-attribuzione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:01:34Z	salta-voce	worker	dispatch	cycle=0	tier=standard	model=sonnet
