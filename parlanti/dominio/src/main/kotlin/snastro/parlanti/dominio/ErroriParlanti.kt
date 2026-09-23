@@ -14,6 +14,9 @@ public sealed interface ErroreParlanti : ErroreDominio {
     /** [INV-18] promozione is only `occasionale` → `ricorrente`. */
     public data class PromozioneNonAmmessa(val id: ParlanteId) : ErroreParlanti
 
+    /** [INV-16] the normalized [nome] is already used by an `attivo` Parlante of the same Progetto (ADR 0007). */
+    public data class NomeGiaInUso(val nome: String) : ErroreParlanti
+
     /** AC-22 a Nome is never empty. */
     public data object NomeVuoto : ErroreParlanti
 }
