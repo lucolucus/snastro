@@ -379,3 +379,8 @@
 2026-09-23T12:21:44Z	registrazioni-del-progetto	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: 4-field view per pin, id tie-break, insertion-order-independent ordering tests)
 2026-09-23T12:22:40Z	fix-batch-6	verifier	result	cycle=0	tier=deep	model=opus	FAIL (late; F2 propagation untested — catch IOException mutant survives) -> forwarded to the running cycle-1 worker (read seam test)
 2026-09-23T12:22:47Z	trascritto-view	verifier	result	cycle=1	tier=deep	model=opus	PASS (both mutants killed; production byte-identical)
+2026-09-23T12:24:41Z	riallinea-impronte	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; 5 worker decisions judged correct; MED patch-later F1: per-Voce failure isolation (persistent fault on one Voce starves later Voci forever); MED carry F2 -> avvio-composizione AC-316: catch/log RiallineaTutteLeImpronte exception, never crash background scope, cancel on project close; carry -> abbonato-riallineamento-impronte review: AC-306 one queued slot must never drop an event; LOW: dead Esito.Errore branches, lost-event edge, cancellation, test gaps)
+2026-09-23T12:26:39Z	fix-batch-8	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW (0e5f241; 3 services on option c; ADR 0012 (b) enforced_by GREEN; 6 mutants caught)
+2026-09-23T12:26:39Z	fix-batch-8	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:26:39Z	fix-batch-8	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:26:39Z	modelli-provisioning	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: review HIGH redirects/.part recovery/timeouts + amended spec AC-129/130/133/330-339 archives, LOCALAPPDATA, modelloId; branch synced first)
