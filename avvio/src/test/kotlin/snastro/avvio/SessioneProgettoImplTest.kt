@@ -8,6 +8,7 @@ import snastro.kernel.GeneratoreIdUuid
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.persistenza.SchemaProgettoPiuRecenteException
+import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.VoceRegistro
@@ -130,6 +131,37 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         assertEquals(ErroreSessione.ProgettoGiaAperto, errore)
     }
 
+    // --- fix-batch-12 #2 (DB closed on chiudi/failure paths) -----------------------------------
+
+    @Test
+    fun `fix-batch-12 2 chiudi rilascia il database e non lascia file wal aperti`() {
+        val sessione = nuovaSessione()
+        val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
+        val cartellaProgetto = Path.of(progetto.percorso)
+
+        sessione.chiudi()
+
+        // SQLite's own WAL checkpoint-and-delete on the last connection's close is not guaranteed to
+        // be reflected in the filesystem the instant `driver.close()` returns — a bounded poll, same
+        // pattern as this file's other eventually-consistent checks (`attendi`), not an immediate assert.
+        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-wal")) }
+        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-shm")) }
+    }
+
+    @Test
+    fun `fix-batch-12 2 un apri fallito perche il progetto non esiste ancora chiude comunque il database`() {
+        // Uno schema valido ma senza alcuna riga progetto: apri arriva fino al ramo `progetto ==
+        // null`, dopo aver gia' aperto il database con successo.
+        val cartellaProgetto = cartella.resolve("Vuoto.snastro").also(Files::createDirectories)
+        apriDatabaseProgetto(cartellaProgetto.toFile()).chiudi()
+
+        val errore = con().apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
+
+        assertEquals(ErroreSessione.CartellaNonValida, errore)
+        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-wal")) }
+        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-shm")) }
+    }
+
     // --- AC-240 ------------------------------------------------------------------------------
 
     @Test
@@ -144,6 +176,35 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         attendi { registro.elenco().firstOrNull { it.percorso == progetto.percorso }?.ultimaAttivita == ORA }
         val voce = registro.elenco().first { it.percorso == progetto.percorso }
         assertEquals(0, voce.numRegistrazioni)
+    }
+
+    // --- fix-batch-12 #6 (registro calls ordered registra -> aggiorna) -------------------------
+
+    /** Records call order; `registra` is deliberately slow so a per-call thread (the pre-fix
+     * behaviour) would very likely let the fast `aggiorna` finish first. */
+    private class RegistroProgettiCheRegistraLentamente : RegistroProgetti {
+        val ordine: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
+        override fun elenco(): List<VoceRegistro> = emptyList()
+        override fun registra(v: VoceRegistro) {
+            Thread.sleep(80)
+            ordine += "registra"
+        }
+        override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) {
+            ordine += "aggiorna"
+        }
+        override fun rimuovi(percorso: String) = Unit
+    }
+
+    @Test
+    fun `fix-batch-12 6 le chiamate al registro restano in ordine registra poi aggiorna anche se registra e lenta`() {
+        val registro = RegistroProgettiCheRegistraLentamente()
+        val sessione = nuovaSessione(registro = registro)
+
+        sessione.crea(cartella.toString(), "Prova").atteso()
+        sessione.chiudi()
+
+        attendi(timeoutMs = 3_000) { registro.ordine.size >= 2 }
+        assertEquals(listOf("registra", "aggiorna"), registro.ordine.toList())
     }
 
     // --- AC-347 ------------------------------------------------------------------------------
@@ -242,6 +303,9 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val seconda = nuovaSessione()
         val riaperto = seconda.apri(progetto.percorso).atteso()
         assertEquals(progetto.progettoId, riaperto.progettoId)
+        // fix-batch-12 #2: chiudi() ora chiude anche il database — mai una sessione di test lasciata
+        // aperta, o @TempDir puo' trovare un file ancora agganciato quando prova a ripulire.
+        seconda.chiudi()
     }
 
     // --- H3 (AC-349): .lock non trattenuto su eccezione in apertura ------------------------------

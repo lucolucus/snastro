@@ -1,9 +1,11 @@
--- Schema v1 (ADR 0006 Amendment (a) / CR-13): migrations ARE the schema
--- (deriveSchemaFromMigrations) — this file is the FULL current schema, not a diff. Version 1 has
--- never shipped: it may still change in place. A committed migration is never edited once shipped
--- (forward-only, no down migrations); the next schema change is a new numbered <n>.sqm. `.sq` files
--- (persistenza/src/main/sqldelight/snastro/persistenza/) hold queries only, compiled against the
--- schema derived from here.
+-- 1.sqm (ADR 0006 Amendment (a) / CR-13): migrations ARE the schema (deriveSchemaFromMigrations) —
+-- this file is the FULL current schema, not a diff. SQLDelight numbers a migration file by the
+-- version it migrates FROM (1.sqm = the 1→2 step), so the baseline SnastroDatabase.Schema.version is
+-- 2, not 1: user_version 1 was never a real shipped state and is refused like a newer-than-supported
+-- schema (SchemaProgettoNonValidoException). This file may still change in place before v1 ships. A
+-- committed migration is never edited once shipped (forward-only, no down migrations); the next
+-- schema change is a new numbered <n>.sqm. `.sq` files (persistenza/src/main/sqldelight/snastro/
+-- persistenza/) hold queries only, compiled against the schema derived from here.
 --
 -- ADR 0007's three partial unique indexes are each on ONE line, greppable — do not reformat.
 -- Tables are ordered by FK dependency (a table only references one created above it); the three
@@ -21,7 +23,8 @@ CREATE TABLE progetto (
 );
 
 -- Aggregate: Registrazione (tactical-model.md § Progetto + R6 titolo). progetto_id is set at
--- creation and never changes (INV-1); data_registrazione is the only mutable column (INV-2).
+-- creation and never changes (INV-1); titolo (AC-360) and data_registrazione (INV-2) are the only
+-- mutable columns.
 CREATE TABLE registrazione (
     id TEXT NOT NULL PRIMARY KEY,
     progetto_id TEXT NOT NULL REFERENCES progetto(id),

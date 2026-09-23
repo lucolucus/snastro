@@ -27,6 +27,9 @@ abstract class SessioneProgettoContratto {
         val sessione = con()
         val progetto = sessione.crea(cartellaGenitoreProva(), nomeProva()).atteso()
         assertEquals(progetto, sessione.corrente.value)
+        // fix-batch-12 #2: same rationale as `apri riapre...` below — a real adapter opens a real
+        // database on `crea` too.
+        sessione.chiudi()
     }
 
     @Test
@@ -45,6 +48,9 @@ abstract class SessioneProgettoContratto {
         val riaperto = sessione.apri(creato.percorso).atteso()
         assertEquals(creato, riaperto)
         assertEquals(riaperto, sessione.corrente.value)
+        // fix-batch-12 #2: a real adapter's `apri` opens a real database — never a session left open
+        // at test end (D2's `:avvio` subclass runs this inside a `@TempDir`).
+        sessione.chiudi()
     }
 
     @Test

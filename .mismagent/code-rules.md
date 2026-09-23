@@ -96,10 +96,12 @@ technical scaffolding may be English. The context-map's "Not:" synonyms (e.g. `S
 edge check sees every edge. → gate lint: `verificaDipendenzeModuli`.
 
 **CR-13 · Migrations are forward-only and are the schema (ADR 0006 (a)).** New schema = a new `.sqm`
-(`deriveSchemaFromMigrations`; `.sq` = queries only); a shipped `.sqm` is never edited. → gate: the
-`:persistenza:test` migration test (empty DB → current version, integrity + every query) and the
-query compilation against the derived schema; the "never edited" half is a **review criterion**
-(diff touches a shipped `.sqm` → finding).
+(`deriveSchemaFromMigrations`; `.sq` = queries only); a shipped `.sqm` is never edited. The baseline
+`SnastroDatabase.Schema.version` is **2** (`1.sqm` is SQLDelight's 1→2 migration step, not "version
+1" itself — a persisted `user_version = 1` was never really shipped and is refused, not migrated).
+→ gate: the `:persistenza:test` migration test (empty DB → current version, integrity + every query,
+`Schema.migrate` from empty matches `Schema.create`) and the query compilation against the derived
+schema; the "never edited" half is a **review criterion** (diff touches a shipped `.sqm` → finding).
 
 **CR-14 · No wall clock in the inner layers.** `*:dominio` and `*:applicazione` never call
 `Instant.now()`, `LocalDate.now()`, `LocalDateTime.now()`, `ZonedDateTime.now()`,

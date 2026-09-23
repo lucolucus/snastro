@@ -39,7 +39,9 @@ class AggiungiRegistrazioneR0Test {
 
         grafo.sessione.chiudi() // rilascia il .lock prima di riaprire il db per l'ispezione
         val db = apriDatabaseProgetto(Path.of(progetto.percorso).toFile())
-        val righeElaborazione = db.elaborazioneQueries.trovaDiRegistrazione(registrazioneId.valore).executeAsList()
+        val righeElaborazione =
+            db.database.elaborazioneQueries.trovaDiRegistrazione(registrazioneId.valore).executeAsList()
+        db.chiudi()
 
         assertTrue(righeElaborazione.isEmpty(), "R0 non deve mai scrivere in elaborazione")
     }

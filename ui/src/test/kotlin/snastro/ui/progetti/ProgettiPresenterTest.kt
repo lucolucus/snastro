@@ -1,5 +1,6 @@
 package snastro.ui.progetti
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,12 +13,14 @@ import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
+import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.VoceRegistro
 import snastro.ui.ErroreSessione
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoFinta
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 import java.time.Instant
 import kotlin.test.Test
@@ -60,6 +63,36 @@ private class SessioneProgettoContaChiamate(private val delegato: SessioneProget
     }
 }
 
+/**
+ * fix-batch-12 #5: the FIRST `crea` throws a `CancellationException` that is NOT a real cancellation
+ * of this presenter's own job (nothing here ever calls `.cancel()`) — the same "spurious cancellation
+ * from the port" family LettorePresenter's own `ensureActive()` fix (#7) handles. Every call after
+ * the first delegates normally, so a test can prove a LATER `crea` still reaches [SessioneProgetto].
+ */
+private class SessioneProgettoAnnullaLaPrimaVolta(private val delegato: SessioneProgetto = SessioneProgettoFinta()) :
+    SessioneProgetto by delegato {
+    var chiamate = 0
+        private set
+    private var primaVolta = true
+
+    override fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto> {
+        chiamate++
+        if (primaVolta) {
+            primaVolta = false
+            throw CancellationException("annullato")
+        }
+        return delegato.crea(cartellaGenitore, nome)
+    }
+}
+
+private class RegistroProgettiCheLanciaSempre : RegistroProgetti {
+    override fun elenco(): List<VoceRegistro> = error("registro rotto")
+    override fun registra(v: VoceRegistro): Unit = error("registro rotto")
+    override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant): Unit =
+        error("registro rotto")
+    override fun rimuovi(percorso: String): Unit = error("registro rotto")
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProgettiPresenterTest {
     // A scope of its own (sharing the test's scheduler, but NOT a child of `runTest`'s own job) —
@@ -67,7 +100,7 @@ class ProgettiPresenterTest {
     // (unlike the shell's never-ending collector), but keeping the pattern identical costs nothing.
     private fun presentatore(
         scope: TestScope,
-        registro: RegistroProgettiFinta = RegistroProgettiFinta(),
+        registro: RegistroProgetti = RegistroProgettiFinta(),
         sessione: SessioneProgetto = SessioneProgettoFinta(),
     ): ProgettiPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
@@ -214,4 +247,33 @@ class ProgettiPresenterTest {
 
         assertEquals(1, sessione.chiamateCrea)
     }
+
+    @Test
+    fun `fix-batch-12 5 una CancellationException di crea non lascia inCorso bloccato`() = runTest {
+        val sessione = SessioneProgettoAnnullaLaPrimaVolta()
+        val presenter = presentatore(this, sessione = sessione)
+        advanceUntilIdle()
+
+        presenter.crea("/tmp", "Uno")
+        advanceUntilIdle()
+        val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
+        assertEquals(false, stato.inCorso, "inCorso bloccato a true impedirebbe ogni crea/apri successivo (M3)")
+
+        // il guardiano M3 non e' piu' bloccato: un secondo crea arriva davvero a sessione.crea.
+        presenter.crea("/tmp", "Due")
+        advanceUntilIdle()
+        assertEquals(2, sessione.chiamate, "il secondo crea deve raggiungere sessione.crea, non essere ignorato da M3")
+    }
+
+    @Test
+    fun `fix-batch-12 5 un fallimento del caricamento iniziale mostra un errore generico con le azioni utilizzabili`() =
+        runTest {
+            val presenter = presentatore(this, registro = RegistroProgettiCheLanciaSempre())
+            advanceUntilIdle()
+
+            val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
+            assertEquals(emptyList(), stato.progetti)
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.erroreCrea)
+            assertEquals(false, stato.inCorso)
+        }
 }

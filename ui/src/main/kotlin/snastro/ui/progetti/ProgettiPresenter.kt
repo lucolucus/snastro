@@ -35,8 +35,20 @@ class ProgettiPresenter(
 
     init {
         scope.launch {
-            val progetti = withContext(io) { elenco.progetti() }
-            _stato.value = ProgettiUiStato.Dati(progetti)
+            try {
+                val progetti = withContext(io) { elenco.progetti() }
+                _stato.value = ProgettiUiStato.Dati(progetti)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                // fix-batch-12 #5: the initial load itself was unguarded — a throwing `elenco.progetti()`
+                // left `_stato` stuck on Caricamento forever, with crea/apri unreachable (M5's own
+                // rationale for RegistrazioniPresenter, applied here). Lands on the SAME Dati state a
+                // dismissed erroreCrea would, actions usable right away.
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                _stato.value = ProgettiUiStato.Dati(progetti = emptyList(), erroreCrea = MESSAGGIO_ERRORE_GENERICO)
+            }
         }
     }
 
@@ -67,8 +79,8 @@ class ProgettiPresenter(
         scope.launch {
             try {
                 when (val esito = withContext(io) { operazione() }) {
-                    is Esito.Ok -> aggiorna { it.copy(inCorso = false, erroreCrea = null, erroreApri = null) }
-                    is Esito.Errore -> aggiorna { alFallimento(it.copy(inCorso = false), messaggioPer(esito.errore)) }
+                    is Esito.Ok -> aggiorna { it.copy(erroreCrea = null, erroreApri = null) }
+                    is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -77,7 +89,13 @@ class ProgettiPresenter(
                 // message the user sees (never a stack trace) — same rationale as ShellPresenter M1(b).
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
-                aggiorna { alFallimento(it.copy(inCorso = false), MESSAGGIO_ERRORE_GENERICO) }
+                aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
+            } finally {
+                // fix-batch-12 #5: reset LAST and UNCONDITIONALLY — Error and Cancellation alike — so
+                // a cancelled `crea`/`apri` (e.g. a spurious CancellationException from the port, same
+                // family as LettorePresenter's own fix) never leaves `inCorso` stuck true, which would
+                // silently block every later crea/apri behind the M3 guard forever.
+                aggiorna { it.copy(inCorso = false) }
             }
         }
     }

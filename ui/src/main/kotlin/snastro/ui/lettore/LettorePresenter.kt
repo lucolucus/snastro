@@ -4,6 +4,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -92,8 +93,16 @@ class LettorePresenter(
                     // else: left unresolved here on purpose — the `init` collector resolves it once
                     // `lettore.stato` reports this id, the ordinary asynchronous-player path.
                 }
-            } catch (e: CancellationException) {
-                throw e
+            } catch (
+                // fix-batch-12 #7: `ensureActive()` rethrows exactly when THIS job is really
+                // cancelled (the normal path, left alone below) — a `CancellationException` thrown
+                // by the port itself while the job is still active is not a real cancellation and
+                // must not leave `_stato` stuck on Caricamento (nothing else would ever resolve it).
+                @Suppress("SwallowedException") e: CancellationException,
+            ) {
+                ensureActive()
+                nuovoIdAtteso = null
+                esito = LettoreUiStato.NonDisponibile(MESSAGGIO_ERRORE_GENERICO)
             } catch (
                 // HIGH-2: `disponibile`/`riproduciDa`/`riproduciEstratto`/`pausa` may throw (e.g.
                 // LineUnavailableException, IOException) — mapped to the one fixed message rather than

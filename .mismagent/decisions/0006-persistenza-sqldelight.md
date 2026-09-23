@@ -47,15 +47,20 @@ never finishing) and it verifies nothing useful while no version has shipped. Us
 (FluentMigrator-style, experience from .NET): migrations ARE the schema.
 - `sqldelight { databases { SnastroDatabase { deriveSchemaFromMigrations.set(true) } } }`: every
   `CREATE TABLE` / `CREATE INDEX` lives in numbered `persistenza/src/main/sqldelight/migrations/<n>.sqm`
-  (`1.sqm` = the full current schema; version 1 has never shipped); `.sq` files hold **queries only**.
-  SQLDelight compiles every query against the schema derived from the migrations (compile-time check).
+  (SQLDelight numbers a migration file by the version it migrates FROM, so `1.sqm` is the 1→2 step
+  and holds the full current schema; the **baseline `SnastroDatabase.Schema.version` is 2**, not 1 —
+  version 1 has never been a real shipped state); `.sq` files hold **queries only**. SQLDelight
+  compiles every query against the schema derived from the migrations (compile-time check).
 - `verifyMigrations` is **off**; the schema snapshots `databases/*.db` are **deleted** and no longer
   committed — the "never commit DB files" rule has no exception any more.
 - Runtime: at open, `PRAGMA user_version` = applied version; `Schema.create` on an empty DB,
-  `Schema.migrate(old, current)` otherwise; a DB newer than the app refuses to open (unchanged).
+  `Schema.migrate(old, current)` otherwise; a DB newer than the app refuses to open (unchanged) — and
+  so does a DB at `user_version = 1` (`SchemaProgettoNonValidoException`: that baseline was never
+  really shipped, so a file claiming it is treated as invalid, not migrated).
 - Gate check replacing the snapshot verification (fast, in `:persistenza:test`): an empty DB
   migrated to the current version opens, has `user_version` = current, passes `PRAGMA
-  foreign_key_check` / `integrity_check`, and runs every query once; from R0 on, a fixture DB
-  frozen at each shipped version is migrated to current in the same test.
+  foreign_key_check` / `integrity_check`, and runs every query once, AND `Schema.migrate` from an
+  empty DB lands on the same schema as `Schema.create`; from R0 on, a fixture DB frozen at each
+  shipped version is migrated to current in the same test.
 - Unchanged: forward-only; a committed `.sqm` is never edited once shipped (before the first
-  release `1.sqm` may still change — it is the baseline); no down migrations.
+  release `1.sqm` may still change — it derives the baseline `user_version = 2`); no down migrations.

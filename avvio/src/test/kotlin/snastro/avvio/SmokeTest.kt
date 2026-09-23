@@ -52,8 +52,8 @@ class SmokeTest {
         Files.write(cartellaProgetto.resolve("audio/rec-1.wav"), byteArrayOf(0))
 
         val db = apriDatabaseProgetto(cartellaProgetto.toFile())
-        val progetti = ProgettoRepositorySql(db)
-        val registrazioni = RegistrazioneRepositorySql(db)
+        val progetti = ProgettoRepositorySql(db.database)
+        val registrazioni = RegistrazioneRepositorySql(db.database)
 
         val nome = NomeProgetto.di("Progetto Fixture").atteso()
         val progetto = Progetto.crea(ProgettoId("fixture-progetto"), nome)

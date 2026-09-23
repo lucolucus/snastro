@@ -68,6 +68,7 @@ class GrafoR0Test {
                 scopeGenitore = scope,
             ),
             elencoProgetti = ElencoProgetti(RegistroProgettiFinta()),
+            cartellaProgettiPredefinita = "/tmp/snastro",
         )
         val collaboratori = CollaboratoriProgettoAperto(
             registrazioni = {
