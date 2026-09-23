@@ -523,3 +523,8 @@
 2026-09-23T20:53:23Z	(spikes)	architect	result	-	deep	opus	ADR 0013 (Parakeet) + 0014 (diarizer, optional Numero di persone) close scelta-asr-code-switching + scelta-diarizzatore [user]; open: where count is entered when import auto-queues
 2026-09-23T20:54:12Z	(r1-plan)	decision	result	-	-	-	USER DECISION: no automatic transcription on import — user starts it with Trascrivi + optional Numero di persone (1..10); Riprova prefilled
 2026-09-23T20:58:44Z	(r1-plan)	architect	result	-	deep	opus	manual-start + NumeroPersone 1..10 folded into ADR 0014/0012(c)/0004(b), tactical-model, context-map; manifest delta saved (manifest-deltas/2026-09-23-numero-persone.md) for build-manifest
+2026-09-23T21:30:20Z	fix-batch-12	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 47be423
+2026-09-23T21:30:20Z	fix-batch-12	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-23T21:34:56Z	fix-batch-12	verifier	result	cycle=0	tier=deep	model=opus	PASS (991 tests; modelli + render green)
+2026-09-23T21:34:56Z	fix-batch-12	composer	merge	cycle=0	-	-	MERGED f7e662d
+2026-09-23T21:34:56Z	fix-batch-12	composer	pre-release	cycle=0	-	-	MED chiudiDb() in finally unguarded (checkpoint throw skips lock release) + cancel scope before checkpoint; LOW DatabaseProgetto KDoc; LOW CampoTitolo one-frame flicker; LOW initial-load error shown under crea form, no retry; LOW registry queue dropped on exit (Main never calls chiudi); LOW user_version 1 shows CartellaNonValida
