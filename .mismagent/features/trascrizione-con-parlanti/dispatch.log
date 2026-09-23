@@ -213,3 +213,6 @@
 2026-09-23T10:47:52Z	revisione-policy	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-23T10:49:47Z	gestione-parlante	verifier	result	cycle=1	tier=deep	model=opus	PASS (only merge conflict: CR-16 line; note: Nome.di validated before root call)
 2026-09-23T10:49:54Z	gestione-parlante	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH; cycle-0 findings all fixed + mutation-discriminating; 3 LOW defer)
+2026-09-23T10:52:20Z	(fix-batch-4)	decision	result	-	-	-	USER DECISION: approve fix-batch-4 (servizi-registrazione: scarta on exception path via try/finally, titoloDa blank fallback) -> queued for next free worker slot
+2026-09-23T10:52:20Z	(avvio-composizione)	decision	result	-	-	-	USER DECISION: fold folder-naming rule into spec -> build-manifest targeted amendment dispatched
+2026-09-23T10:52:20Z	(adr-0003)	decision	result	-	-	-	USER DECISION: errors placement = rules+lookups in dominio, technical-only in applicazione; re-scope ADR 0004/0005/0008 enforced_by (exclude architettura-test) and §14 StatoElaborazione gate to src/main -> write-adr + build-manifest dispatched

@@ -1806,11 +1806,15 @@ blocks:
     tests_nl:
       - "AC-237 --smoke apre il progetto fixture e salva uno screenshot per ogni schermata S1–S5 in avvio/build/smoke/, uscendo con 0"
       - "AC-238 Una seconda istanza sullo stesso progetto riceve 'progetto già aperto'"
-      - "AC-239 SessioneProgetto.crea crea audio/, documenti/, cache/audio/, progetto.db e registra il progetto; cartella esistente → CartellaGiaEsistente"
+      - "AC-239 SessioneProgetto.crea(cartellaGenitore, nome) crea in cartellaGenitore la cartella <nomeCartella>.snastro/ scelta secondo AC-263/AC-264, con audio/, documenti/, cache/audio/, progetto.db e .lock, e registra il progetto nel RegistroProgetti con percorso = percorso assoluto della cartella effettivamente creata"
+      - "AC-263 Il nome della cartella deriva da NomeProgetto (funzione pura, test a tabella): ogni carattere non valido su Windows/macOS/Linux (< > : \" / \\ | ? * e i caratteri di controllo U+0000–U+001F, U+007F) → '_'; spazi e punti iniziali/finali rimossi; troncato a 60 code point (mai spezzando una coppia surrogata) e poi di nuovo ripulito da spazi/punti finali; un nome riservato Windows (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, senza distinzione di maiuscole) riceve un '_' finale; risultato vuoto → 'progetto'; il suffisso '.snastro' è aggiunto dopo. Es.: 'Riunione 3/10: budget?' → 'Riunione 3_10_ budget_.snastro'; 'con' → 'con_.snastro'; '...' → 'progetto.snastro'; un nome di 80 caratteri → 60 caratteri + '.snastro'"
+      - "AC-264 Se <nomeCartella>.snastro esiste già in cartellaGenitore (cartella o file, con la semantica del filesystem: su APFS case-insensitive 'Budget' collide con 'budget'), SessioneProgetto.crea usa '<nomeCartella> (2).snastro', poi ' (3)'… fino al primo nome libero: mai errore, mai sovrascrittura né scrittura dentro la cartella preesistente (il suo contenuto resta byte-identico); la scelta è race-safe (createDirectory atomico, non exists-poi-crea: se il nome viene occupato nel frattempo si passa al numero successivo)"
+      - "AC-265 Il Progetto mantiene il nome digitato: CreaProgetto riceve il nome digitato (solo il trim di NomeProgetto, AC-16), mai il nome della cartella; ProgettoAperto.nome, VoceRegistro.nome e ProgettoCreato.nome valgono es. 'Riunione 3/10: budget?' mentre percorso termina con 'Riunione 3_10_ budget_ (2).snastro'; nome vuoto o di soli spazi → NomeProgettoVuoto e nessuna cartella creata"
       - "AC-240 Alla chiusura il registro è aggiornato con numRegistrazioni e ultimaAttivita"
       - "AC-241 Il LettoreAudio ricostruisce un WAV derivato mancante dalla sorgente; senza sorgente riporta non disponibile"
       - "AC-242 Un comando completato produce un Cambiamento su AggiornamentiVista per la sua Registrazione"
-    sources: "architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding"
+    notes: "USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (the variant is still pinned on tec-shell-ui; re-pin pending). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime."
+    sources: "architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding, user decision 2026-09-23 (folder naming)"
   - id: "ml-sherpa-motore"
     type: "adapter"
     context: "piattaforma"
@@ -2150,7 +2154,7 @@ boundaries:
       - "0007"
     gates:
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(elaborazioneQueries)\\b' . | grep -vE '^\\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
-      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoElaborazione\\.' . | grep -vE '^\\./trascrizione/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
+      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoElaborazione\\.' . | grep -E '^\\./[^:]*/src/main/' | grep -vE '^\\./trascrizione/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
   - id: "agg-trascritto"
     owner: "trascritto"
     consumers:
@@ -2212,7 +2216,7 @@ boundaries:
       - "0009"
     gates:
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(parlanteQueries|improntaVocaleQueries)\\b' . | grep -vE '^\\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
-      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\\.' . | grep -vE '^\\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
+      - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\\.' . | grep -E '^\\./[^:]*/src/main/' | grep -vE '^\\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q ."
   - id: "agg-attribuzione"
     owner: "attribuzione"
     consumers:
