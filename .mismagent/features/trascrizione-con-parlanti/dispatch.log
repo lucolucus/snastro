@@ -418,3 +418,5 @@
 2026-09-23T13:07:23Z	modelli-provisioning	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (f30967e; archives, LOCALAPPDATA, redirects, .part recovery, watchdog, ScritturaFallita; commons-compress 1.28.0 Apache-2.0; 3 mutants red)
 2026-09-23T13:07:23Z	modelli-provisioning	verifier	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T13:07:23Z	modelli-provisioning	code-review	dispatch	cycle=1	tier=deep	model=opus	(HIGH-only gating per user push for visible releases)
+2026-09-23T13:10:23Z	modelli-provisioning	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH; cycle-0 HIGH fixed; MED/LOW -> pre-release cleanup list: IOExceptions escaping scarica()/pronti() (avvio must catch), old-N dir + .part leak after failed delete, cross-process lock + unique tmp suffix, double bz2 pass, InvalidPathException, bomb cap, no progress during extraction)
+2026-09-23T13:11:52Z	modelli-provisioning	verifier	result	cycle=1	tier=deep	model=opus	PASS (37 tests; mutants killed; notes to cleanup list: absolute-path tar entry untested, uncaught FS errors, connect timeout untested)
