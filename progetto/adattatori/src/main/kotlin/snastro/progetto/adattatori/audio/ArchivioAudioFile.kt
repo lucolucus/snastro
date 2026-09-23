@@ -17,9 +17,21 @@ import java.util.Locale
  * [Files.move]s it into place with `ATOMIC_MOVE` — a crash or I/O failure at any point before that
  * rename leaves no file at the final `audio/<id>.<ext>` path, and the temp file itself is deleted
  * on the failure path (AC-148). [cartellaProgetto] is injected by the composition root (`:avvio`) —
- * this class never hard-codes a project location.
+ * this class never hard-codes a project location. The public constructor wires [passoCopia] to the
+ * real [Files.copy]; the `internal` [passoCopia] constructor parameter is a seam only a test in
+ * this module can reach — it lets a test simulate a copy that fails *partway* (bytes already
+ * landed in the temp file before the fault), which a real [Files.copy] on a local filesystem
+ * cannot be made to do on demand (it either fully succeeds or throws before writing anything).
  */
-public class ArchivioAudioFile(private val cartellaProgetto: Path) : ArchivioAudio {
+public class ArchivioAudioFile internal constructor(
+    private val cartellaProgetto: Path,
+    private val passoCopia: PassoCopia,
+) : ArchivioAudio {
+
+    public constructor(cartellaProgetto: Path) : this(
+        cartellaProgetto,
+        PassoCopia { sorgente, temporaneo, opzione -> Files.copy(sorgente, temporaneo, opzione) },
+    )
 
     override fun copia(percorsoSorgente: String, id: RegistrazioneId): Esito<RiferimentoAudio> {
         val sorgente = Path.of(percorsoSorgente)
@@ -29,7 +41,7 @@ public class ArchivioAudioFile(private val cartellaProgetto: Path) : ArchivioAud
         val temporaneo = cartellaAudio.resolve("$nomeFinale.$SUFFISSO_TEMPORANEO${System.nanoTime()}")
         return try {
             Files.createDirectories(cartellaAudio)
-            Files.copy(sorgente, temporaneo, StandardCopyOption.REPLACE_EXISTING)
+            passoCopia.copia(sorgente, temporaneo, StandardCopyOption.REPLACE_EXISTING)
             if (Files.size(temporaneo) == Files.size(sorgente)) {
                 Files.move(
                     temporaneo,
@@ -71,4 +83,9 @@ public class ArchivioAudioFile(private val cartellaProgetto: Path) : ArchivioAud
         const val CARTELLA_AUDIO = "audio/"
         const val SUFFISSO_TEMPORANEO = "tmp"
     }
+}
+
+/** The copy step [ArchivioAudioFile.copia] delegates to — real [Files.copy] in production. */
+internal fun interface PassoCopia {
+    fun copia(sorgente: Path, temporaneo: Path, opzione: StandardCopyOption)
 }
