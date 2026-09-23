@@ -5,7 +5,6 @@ import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
-import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.ui.ErroreSessione
 
 /**
@@ -44,16 +43,23 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
     is ErroreProgetto.RegistrazioneNonTrovata -> "Registrazione non trovata."
 }
 
-private fun etichetta(stato: StatoElaborazione): String = when (stato) {
-    StatoElaborazione.IN_ATTESA -> "in attesa"
-    StatoElaborazione.IN_CORSO -> "in corso"
-    StatoElaborazione.COMPLETATA -> "completata"
-    StatoElaborazione.FALLITA -> "fallita"
+// `StatoElaborazione` (the type of [ErroreTrascrizione.TransizioneNonAmmessa]'s `da`/`verso`) is a
+// `:trascrizione:dominio` VO, not an `Errore<Contesto>` — CR-1(b) allows `:ui` only the latter, never
+// an aggregate/VO. `.name` (an enum's own `String`) sidesteps naming the VO type here entirely.
+private fun etichettaStato(nome: String): String = when (nome) {
+    "IN_ATTESA" -> "in attesa"
+    "IN_CORSO" -> "in corso"
+    "COMPLETATA" -> "completata"
+    "FALLITA" -> "fallita"
+    else -> error("StatoElaborazione non mappato: $nome")
 }
 
 fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
-    is ErroreTrascrizione.TransizioneNonAmmessa ->
-        "Non è possibile passare l'elaborazione da \"${etichetta(errore.da)}\" a \"${etichetta(errore.verso)}\"."
+    is ErroreTrascrizione.TransizioneNonAmmessa -> {
+        val da = etichettaStato(errore.da.name)
+        val verso = etichettaStato(errore.verso.name)
+        "Non è possibile passare l'elaborazione da \"$da\" a \"$verso\"."
+    }
     is ErroreTrascrizione.ElaborazioneGiaAperta -> "Questa registrazione ha già un'elaborazione in corso."
     is ErroreTrascrizione.ElaborazioneGiaCompletata -> "Questa registrazione è già stata elaborata."
     is ErroreTrascrizione.RegistrazioneNonTrovata -> "Registrazione non trovata."

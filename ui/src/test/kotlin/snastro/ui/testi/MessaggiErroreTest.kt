@@ -1,6 +1,5 @@
 package snastro.ui.testi
 
-import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.ErroreDominio
 import snastro.kernel.IntervalloMs
@@ -13,7 +12,6 @@ import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
-import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.ui.ErroreSessione
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -30,6 +28,23 @@ import kotlin.test.assertTrue
  * anyone remembering to keep a hand-written list in sync.
  */
 class MessaggiErroreTest {
+    /**
+     * [ErroreTrascrizione.TransizioneNonAmmessa]'s `da`/`verso` are `StatoElaborazione` — a
+     * `:trascrizione:dominio` VO, not an `Errore<Contesto>`, so CR-1(b) forbids `:ui` importing it
+     * (only the sealed error hierarchies are allowed, never an aggregate/VO). The class is found and
+     * its enum constants read purely by name at runtime (`Class.forName`, never a static import), so
+     * this test exercises the real member without creating a source-level `:ui` → dominio-VO edge.
+     */
+    private fun transizioneNonAmmessa(id: String, da: String, verso: String): ErroreTrascrizione.TransizioneNonAmmessa {
+        val statoClass = Class.forName("snastro.trascrizione.dominio.StatoElaborazione")
+        fun valore(nome: String) = statoClass.enumConstants.first { (it as Enum<*>).name == nome }
+        val costruttore = ErroreTrascrizione.TransizioneNonAmmessa::class.java
+            .getDeclaredConstructor(String::class.java, statoClass, statoClass)
+        costruttore.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return costruttore.newInstance(id, valore(da), valore(verso)) as ErroreTrascrizione.TransizioneNonAmmessa
+    }
+
     private fun <E : Any> verificaCopertura(gerarchia: Class<E>, istanze: List<E>, messaggioPer: (E) -> String) {
         val permesse = gerarchia.permittedSubclasses
             ?: error("${gerarchia.name} non è un'interfaccia sealed JVM (nessun PermittedSubclasses)")
@@ -84,11 +99,7 @@ class MessaggiErroreTest {
         verificaCopertura(
             ErroreTrascrizione::class.java,
             listOf(
-                ErroreTrascrizione.TransizioneNonAmmessa(
-                    ElaborazioneId("id-1"),
-                    StatoElaborazione.IN_ATTESA,
-                    StatoElaborazione.IN_CORSO,
-                ),
+                transizioneNonAmmessa("id-1", "IN_ATTESA", "IN_CORSO"),
                 ErroreTrascrizione.ElaborazioneGiaAperta(RegistrazioneId("id-1")),
                 ErroreTrascrizione.ElaborazioneGiaCompletata(RegistrazioneId("id-1")),
                 ErroreTrascrizione.RegistrazioneNonTrovata(RegistrazioneId("id-1")),
