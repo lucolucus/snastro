@@ -15,3 +15,5 @@ rigenerazione-documento (wave 5) can be final.
    Proposal: reuse AC-263's rule (the one used for project folders), owned by this pure function.
 
 Answer → build-manifest folds it into the spec (re-pin nomeFile) and clears this file.
+
+3. (verifier, to fold into the same rework) INV-24 tie-break test cannot fail: put the tied Segmenti (same inizioMs) in REVERSE segmentoId order in the input.
