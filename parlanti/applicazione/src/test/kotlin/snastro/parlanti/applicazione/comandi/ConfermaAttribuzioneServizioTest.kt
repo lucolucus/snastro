@@ -17,6 +17,7 @@ import snastro.kernel.erroreAtteso
 import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
 import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
+import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
@@ -30,6 +31,7 @@ import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
@@ -424,6 +426,29 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     @Test
+    fun `AC-85 il nuovo Parlante viene salvato prima della sua Attribuzione (vincolo FK sqlite)`() {
+        val parlanti = ParlanteRepositoryFinta()
+        val attribuzioni = AttribuzioneRepositoryConVincoloFK(parlanti)
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(parlanti, attribuzioni))
+        val servizio = ConfermaAttribuzioneServizio(
+            eventi.unitaDiLavoro,
+            GeneratoreIdFinto(),
+            LettoreRegistrazioneFinta(mapOf(REGISTRAZIONE to unaRegistrazioneVista())),
+            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
+            parlanti,
+            attribuzioni,
+            DecodificatoreAudioFinta(),
+            EstrattoreImprontaFinta(),
+            eventi,
+        )
+
+        servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Giulia"))).atteso()
+
+        assertEquals(ParlanteId("id-1"), attribuzioni.trova(VOCE_1)?.parlanteId)
+        assertNotNull(parlanti.trova(ParlanteId("id-1")), "il Parlante e' stato salvato")
+    }
+
+    @Test
     fun `AC-87 riconfermare lo stesso Parlante non cambia nulla, non pubblica eventi e non ri-estrae l impronta`() {
         val p = unParlante(ParlanteId("p-1"), "Marco")
         val estrattore = EstrattoreImprontaCheConta()
@@ -487,6 +512,34 @@ class ConfermaAttribuzioneServizioTest {
             chiamate += id to intervalli
             return delegato.campioni(id, intervalli)
         }
+    }
+
+    /**
+     * Simulates persistenza-schema's immediate FK `attribuzione.parlante_id REFERENCES parlante(id)`
+     * (SQLite `foreign_keys=ON`): [salva] refuses when [parlanti] doesn't yet have that row — pins the
+     * save order the service must follow (Parlante first, then Attribuzione).
+     */
+    private class AttribuzioneRepositoryConVincoloFK(
+        private val parlanti: ParlanteRepository,
+        private val delegato: AttribuzioneRepositoryFinta = AttribuzioneRepositoryFinta(),
+    ) : AttribuzioneRepository, snastro.kernel.Ripristinabile {
+        override fun trova(v: VoceRef) = delegato.trova(v)
+
+        override fun diRegistrazione(id: RegistrazioneId) = delegato.diRegistrazione(id)
+
+        override fun diParlante(id: ParlanteId) = delegato.diParlante(id)
+
+        override fun salva(a: Attribuzione) {
+            checkNotNull(parlanti.trova(a.parlanteId)) {
+                "vincolo FK violato: parlante ${a.parlanteId} non ancora salvato " +
+                    "(attribuzione.parlante_id REFERENCES parlante(id))"
+            }
+            delegato.salva(a)
+        }
+
+        override fun rimuovi(v: VoceRef) = delegato.rimuovi(v)
+
+        override fun istantanea(): () -> Unit = delegato.istantanea()
     }
 
     /** A dedicated type (not a generic [RuntimeException]) so [assertFailsWith] can target it precisely. */

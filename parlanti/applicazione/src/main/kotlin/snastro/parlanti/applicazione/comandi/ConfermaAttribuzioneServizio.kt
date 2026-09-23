@@ -126,12 +126,15 @@ public class ConfermaAttribuzioneServizio(
     ): Esito<Unit> {
         val campioni = decodificatore.campioni(registrazioneId, intervalli)
         val impronta = estrattore.estrai(campioni)
+        // the Parlante MUST be saved before the Attribuzione: persistenza-schema's
+        // attribuzione.parlante_id REFERENCES parlante(id) is an immediate FK (SQLite
+        // foreign_keys=ON) — for a brand new Parlante the row must exist first.
         return risolto.parlante.registraImpronta(voceRef, impronta)
+            .poi { parlanti.salva(risolto.parlante) }
             .poi {
                 attribuzioni.salva(cambiamento.attribuzione)
                 liberaPrecedenteSeServe(cambiamento.evento.precedente, voceRef)
             }
-            .poi { parlanti.salva(risolto.parlante) }
             .poi { pubblica(risolto, cambiamento.evento) }
     }
 
