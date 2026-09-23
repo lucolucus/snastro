@@ -540,3 +540,4 @@
 2026-09-23T22:23:26Z	spike-allineamento-parole-voci	architect	dispatch	-	deep	opus	close with strategy A from R1 experiment evidence
 2026-09-23T22:27:46Z	spike-allineamento-parole-voci	architect	result	-	deep	opus	ADR 0015 per-turn alignment; spike closed; delta saved; open: 500ms min-turn rule (user)
 2026-09-23T22:35:18Z	(r1-plan)	decision	result	-	-	-	USER DECISION: skip merged turns < 500 ms (ADR 0015 rule 2 confirmed)
+2026-09-23T22:36:33Z	spike-packaging-modelli-desktop	experiment	result	-	standard	sonnet	ALL PASS (run, .app, .dmg); sherpa jar+natives v1.13.8 pinned; LibraryUtils.load explicit; JDK vendor gate for jpackage
