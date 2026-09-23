@@ -11,6 +11,12 @@ public interface RegistrazioneRepository {
     /** Every Registrazione of the Progetto [id], in no guaranteed order. */
     public fun delProgetto(id: ProgettoId): List<Registrazione>
 
+    /**
+     * The titolo of every Registrazione of the Progetto [id], in no guaranteed order (empty if none)
+     * — titles only, for the titolo uniqueness of `AggiungiRegistrazione` (AC-322).
+     */
+    public fun titoliDelProgetto(id: ProgettoId): List<String>
+
     /** Inserts or updates [r] inside the caller's transaction. */
     public fun salva(r: Registrazione)
 }

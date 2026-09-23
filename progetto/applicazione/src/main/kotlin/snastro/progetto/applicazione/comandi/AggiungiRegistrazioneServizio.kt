@@ -12,12 +12,14 @@ import snastro.progetto.applicazione.porte.ProgettoRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.SondaAudio
 import snastro.progetto.dominio.Registrazione
+import java.text.Normalizer
 import java.time.Clock
 
 /**
- * Use-case `AggiungiRegistrazione` (AC-56..AC-61, ADR 0010): probes the source, copies it into
+ * Use-case `AggiungiRegistrazione` (AC-56..AC-61, AC-322..324, ADR 0010): probes the source, copies it into
  * `audio/` (ADR 0010: verified copy, then commit the row — a failed copy creates nothing), creates
- * the Registrazione (titolo = source file name without extension, durata/data from the probe) and
+ * the Registrazione (titolo = source file name without extension, made unique in the Progetto with
+ * ` (2)`, ` (3)`… by [TitoloRegistrazione] — AC-322..324; durata/data from the probe) and
  * publishes `RegistrazioneAggiunta` — whose SYNC subscriber auto-starts the Elaborazione (ADR 0012
  * R2, out of scope here). If the transaction does not commit after a successful copy — a sync
  * subscriber's `Esito.Errore` (AC-60) or a thrown exception (sync subscriber throw, or any
@@ -47,7 +49,11 @@ public class AggiungiRegistrazioneServizio(
                         val creato = Registrazione.aggiungi(
                             id = id,
                             progettoId = progetto.id,
-                            titolo = titoloDa(c.percorsoSorgente),
+                            // AC-322: read + insert in this same transaction; one writer per project (ADR 0010 .lock)
+                            titolo = TitoloRegistrazione.unico(
+                                base = titoloDa(c.percorsoSorgente),
+                                titoliEsistenti = registrazioni.titoliDelProgetto(progetto.id),
+                            ),
                             riferimentoAudio = riferimento,
                             durataMs = info.durataMs,
                             dataRegistrazione = info.dataFile,
@@ -67,16 +73,18 @@ public class AggiungiRegistrazioneServizio(
 }
 
 /**
- * The source file's name without its extension (AC-56); no path separator survives in a titolo.
- * Falls back to the full file name when stripping the extension would empty it (a dotfile like
- * `.m4a`, whose "extension" is the whole name), and further to a fixed placeholder when even the
- * file name is empty (a path ending in a separator) — both keep the titolo non-blank without
- * inventing structure the path doesn't have.
+ * The base titolo (AC-56, AC-322): the source file's name without its extension, NFC-normalized and
+ * trimmed; no path separator survives in a titolo. Falls back to the full file name when stripping
+ * the extension would empty it (a dotfile like `.m4a`, whose "extension" is the whole name), and
+ * further to a fixed placeholder when even the file name is empty (a path ending in a separator) —
+ * both keep the titolo non-blank without inventing structure the path doesn't have.
  */
 private fun titoloDa(percorsoSorgente: String): String {
     val nomeFile = percorsoSorgente.substringAfterLast('/').substringAfterLast('\\')
     val senzaEstensione = nomeFile.substringBeforeLast('.', missingDelimiterValue = nomeFile)
-    return senzaEstensione.ifBlank { nomeFile }.ifBlank { "registrazione" }
+    return Normalizer.normalize(senzaEstensione.ifBlank { nomeFile }, Normalizer.Form.NFC)
+        .trim()
+        .ifEmpty { "registrazione" }
 }
 
 private fun snastro.progetto.dominio.RegistrazioneAggiunta.pubblicato(): RegistrazioneAggiunta =
