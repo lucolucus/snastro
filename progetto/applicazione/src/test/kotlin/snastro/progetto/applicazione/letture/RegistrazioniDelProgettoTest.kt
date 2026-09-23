@@ -28,11 +28,9 @@ class RegistrazioniDelProgettoTest {
 
         assertEquals(
             listOf(
-                RegistrazioneVista(
+                RegistrazioneDelProgettoVista(
                     registrazioneId = id,
-                    progettoId = progettoId,
                     titolo = "Seduta del 12 marzo",
-                    riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
                     dataRegistrazione = LocalDate.of(2026, 3, 12),
                     durataMs = 3_600_000L,
                 ),
@@ -42,14 +40,18 @@ class RegistrazioniDelProgettoTest {
     }
 
     @Test
-    fun `AC-161 ordinate per dataRegistrazione dalla piu recente`() {
-        val vecchia = unaRegistrazione(RegistrazioneId("id-1"), dataRegistrazione = LocalDate.of(2026, 1, 1))
-        val recente = unaRegistrazione(RegistrazioneId("id-2"), dataRegistrazione = LocalDate.of(2026, 3, 1))
-        registrazioni.salva(vecchia)
-        registrazioni.salva(recente)
+    fun `AC-161 ordinate per dataRegistrazione dalla piu recente, indipendentemente dall'ordine di inserimento`() {
+        // Insertion order (mid, new, old) matches neither the correct order (new, mid, old) nor its
+        // reverse (old, new, mid): a `delProgetto(id).reversed()` implementation would fail this.
+        val mid = unaRegistrazione(RegistrazioneId("id-mid"), dataRegistrazione = LocalDate.of(2026, 2, 1))
+        val new = unaRegistrazione(RegistrazioneId("id-new"), dataRegistrazione = LocalDate.of(2026, 3, 1))
+        val old = unaRegistrazione(RegistrazioneId("id-old"), dataRegistrazione = LocalDate.of(2026, 1, 1))
+        registrazioni.salva(mid)
+        registrazioni.salva(new)
+        registrazioni.salva(old)
 
         assertEquals(
-            listOf(RegistrazioneId("id-2"), RegistrazioneId("id-1")),
+            listOf(RegistrazioneId("id-new"), RegistrazioneId("id-mid"), RegistrazioneId("id-old")),
             vista.delProgetto(progettoId).map { it.registrazioneId },
         )
     }
@@ -71,6 +73,57 @@ class RegistrazioniDelProgettoTest {
 
         assertEquals(
             listOf(RegistrazioneId("id-2"), RegistrazioneId("id-1")),
+            vista.delProgetto(progettoId).map { it.registrazioneId },
+        )
+    }
+
+    @Test
+    fun `AC-161 dataRegistrazione batte aggiuntaAlle anche quando la piu vecchia e' stata aggiunta dopo`() {
+        // "new" has the more recent dataRegistrazione but was added FIRST (earlier aggiuntaAlle).
+        // "old" has an older dataRegistrazione but was added LATER (later aggiuntaAlle): it must
+        // still sort below "new" — date wins over aggiuntaAlle. Insertion order equals the expected
+        // order here, so a naive `.reversed()` implementation would (wrongly) flip it.
+        val new = unaRegistrazione(
+            RegistrazioneId("id-new"),
+            dataRegistrazione = LocalDate.of(2026, 3, 1),
+            aggiuntaAlle = Instant.parse("2026-03-01T08:00:00Z"),
+        )
+        val old = unaRegistrazione(
+            RegistrazioneId("id-old"),
+            dataRegistrazione = LocalDate.of(2026, 1, 1),
+            aggiuntaAlle = Instant.parse("2026-03-01T23:00:00Z"),
+        )
+        registrazioni.salva(new)
+        registrazioni.salva(old)
+
+        assertEquals(
+            listOf(RegistrazioneId("id-new"), RegistrazioneId("id-old")),
+            vista.delProgetto(progettoId).map { it.registrazioneId },
+        )
+    }
+
+    @Test
+    fun `AC-161 a parita di data e aggiuntaAlle il tie-break finale e' l'id, stabile tra i refresh`() {
+        // Both dataRegistrazione and aggiuntaAlle tie: only the id tie-break decides. Inserted in
+        // the OPPOSITE order of the expected id order, so a stable sort without the id tie-break
+        // would (wrongly) preserve insertion order and fail this assertion.
+        val stessaData = LocalDate.of(2026, 3, 1)
+        val stessoAggiunta = Instant.parse("2026-03-01T10:00:00Z")
+        val secondoPerId = unaRegistrazione(
+            RegistrazioneId("id-2"),
+            dataRegistrazione = stessaData,
+            aggiuntaAlle = stessoAggiunta,
+        )
+        val primoPerId = unaRegistrazione(
+            RegistrazioneId("id-1"),
+            dataRegistrazione = stessaData,
+            aggiuntaAlle = stessoAggiunta,
+        )
+        registrazioni.salva(secondoPerId)
+        registrazioni.salva(primoPerId)
+
+        assertEquals(
+            listOf(RegistrazioneId("id-1"), RegistrazioneId("id-2")),
             vista.delProgetto(progettoId).map { it.registrazioneId },
         )
     }
