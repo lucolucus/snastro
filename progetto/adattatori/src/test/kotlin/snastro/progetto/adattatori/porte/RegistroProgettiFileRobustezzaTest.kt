@@ -167,6 +167,19 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `F7 un tmp abbandonato da una scrittura precedente e spazzato via alla scrittura successiva`() {
+        val file = cartella.resolve("progetti-recenti")
+        val abbandonato = cartella.resolve("progetti-recenti1234567890.tmp")
+        Files.writeString(abbandonato, "resti di un crash precedente")
+        val registro = RegistroProgettiFile(file)
+
+        registro.registra(unaVoce())
+
+        assertEquals(false, Files.exists(abbandonato))
+        assertEquals(listOf(unaVoce()), registro.elenco())
+    }
+
+    @Test
     fun `il percorso attraversa verbatim scrittura e rilettura su file - spazi parentesi unicode separatori Windows`() {
         val file = cartella.resolve("progetti-recenti")
         val percorsi = listOf(

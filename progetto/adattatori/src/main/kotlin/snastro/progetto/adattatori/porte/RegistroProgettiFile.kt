@@ -93,11 +93,13 @@ public class RegistroProgettiFile internal constructor(
     /**
      * Write-to-temp-then-atomic-rename, sibling directory so the rename never crosses filesystems.
      * The temp file is fsync'd before the rename, and the parent directory best-effort after it
-     * (F3): the rename survives a crash right after it, not just a crash before it.
+     * (F3): the rename survives a crash right after it, not just a crash before it. Any `*.tmp`
+     * left by an earlier crashed write is swept first, best effort (F7).
      */
     private fun scrivi(voci: List<VoceRegistro>) {
         val cartella = requireNotNull(file.toAbsolutePath().parent) { "registro senza cartella: $file" }
         Files.createDirectories(cartella)
+        ripulisciTemporaneiObsoleti(cartella, file.fileName.toString())
         val temporaneo = Files.createTempFile(cartella, file.fileName.toString(), SUFFISSO_TEMPORANEO)
         try {
             scriviRighe(temporaneo, voci.map(::riga))
@@ -106,10 +108,6 @@ public class RegistroProgettiFile internal constructor(
         } finally {
             Files.deleteIfExists(temporaneo) // no-op once the move above has succeeded
         }
-    }
-
-    private companion object {
-        const val SUFFISSO_TEMPORANEO = ".tmp"
     }
 }
 
@@ -167,6 +165,21 @@ private fun forzaCartella(cartella: Path) {
     }
 }
 
+/**
+ * Sweeps every `<nomeFile>*.tmp` left in [cartella] by an earlier crashed write (F7) — run before
+ * creating a fresh temp file, so anything matched here necessarily predates the current write.
+ * Best effort: never blocks or fails the write in progress.
+ */
+private fun ripulisciTemporaneiObsoleti(cartella: Path, nomeFile: String) {
+    try {
+        Files.newDirectoryStream(cartella, "$nomeFile*$SUFFISSO_TEMPORANEO").use { obsoleti ->
+            obsoleti.forEach { Files.deleteIfExists(it) }
+        }
+    } catch (ignored: IOException) {
+        // best effort (F7): un tmp non eliminabile, o la cartella non elencabile, non blocca la scrittura
+    }
+}
+
 private fun riga(v: VoceRegistro): String = listOf(
     blocca(v.progettoId.valore),
     blocca(v.nome),
@@ -177,6 +190,7 @@ private fun riga(v: VoceRegistro): String = listOf(
 
 private const val SEPARATORE = "\t"
 private const val BOM = "﻿"
+private const val SUFFISSO_TEMPORANEO = ".tmp"
 private const val INDICE_PROGETTO_ID = 0
 private const val INDICE_NOME = 1
 private const val INDICE_PERCORSO = 2
