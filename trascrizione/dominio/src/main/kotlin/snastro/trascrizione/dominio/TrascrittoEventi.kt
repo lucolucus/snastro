@@ -1,6 +1,3 @@
-// dev-architecture-app.md#pacchetti pins `<Aggregato>Eventi.kt` for an aggregate's domain events.
-@file:Suppress("MatchingDeclarationName", "Filename")
-
 package snastro.trascrizione.dominio
 
 import snastro.kernel.EventoDominio

@@ -80,7 +80,6 @@ public class Elaborazione private constructor(
 
         /** Rebuilds from persisted state; re-validates nothing (the DB is trusted). */
         @RicostituzioneDaPersistenza
-        @Suppress("LongParameterList") // exactly the persisted fields of the `elaborazione` row
         public fun ricostituisci(
             id: ElaborazioneId,
             registrazioneId: RegistrazioneId,

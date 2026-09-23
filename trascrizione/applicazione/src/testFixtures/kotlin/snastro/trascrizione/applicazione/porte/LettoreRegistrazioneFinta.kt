@@ -2,7 +2,7 @@ package snastro.trascrizione.applicazione.porte
 
 import snastro.kernel.RegistrazioneId
 
-/** In-memory [LettoreRegistrazione] over fixed Published Language data (passes [LettoreRegistrazioneContratto]). */
+/** In-memory [LettoreRegistrazione] over Published Language data (passes [LettoreRegistrazioneContratto]). */
 public class LettoreRegistrazioneFinta(
     private val registrazioni: Map<RegistrazioneId, RegistrazioneVista> = emptyMap(),
 ) : LettoreRegistrazione {
