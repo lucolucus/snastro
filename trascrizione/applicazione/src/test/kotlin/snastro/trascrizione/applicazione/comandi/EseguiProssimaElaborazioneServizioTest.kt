@@ -13,6 +13,7 @@ import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
+import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
 import snastro.trascrizione.applicazione.porte.Allineatore
 import snastro.trascrizione.applicazione.porte.AllineatoreFinta
@@ -20,7 +21,9 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
+import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
+import snastro.trascrizione.applicazione.porte.FaseElaborazione
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.ALLINEAMENTO
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
@@ -33,14 +36,16 @@ import snastro.trascrizione.applicazione.porte.TrascrittoRepository
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.dominio.Elaborazione
+import snastro.trascrizione.dominio.ErroreTrascrizione
+import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.Trascritto
+import snastro.trascrizione.dominio.unaElaborazione
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -114,38 +119,91 @@ class EseguiProssimaElaborazioneServizioTest {
         assertEquals(listOf(DECODIFICA, DIARIZZAZIONE, TRASCRIZIONE, ALLINEAMENTO), segnalatore.fasi(id))
         assertEquals(listOf(id), segnalatore.terminate)
         assertTrue(elaborazioni.diRegistrazione(id).single().completata)
+        assertEquals(
+            listOf(ElaborazioneAvviata(id, OROLOGIO.instant()), ElaborazioneCompletata(id)),
+            eventi.pubblicati,
+            "il successo deve pubblicare ElaborazioneCompletata",
+        )
+    }
+
+    private val vistaGuasto = LettoreRegistrazioneFinta(
+        mapOf(REGISTRAZIONE_GUASTO to unaVista(REGISTRAZIONE_GUASTO, RIFERIMENTO_GUASTO, DURATA)),
+    )
+    private val decodificaGuasto = DecodificatoreAudioFinta(mapOf(RIFERIMENTO_GUASTO to DURATA))
+
+    @Test
+    fun `AC-70 registrazione non trovata diventa fallita con motivo semplice`() {
+        verificaGuastoDiPipeline(
+            motivoAtteso = "registrazione non più disponibile",
+            faseAttesa = emptyList(),
+            portePipeline = pipeline(registrazioni = LettoreRegistrazioneFinta(emptyMap())),
+        )
     }
 
     @Test
-    fun `AC-70 un errore di porta in qualunque fase diventa fallita con motivo semplice e nessun Trascritto`() {
-        val id = RegistrazioneId("registrazione-1")
-        val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
+    fun `AC-70 decodifica guasta (tutti lancia) diventa fallita con motivo semplice`() {
+        verificaGuastoDiPipeline(
+            motivoAtteso = "impossibile leggere l'audio",
+            faseAttesa = listOf(DECODIFICA),
+            portePipeline = pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = DecodificatoreCheFallisceSuTutti(decodificaGuasto),
+            ),
+        )
+    }
+
+    @Test
+    fun `AC-70 diarizzazione guasta diventa fallita con motivo semplice`() {
+        verificaGuastoDiPipeline(
+            motivoAtteso = "errore nella separazione delle voci",
+            faseAttesa = listOf(DECODIFICA, DIARIZZAZIONE),
+            portePipeline = pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = decodificaGuasto,
+                diarizzatore = DiarizzatoreCheFallisce(),
+            ),
+        )
+    }
+
+    @Test
+    fun `AC-70 allineamento guasto diventa fallita con motivo semplice`() {
+        verificaGuastoDiPipeline(
+            motivoAtteso = "errore nella trascrizione",
+            faseAttesa = listOf(DECODIFICA, DIARIZZAZIONE, TRASCRIZIONE),
+            portePipeline = pipeline(
+                registrazioni = vistaGuasto,
+                decodificatore = decodificaGuasto,
+                allineatore = AllineatoreCheFallisce(),
+            ),
+        )
+    }
+
+    /** F6: shared shape of every AC-70 fault point — one port guasto per test, the rest normal. */
+    private fun verificaGuastoDiPipeline(
+        motivoAtteso: String,
+        faseAttesa: List<FaseElaborazione>,
+        portePipeline: PortePipeline,
+    ) {
         val elaborazioni = ElaborazioneRepositoryFinta()
         val trascritti = TrascrittoRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
-        val segnalatore = SegnalatoreFaseFinta()
-        val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
-        val decodificatoreGuasto = DecodificatoreAudioFinta(sorgenti = emptyMap()) // decodifica() sempre fallisce
-        val servizio = servizio(
-            eventi.unitaDiLavoro,
-            eventi,
-            elaborazioni,
-            trascritti,
-            pipeline(registrazioni = registrazioni, decodificatore = decodificatoreGuasto, segnalatore = segnalatore),
-        )
-        elaborazioni.salva(unaInAttesa(id)).atteso()
+        val segnalatore = portePipeline.segnalatore as SegnalatoreFaseFinta
+        val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, portePipeline)
+        elaborazioni.salva(unaInAttesa(REGISTRAZIONE_GUASTO)).atteso()
 
         servizio.esegui(EseguiProssimaElaborazione).atteso()
 
-        val salvata = elaborazioni.diRegistrazione(id).single()
+        val salvata = elaborazioni.diRegistrazione(REGISTRAZIONE_GUASTO).single()
         assertTrue(salvata.fallita)
-        val motivo = checkNotNull(salvata.motivoFallimento)
-        assertTrue(motivo.isNotBlank(), "il motivo deve essere in parole semplici, non vuoto")
-        assertEquals(listOf(DECODIFICA), segnalatore.fasi(id), "nessuna fase successiva alla decodifica guasta")
-        assertEquals(listOf(id), segnalatore.terminate)
+        assertEquals(motivoAtteso, salvata.motivoFallimento)
+        assertEquals(faseAttesa, segnalatore.fasi(REGISTRAZIONE_GUASTO))
+        assertEquals(listOf(REGISTRAZIONE_GUASTO), segnalatore.terminate)
         assertEquals(emptyList(), trascritti.conTrascritto())
         assertEquals(
-            listOf(ElaborazioneAvviata(id, OROLOGIO.instant()), ElaborazioneFallita(id, motivo)),
+            listOf(
+                ElaborazioneAvviata(REGISTRAZIONE_GUASTO, OROLOGIO.instant()),
+                ElaborazioneFallita(REGISTRAZIONE_GUASTO, motivoAtteso),
+            ),
             eventi.pubblicati,
         )
     }
@@ -220,6 +278,43 @@ class EseguiProssimaElaborazioneServizioTest {
     }
 
     @Test
+    fun `AC-72 (F12) turni presenti ma nessun Segmento allineato diventa fallita nessun parlato rilevato`() {
+        val id = RegistrazioneId("registrazione-1")
+        val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
+        val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
+        val diarizzatoreConTurni = DiarizzatoreFinta(listOf(Turno(IntervalloMs(0, 500), voceIndice = 0)))
+        val allineatoreVuoto = AllineatoreVuoto() // il diarizzatore trova turni, ma nulla viene allineato
+        val servizio = servizio(
+            eventi.unitaDiLavoro,
+            eventi,
+            elaborazioni,
+            trascritti,
+            pipeline(
+                registrazioni = registrazioni,
+                decodificatore = decodificatore,
+                diarizzatore = diarizzatoreConTurni,
+                allineatore = allineatoreVuoto,
+            ),
+        )
+        elaborazioni.salva(unaInAttesa(id)).atteso()
+
+        servizio.esegui(EseguiProssimaElaborazione).atteso()
+
+        val salvata = elaborazioni.diRegistrazione(id).single()
+        assertTrue(salvata.fallita)
+        assertEquals("nessun parlato rilevato", salvata.motivoFallimento)
+        assertEquals(emptyList(), trascritti.conTrascritto())
+        assertEquals(
+            listOf(ElaborazioneAvviata(id, OROLOGIO.instant()), ElaborazioneFallita(id, "nessun parlato rilevato")),
+            eventi.pubblicati,
+        )
+    }
+
+    @Test
     fun `AC-73 nessuna transazione e aperta mentre le porte ML audio lavorano`() {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
@@ -257,7 +352,7 @@ class EseguiProssimaElaborazioneServizioTest {
     }
 
     @Test
-    fun `INV-5 se il salvataggio del Trascritto fallisce, Elaborazione non completata e nessun Trascritto`() {
+    fun `INV-5 se il salvataggio del Trascritto lancia rollback e compensazione a fallita`() {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
@@ -265,27 +360,145 @@ class EseguiProssimaElaborazioneServizioTest {
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascrittiGuasti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
+        val segnalatore = SegnalatoreFaseFinta()
         val servizio = servizio(
             eventi.unitaDiLavoro,
             eventi,
             elaborazioni,
             trascrittiGuasti,
-            pipeline(registrazioni = registrazioni, decodificatore = decodificatore),
+            pipeline(registrazioni = registrazioni, decodificatore = decodificatore, segnalatore = segnalatore),
         )
         elaborazioni.salva(unaInAttesa(id)).atteso()
 
-        assertFailsWith<GuastoDiProva> { servizio.esegui(EseguiProssimaElaborazione) }
+        servizio.esegui(EseguiProssimaElaborazione).atteso() // F2: l'eccezione non deve piu' propagare al chiamante
 
         val salvata = elaborazioni.diRegistrazione(id).single()
         assertFalse(salvata.completata, "il salvataggio del Trascritto e' fallito: non deve risultare completata")
-        assertFalse(salvata.fallita, "il rollback lascia l'Elaborazione com'era prima del commit finale (in_corso)")
+        assertTrue(salvata.fallita, "F2: la transazione di compensazione marca l'Elaborazione fallita")
+        assertEquals("salvataggio del risultato non riuscito", salvata.motivoFallimento)
         assertEquals(emptyList(), trascrittiGuasti.conTrascritto())
+        assertEquals(listOf(id), segnalatore.terminate, "F2: terminata deve essere sempre segnalata")
+        assertEquals(
+            listOf(
+                ElaborazioneAvviata(id, OROLOGIO.instant()),
+                ElaborazioneFallita(id, "salvataggio del risultato non riuscito"),
+            ),
+            eventi.pubblicati,
+        )
+    }
+
+    @Test
+    fun `V1 se il salvataggio della completata fallisce dopo il Trascritto rollback e compensazione a fallita`() {
+        val id = RegistrazioneId("registrazione-1")
+        val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
+        val elaborazioniReali = ElaborazioneRepositoryFinta()
+        val elaborazioni = ElaborazioneRepositoryCheRifiutaIlCompletamento(elaborazioniReali)
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
+        val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
+        val segnalatore = SegnalatoreFaseFinta()
+        val servizio = servizio(
+            eventi.unitaDiLavoro,
+            eventi,
+            elaborazioni,
+            trascritti,
+            pipeline(registrazioni = registrazioni, decodificatore = decodificatore, segnalatore = segnalatore),
+        )
+        elaborazioni.salva(unaInAttesa(id)).atteso()
+
+        servizio.esegui(EseguiProssimaElaborazione).atteso()
+
+        assertEquals(
+            emptyList(),
+            trascritti.conTrascritto(),
+            "il salvataggio del Trascritto, gia' avvenuto nella stessa transazione, deve essere annullato dal rollback",
+        )
+        val salvata = elaborazioni.diRegistrazione(id).single()
+        assertFalse(salvata.completata, "il salvataggio della completata e' fallito: non deve risultare completata")
+        assertTrue(salvata.fallita, "la compensazione deve marcare l'Elaborazione fallita")
+        assertEquals("salvataggio del risultato non riuscito", salvata.motivoFallimento)
+        assertEquals(listOf(id), segnalatore.terminate)
+        assertEquals(
+            listOf(
+                ElaborazioneAvviata(id, OROLOGIO.instant()),
+                ElaborazioneFallita(id, "salvataggio del risultato non riuscito"),
+            ),
+            eventi.pubblicati,
+        )
+    }
+
+    @Test
+    fun `F3 elaborazione recuperata come fallita nel frattempo non viene sovrascritta`() {
+        val id = RegistrazioneId("registrazione-1")
+        val elaborazioneId = ElaborazioneId("elab-1")
+        val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
+        val decodificatoreBase = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
+        val decodificatore =
+            DecodificatoreCheSimulaRecuperoConcorrente(decodificatoreBase, elaborazioni, elaborazioneId, id)
+        val servizio = servizio(
+            eventi.unitaDiLavoro,
+            eventi,
+            elaborazioni,
+            trascritti,
+            pipeline(registrazioni = registrazioni, decodificatore = decodificatore),
+        )
+        elaborazioni.salva(Elaborazione.accoda(elaborazioneId, id, CREATA_VECCHIA).aggregato).atteso()
+
+        servizio.esegui(EseguiProssimaElaborazione).atteso()
+
+        val salvata = elaborazioni.diRegistrazione(id).single()
+        assertTrue(salvata.fallita)
+        assertEquals(
+            "interrotta",
+            salvata.motivoFallimento,
+            "la riga recuperata nel frattempo (fallita) non deve essere sovrascritta",
+        )
+        assertEquals(
+            emptyList(),
+            trascritti.conTrascritto(),
+            "il pipeline non deve completare su una riga gia' terminale",
+        )
+    }
+
+    @Test
+    fun `F5 la durata usata per Trascritto viene dai campioni decodificati non dal catalogo`() {
+        val id = RegistrazioneId("registrazione-1")
+        val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val trascritti = TrascrittoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
+        // Il catalogo dichiara 1999 ms (un possibile arrotondamento), ma l'audio decodificato ne ha
+        // 2000: un turno che finisce esattamente a 2000 ms non deve far fallire l'elaborazione (F5).
+        val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, durataMs = 1_999L)))
+        val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to 2_000L))
+        val diarizzatore = DiarizzatoreFinta(listOf(Turno(IntervalloMs(0, 2_000), voceIndice = 0)))
+        val servizio = servizio(
+            eventi.unitaDiLavoro,
+            eventi,
+            elaborazioni,
+            trascritti,
+            pipeline(registrazioni = registrazioni, decodificatore = decodificatore, diarizzatore = diarizzatore),
+        )
+        elaborazioni.salva(unaInAttesa(id)).atteso()
+
+        servizio.esegui(EseguiProssimaElaborazione).atteso()
+
+        assertTrue(
+            elaborazioni.diRegistrazione(id).single().completata,
+            "un surplus di decodifica di 1 ms rispetto al catalogo non deve far fallire l'elaborazione",
+        )
+        assertEquals(1, trascritti.trova(id)?.segmenti?.size)
     }
 
     private fun servizio(
         uow: UnitaDiLavoro,
         eventi: DispatcherEventiFinta,
-        elaborazioni: ElaborazioneRepositoryFinta,
+        elaborazioni: ElaborazioneRepository,
         trascritti: TrascrittoRepository,
         pipeline: PortePipeline,
     ): EseguiProssimaElaborazioneServizio =
@@ -318,6 +531,8 @@ class EseguiProssimaElaborazioneServizioTest {
         val CREATA_VECCHIA: Instant = Instant.parse("2026-09-23T09:00:00Z")
         val CREATA_RECENTE: Instant = Instant.parse("2026-09-23T09:05:00Z")
         val PROGETTO = ProgettoId("progetto-1")
+        val REGISTRAZIONE_GUASTO = RegistrazioneId("registrazione-1")
+        val RIFERIMENTO_GUASTO = RiferimentoAudio("audio/registrazione-1.m4a")
     }
 }
 
@@ -379,6 +594,35 @@ private class AllineatoreSorvegliato(
     }
 }
 
+/** A port fault, simulated (AC-70): never seen by the user — only the fixed `motivo` is. */
+private class GuastoDiPortaDiProva(fase: String) : RuntimeException("guasto di prova in $fase")
+
+/** [DecodificatoreAudio] whose `tutti` always throws once decoded (AC-70: decodifica guasta). */
+private class DecodificatoreCheFallisceSuTutti(private val delegata: DecodificatoreAudio) : DecodificatoreAudio {
+    override fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio): Unit = delegata.decodifica(id, sorgente)
+
+    override fun tutti(id: RegistrazioneId): CampioniAudio = throw GuastoDiPortaDiProva("tutti()")
+
+    override fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio =
+        delegata.campioni(id, intervallo)
+}
+
+/** [Diarizzatore] that always throws (AC-70: diarizzazione guasta). */
+private class DiarizzatoreCheFallisce : Diarizzatore {
+    override fun diarizza(c: CampioniAudio): List<Turno> = throw GuastoDiPortaDiProva("diarizza()")
+}
+
+/** [Allineatore] that always throws (AC-70: allineamento guasto). */
+private class AllineatoreCheFallisce : Allineatore {
+    override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> =
+        throw GuastoDiPortaDiProva("allinea()")
+}
+
+/** [Allineatore] that never produces a Segmento, whatever the Turni (AC-72/F12: zero parlato). */
+private class AllineatoreVuoto : Allineatore {
+    override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = emptyList()
+}
+
 /** [TrascrittoRepository] whose `salva` always fails (INV-5). */
 private class TrascrittoRepositoryGuasta : TrascrittoRepository, Ripristinabile {
     override fun trova(id: RegistrazioneId): Trascritto? = null
@@ -391,3 +635,52 @@ private class TrascrittoRepositoryGuasta : TrascrittoRepository, Ripristinabile 
 }
 
 private class GuastoDiProva : RuntimeException("guasto di prova nel salvataggio del Trascritto")
+
+/**
+ * [ElaborazioneRepository] whose `salva` refuses to persist a `completata` row (V1): the Trascritto may
+ * already be saved in the SAME transaction — this proves the whole transaction rolls back (INV-5),
+ * unlike a [TrascrittoRepositoryGuasta]-only scenario, which stays green even under a two-transaction
+ * split.
+ */
+private class ElaborazioneRepositoryCheRifiutaIlCompletamento(
+    private val delegata: ElaborazioneRepositoryFinta,
+) : ElaborazioneRepository, Ripristinabile {
+    override fun diRegistrazione(id: RegistrazioneId): List<Elaborazione> = delegata.diRegistrazione(id)
+
+    override fun inAttesa(): List<Elaborazione> = delegata.inAttesa()
+
+    override fun inCorso(): List<Elaborazione> = delegata.inCorso()
+
+    override fun salva(e: Elaborazione): Esito<Unit> = if (e.completata) {
+        Esito.Errore(ErroreTrascrizione.ElaborazioneGiaCompletata(e.registrazioneId))
+    } else {
+        delegata.salva(e)
+    }
+
+    override fun istantanea(): () -> Unit = delegata.istantanea()
+}
+
+/** Simulates [RecuperaElaborazioniInterrotte] running concurrently while this pipeline is mid-flight (F3). */
+private class DecodificatoreCheSimulaRecuperoConcorrente(
+    private val delegata: DecodificatoreAudio,
+    private val elaborazioni: ElaborazioneRepositoryFinta,
+    private val elaborazioneId: ElaborazioneId,
+    private val registrazioneId: RegistrazioneId,
+) : DecodificatoreAudio {
+    override fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio) {
+        elaborazioni.salva(
+            unaElaborazione(
+                stato = StatoElaborazione.FALLITA,
+                id = elaborazioneId,
+                registrazioneId = registrazioneId,
+                motivo = "interrotta",
+            ),
+        )
+        delegata.decodifica(id, sorgente)
+    }
+
+    override fun tutti(id: RegistrazioneId): CampioniAudio = delegata.tutti(id)
+
+    override fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio =
+        delegata.campioni(id, intervallo)
+}
