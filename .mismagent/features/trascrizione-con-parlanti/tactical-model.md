@@ -170,12 +170,18 @@
     `EstrattoAudio`; no numeric score leaves the read-model [user].
     → view test on the proposta `read-model` block
   - [INV-21] after a `Revisione`, per affected `VoceRef`: a removed `Voce` loses its `Attribuzione`
-    and the `ImprontaVocale` derived from it; a surviving/changed `Voce` with an `Attribuzione` gets
+    and the `ImprontaVocale` derived from it (save the `unire` inheritance exception below); a surviving/changed `Voce` with an `Attribuzione` gets
     its `ImprontaVocale` re-derived from its current `Segmento`s; a NEW `Voce` A' (from `dividere` /
     `riassegnare`) starts WITHOUT `Attribuzione` and gets its own `Proposta`, while A keeps its
     `Attribuzione` [user, Q-2]. In `unire(A, B)` with A and B attributed to DIFFERENT `Parlante`s,
     A's `Attribuzione` wins; B's `Attribuzione` and the `ImprontaVocale` derived from B are dropped
-    [user, Q-3]. A `Parlante` thereby left without any `Attribuzione` → [INV-25].
+    [user, Q-3]. Exception (amended 2026-09-23, user decision): in `unire(A, B)` with the removed B
+    attributed to `Parlante` P and the surviving A NOT attributed, A INHERITS B's `Attribuzione` to P
+    (B's `Attribuzione` and `ImprontaVocale` are removed; P's `ImprontaVocale` for A is re-derived
+    from A's current `Segmento`s — none if P is `eliminato`, the `Attribuzione` is inherited
+    anyway), so P is not left without an `Attribuzione` and [INV-25] does not fire. Both attributed
+    to the same P → A keeps it, re-derived. A `Parlante` thereby left without any `Attribuzione`
+    → [INV-25].
     → test on the Parlanti revisione-policy application-service block
   - [INV-25] a `Parlante` left without any `Attribuzione` (after a `Revisione` or a changed
     `Attribuzione`): if `occasionale` it ceases to exist entirely (nothing references it — no

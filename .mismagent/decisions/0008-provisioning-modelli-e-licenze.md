@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=modelli --exclude-dir=build '(java\\.net\\.|io\\.ktor|okhttp3|HttpClient|HttpURLConnection)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=modelli --exclude-dir=build --exclude-dir=architettura-test '(java\\.net\\.|io\\.ktor|okhttp3|HttpClient|HttpURLConnection)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+amended: 2026-09-23   # see "Amendment 2026-09-23 (b)" (enforced_by scope: --exclude-dir=architettura-test)
 ---
 # 0008 — Model provisioning: first-run download from k2-fsa releases, pinned SHA-256, offline after; network only in `:modelli`
 
@@ -43,3 +44,17 @@ hash-error and no-network states with "Riprova", licences from the catalogue. `:
 `:modelli`, so S5 declares a `ServizioModelli` port implemented in `:avvio` over `:modelli`
 (block `avvio-composizione`); the mechanism itself is block `modelli-provisioning`, and each
 spike ADR adds its catalogue entry in the real-adapter block it gates.
+
+## Amendment 2026-09-23 (b) — `enforced_by` scoped out of `architettura-test`
+**Why.** The rule was red on a clean tree for a reason unrelated to the decision: the Konsist suite
+`architettura-test/src/test/kotlin/snastro/architettura/RegoleArchitetturaliTest.kt` **names** the
+forbidden packages as string literals (`"java.net."`, `"io.ktor"`, `"okhttp3"`) in order to check this very confinement, and
+the grep matched those literals. Approved by the user on 2026-09-23 **[user]**.
+
+**Amended rule.** Identical, plus `--exclude-dir=architettura-test` on the `*.kt` scan.
+The decision itself (what is confined, and where) is unchanged. Validated via `bash -c` on
+2026-09-23: exit 0 on the tree; exit 1 with a probe `import` of a forbidden package placed in a
+non-excluded module (probe removed).
+
+**Known blind spot.** `architettura-test` itself is no longer scanned; it is a test-only module
+holding the architecture rules, and its imports are reviewed by code-review.

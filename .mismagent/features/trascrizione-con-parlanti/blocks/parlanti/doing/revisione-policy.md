@@ -1,18 +1,17 @@
 ---
-id: "conferma-attribuzione"
+id: "revisione-policy"
 type: "application-service"
 context: "parlanti"
 side: "app"
 wave: 4
-module: ":parlanti:applicazione (..comandi)"
+module: ":parlanti:applicazione (..politiche)"
 consumes:
   - "kernel-pl"
   - "agg-parlante"
   - "agg-attribuzione"
   - "repo-parlanti"
-  - "registrazione-per-parlanti"
   - "voci-per-parlanti"
-  - "eventi-parlanti"
+  - "eventi-revisione"
   - "tec-decodifica-parlanti"
   - "tec-estrattore-impronta"
 depends_on: []
@@ -26,33 +25,29 @@ related_adrs:
   - "0009"
   - "0012"
 commands:
-  - "ConfermaAttribuzione"
+  - "ApplicaRevisione"
 invariants:
-  - "INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo; a Proposta never writes the Galleria"
-  - "INV-16 Nome unique among the attivo Parlanti of a Progetto (trimmed, case-insensitive); an eliminato's Nome is reusable"
-  - "INV-17 an Attribuzione targets only an attivo Parlante of the SAME Progetto, and only a Voce of an existing Trascritto"
-  - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept with its other prints"
+  - "INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins; EXCEPTION (amended 2026-09-23, user decision): in unire(A,B) with B attributed to P and A unattributed, A INHERITS the Attribuzione to P (B's Attribuzione and print removed, P's print for A re-derived from A's current Segmenti — none if P is eliminato), so P is not left without Attribuzioni and INV-25 does not fire"
+  - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept"
 ---
-# conferma-attribuzione — ConfermaAttribuzione
+# revisione-policy — Policy di Revisione dei Parlanti
 
 ## What to do
-Confirm a Voce → existing Parlante or a new Nome (ricorrente by default, occasionale if chosen); extracts the Voce's ImprontaVocale (in the transaction, R12), moves prints on a change, applies INV-25; publishes AttribuzioneConfermata (+ ParlanteCreato).
+ApplicaRevisione(evento) reacts to VociUnite / VoceDivisa / SegmentoRiassegnato inside the Revisione's transaction (called by abbonato-revisione-parlanti).
 
 ### Invariants owned here (one test each, name starts with the tag)
-- INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo; a Proposta never writes the Galleria
-- INV-16 Nome unique among the attivo Parlanti of a Progetto (trimmed, case-insensitive); an eliminato's Nome is reusable
-- INV-17 an Attribuzione targets only an attivo Parlante of the SAME Progetto, and only a Voce of an existing Trascritto
-- INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept with its other prints
+- INV-21 after a Revisione: a removed Voce loses Attribuzione + derived print; a surviving/changed attributed Voce gets its print re-derived; a NEW Voce starts without Attribuzione; in unire(A,B) with different Parlanti A's Attribuzione wins; EXCEPTION (amended 2026-09-23, user decision): in unire(A,B) with B attributed to P and A unattributed, A INHERITS the Attribuzione to P (B's Attribuzione and print removed, P's print for A re-derived from A's current Segmenti — none if P is eliminato), so P is not left without Attribuzioni and INV-25 does not fire
+- INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept
 
 ## Tasks
-- AC-84 Confermare un Candidato → Attribuzione(v) = P, un'ImprontaVocale di P per v e l'evento AttribuzioneConfermata
-- AC-85 'nuovo…' crea un Parlante ricorrente di default, occasionale se scelto
-- INV-16 un Nome già usato da un attivo, anche con spazi o maiuscole diverse → NomeGiaInUso e nulla cambia; il Nome di un eliminato è riusabile
-- INV-15 cambiare l'attribuzione da P a Q: l'impronta di v passa a Q e P non ne ha più
-- INV-25 P occasionale rimasto senza Attribuzioni cessa di esistere; P ricorrente resta con le altre impronte
-- INV-17 Parlante eliminato o di un altro Progetto, Voce inesistente, Registrazione senza Trascritto → rifiutata
-- AC-86 Se l'estrazione dell'impronta fallisce, rollback completo
-- AC-87 Riconfermare lo stesso Parlante → nessun cambiamento e nessun evento
+- INV-21 unire(A, B) con A e B attribuiti a Parlanti diversi → vince A; l'Attribuzione di B e l'impronta derivata da B sono cancellate
+- INV-21 unire con A attribuita e B no → l'impronta di A è ri-derivata dai Segmenti correnti
+- INV-21 unire(A, B) con B attribuita a P e A non attribuita → A eredita l'Attribuzione a P (Attribuzione(A) = P); l'Attribuzione di B e l'impronta di P per B sono cancellate; l'impronta di P per A è ri-derivata dai Segmenti correnti di A; P occasionale NON cessa (INV-25 non scatta); se P è eliminato A eredita comunque l'Attribuzione ma nessuna impronta viene creata
+- INV-21 unire(A, B) con A e B attribuiti allo stesso Parlante P → A mantiene l'Attribuzione a P con l'impronta ri-derivata; l'Attribuzione e l'impronta di B sono cancellate; P non cessa
+- INV-21 dividere(A, S) → A' nasce senza Attribuzione; A la mantiene con l'impronta ri-derivata
+- INV-21 riassegnare → la sorgente svuotata perde Attribuzione e impronta; una destinazione nuova nasce senza Attribuzione
+- INV-25 un occasionale rimasto senza Attribuzioni cessa; un ricorrente resta
+- AC-96 Un errore della policy restituisce Errore e annulla anche la Revisione
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -101,7 +96,7 @@ Confirm a Voce → existing Parlante or a new Nome (ricorrente by default, occas
     - `nome_normalizzato`: minted by the Nome VO: trim().lowercase(Locale.ROOT); never computed in SQL (ADR 0007)
   - §14 gates (must stay green):
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(parlanteQueries|improntaVocaleQueries)\b' . | grep -vE '^\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
-    - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
+    - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -E '^\./[^:]*/src/main/' | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
 - **agg-attribuzione** (consumed/implemented) — owner `attribuzione`, projection in-process, contract_test **invariant-test**
   - pinned types:
     - `Attribuzione.conferma`: (voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>
@@ -114,14 +109,6 @@ Confirm a Voce → existing Parlante or a new Nome (ricorrente by default, occas
   - pinned types:
     - `ParlanteRepository`: interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */ }
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
-- **registrazione-per-parlanti** (consumed/implemented) — owner `porta-registrazione-parlanti`, supplier `catalogo-registrazioni`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `LettoreRegistrazione`: interface { fun registrazione(id: RegistrazioneId): RegistrazioneVista? } — Parlanti's own copy
-    - `RegistrazioneVista`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId, titolo: String, riferimentoAudio: RiferimentoAudio, dataRegistrazione: LocalDate, durataMs: Long) — progettoId scopes INV-17, dataRegistrazione feeds 'Ospite del dd/MM/yyyy' (INV-19)
-  - keys (minting rules):
-    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
-    - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>? } — null iff no Trascritto (INV-5); Voci ordered by voceId
@@ -129,19 +116,16 @@ Confirm a Voce → existing Parlante or a new Nome (ricorrente by default, occas
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-- **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante`, projection in-process, contract_test **consumer-driven**
+- **eventi-revisione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `revisione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `AttribuzioneConfermata`: data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato
-    - `ParlanteCreato`: data class(parlanteId: ParlanteId, progettoId: ProgettoId, nome: String, tipo: TipoParlanteVista) : EventoPubblicato
-    - `ParlanteRinominato`: data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato
-    - `ParlantePromosso`: data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato
-    - `ParlanteEliminato`: data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change
-    - `TipoParlanteVista`: enum RICORRENTE | OCCASIONALE (parlanti:applicazione)
+    - `VociUnite`: data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato
+    - `VoceDivisa`: data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato
+    - `SegmentoRiassegnato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato
   - keys (minting rules):
-    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
-    - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
-  - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 - **tec-decodifica-parlanti** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `DecodificatoreAudio`: interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy)
@@ -150,4 +134,4 @@ Confirm a Voce → existing Parlante or a new Nome (ricorrente by default, occas
     - `EstrattoreImpronta`: interface { fun estrai(c: CampioniAudio): Impronta } — native use serialized with the pipeline (ADR 0012 amendment, R12)
     - `Impronta`: see agg-parlante (parlanti:dominio)
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15..17, INV-25, Q-7).
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-21, INV-25, Q-2, Q-3), ADR 0012.

@@ -35,7 +35,7 @@ S1 list + 'Nuovo progetto' + 'Apri progetto…' (R3).
 - AC-192 Vuoto: 'Nessun progetto. Crea il primo'
 - AC-193 Caricamento dell'elenco mostrato come indicatore
 - AC-194 Crea con nome vuoto → messaggio inline
-- AC-195 Creazione fallita (cartella esistente) → errore inline
+- AC-195 Creazione fallita (SessioneProgetto.crea restituisce un Esito.Errore diverso da NomeProgettoVuoto — nel presenter test un fake che restituisce es. CartellaNonValida) → errore inline e nessun progetto aperto; una cartella già esistente NON è un errore (AC-264: nome libero ' (2)', ' (3)'…)
 - AC-196 Aprire un progetto già aperto da un'altra istanza → 'progetto già aperto'
 - AC-197 'Apri progetto…' con una cartella non valida → errore inline
 - AC-198 La lista mostra nome, numero di registrazioni e ultima attività
@@ -77,7 +77,7 @@ S1 list + 'Nuovo progetto' + 'Apri progetto…' (R3).
   - pinned types:
     - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
     - `ProgettoAperto`: data class(progettoId: ProgettoId, nome: String, percorso: String)
-    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
+    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente } — no CartellaGiaEsistente: crea derives a free folder name (AC-264), re-pinned 2026-09-23 (user decision)
     - `ApriEsterno`: interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }
     - `AggiornamentiVista`: interface { val cambiamenti: Flow<Cambiamento> }
     - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed

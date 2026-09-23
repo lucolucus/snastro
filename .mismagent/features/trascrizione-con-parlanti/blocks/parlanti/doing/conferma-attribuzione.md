@@ -1,5 +1,5 @@
 ---
-id: "salta-voce"
+id: "conferma-attribuzione"
 type: "application-service"
 context: "parlanti"
 side: "app"
@@ -26,24 +26,33 @@ related_adrs:
   - "0009"
   - "0012"
 commands:
-  - "SaltaVoce"
+  - "ConfermaAttribuzione"
 invariants:
-  - "INV-19 skipping a Voce = confirming it as a NEW occasionale 'Ospite del <DataRegistrazione>' (dd/MM/yyyy); if taken, first free '(2)', '(3)', …; stored at creation, never follows a later date change; its ImprontaVocale is kept"
+  - "INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo; a Proposta never writes the Galleria"
+  - "INV-16 Nome unique among the attivo Parlanti of a Progetto (trimmed, case-insensitive); an eliminato's Nome is reusable"
+  - "INV-17 an Attribuzione targets only an attivo Parlante of the SAME Progetto, and only a Voce of an existing Trascritto"
+  - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept with its other prints"
 ---
-# salta-voce — SaltaVoce
+# conferma-attribuzione — ConfermaAttribuzione
 
 ## What to do
-Create the occasionale guest + Attribuzione + print; publishes ParlanteCreato and AttribuzioneConfermata (R21). Not offered on an already-attributed Voce.
+Confirm a Voce → existing Parlante or a new Nome (ricorrente by default, occasionale if chosen); extracts the Voce's ImprontaVocale (in the transaction, R12), moves prints on a change, applies INV-25; publishes AttribuzioneConfermata (+ ParlanteCreato).
 
 ### Invariants owned here (one test each, name starts with the tag)
-- INV-19 skipping a Voce = confirming it as a NEW occasionale 'Ospite del <DataRegistrazione>' (dd/MM/yyyy); if taken, first free '(2)', '(3)', …; stored at creation, never follows a later date change; its ImprontaVocale is kept
+- INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo; a Proposta never writes the Galleria
+- INV-16 Nome unique among the attivo Parlanti of a Progetto (trimmed, case-insensitive); an eliminato's Nome is reusable
+- INV-17 an Attribuzione targets only an attivo Parlante of the SAME Progetto, and only a Voce of an existing Trascritto
+- INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept with its other prints
 
 ## Tasks
-- INV-19 crea un occasionale 'Ospite del 12/09/2026' con l'impronta conservata e attribuisce la Voce
-- INV-19 se il nome è già preso da un attivo (confronto normalizzato) → '(2)', poi '(3)'
-- INV-19 il nome resta invariato dopo una ModificaDataRegistrazione
-- AC-88 SaltaVoce pubblica ParlanteCreato e AttribuzioneConfermata
-- AC-89 Saltare una Voce già attribuita → VoceGiaAttribuita e nulla cambia
+- AC-84 Confermare un Candidato → Attribuzione(v) = P, un'ImprontaVocale di P per v e l'evento AttribuzioneConfermata
+- AC-85 'nuovo…' crea un Parlante ricorrente di default, occasionale se scelto
+- INV-16 un Nome già usato da un attivo, anche con spazi o maiuscole diverse → NomeGiaInUso e nulla cambia; il Nome di un eliminato è riusabile
+- INV-15 cambiare l'attribuzione da P a Q: l'impronta di v passa a Q e P non ne ha più
+- INV-25 P occasionale rimasto senza Attribuzioni cessa di esistere; P ricorrente resta con le altre impronte
+- INV-17 Parlante eliminato o di un altro Progetto, Voce inesistente, Registrazione senza Trascritto → rifiutata
+- AC-86 Se l'estrazione dell'impronta fallisce, rollback completo
+- AC-87 Riconfermare lo stesso Parlante → nessun cambiamento e nessun evento
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -92,7 +101,7 @@ Create the occasionale guest + Attribuzione + print; publishes ParlanteCreato an
     - `nome_normalizzato`: minted by the Nome VO: trim().lowercase(Locale.ROOT); never computed in SQL (ADR 0007)
   - §14 gates (must stay green):
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(parlanteQueries|improntaVocaleQueries)\b' . | grep -vE '^\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
-    - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
+    - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -E '^\./[^:]*/src/main/' | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
 - **agg-attribuzione** (consumed/implemented) — owner `attribuzione`, projection in-process, contract_test **invariant-test**
   - pinned types:
     - `Attribuzione.conferma`: (voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>
@@ -141,4 +150,4 @@ Create the occasionale guest + Attribuzione + print; publishes ParlanteCreato an
     - `EstrattoreImpronta`: interface { fun estrai(c: CampioniAudio): Impronta } — native use serialized with the pipeline (ADR 0012 amendment, R12)
     - `Impronta`: see agg-parlante (parlanti:dominio)
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-19, Q-1, Q-5) + R21, R24.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15..17, INV-25, Q-7).

@@ -187,3 +187,110 @@
 2026-09-23T10:25:39Z	avvia-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:25:39Z	avvia-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:26:03Z	esegui-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:27:26Z	avvia-elaborazione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED defer: agg-elaborazione §14 gate StatoElaborazione\. already red at 091e443 on test/testFixtures — gate scope vs tests needs a decision; LOW patch: mixed INV-4 histories, AC-66 GiaCompletata backstop, creataAlle==clock; LOW: comment on discarded ElaborazioneAccodata)
+2026-09-23T10:27:33Z	gestione-parlante	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (7b275d1; new ErroreApplicazioneParlanti hierarchy; duplicate CR-16 fix)
+2026-09-23T10:27:33Z	gestione-parlante	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:27:33Z	gestione-parlante	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:27:55Z	avvia-elaborazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (pre-existing mis-scoped reds, not from this diff: ADR 0004 enforced_by matches "com.k2fsa" literals in architettura-test; agg-elaborazione §14 StatoElaborazione\. matches test/testFixtures → re-scope to src/main via write-adr/build-manifest)
+2026-09-23T10:28:36Z	revisione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:29:27Z	gestione-parlante	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED patch F1 self-rename untested, F2 ADR0007 backstop path untested; MED decision F3 error placement diverges across contexts (ADR 0003 wording) -> user/architect; LOW F4 reuse via command, F5 pre-check before root rules bends AC-91/93 error precedence, F6 same-name rename publishes)
+2026-09-23T10:30:30Z	gestione-parlante	verifier	result	cycle=0	tier=deep	model=opus	FAIL (ADR 0003/CR-8: ParlanteNonTrovato must join ErroreParlanti in dominio; delete ErroriApplicazioneParlanti) -> rework cycle=1 queued (worker cap 4/4)
+2026-09-23T10:34:26Z	servizi-registrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (b90444b; out-of-block: ErroreProgetto.RegistrazioneNonTrovata + duplicate CR-16 fix)
+2026-09-23T10:34:26Z	servizi-registrazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:34:26Z	servizi-registrazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:34:26Z	gestione-parlante	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL error placement + code-review MED F1/F2, LOW F5)
+2026-09-23T10:35:59Z	servizi-registrazione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED patch F1 exception path leaves orphan audio file — try/finally with success flag, no generic catch; MED carry F2 -> rigenerazione-documento: same-date modificaData must not delete regenerated Documento; LOW patch F3 titoloDa blank -> fallback nomeFile; LOW F4 requireNotNull ok)
+2026-09-23T10:36:45Z	servizi-registrazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (ADR 0004/0005/0008 enforced_by red only on architettura-test literals — mis-scoped, pre-existing)
+2026-09-23T10:38:20Z	revisione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (c4f567f; out-of-block: ErroreTrascrizione.TrascrittoNonTrovato)
+2026-09-23T10:38:20Z	revisione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:38:20Z	revisione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:38:20Z	conferma-attribuzione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:40:09Z	revisione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; 5 LOW defer: AC-80 daRimossa=true path, prossimaVoce rollback assert, AC-83 exception path covered by kernel contract, named args in PL mappers, carry to avvio-composizione: wire eventi.unitaDiLavoro not the raw delegate)
+2026-09-23T10:40:33Z	revisione	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T10:47:52Z	gestione-parlante	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (f31cced; mutation-checked F1/F2/F5 tests)
+2026-09-23T10:47:52Z	gestione-parlante	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T10:47:52Z	gestione-parlante	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T10:47:52Z	revisione-policy	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:49:47Z	gestione-parlante	verifier	result	cycle=1	tier=deep	model=opus	PASS (only merge conflict: CR-16 line; note: Nome.di validated before root call)
+2026-09-23T10:49:54Z	gestione-parlante	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH; cycle-0 findings all fixed + mutation-discriminating; 3 LOW defer)
+2026-09-23T10:52:20Z	(fix-batch-4)	decision	result	-	-	-	USER DECISION: approve fix-batch-4 (servizi-registrazione: scarta on exception path via try/finally, titoloDa blank fallback) -> queued for next free worker slot
+2026-09-23T10:52:20Z	(avvio-composizione)	decision	result	-	-	-	USER DECISION: fold folder-naming rule into spec -> build-manifest targeted amendment dispatched
+2026-09-23T10:52:20Z	(adr-0003)	decision	result	-	-	-	USER DECISION: errors placement = rules+lookups in dominio, technical-only in applicazione; re-scope ADR 0004/0005/0008 enforced_by (exclude architettura-test) and §14 StatoElaborazione gate to src/main -> write-adr + build-manifest dispatched
+2026-09-23T10:55:49Z	esegui-elaborazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (ce26678; no out-of-block touches; PortePipeline DI bundle)
+2026-09-23T10:55:49Z	esegui-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:55:49Z	esegui-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:55:49Z	fix-batch-4	worker	dispatch	cycle=0	tier=standard	model=sonnet	(servizi-registrazione follow-up, user-approved)
+2026-09-23T10:58:55Z	esegui-elaborazione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: F1 motivo = raw exception text violates AC-70; F2 failed final commit leaves in_corso + no terminata; MED F3 no re-read/guard between phases, F4 runCatching catches Throwable, F5 durata catalogue vs decoded samples, F6 AC-70 only decodifica tested, F7 missing Registrazione via error(); LOW F9 narrow when, F12 AC-72 zero parlato; defer F8 phase granularity, F10 -Xmx, F11 carry to avvio-composizione: RecuperaElaborazioniInterrotte strictly before dispatcher)
+2026-09-23T10:59:12Z	esegui-elaborazione	verifier	result	cycle=0	tier=deep	model=opus	FAIL (INV-5 test cannot catch a two-transaction split — needs failure on Elaborazione side after Trascritto saved; AC-70 motivo plain-language not asserted + only decodifica fault tested) -> rework cycle=1 queued (worker cap 4/4) with code-review F1-F7,F9,F12
+2026-09-23T11:00:51Z	revisione-policy	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (c2f1b72; primitive-arg policy API, event translation left to abbonato-revisione-parlanti)
+2026-09-23T11:00:51Z	revisione-policy	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:00:51Z	revisione-policy	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:00:51Z	esegui-elaborazione	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL INV-5 test + AC-70; code-review HIGH F1/F2, MED F3-F7, LOW F9/F12)
+2026-09-23T11:01:34Z	conferma-attribuzione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (af22ade; out-of-block: ErroreParlanti +ParlanteNonTrovato/TrascrittoNonTrovato/VoceNonTrovata)
+2026-09-23T11:01:34Z	conferma-attribuzione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:01:34Z	conferma-attribuzione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:01:34Z	salta-voce	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:03:32Z	revisione-policy	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (1 HIGH: F1 revisione on Voce attributed to eliminato Parlante always rolled back via registraImpronta; MED patch F2 AC-96 test enshrines bug, F3 untested branches; MED defer F4 uncapped print re-derivation in transaction -> architect/spike across conferma/salta-voce/revisione-policy; LOW F5 product confirm unire B-only, F6 INV-25 predicate duplicated w/ conferma, F7 spec naming)
+2026-09-23T11:04:03Z	revisione-policy	verifier	result	cycle=0	tier=deep	model=opus	PASS (merged-tree gate green; confirms eliminato-Parlante behaviour issue) -> not eligible (code-review HIGH F1) -> rework cycle=1 queued (worker cap 4/4)
+2026-09-23T11:04:34Z	fix-batch-4	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (a851dd3)
+2026-09-23T11:04:34Z	fix-batch-4	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:04:34Z	fix-batch-4	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:04:34Z	revisione-policy	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: code-review HIGH F1 eliminato Parlante, MED F2 AC-96 test, F3 missing branches)
+2026-09-23T11:05:08Z	conferma-attribuzione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (1 HIGH: duplicate ErroreParlanti.ParlanteNonTrovato after merge with gestione-parlante -> compile error; MED patch F2 INV-25 missing attivo guard, F3 no test of decoded intervals; MED defer F4 uncapped print extraction inside tx -> architect/spike (cross-block with revisione-policy, salta-voce); LOW F5/F6 defer, F7 patch occasionale keeps other Attribuzione)
+2026-09-23T11:06:02Z	conferma-attribuzione	verifier	result	cycle=0	tier=deep	model=opus	FAIL (merged tree: ParlanteNonTrovato declared twice -> compile error; INV-25 ricorrente branch untested, mutation survived) -> rework cycle=1 queued (worker cap 4/4); integration line merged into block branch first
+2026-09-23T11:06:37Z	fix-batch-4	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED defer: after-commit subscriber throw would discard audio of a COMMITTED Registrazione — latent, no after-commit consumer of RegistrazioneAggiunta; decision on UnitaDiLavoro/Dispatcher contract if one is ever added; MED patch-later: scarta throwing in finally masks original exception (addSuppressed form); LOW titoloDa whitespace, nested tx)
+2026-09-23T11:06:52Z	fix-batch-4	verifier	result	cycle=0	tier=deep	model=opus	PASS (mutation-checked F1/F3 tests)
+2026-09-23T11:13:02Z	(tec-shell-ui)	decision	result	-	-	-	USER DECISION: remove ErroreSessione.CartellaGiaEsistente from tec-shell-ui pin (dead after folder-naming rule) -> build-manifest
+2026-09-23T11:13:02Z	(revisione-policy)	decision	result	-	-	-	USER DECISION: INV-21 unire where only the REMOVED Voce B is attributed -> keep the attributed one: surviving Voce A inherits B's Attribuzione (print re-derived from A's segments); B's own Attribuzione/print removed -> build-manifest + revisione-policy rework
+2026-09-23T11:13:02Z	(impronta-estrazione)	decision	result	-	-	-	USER DECISION: route uncapped in-transaction print extraction (conferma-attribuzione, revisione-policy, salta-voce; ADR 0012 R12 premise) to the architect
+2026-09-23T11:13:42Z	salta-voce	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (c2079a3; ErroreParlanti +TrascrittoNonTrovato/VoceNonTrovata (same shapes as conferma) +VoceGiaAttribuita)
+2026-09-23T11:13:42Z	salta-voce	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:13:42Z	salta-voce	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:13:42Z	conferma-attribuzione	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL duplicate ParlanteNonTrovato + INV-25 ricorrente; code-review HIGH F1, MED F2/F3, LOW F7)
+2026-09-23T11:15:50Z	(impronta-estrazione)	architect	result	-	tier=deep	model=opus	DISCOVERY: options (a) cap SorgenteImpronta 30s, (b) extract before tx + revisione split into after-commit RiallineaImpronte w/ source fingerprint column, (c)=a+b RECOMMENDED, (c-prime)=a+Mutex timeout; extra issue: AC-236 native Mutex wait holds write tx for minutes during an Elaborazione; separate Mutex question -> awaiting USER DECISION
+2026-09-23T11:16:11Z	salta-voce	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; MED cross-block: conferma saves Attribuzione before new Parlante -> FK violation on real SQLite -> routed to conferma rework cycle 1; MED merge-time dedupe of TrascrittoNonTrovato/VoceNonTrovata with conferma; LOW: checkNotNull vs Errore symmetry, duplicated create+print flow w/ conferma -> shared helper later, pin Voci >=1 interval in LettoreVoci contract)
+2026-09-23T11:17:49Z	salta-voce	verifier	result	cycle=0	tier=deep	model=opus	PASS (merged tree compiles; weak test: decoded window not pinned — same-length other window survives mutation -> follow-up)
+2026-09-23T11:18:24Z	(impronta-estrazione)	decision	result	-	-	-	USER DECISION: option (c) = bounded source SorgenteImpronta (BUDGET 30s provisional, spike calibrates) + no ML inside a transaction (extract before, re-read + VoceCambiata) + revisione split (structural INV-21/25 sync, print re-derivation after-commit RiallineaImpronte with source fingerprint + model id); eventual print freshness accepted; separate Mutex question deferred
+2026-09-23T11:18:24Z	(revisione-policy)	decision	result	-	-	-	USER DECISION: unire inheritance applies also when P is eliminato (re-keyed tombstone Attribuzione, no print) — explicit exception to INV-13/INV-17
+2026-09-23T11:18:56Z	persistenza-schema	worker	result	cycle=0	tier=standard	model=sonnet	BLOCKED (stalled >2h on own background work, no commits, no reply to status check; stopped by composer; uncommitted AperturaDatabase.kt edit stashed) -> orphan re-dispatch at cycle=0 after manifest adds the print-source fingerprint column (option c)
+2026-09-23T11:19:12Z	catalogo-registrazioni	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:21:41Z	revisione-policy	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (af0540d; F1/F2/F3 + unire inheritance incl. eliminato P; mutation-checked; uses MockK verify in src/test)
+2026-09-23T11:21:41Z	revisione-policy	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:21:41Z	revisione-policy	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:21:41Z	api-trascritto	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:23:27Z	catalogo-registrazioni	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (ff6b90e; no out-of-block touches)
+2026-09-23T11:23:27Z	catalogo-registrazioni	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:23:27Z	catalogo-registrazioni	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:23:27Z	documento	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:24:10Z	revisione-policy	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; LOW defer: inherited AttribuzioneConfermata dropped — consumers reached via VociUnite today, note for future incremental projections; LOW patch-later: KDoc names the INV-13/17 exception, drop dead MockK every-stubs, hand-written throwing extractor)
+2026-09-23T11:24:43Z	catalogo-registrazioni	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; LOW defer: KDoc durataMs = probe duration (+-50ms, AC-123) not a segment bound — already routed to esegui-elaborazione F5; architecture-overview.md:32 boundary row missing titolo (doc drift))
+2026-09-23T11:25:12Z	revisione-policy	verifier	result	cycle=1	tier=deep	model=opus	FAIL (RC-9: AC-96 exception test stubs EstrattoreImpronta with MockK throws — port has a fake; use hand-written throwing double; also drop dead every-stubs) -> rework cycle=2 queued (tier +1 -> deep/opus, LAST cycle; worker cap 4/4)
+2026-09-23T11:25:34Z	conferma-attribuzione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (90d5c4a; V1 dedupe, V2/F2/F7 INV-25 guards, F3 decoded intervals, AC-86 P->Q, FK order; mutation-checked)
+2026-09-23T11:25:34Z	conferma-attribuzione	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:25:34Z	conferma-attribuzione	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:25:34Z	revisione-policy	worker	dispatch	cycle=2	tier=deep	model=opus	(LAST cycle: RC-9 throwing fake + drop dead every-stubs; scope limited, option c comes as a fresh series)
+2026-09-23T11:26:34Z	catalogo-registrazioni	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T11:27:11Z	esegui-elaborazione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (cd5c514; V1,F1-F7,F9,F12 + Completata asserted; mutation-checked V1)
+2026-09-23T11:27:11Z	esegui-elaborazione	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:27:11Z	esegui-elaborazione	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:27:11Z	registro-progetti-file	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:27:56Z	revisione-policy	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW (6d8e994; RC-9 throwing fake, dead stubs dropped, KDoc)
+2026-09-23T11:27:56Z	revisione-policy	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-23T11:27:56Z	revisione-policy	code-review	dispatch	cycle=2	tier=deep	model=opus
+2026-09-23T11:27:56Z	audio-ffmpeg	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:28:28Z	conferma-attribuzione	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH; all cycle-0 fixed; LOW: FK fake only insert side, P->Q-new path not via FK fake; carry to persistenza-schema: print uniqueness per (parlante,registrazione,voce) — do not tighten to (registrazione,voce) without reordering; amendment (b) will force rewrite of F3/AC-86 tests)
+2026-09-23T11:28:28Z	api-trascritto	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (98ed0a0; no out-of-block touches)
+2026-09-23T11:28:28Z	api-trascritto	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:28:28Z	api-trascritto	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:28:28Z	modelli-provisioning	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:30:11Z	api-trascritto	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH, 0 MED; LOW defer: segmenti order relies on id minting (defensive sort optional), no post-Revisione read tests (covered at D2); carry to sorgente-impronta: VoceVista.intervalli may OVERLAP after UnisciVoci -> selection must not double-count)
+2026-09-23T11:30:26Z	esegui-elaborazione	code-review	result	cycle=1	tier=deep	model=opus	CHANGES (1 HIGH F-A: LettoreRegistrazione throw escapes esegui -> in_corso stuck; MED F-B failed compensation swallowed silently; LOW patch F-D as-cast, F-H tests; carry to avvio-coda-elaborazioni: F-C recover in_corso before next item / on project re-open, F-G sync-subscriber-poisoned head + no version check; F-I no logging sink -> architect decision) -> rework cycle=2 (deep, LAST) after verifier
+2026-09-23T11:30:31Z	revisione-policy	code-review	result	cycle=2	tier=deep	model=opus	APPROVE (0 HIGH; MED patch-later: AC-96 assertFailsWith<IllegalStateException> cannot distinguish extractor throw from policy checkNotNull — assert message/type; LOW: stale private KDoc, conferma factory name for inheritance -> amendment (b) series)
+2026-09-23T11:30:59Z	revisione-policy	verifier	result	cycle=2	tier=deep	model=opus	PASS (merged tree green; NOTE: ADR 0012 (b) enforced_by red by design on ApplicaRevisionePolitica imports until the option-(c) series for revisione-policy lands — KNOWN PENDING on the integration line after this merge)
+2026-09-23T11:31:34Z	api-trascritto	verifier	result	cycle=0	tier=deep	model=opus	PASS (shapes match consumer copies exactly)
+2026-09-23T11:32:54Z	documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (8e7167f; pure Documento.proietta + nomeFile)
+2026-09-23T11:32:54Z	documento	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:32:54Z	documento	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:32:54Z	nomi-delle-voci	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T11:33:27Z	conferma-attribuzione	verifier	result	cycle=1	tier=deep	model=opus	PASS (merged-tree gate green with ErroriParlanti hunk = HEAD side; 9 mutants caught; NOTE ADR 0012 (b) not yet implemented — follows in option-c series)
+2026-09-23T11:33:51Z	esegui-elaborazione	verifier	result	cycle=1	tier=deep	model=opus	FAIL (merged tree does not compile: motivoTrascritto when missing RegistrazioneNonTrovata/TrascrittoNonTrovato added on integration line; AC-70: throwing LettoreRegistrazione / segnalatore.fase escape esegui -> in_corso) -> rework cycle=2 (deep/opus, LAST) queued; integration line merged into block branch first

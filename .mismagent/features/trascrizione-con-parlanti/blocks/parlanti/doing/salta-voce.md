@@ -1,43 +1,49 @@
 ---
-id: "nomi-delle-voci"
-type: "read-model"
+id: "salta-voce"
+type: "application-service"
 context: "parlanti"
 side: "app"
 wave: 4
-module: ":parlanti:applicazione (..letture)"
+module: ":parlanti:applicazione (..comandi)"
 consumes:
   - "kernel-pl"
   - "agg-parlante"
   - "agg-attribuzione"
   - "repo-parlanti"
-  - "nomi-per-documento"
+  - "registrazione-per-parlanti"
+  - "voci-per-parlanti"
+  - "eventi-parlanti"
+  - "tec-decodifica-parlanti"
+  - "tec-estrattore-impronta"
 depends_on: []
 related_adrs:
   - "0002"
   - "0003"
+  - "0004"
+  - "0005"
   - "0006"
   - "0007"
   - "0009"
   - "0012"
-view_shape:
-  nomi: "Map<VoceRef, String>"
-  registrazioniCon: "List<RegistrazioneId>"
-view_sources:
-  nomi: "≡ nomi-per-documento ← Attribuzione + Parlante.nome (eliminato included)"
-  registrazioniCon: "≡ nomi-per-documento ← AttribuzioneRepository.diParlante"
+commands:
+  - "SaltaVoce"
+invariants:
+  - "INV-19 skipping a Voce = confirming it as a NEW occasionale 'Ospite del <DataRegistrazione>' (dd/MM/yyyy); if taken, first free '(2)', '(3)', …; stored at creation, never follows a later date change; its ImprontaVocale is kept"
 ---
-# nomi-delle-voci — NomiDelleVoci (API pubblica dei Parlanti)
+# salta-voce — SaltaVoce
 
 ## What to do
-Supplier query API nomi(id) and registrazioniCon(parlanteId) — shapes ARE the pinned type.
+Create the occasionale guest + Attribuzione + print; publishes ParlanteCreato and AttribuzioneConfermata (R21). Not offered on an already-attributed Voce.
 
-### view_shape (field ← source)
-- `nomi`: Map<VoceRef, String> ← ≡ nomi-per-documento ← Attribuzione + Parlante.nome (eliminato included)
-- `registrazioniCon`: List<RegistrazioneId> ← ≡ nomi-per-documento ← AttribuzioneRepository.diParlante
+### Invariants owned here (one test each, name starts with the tag)
+- INV-19 skipping a Voce = confirming it as a NEW occasionale 'Ospite del <DataRegistrazione>' (dd/MM/yyyy); if taken, first free '(2)', '(3)', …; stored at creation, never follows a later date change; its ImprontaVocale is kept
 
 ## Tasks
-- AC-101 nomi(id) mappa ogni VoceRef attribuita al Nome del Parlante, anche se eliminato; le Voci non attribuite non compaiono
-- AC-102 registrazioniCon(P) restituisce le Registrazioni distinte con almeno un'Attribuzione a P
+- INV-19 crea un occasionale 'Ospite del 12/09/2026' con l'impronta conservata e attribuisce la Voce
+- INV-19 se il nome è già preso da un attivo (confronto normalizzato) → '(2)', poi '(3)'
+- INV-19 il nome resta invariato dopo una ModificaDataRegistrazione
+- AC-88 SaltaVoce pubblica ParlanteCreato e AttribuzioneConfermata
+- AC-89 Saltare una Voce già attribuita → VoceGiaAttribuita e nulla cambia
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -86,7 +92,7 @@ Supplier query API nomi(id) and registrazioniCon(parlanteId) — shapes ARE the 
     - `nome_normalizzato`: minted by the Nome VO: trim().lowercase(Locale.ROOT); never computed in SQL (ADR 0007)
   - §14 gates (must stay green):
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(parlanteQueries|improntaVocaleQueries)\b' . | grep -vE '^\./(persistenza/|parlanti/adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
-    - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
+    - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoParlante\.' . | grep -E '^\./[^:]*/src/main/' | grep -vE '^\./parlanti/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/parlanti/adattatori/persistenza/)' | grep -q .`
 - **agg-attribuzione** (consumed/implemented) — owner `attribuzione`, projection in-process, contract_test **invariant-test**
   - pinned types:
     - `Attribuzione.conferma`: (voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>
@@ -99,11 +105,40 @@ Supplier query API nomi(id) and registrazioniCon(parlanteId) — shapes ARE the 
   - pinned types:
     - `ParlanteRepository`: interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */ }
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
-- **nomi-per-documento** (consumed/implemented) — owner `porta-lettore-nomi`, supplier `nomi-delle-voci`, projection in-process, contract_test **consumer-driven**
+- **registrazione-per-parlanti** (consumed/implemented) — owner `porta-registrazione-parlanti`, supplier `catalogo-registrazioni`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `LettoreNomi`: interface { fun nomi(id: RegistrazioneId): Map<VoceRef, String>; fun registrazioniCon(p: ParlanteId): List<RegistrazioneId> } — attributed Voci only; an eliminato Parlante still resolves to its Nome (INV-24)
+    - `LettoreRegistrazione`: interface { fun registrazione(id: RegistrazioneId): RegistrazioneVista? } — Parlanti's own copy
+    - `RegistrazioneVista`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId, titolo: String, riferimentoAudio: RiferimentoAudio, dataRegistrazione: LocalDate, durataMs: Long) — progettoId scopes INV-17, dataRegistrazione feeds 'Ospite del dd/MM/yyyy' (INV-19)
+  - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
+    - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
+- **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>? } — null iff no Trascritto (INV-5); Voci ordered by voceId
+    - `VoceVista`: data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text
+  - keys (minting rules):
+    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
+- **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `AttribuzioneConfermata`: data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato
+    - `ParlanteCreato`: data class(parlanteId: ParlanteId, progettoId: ProgettoId, nome: String, tipo: TipoParlanteVista) : EventoPubblicato
+    - `ParlanteRinominato`: data class(parlanteId: ParlanteId, nome: String) : EventoPubblicato
+    - `ParlantePromosso`: data class(parlanteId: ParlanteId, nome: String, nomeCambiato: Boolean) : EventoPubblicato
+    - `ParlanteEliminato`: data class(parlanteId: ParlanteId) : EventoPubblicato — NO Documento change
+    - `TipoParlanteVista`: enum RICORRENTE | OCCASIONALE (parlanti:applicazione)
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
+    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
+  - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+- **tec-decodifica-parlanti** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `DecodificatoreAudio`: interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy)
+- **tec-estrattore-impronta** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `EstrattoreImpronta`: interface { fun estrai(c: CampioniAudio): Impronta } — native use serialized with the pipeline (ADR 0012 amendment, R12)
+    - `Impronta`: see agg-parlante (parlanti:dominio)
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Supplier API NomiDelleVoci).
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-19, Q-1, Q-5) + R21, R24.

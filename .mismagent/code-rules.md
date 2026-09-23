@@ -56,11 +56,14 @@ in a class with explicit `equals`/`hashCode` (e.g. `Impronta`, `CampioniAudio`).
 
 **CR-8 · Expected failures are values.** `ErroreDominio` is a plain (non-sealed) interface in
 `:kernel`, never a `Throwable`; each context owns one sealed hierarchy `Errore<Contesto> : ErroreDominio`
-in `Errori<Contesto>.kt`; aggregate methods / application services return `Esito` for expected rule
+in `:<ctx>:dominio`'s `Errori<Contesto>.kt` for rule violations AND lookup misses (`…NonTrovato`,
+`…GiaPresente`), plus at most one `ErroreApplicazione<Contesto>` per `applicazione` module (package
+`…applicazione.porte`) only for technical/adapter failures; aggregate methods / application services return `Esito` for expected rule
 violations (ADR 0003). → gate lint: Konsist (no subtype of `ErroreDominio` extends `Throwable`;
 every direct subtype of `ErroreDominio` is a `sealed interface` named `Errore<X>`; public functions
 of `*:applicazione` command handlers return `Esito`) + ADR 0003 `enforced_by`.
 *(amended 2026-09-23, R25 — was "`ErroreDominio` is a sealed interface")*
+*(amended 2026-09-23 (b), ADR 0003 placement clarification)*
 
 **CR-9 · Warnings are errors; public API is explicit.** → gate lint: compiler
 (`allWarningsAsErrors`, `explicitApi()` on `:kernel` + `*:applicazione`).
