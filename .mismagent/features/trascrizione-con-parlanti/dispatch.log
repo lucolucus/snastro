@@ -350,3 +350,7 @@
 2026-09-23T12:06:42Z	registrazioni-del-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-23T12:07:14Z	fix-batch-5	verifier	result	cycle=0	tier=deep	model=opus	PASS (merged tree 569 tests green; 9 mutants caught; chiaveSorgenteProvvisoria byte-identical to SorgenteImpronta.chiave -> remove in option-c follow-ups)
 2026-09-23T12:07:53Z	(option-c)	plan	result	-	-	-	foundations merged (sorgente-impronta, fix-batch-5). QUEUE next free slots: 1 riallinea-impronte (new, deep); 2 fix-batch-8 = option-c restructure of merged conferma-attribuzione + salta-voce + revisione-policy (extract before tx via SorgenteImpronta.di, VoceCambiata, re-key inheritance, drop chiaveSorgenteProvvisoria, wire tx-guarding fakes; AC-282..291 etc.); then abbonato-riallineamento-impronte; modelli-provisioning rework cycle 1 after ADR/manifest agent
+2026-09-23T12:08:28Z	trascritto-view	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (d663c1b; TrascrittoQuery.vista)
+2026-09-23T12:08:28Z	trascritto-view	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:08:28Z	trascritto-view	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T12:08:28Z	riallinea-impronte	worker	dispatch	cycle=0	tier=deep	model=opus
