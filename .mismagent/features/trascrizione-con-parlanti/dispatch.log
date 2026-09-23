@@ -143,3 +143,6 @@
 2026-09-23T09:19:47Z	porte-trascrizione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T09:19:47Z	porte-trascrizione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T09:19:54Z	porta-lettore-voci	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T09:25:31Z	porte-trascrizione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (HIGH errors belong in dominio ErroreTrascrizione per CR-8/NomeGiaInUso precedent; MED allineatore voice tie, campioni at end zero-pad; LOW IOException, VAD 2 intervals, deps block)
+2026-09-23T09:25:31Z	porte-trascrizione	worker	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T09:25:31Z	fix-batch-2	worker	dispatch	cycle=0	tier=deep	model=opus	(out-of-manifest, user-approved)
