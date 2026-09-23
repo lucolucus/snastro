@@ -1,0 +1,31 @@
+-- Aggregate: Attribuzione (tactical-model.md § Parlanti). Identity = VoceRef (registrazione_id,
+-- voce_id) — "at most one Parlante per Voce" is structural (AC-23), guaranteed by the PRIMARY KEY.
+CREATE TABLE attribuzione (
+    registrazione_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id),
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    PRIMARY KEY (registrazione_id, voce_id),
+    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero)
+);
+
+CREATE INDEX attribuzione_parlante ON attribuzione(parlante_id);
+
+trova:
+SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+
+trovaDiRegistrazione:
+SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId;
+
+trovaDiParlante:
+SELECT * FROM attribuzione WHERE parlante_id = :parlanteId;
+
+inserisci:
+INSERT INTO attribuzione(registrazione_id, voce_id, progetto_id, parlante_id)
+VALUES (:registrazioneId, :voceId, :progettoId, :parlanteId);
+
+aggiornaParlante:
+UPDATE attribuzione SET parlante_id = :parlanteId WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+
+rimuovi:
+DELETE FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;

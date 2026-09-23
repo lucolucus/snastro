@@ -1,0 +1,39 @@
+-- Aggregate: Parlante (tactical-model.md § Parlanti). nome_normalizzato is computed by the Nome
+-- VO (trim + lowercase Locale.ROOT), never in SQL (ADR 0007). INV-16 backed by the partial unique
+-- index below (on ONE line, greppable — do not reformat). rimuovi is the ONLY physical deletion of
+-- a Parlante (R25, INV-25 occasionale cessation) — the aggregate's own no-deletion rule stays a
+-- soft tombstone (stato = 'eliminato') for every other case.
+CREATE TABLE parlante (
+    id TEXT NOT NULL PRIMARY KEY,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id),
+    nome TEXT NOT NULL,
+    nome_normalizzato TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    stato TEXT NOT NULL
+);
+
+CREATE INDEX parlante_progetto ON parlante(progetto_id);
+
+CREATE UNIQUE INDEX parlante_nome_attivo_unico ON parlante(progetto_id, nome_normalizzato) WHERE stato = 'attivo';
+
+trovaPerId:
+SELECT * FROM parlante WHERE id = :id;
+
+trovaDelProgetto:
+SELECT * FROM parlante WHERE progetto_id = :progettoId;
+
+contaAttivoConNome:
+SELECT COUNT(*) FROM parlante
+    WHERE progetto_id = :progettoId AND nome_normalizzato = :nomeNormalizzato AND stato = 'attivo'
+        AND (:escluso IS NULL OR id != :escluso);
+
+inserisci:
+INSERT INTO parlante(id, progetto_id, nome, nome_normalizzato, tipo, stato)
+VALUES (:id, :progettoId, :nome, :nomeNormalizzato, :tipo, :stato);
+
+aggiorna:
+UPDATE parlante SET nome = :nome, nome_normalizzato = :nomeNormalizzato, tipo = :tipo, stato = :stato
+    WHERE id = :id;
+
+rimuovi:
+DELETE FROM parlante WHERE id = :id;

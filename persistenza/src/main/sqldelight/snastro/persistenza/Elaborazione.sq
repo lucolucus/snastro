@@ -1,0 +1,34 @@
+-- Aggregate: Elaborazione (tactical-model.md § Trascrizione). StatoElaborazione persisted as
+-- lowercase canonical text (dev-architecture-app.md#pacchetti). INV-4 backed by ADR 0007's two
+-- partial unique indexes below (each on ONE line, greppable — do not reformat).
+CREATE TABLE elaborazione (
+    id TEXT NOT NULL PRIMARY KEY,
+    registrazione_id TEXT NOT NULL REFERENCES registrazione(id),
+    stato TEXT NOT NULL,
+    creata_alle INTEGER NOT NULL,
+    avviata_alle INTEGER,
+    motivo_fallimento TEXT
+);
+
+CREATE INDEX elaborazione_registrazione ON elaborazione(registrazione_id);
+
+CREATE UNIQUE INDEX elaborazione_aperta_unica ON elaborazione(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso');
+
+CREATE UNIQUE INDEX elaborazione_completata_unica ON elaborazione(registrazione_id) WHERE stato = 'completata';
+
+trovaDiRegistrazione:
+SELECT * FROM elaborazione WHERE registrazione_id = :registrazioneId ORDER BY creata_alle, id;
+
+trovaInAttesa:
+SELECT * FROM elaborazione WHERE stato = 'in_attesa' ORDER BY creata_alle, id;
+
+trovaInCorso:
+SELECT * FROM elaborazione WHERE stato = 'in_corso' ORDER BY creata_alle, id;
+
+inserisci:
+INSERT INTO elaborazione(id, registrazione_id, stato, creata_alle, avviata_alle, motivo_fallimento)
+VALUES (:id, :registrazioneId, :stato, :creataAlle, :avviataAlle, :motivoFallimento);
+
+aggiornaStato:
+UPDATE elaborazione SET stato = :stato, avviata_alle = :avviataAlle, motivo_fallimento = :motivoFallimento
+    WHERE id = :id;

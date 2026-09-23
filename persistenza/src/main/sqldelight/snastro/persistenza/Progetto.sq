@@ -1,0 +1,14 @@
+-- Aggregate: Progetto (tactical-model.md § Progetto). One row per project database (ADR 0006).
+CREATE TABLE progetto (
+    id TEXT NOT NULL PRIMARY KEY,
+    nome TEXT NOT NULL
+);
+
+trova:
+SELECT * FROM progetto LIMIT 1;
+
+inserisci:
+INSERT INTO progetto(id, nome) VALUES (:id, :nome);
+
+aggiorna:
+UPDATE progetto SET nome = :nome WHERE id = :id;

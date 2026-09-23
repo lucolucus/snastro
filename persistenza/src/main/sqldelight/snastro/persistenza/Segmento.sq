@@ -1,0 +1,25 @@
+-- Entity: Segmento, owned by Trascritto (INV-6/INV-7). numero = segmentoId, fixed at creation,
+-- never created afterwards (INV-8) — text is immutable in v1. Overlaps between Segmenti are
+-- allowed (INV-7): no uniqueness constraint on (voce_numero, inizio_ms/fine_ms).
+CREATE TABLE segmento (
+    registrazione_id TEXT NOT NULL,
+    numero INTEGER NOT NULL,
+    voce_numero INTEGER NOT NULL,
+    inizio_ms INTEGER NOT NULL,
+    fine_ms INTEGER NOT NULL,
+    testo TEXT NOT NULL,
+    PRIMARY KEY (registrazione_id, numero),
+    FOREIGN KEY (registrazione_id, voce_numero) REFERENCES voce(registrazione_id, numero)
+);
+
+CREATE INDEX segmento_voce ON segmento(registrazione_id, voce_numero);
+
+trovaDiTrascritto:
+SELECT * FROM segmento WHERE registrazione_id = :registrazioneId ORDER BY inizio_ms, numero;
+
+inserisci:
+INSERT INTO segmento(registrazione_id, numero, voce_numero, inizio_ms, fine_ms, testo)
+VALUES (:registrazioneId, :numero, :voceNumero, :inizioMs, :fineMs, :testo);
+
+eliminaDiRegistrazione:
+DELETE FROM segmento WHERE registrazione_id = :registrazioneId;

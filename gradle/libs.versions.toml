@@ -34,8 +34,9 @@ mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 konsist = { module = "com.lemonappdev:konsist", version.ref = "konsist" }
 detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", version.ref = "detekt" }
 
-# Persistence (:persistenza).
+# Persistence (:persistenza). ADR 0006: SQLDelight (JVM, JdbcSqliteDriver) over xerial sqlite-jdbc.
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+sqldelight-driver = { module = "app.cash.sqldelight:sqlite-driver", version.ref = "sqldelight" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

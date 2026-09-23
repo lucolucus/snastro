@@ -1,0 +1,31 @@
+-- Entity: ImprontaVocale, owned by Parlante (INV-14). valori = BLOB float32 little-endian
+-- (ADR 0009) — the app writes no other copy. UNIQUE(parlante_id, registrazione_id, voce_id) is the
+-- "at most one print per VoceRef" guard (AC-13); registraImpronta's "insert or replace" semantics
+-- use `sostituisci`, never touching the other prints of the same Parlante.
+CREATE TABLE impronta_vocale (
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    registrazione_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    valori BLOB NOT NULL,
+    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero),
+    UNIQUE (parlante_id, registrazione_id, voce_id)
+);
+
+CREATE INDEX impronta_vocale_voce ON impronta_vocale(registrazione_id, voce_id);
+
+trovaDiParlante:
+SELECT * FROM impronta_vocale WHERE parlante_id = :parlanteId;
+
+inserisci:
+INSERT INTO impronta_vocale(parlante_id, registrazione_id, voce_id, valori)
+VALUES (:parlanteId, :registrazioneId, :voceId, :valori);
+
+sostituisci:
+INSERT OR REPLACE INTO impronta_vocale(parlante_id, registrazione_id, voce_id, valori)
+VALUES (:parlanteId, :registrazioneId, :voceId, :valori);
+
+eliminaPerVoceRef:
+DELETE FROM impronta_vocale WHERE parlante_id = :parlanteId AND registrazione_id = :registrazioneId AND voce_id = :voceId;
+
+eliminaDiParlante:
+DELETE FROM impronta_vocale WHERE parlante_id = :parlanteId;
