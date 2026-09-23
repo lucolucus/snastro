@@ -8,33 +8,52 @@ package snastro.kernel
 public class UnitaDiLavoroFinta(private vararg val partecipanti: Ripristinabile) : UnitaDiLavoro {
     private var profondita = 0
     private var erroreAnnidato: Esito.Errore? = null
-    private var eccezioneAnnidata = false
+    private var eccezioneAnnidata: Throwable? = null
 
-    override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> {
-        val esterna = profondita == 0
-        val ripristini = if (esterna) partecipanti.map { it.istantanea() } else emptyList()
-        var terminato = false
+    override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> =
+        if (profondita == 0) esterna(blocco) else annidata(blocco)
+
+    private fun <T> annidata(blocco: () -> Esito<T>): Esito<T> {
+        profondita++
+        try {
+            val esito = runCatching(blocco).onFailure(::condanna).getOrThrow()
+            if (esito is Esito.Errore) condanna(esito)
+            return esito
+        } finally {
+            profondita--
+        }
+    }
+
+    private fun <T> esterna(blocco: () -> Esito<T>): Esito<T> {
+        val ripristini = partecipanti.map { it.istantanea() }
         var confermata = false
         profondita++
         try {
-            val esito = blocco()
-            terminato = true
-            if (!esterna) {
-                if (esito is Esito.Errore && erroreAnnidato == null) erroreAnnidato = esito
-                return esito
-            }
-            check(!eccezioneAnnidata) { "una transazione annidata e fallita con un'eccezione: rollback" }
-            val finale = erroreAnnidato ?: esito
+            val finale = finale(blocco())
             confermata = finale is Esito.Ok
             return finale
         } finally {
             profondita--
-            if (!esterna && !terminato) eccezioneAnnidata = true
-            if (esterna) {
-                if (!confermata) ripristini.forEach { it() }
-                erroreAnnidato = null
-                eccezioneAnnidata = false
-            }
+            if (!confermata) ripristini.forEach { it() }
+            erroreAnnidato = null
+            eccezioneAnnidata = null
         }
+    }
+
+    /** The outer Errore wins; under an outer Ok the first nested failure decides. */
+    private fun <T> finale(esito: Esito<T>): Esito<T> {
+        if (esito is Esito.Errore) return esito
+        eccezioneAnnidata?.let {
+            throw IllegalStateException("una transazione annidata e fallita con un'eccezione: rollback", it)
+        }
+        return erroreAnnidato ?: esito
+    }
+
+    private fun condanna(errore: Esito.Errore) {
+        if (erroreAnnidato == null && eccezioneAnnidata == null) erroreAnnidato = errore
+    }
+
+    private fun condanna(eccezione: Throwable) {
+        if (erroreAnnidato == null && eccezioneAnnidata == null) eccezioneAnnidata = eccezione
     }
 }

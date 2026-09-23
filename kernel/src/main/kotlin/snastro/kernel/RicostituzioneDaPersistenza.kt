@@ -9,5 +9,5 @@ package snastro.kernel
     level = RequiresOptIn.Level.ERROR,
 )
 @Retention(AnnotationRetention.BINARY)
-@Target(AnnotationTarget.FUNCTION, AnnotationTarget.CONSTRUCTOR)
+@Target(AnnotationTarget.FUNCTION)
 public annotation class RicostituzioneDaPersistenza

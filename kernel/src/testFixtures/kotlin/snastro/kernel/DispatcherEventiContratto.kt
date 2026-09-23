@@ -1,14 +1,16 @@
 package snastro.kernel
 
 import org.junit.jupiter.api.Test
+import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 /**
  * Contract of [DispatcherEventi] (ADR 0012): synchronous subscribers run in publication order
- * inside the transaction and an [Esito.Errore] of theirs rolls the command back; after-commit
- * subscribers run only after commit, never after a rollback. One subclass per implementation.
+ * inside the transaction and an [Esito.Errore] or exception of theirs dooms the command (rollback);
+ * after-commit subscribers run only after commit, never after a rollback, and a fatal throwable
+ * stops their delivery at once. One subclass per implementation.
  */
 public abstract class DispatcherEventiContratto {
     /** A fresh environment: dispatcher, the unit of work services receive, a transactional effect. */
@@ -164,6 +166,108 @@ public abstract class DispatcherEventiContratto {
         assertSame(primo, lanciata)
         assertEquals(listOf<Throwable>(secondo), lanciata.suppressed.toList())
         assertEquals(listOf("sano-1", "sano-2"), ricevuti)
+        assertEquals(setOf("comando"), a.effetti(), "il comando resta confermato")
+    }
+
+    @Test
+    public fun `AC-3 un abbonato sincrono che lancia si propaga e annulla il comando`() {
+        val a = ambiente()
+        val guasto = GuastoDiProva()
+        val dopoCommit = mutableListOf<EventoPubblicato>()
+        a.registraSincrono { throw guasto }
+        a.registraDopoCommit { dopoCommit += it }
+        val lanciata = assertFailsWith<GuastoDiProva> {
+            a.unitaDiLavoro.inTransazione {
+                a.scrivi("comando")
+                a.dispatcher.pubblica(EventoDiProva(1))
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(guasto, lanciata)
+        assertEquals(emptySet(), a.effetti())
+        assertEquals(emptyList(), dopoCommit)
+    }
+
+    @Test
+    public fun `AC-3 un abbonato sincrono che lancia condanna il comando anche se chi pubblica restituisce Ok`() {
+        val a = ambiente()
+        val guasto = GuastoDiProva()
+        val ricevuti = mutableListOf<String>()
+        val dopoCommit = mutableListOf<EventoPubblicato>()
+        a.registraSincrono { throw guasto }
+        a.registraSincrono {
+            ricevuti += "successivo"
+            Esito.Ok(Unit)
+        }
+        a.registraDopoCommit { dopoCommit += it }
+        val lanciata = assertFailsWith<IllegalStateException> {
+            a.unitaDiLavoro.inTransazione {
+                a.scrivi("comando")
+                assertFailsWith<GuastoDiProva> { a.dispatcher.pubblica(EventoDiProva(1)) }
+                a.dispatcher.pubblica(EventoDiProva(2))
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(guasto, lanciata.cause, "la causa non si perde")
+        assertEquals(emptyList(), ricevuti, "dopo la condanna gli abbonati sincroni successivi non ricevono")
+        assertEquals(emptySet(), a.effetti())
+        assertEquals(emptyList(), dopoCommit)
+    }
+
+    @Test
+    public fun `AC-3 l eccezione di un abbonato sincrono tradotta in Errore annulla e restituisce quell Errore`() {
+        val a = ambiente()
+        a.registraSincrono { throw GuastoDiProva() }
+        val esito = a.unitaDiLavoro.inTransazione<Unit> {
+            a.scrivi("comando")
+            try {
+                a.dispatcher.pubblica(EventoDiProva(1))
+            } catch (e: GuastoDiProva) {
+                return@inTransazione Esito.Errore(ErroreDiProva.Fallito("tradotto: ${e.message}"))
+            }
+            Esito.Ok(Unit)
+        }
+        assertEquals(ErroreDiProva.Fallito("tradotto: guasto di prova"), esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
+    public fun `AC-3 un VirtualMachineError di un abbonato dopo-commit si propaga subito e ferma la consegna`() {
+        fataleFermaLaConsegna(StackOverflowError("di prova"))
+    }
+
+    @Test
+    public fun `AC-3 una CancellationException di un abbonato dopo-commit si propaga subito e ferma la consegna`() {
+        fataleFermaLaConsegna(CancellationException("di prova"))
+    }
+
+    @Test
+    public fun `AC-3 una InterruptedException di un abbonato dopo-commit si propaga e ripristina l interruzione`() {
+        fataleFermaLaConsegna(InterruptedException("di prova"))
+    }
+
+    /** An ordinary failure on event 1 is collected; the fatal one on event 2 stops everything at once. */
+    private fun fataleFermaLaConsegna(fatale: Throwable) {
+        val a = ambiente()
+        val ordinario = GuastoDiProva()
+        val ricevuti = mutableListOf<String>()
+        a.registraDopoCommit { if ((it as EventoDiProva).n == 1) throw ordinario }
+        a.registraDopoCommit { if ((it as EventoDiProva).n == 2) throw fatale }
+        a.registraDopoCommit { ricevuti += "dopo-${(it as EventoDiProva).n}" }
+        val lanciata = assertFailsWith<Throwable> {
+            a.unitaDiLavoro.inTransazione {
+                a.scrivi("comando")
+                a.dispatcher.pubblica(EventoDiProva(1))
+                a.dispatcher.pubblica(EventoDiProva(2))
+                a.dispatcher.pubblica(EventoDiProva(3))
+                Esito.Ok(Unit)
+            }
+        }
+        val interrotto = Thread.interrupted()
+        assertSame(fatale, lanciata, "il fatale si propaga, mai soppresso")
+        assertEquals(listOf<Throwable>(ordinario), lanciata.suppressed.toList())
+        assertEquals(listOf("dopo-1"), ricevuti, "nessuna consegna dopo il fatale")
+        assertEquals(fatale is InterruptedException, interrotto, "flag di interruzione")
         assertEquals(setOf("comando"), a.effetti(), "il comando resta confermato")
     }
 

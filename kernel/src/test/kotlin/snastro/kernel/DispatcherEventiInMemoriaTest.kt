@@ -3,6 +3,7 @@ package snastro.kernel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertSame
 
 class DispatcherEventiInMemoriaTest : DispatcherEventiContratto() {
     private val effetti = EffettiInMemoria()
@@ -67,11 +68,32 @@ class DispatcherEventiInMemoriaTest : DispatcherEventiContratto() {
         assertEquals(setOf("rigenerato"), effetti.visibili())
     }
 
+    /** A delegate that dooms nothing: the dispatcher alone must carry the nested-failure rule. */
+    private val ingenua = object : UnitaDiLavoro {
+        override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> = blocco()
+    }
+
+    @Test
+    fun `un eccezione annidata intercettata condanna il comando anche se la delegata non condanna`() {
+        val dispatcher = DispatcherEventiInMemoria(ingenua)
+        val ricevuti = mutableListOf<EventoPubblicato>()
+        val guasto = IllegalArgumentException("annidato")
+        dispatcher.registraDopoCommit { ricevuti += it }
+        val lanciata = assertFailsWith<IllegalStateException> {
+            dispatcher.unitaDiLavoro.inTransazione {
+                dispatcher.pubblica(Evento)
+                assertFailsWith<IllegalArgumentException> {
+                    dispatcher.unitaDiLavoro.inTransazione<Unit> { throw guasto }
+                }
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(guasto, lanciata.cause)
+        assertEquals(emptyList(), ricevuti)
+    }
+
     @Test
     fun `un Errore annidato condanna il comando anche se la delegata non lo propaga`() {
-        val ingenua = object : UnitaDiLavoro {
-            override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> = blocco()
-        }
         val dispatcher = DispatcherEventiInMemoria(ingenua)
         val ricevuti = mutableListOf<EventoPubblicato>()
         dispatcher.registraDopoCommit { ricevuti += it }
