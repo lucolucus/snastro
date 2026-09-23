@@ -116,3 +116,7 @@
 2026-09-23T09:01:04Z	porte-parlanti	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (MED: righeImpronte should be abstract -> follow-up batch before repository-sql-parlanti; note: SQL seeding must derive unique names + minimal elaborazione/trascritto)
 2026-09-23T09:01:09Z	porte-progetto	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (LOW notes: audio/<id> minting to pin; FFmpeg content detection in :audio; scarta IO-failure policy for services)
 2026-09-23T09:01:21Z	porte-progetto	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-23T09:02:46Z	porta-lettore-trascritto	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T09:02:46Z	porta-lettore-trascritto	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:02:46Z	porta-lettore-trascritto	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:03:13Z	porte-parlanti	verifier	result	cycle=1	tier=deep	model=opus	PASS
