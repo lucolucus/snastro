@@ -66,10 +66,17 @@ public class AggiungiRegistrazioneServizio(
     }
 }
 
-/** The source file's name without its extension (AC-56); no path separator survives in a titolo. */
+/**
+ * The source file's name without its extension (AC-56); no path separator survives in a titolo.
+ * Falls back to the full file name when stripping the extension would empty it (a dotfile like
+ * `.m4a`, whose "extension" is the whole name), and further to a fixed placeholder when even the
+ * file name is empty (a path ending in a separator) — both keep the titolo non-blank without
+ * inventing structure the path doesn't have.
+ */
 private fun titoloDa(percorsoSorgente: String): String {
     val nomeFile = percorsoSorgente.substringAfterLast('/').substringAfterLast('\\')
-    return nomeFile.substringBeforeLast('.', missingDelimiterValue = nomeFile)
+    val senzaEstensione = nomeFile.substringBeforeLast('.', missingDelimiterValue = nomeFile)
+    return senzaEstensione.ifBlank { nomeFile }.ifBlank { "registrazione" }
 }
 
 private fun snastro.progetto.dominio.RegistrazioneAggiunta.pubblicato(): RegistrazioneAggiunta =

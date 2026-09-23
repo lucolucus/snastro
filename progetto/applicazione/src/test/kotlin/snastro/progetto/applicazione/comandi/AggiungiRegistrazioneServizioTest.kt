@@ -166,7 +166,52 @@ class AggiungiRegistrazioneServizioTest {
         )
     }
 
+    @Test
+    fun `AC-56 titoloDa vari percorsi sorgente`() {
+        val casi = listOf(
+            CasoTitolo(
+                "percorso Windows con backslash",
+                "C:\\Users\\foo\\Seduta del 12 marzo.m4a",
+                "Seduta del 12 marzo",
+            ),
+            CasoTitolo("percorso senza estensione", "/sorgenti/Seduta", "Seduta"),
+            CasoTitolo("dotfile: l'estensione e' l'intero nome", "/sorgenti/.m4a", ".m4a"),
+            CasoTitolo("separatore finale: nessun nome file", "/sorgenti/dir/", "registrazione"),
+        )
+
+        casi.forEach { caso -> assertEquals(caso.atteso, titoloPer(caso.percorso), caso.descrizione) }
+    }
+
+    /** Runs AggiungiRegistrazione on a fresh service/fakes for [percorsoSorgente] and returns the saved titolo. */
+    private fun titoloPer(percorsoSorgente: String): String {
+        val registrazioniLocali = RegistrazioneRepositoryFinta()
+        val eventiLocali = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniLocali))
+        val progettiLocali = ProgettoRepositoryFinta().apply {
+            salva(Progetto.crea(progettoId, NomeProgetto.di("Consiglio comunale").atteso()).aggregato)
+        }
+        val servizioLocale = AggiungiRegistrazioneServizio(
+            eventiLocali.unitaDiLavoro,
+            GeneratoreIdFinto(),
+            clock,
+            progettiLocali,
+            registrazioniLocali,
+            SondaAudioFinta(
+                leggibili = mapOf(
+                    percorsoSorgente to InfoAudio(durataMs = 1_000L, dataFile = LocalDate.of(2026, 1, 1)),
+                ),
+            ),
+            ArchivioAudioFinta().apply { conSorgente(percorsoSorgente) },
+            eventiLocali,
+        )
+
+        servizioLocale.esegui(AggiungiRegistrazione(percorsoSorgente)).atteso()
+
+        return assertNotNull(registrazioniLocali.trova(RegistrazioneId("id-1"))).titolo
+    }
+
     private class GuastoDiProva : RuntimeException("guasto di prova")
+
+    private data class CasoTitolo(val descrizione: String, val percorso: String, val atteso: String)
 
     private companion object {
         const val SORGENTE = "/sorgenti/Seduta del 12 marzo.m4a"
