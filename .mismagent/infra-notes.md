@@ -14,6 +14,10 @@
   opt-in only if a spike measures a gain). Child JVM = documented escape hatch only.
 - **Native libs:** sherpa-onnx JNI + onnxruntime per OS, fetched by a Gradle task from a pinned
   release with SHA-256, cached outside the repo, never committed.
+  → pinned by **ADR 0016** (2026-09-24): v1.13.8 GitHub release assets (not Maven Central);
+  `scaricaJarSherpa` (compile, gate) + `scaricaNativiSherpa` (run / distributable / `modelliTest`,
+  never `check`) into gitignored `native-cache/` and `:avvio`'s Compose `appResourcesRootDir/macos-arm64/`;
+  explicit `LibraryUtils.load()` via `sherpa_onnx.native.path`.
 - **ffmpeg (ADR 0005):** no system ffmpeg — bytedeco FFmpeg (LGPL) bundled per OS in `:audio`;
   decode once to a derived 16 kHz mono WAV; playback via javax.sound.
 - Dev machine prerequisites: JDK 21 (present: Homebrew openjdk@21; the Gradle toolchain provisions
@@ -63,6 +67,10 @@
 - **Later (infra block):** Compose Gradle plugin jpackage `.dmg` (bundled JRE; signed natives:
   sherpa JNI, onnxruntime, FFmpeg dylibs), signing/notarization only if an Apple Developer account
   is used; Conveyor is the option if cross-building/updates are ever wanted.
+- **Proven 2026-09-24 (ADR 0016):** an unsigned `.dmg` built with Compose `packageDmg` runs on this Mac,
+  with the sherpa natives, FFmpeg, VAD, embeddings and playback all working. **OPEN [user] before a distributable
+  `.dmg`:** O-1 which JDK the package bundles (JBR / Corretto / vendor check disabled: Compose refuses
+  Homebrew OpenJDK), and O-2 signing and notarization. Neither blocks R1, which runs from source.
 - Windows/Linux: kept open architecturally (per-OS native classifiers, OS-appropriate dirs) but
   **not built or tested in v1**.
 

@@ -4,6 +4,9 @@ type: spike
 side: app
 repo: .
 depends_on: []
+status: answered
+closed_by: 0016-packaging-nativi-sherpa
+closed: 2026-09-24 (evidence: research/spike-packaging-modelli-desktop.md; open [user] decisions O-1 JDK, O-2 signing do not block closure)
 ---
 # Spike / Hello-world: sherpa-onnx JNI + bytedeco FFmpeg inside a Compose Desktop app (run + jpackage)
 

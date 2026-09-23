@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(org\\.bytedeco|javax\\.sound)' . | grep -vE '^(\\./)?(audio|architettura-test)/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q . && ! grep -rniE --include='*.kts' --include='*.toml' --include='*.gradle' --exclude-dir=build '(-|_|\")gpl' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*|#)' | grep -q ."
-amended: 2026-09-23   # see "Amendment 2026-09-23" (enforced_by scope: architettura-test) + "Amendment 2026-09-23 (b)" (-gpl clause blind spot; module-path scoping)
+amended: 2026-09-24   # see "Amendment 2026-09-23" (enforced_by scope: architettura-test) + "Amendment 2026-09-23 (b)" (-gpl clause blind spot; module-path scoping) + "Amendment 2026-09-24" (packaging spike evidence, ADR 0016)
 ---
 # 0005 — Audio: decode once with bytedeco FFmpeg (LGPL) to a derived WAV; play via javax.sound
 
@@ -79,3 +79,19 @@ in `ui/src/main/kotlin/snastro/ui/audio/`; exit 0 with that import under `audio/
 **Known blind spots.** A classifier assembled from a variable holding `gpl` with no preceding
 `-`/`_`/quote on the same line (e.g. `listOf("x", "gp" + "l")`) is not caught — deliberate
 obfuscation is left to code-review; `--exclude-dir=build` skips any directory named `build`.
+
+## Amendment 2026-09-24 — packaging spike evidence (ADR 0016)
+**Why.** Spike `packaging-modelli-desktop` exercised this ADR's decode and playback path from
+`./gradlew run`, the `.app` and the mounted `.dmg` on macOS arm64. All passed. The decision is
+**unchanged**. The spike refines two points; the text above is kept as written:
+- **Decode recipe confirmed.** javacv `FFmpegFrameGrabber` with an FFmpeg `aformat` filter
+  produces the 16 kHz mono WAV. `SourceDataLine` plays it from an offset. The spike used synthetic
+  audio (an m4a written by `FFmpegFrameRecorder`); real `sample/` recordings are exercised by the
+  `audio-ffmpeg` block and R1.
+- **No extra native layout for FFmpeg.** The bytedeco natives travel in their classifier jars on
+  the classpath. Unlike sherpa-onnx (ADR 0016 §3), they need no `appResourcesRootDir` entry to
+  load from the packaged app.
+- **For the later distributable `.dmg`:** these FFmpeg dylibs are nested Mach-O files *inside
+  jars*. If the user chooses Developer ID signing and notarization (ADR 0016 open decision O-2),
+  they must be signed too. This is not verified.
+
