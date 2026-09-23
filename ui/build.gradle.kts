@@ -19,6 +19,8 @@ dependencies {
     implementation(project(":parlanti:applicazione"))
 
     testImplementation(compose.desktop.uiTestJUnit4)
+    // RegistroProgettiFinta — ElencoProgetti's own dependency fake (ProgettiPresenterTest, AC-192/193/198).
+    testImplementation(testFixtures(project(":progetto:applicazione")))
 
     // GeneratoreIdFinto + Esito test helpers (atteso/erroreAtteso), used by testFixtures (SessioneProgettoFinta) and tests alike.
     testFixturesApi(testFixtures(project(":kernel")))
