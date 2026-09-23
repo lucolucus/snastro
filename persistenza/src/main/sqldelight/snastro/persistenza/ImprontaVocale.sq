@@ -1,12 +1,19 @@
--- Entity: ImprontaVocale, owned by Parlante (INV-14). valori = BLOB float32 little-endian
+-- Entity: ImprontaVocale, owned by Parlante (INV-14). impronta = BLOB float32 little-endian
 -- (ADR 0009) — the app writes no other copy. UNIQUE(parlante_id, registrazione_id, voce_id) is the
 -- "at most one print per VoceRef" guard (AC-13); registraImpronta's "insert or replace" semantics
--- use `sostituisci`, never touching the other prints of the same Parlante.
+-- use `sostituisci`, never touching the other prints of the same Parlante. sorgente_impronta
+-- (SorgenteImpronta.chiave) and modello_impronta (extractor model id) are non-biometric metadata
+-- (ADR 0009 Amendment (b) / ADR 0012 Amendment (b)) purged with the row by every removal path;
+-- `aggiornaCompareAndSet` is the ONLY write `RiallineaImpronte` uses — an UPDATE of the one row,
+-- never an INSERT ("no resurrection": a row purged meanwhile cannot be re-created by after-commit
+-- work that started before the purge).
 CREATE TABLE impronta_vocale (
     parlante_id TEXT NOT NULL REFERENCES parlante(id),
     registrazione_id TEXT NOT NULL,
     voce_id INTEGER NOT NULL,
-    valori BLOB NOT NULL,
+    impronta BLOB NOT NULL,
+    sorgente_impronta TEXT NOT NULL,
+    modello_impronta TEXT NOT NULL,
     FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero),
     UNIQUE (parlante_id, registrazione_id, voce_id)
 );
@@ -16,13 +23,34 @@ CREATE INDEX impronta_vocale_voce ON impronta_vocale(registrazione_id, voce_id);
 trovaDiParlante:
 SELECT * FROM impronta_vocale WHERE parlante_id = :parlanteId;
 
+-- AC-267: metadata only (no BLOB) — every print of a Registrazione, across every Parlante (a
+-- P->Q re-attribution can briefly leave v's print on both within one transaction).
+metadatiDiRegistrazione:
+SELECT parlante_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta
+FROM impronta_vocale WHERE registrazione_id = :registrazioneId;
+
+-- AC-267: metadata only (no BLOB) — every print owned by any Parlante of a Progetto.
+metadatiDelProgetto:
+SELECT iv.parlante_id, iv.registrazione_id, iv.voce_id, iv.sorgente_impronta, iv.modello_impronta
+FROM impronta_vocale AS iv
+INNER JOIN parlante AS p ON p.id = iv.parlante_id
+WHERE p.progetto_id = :progettoId;
+
 inserisci:
-INSERT INTO impronta_vocale(parlante_id, registrazione_id, voce_id, valori)
-VALUES (:parlanteId, :registrazioneId, :voceId, :valori);
+INSERT INTO impronta_vocale(parlante_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
+VALUES (:parlanteId, :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
 
 sostituisci:
-INSERT OR REPLACE INTO impronta_vocale(parlante_id, registrazione_id, voce_id, valori)
-VALUES (:parlanteId, :registrazioneId, :voceId, :valori);
+INSERT OR REPLACE INTO impronta_vocale(parlante_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
+VALUES (:parlanteId, :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
+
+-- AC-267: compare-and-set UPDATE of the ONE row — no INSERT branch, ever (no resurrection).
+-- affectedRows() == 0 iff the row was removed or its sorgente/modello moved on since it was read.
+aggiornaCompareAndSet:
+UPDATE impronta_vocale
+SET impronta = :impronta, sorgente_impronta = :sorgenteImpronta, modello_impronta = :modelloImpronta
+WHERE parlante_id = :parlanteId AND registrazione_id = :registrazioneId AND voce_id = :voceId
+    AND sorgente_impronta = :sorgenteAttesa AND modello_impronta = :modelloAtteso;
 
 eliminaPerVoceRef:
 DELETE FROM impronta_vocale WHERE parlante_id = :parlanteId AND registrazione_id = :registrazioneId AND voce_id = :voceId;
