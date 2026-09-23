@@ -583,3 +583,5 @@
 2026-09-23T23:28:22Z	rigenerazione-documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
 2026-09-23T23:30:54Z	fix-batch-15	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 44f99de (tests only)
 2026-09-23T23:30:54Z	fix-batch-15	composer	merge	cycle=0	-	-	MERGED 1b428d9
+2026-09-23T23:34:05Z	lettore-trascritto-da-trascrizione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 99a9040
+2026-09-23T23:34:05Z	lettore-trascritto-da-trascrizione	composer	merge	cycle=0	-	-	MERGED 0fa3879 (light verify; build file conflict resolved)
