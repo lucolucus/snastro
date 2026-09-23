@@ -3,11 +3,15 @@ package snastro.progetto.adattatori.porte
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.VoceRegistro
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
 import java.nio.charset.MalformedInputException
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
@@ -69,14 +73,19 @@ public class RegistroProgettiFile(private val file: Path) : RegistroProgetti {
         emptyList()
     }
 
-    /** Write-to-temp-then-atomic-rename, sibling directory so the rename never crosses filesystems. */
+    /**
+     * Write-to-temp-then-atomic-rename, sibling directory so the rename never crosses filesystems.
+     * The temp file is fsync'd before the rename, and the parent directory best-effort after it
+     * (F3): the rename survives a crash right after it, not just a crash before it.
+     */
     private fun scrivi(voci: List<VoceRegistro>) {
         val cartella = requireNotNull(file.toAbsolutePath().parent) { "registro senza cartella: $file" }
         Files.createDirectories(cartella)
         val temporaneo = Files.createTempFile(cartella, file.fileName.toString(), SUFFISSO_TEMPORANEO)
         try {
-            Files.write(temporaneo, voci.map(::riga), Charsets.UTF_8)
+            scriviRigheSuDisco(temporaneo, voci.map(::riga))
             Files.move(temporaneo, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+            forzaCartella(cartella)
         } finally {
             Files.deleteIfExists(temporaneo) // no-op once the move above has succeeded
         }
@@ -121,6 +130,24 @@ private fun analizzaRiga(riga: String): VoceRegistro {
         numRegistrazioni = parti[INDICE_NUM_REGISTRAZIONI].toInt(),
         ultimaAttivita = Instant.parse(parti[INDICE_ULTIMA_ATTIVITA]),
     )
+}
+
+/** Writes [righe] to [temporaneo] and fsyncs before returning (F3) — durable before the rename. */
+private fun scriviRigheSuDisco(temporaneo: Path, righe: List<String>) {
+    val contenuto = righe.joinToString(separator = "") { "$it\n" }.toByteArray(Charsets.UTF_8)
+    FileChannel.open(temporaneo, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use { canale ->
+        canale.write(ByteBuffer.wrap(contenuto))
+        canale.force(true)
+    }
+}
+
+/** Best-effort fsync of [cartella] (F3) — makes the rename's directory entry durable too. */
+private fun forzaCartella(cartella: Path) {
+    try {
+        FileChannel.open(cartella, StandardOpenOption.READ).use { it.force(true) }
+    } catch (ignored: IOException) {
+        // best effort: non ogni filesystem/OS permette di aprire una cartella come FileChannel
+    }
 }
 
 private fun riga(v: VoceRegistro): String = listOf(
