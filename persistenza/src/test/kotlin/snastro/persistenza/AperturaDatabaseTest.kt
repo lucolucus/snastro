@@ -7,8 +7,10 @@ import java.io.File
 import java.nio.file.Path
 import kotlin.io.path.absolutePathString
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AperturaDatabaseTest {
@@ -36,7 +38,7 @@ class AperturaDatabaseTest {
         SnastroDatabase.Schema.create(driverSetup)
         driverSetup.execute(null, "PRAGMA user_version = 999", 0)
         driverSetup.close()
-        val dimensionePrima = file.length()
+        val contenutoPrima = file.readBytes()
 
         val eccezione = assertFailsWith<SchemaProgettoPiuRecenteException> {
             apriDatabaseProgetto(cartella.toFile())
@@ -45,7 +47,11 @@ class AperturaDatabaseTest {
         assertEquals(999L, eccezione.versioneTrovata)
         assertEquals(SnastroDatabase.Schema.version, eccezione.versioneSupportata)
         assertTrue(eccezione.message?.isNotBlank() == true, "il messaggio deve essere chiaro")
-        assertEquals(dimensionePrima, file.length(), "il file non deve essere modificato")
+        // Byte-for-byte, not just length: a refusal must never flip the file into WAL (which writes
+        // the header) even when the length happens to stay the same.
+        assertContentEquals(contenutoPrima, file.readBytes(), "il file non deve essere modificato")
+        assertFalse(File(cartella.toFile(), "progetto.db-wal").exists(), "nessun file -wal deve comparire")
+        assertFalse(File(cartella.toFile(), "progetto.db-shm").exists(), "nessun file -shm deve comparire")
 
         val driverVerifica = JdbcSqliteDriver("jdbc:sqlite:${file.absolutePath}")
         assertEquals("999", pragma(driverVerifica, "user_version"))
