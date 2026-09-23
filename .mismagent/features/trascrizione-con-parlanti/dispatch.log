@@ -173,3 +173,7 @@
 2026-09-23T10:01:36Z	crea-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-23T10:01:36Z	avvia-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-23T10:01:36Z	gestione-parlante	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T10:13:47Z	persistenza-schema	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; resumes from WIP 6134531, not a rework)
+2026-09-23T10:13:47Z	crea-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; worktree empty)
+2026-09-23T10:13:47Z	avvia-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; worktree empty)
+2026-09-23T10:13:47Z	gestione-parlante	worker	dispatch	cycle=0	tier=standard	model=sonnet	(orphan re-dispatch after session loss; worktree empty)
