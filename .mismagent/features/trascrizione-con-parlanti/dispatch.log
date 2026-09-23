@@ -220,3 +220,9 @@
 2026-09-23T10:55:49Z	esegui-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:55:49Z	esegui-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T10:55:49Z	fix-batch-4	worker	dispatch	cycle=0	tier=standard	model=sonnet	(servizi-registrazione follow-up, user-approved)
+2026-09-23T10:58:55Z	esegui-elaborazione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: F1 motivo = raw exception text violates AC-70; F2 failed final commit leaves in_corso + no terminata; MED F3 no re-read/guard between phases, F4 runCatching catches Throwable, F5 durata catalogue vs decoded samples, F6 AC-70 only decodifica tested, F7 missing Registrazione via error(); LOW F9 narrow when, F12 AC-72 zero parlato; defer F8 phase granularity, F10 -Xmx, F11 carry to avvio-composizione: RecuperaElaborazioniInterrotte strictly before dispatcher)
+2026-09-23T10:59:12Z	esegui-elaborazione	verifier	result	cycle=0	tier=deep	model=opus	FAIL (INV-5 test cannot catch a two-transaction split — needs failure on Elaborazione side after Trascritto saved; AC-70 motivo plain-language not asserted + only decodifica fault tested) -> rework cycle=1 queued (worker cap 4/4) with code-review F1-F7,F9,F12
+2026-09-23T11:00:51Z	revisione-policy	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (c2f1b72; primitive-arg policy API, event translation left to abbonato-revisione-parlanti)
+2026-09-23T11:00:51Z	revisione-policy	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:00:51Z	revisione-policy	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T11:00:51Z	esegui-elaborazione	worker	dispatch	cycle=1	tier=standard	model=sonnet	(rework: verifier FAIL INV-5 test + AC-70; code-review HIGH F1/F2, MED F3-F7, LOW F9/F12)
