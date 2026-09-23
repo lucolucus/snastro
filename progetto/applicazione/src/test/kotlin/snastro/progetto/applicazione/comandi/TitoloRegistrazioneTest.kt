@@ -14,7 +14,8 @@ class TitoloRegistrazioneTest {
      * (`DocumentoTest`, `:documento:applicazione`) — they MUST stay identical to that test's rows
      * (the NFD row is only spelled with escapes here), because [TitoloRegistrazione.pulisci] is a
      * private copy of documento's `pulisci` (`:progetto` may not depend on `:documento`). The rows
-     * after the marker are extra coverage of this copy.
+     * after the marker cover pinned-rule clauses documento's table does not test yet (the trim after
+     * the 237-byte cut, U+007F) — they are to be added to documento's table too, so both stay identical.
      */
     @Test
     fun `AC-322 pulisci segue la regola di nomeFile, stesse righe della tabella AC-320 di documento`() {
@@ -33,7 +34,8 @@ class TitoloRegistrazioneTest {
             // --- extra rows (not in documento's table) ---
             "a".repeat(236) + " b" to "a".repeat(236), // the 237-byte cut lands right after a space
             "a".repeat(236) + ".b" to "a".repeat(236), // the 237-byte cut lands right after a dot
-            "x\u001Fy\u007Fz" to "x_y_z",
+            "prima\u007Fdopo" to "prima_dopo", // U+007F (DEL) -> '_'
+            "x\u0000y\u001Fz" to "x_y_z", // the ends of the C0 control range
             "lpt9" to "lpt9_",
             "Riunione*" to "Riunione_",
             "Riunione?" to "Riunione_",
