@@ -66,3 +66,20 @@
 2026-09-23T08:39:39Z	trascritto	verifier	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:39:39Z	trascritto	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T08:39:50Z	porte-parlanti	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:40:33Z	porte-documento	verifier	result	cycle=0	tier=deep	model=opus	PASS (ADR 0010 enforced_by must be narrowed to documento/*/src/main before scrittore-documento-md)
+2026-09-23T08:40:55Z	porte-documento	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (HIGH F1 Finta lacks failure injection + op log; MED F2-F4; F9 nomeFile collision -> Decision for documento)
+2026-09-23T08:40:55Z	porte-documento	worker	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:42:47Z	trascritto	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED (Decision F1 riassegna(null) on sole Segmento destroys attribution; Patch F2 ricostituisci guard on prossimaVoce)
+2026-09-23T08:47:32Z	trascritto	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T08:47:32Z	trascritto	worker	dispatch	cycle=1	tier=deep	model=opus	(user Decision: refuse riassegna(null) on sole Segmento; + ricostituisci guard)
+2026-09-23T08:47:32Z	porte-documento	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:47:32Z	porte-documento	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:47:32Z	porte-documento	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T08:47:32Z	porte-progetto	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:47:32Z	porte-progetto	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:47:32Z	porte-progetto	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:47:32Z	(documento)	decision	result	-	-	-	USER DECISION: nomeFile unique via suffix \" (2)\", \" (3)\" on collision, stable order by aggiuntaAlle — fold into documento/rigenerazione-documento via build-manifest
+2026-09-23T08:48:16Z	porte-parlanti	worker	result	cycle=0	tier=deep	model=opus	BOUNCED->accepted by composer as READY-FOR-REVIEW (1-line NomeGiaInUso in :parlanti:dominio ErroriParlanti, verbatim from dev-arch #pacchetti; manifest gap: pinned error with no dominio owner -> build-manifest)
+2026-09-23T08:48:16Z	porte-parlanti	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:48:16Z	porte-parlanti	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:48:52Z	porta-registrazione-trascrizione	worker	dispatch	cycle=0	tier=deep	model=opus
