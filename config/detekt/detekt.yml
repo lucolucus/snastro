@@ -1,0 +1,36 @@
+# snastro — detekt config (code-rules.md: CR-6, CR-7, CR-11). No baseline (mechanical gate lint).
+# buildUponDefaultConfig = true (build-logic/ConventionUtils.kt): everything not overridden here
+# keeps detekt's own default active/inactive state.
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false # allWarningsAsErrors is the Kotlin compiler's job (CR-9); detekt fails the build via maxIssues: 0.
+
+potential-bugs:
+  UnsafeCallOnNullableType: # CR-6: no `!!`.
+    active: true
+
+exceptions:
+  TooGenericExceptionCaught: # CR-7: no swallowed failure.
+    active: true
+  TooGenericExceptionThrown:
+    active: true
+  SwallowedException:
+    active: true
+
+empty-blocks:
+  EmptyCatchBlock: # CR-7: no empty catch.
+    active: true
+
+formatting: # CR-11: official Kotlin style (ktlint rules via detekt-formatting).
+  active: true
+  android: false
+  autoCorrect: false
+
+naming:
+  FunctionNaming:
+    ignoreAnnotated: ["Composable"] # Compose convention: composables are PascalCase (screen/component names).
