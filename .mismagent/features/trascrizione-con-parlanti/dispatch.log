@@ -415,3 +415,6 @@
 2026-09-23T12:58:48Z	fix-batch-6	code-review	dispatch	cycle=2	tier=deep	model=opus
 2026-09-23T13:00:39Z	fix-batch-6	code-review	result	cycle=2	tier=deep	model=opus	APPROVE (0 HIGH; all cycle-1 findings fixed; LOW defer: child warm-up for guaranteed contention, waitFor after destroyForcibly, Windows classpath length, DirectoryIteratorException in sweep, realPath key)
 2026-09-23T13:06:06Z	fix-batch-6	verifier	result	cycle=2	tier=deep	model=opus	PASS (child-JVM mutants red 4/4 and 2/2; sweep mutants red)
+2026-09-23T13:07:23Z	modelli-provisioning	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (f30967e; archives, LOCALAPPDATA, redirects, .part recovery, watchdog, ScritturaFallita; commons-compress 1.28.0 Apache-2.0; 3 mutants red)
+2026-09-23T13:07:23Z	modelli-provisioning	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T13:07:23Z	modelli-provisioning	code-review	dispatch	cycle=1	tier=deep	model=opus	(HIGH-only gating per user push for visible releases)
