@@ -1,24 +1,8 @@
--- Entity: ImprontaVocale, owned by Parlante (INV-14). impronta = BLOB float32 little-endian
--- (ADR 0009) — the app writes no other copy. UNIQUE(parlante_id, registrazione_id, voce_id) is the
--- "at most one print per VoceRef" guard (AC-13); registraImpronta's "insert or replace" semantics
--- use `sostituisci`, never touching the other prints of the same Parlante. sorgente_impronta
--- (SorgenteImpronta.chiave) and modello_impronta (extractor model id) are non-biometric metadata
--- (ADR 0009 Amendment (b) / ADR 0012 Amendment (b)) purged with the row by every removal path;
--- `aggiornaCompareAndSet` is the ONLY write `RiallineaImpronte` uses — an UPDATE of the one row,
--- never an INSERT ("no resurrection": a row purged meanwhile cannot be re-created by after-commit
--- work that started before the purge).
-CREATE TABLE impronta_vocale (
-    parlante_id TEXT NOT NULL REFERENCES parlante(id),
-    registrazione_id TEXT NOT NULL,
-    voce_id INTEGER NOT NULL,
-    impronta BLOB NOT NULL,
-    sorgente_impronta TEXT NOT NULL,
-    modello_impronta TEXT NOT NULL,
-    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero),
-    UNIQUE (parlante_id, registrazione_id, voce_id)
-);
-
-CREATE INDEX impronta_vocale_voce ON impronta_vocale(registrazione_id, voce_id);
+-- Queries for `impronta_vocale` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+-- registraImpronta's "insert or replace" semantics use `sostituisci`, never touching the other
+-- prints of the same Parlante. `aggiornaCompareAndSet` is the ONLY write `RiallineaImpronte` uses —
+-- an UPDATE of the one row, never an INSERT ("no resurrection": a row purged meanwhile cannot be
+-- re-created by after-commit work that started before the purge).
 
 trovaDiParlante:
 SELECT * FROM impronta_vocale WHERE parlante_id = :parlanteId;

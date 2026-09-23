@@ -1,20 +1,4 @@
--- Aggregate: Elaborazione (tactical-model.md § Trascrizione). StatoElaborazione persisted as
--- lowercase canonical text (dev-architecture-app.md#pacchetti). INV-4 backed by ADR 0007's two
--- partial unique indexes below (each on ONE line, greppable — do not reformat).
-CREATE TABLE elaborazione (
-    id TEXT NOT NULL PRIMARY KEY,
-    registrazione_id TEXT NOT NULL REFERENCES registrazione(id),
-    stato TEXT NOT NULL,
-    creata_alle INTEGER NOT NULL,
-    avviata_alle INTEGER,
-    motivo_fallimento TEXT
-);
-
-CREATE INDEX elaborazione_registrazione ON elaborazione(registrazione_id);
-
-CREATE UNIQUE INDEX elaborazione_aperta_unica ON elaborazione(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso');
-
-CREATE UNIQUE INDEX elaborazione_completata_unica ON elaborazione(registrazione_id) WHERE stato = 'completata';
+-- Queries for `elaborazione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
 trovaDiRegistrazione:
 SELECT * FROM elaborazione WHERE registrazione_id = :registrazioneId ORDER BY creata_alle, id;

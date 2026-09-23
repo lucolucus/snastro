@@ -1,15 +1,4 @@
--- Aggregate: Attribuzione (tactical-model.md § Parlanti). Identity = VoceRef (registrazione_id,
--- voce_id) — "at most one Parlante per Voce" is structural (AC-23), guaranteed by the PRIMARY KEY.
-CREATE TABLE attribuzione (
-    registrazione_id TEXT NOT NULL,
-    voce_id INTEGER NOT NULL,
-    progetto_id TEXT NOT NULL REFERENCES progetto(id),
-    parlante_id TEXT NOT NULL REFERENCES parlante(id),
-    PRIMARY KEY (registrazione_id, voce_id),
-    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero)
-);
-
-CREATE INDEX attribuzione_parlante ON attribuzione(parlante_id);
+-- Queries for `attribuzione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
 trova:
 SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;

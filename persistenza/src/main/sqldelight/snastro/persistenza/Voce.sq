@@ -1,11 +1,6 @@
--- Entity: Voce, owned by Trascritto (INV-6). numero = the fixed "Voce n" label (never renumbered,
--- never reused, INV-12). The repository replaces the full set of rows per Registrazione on salva
--- (dev-architecture-app.md#repository), so no per-row update query is needed here.
-CREATE TABLE voce (
-    registrazione_id TEXT NOT NULL REFERENCES trascritto(registrazione_id),
-    numero INTEGER NOT NULL,
-    PRIMARY KEY (registrazione_id, numero)
-);
+-- Queries for `voce` — schema in migrations/1.sqm (ADR 0006 Amendment (a)). The repository
+-- replaces the full set of rows per Registrazione on salva (dev-architecture-app.md#repository),
+-- so no per-row update query is needed here.
 
 trovaDiTrascritto:
 SELECT * FROM voce WHERE registrazione_id = :registrazioneId ORDER BY numero;

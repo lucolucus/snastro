@@ -1,16 +1,4 @@
--- Aggregate: Registrazione (tactical-model.md § Progetto + R6 titolo). progetto_id is set at
--- creation and never changes (INV-1); data_registrazione is the only mutable column (INV-2).
-CREATE TABLE registrazione (
-    id TEXT NOT NULL PRIMARY KEY,
-    progetto_id TEXT NOT NULL REFERENCES progetto(id),
-    titolo TEXT NOT NULL,
-    riferimento_audio TEXT NOT NULL,
-    durata_ms INTEGER NOT NULL,
-    data_registrazione TEXT NOT NULL,
-    aggiunta_alle INTEGER NOT NULL
-);
-
-CREATE INDEX registrazione_progetto ON registrazione(progetto_id);
+-- Queries for `registrazione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
 trovaPerId:
 SELECT * FROM registrazione WHERE id = :id;

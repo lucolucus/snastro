@@ -1,20 +1,4 @@
--- Aggregate: Parlante (tactical-model.md § Parlanti). nome_normalizzato is computed by the Nome
--- VO (trim + lowercase Locale.ROOT), never in SQL (ADR 0007). INV-16 backed by the partial unique
--- index below (on ONE line, greppable — do not reformat). rimuovi is the ONLY physical deletion of
--- a Parlante (R25, INV-25 occasionale cessation) — the aggregate's own no-deletion rule stays a
--- soft tombstone (stato = 'eliminato') for every other case.
-CREATE TABLE parlante (
-    id TEXT NOT NULL PRIMARY KEY,
-    progetto_id TEXT NOT NULL REFERENCES progetto(id),
-    nome TEXT NOT NULL,
-    nome_normalizzato TEXT NOT NULL,
-    tipo TEXT NOT NULL,
-    stato TEXT NOT NULL
-);
-
-CREATE INDEX parlante_progetto ON parlante(progetto_id);
-
-CREATE UNIQUE INDEX parlante_nome_attivo_unico ON parlante(progetto_id, nome_normalizzato) WHERE stato = 'attivo';
+-- Queries for `parlante` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
 trovaPerId:
 SELECT * FROM parlante WHERE id = :id;

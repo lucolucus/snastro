@@ -1,8 +1,4 @@
--- Aggregate: Progetto (tactical-model.md § Progetto). One row per project database (ADR 0006).
-CREATE TABLE progetto (
-    id TEXT NOT NULL PRIMARY KEY,
-    nome TEXT NOT NULL
-);
+-- Queries for `progetto` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
 trova:
 SELECT * FROM progetto LIMIT 1;

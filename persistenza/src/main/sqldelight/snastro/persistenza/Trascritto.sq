@@ -1,11 +1,4 @@
--- Aggregate: Trascritto (tactical-model.md § Trascrizione). Identity = registrazione_id (one
--- Trascritto per Registrazione, INV-5). prossima_voce / prossimo_segmento are the persisted
--- monotonic counters that guarantee INV-12 (voceId never reused) and segmentoId stability (INV-8).
-CREATE TABLE trascritto (
-    registrazione_id TEXT NOT NULL PRIMARY KEY REFERENCES registrazione(id),
-    prossima_voce INTEGER NOT NULL,
-    prossimo_segmento INTEGER NOT NULL
-);
+-- Queries for `trascritto` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
 trovaPerRegistrazione:
 SELECT * FROM trascritto WHERE registrazione_id = :registrazioneId;

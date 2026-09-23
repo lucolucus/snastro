@@ -72,6 +72,82 @@ class SchemaVincoliTest {
     }
 
     @Test
+    fun `AC-13 i FK verso voce sono differibili e permettono di sostituire le voce nella stessa transazione`() {
+        val db = databaseInMemoria()
+        val progettoId = "progetto-1"
+        db.progettoQueries.inserisci(progettoId, "Progetto di prova")
+        val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
+        db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
+        db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
+        db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
+        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao")
+
+        // Trascritto's documented salva: DELETE voce ... then re-insert, in ONE transaction that
+        // also carries the Parlanti revisione-policy on attribuzione/impronta_vocale (ADR 0012).
+        // With an immediate FK this DELETE alone would fail while attribuzione/segmento/
+        // impronta_vocale still reference the row.
+        db.transaction {
+            db.voceQueries.eliminaDiRegistrazione(registrazioneId)
+            db.voceQueries.inserisci(registrazioneId, 1L)
+        }
+
+        assertEquals(1, db.attribuzioneQueries.trovaDiRegistrazione(registrazioneId).executeAsList().size)
+        assertEquals(1, db.improntaVocaleQueries.trovaDiParlante("parlante-1").executeAsList().size)
+        assertEquals(1, db.segmentoQueries.trovaDiTrascritto(registrazioneId).executeAsList().size)
+    }
+
+    @Test
+    fun `AC-13 un riferimento a voce ancora pendente a fine transazione fa fallire il commit`() {
+        val db = databaseInMemoria()
+        val progettoId = "progetto-1"
+        db.progettoQueries.inserisci(progettoId, "Progetto di prova")
+        val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
+        db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
+        db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
+        db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
+
+        assertFailsWith<SQLException> {
+            db.transaction {
+                db.voceQueries.eliminaDiRegistrazione(registrazioneId)
+                // niente reinserimento: attribuzione resta orfana quando la transazione fa commit.
+            }
+        }
+    }
+
+    @Test
+    fun `elaborazione stato CHECK rifiuta un valore fuori dai letterali canonici`() {
+        val db = databaseInMemoria()
+        val registrazioneId = db.seminaProgettoERegistrazione()
+
+        assertFailsWith<SQLException> {
+            db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "sconosciuto", 0L, null, null)
+        }
+    }
+
+    @Test
+    fun `parlante tipo CHECK rifiuta un valore fuori dai letterali canonici`() {
+        val db = databaseInMemoria()
+        val progettoId = "progetto-1"
+        db.progettoQueries.inserisci(progettoId, "Progetto di prova")
+
+        assertFailsWith<SQLException> {
+            db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "sconosciuto", "attivo")
+        }
+    }
+
+    @Test
+    fun `parlante stato CHECK rifiuta un valore fuori dai letterali canonici`() {
+        val db = databaseInMemoria()
+        val progettoId = "progetto-1"
+        db.progettoQueries.inserisci(progettoId, "Progetto di prova")
+
+        assertFailsWith<SQLException> {
+            db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "sconosciuto")
+        }
+    }
+
+    @Test
     fun `AC-13 attribuzione ha chiave registrazione_id voce_id e rifiuta una seconda riga`() {
         val db = databaseInMemoria()
         val progettoId = "progetto-1"
