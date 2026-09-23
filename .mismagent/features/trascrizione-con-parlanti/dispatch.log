@@ -483,3 +483,9 @@
 2026-09-23T16:32:19Z	schermata-registrazioni	verifier	result	cycle=1	tier=deep	model=opus	PASS (H1,H2 resolved)
 2026-09-23T16:32:19Z	schermata-registrazioni	composer	merge	cycle=1	-	-	MERGED 36035e0
 2026-09-23T16:32:19Z	schermata-registrazioni	composer	pre-release	cycle=1	-	-	MED refresh-error banner sticks after later success; MED generation guard drops older successful load when newer fails (imported row hidden, error nulled); MED no view test for date Enter/blur submit; LOW %+1 accepted / invalid UTF-8 -> U+FFFD; LOW riprova no Caricamento feedback
+2026-09-23T16:38:05Z	persistenza-schema	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW a05fa37 (+ composer sync 71138fa)
+2026-09-23T16:38:05Z	persistenza-schema	verifier	dispatch	cycle=1	tier=deep	model=opus	verify + re-review
+2026-09-23T16:42:54Z	persistenza-schema	verifier	result	cycle=1	tier=deep	model=opus	PASS (both HIGH resolved; uncached gate 56s)
+2026-09-23T16:42:54Z	persistenza-schema	composer	merge	cycle=1	-	-	MERGED 1daa9e0
+2026-09-23T16:42:54Z	persistenza-schema	composer	pre-release	cycle=1	-	-	MED Schema.version is 2 (1.sqm migrates 1->2) vs docs "v1"; migrate branch untested (add migrate(0,version) test, fix wording) — settle BEFORE R0 freeze; LOW block spec AC-8 still cites verifySqlDelightMigration; LOW deferred FK errors surface at COMMIT
+2026-09-23T16:42:54Z	repository-sql-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
