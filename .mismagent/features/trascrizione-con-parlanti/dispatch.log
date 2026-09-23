@@ -489,3 +489,9 @@
 2026-09-23T16:42:54Z	persistenza-schema	composer	merge	cycle=1	-	-	MERGED 1daa9e0
 2026-09-23T16:42:54Z	persistenza-schema	composer	pre-release	cycle=1	-	-	MED Schema.version is 2 (1.sqm migrates 1->2) vs docs "v1"; migrate branch untested (add migrate(0,version) test, fix wording) — settle BEFORE R0 freeze; LOW block spec AC-8 still cites verifySqlDelightMigration; LOW deferred FK errors surface at COMMIT
 2026-09-23T16:42:54Z	repository-sql-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-23T16:51:27Z	repository-sql-progetto	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 90a4614
+2026-09-23T16:51:27Z	repository-sql-progetto	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + code-review combined
+2026-09-23T16:53:09Z	repository-sql-progetto	verifier	result	cycle=0	tier=deep	model=opus	PASS (no HIGH)
+2026-09-23T16:53:09Z	repository-sql-progetto	composer	merge	cycle=0	-	-	MERGED 9a43a84
+2026-09-23T16:53:09Z	repository-sql-progetto	composer	pre-release	cycle=0	-	-	MED aggiuntaAlle truncated to ms (avvio-r0 wires Clock.tick 1ms; add sub-ms contract case); LOW salva read-then-write could be UPSERT
+2026-09-23T16:53:09Z	avvio-r0	worker	dispatch	cycle=0	tier=standard	model=sonnet
