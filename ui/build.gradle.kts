@@ -7,8 +7,23 @@ plugins {
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
+    implementation(project(":kernel"))
+    implementation(libs.kotlinx.coroutines.core)
+
+    // ErroreApplicazioneProgetto (MessaggiErrore, AC-180) — package `..applicazione.porte`, CR-1
+    // ("ui sees only kernel and *:applicazione"). ErroreProgetto/ErroreTrascrizione/ErroreParlanti
+    // live in `*:dominio` and are NOT reachable here yet (BOUNCED — see the worker's report).
+    implementation(project(":progetto:applicazione"))
 
     testImplementation(compose.desktop.uiTestJUnit4)
+
+    // GeneratoreIdFinto + Esito test helpers (atteso/erroreAtteso), used by testFixtures (SessioneProgettoFinta) and tests alike.
+    testFixturesApi(testFixtures(project(":kernel")))
+    // StateFlow in SessioneProgettoFinta/-Contratto (not inherited from main's `implementation`).
+    testFixturesImplementation(libs.kotlinx.coroutines.core)
+    // The Compose compiler plugin runs on every source set of this module; testFixtures needs the
+    // runtime on its classpath even though it declares no `@Composable` (build-logic snastro.compose-desktop).
+    testFixturesImplementation(compose.desktop.currentOs)
 }
 
 // Compose Desktop headless render-check (profile `ui_render_check`): every screen rendered
