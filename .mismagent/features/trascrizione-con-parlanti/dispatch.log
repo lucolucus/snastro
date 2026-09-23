@@ -183,3 +183,7 @@
 2026-09-23T10:23:31Z	servizi-registrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-23T10:24:37Z	crea-progetto	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; LOW carry to repository-sql-progetto: enforce one-Progetto-per-DB in storage; LOW AC-54 empty-string case only in domain test; LOW CR-16 matches simple name Esito)
 2026-09-23T10:25:27Z	crea-progetto	verifier	result	cycle=0	tier=deep	model=opus	PASS (CR-16 fix mutation-tested: still discriminates)
+2026-09-23T10:25:39Z	avvia-elaborazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (70a942d; out-of-block: ErroreTrascrizione.RegistrazioneNonTrovata + duplicate CR-16 fix)
+2026-09-23T10:25:39Z	avvia-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:25:39Z	avvia-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:26:03Z	esegui-elaborazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
