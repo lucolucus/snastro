@@ -22,6 +22,9 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
     /** INV-4 (ADR 0007, `elaborazione_completata_unica`): the Registrazione already has a `completata` one. */
     public data class ElaborazioneGiaCompletata(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
 
+    /** ADR 0014 (AC-368): a Numero di persone must be an integer from 1 to 10; [valore] was given. */
+    public data class NumeroPersoneFuoriIntervallo(val valore: Int) : ErroreTrascrizione
+
     /** AC-67: `LettoreRegistrazione` (Progetto, via the port) does not know this Registrazione. */
     public data class RegistrazioneNonTrovata(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
 

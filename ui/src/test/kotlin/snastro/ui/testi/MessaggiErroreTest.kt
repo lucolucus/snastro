@@ -117,6 +117,7 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.UnioneNonAmmessa(VoceId(1), VoceId(2)),
                 ErroreTrascrizione.DivisioneNonAmmessa(VoceId(1), setOf(SegmentoId(1))),
                 ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
+                ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
             ),
         ) { messaggioPer(it) }
     }

@@ -19,10 +19,10 @@ class SchemaVincoliTest {
     fun `AC-9 elaborazione_aperta_unica rifiuta una seconda Elaborazione aperta per la stessa Registrazione`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "in_attesa", 0L, null, null)
+        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "in_attesa", 0L, null, null, null)
 
         assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "in_corso", 1L, 1L, null)
+            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "in_corso", 1L, 1L, null, null)
         }
     }
 
@@ -30,10 +30,10 @@ class SchemaVincoliTest {
     fun `AC-9 elaborazione_completata_unica rifiuta una seconda Elaborazione completata per la stessa Registrazione`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "completata", 0L, 0L, null)
+        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "completata", 0L, 0L, null, null)
 
         assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "completata", 1L, 1L, null)
+            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "completata", 1L, 1L, null, null)
         }
     }
 
@@ -45,8 +45,8 @@ class SchemaVincoliTest {
         val r1 = db.seminaRegistrazione(progettoId, "reg-1")
         val r2 = db.seminaRegistrazione(progettoId, "reg-2")
 
-        db.elaborazioneQueries.inserisci("elab-1", r1, "in_attesa", 0L, null, null)
-        db.elaborazioneQueries.inserisci("elab-2", r2, "in_attesa", 0L, null, null)
+        db.elaborazioneQueries.inserisci("elab-1", r1, "in_attesa", 0L, null, null, null)
+        db.elaborazioneQueries.inserisci("elab-2", r2, "in_attesa", 0L, null, null, null)
     }
 
     @Test
@@ -121,8 +121,30 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaProgettoERegistrazione()
 
         assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "sconosciuto", 0L, null, null)
+            db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "sconosciuto", 0L, null, null, null)
         }
+    }
+
+    @Test
+    fun `AC-377 numero_persone CHECK rifiuta 0 e 11 e accetta 1, 10 e NULL`() {
+        listOf(0L, 11L).forEach { n ->
+            val db = databaseInMemoria()
+            val registrazioneId = db.seminaProgettoERegistrazione()
+
+            assertFailsWith<SQLException>("numero_persone = $n") {
+                db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "fallita", 0L, 0L, "motivo", n)
+            }
+        }
+        val db = databaseInMemoria()
+        val registrazioneId = db.seminaProgettoERegistrazione()
+        listOf(1L, 10L, null).forEachIndexed { i, n ->
+            db.elaborazioneQueries.inserisci("elab-$i", registrazioneId, "fallita", i.toLong(), 0L, "motivo", n)
+        }
+
+        assertEquals(
+            listOf(1L, 10L, null),
+            db.elaborazioneQueries.trovaDiRegistrazione(registrazioneId).executeAsList().map { it.numero_persone },
+        )
     }
 
     @Test

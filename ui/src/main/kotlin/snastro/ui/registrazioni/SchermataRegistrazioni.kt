@@ -47,18 +47,19 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import snastro.kernel.RegistrazioneId
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
 import snastro.ui.formattaDurata
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_COMPLETATA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
+import snastro.ui.testi.ETICHETTA_NUMERO_PERSONE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
+import snastro.ui.testi.SUGGERIMENTO_NUMERO_PERSONE
 import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.etichettaInCorso
 import java.time.LocalDate
@@ -71,6 +72,7 @@ private val PADDING_SCHERMO = 24.dp
 private val PADDING_SEZIONE = 16.dp
 private val PADDING_RIGA = 8.dp
 private val LARGHEZZA_CAMPO_DATA = 120.dp
+private val LARGHEZZA_CAMPO_NUMERO_PERSONE = 170.dp
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 
 /** M4: `uuuu` (proleptic year, not `yyyy`) + [ResolverStyle.STRICT] rejects an out-of-range day
@@ -199,7 +201,7 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
                     Text(text = formattaDurata(riga.durataMs), style = MaterialTheme.typography.bodySmall)
                 }
             }
-            riga.elaborazione?.let { ColonnaElaborazione(it, riga.registrazioneId, riga.operazioneInCorso, azioni) }
+            riga.elaborazione?.let { ColonnaElaborazione(it, riga, azioni) }
         }
         riga.erroreRiga?.let {
             MessaggioInlineErrore(
@@ -360,21 +362,15 @@ internal fun String.aData(): LocalDate? =
     }
 
 @Composable
-private fun ColonnaElaborazione(
-    stato: StatoElaborazioneRiga,
-    id: RegistrazioneId,
-    operazioneInCorso: Boolean,
-    azioni: AzioniRegistrazioni,
-) {
+private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId
+    val operazioneInCorso = riga.operazioneInCorso
     Column(
         horizontalAlignment = Alignment.End,
         modifier = Modifier.padding(start = PADDING_RIGA).testTag("registrazioni-stato-${id.valore}"),
     ) {
         when (stato) {
-            StatoElaborazioneRiga.NonAvviata ->
-                TextButton(onClick = { azioni.avviaElaborazione(id) }, enabled = !operazioneInCorso) {
-                    Text(ETICHETTA_TRASCRIVI)
-                }
+            StatoElaborazioneRiga.NonAvviata -> AvvioConNumeroPersone(riga, ETICHETTA_TRASCRIVI, azioni)
             is StatoElaborazioneRiga.InAttesa -> Text(etichettaInAttesa(stato.posizione))
             is StatoElaborazioneRiga.InCorso -> Text(etichettaInCorso(stato.faseEtichetta, stato.trascorsoMs))
             is StatoElaborazioneRiga.Fallita -> {
@@ -383,9 +379,7 @@ private fun ColonnaElaborazione(
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                TextButton(onClick = { azioni.avviaElaborazione(id) }, enabled = !operazioneInCorso) {
-                    Text(ETICHETTA_RIPROVA)
-                }
+                AvvioConNumeroPersone(riga, ETICHETTA_RIPROVA, azioni)
             }
             StatoElaborazioneRiga.Completata -> Text(ETICHETTA_COMPLETATA)
         }
@@ -394,6 +388,35 @@ private fun ColonnaElaborazione(
                 modifier = Modifier.size(DIMENSIONE_INDICATORE_PICCOLO)
                     .testTag("registrazioni-operazione-in-corso-${id.valore}"),
             )
+        }
+    }
+}
+
+/**
+ * ADR 0014: the plain 'Numero di persone' field (empty = automatic) next to the 'Trascrivi'/'Riprova' button
+ * [etichetta]. Its text is presenter state ([RigaRegistrazione.numeroPersone]); validation and the inline
+ * message (AC-375) are the presenter's, shown as the row's `erroreRiga`.
+ */
+@Composable
+private fun AvvioConNumeroPersone(riga: RigaRegistrazione, etichetta: String, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        OutlinedTextField(
+            value = riga.numeroPersone,
+            onValueChange = { azioni.modificaNumeroPersone(id, it) },
+            singleLine = true,
+            enabled = !riga.operazioneInCorso,
+            label = { Text(ETICHETTA_NUMERO_PERSONE) },
+            placeholder = { Text(SUGGERIMENTO_NUMERO_PERSONE) },
+            textStyle = MaterialTheme.typography.bodySmall,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            keyboardActions = KeyboardActions(onDone = { azioni.avviaElaborazione(id) }),
+            modifier = Modifier
+                .width(LARGHEZZA_CAMPO_NUMERO_PERSONE)
+                .testTag("registrazioni-numero-persone-${id.valore}"),
+        )
+        TextButton(onClick = { azioni.avviaElaborazione(id) }, enabled = !riga.operazioneInCorso) {
+            Text(etichetta)
         }
     }
 }

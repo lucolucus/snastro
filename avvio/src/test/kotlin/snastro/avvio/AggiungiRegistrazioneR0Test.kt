@@ -12,7 +12,8 @@ import kotlin.test.assertTrue
 /**
  * AC-350 (dynamic half): after a REAL `AggiungiRegistrazione`, run through R0's own composition
  * ([costruisciGrafoR0]) end to end, no row lands in `elaborazione` — R0 wires no Trascrizione
- * command/subscriber that would auto-start processing (the R2 behaviour, not built here; the static
+ * command/subscriber that would auto-start processing (that policy is removed, not deferred: no
+ * release starts an Elaborazione on import, ADR 0014; the static
  * half — nothing under `avvio/src/main` even imports `snastro.trascrizione` — is proven in
  * [GrafoR0Test]). Needs real FFmpeg to probe the source (ADR 0005), like every other real-audio test
  * in this codebase: `@Tag("modelli")`, excluded from the default gate.

@@ -2,9 +2,12 @@ package snastro.trascrizione.applicazione.letture
 
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.atteso
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.dominio.NumeroPersone
+import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
@@ -27,9 +30,44 @@ class StatiElaborazioneTest {
         val riga = stati.stati(listOf(REGISTRAZIONE)).single()
 
         assertEquals(
-            StatoRegistrazioneVista(REGISTRAZIONE, StatoElaborazioneVista.NON_AVVIATA, null, null, null, null, null),
+            StatoRegistrazioneVista(
+                REGISTRAZIONE,
+                StatoElaborazioneVista.NON_AVVIATA,
+                fase = null,
+                avviataAlle = null,
+                motivoFallimento = null,
+                posizioneInCoda = null,
+                numVoci = null,
+                numeroPersone = null,
+            ),
             riga,
         )
+    }
+
+    @Test
+    fun `AC-162 numeroPersone e quello dell ultima Elaborazione in ogni stato e nullo se assente`() {
+        val registrazioni = StatoElaborazione.entries.map { RegistrazioneId("registrazione-${it.name}") }
+        StatoElaborazione.entries.zip(registrazioni).forEachIndexed { i, (stato, id) ->
+            val numero = NumeroPersone.di(i + 2).atteso()
+            elaborazioni.salva(unaElaborazione(stato, id = idDi("el-$i"), registrazioneId = id, numeroPersone = numero))
+        }
+        val senzaNumero = RegistrazioneId("registrazione-senza-numero")
+        elaborazioni.salva(unaElaborazione(FALLITA, id = idDi("el-senza"), registrazioneId = senzaNumero))
+
+        val righe = stati.stati(registrazioni + senzaNumero + REGISTRAZIONE)
+
+        assertEquals(listOf(2, 3, 4, 5, null, null), righe.map { it.numeroPersone })
+    }
+
+    @Test
+    fun `AC-162 numeroPersone viene dall ultima Elaborazione, non da una fallita precedente`() {
+        val tre = NumeroPersone.di(3).atteso()
+        elaborazioni.salva(
+            unaElaborazione(FALLITA, idDi("el-1"), REGISTRAZIONE, creataAlle = t(0), numeroPersone = tre),
+        )
+        elaborazioni.salva(unaElaborazione(IN_ATTESA, idDi("el-2"), REGISTRAZIONE, creataAlle = t(1)))
+
+        assertNull(stati.stati(listOf(REGISTRAZIONE)).single().numeroPersone)
     }
 
     @Test

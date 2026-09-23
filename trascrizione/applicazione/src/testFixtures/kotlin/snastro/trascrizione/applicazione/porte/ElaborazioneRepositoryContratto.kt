@@ -10,6 +10,7 @@ import snastro.kernel.erroreAtteso
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
+import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
@@ -132,7 +133,9 @@ public abstract class ElaborazioneRepositoryContratto {
     @Test
     public fun `AC-29 il round-trip conserva ogni campo in ogni stato`() {
         val tutte = StatoElaborazione.entries.mapIndexed { i, stato ->
-            una(stato, "elaborazione-$i", registrazioneId = REGISTRAZIONI[i])
+            // AC-377: numeroPersone round-trips too — present (1..10) on odd rows, absent on even ones.
+            val numero = if (i % 2 == 1) NumeroPersone.di(i * 3).atteso() else null
+            una(stato, "elaborazione-$i", registrazioneId = REGISTRAZIONI[i], numeroPersone = numero)
         }
         tutte.forEach { repo.salva(it).atteso() }
 
@@ -159,15 +162,24 @@ public abstract class ElaborazioneRepositoryContratto {
 
     /** The observable state of an [Elaborazione] (the aggregate has no value equality). */
     private fun righe(e: Elaborazione): List<Any?> =
-        listOf(e.id, e.registrazioneId, e.creataAlle, e.stato, e.avviataAlle, e.motivoFallimento)
+        listOf(e.id, e.registrazioneId, e.creataAlle, e.numeroPersone, e.stato, e.avviataAlle, e.motivoFallimento)
 
     private fun una(
         stato: StatoElaborazione,
         id: String,
         registrazioneId: RegistrazioneId = REGISTRAZIONE,
         creataAlle: Instant = CREATA,
+        numeroPersone: NumeroPersone? = null,
     ): Elaborazione =
-        unaElaborazione(stato, ElaborazioneId(id), registrazioneId, creataAlle, avviataAlle = AVVIATA, motivo = MOTIVO)
+        unaElaborazione(
+            stato,
+            ElaborazioneId(id),
+            registrazioneId,
+            creataAlle,
+            avviataAlle = AVVIATA,
+            motivo = MOTIVO,
+            numeroPersone = numeroPersone,
+        )
 
     public companion object {
         public val PROGETTO: ProgettoId = ProgettoId("progetto-1")

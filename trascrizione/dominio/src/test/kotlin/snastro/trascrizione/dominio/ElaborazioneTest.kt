@@ -19,7 +19,7 @@ class ElaborazioneTest {
 
     @Test
     fun `INV-3 accoda crea un Elaborazione in_attesa aperta e restituisce ElaborazioneAccodata`() {
-        val creato = Elaborazione.accoda(id, registrazioneId, CREATA_ALLE)
+        val creato = Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, numeroPersone = null)
 
         val e = creato.aggregato
         assertEquals(ElaborazioneAccodata(id, registrazioneId, CREATA_ALLE), creato.evento)
@@ -122,6 +122,35 @@ class ElaborazioneTest {
 
         assertEquals("Il file audio non si puo leggere", e.motivoFallimento)
         assertEquals(AVVIATA_ALLE, e.avviataAlle)
+    }
+
+    // --- AC-367 ------------------------------------------------------------------------------------
+
+    @Test
+    fun `AC-367 accoda fissa numeroPersone alla creazione`() {
+        val quattro = NumeroPersone.di(4).atteso()
+
+        assertEquals(quattro, Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, quattro).aggregato.numeroPersone)
+        assertNull(Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, numeroPersone = null).aggregato.numeroPersone)
+    }
+
+    @Test
+    fun `AC-367 nessuna transizione cambia numeroPersone`() {
+        listOf(NumeroPersone.di(4).atteso(), null).forEach { numero ->
+            val completata = Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, numero).aggregato
+            completata.avvia(AVVIATA_ALLE).atteso()
+            assertEquals(numero, completata.numeroPersone, "dopo avvia")
+            completata.completa().atteso()
+            assertEquals(numero, completata.numeroPersone, "dopo completa")
+
+            val fallita = unaElaborazione(StatoElaborazione.IN_CORSO, numeroPersone = numero)
+            fallita.fallisci("motivo").atteso()
+            assertEquals(numero, fallita.numeroPersone, "dopo fallisci")
+
+            val rifiutata = unaElaborazione(StatoElaborazione.FALLITA, numeroPersone = numero)
+            rifiutata.avvia(AVVIATA_ALLE).erroreAtteso<ErroreTrascrizione.TransizioneNonAmmessa>()
+            assertEquals(numero, rifiutata.numeroPersone, "dopo una transizione rifiutata")
+        }
     }
 
     // --- helpers -----------------------------------------------------------------------------------

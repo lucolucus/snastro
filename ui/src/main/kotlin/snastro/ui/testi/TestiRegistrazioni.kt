@@ -10,6 +10,13 @@ const val ETICHETTA_TRASCRIVI: String = "Trascrivi"
 const val ETICHETTA_RIPROVA: String = "Riprova"
 const val ETICHETTA_COMPLETATA: String = "Completata"
 
+/** ADR 0014: the optional field next to 'Trascrivi'/'Riprova' — empty means automatic. */
+const val ETICHETTA_NUMERO_PERSONE: String = "Numero di persone"
+const val SUGGERIMENTO_NUMERO_PERSONE: String = "automatico"
+
+/** AC-375: the field holds neither nothing nor an integer from 1 to 10 — no command is sent. */
+const val MESSAGGIO_NUMERO_PERSONE_NON_VALIDO: String = "Da 1 a 10, oppure lascia vuoto"
+
 /** M5: the initial load failed — distinct from [MESSAGGIO_REGISTRAZIONI_VUOTO] (a real empty catalog). */
 const val MESSAGGIO_ERRORE_CARICAMENTO: String = "Non è stato possibile caricare le registrazioni."
 

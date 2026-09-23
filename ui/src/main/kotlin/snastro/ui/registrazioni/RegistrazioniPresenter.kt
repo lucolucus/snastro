@@ -22,6 +22,7 @@ import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
+import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.etichetta
 import snastro.ui.testi.messaggioPer
 import java.io.File
@@ -115,7 +116,16 @@ class RegistrazioniPresenter(
             if (vecchia == null) {
                 nuova
             } else {
-                nuova.copy(operazioneInCorso = vecchia.operazioneInCorso, erroreRiga = vecchia.erroreRiga)
+                nuova.copy(
+                    operazioneInCorso = vecchia.operazioneInCorso,
+                    erroreRiga = vecchia.erroreRiga,
+                    // AC-376: the user's text survives a refresh of the same state; a new state takes the prefill.
+                    numeroPersone = if (vecchia.elaborazione == nuova.elaborazione) {
+                        vecchia.numeroPersone
+                    } else {
+                        nuova.numeroPersone
+                    },
+                )
             }
         }
         _stato.value = RegistrazioniUiStato.Dati(
@@ -149,17 +159,20 @@ class RegistrazioniPresenter(
         val stati = statiElaborazione?.invoke(progetto.map { it.registrazioneId })?.associateBy { it.registrazioneId }
         val statoLettore = lettore.stato.value
         return progetto.map { r ->
+            val vista = stati?.get(r.registrazioneId)
             RigaRegistrazione(
                 registrazioneId = r.registrazioneId,
                 titolo = r.titolo,
                 dataRegistrazione = r.dataRegistrazione,
                 durataMs = r.durataMs,
-                elaborazione = stati?.get(r.registrazioneId)?.let(::elaborazioneDi),
+                elaborazione = vista?.let(::elaborazioneDi),
                 riproduzione = riproduzioneDi(
                     r.registrazioneId,
                     statoLettore,
                     disponibile = lettore.disponibile(r.registrazioneId),
                 ),
+                numeroPersone = vista?.takeIf { it.stato == StatoElaborazioneVista.FALLITA }
+                    ?.numeroPersone?.toString().orEmpty(), // AC-376: 'Riprova' prefilled
             )
         }
     }
@@ -248,11 +261,28 @@ class RegistrazioniPresenter(
     fun rinomina(id: RegistrazioneId, nuovoTitolo: String) =
         suRiga(id) { withContext(io) { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) } }
 
-    /** AC-344/AC-203: 'Trascrivi' (NON_AVVIATA) and 'Riprova' (FALLITA) both land here. */
+    /**
+     * AC-344/AC-203: 'Trascrivi' (NON_AVVIATA) and 'Riprova' (FALLITA) both land here, carrying the row's
+     * 'Numero di persone' field (AC-375): empty → `null` (automatic), an integer 1..10 → that number, anything
+     * else → the inline [MESSAGGIO_NUMERO_PERSONE_NON_VALIDO] and NO command.
+     */
     fun avviaElaborazione(id: RegistrazioneId) {
         val comando = avviaElaborazione ?: return // R0: the button isn't rendered either (elaborazione == null)
-        suRiga(id) { withContext(io) { comando(AvviaElaborazione(id)) } }
+        val riga = (_stato.value as? RegistrazioniUiStato.Dati)?.righe
+            ?.find { it.registrazioneId == id }
+            ?.takeUnless { it.operazioneInCorso } // M3
+            ?: return
+        val testo = riga.numeroPersone.trim()
+        val numero = testo.toIntOrNull()?.takeIf { it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX }
+        if (testo.isNotEmpty() && numero == null) {
+            aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
+        } else {
+            suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, numero)) } }
+        }
     }
+
+    /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only by [avviaElaborazione]). */
+    fun modificaNumeroPersone(id: RegistrazioneId, testo: String) = aggiornaRiga(id) { it.copy(numeroPersone = testo) }
 
     private fun suRiga(id: RegistrazioneId, operazione: suspend () -> Esito<Unit>) {
         val riga = (_stato.value as? RegistrazioniUiStato.Dati)?.righe?.find { it.registrazioneId == id } ?: return
@@ -344,9 +374,17 @@ class RegistrazioniPresenter(
         riproduci = ::riproduci,
         pausa = ::pausa,
         avviaElaborazione = ::avviaElaborazione,
+        modificaNumeroPersone = ::modificaNumeroPersone,
         apriRiga = ::apriRiga,
         chiudiErrore = ::chiudiErrore,
         chiudiErroreRiga = ::chiudiErroreRiga,
         riprova = ::riprova,
     )
 }
+
+/**
+ * ADR 0014: the range the field accepts before sending the command (AC-375, 'no command' on anything else).
+ * `:ui` cannot see the `NumeroPersone` VO (CR-1); `AvviaElaborazione` re-validates it (`NumeroPersone.di`).
+ */
+private const val NUMERO_PERSONE_MIN = 1
+private const val NUMERO_PERSONE_MAX = 10

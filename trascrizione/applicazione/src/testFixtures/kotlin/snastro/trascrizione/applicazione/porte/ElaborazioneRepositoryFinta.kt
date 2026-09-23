@@ -59,6 +59,7 @@ public class ElaborazioneRepositoryFinta : ElaborazioneRepository, Ripristinabil
         val id = e.id
         val registrazioneId = e.registrazioneId
         val creataAlle: Instant = e.creataAlle
+        val numeroPersone = e.numeroPersone
         val stato = e.stato
         val avviataAlle = e.avviataAlle
         val motivoFallimento = e.motivoFallimento
@@ -72,6 +73,7 @@ public class ElaborazioneRepositoryFinta : ElaborazioneRepository, Ripristinabil
                 creataAlle = creataAlle,
                 avviataAlle = avviataAlle ?: creataAlle,
                 motivo = motivoFallimento.orEmpty(),
+                numeroPersone = numeroPersone,
             )
     }
 }

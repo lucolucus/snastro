@@ -45,6 +45,7 @@ public class StatiElaborazione(
         motivoFallimento = null,
         posizioneInCoda = null,
         numVoci = null,
+        numeroPersone = null,
     )
 
     private fun inAttesa(id: RegistrazioneId, coda: List<Elaborazione>, e: Elaborazione) = StatoRegistrazioneVista(
@@ -55,6 +56,7 @@ public class StatiElaborazione(
         motivoFallimento = null,
         posizioneInCoda = coda.indexOfFirst { it.id == e.id }.takeIf { it >= 0 }?.plus(1), // AC-163
         numVoci = null,
+        numeroPersone = e.numeroPersone?.valore,
     )
 
     private fun inCorso(id: RegistrazioneId, e: Elaborazione) = StatoRegistrazioneVista(
@@ -65,6 +67,7 @@ public class StatiElaborazione(
         motivoFallimento = null,
         posizioneInCoda = null,
         numVoci = null,
+        numeroPersone = e.numeroPersone?.valore,
     )
 
     private fun completata(id: RegistrazioneId, e: Elaborazione) = StatoRegistrazioneVista(
@@ -75,6 +78,7 @@ public class StatiElaborazione(
         motivoFallimento = null,
         posizioneInCoda = null,
         numVoci = trascritti.trova(id)?.voci?.size, // AC-165
+        numeroPersone = e.numeroPersone?.valore,
     )
 
     private fun fallita(id: RegistrazioneId, e: Elaborazione) = StatoRegistrazioneVista(
@@ -85,5 +89,6 @@ public class StatiElaborazione(
         motivoFallimento = e.motivoFallimento,
         posizioneInCoda = null,
         numVoci = null,
+        numeroPersone = e.numeroPersone?.valore,
     )
 }

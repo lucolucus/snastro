@@ -6,8 +6,8 @@ import snastro.kernel.RegistrazioneId
 
 /**
  * Published Language of the domain event `RegistrazioneAggiunta` (boundary `eventi-progetto`).
- * Delivered SYNCHRONOUSLY inside the publishing command's transaction (auto-start of the
- * `Elaborazione`, ADR 0012 R2).
+ * After-commit consumers only (view refresh): no synchronous subscriber, and importing never starts an
+ * `Elaborazione` (ADR 0014, ADR 0012 Amendment (c)).
  */
 public data class RegistrazioneAggiunta(
     val registrazioneId: RegistrazioneId,
