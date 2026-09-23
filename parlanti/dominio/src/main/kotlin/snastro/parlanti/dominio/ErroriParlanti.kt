@@ -2,6 +2,8 @@ package snastro.parlanti.dominio
 
 import snastro.kernel.ErroreDominio
 import snastro.kernel.ParlanteId
+import snastro.kernel.RegistrazioneId
+import snastro.kernel.VoceRef
 
 /** Expected rule violations of the Parlanti context (ADR 0003, CR-8). Later blocks add their members here. */
 public sealed interface ErroreParlanti : ErroreDominio {
@@ -16,4 +18,13 @@ public sealed interface ErroreParlanti : ErroreDominio {
 
     /** AC-22 a Nome is never empty. */
     public data object NomeVuoto : ErroreParlanti
+
+    /** No Parlante with that id exists, or it belongs to another Progetto ([INV-17], conferma-attribuzione). */
+    public data class ParlanteNonTrovato(val id: ParlanteId) : ErroreParlanti
+
+    /** [INV-17] the Registrazione has no Trascritto (unknown id, or no Elaborazione completata, [INV-5]). */
+    public data class TrascrittoNonTrovato(val registrazioneId: RegistrazioneId) : ErroreParlanti
+
+    /** [INV-17] the Trascritto exists but has no Voce with that [VoceRef.voceId]. */
+    public data class VoceNonTrovata(val voceRef: VoceRef) : ErroreParlanti
 }
