@@ -56,3 +56,12 @@
 2026-09-23T08:36:58Z	eventi-pubblicati	verifier	result	cycle=0	tier=deep	model=opus	PASS
 2026-09-23T08:37:33Z	eventi-pubblicati	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (0 HIGH; LOW F1 VoceDivisa.segmentiSpostati order -> trascritto/revisione)
 2026-09-23T08:37:40Z	porte-progetto	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:38:26Z	porte-documento	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:38:26Z	porte-documento	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:38:26Z	porte-documento	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:38:47Z	attribuzione	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T08:38:52Z	attribuzione	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED (Decision F1: root does not guard INV-13/INV-17 halves; pinned signature takes bare ParlanteId)
+2026-09-23T08:39:39Z	attribuzione	code-review	result	cycle=0	tier=deep	model=opus	APPROVE after user Decision: keep pin; conferma-attribuzione + salta-voce MUST test INV-13 (eliminato) and INV-17 (other Progetto) rejection
+2026-09-23T08:39:39Z	trascritto	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T08:39:39Z	trascritto	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T08:39:39Z	trascritto	code-review	dispatch	cycle=0	tier=deep	model=opus
