@@ -135,3 +135,11 @@
 2026-09-23T09:09:52Z	porta-lettore-nomi	code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-23T09:12:13Z	porta-lettore-nomi	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED F1 occasionale/INV-25 contract case + LOW F2 nomi order KDoc -> follow-up batch; note: rigenerazione-documento regenerates event.voceRef.registrazioneId on AttribuzioneConfermata; product note: eliminato + new attivo may share a Nome)
 2026-09-23T09:12:42Z	porta-lettore-nomi	verifier	result	cycle=0	tier=deep	model=opus	PASS (carry to gestione-parlante: case-only rename must exclude self and not be a no-op on equal normalizzato)
+2026-09-23T09:16:47Z	porta-lettore-voci	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T09:16:47Z	porta-lettore-voci	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:16:47Z	porta-lettore-voci	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:19:13Z	porta-lettore-voci	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED F1 overlap case + LOW F3 Konsist on LettoreVoci surface -> follow-up batch; carry: print-extraction consumers merge overlapping intervals before campioni)
+2026-09-23T09:19:47Z	porte-trascrizione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T09:19:47Z	porte-trascrizione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:19:47Z	porte-trascrizione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:19:54Z	porta-lettore-voci	verifier	result	cycle=0	tier=deep	model=opus	PASS
