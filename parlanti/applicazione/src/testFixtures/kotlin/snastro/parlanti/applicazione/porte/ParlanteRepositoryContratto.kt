@@ -36,9 +36,10 @@ public abstract class ParlanteRepositoryContratto {
 
     /**
      * Physical `impronta_vocale` rows stored for [id] (ADR 0009), read beside the port so an adapter that
-     * merely hides print rows fails; `null` = this implementation cannot count them (the checks are skipped).
+     * merely hides print rows fails. Mandatory: every implementation must count them, so a subclass can
+     * never silently skip the purge checks.
      */
-    protected open fun righeImpronte(id: ParlanteId): Int? = null
+    protected abstract fun righeImpronte(id: ParlanteId): Int
 
     private lateinit var repo: ParlanteRepository
 
@@ -248,7 +249,7 @@ public abstract class ParlanteRepositoryContratto {
     }
 
     private fun assertRigheImpronte(attese: Int, id: ParlanteId) {
-        righeImpronte(id)?.let { assertEquals(attese, it, "righe impronta_vocale di ${id.valore}") }
+        assertEquals(attese, righeImpronte(id), "righe impronta_vocale di ${id.valore}")
     }
 
     private fun nome(testo: String): Nome = Nome.di(testo).atteso()

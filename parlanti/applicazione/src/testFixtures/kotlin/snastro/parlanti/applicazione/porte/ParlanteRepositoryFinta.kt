@@ -11,8 +11,8 @@ import snastro.parlanti.dominio.Parlante
 
 /**
  * In-memory [ParlanteRepository]: refuses a second `attivo` normalized [Nome] per Progetto like the partial
- * unique index `parlante_nome_attivo_unico` (INV-16, ADR 0007). Stores and returns private copies (prints'
- * arrays included), so no caller ever aliases the stored state. [Ripristinabile]: pass it to `UnitaDiLavoroFinta`.
+ * unique index `parlante_nome_attivo_unico` (INV-16, ADR 0007). Stores and returns private copies (an
+ * [Impronta] is immutable), so no caller ever aliases the stored state. [Ripristinabile]: pass it to `UnitaDiLavoroFinta`.
  */
 public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
     private val righe = LinkedHashMap<ParlanteId, Parlante>()
