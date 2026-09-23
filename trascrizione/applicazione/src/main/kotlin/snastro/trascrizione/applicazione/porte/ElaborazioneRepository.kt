@@ -20,9 +20,9 @@ public interface ElaborazioneRepository {
 
     /**
      * Inserts or updates [e]. INV-4 is refused like the ADR 0007 partial unique indexes, leaving the store
-     * unchanged: [ErroreApplicazioneTrascrizione.ElaborazioneGiaAperta] if another Elaborazione of the same
-     * Registrazione is open while [e] is, [ErroreApplicazioneTrascrizione.ElaborazioneGiaCompletata] if another
-     * one is `completata` while [e] is. Infra faults throw (ADR 0003).
+     * unchanged, with an `ErroreTrascrizione` (`:trascrizione:dominio`): `ElaborazioneGiaAperta` if another
+     * Elaborazione of the same Registrazione is open while [e] is, `ElaborazioneGiaCompletata` if another one
+     * is `completata` while [e] is. Infra faults throw (ADR 0003).
      */
     public fun salva(e: Elaborazione): Esito<Unit>
 }

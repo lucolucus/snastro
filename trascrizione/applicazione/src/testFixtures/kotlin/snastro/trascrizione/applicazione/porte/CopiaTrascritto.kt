@@ -96,7 +96,8 @@ private class Ricostruzione(
     private fun conia(v: VoceId) {
         if (v in bersaglio.values) {
             val propri = segmentiBersaglio(v)
-            val s = propri.firstOrNull { diPiu(voceDi(it)) } ?: propri.first().also(::accompagna)
+            val s = propri.firstOrNull { diPiu(voceDi(it)) }
+                ?: checkNotNull(propri.firstOrNull()) { "la Voce $v non ha Segmenti" }.also(::accompagna)
             nuovaVoce(s, v)
             ancore += s
         } else {
@@ -113,11 +114,15 @@ private class Ricostruzione(
      */
     private fun accompagna(s: SegmentoId) {
         check(voceDi(s) !in bersaglio.values) { "$s e solo in una Voce da conservare" }
-        sposta(s, t.voci.map { it.id }.first { it != voceDi(s) })
+        val altra = t.voci.map { it.id }.firstOrNull { it != voceDi(s) }
+        sposta(s, checkNotNull(altra) { "nessun'altra Voce in cui accompagnare $s" })
     }
 
     /** A Segmento in a Voce the copy does not keep (so it may disappear). */
-    private fun sacrificabile(): SegmentoId = t.segmenti.first { it.voceId !in bersaglio.values }.id
+    private fun sacrificabile(): SegmentoId =
+        checkNotNull(t.segmenti.firstOrNull { it.voceId !in bersaglio.values }) {
+            "nessuna Voce con due Segmenti ne sacrificabile"
+        }.id
 
     private fun nuovaVoce(s: SegmentoId, attesa: VoceId) {
         val esito = t.riassegna(s, null)
@@ -132,7 +137,8 @@ private class Ricostruzione(
     private fun segmentiBersaglio(v: VoceId): List<SegmentoId> =
         bersaglio.filterValues { it == v }.keys.sortedBy { it.numero }
 
-    private fun voceDi(s: SegmentoId): VoceId = t.segmenti.first { it.id == s }.voceId
+    private fun voceDi(s: SegmentoId): VoceId =
+        checkNotNull(t.segmenti.firstOrNull { it.id == s }) { "Segmento $s assente nella copia" }.voceId
 
     private fun diPiu(v: VoceId): Boolean = t.segmenti.count { it.voceId == v } >= 2
 }

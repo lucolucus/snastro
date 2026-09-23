@@ -36,7 +36,7 @@ public abstract class VadContratto {
 
         val intervalli = vad().parlato(campioni)
 
-        assertTrue(intervalli.isNotEmpty(), "il parlato produce almeno un intervallo")
+        assertTrue(intervalli.size >= 2, "la pausa di $PAUSA_MS ms separa il parlato: $intervalli")
         assertValidi(intervalli, campioni)
     }
 

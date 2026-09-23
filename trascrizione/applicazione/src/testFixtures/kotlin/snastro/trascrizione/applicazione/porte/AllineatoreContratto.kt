@@ -8,7 +8,8 @@ import kotlin.test.assertTrue
 
 /**
  * Consumer-driven contract of [Allineatore] (boundary `tec-allineatore`, ADR 0004, INV-7, Q-4): every
- * SegmentoGrezzo has `inizio < fine` within the duration and a `voceIndice` of the given turns; overlaps
+ * SegmentoGrezzo has `inizio < fine` within the duration, a `voceIndice` of the given turns and overlaps in
+ * time a Turno of that same voice (no swapped voices, no shifted turns); overlaps
  * between turns are neither trimmed nor dropped; no turns give no segments; silence never throws.
  * Implementation-agnostic (strategy A or B). One subclass per implementation — the pure Kotlin one with
  * the Finte of [RiconoscitoreParlato] and [Vad] runs in the gate; a real-model one is `@Tag("modelli")`.
@@ -61,6 +62,10 @@ public abstract class AllineatoreContratto {
         segmenti.forEach {
             assertTrue(it.intervallo.fineMs <= campioni.durataMs(), "$it oltre ${campioni.durataMs()} ms")
             assertTrue(it.voceIndice in voci, "$it: voceIndice non presente nei turni")
+            assertTrue(
+                TURNI.any { t -> t.voceIndice == it.voceIndice && t.intervallo.sovrapposto(it.intervallo) },
+                "$it non si sovrappone ad alcun Turno della sua voce",
+            )
         }
     }
 

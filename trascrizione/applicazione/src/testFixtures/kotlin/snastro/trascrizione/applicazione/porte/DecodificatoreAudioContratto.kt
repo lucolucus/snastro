@@ -1,9 +1,11 @@
 package snastro.trascrizione.applicazione.porte
 
 import org.junit.jupiter.api.Test
+import snastro.kernel.CampioniAudio
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import java.io.IOException
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -11,8 +13,8 @@ import kotlin.test.assertTrue
 
 /**
  * Consumer-driven contract of Trascrizione's [DecodificatoreAudio] (boundary `tec-decodifica-trascrizione`,
- * ADR 0005): `campioni(intervallo)` has exactly `(fine - inizio) × 16` samples and is that slice of `tutti`;
- * infra faults throw. One subclass per implementation; the real adapter's subclass is `@Tag("modelli")`.
+ * ADR 0005): `campioni(intervallo)` has exactly `(fine - inizio) × 16` samples — that slice of `tutti`,
+ * zero-padded past its end (a trailing partial millisecond included); an unreadable source throws `IOException`. One subclass per implementation; the real adapter's subclass is `@Tag("modelli")`.
  */
 public abstract class DecodificatoreAudioContratto {
     /** A fresh decoder; nothing decoded yet. */
@@ -48,8 +50,25 @@ public abstract class DecodificatoreAudioContratto {
     }
 
     @Test
-    public fun `AC-31 una sorgente illeggibile lancia un eccezione`() {
-        assertFailsWith<Exception> { decodificatore().decodifica(REGISTRAZIONE, sorgenteIlleggibile) }
+    public fun `AC-31 un intervallo che finisce alla fine o oltre la durata ha comunque fine meno inizio per 16 campioni`() {
+        val d = decodificato()
+        val tutti = d.tutti(REGISTRAZIONE).campioni
+        val durata = CampioniAudio(tutti).durataMs()
+
+        listOf(IntervalloMs(durata - 1, durata), IntervalloMs(durata - 2, durata + 3)).forEach { i ->
+            val campioni = d.campioni(REGISTRAZIONE, i).campioni
+            val da = i.inizioMs.toInt() * CAMPIONI_PER_MS
+            val disponibili = tutti.copyOfRange(da, tutti.size)
+
+            assertEquals((i.fineMs - i.inizioMs).toInt() * CAMPIONI_PER_MS, campioni.size, "$i")
+            assertContentEquals(disponibili, campioni.copyOfRange(0, disponibili.size), "$i: la parte disponibile")
+            assertTrue(campioni.drop(disponibili.size).all { it == 0f }, "$i: oltre la fine solo silenzio")
+        }
+    }
+
+    @Test
+    public fun `AC-31 una sorgente illeggibile lancia IOException`() {
+        assertFailsWith<IOException> { decodificatore().decodifica(REGISTRAZIONE, sorgenteIlleggibile) }
     }
 
     private fun decodificato(): DecodificatoreAudio = decodificatore().also { it.decodifica(REGISTRAZIONE, sorgente) }

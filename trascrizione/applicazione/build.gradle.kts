@@ -12,9 +12,7 @@ dependencies {
 
     // LettoreRegistrazioneFintaTest mints ids like the supplier, with the kernel's GeneratoreIdFinto.
     testImplementation(testFixtures(project(":kernel")))
-}
 
-dependencies {
     // Repository ports (applicazione.porte) expose the Trascrizione domain types (Elaborazione, Trascritto).
     api(project(":trascrizione:dominio"))
 

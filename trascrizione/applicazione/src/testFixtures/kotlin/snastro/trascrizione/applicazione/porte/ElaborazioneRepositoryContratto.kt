@@ -7,9 +7,9 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
-import snastro.trascrizione.applicazione.porte.ErroreApplicazioneTrascrizione.ElaborazioneGiaAperta
-import snastro.trascrizione.applicazione.porte.ErroreApplicazioneTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.Elaborazione
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
