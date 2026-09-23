@@ -223,7 +223,8 @@ private fun spezzaInRighe(bytes: ByteArray): List<ByteArray> {
 }
 
 /**
- * Decodes one line's bytes as strict UTF-8; a line that doesn't decode is skipped (returns `null`)
+ * Decodes one line's bytes as strict UTF-8, dropping one trailing CR (a CRLF line ending);
+ * a line that doesn't decode is skipped (returns `null`)
  * instead of failing the whole file (F2) — [CodingErrorAction.REPORT] makes the failure explicit
  * rather than silently replacing bytes with `?` inside an otherwise-valid field.
  */
@@ -231,7 +232,9 @@ private fun decodificaRiga(bytes: ByteArray, primaRiga: Boolean): String? = try 
     val decoder = Charsets.UTF_8.newDecoder()
         .onMalformedInput(CodingErrorAction.REPORT)
         .onUnmappableCharacter(CodingErrorAction.REPORT)
-    val decodificata = decoder.decode(ByteBuffer.wrap(bytes)).toString()
+    // un file modificato a mano su Windows (CRLF): il `\r` finale non fa parte della riga — i `\r`
+    // DENTRO un campo sono sempre scritti come scape (`blocca`), quindi mai confusi con questo.
+    val decodificata = decoder.decode(ByteBuffer.wrap(bytes)).toString().removeSuffix("\r")
     if (primaRiga) decodificata.removePrefix(BOM) else decodificata
 } catch (ignored: CharacterCodingException) {
     null

@@ -343,6 +343,23 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `LOW-1 un file con terminatori CRLF modificato a mano su Windows e leggibile`() {
+        val file = cartella.resolve("progetti-recenti")
+        val riga1 = "id-1\tConsiglio comunale\t/progetti/Consiglio comunale.snastro\t1\t2026-09-23T10:15:30Z"
+        val riga2 = "id-4\tConsulta\t/progetti/Consulta.snastro\t2\t2026-09-23T09:00:00Z"
+        Files.writeString(file, "$riga1\r\n$riga2\r\n")
+        val registro = RegistroProgettiFile(file)
+
+        val consulta = unaVoce(
+            progettoId = ProgettoId("id-4"),
+            nome = "Consulta",
+            percorso = "/progetti/Consulta.snastro",
+            ultimaAttivita = Instant.parse("2026-09-23T09:00:00Z"),
+        ).copy(numRegistrazioni = 2)
+        assertEquals(listOf(unaVoce(), consulta), registro.elenco())
+    }
+
+    @Test
     fun `il percorso attraversa verbatim scrittura e rilettura su file - spazi parentesi unicode separatori Windows`() {
         val file = cartella.resolve("progetti-recenti")
         val percorsi = listOf(
