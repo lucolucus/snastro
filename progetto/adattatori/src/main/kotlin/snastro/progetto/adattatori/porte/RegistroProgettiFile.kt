@@ -14,6 +14,8 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.time.Instant
 import java.time.format.DateTimeParseException
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * [RegistroProgetti] over a single per-user text file at [file] (R3): the OS app-data location is
@@ -40,9 +42,17 @@ import java.time.format.DateTimeParseException
  * inside [registra]/[aggiorna]/[rimuovi]'s read-before-write, so a transient fault can never
  * masquerade as "empty" and overwrite still-valid content.
  *
- * The four operations are `@Synchronized` on this instance (F4): two threads sharing one
- * [RegistroProgettiFile] never interleave a read-modify-write into a lost update. Two SEPARATE
- * instances (e.g. two app processes) are NOT coordinated — out of scope pending a user decision.
+ * Every read-modify-write ([registra]/[aggiorna]/[rimuovi]) is serialized by [sottoLock] (F4,
+ * AC-328): first an in-process [ReentrantLock] keyed by the file's normalized absolute path (the
+ * top-level [lockPerPercorso] map, not `@Synchronized` on `this` — that would not coordinate two
+ * SEPARATE [RegistroProgettiFile] instances pointed at the same path), then an exclusive
+ * [FileChannel.lock] on a sibling `<nomeFile>.lock` file: several app instances, each on a
+ * different project (ADR 0010), share this one per-user registry and must not interleave a write
+ * into a lost update. The in-process lock is taken FIRST because [FileChannel.lock] throws
+ * `OverlappingFileLockException` if the same JVM ever tried to lock the same file twice
+ * concurrently. [elenco] takes neither lock — it only reads, and the atomic rename inside [scrivi]
+ * guarantees a reader always sees either the whole old content or the whole new one, never a
+ * partial write.
  *
  * [scriviRighe] is the temp-file-write step of [scrivi], defaulted to [scriviRigheSuDisco]; the
  * `internal` constructor lets a test substitute it with one that fails PART-WAY through, to prove
@@ -53,26 +63,28 @@ public class RegistroProgettiFile internal constructor(
     private val scriviRighe: (Path, List<String>) -> Unit,
 ) : RegistroProgetti {
 
-    public constructor(file: Path) : this(file, ::scriviRigheSuDisco)
+    public constructor(file: Path) : this(file, scriviRigheSuDisco)
 
-    @Synchronized
     override fun elenco(): List<VoceRegistro> = leggi().sortedByDescending { it.ultimaAttivita }
 
-    @Synchronized
     override fun registra(v: VoceRegistro) {
-        scrivi(leggi().filterNot { it.percorso == v.percorso } + v)
+        sottoLock(file) {
+            scrivi(leggi().filterNot { it.percorso == v.percorso } + v)
+        }
     }
 
-    @Synchronized
     override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) {
-        val correnti = leggi()
-        if (correnti.none { it.percorso == percorso }) return
-        scrivi(correnti.map { aggiornaVoce(it, percorso, numRegistrazioni, ultimaAttivita) })
+        sottoLock(file) {
+            val correnti = leggi()
+            if (correnti.none { it.percorso == percorso }) return@sottoLock
+            scrivi(correnti.map { aggiornaVoce(it, percorso, numRegistrazioni, ultimaAttivita) })
+        }
     }
 
-    @Synchronized
     override fun rimuovi(percorso: String) {
-        scrivi(leggi().filterNot { it.percorso == percorso })
+        sottoLock(file) {
+            scrivi(leggi().filterNot { it.percorso == percorso })
+        }
     }
 
     /**
@@ -94,7 +106,8 @@ public class RegistroProgettiFile internal constructor(
      * Write-to-temp-then-atomic-rename, sibling directory so the rename never crosses filesystems.
      * The temp file is fsync'd before the rename, and the parent directory best-effort after it
      * (F3): the rename survives a crash right after it, not just a crash before it. Any `*.tmp`
-     * left by an earlier crashed write is swept first, best effort (F7).
+     * left by an earlier crashed write is swept first, best effort (F7) — always called from inside
+     * [sottoLock], so nothing concurrent with THIS registry's own writes can be mid-write.
      */
     private fun scrivi(voci: List<VoceRegistro>) {
         val cartella = requireNotNull(file.toAbsolutePath().parent) { "registro senza cartella: $file" }
@@ -113,6 +126,32 @@ public class RegistroProgettiFile internal constructor(
 
 /** A line that does not split into the expected number of fields — a technical fault, not a domain error. */
 private class RigaCorrottaException(message: String) : Exception(message)
+
+/** JVM-wide, keyed by normalized absolute path — see [sottoLock]. */
+private val lockPerPercorso = ConcurrentHashMap<Path, ReentrantLock>()
+
+/**
+ * Serializes [azione] — one read-modify-write on [file] — first behind an in-process lock keyed by
+ * [file]'s normalized absolute path, then behind an exclusive [FileChannel.lock] on a sibling
+ * `<nomeFile>.lock` file (AC-328). See the class KDoc for why the in-process lock comes first.
+ */
+private fun sottoLock(file: Path, azione: () -> Unit) {
+    val percorsoAssoluto = file.toAbsolutePath().normalize()
+    val lockDiProcesso = lockPerPercorso.computeIfAbsent(percorsoAssoluto) { ReentrantLock() }
+    lockDiProcesso.lock()
+    try {
+        val cartella = requireNotNull(percorsoAssoluto.parent) { "registro senza cartella: $file" }
+        Files.createDirectories(cartella)
+        val fileDiLock = cartella.resolve("${percorsoAssoluto.fileName}$SUFFISSO_LOCK")
+        FileChannel.open(fileDiLock, StandardOpenOption.CREATE, StandardOpenOption.WRITE).use { canale ->
+            canale.lock().use {
+                azione()
+            }
+        }
+    } finally {
+        lockDiProcesso.unlock()
+    }
+}
 
 private fun aggiornaVoce(
     v: VoceRegistro,
@@ -148,7 +187,7 @@ private fun analizzaRiga(riga: String): VoceRegistro {
 }
 
 /** Writes [righe] to [temporaneo] and fsyncs before returning (F3) — durable before the rename. */
-private fun scriviRigheSuDisco(temporaneo: Path, righe: List<String>) {
+private val scriviRigheSuDisco: (Path, List<String>) -> Unit = { temporaneo, righe ->
     val contenuto = righe.joinToString(separator = "") { "$it\n" }.toByteArray(Charsets.UTF_8)
     FileChannel.open(temporaneo, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use { canale ->
         canale.write(ByteBuffer.wrap(contenuto))
@@ -166,15 +205,19 @@ private fun forzaCartella(cartella: Path) {
 }
 
 /**
- * Sweeps every `<nomeFile>*.tmp` left in [cartella] by an earlier crashed write (F7) — run before
- * creating a fresh temp file, so anything matched here necessarily predates the current write.
- * Best effort: never blocks or fails the write in progress.
+ * Sweeps every file in [cartella] whose name starts with [nomeFile] and ends with `.tmp`, left by
+ * an earlier crashed write (F7) — run before creating a fresh temp file, so anything matched here
+ * necessarily predates the current write. A plain directory listing filtered by
+ * `startsWith`/`endsWith`, not a glob built from [nomeFile]: a raw file name can itself contain
+ * glob metacharacters (`[`, `*`, `?`…), which a glob pattern would misinterpret. Best effort: never
+ * blocks or fails the write in progress.
  */
 private fun ripulisciTemporaneiObsoleti(cartella: Path, nomeFile: String) {
     try {
-        Files.newDirectoryStream(cartella, "$nomeFile*$SUFFISSO_TEMPORANEO").use { obsoleti ->
-            obsoleti.forEach { Files.deleteIfExists(it) }
-        }
+        Files.newDirectoryStream(cartella) { candidato ->
+            val nome = candidato.fileName.toString()
+            nome.startsWith(nomeFile) && nome.endsWith(SUFFISSO_TEMPORANEO)
+        }.use { obsoleti -> obsoleti.forEach { Files.deleteIfExists(it) } }
     } catch (ignored: IOException) {
         // best effort (F7): un tmp non eliminabile, o la cartella non elencabile, non blocca la scrittura
     }
@@ -191,6 +234,7 @@ private fun riga(v: VoceRegistro): String = listOf(
 private const val SEPARATORE = "\t"
 private const val BOM = "﻿"
 private const val SUFFISSO_TEMPORANEO = ".tmp"
+private const val SUFFISSO_LOCK = ".lock"
 private const val INDICE_PROGETTO_ID = 0
 private const val INDICE_NOME = 1
 private const val INDICE_PERCORSO = 2

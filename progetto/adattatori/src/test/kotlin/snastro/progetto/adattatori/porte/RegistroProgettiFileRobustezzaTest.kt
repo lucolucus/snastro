@@ -10,11 +10,15 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.time.Instant
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 
 /**
  * AC-120 (atomic rewrite), AC-121 (a corrupt file never crashes the caller) and the round-trip
@@ -43,7 +47,8 @@ class RegistroProgettiFileRobustezzaTest {
         assertEquals(contenutoPrimaDelGuasto, Files.readString(file))
         assertEquals(listOf(unaVoce()), registro.elenco())
         val presentiInCartella = Files.list(cartella).use { it.toList() }
-        assertEquals(listOf(file), presentiInCartella) // nessun *.tmp abbandonato
+        // il file dati e il file di lock del locking incrociato (AC-328) — nessun *.tmp abbandonato.
+        assertEquals(setOf(file, cartella.resolve("progetti-recenti.lock")), presentiInCartella.toSet())
     }
 
     @Test
@@ -167,6 +172,30 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `AC-328 due istanze sullo stesso file in una JVM non perdono aggiornamenti in scrittura concorrente`() {
+        val file = cartella.resolve("progetti-recenti")
+        val registroUno = RegistroProgettiFile(file)
+        val registroDue = RegistroProgettiFile(file)
+        val perIstanza = 25
+        val esecutore = Executors.newFixedThreadPool(2)
+        try {
+            val compiti = (0 until perIstanza).map { i ->
+                val voce = unaVoce(progettoId = ProgettoId("u1-$i"), percorso = "/u1/progetto-$i.snastro")
+                esecutore.submit { registroUno.registra(voce) }
+            } + (0 until perIstanza).map { i ->
+                val voce = unaVoce(progettoId = ProgettoId("u2-$i"), percorso = "/u2/progetto-$i.snastro")
+                esecutore.submit { registroDue.registra(voce) }
+            }
+            compiti.forEach { it.get() }
+        } finally {
+            esecutore.shutdown()
+        }
+
+        assertEquals(2 * perIstanza, registroUno.elenco().size)
+        assertEquals(2 * perIstanza, registroDue.elenco().size)
+    }
+
+    @Test
     fun `F7 un tmp abbandonato da una scrittura precedente e spazzato via alla scrittura successiva`() {
         val file = cartella.resolve("progetti-recenti")
         val abbandonato = cartella.resolve("progetti-recenti1234567890.tmp")
@@ -177,6 +206,54 @@ class RegistroProgettiFileRobustezzaTest {
 
         assertEquals(false, Files.exists(abbandonato))
         assertEquals(listOf(unaVoce()), registro.elenco())
+    }
+
+    @Test
+    fun `F7 un tmp non correlato nella stessa cartella sopravvive alla pulizia`() {
+        val file = cartella.resolve("progetti-recenti")
+        val nonCorrelato = cartella.resolve("altro.tmp")
+        Files.writeString(nonCorrelato, "tmp di un altro registro, non deve sparire")
+        val registro = RegistroProgettiFile(file)
+
+        registro.registra(unaVoce())
+
+        assertTrue(Files.exists(nonCorrelato))
+    }
+
+    @Test
+    fun `F7 la pulizia di un registro non cancella il tmp in scrittura di un registro diverso nella stessa cartella`() {
+        val fileA = cartella.resolve("registro-a")
+        val fileB = cartella.resolve("registro-b")
+        val bTempCreato = CountDownLatch(1)
+        val bPuoContinuare = CountDownLatch(1)
+        val bTemporaneo = AtomicReference<Path>()
+        val registroB = RegistroProgettiFile(fileB) { temporaneo, righe ->
+            Files.write(temporaneo, righe)
+            bTemporaneo.set(temporaneo)
+            bTempCreato.countDown()
+            assertTrue(bPuoContinuare.await(5, TimeUnit.SECONDS))
+        }
+        val registroA = RegistroProgettiFile(fileA)
+        val esecutore = Executors.newSingleThreadExecutor()
+        try {
+            val futuro = esecutore.submit { registroB.registra(unaVoce(percorso = "/b/progetto.snastro")) }
+            assertTrue(bTempCreato.await(5, TimeUnit.SECONDS))
+
+            // A e B hanno percorsi diversi: lock separati, corrono davvero in parallelo. La pulizia
+            // interna a registroA.registra deve ignorare il tmp di B (prefisso "registro-b", non
+            // "registro-a").
+            registroA.registra(unaVoce(percorso = "/a/progetto.snastro"))
+
+            assertTrue(Files.exists(bTemporaneo.get()))
+
+            bPuoContinuare.countDown()
+            futuro.get(5, TimeUnit.SECONDS)
+        } finally {
+            esecutore.shutdown()
+        }
+
+        assertEquals(listOf(unaVoce(percorso = "/a/progetto.snastro")), registroA.elenco())
+        assertEquals(listOf(unaVoce(percorso = "/b/progetto.snastro")), registroB.elenco())
     }
 
     @Test
