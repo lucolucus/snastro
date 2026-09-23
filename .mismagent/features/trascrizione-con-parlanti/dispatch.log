@@ -216,3 +216,7 @@
 2026-09-23T10:52:20Z	(fix-batch-4)	decision	result	-	-	-	USER DECISION: approve fix-batch-4 (servizi-registrazione: scarta on exception path via try/finally, titoloDa blank fallback) -> queued for next free worker slot
 2026-09-23T10:52:20Z	(avvio-composizione)	decision	result	-	-	-	USER DECISION: fold folder-naming rule into spec -> build-manifest targeted amendment dispatched
 2026-09-23T10:52:20Z	(adr-0003)	decision	result	-	-	-	USER DECISION: errors placement = rules+lookups in dominio, technical-only in applicazione; re-scope ADR 0004/0005/0008 enforced_by (exclude architettura-test) and §14 StatoElaborazione gate to src/main -> write-adr + build-manifest dispatched
+2026-09-23T10:55:49Z	esegui-elaborazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (ce26678; no out-of-block touches; PortePipeline DI bundle)
+2026-09-23T10:55:49Z	esegui-elaborazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:55:49Z	esegui-elaborazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T10:55:49Z	fix-batch-4	worker	dispatch	cycle=0	tier=standard	model=sonnet	(servizi-registrazione follow-up, user-approved)
