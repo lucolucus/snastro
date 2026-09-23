@@ -55,7 +55,7 @@ Load sherpa-onnx JNI + onnxruntime natives (fills the scaricaNativiSherpa coordi
     - `CampioniAudio`: class(campioni: FloatArray) — 16 kHz mono float, explicit equals/hashCode (CR-5)
     - `EstrattoRef`: data class(registrazioneId: RegistrazioneId, intervalli: List<IntervalloMs>) — non-empty, ordered by inizioMs, total duration <= 10 000 ms, played as a sequence
     - `Esito`: sealed interface Esito<out T> { Ok<T>(valore: T); Errore(errore: ErroreDominio) } + poi / mappa / seErrore
-    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errori<Contesto> : ErroreDominio
+    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errore<Contesto> : ErroreDominio in file Errori<Contesto>.kt (ADR 0003 amended)
     - `EventoDominio`: marker interface for domain events (returned by aggregate methods)
     - `EventoPubblicato`: marker interface for published events (Published Language, <ctx>:applicazione.eventi)
     - `Creato`: data class Creato<A, E>(aggregato: A, evento: E)
@@ -75,7 +75,7 @@ Load sherpa-onnx JNI + onnxruntime natives (fills the scaricaNativiSherpa coordi
   - pinned types:
     - `snastro.modelli.CatalogoModelli`: val voci: List<VoceCatalogo>
     - `VoceCatalogo`: data class(id: String, ruolo: String, url: String, sha256: String, dimensioneByte: Long, licenza: String, attribuzione: String)
-    - `snastro.modelli.ProvisioningModelli`: fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroriModelli: HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path
+    - `snastro.modelli.ProvisioningModelli`: fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroreModelli (sealed : ErroreDominio, file ErroriModelli.kt): HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path
   - keys (minting rules):
     - `VoceCatalogo.id`: minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across catalogue edits
 

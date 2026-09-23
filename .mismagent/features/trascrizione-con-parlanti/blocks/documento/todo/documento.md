@@ -60,7 +60,7 @@ Pure projection: '# <titolo>' line, a blank line, 'Registrata il dd/MM/yyyy', a 
     - `CampioniAudio`: class(campioni: FloatArray) — 16 kHz mono float, explicit equals/hashCode (CR-5)
     - `EstrattoRef`: data class(registrazioneId: RegistrazioneId, intervalli: List<IntervalloMs>) — non-empty, ordered by inizioMs, total duration <= 10 000 ms, played as a sequence
     - `Esito`: sealed interface Esito<out T> { Ok<T>(valore: T); Errore(errore: ErroreDominio) } + poi / mappa / seErrore
-    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errori<Contesto> : ErroreDominio
+    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errore<Contesto> : ErroreDominio in file Errori<Contesto>.kt (ADR 0003 amended)
     - `EventoDominio`: marker interface for domain events (returned by aggregate methods)
     - `EventoPubblicato`: marker interface for published events (Published Language, <ctx>:applicazione.eventi)
     - `Creato`: data class Creato<A, E>(aggregato: A, evento: E)
@@ -92,4 +92,4 @@ Pure projection: '# <titolo>' line, a blank line, 'Registrata il dd/MM/yyyy', a 
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
 
-Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento (INV-23, INV-24) + R24 format, ADR 0010.
+Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento (INV-23, INV-24) + R24 format, ADR 0010; format details USER-CONFIRMED 2026-09-23: date line 'Registrata il dd/MM/yyyy', a blank line between Segmento lines, mm = total minutes not wrapping at 60.

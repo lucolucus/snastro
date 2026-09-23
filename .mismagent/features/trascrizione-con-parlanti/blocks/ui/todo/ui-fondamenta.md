@@ -22,7 +22,7 @@ owns_boundaries:
     pinned_types:
       SessioneProgetto: "interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }"
       ProgettoAperto: "data class(progettoId: ProgettoId, nome: String, percorso: String)"
-      ErroriSessione: "sealed interface : ErroreDominio { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }"
+      ErroreSessione: "sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }"
       ApriEsterno: "interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }"
       AggiornamentiVista: "interface { val cambiamenti: Flow<Cambiamento> }"
       Cambiamento: "data class(registrazioneId: RegistrazioneId?) — null = everything may have changed"
@@ -48,7 +48,7 @@ Derived owner (rule 11) of what every screen shares: Material 3 theme, snastro.u
   - pinned types:
     - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
     - `ProgettoAperto`: data class(progettoId: ProgettoId, nome: String, percorso: String)
-    - `ErroriSessione`: sealed interface : ErroreDominio { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
+    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
     - `ApriEsterno`: interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }
     - `AggiornamentiVista`: interface { val cambiamenti: Flow<Cambiamento> }
     - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed
@@ -68,7 +68,7 @@ Derived owner (rule 11) of what every screen shares: Material 3 theme, snastro.u
     - `CampioniAudio`: class(campioni: FloatArray) — 16 kHz mono float, explicit equals/hashCode (CR-5)
     - `EstrattoRef`: data class(registrazioneId: RegistrazioneId, intervalli: List<IntervalloMs>) — non-empty, ordered by inizioMs, total duration <= 10 000 ms, played as a sequence
     - `Esito`: sealed interface Esito<out T> { Ok<T>(valore: T); Errore(errore: ErroreDominio) } + poi / mappa / seErrore
-    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errori<Contesto> : ErroreDominio
+    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errore<Contesto> : ErroreDominio in file Errori<Contesto>.kt (ADR 0003 amended)
     - `EventoDominio`: marker interface for domain events (returned by aggregate methods)
     - `EventoPubblicato`: marker interface for published events (Published Language, <ctx>:applicazione.eventi)
     - `Creato`: data class Creato<A, E>(aggregato: A, evento: E)

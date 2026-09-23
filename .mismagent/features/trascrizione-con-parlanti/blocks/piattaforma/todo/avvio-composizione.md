@@ -75,7 +75,7 @@ main(): manual wiring; SessioneProgetto (folder layout <nome>.snastro/, .lock, a
     - `CampioniAudio`: class(campioni: FloatArray) — 16 kHz mono float, explicit equals/hashCode (CR-5)
     - `EstrattoRef`: data class(registrazioneId: RegistrazioneId, intervalli: List<IntervalloMs>) — non-empty, ordered by inizioMs, total duration <= 10 000 ms, played as a sequence
     - `Esito`: sealed interface Esito<out T> { Ok<T>(valore: T); Errore(errore: ErroreDominio) } + poi / mappa / seErrore
-    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errori<Contesto> : ErroreDominio
+    - `ErroreDominio`: interface (NOT sealed — Kotlin forbids cross-module sealed subtypes; NOT Throwable); each context declares its own sealed hierarchy Errore<Contesto> : ErroreDominio in file Errori<Contesto>.kt (ADR 0003 amended)
     - `EventoDominio`: marker interface for domain events (returned by aggregate methods)
     - `EventoPubblicato`: marker interface for published events (Published Language, <ctx>:applicazione.eventi)
     - `Creato`: data class Creato<A, E>(aggregato: A, evento: E)
@@ -147,7 +147,7 @@ main(): manual wiring; SessioneProgetto (folder layout <nome>.snastro/, .lock, a
   - pinned types:
     - `snastro.modelli.CatalogoModelli`: val voci: List<VoceCatalogo>
     - `VoceCatalogo`: data class(id: String, ruolo: String, url: String, sha256: String, dimensioneByte: Long, licenza: String, attribuzione: String)
-    - `snastro.modelli.ProvisioningModelli`: fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroriModelli: HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path
+    - `snastro.modelli.ProvisioningModelli`: fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroreModelli (sealed : ErroreDominio, file ErroriModelli.kt): HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path
   - keys (minting rules):
     - `VoceCatalogo.id`: minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across catalogue edits
 - **tec-lettore-audio** (consumed/implemented) — owner `lettore-audio`, projection in-process, contract_test **consumer-driven**
@@ -158,7 +158,7 @@ main(): manual wiring; SessioneProgetto (folder layout <nome>.snastro/, .lock, a
   - pinned types:
     - `SessioneProgetto`: interface { val corrente: StateFlow<ProgettoAperto?>; fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>; fun apri(percorso: String): Esito<ProgettoAperto>; fun chiudi() }
     - `ProgettoAperto`: data class(progettoId: ProgettoId, nome: String, percorso: String)
-    - `ErroriSessione`: sealed interface : ErroreDominio { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
+    - `ErroreSessione`: sealed interface : ErroreDominio (file ErroriSessione.kt) { NomeProgettoVuoto; CartellaGiaEsistente; CartellaNonValida; ProgettoGiaAperto; DatabasePiuRecente }
     - `ApriEsterno`: interface { fun apriFile(percorso: String); fun mostraNellaCartella(percorso: String) }
     - `AggiornamentiVista`: interface { val cambiamenti: Flow<Cambiamento> }
     - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed
@@ -168,7 +168,7 @@ main(): manual wiring; SessioneProgetto (folder layout <nome>.snastro/, .lock, a
   - pinned types:
     - `ServizioModelli`: interface { val stato: StateFlow<StatoModelli>; fun scarica(); fun licenze(): List<LicenzaVista> }
     - `StatoModelli`: sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreModelli) }
-    - `ErroreModelli`: sealed interface : ErroreDominio { HashNonValido(modelloId: String); ReteAssente; DownloadFallito(motivo: String) }
+    - `ErroreModelli`: sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ReteAssente; DownloadFallito(motivo: String) }
     - `LicenzaVista`: data class(nome: String, ruolo: String, licenza: String, attribuzione: String)
 
 Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0008, 0010, 0012 (.mismagent/decisions/); architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding.
