@@ -22,8 +22,8 @@ import kotlin.test.assertTrue
  * AC-180: every member of every context error hierarchy `:ui` can see has a plain-Italian message,
  * with no `else` branch anywhere (RC-4) — a new member breaks `messaggioPer`'s compilation.
  * [verificaCopertura] additionally reflects on the sealed interface's real JVM `PermittedSubclasses`
- * (this toolchain, JDK 21, compiles Kotlin `sealed` to a genuine JVM sealed type) and checks its count
- * against the instances mapped below, so a member added here with a `messaggioPer` branch but no test
+ * (this toolchain, JDK 21, compiles Kotlin `sealed` to a genuine JVM sealed type) and checks it against
+ * the SET of classes mapped below (L1), so a member added here with a `messaggioPer` branch but no test
  * instance — or a branch that compiles but returns a blank string — goes red too, without relying on
  * anyone remembering to keep a hand-written list in sync.
  */
@@ -45,14 +45,18 @@ class MessaggiErroreTest {
         return costruttore.newInstance(id, valore(da), valore(verso)) as ErroreTrascrizione.TransizioneNonAmmessa
     }
 
+    // L1: compares the SET of classes, not just a count — two instances of the same permitted subclass
+    // (leaving another member uncovered) had the same size as the real hierarchy and slipped through.
     private fun <E : Any> verificaCopertura(gerarchia: Class<E>, istanze: List<E>, messaggioPer: (E) -> String) {
-        val permesse = gerarchia.permittedSubclasses
+        val permesse = gerarchia.permittedSubclasses?.toSet()
             ?: error("${gerarchia.name} non è un'interfaccia sealed JVM (nessun PermittedSubclasses)")
+        val coperte = istanze.map { it::class.java }.toSet()
         assertEquals(
-            permesse.size,
-            istanze.size,
-            "attesa un'istanza per ognuno dei ${permesse.size} membri di ${gerarchia.simpleName}, " +
-                "trovate ${istanze.size} — un membro è stato aggiunto o rimosso senza aggiornare questo test",
+            permesse,
+            coperte,
+            "attesa un'istanza per ognuno dei membri di ${gerarchia.simpleName} " +
+                "(${permesse.map { it.simpleName }}), coperti ${coperte.map { it.simpleName }} — un membro è " +
+                "stato aggiunto o rimosso, o coperto due volte, senza aggiornare questo test",
         )
         istanze.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank(), "messaggio vuoto per $errore") }
     }
@@ -113,6 +117,15 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
             ),
         ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `M2 TransizioneNonAmmessa usa un messaggio generico che non nomina gli stati`() {
+        val primo = transizioneNonAmmessa("id-1", "IN_ATTESA", "IN_CORSO")
+        val secondo = transizioneNonAmmessa("id-2", "COMPLETATA", "FALLITA")
+        assertEquals("Operazione non ammessa nello stato attuale dell'elaborazione.", messaggioPer(primo))
+        // Same message regardless of da/verso: production code no longer reads either field (M2).
+        assertEquals(messaggioPer(primo), messaggioPer(secondo))
     }
 
     @Test

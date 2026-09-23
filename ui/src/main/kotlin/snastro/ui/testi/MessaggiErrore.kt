@@ -43,23 +43,11 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
     is ErroreProgetto.RegistrazioneNonTrovata -> "Registrazione non trovata."
 }
 
-// `StatoElaborazione` (the type of [ErroreTrascrizione.TransizioneNonAmmessa]'s `da`/`verso`) is a
-// `:trascrizione:dominio` VO, not an `Errore<Contesto>` — CR-1(b) allows `:ui` only the latter, never
-// an aggregate/VO. `.name` (an enum's own `String`) sidesteps naming the VO type here entirely.
-private fun etichettaStato(nome: String): String = when (nome) {
-    "IN_ATTESA" -> "in attesa"
-    "IN_CORSO" -> "in corso"
-    "COMPLETATA" -> "completata"
-    "FALLITA" -> "fallita"
-    else -> error("StatoElaborazione non mappato: $nome")
-}
-
 fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
-    is ErroreTrascrizione.TransizioneNonAmmessa -> {
-        val da = etichettaStato(errore.da.name)
-        val verso = etichettaStato(errore.verso.name)
-        "Non è possibile passare l'elaborazione da \"$da\" a \"$verso\"."
-    }
+    // `TransizioneNonAmmessa` is an internal invariant breach, not something the user can act on: its
+    // `da`/`verso` (`:trascrizione:dominio` VOs, off-limits to `:ui` per CR-1(b)) are never read here —
+    // a generic message that names no state is both the correct UX and the frugal fix.
+    is ErroreTrascrizione.TransizioneNonAmmessa -> "Operazione non ammessa nello stato attuale dell'elaborazione."
     is ErroreTrascrizione.ElaborazioneGiaAperta -> "Questa registrazione ha già un'elaborazione in corso."
     is ErroreTrascrizione.ElaborazioneGiaCompletata -> "Questa registrazione è già stata elaborata."
     is ErroreTrascrizione.RegistrazioneNonTrovata -> "Registrazione non trovata."

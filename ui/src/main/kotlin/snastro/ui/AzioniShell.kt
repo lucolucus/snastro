@@ -5,5 +5,6 @@ data class AzioniShell(
     val apri: (String) -> Unit,
     val crea: (String, String) -> Unit,
     val chiudi: () -> Unit,
+    val chiudiErrore: () -> Unit,
     val seleziona: (DestinazioneShell) -> Unit,
 )

@@ -19,6 +19,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CHIUDI_PROGETTO
 import snastro.ui.testi.etichetta
 
@@ -43,17 +44,25 @@ fun SchermataShell(
     SnastroTema {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (stato) {
-                ShellUiStato.SenzaProgetto -> contenutoSenzaProgetto()
+                // H1: the error is an overlay banner, never a replacement of S1 / the nav — see
+                // BannerErroreApertura.
+                is ShellUiStato.SenzaProgetto ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        contenutoSenzaProgetto()
+                        stato.erroreApertura?.let { BannerErroreApertura(it, azioni.chiudiErrore) }
+                    }
                 ShellUiStato.Caricamento -> IndicatoreCaricamento()
-                is ShellUiStato.ErroreApertura -> MessaggioErroreApertura(stato.messaggio)
                 is ShellUiStato.ConProgetto ->
-                    Row(modifier = Modifier.fillMaxSize()) {
-                        NavigazioneShell(
-                            stato = stato,
-                            azioni = azioni,
-                            modifier = Modifier.width(LARGHEZZA_NAV).fillMaxHeight(),
-                        )
-                        Box(modifier = Modifier.weight(1f).fillMaxHeight()) { contenuto(stato) }
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Row(modifier = Modifier.fillMaxSize()) {
+                            NavigazioneShell(
+                                stato = stato,
+                                azioni = azioni,
+                                modifier = Modifier.width(LARGHEZZA_NAV).fillMaxHeight(),
+                            )
+                            Box(modifier = Modifier.weight(1f).fillMaxHeight()) { contenuto(stato) }
+                        }
+                        stato.erroreApertura?.let { BannerErroreApertura(it, azioni.chiudiErrore) }
                     }
             }
         }
@@ -67,14 +76,33 @@ private fun IndicatoreCaricamento() {
     }
 }
 
+/**
+ * Dismissible banner over the current state (H1): [SchermataShell] overlays it on S1 or on the
+ * ConProgetto nav, it never replaces either — `chiudiErrore` (AC-181) is always reachable.
+ */
 @Composable
-private fun MessaggioErroreApertura(messaggio: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = messaggio,
-            color = MaterialTheme.colorScheme.error,
+private fun BannerErroreApertura(messaggio: String, onChiudi: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+        Surface(
+            color = MaterialTheme.colorScheme.errorContainer,
             modifier = Modifier.padding(PADDING_MESSAGGIO).testTag("shell-errore-apertura"),
-        )
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(PADDING_NAV)) {
+                Text(
+                    text = messaggio,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(
+                    text = ETICHETTA_CHIUDI_ERRORE,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier
+                        .padding(start = PADDING_NAV)
+                        .clickable(onClick = onChiudi)
+                        .testTag("shell-chiudi-errore"),
+                )
+            }
+        }
     }
 }
 

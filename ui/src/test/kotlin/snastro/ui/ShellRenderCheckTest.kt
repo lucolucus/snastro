@@ -21,8 +21,9 @@ private const val ALTEZZA_GRANDE_PX = 800
 private const val LARGHEZZA_PICCOLA_PX = 1024
 private const val ALTEZZA_PICCOLA_PX = 640
 
+private val OGNI_SEZIONE = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
 private val PROGETTO_PROVA = ProgettoAperto(ProgettoId("id-1"), "Riunione team", "/tmp/riunione-team.snastro")
-private val AZIONI_VUOTE = AzioniShell(apri = {}, crea = { _, _ -> }, chiudi = {}, seleziona = {})
+private val AZIONI_VUOTE = AzioniShell(apri = {}, crea = { _, _ -> }, chiudi = {}, chiudiErrore = {}, seleziona = {})
 
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): every [ShellUiStato] fixture at both sizes —
@@ -51,12 +52,20 @@ class ShellRenderCheckTest {
         verificaCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
-    fun `AC-181 errore di apertura mostra un messaggio a 1280x800`() =
-        verificaErroreApertura(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+    fun `AC-181 errore di apertura senza progetto mostra un banner su S1 a 1280x800`() =
+        verificaErroreSenzaProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
-    fun `AC-181 errore di apertura mostra un messaggio a 1024x640`() =
-        verificaErroreApertura(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+    fun `AC-181 errore di apertura senza progetto mostra un banner su S1 a 1024x640`() =
+        verificaErroreSenzaProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `H1 errore di apertura con un progetto aperto mostra un banner e mantiene la nav a 1280x800`() =
+        verificaErroreConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `H1 errore di apertura con un progetto aperto mostra un banner e mantiene la nav a 1024x640`() =
+        verificaErroreConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
     fun `AC-341 R0 senza la sezione Parlanti nasconde la voce Parlanti a 1280x800`() =
@@ -77,7 +86,7 @@ class ShellRenderCheckTest {
     private fun verificaSenzaProgetto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent {
             SchermataShell(
-                stato = ShellUiStato.SenzaProgetto,
+                stato = ShellUiStato.SenzaProgetto(),
                 azioni = AZIONI_VUOTE,
                 contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
             )
@@ -94,12 +103,43 @@ class ShellRenderCheckTest {
         catturaPng("shell-caricamento", width, height)
     }
 
-    private fun verificaErroreApertura(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+    // H1: the error overlays S1 (a dismissible banner), it does not replace it.
+    private fun verificaErroreSenzaProgetto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         val messaggio = "La cartella scelta non è valida."
-        setContent { SchermataShell(stato = ShellUiStato.ErroreApertura(messaggio), azioni = AZIONI_VUOTE) }
+        setContent {
+            SchermataShell(
+                stato = ShellUiStato.SenzaProgetto(erroreApertura = messaggio),
+                azioni = AZIONI_VUOTE,
+                contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
+            )
+        }
+        onNodeWithText("S1 - elenco progetti").assertIsDisplayed()
         onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
         onNodeWithText(messaggio).assertIsDisplayed()
         catturaPng("shell-errore-apertura", width, height)
+    }
+
+    // H1: the error overlays the ConProgetto nav (still reachable), it does not replace it.
+    private fun verificaErroreConProgetto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        val messaggio = "La cartella scelta non è valida."
+        setContent {
+            SchermataShell(
+                stato = ShellUiStato.ConProgetto(
+                    PROGETTO_PROVA,
+                    OGNI_SEZIONE,
+                    DestinazioneShell.REGISTRAZIONI,
+                    erroreApertura = messaggio,
+                ),
+                azioni = AZIONI_VUOTE,
+                contenuto = { Text("Contenuto della sezione selezionata") },
+            )
+        }
+        onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
+        onNodeWithText("Registrazioni").assertIsDisplayed()
+        onNodeWithText("Parlanti").assertIsDisplayed()
+        onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
+        onNodeWithText(messaggio).assertIsDisplayed()
+        catturaPng("shell-errore-con-progetto", width, height)
     }
 
     private fun verificaConProgetto(width: Int, height: Int, conParlanti: Boolean) =

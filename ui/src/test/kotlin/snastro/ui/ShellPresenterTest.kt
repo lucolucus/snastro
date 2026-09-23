@@ -1,17 +1,48 @@
 package snastro.ui
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.Esito
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 
 private val OGNI_SEZIONE = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
+
+/**
+ * A [SessioneProgetto] whose `apri`/`crea` throw instead of returning [Esito] (M1(b)): a hand-written
+ * fake, not a MockK stub, per RC-9/CR-17.
+ */
+private class SessioneProgettoCheEsplode(private val eccezione: () -> Throwable) : SessioneProgetto {
+    override val corrente: StateFlow<ProgettoAperto?> = MutableStateFlow(null)
+
+    override fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto> = throw eccezione()
+
+    override fun apri(percorso: String): Esito<ProgettoAperto> = throw eccezione()
+
+    override fun chiudi() = Unit
+}
+
+/** Counts `crea` calls (M3): wraps [SessioneProgettoFinta] by delegation rather than a MockK spy. */
+private class SessioneProgettoContaChiamate(private val delegato: SessioneProgetto = SessioneProgettoFinta()) :
+    SessioneProgetto by delegato {
+    var chiamateCrea = 0
+        private set
+
+    override fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto> {
+        chiamateCrea++
+        return delegato.crea(cartellaGenitore, nome)
+    }
+}
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ShellPresenterTest {
@@ -31,7 +62,7 @@ class ShellPresenterTest {
     @Test
     fun `AC-177 senza progetto lo stato iniziale e SenzaProgetto`() = runTest {
         val presenter = presentatore(this)
-        assertEquals(ShellUiStato.SenzaProgetto, presenter.stato.value)
+        assertEquals(ShellUiStato.SenzaProgetto(), presenter.stato.value)
     }
 
     @Test
@@ -52,16 +83,16 @@ class ShellPresenterTest {
         advanceUntilIdle()
         presenter.chiudi()
         advanceUntilIdle()
-        assertEquals(ShellUiStato.SenzaProgetto, presenter.stato.value)
+        assertEquals(ShellUiStato.SenzaProgetto(), presenter.stato.value)
     }
 
     @Test
-    fun `AC-181 un errore di apertura mostra il messaggio mappato e non apre nulla`() = runTest {
+    fun `AC-181 un errore di apertura senza progetto mostra il messaggio mappato e non apre nulla`() = runTest {
         val presenter = presentatore(this)
         presenter.apri("/percorso/inesistente")
         advanceUntilIdle()
-        val stato = assertIs<ShellUiStato.ErroreApertura>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.messaggio)
+        val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.erroreApertura)
     }
 
     @Test
@@ -69,8 +100,92 @@ class ShellPresenterTest {
         val presenter = presentatore(this)
         presenter.crea("/tmp", "")
         advanceUntilIdle()
-        val stato = assertIs<ShellUiStato.ErroreApertura>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto), stato.messaggio)
+        val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
+        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto), stato.erroreApertura)
+    }
+
+    @Test
+    fun `H1 un errore di apertura senza progetto lascia S1 raggiungibile e chiudiErrore lo rimuove`() = runTest {
+        val presenter = presentatore(this)
+        presenter.apri("/percorso/inesistente")
+        advanceUntilIdle()
+        assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
+
+        presenter.chiudiErrore()
+
+        assertEquals(ShellUiStato.SenzaProgetto(), presenter.stato.value)
+    }
+
+    @Test
+    fun `H1 un errore di apertura con un progetto gia aperto mantiene ConProgetto e la nav`() = runTest {
+        val presenter = presentatore(this)
+        presenter.crea("/tmp", "Riunione")
+        advanceUntilIdle()
+        val aperto = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+
+        presenter.apri("/percorso/inesistente")
+        advanceUntilIdle()
+
+        val conErrore = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+        assertEquals(aperto.progetto, conErrore.progetto)
+        assertEquals(aperto.destinazioniDisponibili, conErrore.destinazioniDisponibili)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), conErrore.erroreApertura)
+
+        presenter.chiudiErrore()
+
+        val dopo = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+        assertEquals(aperto.progetto, dopo.progetto)
+        assertEquals(null, dopo.erroreApertura)
+    }
+
+    @Test
+    fun `M1a riaprire lo stesso progetto gia aperto non lascia lo stato bloccato in Caricamento`() = runTest {
+        val sessione = SessioneProgettoFinta()
+        val presenter = presentatore(this, sessione = sessione)
+        presenter.crea("/tmp", "Riunione")
+        advanceUntilIdle()
+        val aperto = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+
+        // `sessione.corrente` is already this Progetto: `apri` re-sets an EQUAL value, so the
+        // presenter's own collector alone would never re-emit and would leave `_stato` at Caricamento.
+        presenter.apri(aperto.progetto.percorso)
+        advanceUntilIdle()
+
+        val stato = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+        assertEquals(aperto.progetto, stato.progetto)
+    }
+
+    @Test
+    fun `M1b una eccezione non di cancellazione durante apri mostra un errore generico`() = runTest {
+        val presenter = presentatore(this, sessione = SessioneProgettoCheEsplode { IllegalStateException("boom") })
+        presenter.apri("/tmp/qualsiasi")
+        advanceUntilIdle()
+        val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.erroreApertura)
+    }
+
+    @Test
+    fun `M1b una CancellationException durante apri non diventa un errore generico`() = runTest {
+        val presenter =
+            presentatore(this, sessione = SessioneProgettoCheEsplode { CancellationException("annullato") })
+        presenter.apri("/tmp/qualsiasi")
+        advanceUntilIdle()
+        // Rethrown, not swallowed: the operation stays cancelled, it is never turned into a banner.
+        assertEquals(ShellUiStato.Caricamento, presenter.stato.value)
+    }
+
+    @Test
+    fun `M3 due richieste crea ravvicinate eseguono sessione crea una sola volta`() = runTest {
+        val sessione = SessioneProgettoContaChiamate()
+        val presenter = presentatore(this, sessione = sessione)
+
+        presenter.crea("/tmp", "Uno")
+        presenter.crea("/tmp", "Due")
+        advanceUntilIdle()
+
+        assertEquals(1, sessione.chiamateCrea)
+        val stato = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+        assertEquals("Uno", stato.progetto.nome)
     }
 
     @Test
