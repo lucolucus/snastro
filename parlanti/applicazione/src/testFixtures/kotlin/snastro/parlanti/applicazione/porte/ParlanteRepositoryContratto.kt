@@ -31,15 +31,21 @@ public abstract class ParlanteRepositoryContratto {
     /** A fresh, empty repository. */
     protected abstract fun repository(): ParlanteRepository
 
-    /** Hook for real stores: create the parent rows (e.g. `progetto`) the contract's [progetti] need. */
-    protected open fun predisponi(progetti: Set<ProgettoId>) {}
+    /** Hook for real stores: create the parent rows of every id the contract uses ([PREDISPOSIZIONE]). */
+    protected open fun predisponi(predisposizione: PredisposizioneParlanti) {}
+
+    /**
+     * Physical `impronta_vocale` rows stored for [id] (ADR 0009), read beside the port so an adapter that
+     * merely hides print rows fails; `null` = this implementation cannot count them (the checks are skipped).
+     */
+    protected open fun righeImpronte(id: ParlanteId): Int? = null
 
     private lateinit var repo: ParlanteRepository
 
     @BeforeEach
     public fun preparaRepository() {
         repo = repository()
-        predisponi(setOf(PROGETTO, ALTRO_PROGETTO))
+        predisponi(PREDISPOSIZIONE)
     }
 
     @Test
@@ -129,6 +135,7 @@ public abstract class ParlanteRepositoryContratto {
         assertStessoStato(p, trovato)
         assertTrue(trovato.eliminato)
         assertEquals(emptyList(), trovato.impronte)
+        assertRigheImpronte(0, p.id)
     }
 
     @Test
@@ -145,6 +152,27 @@ public abstract class ParlanteRepositoryContratto {
         val impronte = assertNotNull(repo.trova(p.id)).impronte
         assertEquals(listOf(ImprontaVocale(VOCE_2, Impronta(floatArrayOf(3f)))), impronte)
         assertEquals(1, repo.delProgetto(PROGETTO).size)
+        assertRigheImpronte(1, p.id)
+    }
+
+    @Test
+    public fun `AC-37 rinominare un Parlante esistente con impronte cambiate in un nome in uso non salva nulla`() {
+        val marco = unParlante("id-1", "Marco")
+        repo.salva(marco).atteso()
+        val anna = unParlante("id-2", "Anna")
+        anna.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 1f))).atteso()
+        repo.salva(anna).atteso()
+        val modificata = assertNotNull(repo.trova(anna.id))
+        modificata.rimuoviImpronta(VOCE_1)
+        modificata.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f, 2f))).atteso()
+        modificata.registraImpronta(VOCE_3, Impronta(floatArrayOf(3f, 3f))).atteso()
+        modificata.rinomina(nome(" MARCO")).atteso()
+
+        repo.salva(modificata).erroreAtteso<ErroreParlanti.NomeGiaInUso>()
+
+        assertStessoStato(anna, assertNotNull(repo.trova(anna.id)))
+        assertRigheImpronte(1, anna.id)
+        assertEquals("Marco", assertNotNull(repo.trova(marco.id)).nome.valore)
     }
 
     @Test
@@ -202,6 +230,7 @@ public abstract class ParlanteRepositoryContratto {
         repo.rimuovi(p.id)
 
         assertNull(repo.trova(p.id))
+        assertRigheImpronte(0, p.id)
         assertEquals(emptyList(), repo.delProgetto(PROGETTO))
         assertFalse(repo.nomeAttivoInUso(PROGETTO, nome("Marco"), escluso = null))
         repo.salva(unParlante("id-2", "Marco")).atteso()
@@ -218,6 +247,10 @@ public abstract class ParlanteRepositoryContratto {
         assertEquals(atteso.impronte.size, trovato.impronte.size)
     }
 
+    private fun assertRigheImpronte(attese: Int, id: ParlanteId) {
+        righeImpronte(id)?.let { assertEquals(attese, it, "righe impronta_vocale di ${id.valore}") }
+    }
+
     private fun nome(testo: String): Nome = Nome.di(testo).atteso()
 
     private fun unParlante(
@@ -227,10 +260,20 @@ public abstract class ParlanteRepositoryContratto {
         tipo: TipoParlante = TipoParlante.RICORRENTE,
     ): Parlante = Parlante.crea(ParlanteId(id), progettoId, nome(nome), tipo).aggregato
 
-    private companion object {
-        val PROGETTO = ProgettoId("progetto-1")
-        val ALTRO_PROGETTO = ProgettoId("progetto-2")
-        val VOCE_1 = VoceRef(RegistrazioneId("registrazione-1"), VoceId(1))
-        val VOCE_2 = VoceRef(RegistrazioneId("registrazione-1"), VoceId(2))
+    protected companion object {
+        public val PROGETTO: ProgettoId = ProgettoId("progetto-1")
+        public val ALTRO_PROGETTO: ProgettoId = ProgettoId("progetto-2")
+        public val REGISTRAZIONE: RegistrazioneId = RegistrazioneId("registrazione-1")
+        public val VOCE_1: VoceRef = VoceRef(REGISTRAZIONE, VoceId(1))
+        public val VOCE_2: VoceRef = VoceRef(REGISTRAZIONE, VoceId(2))
+        public val VOCE_3: VoceRef = VoceRef(REGISTRAZIONE, VoceId(3))
+
+        /** Every id this contract uses (prints only on Parlanti of [PROGETTO]). */
+        public val PREDISPOSIZIONE: PredisposizioneParlanti = PredisposizioneParlanti(
+            progetti = setOf(PROGETTO, ALTRO_PROGETTO),
+            registrazioni = mapOf(REGISTRAZIONE to PROGETTO),
+            voci = setOf(VOCE_1, VOCE_2, VOCE_3),
+            parlanti = emptyMap(),
+        )
     }
 }

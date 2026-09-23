@@ -39,6 +39,9 @@ public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
         righe.remove(id)
     }
 
+    /** Stored print rows of [id] (the `impronta_vocale` count of the SQL store); 0 if absent. */
+    public fun righeImpronte(id: ParlanteId): Int = righe[id]?.impronte?.size ?: 0
+
     override fun istantanea(): () -> Unit {
         val salvate = LinkedHashMap(righe)
         return {

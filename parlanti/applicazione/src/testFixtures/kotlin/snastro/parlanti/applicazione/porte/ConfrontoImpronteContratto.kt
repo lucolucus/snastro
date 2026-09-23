@@ -4,12 +4,12 @@ import org.junit.jupiter.api.Test
 import snastro.parlanti.dominio.Impronta
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 /**
  * Consumer-driven contract of [ConfrontoImpronte] (boundary `tec-confronto-impronte`, ADR 0004): an
  * identical print is [Fascia.FORTE], an empty list is [Fascia.NESSUNA], the result is the BEST band over
- * the list, inputs are never modified; [SoglieFascia] refuses forte <= debole. One subclass per implementation.
+ * the list, inputs are never modified, non-comparable prints and dimension mismatches are NESSUNA without
+ * throwing (see [ConfrontoImpronte]). One subclass per implementation.
  */
 public abstract class ConfrontoImpronteContratto {
     /** The comparison under test. */
@@ -57,11 +57,32 @@ public abstract class ConfrontoImpronteContratto {
     }
 
     @Test
-    public fun `AC-41 SoglieFascia con forte minore o uguale a debole sono rifiutate`() {
-        assertFailsWith<IllegalArgumentException> { SoglieFascia(forte = 0.5, debole = 0.7) }
-        assertFailsWith<IllegalArgumentException> { SoglieFascia(forte = 0.6, debole = 0.6) }
-        assertFailsWith<IllegalArgumentException> { SoglieFascia(forte = Double.NaN, debole = 0.5) }
-        assertEquals(0.7, SoglieFascia(forte = 0.7, debole = 0.5).forte)
+    public fun `AC-41 un impronta nulla o non finita nella lista non maschera una FORTE`() {
+        val c = confronto()
+        val nonConfrontabili = listOf(nulla(), nonFinita(), Impronta(floatArrayOf(Float.POSITIVE_INFINITY, 0f, 0f, 0f)))
+
+        assertEquals(Fascia.FORTE, c.fascia(voce(), nonConfrontabili + voce()))
+        assertEquals(Fascia.FORTE, c.fascia(voce(), listOf(voce()) + nonConfrontabili))
+        assertEquals(Fascia.NESSUNA, c.fascia(voce(), nonConfrontabili))
+    }
+
+    @Test
+    public fun `AC-41 una voce nulla o non finita e NESSUNA senza eccezioni`() {
+        val c = confronto()
+
+        assertEquals(Fascia.NESSUNA, c.fascia(nulla(), listOf(voce(), nulla())))
+        assertEquals(Fascia.NESSUNA, c.fascia(nonFinita(), listOf(voce(), nonFinita())))
+        assertEquals(Fascia.NESSUNA, c.fascia(Impronta(FloatArray(0)), listOf(Impronta(FloatArray(0)))))
+    }
+
+    @Test
+    public fun `AC-41 un impronta di dimensione diversa e NESSUNA e non maschera una FORTE`() {
+        val c = confronto()
+        val corta = Impronta(floatArrayOf(1f, 0f, 0f))
+        val lunga = Impronta(floatArrayOf(1f, 0f, 0f, 0f, 0f))
+
+        assertEquals(Fascia.NESSUNA, c.fascia(voce(), listOf(corta, lunga)))
+        assertEquals(Fascia.FORTE, c.fascia(voce(), listOf(corta, voce(), lunga)))
     }
 
     private fun voce() = Impronta(floatArrayOf(1f, 0f, 0f, 0f))
@@ -71,4 +92,8 @@ public abstract class ConfrontoImpronteContratto {
     private fun vicina() = Impronta(floatArrayOf(1f, 0.3f, 0f, 0f))
 
     private fun diagonale() = Impronta(floatArrayOf(1f, 1f, 0f, 0f))
+
+    private fun nulla() = Impronta(floatArrayOf(0f, 0f, 0f, 0f))
+
+    private fun nonFinita() = Impronta(floatArrayOf(1f, Float.NaN, 0f, 0f))
 }

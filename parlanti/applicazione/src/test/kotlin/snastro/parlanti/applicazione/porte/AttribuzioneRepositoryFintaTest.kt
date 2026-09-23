@@ -2,8 +2,6 @@ package snastro.parlanti.applicazione.porte
 
 import snastro.kernel.Esito
 import snastro.kernel.ParlanteId
-import snastro.kernel.ProgettoId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -21,8 +19,8 @@ class AttribuzioneRepositoryFintaTest : AttribuzioneRepositoryContratto() {
     fun `AC-38 la Finta segue il rollback di UnitaDiLavoroFinta`() {
         val repo = AttribuzioneRepositoryFinta()
         val uow = UnitaDiLavoroFinta(repo)
-        val voce1 = VoceRef(REGISTRAZIONE, VoceId(1))
-        val voce2 = VoceRef(REGISTRAZIONE, VoceId(2))
+        val voce1 = VoceRef(REGISTRAZIONE_1, VoceId(1))
+        val voce2 = VoceRef(REGISTRAZIONE_1, VoceId(2))
         uow.inTransazione {
             repo.salva(Attribuzione.conferma(voce1, PROGETTO, ParlanteId("marco")).aggregato)
             Esito.Ok(Unit)
@@ -34,12 +32,7 @@ class AttribuzioneRepositoryFintaTest : AttribuzioneRepositoryContratto() {
             Esito.Errore(ErroreParlanti.NomeVuoto)
         }.erroreAtteso<ErroreParlanti.NomeVuoto>()
 
-        assertEquals(listOf(voce1), repo.diRegistrazione(REGISTRAZIONE).map { it.voceRef })
+        assertEquals(listOf(voce1), repo.diRegistrazione(REGISTRAZIONE_1).map { it.voceRef })
         assertNull(repo.trova(voce2))
-    }
-
-    private companion object {
-        val PROGETTO = ProgettoId("progetto-1")
-        val REGISTRAZIONE = RegistrazioneId("registrazione-1")
     }
 }

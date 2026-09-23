@@ -22,19 +22,15 @@ public abstract class AttribuzioneRepositoryContratto {
     /** A fresh, empty repository. */
     protected abstract fun repository(): AttribuzioneRepository
 
-    /** Hook for real stores: create the parent rows the contract's ids need (Progetto, Registrazioni, Parlanti). */
-    protected open fun predisponi(
-        progettoId: ProgettoId,
-        registrazioni: Set<RegistrazioneId>,
-        parlanti: Set<ParlanteId>,
-    ) {}
+    /** Hook for real stores: create the parent rows of every id the contract uses ([PREDISPOSIZIONE]). */
+    protected open fun predisponi(predisposizione: PredisposizioneParlanti) {}
 
     private lateinit var repo: AttribuzioneRepository
 
     @BeforeEach
     public fun preparaRepository() {
         repo = repository()
-        predisponi(PROGETTO, setOf(REGISTRAZIONE_1, REGISTRAZIONE_2), setOf(MARCO, ANNA))
+        predisponi(PREDISPOSIZIONE)
     }
 
     @Test
@@ -138,11 +134,23 @@ public abstract class AttribuzioneRepositoryContratto {
     private fun unaAttribuzione(voceRef: VoceRef, parlanteId: ParlanteId): Attribuzione =
         Attribuzione.conferma(voceRef, PROGETTO, parlanteId).aggregato
 
-    private companion object {
-        val PROGETTO = ProgettoId("progetto-1")
-        val REGISTRAZIONE_1 = RegistrazioneId("registrazione-1")
-        val REGISTRAZIONE_2 = RegistrazioneId("registrazione-2")
-        val MARCO = ParlanteId("parlante-marco")
-        val ANNA = ParlanteId("parlante-anna")
+    protected companion object {
+        public val PROGETTO: ProgettoId = ProgettoId("progetto-1")
+        public val REGISTRAZIONE_1: RegistrazioneId = RegistrazioneId("registrazione-1")
+        public val REGISTRAZIONE_2: RegistrazioneId = RegistrazioneId("registrazione-2")
+        public val MARCO: ParlanteId = ParlanteId("parlante-marco")
+        public val ANNA: ParlanteId = ParlanteId("parlante-anna")
+
+        /** Every id this contract uses; the queries on "registrazione-vuota" / "parlante-senza-voci" need no row. */
+        public val PREDISPOSIZIONE: PredisposizioneParlanti = PredisposizioneParlanti(
+            progetti = setOf(PROGETTO),
+            registrazioni = mapOf(REGISTRAZIONE_1 to PROGETTO, REGISTRAZIONE_2 to PROGETTO),
+            voci = setOf(
+                VoceRef(REGISTRAZIONE_1, VoceId(1)),
+                VoceRef(REGISTRAZIONE_1, VoceId(2)),
+                VoceRef(REGISTRAZIONE_2, VoceId(1)),
+            ),
+            parlanti = mapOf(MARCO to PROGETTO, ANNA to PROGETTO),
+        )
     }
 }

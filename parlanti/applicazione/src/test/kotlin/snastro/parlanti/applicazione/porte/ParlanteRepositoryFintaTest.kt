@@ -2,7 +2,6 @@ package snastro.parlanti.applicazione.porte
 
 import snastro.kernel.Esito
 import snastro.kernel.ParlanteId
-import snastro.kernel.ProgettoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
@@ -15,7 +14,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class ParlanteRepositoryFintaTest : ParlanteRepositoryContratto() {
-    override fun repository(): ParlanteRepository = ParlanteRepositoryFinta()
+    private lateinit var finta: ParlanteRepositoryFinta
+
+    override fun repository(): ParlanteRepository = ParlanteRepositoryFinta().also { finta = it }
+
+    override fun righeImpronte(id: ParlanteId): Int = finta.righeImpronte(id)
 
     @Test
     fun `AC-37 la Finta segue il rollback di UnitaDiLavoroFinta`() {
@@ -48,8 +51,4 @@ class ParlanteRepositoryFintaTest : ParlanteRepositoryContratto() {
 
     private fun unParlante(id: String, nome: String): Parlante =
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(nome).atteso(), TipoParlante.RICORRENTE).aggregato
-
-    private companion object {
-        val PROGETTO = ProgettoId("progetto-1")
-    }
 }
