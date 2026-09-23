@@ -1,31 +1,35 @@
 ---
-id: "registro-progetti-file"
+id: "abbonato-riallineamento-impronte"
 type: "adapter"
-context: "progetto"
+context: "parlanti"
 side: "app"
-wave: 4
-module: ":progetto:adattatori"
+wave: 5
+module: ":parlanti:adattatori (..eventi)"
 consumes:
   - "kernel-pl"
-  - "tec-registro-progetti"
-depends_on: []
+  - "eventi-revisione"
+depends_on:
+  - "riallinea-impronte"
 related_adrs:
   - "0002"
   - "0003"
-  - "0010"
   - "0012"
 ---
-# registro-progetti-file — Registro dei progetti recenti (file per utente)
+# abbonato-riallineamento-impronte — Abbonato dopo-commit agli eventi di Revisione → RiallineaImpronte
 
 ## What to do
-RegistroProgetti over a per-user file progetti-recenti in the OS app-data dir (macOS ~/Library/Application Support/snastro/), written atomically (R3).
+AbbonatoDopoCommit on VociUnite / VoceDivisa / SegmentoRiassegnato → RiallineaImpronte(registrazioneId) on a background coroutine, coalesced per registrazioneId, retried with bounded back-off; nothing on a rolled-back Revisione.
+
+Note: Same discipline as the Documento Rigenerazione subscriber (ADR 0012): after commit, background coroutine, coalesced per registrazioneId, idempotent, retried.
 
 ## Tasks
-- AC-119 RegistroProgettiContratto passa contro l'implementazione su file (cartella temporanea)
-- AC-120 Il file viene riscritto in modo atomico: un crash simulato a metà scrittura lascia il contenuto precedente
-- AC-121 Un file illeggibile → elenco vuoto senza crash, e il prossimo registra lo riscrive valido
+- AC-304 VociUnite, VoceDivisa e SegmentoRiassegnato sono ricevuti da un AbbonatoDopoCommit che invoca RiallineaImpronte(registrazioneId) solo dopo il commit della Revisione
+- AC-305 Una Revisione annullata (rollback, es. errore della revisione-policy) non innesca nessun RiallineaImpronte
+- AC-306 Più eventi ravvicinati della stessa Registrazione sono coalescenti: al più un RiallineaImpronte in corso e uno in coda per registrazioneId
+- AC-307 Un Errore o un'eccezione di RiallineaImpronte è ritentato con back-off limitato, senza toccare la Revisione già committata; esauriti i tentativi è riportato (la prossima apertura del progetto riallinea comunque)
 
 ## Dependencies
+- Blocks built first: `riallinea-impronte` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -56,12 +60,15 @@ RegistroProgetti over a per-user file progetti-recenti in the OS app-data dir (m
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **tec-registro-progetti** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
+- **eventi-revisione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `revisione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant); rimuovi(percorso: String) }
-    - `VoceRegistro`: data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)
+    - `VociUnite`: data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato
+    - `VoceDivisa`: data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato
+    - `SegmentoRiassegnato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato
   - keys (minting rules):
-    - `percorso`: minted by avvio-composizione (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 
-Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); R3 (user decision 2026-09-23), ADR 0010.
+Sources: ADRs 0002, 0003, 0012 (.mismagent/decisions/); ADR 0012 Amendment (b) point 3, features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy.

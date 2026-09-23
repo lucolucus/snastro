@@ -12,6 +12,8 @@ junit-platform = "1.14.4"
 kotlinx-coroutines = "1.10.2"
 mockk = "1.14.11"
 sqlite-jdbc = "3.53.4.0"
+bytedeco-javacv = "1.5.14"
+bytedeco-ffmpeg = "8.1.2-1.5.14"
 
 [libraries]
 # Gradle-plugin marker artifacts consumed by build-logic/build.gradle.kts to author
@@ -36,6 +38,10 @@ detekt-formatting = { module = "io.gitlab.arturbosch.detekt:detekt-formatting", 
 
 # Persistence (:persistenza).
 sqlite-jdbc = { module = "org.xerial:sqlite-jdbc", version.ref = "sqlite-jdbc" }
+
+# Audio decode/probe (:audio, ADR 0005) — LGPL build, never the `-gpl` artifacts (AC-126).
+bytedeco-javacv = { module = "org.bytedeco:javacv", version.ref = "bytedeco-javacv" }
+bytedeco-ffmpeg = { module = "org.bytedeco:ffmpeg", version.ref = "bytedeco-ffmpeg" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

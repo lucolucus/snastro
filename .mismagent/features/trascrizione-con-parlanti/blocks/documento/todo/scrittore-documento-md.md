@@ -24,6 +24,7 @@ ScrittoreDocumento over documenti/: write *.tmp then atomic move/replace; never 
 - AC-144 ScrittoreDocumentoContratto passa contro l'implementazione su file
 - AC-145 Un errore simulato a metà scrittura lascia intatto il file precedente (mai un file parziale)
 - AC-146 Nessuna API di lettura nel modulo documento (regola enforced_by di ADR 0010)
+- AC-340 Il file temporaneo della scrittura atomica è '<nomeFile>.tmp' nella stessa cartella documenti/ (mai un nome più lungo), così il limite di 255 byte di AC-321 vale anche per lui; con un nomeFile di 251 byte scrivi riesce
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -60,6 +61,6 @@ ScrittoreDocumento over documenti/: write *.tmp then atomic move/replace; never 
   - pinned types:
     - `ScrittoreDocumento`: interface { fun scrivi(nomeFile: String, markdown: String); fun rimuovi(nomeFile: String) } — write-only, never reads (ADR 0010)
   - keys (minting rules):
-    - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> <titolo>.md' under documenti/ — changes only when dataRegistrazione changes (titolo immutable)
+    - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' under documenti/, with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : " / \ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. UNIQUE per Progetto: titolo is unique per Progetto on the key pulisci(titolo).lowercase(Locale.ROOT) (servizi-registrazione AC-322) — so two Registrazioni never share a nomeFile whatever their dates; changes only when dataRegistrazione changes (titolo immutable). The atomic write's temp file is '<nomeFile>.tmp' in the same folder (AC-340).
 
 Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); ADR 0010.

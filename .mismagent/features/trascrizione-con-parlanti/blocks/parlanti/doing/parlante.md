@@ -15,7 +15,7 @@ related_adrs:
   - "0009"
   - "0012"
 invariants:
-  - "INV-13 StatoParlante = eliminato ⇒ zero ImprontaVocale; eliminato is terminal: no rinomina, no promozione, no new Attribuzione; Nome and past Attribuzioni kept"
+  - "INV-13 StatoParlante = eliminato ⇒ zero ImprontaVocale; eliminato is terminal: no rinomina, no promozione, no new Attribuzione (sole, policy-only exception: the INV-21 unire re-keying of its tombstone Attribuzione — attribuzione/revisione-policy; no print is ever created); Nome and past Attribuzioni kept"
   - "INV-14 a Parlante holds at most one ImprontaVocale per VoceRef; prints are kept individually (adding one never replaces or averages the others)"
   - "INV-18 promozione only occasionale → ricorrente; ImprontaVocale unchanged; only TipoParlante and optionally Nome change"
 invariant_fields:
@@ -36,7 +36,9 @@ owns_boundaries:
       "Parlante.rinomina": "(nome: Nome): Esito<ParlanteRinominato>"
       "Parlante.promuovi": "(nome: Nome?): Esito<ParlantePromosso>"
       "Parlante.elimina": "(): Esito<ParlanteEliminato> — purges every ImprontaVocale in the same call"
-      "Parlante.registraImpronta": "(voceRef: VoceRef, impronta: Impronta): Esito<Unit> — insert or replace the ONE print of that VoceRef, never touches others"
+      "Parlante.registraImpronta": "(voceRef: VoceRef, impronta: Impronta, sorgente: String /* SorgenteImpronta.chiave */, modello: String /* EstrattoreImpronta.modello */): Esito<Unit> — insert or replace the ONE print of that VoceRef, never touches others"
+      "Parlante.trasferisciImpronta": "(da: VoceRef, a: VoceRef): Unit — policy-only (INV-21 unire inheritance/re-keying): moves the print of `da` to key `a` keeping impronta, sorgente and modello (so it is stale by construction, refreshed after commit by RiallineaImpronte); no-op when there is no print for `da` (always so for an eliminato); require no print already present for `a`"
+      ImprontaVocale: "entity data class(voceRef: VoceRef, impronta: Impronta, sorgente: String, modello: String) in parlanti:dominio, exposed read-only via Parlante.impronte: List<ImprontaVocale>; fun obsoleta(chiaveCorrente: String, modelloCorrente: String): Boolean = sorgente != chiaveCorrente || modello != modelloCorrente (the ONE staleness rule, ADR 0012 (b)); same rule as companion ImprontaVocale.obsoleta(sorgente, modello, chiaveCorrente, modelloCorrente) for callers holding only row metadata"
       "Parlante.rimuoviImpronta": "(voceRef: VoceRef): Unit"
       Nome: "smart-constructor VO: Nome.di(String): Esito<Nome>; normalizzato = trim().lowercase(Locale.ROOT)"
       Impronta: "class(valori: FloatArray) in parlanti:dominio, explicit equals/hashCode"
@@ -45,10 +47,12 @@ owns_boundaries:
 # parlante — Aggregato Parlante (+ ImprontaVocale)
 
 ## What to do
-Parlante root (dev-architecture #aggregato) with Nome VO (normalizzato), TipoParlante, StatoParlante, ImprontaVocale entities (voceRef, Impronta — Impronta lives in parlanti:dominio). Built BEFORE attribuzione (shared ErroriParlanti.kt, R20).
+Parlante root (dev-architecture #aggregato) with Nome VO (normalizzato), TipoParlante, StatoParlante, ImprontaVocale entities (voceRef, Impronta, sorgente, modello — Impronta lives in parlanti:dominio) with the staleness predicate obsoleta; registraImpronta(voceRef, impronta, sorgente, modello) and the policy-only trasferisciImpronta(da, a). Built BEFORE attribuzione (shared ErroriParlanti.kt, R20).
+
+Note: AMENDED 2026-09-23 (ADR 0012 / 0009 Amendment (b)): ImprontaVocale carries sorgente (SorgenteImpronta.chiave) + modello (EstrattoreImpronta.modello); registraImpronta gains them; new trasferisciImpronta and the obsoleta predicate (pinned in agg-parlante); INV-13 text names the policy-only unire exception. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
 
 ### Invariants owned here (one test each, name starts with the tag)
-- INV-13 StatoParlante = eliminato ⇒ zero ImprontaVocale; eliminato is terminal: no rinomina, no promozione, no new Attribuzione; Nome and past Attribuzioni kept
+- INV-13 StatoParlante = eliminato ⇒ zero ImprontaVocale; eliminato is terminal: no rinomina, no promozione, no new Attribuzione (sole, policy-only exception: the INV-21 unire re-keying of its tombstone Attribuzione — attribuzione/revisione-policy; no print is ever created); Nome and past Attribuzioni kept
 - INV-14 a Parlante holds at most one ImprontaVocale per VoceRef; prints are kept individually (adding one never replaces or averages the others)
 - INV-18 promozione only occasionale → ricorrente; ImprontaVocale unchanged; only TipoParlante and optionally Nome change
 
@@ -57,6 +61,9 @@ Parlante root (dev-architecture #aggregato) with Nome VO (normalizzato), TipoPar
 - INV-14 registraImpronta con un VoceRef già presente sostituisce solo quella impronta; con un VoceRef nuovo la aggiunge senza toccare le altre
 - INV-18 promuovi su un ricorrente → Errore(PromozioneNonAmmessa); su un occasionale cambia solo tipo (e nome se dato) e lascia le impronte identiche
 - AC-22 Nome.di rifiuta testo vuoto; normalizzato = trim + minuscole Locale.ROOT ('  Marco ' e 'marco' hanno lo stesso normalizzato)
+- INV-13 su un eliminato trasferisciImpronta non crea impronte: resta a zero impronte
+- INV-14 trasferisciImpronta(da, a) ri-chiava l'impronta di da su a con la stessa Impronta, sorgente e modello, senza toccare le altre; senza impronta per da non fa nulla
+- AC-268 registraImpronta conserva sorgente e modello; ImprontaVocale.obsoleta(chiaveCorrente, modelloCorrente) è vera se la sorgente differisce dalla chiave corrente o il modello differisce, falsa se coincidono entrambi
 
 ## Dependencies
 - **agg-parlante** (OWNED here — built before its consumers) — owner `parlante`, projection in-process, contract_test **invariant-test**
@@ -65,7 +72,9 @@ Parlante root (dev-architecture #aggregato) with Nome VO (normalizzato), TipoPar
     - `Parlante.rinomina`: (nome: Nome): Esito<ParlanteRinominato>
     - `Parlante.promuovi`: (nome: Nome?): Esito<ParlantePromosso>
     - `Parlante.elimina`: (): Esito<ParlanteEliminato> — purges every ImprontaVocale in the same call
-    - `Parlante.registraImpronta`: (voceRef: VoceRef, impronta: Impronta): Esito<Unit> — insert or replace the ONE print of that VoceRef, never touches others
+    - `Parlante.registraImpronta`: (voceRef: VoceRef, impronta: Impronta, sorgente: String /* SorgenteImpronta.chiave */, modello: String /* EstrattoreImpronta.modello */): Esito<Unit> — insert or replace the ONE print of that VoceRef, never touches others
+    - `Parlante.trasferisciImpronta`: (da: VoceRef, a: VoceRef): Unit — policy-only (INV-21 unire inheritance/re-keying): moves the print of `da` to key `a` keeping impronta, sorgente and modello (so it is stale by construction, refreshed after commit by RiallineaImpronte); no-op when there is no print for `da` (always so for an eliminato); require no print already present for `a`
+    - `ImprontaVocale`: entity data class(voceRef: VoceRef, impronta: Impronta, sorgente: String, modello: String) in parlanti:dominio, exposed read-only via Parlante.impronte: List<ImprontaVocale>; fun obsoleta(chiaveCorrente: String, modelloCorrente: String): Boolean = sorgente != chiaveCorrente || modello != modelloCorrente (the ONE staleness rule, ADR 0012 (b)); same rule as companion ImprontaVocale.obsoleta(sorgente, modello, chiaveCorrente, modelloCorrente) for callers holding only row metadata
     - `Parlante.rimuoviImpronta`: (voceRef: VoceRef): Unit
     - `Nome`: smart-constructor VO: Nome.di(String): Esito<Nome>; normalizzato = trim().lowercase(Locale.ROOT)
     - `Impronta`: class(valori: FloatArray) in parlanti:dominio, explicit equals/hashCode
