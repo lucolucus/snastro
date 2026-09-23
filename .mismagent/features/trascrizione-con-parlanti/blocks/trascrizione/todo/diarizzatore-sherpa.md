@@ -4,6 +4,7 @@ type: "adapter"
 context: "trascrizione"
 side: "app"
 wave: 12
+release: "R1"
 module: ":ml-sherpa + :trascrizione:adattatori (..ml)"
 consumes:
   - "kernel-pl"

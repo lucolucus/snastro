@@ -27,7 +27,7 @@ sides:
   app:                          # single side, one Kotlin codebase (ADR 0001), fully local processing
     repo: .
     dev_architecture: .mismagent/architetture/dev-architecture-app.md   # prescriptive style memory (authored 2026-09-23, before the first domain wave); harvest-dev-architecture reconciles it after the first green wave
-    gate: "./gradlew check"     # compile (allWarningsAsErrors) + detekt + unit/contract/Konsist tests + Compose UI tests (:ui:renderCheck) + verificaDipendenzeModuli + verifySqlDelightMigration; headless, no model weights, no native ML libs
+    gate: "./gradlew check"     # compile (allWarningsAsErrors) + detekt + unit/contract/Konsist tests + Compose UI tests (:ui:renderCheck) + verificaDipendenzeModuli + migration test (ADR 0006 (a)); headless, no model weights, no native ML libs
     toolchain: "Kotlin 2.x/JVM on JetBrains Runtime 21 (Gradle toolchain, foojay resolver); Gradle wrapper + Kotlin DSL + version catalog; Compose Multiplatform Desktop; SQLDelight; Konsist; detekt. Opt-in (outside the gate): ./gradlew modelliTest (real ML adapters, @Tag(\"modelli\"), downloads natives+models) and ./gradlew benchmarkElaborazione -Pcampione=<60-min sample> (NFR, ADR 0011)"
     ui_render_check: "./gradlew :ui:renderCheck"   # Compose Desktop headless (runComposeUiTest/ImageComposeScene): every screen S1–S4 + lettore-audio from fixture read-models at 1280x800 and 1024x640, all states (empty/loading/error/data); PNGs to ui/build/render-check/; semantic asserts on key nodes + no clipped text. Part of the gate.
     run: "./gradlew :avvio:run"                     # native window, no port. Smoke: ./gradlew :avvio:run --args="--smoke <fixture-progetto-dir>" (opens the fixture, captures one screenshot per screen to avvio/build/smoke/, exits 0)
@@ -50,4 +50,4 @@ Single side → every boundary is `in-process` (port + contract test). No OpenAP
 
 ## Boundary rules
 - The boundary is the MODULE/package: never write outside your own block's package; the other context is touched only via the port.
-- Never commit secrets / .env / audio samples / model weights / DB files. **Scoped exception (ADR 0006):** the SQLDelight schema snapshots `persistenza/src/main/sqldelight/databases/*.db` (schema only, never user data) ARE committed — `verifySqlDelightMigration` needs them.
+- Never commit secrets / .env / audio samples / model weights / DB files. (ADR 0006 (a): no DB file is committed — the schema lives in `.sqm` migrations.)

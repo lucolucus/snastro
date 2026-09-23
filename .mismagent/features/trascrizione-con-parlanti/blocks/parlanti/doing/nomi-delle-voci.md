@@ -4,6 +4,7 @@ type: "read-model"
 context: "parlanti"
 side: "app"
 wave: 4
+release: "R2"
 module: ":parlanti:applicazione (..letture)"
 consumes:
   - "kernel-pl"

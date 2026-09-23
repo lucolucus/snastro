@@ -1,8 +1,5 @@
 package snastro.parlanti.applicazione.politiche
 
-import io.mockk.mockk
-import io.mockk.verify
-import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
@@ -13,135 +10,152 @@ import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
-import snastro.parlanti.applicazione.porte.DecodificatoreAudio
-import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
-import snastro.parlanti.applicazione.porte.EstrattoreImpronta
-import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
-import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
+import snastro.parlanti.dominio.ImprontaVocale
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
+import snastro.parlanti.dominio.SorgenteImpronta
 import snastro.parlanti.dominio.TipoParlante
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+/**
+ * [ApplicaRevisionePolitica] against the repository fakes (D1). STRUCTURAL part of [INV-21]/[INV-25]
+ * only (ADR 0012 Amendment (b)): no ML port is even wired (AC-291) — surviving rows are KEPT as they
+ * were (stale by `sorgente`, refreshed after commit by RiallineaImpronte), `unire` inheritance RE-KEYS.
+ */
 class ApplicaRevisionePoliticaTest {
     private val parlanti = ParlanteRepositoryFinta()
     private val attribuzioni = AttribuzioneRepositoryFinta()
-    private val decodificatore = DecodificatoreAudioFinta()
-    private val estrattore = EstrattoreImprontaFinta()
+    private val politica = ApplicaRevisionePolitica(parlanti, attribuzioni)
 
-    private fun politica(voci: Map<RegistrazioneId, List<VoceVista>> = emptyMap()): ApplicaRevisionePolitica =
-        ApplicaRevisionePolitica(parlanti, attribuzioni, LettoreVociFinta(voci), decodificatore, estrattore)
-
-    private fun unNome(testo: String) = Nome.di(testo).atteso()
-
-    private fun unParlante(id: String, nome: String = id, tipo: TipoParlante = TipoParlante.RICORRENTE): Parlante =
-        Parlante.crea(ParlanteId(id), PROGETTO, unNome(nome), tipo).aggregato
+    private fun unParlante(id: String, tipo: TipoParlante = TipoParlante.RICORRENTE): Parlante =
+        Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), tipo).aggregato
 
     private fun unaVoce(n: Int): VoceRef = VoceRef(REGISTRAZIONE, VoceId(n))
 
-    private fun attribuisci(voceRef: VoceRef, parlanteId: ParlanteId): Attribuzione =
-        Attribuzione.conferma(voceRef, PROGETTO, parlanteId).aggregato
+    /** Attributes [voceRef] to [parlante] with a print extracted from [SORGENTE_INIZIALE], as a command would. */
+    private fun attribuisci(voceRef: VoceRef, parlante: Parlante, valore: Float = voceRef.voceId.numero.toFloat()) {
+        if (parlante.attivo) {
+            val impronta = Impronta(floatArrayOf(valore))
+            parlante.registraImpronta(voceRef, impronta, SORGENTE_INIZIALE, MODELLO).atteso()
+        }
+        parlanti.salva(parlante).atteso()
+        attribuzioni.salva(Attribuzione.conferma(voceRef, PROGETTO, parlante.id).aggregato)
+    }
 
-    private fun improntaAttesa(intervalli: List<IntervalloMs>): Impronta =
-        estrattore.estrai(decodificatore.campioni(REGISTRAZIONE, intervalli))
+    private fun impronteDi(parlante: Parlante): List<ImprontaVocale> =
+        assertNotNull(parlanti.trova(parlante.id)).impronte
 
     @Test
     fun `INV-21 unire con A e B attribuiti a Parlanti diversi vince A, B perde Attribuzione e impronta`() {
         val pa = unParlante("id-pa")
         val pb = unParlante("id-pb")
-        val voceA = unaVoce(1)
-        val voceB = unaVoce(2)
-        pa.registraImpronta(voceA, Impronta(floatArrayOf(0f, 0f))).atteso()
-        pb.registraImpronta(voceB, Impronta(floatArrayOf(1f, 1f))).atteso()
-        parlanti.salva(pa).atteso()
-        parlanti.salva(pb).atteso()
-        attribuzioni.salva(attribuisci(voceA, pa.id))
-        attribuzioni.salva(attribuisci(voceB, pb.id))
-        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged))))
+        attribuisci(unaVoce(1), pa)
+        attribuisci(unaVoce(2), pb)
+        val rigaA = impronteDi(pa).single()
 
-        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
-        assertNull(attribuzioni.trova(voceB), "B perde l'Attribuzione")
-        val pbSalvato = assertNotNull(parlanti.trova(pb.id))
-        assertEquals(emptyList(), pbSalvato.impronte, "l'impronta derivata da B e cancellata")
-        val attribuzioneA = assertNotNull(attribuzioni.trova(voceA), "vince A: la sua Attribuzione resta")
-        assertEquals(pa.id, attribuzioneA.parlanteId)
-        val paSalvato = assertNotNull(parlanti.trova(pa.id))
-        assertEquals(
-            improntaAttesa(intervalliMerged),
-            paSalvato.impronte.single { it.voceRef == voceA }.impronta,
-            "A e sopravvissuta e attribuita: la sua impronta e comunque ri-derivata dai Segmenti correnti",
+        assertNull(attribuzioni.trova(unaVoce(2)), "B perde l'Attribuzione")
+        assertEquals(emptyList(), impronteDi(pb), "l'impronta derivata da B e cancellata")
+        assertEquals(pa.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId, "vince A")
+        assertEquals(listOf(rigaA), impronteDi(pa), "la riga di A resta com'era (obsoleta), nessuna estrazione")
+    }
+
+    @Test
+    fun `INV-21 unire con A attribuita e B no, A mantiene la sua riga obsoleta aggiornata dopo il commit`() {
+        val pa = unParlante("id-pa")
+        attribuisci(unaVoce(1), pa)
+        val rigaPrima = impronteDi(pa).single()
+        val intervalliUniti = listOf(IntervalloMs(0, 1_000), IntervalloMs(2_000, 5_000))
+
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+
+        assertNull(attribuzioni.trova(unaVoce(2)))
+        assertEquals(pa.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
+        val rigaDopo = impronteDi(pa).single()
+        assertEquals(rigaPrima, rigaDopo, "la riga resta identica: nessuna estrazione nella transazione")
+        assertTrue(
+            rigaDopo.obsoleta(SorgenteImpronta.di(intervalliUniti).chiave, MODELLO),
+            "la sorgente non corrisponde piu ai Segmenti uniti: RiallineaImpronte la aggiornera",
         )
     }
 
     @Test
-    fun `INV-21 unire con A attribuita e B no ri-deriva l impronta di A dai Segmenti correnti`() {
-        val pa = unParlante("id-pa")
-        val voceA = unaVoce(1)
-        val voceB = unaVoce(2)
-        val improntaIniziale = Impronta(floatArrayOf(0f, 0f, 0f))
-        pa.registraImpronta(voceA, improntaIniziale).atteso()
-        parlanti.salva(pa).atteso()
-        attribuzioni.salva(attribuisci(voceA, pa.id))
-        val intervalliCorrenti = listOf(IntervalloMs(0, 5000))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliCorrenti))))
+    fun `INV-21 unire con B attribuita a P attivo e A no, Attribuzione e riga di B sono ri-chiavate su A`() {
+        val p = unParlante("id-p", tipo = TipoParlante.OCCASIONALE)
+        attribuisci(unaVoce(2), p, valore = 8f)
+        val rigaB = impronteDi(p).single()
 
-        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
-        assertNull(attribuzioni.trova(voceB))
-        val paSalvato = assertNotNull(parlanti.trova(pa.id))
-        val improntaSalvata = paSalvato.impronte.single { it.voceRef == voceA }.impronta
-        assertEquals(improntaAttesa(intervalliCorrenti), improntaSalvata)
-        assertNotEquals(improntaIniziale, improntaSalvata)
+        assertNull(attribuzioni.trova(unaVoce(2)), "nessuna Attribuzione per B")
+        assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId, "Attribuzione(A) = P")
+        assertEquals(
+            listOf(ImprontaVocale(unaVoce(1), rigaB.impronta, rigaB.sorgente, rigaB.modello)),
+            impronteDi(p),
+            "la riga di B e ri-chiavata su A conservando impronta, sorgente e modello (quindi obsoleta)",
+        )
+        assertTrue(assertNotNull(parlanti.trova(p.id)).attivo, "P occasionale NON cessa: INV-25 non scatta")
     }
 
     @Test
-    fun `INV-21 dividere A' nasce senza Attribuzione, A la mantiene con l impronta ri-derivata`() {
+    fun `INV-21 unire con B attribuita a P eliminato e A no, solo l Attribuzione tombstone e ri-chiavata`() {
+        val p = unParlante("id-p")
+        attribuisci(unaVoce(2), p)
+        p.elimina().atteso()
+        parlanti.salva(p).atteso()
+
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+
+        assertNull(attribuzioni.trova(unaVoce(2)), "B perde l'Attribuzione")
+        assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId, "A eredita il tombstone")
+        assertEquals(emptyList(), impronteDi(p), "nessuna riga d'impronta creata: P resta a zero impronte (INV-13)")
+        assertTrue(assertNotNull(parlanti.trova(p.id)).eliminato)
+    }
+
+    @Test
+    fun `INV-21 unire con A e B attribuiti allo stesso Parlante, A mantiene Attribuzione e riga, B le perde`() {
+        val p = unParlante("id-p", tipo = TipoParlante.OCCASIONALE)
+        attribuisci(unaVoce(1), p)
+        attribuisci(unaVoce(2), p)
+        val rigaA = impronteDi(p).single { it.voceRef == unaVoce(1) }
+
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+
+        assertNull(attribuzioni.trova(unaVoce(2)), "B perde l'Attribuzione")
+        assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
+        assertEquals(listOf(rigaA), impronteDi(p), "A tiene la propria riga (obsoleta), quella di B e cancellata")
+        assertTrue(assertNotNull(parlanti.trova(p.id)).attivo, "e ancora attribuito da A: non cessa")
+    }
+
+    @Test
+    fun `INV-21 dividere A' nasce senza Attribuzione, A mantiene Attribuzione e riga obsoleta`() {
         val pa = unParlante("id-pa")
-        val voceOrigine = unaVoce(1)
-        val voceNuova = unaVoce(2)
-        val improntaIniziale = Impronta(floatArrayOf(2f, 2f))
-        pa.registraImpronta(voceOrigine, improntaIniziale).atteso()
-        parlanti.salva(pa).atteso()
-        attribuzioni.salva(attribuisci(voceOrigine, pa.id))
-        val intervalliRidotti = listOf(IntervalloMs(0, 2000))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceOrigine, intervalliRidotti))))
+        attribuisci(unaVoce(1), pa)
+        val rigaPrima = impronteDi(pa).single()
 
-        pol.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)).atteso()
+        politica.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)).atteso()
 
-        assertNull(attribuzioni.trova(voceNuova), "A' nasce senza Attribuzione")
-        val attribuzioneOrigine = assertNotNull(attribuzioni.trova(voceOrigine), "A mantiene la sua Attribuzione")
-        assertEquals(pa.id, attribuzioneOrigine.parlanteId)
-        val paSalvato = assertNotNull(parlanti.trova(pa.id))
-        val improntaSalvata = paSalvato.impronte.single { it.voceRef == voceOrigine }.impronta
-        assertEquals(improntaAttesa(intervalliRidotti), improntaSalvata)
-        assertNotEquals(improntaIniziale, improntaSalvata)
+        assertNull(attribuzioni.trova(unaVoce(2)), "A' nasce senza Attribuzione")
+        assertEquals(pa.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
+        assertEquals(listOf(rigaPrima), impronteDi(pa), "riga invariata, aggiornata dopo il commit")
     }
 
     @Test
     fun `INV-21 riassegnare svuota la sorgente e la destinazione nuova resta senza Attribuzione`() {
-        val pda = unParlante("id-pda", tipo = TipoParlante.RICORRENTE)
-        val voceDa = unaVoce(1)
-        val voceDestinazione = unaVoce(2)
-        pda.registraImpronta(voceDa, Impronta(floatArrayOf(3f, 3f))).atteso()
-        parlanti.salva(pda).atteso()
-        attribuzioni.salva(attribuisci(voceDa, pda.id))
-        val pol = politica()
+        val pda = unParlante("id-pda")
+        attribuisci(unaVoce(1), pda)
 
-        pol.applicaSegmentoRiassegnato(
+        politica.applicaSegmentoRiassegnato(
             REGISTRAZIONE,
             da = VoceId(1),
             a = VoceId(2),
@@ -149,393 +163,131 @@ class ApplicaRevisionePoliticaTest {
             aNuova = true,
         ).atteso()
 
-        assertNull(attribuzioni.trova(voceDa), "la sorgente svuotata perde l'Attribuzione")
-        val pdaSalvato = assertNotNull(parlanti.trova(pda.id))
-        assertEquals(emptyList(), pdaSalvato.impronte, "la sorgente svuotata perde l'impronta")
-        assertTrue(pdaSalvato.attivo, "e ricorrente: resta (INV-25)")
-        assertNull(attribuzioni.trova(voceDestinazione), "la destinazione nuova nasce senza Attribuzione")
+        assertNull(attribuzioni.trova(unaVoce(1)), "la sorgente svuotata perde l'Attribuzione")
+        assertEquals(emptyList(), impronteDi(pda), "la sorgente svuotata perde l'impronta")
+        assertTrue(assertNotNull(parlanti.trova(pda.id)).attivo, "e ricorrente: resta (INV-25)")
+        assertNull(attribuzioni.trova(unaVoce(2)), "la destinazione nuova nasce senza Attribuzione")
+    }
+
+    @Test
+    fun `INV-21 riassegnare tra Voci che sopravvivono lascia entrambe le righe com erano`() {
+        val pda = unParlante("id-pda")
+        val pa = unParlante("id-pa")
+        attribuisci(unaVoce(1), pda)
+        attribuisci(unaVoce(2), pa)
+        val righePrima = impronteDi(pda) + impronteDi(pa)
+
+        politica.applicaSegmentoRiassegnato(
+            REGISTRAZIONE,
+            da = VoceId(1),
+            a = VoceId(2),
+            daRimossa = false,
+            aNuova = false,
+        ).atteso()
+
+        assertEquals(pda.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
+        assertEquals(pa.id, assertNotNull(attribuzioni.trova(unaVoce(2))).parlanteId)
+        assertEquals(righePrima, impronteDi(pda) + impronteDi(pa), "righe invariate (obsolete), nessuna estrazione")
     }
 
     @Test
     fun `INV-25 un occasionale rimasto senza Attribuzioni cessa, un ricorrente resta`() {
         val occasionale = unParlante("id-occ", tipo = TipoParlante.OCCASIONALE)
-        val ricorrente = unParlante("id-ric", tipo = TipoParlante.RICORRENTE)
-        val voceOcc = unaVoce(1)
-        val voceRic = unaVoce(2)
-        occasionale.registraImpronta(voceOcc, Impronta(floatArrayOf(4f))).atteso()
-        ricorrente.registraImpronta(voceRic, Impronta(floatArrayOf(5f))).atteso()
-        parlanti.salva(occasionale).atteso()
-        parlanti.salva(ricorrente).atteso()
-        attribuzioni.salva(attribuisci(voceOcc, occasionale.id))
-        attribuzioni.salva(attribuisci(voceRic, ricorrente.id))
-        val pol = politica()
+        val ricorrente = unParlante("id-ric")
+        attribuisci(unaVoce(1), occasionale)
+        attribuisci(unaVoce(2), ricorrente)
 
-        pol.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
-            da = VoceId(1),
-            a = VoceId(97),
-            daRimossa = true,
-            aNuova = true,
-        ).atteso()
-        pol.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
-            da = VoceId(2),
-            a = VoceId(98),
-            daRimossa = true,
-            aNuova = true,
-        ).atteso()
+        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(1), VoceId(97), daRimossa = true, aNuova = true)
+            .atteso()
+        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(2), VoceId(98), daRimossa = true, aNuova = true)
+            .atteso()
 
         assertNull(parlanti.trova(occasionale.id), "l'occasionale rimasto senza Attribuzioni cessa di esistere")
-        val ricorrenteSalvato = assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta")
-        assertTrue(ricorrenteSalvato.attivo)
+        assertTrue(assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta").attivo)
         assertEquals(emptyList(), attribuzioni.diParlante(ricorrente.id))
     }
 
-    // --- F1 (code-review HIGH): una Voce attribuita a un Parlante ELIMINATO non deve mai far fallire
-    // la Revisione. Per [INV-15] un'impronta esiste solo mentre il Parlante e `attivo`: past il
-    // tombstone ([INV-13]/[INV-24]) l'Attribuzione resta, ma niente decodifica/estrazione/scrittura
-    // deve avvenire — la ri-derivazione va semplicemente saltata, `Ok`. --------------------------------
-
     @Test
-    fun `INV-21 dividere con l origine attribuita a un Parlante eliminato non ri-deriva`() {
+    fun `INV-25 unire con A e B attribuiti a Parlanti diversi fa cessare l occasionale di B`() {
         val pa = unParlante("id-pa")
-        pa.elimina().atteso()
-        parlanti.salva(pa).atteso()
-        val voceOrigine = unaVoce(1)
-        attribuzioni.salva(attribuisci(voceOrigine, pa.id))
-        val intervalli = listOf(IntervalloMs(0, 1000))
-        val decodificatoreMock = mockk<DecodificatoreAudio>()
-        val estrattoreMock = mockk<EstrattoreImpronta>()
-        val pol = ApplicaRevisionePolitica(
-            parlanti,
-            attribuzioni,
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceOrigine, intervalli)))),
-            decodificatoreMock,
-            estrattoreMock,
-        )
-
-        pol.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)).atteso()
-
-        assertNotNull(
-            attribuzioni.trova(voceOrigine),
-            "il Parlante eliminato mantiene l'Attribuzione tombstone (INV-13)",
-        )
-        assertEquals(
-            emptyList(),
-            assertNotNull(parlanti.trova(pa.id)).impronte,
-            "nessuna impronta per un eliminato (INV-15)",
-        )
-        verify(exactly = 0) { decodificatoreMock.campioni(any(), any()) }
-        verify(exactly = 0) { estrattoreMock.estrai(any()) }
-    }
-
-    @Test
-    fun `INV-21 unire con la sopravvissuta attribuita a un Parlante eliminato non ri-deriva`() {
-        val pa = unParlante("id-pa")
-        pa.elimina().atteso()
-        parlanti.salva(pa).atteso()
-        val voceA = unaVoce(1)
-        attribuzioni.salva(attribuisci(voceA, pa.id))
-        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
-        val decodificatoreMock = mockk<DecodificatoreAudio>()
-        val estrattoreMock = mockk<EstrattoreImpronta>()
-        val pol = ApplicaRevisionePolitica(
-            parlanti,
-            attribuzioni,
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged)))),
-            decodificatoreMock,
-            estrattoreMock,
-        )
-
-        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
-
-        assertNotNull(attribuzioni.trova(voceA), "il Parlante eliminato mantiene l'Attribuzione tombstone")
-        assertEquals(emptyList(), assertNotNull(parlanti.trova(pa.id)).impronte)
-        verify(exactly = 0) { decodificatoreMock.campioni(any(), any()) }
-        verify(exactly = 0) { estrattoreMock.estrai(any()) }
-    }
-
-    @Test
-    fun `INV-21 riassegnare su una destinazione esistente attribuita a un Parlante eliminato non ri-deriva`() {
-        val pa = unParlante("id-pa")
-        pa.elimina().atteso()
-        parlanti.salva(pa).atteso()
-        val voceDestinazione = unaVoce(2)
-        attribuzioni.salva(attribuisci(voceDestinazione, pa.id))
-        val intervalli = listOf(IntervalloMs(0, 1000))
-        val decodificatoreMock = mockk<DecodificatoreAudio>()
-        val estrattoreMock = mockk<EstrattoreImpronta>()
-        val pol = ApplicaRevisionePolitica(
-            parlanti,
-            attribuzioni,
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceDestinazione, intervalli)))),
-            decodificatoreMock,
-            estrattoreMock,
-        )
-
-        pol.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
-            da = VoceId(1),
-            a = VoceId(2),
-            daRimossa = false,
-            aNuova = false,
-        ).atteso()
-
-        assertNotNull(attribuzioni.trova(voceDestinazione), "il Parlante eliminato mantiene l'Attribuzione tombstone")
-        assertEquals(emptyList(), assertNotNull(parlanti.trova(pa.id)).impronte)
-        verify(exactly = 0) { decodificatoreMock.campioni(any(), any()) }
-        verify(exactly = 0) { estrattoreMock.estrai(any()) }
-    }
-
-    // --- F2 (code-review MED): AC-96 riscritto su un fallimento REALE. Il caso "Parlante eliminato"
-    // non e piu un errore (F1 sopra): qui la policy fallisce per una ragione di infrastruttura vera.
-    // L'annullamento END-TO-END della Revisione (rollback del Trascritto) e provato altrove, da
-    // abbonato-revisione-parlanti's AC-143 — qui la policy non possiede la transazione. -------------
-
-    @Test
-    fun `AC-96 il ParlanteRepository che fallisce salva restituisce il suo Errore`() {
-        val pa = unParlante("id-pa")
-        parlanti.salva(pa).atteso()
-        val voceOrigine = unaVoce(1)
-        attribuzioni.salva(attribuisci(voceOrigine, pa.id))
-        val intervalli = listOf(IntervalloMs(0, 1000))
-        val repositorioCheFallisce = ParlanteRepositorySalvaFallisce(parlanti)
-        val pol = ApplicaRevisionePolitica(
-            repositorioCheFallisce,
-            attribuzioni,
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceOrigine, intervalli)))),
-            decodificatore,
-            estrattore,
-        )
-
-        val errore = pol.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1))
-            .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
-
-        assertEquals(ErroreParlanti.NomeGiaInUso(pa.nome.valore), errore)
-    }
-
-    @Test
-    fun `AC-96 un EstrattoreImpronta che lancia una eccezione la propaga senza intercettarla`() {
-        val pa = unParlante("id-pa")
-        parlanti.salva(pa).atteso()
-        val voceOrigine = unaVoce(1)
-        attribuzioni.salva(attribuisci(voceOrigine, pa.id))
-        val intervalli = listOf(IntervalloMs(0, 1000))
-        val estrattoreCheLancia = EstrattoreImprontaCheLancia
-        val pol = ApplicaRevisionePolitica(
-            parlanti,
-            attribuzioni,
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceOrigine, intervalli)))),
-            decodificatore,
-            estrattoreCheLancia,
-        )
-
-        assertFailsWith<IllegalStateException> { pol.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)) }
-    }
-
-    // --- F3 (code-review SHOULD, rami mancanti su comportamento gia implementato): niente da
-    // correggere nel codice, solo test che coprono i rami esistenti. ---------------------------------
-
-    @Test
-    fun `INV-21 riassegnare su una destinazione esistente attribuita ri-deriva la sua impronta`() {
-        val pDest = unParlante("id-dest")
-        val voceDestinazione = unaVoce(2)
-        val improntaIniziale = Impronta(floatArrayOf(6f, 6f))
-        pDest.registraImpronta(voceDestinazione, improntaIniziale).atteso()
-        parlanti.salva(pDest).atteso()
-        attribuzioni.salva(attribuisci(voceDestinazione, pDest.id))
-        val intervalliCorrenti = listOf(IntervalloMs(0, 3000))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceDestinazione, intervalliCorrenti))))
-
-        pol.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
-            da = VoceId(1),
-            a = VoceId(2),
-            daRimossa = true,
-            aNuova = false,
-        ).atteso()
-
-        val attribuzioneDest = assertNotNull(attribuzioni.trova(voceDestinazione))
-        assertEquals(pDest.id, attribuzioneDest.parlanteId)
-        val destSalvato = assertNotNull(parlanti.trova(pDest.id))
-        val improntaSalvata = destSalvato.impronte.single { it.voceRef == voceDestinazione }.impronta
-        assertEquals(improntaAttesa(intervalliCorrenti), improntaSalvata)
-        assertNotEquals(improntaIniziale, improntaSalvata)
-    }
-
-    @Test
-    fun `INV-21 riassegnare con la sorgente non svuotata ri-deriva la sua impronta`() {
-        val pSrc = unParlante("id-src")
-        val voceDa = unaVoce(1)
-        val improntaIniziale = Impronta(floatArrayOf(7f, 7f, 7f))
-        pSrc.registraImpronta(voceDa, improntaIniziale).atteso()
-        parlanti.salva(pSrc).atteso()
-        attribuzioni.salva(attribuisci(voceDa, pSrc.id))
-        val intervalliRidotti = listOf(IntervalloMs(0, 1500))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceDa, intervalliRidotti))))
-
-        pol.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
-            da = VoceId(1),
-            a = VoceId(2),
-            daRimossa = false,
-            aNuova = true,
-        ).atteso()
-
-        val attribuzioneDa = assertNotNull(
-            attribuzioni.trova(voceDa),
-            "la sorgente non svuotata mantiene l'Attribuzione",
-        )
-        assertEquals(pSrc.id, attribuzioneDa.parlanteId)
-        val srcSalvato = assertNotNull(parlanti.trova(pSrc.id))
-        val improntaSalvata = srcSalvato.impronte.single { it.voceRef == voceDa }.impronta
-        assertEquals(improntaAttesa(intervalliRidotti), improntaSalvata)
-        assertNotEquals(improntaIniziale, improntaSalvata)
-    }
-
-    // user decision 2026-09-23: unire(A sopravvissuta, B rimossa) con SOLO B attribuita — A EREDITA il
-    // Parlante di B (non resta senza Attribuzione): nuova Attribuzione(A -> P) confermata come
-    // conferma-attribuzione, l'Attribuzione+impronta di B sparisce, l'impronta di P e ri-derivata per A
-    // dai Segmenti correnti. P mantiene cosi un'Attribuzione (quella ereditata): un occasionale P NON
-    // cessa (INV-25 non si applica qui).
-    @Test
-    fun `INV-21 unire con B attribuita e A no, A eredita il Parlante di B con l impronta ri-derivata`() {
         val pb = unParlante("id-pb", tipo = TipoParlante.OCCASIONALE)
-        val voceA = unaVoce(1)
-        val voceB = unaVoce(2)
-        pb.registraImpronta(voceB, Impronta(floatArrayOf(8f))).atteso()
-        parlanti.salva(pb).atteso()
-        attribuzioni.salva(attribuisci(voceB, pb.id))
-        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged))))
+        attribuisci(unaVoce(1), pa)
+        attribuisci(unaVoce(2), pb)
 
-        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
-        assertNull(attribuzioni.trova(voceB), "B perde l'Attribuzione")
-        val attribuzioneA = assertNotNull(attribuzioni.trova(voceA), "A eredita il Parlante di B")
-        assertEquals(pb.id, attribuzioneA.parlanteId)
-        val pbSalvato = assertNotNull(
-            parlanti.trova(pb.id),
-            "occasionale, ma mantiene l'Attribuzione ereditata: non cessa",
-        )
-        val improntaSalvata = pbSalvato.impronte.single { it.voceRef == voceA }.impronta
-        assertEquals(
-            improntaAttesa(intervalliMerged),
-            improntaSalvata,
-            "l'impronta di P e ri-derivata dai Segmenti di A",
-        )
-        assertEquals(1, pbSalvato.impronte.size, "l'impronta di B (rimossa) non resta")
-    }
-
-    @Test
-    fun `INV-21 unire con B attribuita a un Parlante eliminato e A no, A eredita l Attribuzione senza impronta`() {
-        val pb = unParlante("id-pb")
-        pb.elimina().atteso()
-        parlanti.salva(pb).atteso()
-        val voceA = unaVoce(1)
-        val voceB = unaVoce(2)
-        attribuzioni.salva(attribuisci(voceB, pb.id))
-        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
-        val decodificatoreMock = mockk<DecodificatoreAudio>()
-        val estrattoreMock = mockk<EstrattoreImpronta>()
-        val pol = ApplicaRevisionePolitica(
-            parlanti,
-            attribuzioni,
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged)))),
-            decodificatoreMock,
-            estrattoreMock,
-        )
-
-        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
-
-        assertNull(attribuzioni.trova(voceB), "B perde l'Attribuzione")
-        val attribuzioneA = assertNotNull(attribuzioni.trova(voceA), "A eredita l'Attribuzione, anche se P e eliminato")
-        assertEquals(pb.id, attribuzioneA.parlanteId)
-        assertEquals(
-            emptyList(),
-            assertNotNull(parlanti.trova(pb.id)).impronte,
-            "nessuna impronta per un eliminato (INV-15)",
-        )
-        verify(exactly = 0) { decodificatoreMock.campioni(any(), any()) }
-        verify(exactly = 0) { estrattoreMock.estrai(any()) }
-    }
-
-    @Test
-    fun `INV-21 unire con A e B attribuiti allo stesso Parlante, l impronta e ri-derivata e l Attribuzione resta`() {
-        val p = unParlante("id-p", tipo = TipoParlante.OCCASIONALE)
-        val voceA = unaVoce(1)
-        val voceB = unaVoce(2)
-        p.registraImpronta(voceA, Impronta(floatArrayOf(9f))).atteso()
-        p.registraImpronta(voceB, Impronta(floatArrayOf(10f))).atteso()
-        parlanti.salva(p).atteso()
-        attribuzioni.salva(attribuisci(voceA, p.id))
-        attribuzioni.salva(attribuisci(voceB, p.id))
-        val intervalliMerged = listOf(IntervalloMs(0, 1000), IntervalloMs(1000, 2000))
-        val pol = politica(mapOf(REGISTRAZIONE to listOf(VoceVista(voceA, intervalliMerged))))
-
-        pol.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
-
-        assertNull(attribuzioni.trova(voceB), "B perde l'Attribuzione")
-        val attribuzioneA = assertNotNull(attribuzioni.trova(voceA), "A mantiene la sua Attribuzione")
-        assertEquals(p.id, attribuzioneA.parlanteId)
-        val pSalvato = assertNotNull(
-            parlanti.trova(p.id),
-            "e ancora attribuito da A: non cessa nonostante sia occasionale",
-        )
-        val improntaSalvata = pSalvato.impronte.single { it.voceRef == voceA }.impronta
-        assertEquals(improntaAttesa(intervalliMerged), improntaSalvata)
+        assertNull(parlanti.trova(pb.id), "l'occasionale di B, senza piu Attribuzioni, cessa")
     }
 
     @Test
     fun `INV-25 un occasionale con altre Attribuzioni non cessa`() {
-        val pOcc = unParlante("id-occ", tipo = TipoParlante.OCCASIONALE)
-        val voceDa = unaVoce(1)
+        val occasionale = unParlante("id-occ", tipo = TipoParlante.OCCASIONALE)
         val voceAltrove = VoceRef(RegistrazioneId("registrazione-2"), VoceId(1))
-        pOcc.registraImpronta(voceDa, Impronta(floatArrayOf(11f))).atteso()
-        parlanti.salva(pOcc).atteso()
-        attribuzioni.salva(attribuisci(voceDa, pOcc.id))
-        attribuzioni.salva(Attribuzione.conferma(voceAltrove, PROGETTO, pOcc.id).aggregato)
-        val pol = politica()
+        attribuisci(unaVoce(1), occasionale)
+        attribuzioni.salva(Attribuzione.conferma(voceAltrove, PROGETTO, occasionale.id).aggregato)
 
-        pol.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
-            da = VoceId(1),
-            a = VoceId(2),
-            daRimossa = true,
-            aNuova = true,
-        ).atteso()
+        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(1), VoceId(2), daRimossa = true, aNuova = true)
+            .atteso()
 
-        assertNull(attribuzioni.trova(voceDa), "la sorgente svuotata perde questa Attribuzione")
-        val occSalvato = assertNotNull(parlanti.trova(pOcc.id), "resta: ha ancora un'Attribuzione altrove")
-        assertEquals(emptyList(), occSalvato.impronte, "l'unica impronta rimasta era quella di voceDa, ora rimossa")
-        assertEquals(listOf(voceAltrove), attribuzioni.diParlante(pOcc.id).map { it.voceRef })
+        assertNull(attribuzioni.trova(unaVoce(1)), "la sorgente svuotata perde questa Attribuzione")
+        assertEquals(emptyList(), impronteDi(occasionale), "l'unica impronta era quella della Voce svuotata")
+        assertEquals(listOf(voceAltrove), attribuzioni.diParlante(occasionale.id).map { it.voceRef })
     }
 
-    /**
-     * [ParlanteRepository] il cui [salva] fallisce sempre, come l'indice unico dell'ADR 0007 (F2/AC-96):
-     * prova che l'Errore di AC-96 e un guasto REALE del repository, non il falso-positivo "eliminato"
-     * corretto per F1. Delega ogni lettura/rimozione a [delegato].
-     */
-    private class ParlanteRepositorySalvaFallisce(private val delegato: ParlanteRepository) : ParlanteRepository {
-        override fun trova(id: ParlanteId): Parlante? = delegato.trova(id)
+    @Test
+    fun `AC-96 il ParlanteRepository che fallisce salva fa restituire alla policy il suo Errore`() {
+        val p = unParlante("id-p")
+        attribuisci(unaVoce(1), p)
+        val politicaConGuasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
 
-        override fun delProgetto(id: ProgettoId): List<Parlante> = delegato.delProgetto(id)
+        val errore = politicaConGuasto
+            .applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(1), VoceId(2), daRimossa = true, aNuova = true)
+            .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
 
-        override fun nomeAttivoInUso(progettoId: ProgettoId, nome: Nome, escluso: ParlanteId?): Boolean =
-            delegato.nomeAttivoInUso(progettoId, nome, escluso)
+        assertEquals(ErroreParlanti.NomeGiaInUso(p.nome.valore), errore)
+    }
 
+    @Test
+    fun `AC-96 anche l eredita di unire propaga l Errore del ParlanteRepository`() {
+        val p = unParlante("id-p")
+        attribuisci(unaVoce(2), p)
+        val politicaConGuasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
+
+        politicaConGuasto.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2))
+            .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
+    }
+
+    @Test
+    fun `AC-291 nessuna riga d impronta e creata o ri-estratta dalla policy`() {
+        val p = unParlante("id-p")
+        val q = unParlante("id-q")
+        attribuisci(unaVoce(1), p)
+        attribuisci(unaVoce(3), q)
+        attribuisci(unaVoce(4), q)
+        val impronteIniziali = (impronteDi(p) + impronteDi(q)).map { it.impronta }.toSet()
+
+        politica.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)).atteso()
+        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(3), VoceId(4), daRimossa = false, aNuova = false)
+            .atteso()
+        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(5), rimossa = VoceId(1)).atteso()
+
+        val righe = impronteDi(p) + impronteDi(q)
+        assertEquals(3, righe.size, "nessuna riga creata")
+        assertTrue(
+            righe.all { it.impronta in impronteIniziali && it.sorgente == SORGENTE_INIZIALE },
+            "nulla ri-estratto",
+        )
+    }
+
+    /** [ParlanteRepository] whose [salva] always fails, like ADR 0007's unique index (AC-96). */
+    private class ParlanteRepositorySalvaFallisce(delegato: ParlanteRepository) : ParlanteRepository by delegato {
         override fun salva(p: Parlante): Esito<Unit> = Esito.Errore(ErroreParlanti.NomeGiaInUso(p.nome.valore))
-
-        override fun rimuovi(id: ParlanteId) = delegato.rimuovi(id)
-    }
-
-    /** [EstrattoreImpronta] che lancia sempre, come un guasto nativo dell'estrattore (AC-96). */
-    private object EstrattoreImprontaCheLancia : EstrattoreImpronta {
-        override fun estrai(c: CampioniAudio): Impronta = error("guasto nativo dell'estrattore")
     }
 
     private companion object {
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
         val PROGETTO = ProgettoId("progetto-1")
+        const val SORGENTE_INIZIALE = "0-1000"
+        const val MODELLO = "finto"
     }
 }

@@ -4,6 +4,7 @@ type: "scaffold"
 context: "piattaforma"
 side: "app"
 wave: 0
+release: "R0"
 module: "root + every module of architecture.md"
 consumes: []
 depends_on: []

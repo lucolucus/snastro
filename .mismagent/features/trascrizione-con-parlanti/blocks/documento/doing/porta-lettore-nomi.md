@@ -4,6 +4,7 @@ type: "port"
 context: "documento"
 side: "app"
 wave: 3
+release: "R1"
 module: ":documento:applicazione (..porte) + testFixtures"
 consumes:
   - "kernel-pl"

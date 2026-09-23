@@ -4,6 +4,7 @@ type: "adapter"
 context: "parlanti"
 side: "app"
 wave: 5
+release: "R2"
 module: ":parlanti:adattatori (..eventi)"
 consumes:
   - "kernel-pl"

@@ -17,6 +17,9 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
     override fun delProgetto(id: ProgettoId): List<Registrazione> =
         righe.values.filter { it.progettoId == id }.map { it.copia() }
 
+    override fun titoliDelProgetto(id: ProgettoId): List<String> =
+        righe.values.filter { it.progettoId == id }.map { it.titolo }
+
     override fun salva(r: Registrazione) {
         righe[r.id] = r.copia()
     }

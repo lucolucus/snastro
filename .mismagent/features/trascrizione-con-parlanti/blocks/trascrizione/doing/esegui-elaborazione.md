@@ -4,6 +4,7 @@ type: "application-service"
 context: "trascrizione"
 side: "app"
 wave: 4
+release: "R1"
 module: ":trascrizione:applicazione (..comandi)"
 consumes:
   - "kernel-pl"

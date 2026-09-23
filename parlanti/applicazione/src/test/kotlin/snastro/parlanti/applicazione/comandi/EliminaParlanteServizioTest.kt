@@ -40,8 +40,8 @@ class EliminaParlanteServizioTest {
     @Test
     fun `AC-94 elimina azzera le impronte, mantiene il Nome, non e piu attivo e pubblica ParlanteEliminato`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f))).atteso()
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f, 4f))).atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "finto").atteso()
+        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "finto").atteso()
         repo.salva(p).atteso()
 
         servizio.esegui(EliminaParlante(ParlanteId("id-1"))).atteso()

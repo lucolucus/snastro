@@ -222,7 +222,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() { override fun con(
 
 - `:persistenza`: one `.sq` per table in `persistenza/src/main/sqldelight/snastro/persistenza/`
   with **named queries** (`trovaPerId`, `inserisci`, `aggiorna`, `eliminaImpronteDi`, …); each
-  `CREATE UNIQUE INDEX` on **one line** (ADR 0007); migrations `.sqm` + schema snapshots (ADR 0006);
+  `CREATE UNIQUE INDEX` on **one line** (ADR 0007); migrations `.sqm` are the schema, `.sq` = queries only (ADR 0006 (a));
   `apriDatabaseProgetto(cartella): SnastroDatabase` (WAL, `foreign_keys=ON`, `secure_delete=ON`);
   `UnitaDiLavoroSql`. testFixtures: `databaseInMemoria()`.
 - `<ctx>:adattatori.persistenza`: `class ParlanteRepositorySql(private val db: SnastroDatabase) : ParlanteRepository`.

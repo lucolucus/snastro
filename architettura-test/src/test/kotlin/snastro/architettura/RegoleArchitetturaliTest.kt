@@ -61,8 +61,27 @@ class RegoleArchitetturaliTest {
             }
     }
 
+    /**
+     * A context's `dominio`-owned error hierarchy, and only it: `Errore<Contesto>` itself or a
+     * nested member (`ErroreProgetto.NomeProgettoVuoto`). No aggregate/VO of `dominio` matches
+     * (ADR 0003 (b): `:ui`'s `MessaggiErrore` maps these hierarchies exhaustively, AC-180/RC-4).
+     */
+    private val gerarchiaErroreDominio = Regex("""^snastro\.[a-z]+\.dominio\.Errore[A-Z][A-Za-z]*(\..+)?$""")
+
+    /** `:ui`'s own package, any depth — intra-`:ui` imports across screens/shared UI code. */
+    private fun isPacchettoUi(nomeImport: String): Boolean =
+        nomeImport == "snastro.ui" || nomeImport.startsWith("snastro.ui.")
+
+    /** CR-1's allowance for a `snastro.*` import inside a `:ui` file: kernel, any `applicazione`
+     * module, `:ui` itself, or a context's `dominio` error hierarchy (never any other `dominio` type). */
+    private fun importUiConsentito(nomeImport: String): Boolean =
+        nomeImport.startsWith("snastro.kernel") ||
+            nomeImport.contains(".applicazione") ||
+            isPacchettoUi(nomeImport) ||
+            gerarchiaErroreDominio.matches(nomeImport)
+
     @Test
-    fun `CR-1 ui importa solo kernel e i moduli applicazione`() {
+    fun `CR-1 ui importa solo kernel, i moduli applicazione, se stesso e le gerarchie errore del dominio`() {
         Konsist.scopeFromProject()
             .files
             .filter { file ->
@@ -72,8 +91,44 @@ class RegoleArchitetturaliTest {
             .assertTrue { file ->
                 file.imports
                     .filter { it.name.startsWith("snastro.") }
-                    .all { imp -> imp.name.startsWith("snastro.kernel") || imp.name.contains(".applicazione") }
+                    .all { imp -> importUiConsentito(imp.name) }
             }
+    }
+
+    /**
+     * Direct unit test of the predicate above (no fixture files needed — `:ui` stays untouched at
+     * wave 0/fix-batch-10). Verifies BOTH directions stay live: the two new allowances accept their
+     * cases, and a `dominio` type that is NOT an error hierarchy (e.g. an aggregate root) is still
+     * rejected — i.e. the rule can still go red.
+     */
+    @Test
+    fun `CR-1 il predicato di importazione ui accetta le nuove eccezioni e rifiuta il resto del dominio`() {
+        val consentiti = listOf(
+            "snastro.kernel.Esito",
+            "snastro.progetto.applicazione.porte.RegistroProgetti",
+            "snastro.progetto.applicazione.porte.ErroriApplicazioneProgetto.CopiaFallita",
+            "snastro.ui",
+            "snastro.ui.testi.Colori",
+            "snastro.ui.s1.SchermataUno",
+            "snastro.progetto.dominio.ErroreProgetto",
+            "snastro.progetto.dominio.ErroreProgetto.NomeProgettoVuoto",
+            "snastro.trascrizione.dominio.ErroreTrascrizione",
+            "snastro.trascrizione.dominio.ErroreTrascrizione.TrascrittoNonTrovato",
+            "snastro.parlanti.dominio.ErroreParlanti.ParlanteNonTrovato",
+        )
+        val vietati = listOf(
+            "snastro.progetto.dominio.Progetto",
+            "snastro.progetto.dominio.Registrazione",
+            "snastro.trascrizione.dominio.Trascritto",
+            "snastro.trascrizione.dominio.Elaborazione",
+            "snastro.parlanti.dominio.Parlante",
+            "snastro.progetto.adattatori.persistenza.RepositoryProgettoSqlite",
+            "snastro.progetto.dominio.errore.QualcosaltroNonErrore",
+        )
+        val accettatiPerErrore = consentiti.filterNot { importUiConsentito(it) }
+        val rifiutatiPerErrore = vietati.filter { importUiConsentito(it) }
+        kotlin.test.assertTrue(accettatiPerErrore.isEmpty(), "Import legittimi rifiutati: $accettatiPerErrore")
+        kotlin.test.assertTrue(rifiutatiPerErrore.isEmpty(), "Import vietati accettati: $rifiutatiPerErrore")
     }
 
     // --- CR-2 - Inner modules are pure --------------------------------------------------------

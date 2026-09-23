@@ -4,6 +4,7 @@ type: "adapter"
 context: "piattaforma"
 side: "app"
 wave: 9
+release: "R1"
 module: ":avvio"
 consumes:
   - "kernel-pl"
@@ -19,13 +20,15 @@ related_adrs:
   - "0004"
   - "0008"
   - "0012"
+gated_by:
+  - "ADR closing spike attesa-mutex-estrazione"
 ---
 # avvio-coda-elaborazioni — Coda seriale delle Elaborazioni e dispatcher della pipeline
 
 ## What to do
 Serial FIFO on a single-thread pipeline dispatcher that calls EseguiProssimaElaborazione; holds while ModelliPronti is false; calls RecuperaElaborazioniInterrotte before starting, after anything escapes esegui and on project re-open; does not spin on a head item whose start keeps failing; wires FasiInCorso as SegnalatoreFase; one Mutex serializes every native use (pipeline + EstrattoreImpronta), always acquired outside any transaction (ADR 0012 (b) point 5).
 
-Note: PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built.
+Note: PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built. GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl.
 
 ## Tasks
 - AC-233 All'avvio RecuperaElaborazioniInterrotte gira prima che la coda parta
@@ -37,6 +40,7 @@ Note: PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the star
 - AC-314 Un solo dispatcher single-thread prende gli elementi: due richieste concorrenti di avanzamento non portano mai due Elaborazioni in_corso (la transizione in_attesa → in_corso non ha controllo di versione e si affida a questo)
 
 ## Dependencies
+- **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione
 - Blocks built first: `esegui-elaborazione` (wave 4), `stati-elaborazione` (wave 5), `modelli-provisioning` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -75,9 +79,11 @@ Note: PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the star
 - **tec-modelli** (consumed/implemented) — owner `modelli-provisioning`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `snastro.modelli.CatalogoModelli`: val voci: List<VoceCatalogo>
-    - `VoceCatalogo`: data class(id: String, ruolo: String, url: String, sha256: String, dimensioneByte: Long, licenza: String, attribuzione: String)
-    - `snastro.modelli.ProvisioningModelli`: fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroreModelli (sealed : ErroreDominio, file ErroriModelli.kt): HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path
+    - `VoceCatalogo`: data class(id: String, ruolo: String, url: String, sha256: String /* of the downloaded ASSET (the archive, or the single file) */, dimensioneByte: Long /* of the asset */, formato: FormatoVoce, licenza: String, attribuzione: String) — ADR 0008 Amendment (c)
+    - `FormatoVoce`: enum class { TAR_BZ2 /* k2-fsa .tar.bz2 release: extracted, a single top-level directory stripped */, FILE /* single asset, placed as <id>/<file name of the url> */ }
+    - `snastro.modelli.ProvisioningModelli`: fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit>; fun percorso(id: String): Path /* the installed DIRECTORY <cartella>/<id>/ — never a file */
+    - `snastro.modelli.ErroreModelli`: sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String, motivo: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — declared in :modelli, NEVER referenced by :ui (avvio-composizione maps it to the :ui ErroreServizioModelli)
   - keys (minting rules):
-    - `VoceCatalogo.id`: minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across catalogue edits
+    - `VoceCatalogo.id`: minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across edits of licence/attribution text, but NEVER reused for different bytes: any change of the entry's sha256 MINTS A NEW id (ADR 0008 Amendment (c)) — the embedding model's id is EstrattoreImpronta.modello, and ADR 0012 (b) staleness (modello_impronta ≠ EstrattoreImpronta.modello) relies on it; also the installed directory name <cartella>/<id>/, whose .sha256 marker records the installed asset hash
 
 Sources: ADRs 0002, 0003, 0004, 0008, 0012 (.mismagent/decisions/); ADR 0004/0008/0012 (+ R12).

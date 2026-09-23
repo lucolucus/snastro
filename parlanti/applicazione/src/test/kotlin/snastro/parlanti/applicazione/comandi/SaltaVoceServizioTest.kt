@@ -9,6 +9,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -20,8 +21,10 @@ import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
+import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
+import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
@@ -29,12 +32,15 @@ import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
+import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
+import snastro.parlanti.dominio.SorgenteImpronta
 import snastro.parlanti.dominio.TipoParlante
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -45,18 +51,24 @@ import kotlin.test.assertTrue
 class SaltaVoceServizioTest {
     private val parlanti = ParlanteRepositoryFinta()
     private val attribuzioni = AttribuzioneRepositoryFinta()
-    private val decodificatore = DecodificatoreAudioFinta()
-    private val estrattore = EstrattoreImprontaFinta()
-    private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(parlanti, attribuzioni))
+
+    private val uow = UnitaDiLavoroFinta(parlanti, attribuzioni)
+
+    // ML fakes wired to the UnitaDiLavoroFinta: any decode/extract inside a transaction throws (AC-288).
+    private val decodificatore = DecodificatoreAudioFinta(uow)
+    private val estrattore = EstrattoreImprontaFinta(unitaDiLavoro = uow, modello = "modello-x")
+    private val eventi = DispatcherEventiFinta(uow)
+    private val transazioni = UnitaDiLavoroCheConta(eventi.unitaDiLavoro)
 
     private fun servizio(
         registrazioni: LettoreRegistrazioneFinta,
-        voci: LettoreVociFinta,
+        voci: LettoreVoci,
         decoder: DecodificatoreAudio = decodificatore,
         generatoreId: GeneratoreIdFinto = GeneratoreIdFinto(),
+        estrattoreUsato: EstrattoreImpronta = estrattore,
     ): SaltaVoceServizio =
         SaltaVoceServizio(
-            eventi.unitaDiLavoro, generatoreId, parlanti, attribuzioni, registrazioni, voci, decoder, estrattore,
+            transazioni, generatoreId, parlanti, attribuzioni, registrazioni, voci, decoder, estrattoreUsato,
             eventi,
         )
 
@@ -206,7 +218,7 @@ class SaltaVoceServizioTest {
     fun `F2 il backstop dell indice ADR 0007 e propagato senza persistere l Attribuzione ne pubblicare`() {
         val stub = RepositoryBackstopSempre(parlanti)
         val servizioLocale = SaltaVoceServizio(
-            eventi.unitaDiLavoro, GeneratoreIdFinto(), stub, attribuzioni, unaRegistrazione(), unaVoce(),
+            transazioni, GeneratoreIdFinto(), stub, attribuzioni, unaRegistrazione(), unaVoce(),
             decodificatore, estrattore, eventi,
         )
 
@@ -215,6 +227,115 @@ class SaltaVoceServizioTest {
         assertEquals("Ospite del 12/09/2026", errore.nome)
         assertNull(attribuzioni.trova(VOCE), "l Attribuzione non deve essere salvata se il Parlante non lo e")
         assertTrue(eventi.pubblicati.isEmpty())
+    }
+
+    @Test
+    fun `AC-286 se la Voce cambia tra l estrazione e la transazione e VoceCambiata e nessun Parlante e creato`() {
+        val voci = LettoreVociCheCambia(
+            primaLettura = listOf(VoceVista(VOCE, listOf(IntervalloMs(0, 2_000)))),
+            poi = listOf(VoceVista(VOCE, listOf(IntervalloMs(0, 2_000), IntervalloMs(4_000, 7_000)))),
+        )
+
+        val errore = servizio(unaRegistrazione(), voci).esegui(SaltaVoce(VOCE))
+            .erroreAtteso<ErroreParlanti.VoceCambiata>()
+
+        assertEquals(ErroreParlanti.VoceCambiata(VOCE), errore)
+        assertTrue(parlanti.delProgetto(PROGETTO).isEmpty(), "nessun Parlante creato")
+        assertNull(attribuzioni.trova(VOCE))
+        assertTrue(eventi.pubblicati.isEmpty())
+    }
+
+    @Test
+    fun `AC-287 per una Voce di oltre 30 s si decodifica solo SorgenteImpronta, 30 000 ms in tutto`() {
+        val intervalliVoce = listOf(IntervalloMs(0, 20_000), IntervalloMs(25_000, 45_000), IntervalloMs(50_000, 50_500))
+        val registra = DecodificatoreAudioContaChiamate(decodificatore)
+        val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(VOCE, intervalliVoce))))
+
+        servizio(unaRegistrazione(), voci, decoder = registra).esegui(SaltaVoce(VOCE)).atteso()
+
+        val decodificati = registra.intervalli.single()
+        assertEquals(listOf(IntervalloMs(0, 20_000), IntervalloMs(25_000, 35_000)), decodificati)
+        assertEquals(SorgenteImpronta.di(intervalliVoce).intervalli, decodificati)
+        assertEquals(30_000L, decodificati.sumOf { it.fineMs - it.inizioMs })
+    }
+
+    @Test
+    fun `AC-288 nessuna decodifica ne estrazione con una transazione aperta`() {
+        // decodificatore/estrattore are wired to the UnitaDiLavoroFinta: inside the transaction they throw.
+        servizio(unaRegistrazione(), unaVoce()).esegui(SaltaVoce(VOCE)).atteso()
+
+        assertEquals(1, transazioni.aperte)
+        assertNotNull(attribuzioni.trova(VOCE))
+    }
+
+    @Test
+    fun `AC-289 la riga d impronta del nuovo occasionale conserva sorgente = chiave e modello dell estrattore`() {
+        val intervalli = listOf(IntervalloMs(1_200, 5_400), IntervalloMs(8_000, 15_000))
+        val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(VOCE, intervalli))))
+
+        servizio(unaRegistrazione(), voci).esegui(SaltaVoce(VOCE)).atteso()
+
+        val riga = assertNotNull(parlanti.trova(ParlanteId("id-1"))).impronte.single()
+        assertEquals("1200-5400,8000-15000", riga.sorgente)
+        assertEquals(SorgenteImpronta.di(intervalli).chiave, riga.sorgente)
+        assertEquals("modello-x", riga.modello)
+    }
+
+    @Test
+    fun `AC-290 se l estrazione fallisce nessuna transazione e aperta e nulla e scritto`() {
+        val guasto = object : EstrattoreImpronta {
+            override val modello: String = "modello-x"
+
+            override fun estrai(c: CampioniAudio): Impronta = throw GuastoDiProva()
+        }
+
+        assertFailsWith<GuastoDiProva> {
+            servizio(unaRegistrazione(), unaVoce(), estrattoreUsato = guasto).esegui(SaltaVoce(VOCE))
+        }
+
+        assertEquals(0, transazioni.aperte)
+        assertTrue(parlanti.delProgetto(PROGETTO).isEmpty())
+        assertNull(attribuzioni.trova(VOCE))
+        assertTrue(eventi.pubblicati.isEmpty())
+    }
+
+    @Test
+    fun `AC-290 se la decodifica fallisce nessuna transazione e aperta e nulla e scritto`() {
+        val guasto = object : DecodificatoreAudio {
+            override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio =
+                throw GuastoDiProva()
+        }
+
+        assertFailsWith<GuastoDiProva> {
+            servizio(unaRegistrazione(), unaVoce(), decoder = guasto).esegui(SaltaVoce(VOCE))
+        }
+
+        assertEquals(0, transazioni.aperte)
+        assertTrue(parlanti.delProgetto(PROGETTO).isEmpty())
+        assertNull(attribuzioni.trova(VOCE))
+    }
+
+    private class GuastoDiProva : RuntimeException("guasto nativo di prova")
+
+    /** Counts the transactions actually opened (AC-288/AC-290). */
+    private class UnitaDiLavoroCheConta(private val delegata: UnitaDiLavoro) : UnitaDiLavoro {
+        var aperte: Int = 0
+            private set
+
+        override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> {
+            aperte++
+            return delegata.inTransazione(blocco)
+        }
+    }
+
+    /** [LettoreVoci] whose Voci change after the first read: the Voce is edited between extraction and write. */
+    private class LettoreVociCheCambia(
+        private val primaLettura: List<VoceVista>,
+        private val poi: List<VoceVista>,
+    ) : LettoreVoci {
+        private var letture = 0
+
+        override fun voci(id: RegistrazioneId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
     }
 
     /**
@@ -233,11 +354,11 @@ class SaltaVoceServizioTest {
     private class DecodificatoreAudioContaChiamate(
         private val delegato: DecodificatoreAudio,
     ) : DecodificatoreAudio {
-        var chiamate: Int = 0
-            private set
+        val intervalli: MutableList<List<IntervalloMs>> = mutableListOf()
+        val chiamate: Int get() = intervalli.size
 
         override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio {
-            chiamate++
+            this.intervalli += intervalli
             return delegato.campioni(id, intervalli)
         }
     }

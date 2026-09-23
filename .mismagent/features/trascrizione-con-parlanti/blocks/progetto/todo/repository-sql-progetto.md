@@ -4,6 +4,7 @@ type: "adapter"
 context: "progetto"
 side: "app"
 wave: 4
+release: "R0"
 module: ":progetto:adattatori (..persistenza)"
 consumes:
   - "kernel-pl"
@@ -26,6 +27,7 @@ ProgettoRepositorySql, RegistrazioneRepositorySql on the generated queries (dev-
 ## Tasks
 - AC-108 Round-trip salva → trova per Progetto e Registrazione (stato osservabile uguale)
 - AC-109 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le implementazioni SQL su databaseInMemoria()
+- AC-326 titoliDelProgetto su SQL legge la sola colonna titolo filtrata per progetto_id (nessuna ricostituzione di Registrazione) e passa RegistrazioneRepositoryContratto (AC-325)
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -79,6 +81,6 @@ ProgettoRepositorySql, RegistrazioneRepositorySql on the generated queries (dev-
 - **repo-progetto** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
-    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; salva(r: Registrazione) }
+    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }
 
 Sources: ADRs 0002, 0003, 0006, 0010, 0012 (.mismagent/decisions/); ADR 0006, dev-architecture-app.md #repository.

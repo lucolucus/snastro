@@ -78,6 +78,25 @@ public abstract class RegistrazioneRepositoryContratto {
     }
 
     @Test
+    public fun `AC-325 titoliDelProgetto restituisce i titoli di tutte e sole le Registrazioni del Progetto`() {
+        val a = ambiente()
+        a.salva(unaRegistrazione(a.progettoId, RegistrazioneId("id-2"), "Seduta di marzo"))
+        a.salva(unaRegistrazione(a.progettoId, RegistrazioneId("id-3"), "Seduta di aprile"))
+        a.salva(unaRegistrazione(a.progettoId, RegistrazioneId("id-4"), "Seduta di marzo (2)"))
+        assertEquals(
+            listOf("Seduta di aprile", "Seduta di marzo", "Seduta di marzo (2)"),
+            a.registrazioni.titoliDelProgetto(a.progettoId).sorted(),
+        )
+        assertEquals(emptyList(), a.registrazioni.titoliDelProgetto(ProgettoId("id-sconosciuto")))
+    }
+
+    @Test
+    public fun `AC-325 titoliDelProgetto senza Registrazioni restituisce una lista vuota`() {
+        val a = ambiente()
+        assertEquals(emptyList(), a.registrazioni.titoliDelProgetto(a.progettoId))
+    }
+
+    @Test
     public fun `AC-25 un salva annullato dalla transazione non lascia traccia`() {
         val a = ambiente()
         val r = unaRegistrazione(a.progettoId)
@@ -87,6 +106,7 @@ public abstract class RegistrazioneRepositoryContratto {
         }.erroreAtteso<ErroreDiProva.Fallito>()
         assertNull(a.registrazioni.trova(r.id))
         assertEquals(emptyList(), a.registrazioni.delProgetto(a.progettoId))
+        assertEquals(emptyList(), a.registrazioni.titoliDelProgetto(a.progettoId))
     }
 
     private fun Ambiente.salva(r: Registrazione) {

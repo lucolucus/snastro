@@ -179,3 +179,12 @@ separate spike.
   scaricatiByte, totaliByte} | Errore{HashNonValido | ReteAssente | DownloadFallito}` + `LicenzaVista[]`.
 - **Commands:** `ScaricaModelli` (through the `ServizioModelli` port implemented in `:avvio` over `:modelli`).
 - **ui block:** `schermata-modelli`.
+
+## Amendments 2026-09-23 (release pivot — user decision: R0 Archivio / R1 Trascrizione / R2 Parlanti)
+- **App shell:** the sections are supplied by the release's composition root; without Parlanti (R0, R1) the
+  "Parlanti" navigation entry is absent (manifest AC-341).
+- **S2 (R0 variant):** without Trascrizione the row shows title, date (editable), duration and a **"▶"** that plays
+  the Registrazione from its start through the shared `LettoreAudio` (new surface, user decision "R0 = import, list
+  and play"; AC-342/343); no processing state, no badge, no S3. R1 adds the processing state plus a **"Trascrivi"**
+  action for a Registrazione with no Elaborazione yet (e.g. imported in R0; AC-344). R2 adds the identification
+  badge (block `schermata-registrazioni-identificazione`, AC-204/345).

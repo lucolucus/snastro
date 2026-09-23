@@ -6,7 +6,8 @@
 > **enforcement channel**; a rule with no channel is not written here.
 > Style and module map: `architecture.md`. Stack: Kotlin/JVM, Compose Desktop (ADR 0001).
 > Codebase conventions (style memory): `architetture/dev-architecture-app.md`.
-> **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9 · 2026-09-23 (R25 amendment) — CR-8, RC-4.
+> **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9 · 2026-09-23 (R25 amendment) — CR-8, RC-4 ·
+> 2026-09-23 (fix-batch-10) — CR-1.
 
 Channels:
 - **gate lint** — runs inside `./gradlew check` (the worker's own loop, verifier step 2, CI). Tools and
@@ -23,9 +24,22 @@ Channels:
 ## Mechanical rules (gate lint)
 
 **CR-1 · Dependency rule.** `adattatori → applicazione → dominio → kernel`; cross-context only
-`consumer:adattatori → supplier:applicazione`; `ui` sees only `*:applicazione` + `kernel`.
+`consumer:adattatori → supplier:applicazione`; `ui` sees only `*:applicazione` + `kernel`, plus (a)
+itself (`snastro.ui` / `snastro.ui.*` — intra-`:ui` imports across screens and shared UI code, e.g.
+`snastro.ui.testi.*`) and (b) each context's `dominio`-owned error hierarchy ONLY —
+`snastro.<ctx>.dominio.Errore<Nome>`, including nested members (e.g.
+`ErroreProgetto.NomeProgettoVuoto`) — never an aggregate/VO of `dominio`. (b) exists because
+`MessaggiErrore` (`:ui`) maps `ErroreProgetto`/`ErroreTrascrizione`/`ErroreParlanti` exhaustively
+(ADR 0003 (b), RC-4); no new Gradle edge is needed — `*:applicazione` already exposes its own
+`*:dominio` as `api`, so it is reachable for compilation transitively, and `:ui` never declares a
+direct `*:dominio` dependency.
 → gate lint: Gradle module graph + `verificaDipendenzeModuli`; Konsist (package-level: no
-`snastro.<a>.*` import of `snastro.<b>.dominio|adattatori` for `a ≠ b`). Backup: ADR 0002 `enforced_by`.
+`snastro.<a>.*` import of `snastro.<b>.dominio|adattatori` for `a ≠ b`; a narrower `:ui`-only
+Konsist rule allows exactly (a) and (b) above, nothing else of `dominio`). Backup: ADR 0002
+`enforced_by`.
+*(amended 2026-09-23, fix-batch-10 — ui error hierarchies + intra-ui: the original `:ui` rule was
+"kernel or `.applicazione`" only, which wrongly rejected both intra-`:ui` imports and the ADR 0003
+(b) `dominio` error hierarchies `MessaggiErrore` must map.)*
 
 **CR-2 · Inner modules are pure.** `:kernel`, `*:dominio`, `*:applicazione` import no framework,
 I/O, persistence, UI, ML, audio or network API — incl. JDK `java.sql`, `java.net`, `java.nio.file`,
@@ -81,9 +95,11 @@ technical scaffolding may be English. The context-map's "Not:" synonyms (e.g. `S
 **CR-12 · Build files reference projects with `project(":…")` only** (no type-safe accessors), so the
 edge check sees every edge. → gate lint: `verificaDipendenzeModuli`.
 
-**CR-13 · Migrations are forward-only and verified.** New schema = a new `.sqm` + regenerated
-snapshot; a committed `.sqm` is never edited. → gate lint: `verifySqlDelightMigration`; the
-"never edited" half is a **review criterion** (diff touches an existing `.sqm` → finding).
+**CR-13 · Migrations are forward-only and are the schema (ADR 0006 (a)).** New schema = a new `.sqm`
+(`deriveSchemaFromMigrations`; `.sq` = queries only); a shipped `.sqm` is never edited. → gate: the
+`:persistenza:test` migration test (empty DB → current version, integrity + every query) and the
+query compilation against the derived schema; the "never edited" half is a **review criterion**
+(diff touches a shipped `.sqm` → finding).
 
 **CR-14 · No wall clock in the inner layers.** `*:dominio` and `*:applicazione` never call
 `Instant.now()`, `LocalDate.now()`, `LocalDateTime.now()`, `ZonedDateTime.now()`,

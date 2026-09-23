@@ -3,6 +3,8 @@ package snastro.parlanti.applicazione.porte
 import snastro.kernel.Esito
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
+import snastro.kernel.RegistrazioneId
+import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 
@@ -27,4 +29,18 @@ public interface ParlanteRepository {
 
     /** Physical removal with its prints — ONLY for the INV-25 cessation of an `occasionale`. */
     public fun rimuovi(id: ParlanteId)
+
+    /** Every stored print row of a Voce of the Registrazione [id] (any Parlante). */
+    public fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>
+
+    /** Every stored print row of the Parlanti of the Progetto [id]. */
+    public fun impronteDelProgetto(id: ProgettoId): List<RigaImpronta>
+
+    /**
+     * Compare-and-set UPDATE of the ONE row (`attesa.parlanteId`, `attesa.voceRef`) to [impronta] /
+     * [sorgente] / [modello], only if it still exists with the `sorgente` and `modello` of [attesa].
+     * True iff that row was updated. NEVER inserts: a purged print is never resurrected
+     * (ADR 0009/0012 Amendment (b)).
+     */
+    public fun aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean
 }
