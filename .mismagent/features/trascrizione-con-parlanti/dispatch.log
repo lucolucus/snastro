@@ -130,3 +130,8 @@
 2026-09-23T09:07:55Z	porta-registrazione-parlanti	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (LOW: 3 unused view fields -> manifest note; D2 ambient must use ModificaDataRegistrazione)
 2026-09-23T09:09:39Z	porta-registrazione-parlanti	verifier	result	cycle=0	tier=deep	model=opus	PASS
 2026-09-23T09:09:47Z	porta-lettore-voci	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:09:52Z	porta-lettore-nomi	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-23T09:09:52Z	porta-lettore-nomi	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:09:52Z	porta-lettore-nomi	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-23T09:12:13Z	porta-lettore-nomi	code-review	result	cycle=0	tier=deep	model=opus	APPROVE (MED F1 occasionale/INV-25 contract case + LOW F2 nomi order KDoc -> follow-up batch; note: rigenerazione-documento regenerates event.voceRef.registrazioneId on AttribuzioneConfermata; product note: eliminato + new attivo may share a Nome)
+2026-09-23T09:12:42Z	porta-lettore-nomi	verifier	result	cycle=0	tier=deep	model=opus	PASS (carry to gestione-parlante: case-only rename must exclude self and not be a no-op on equal normalizzato)
