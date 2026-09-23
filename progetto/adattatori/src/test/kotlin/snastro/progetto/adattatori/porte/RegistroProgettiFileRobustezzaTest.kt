@@ -7,6 +7,7 @@ import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -112,6 +113,30 @@ class RegistroProgettiFileRobustezzaTest {
         val registro = RegistroProgettiFile(file)
 
         assertEquals(listOf("/percorso/con\\xb.snastro"), registro.elenco().map { it.percorso })
+    }
+
+    @Test
+    fun `F4 due thread che registrano in concorrenza non perdono aggiornamenti`() {
+        val file = cartella.resolve("progetti-recenti")
+        val registro = RegistroProgettiFile(file)
+        val perThread = 30
+        val esecutore = Executors.newFixedThreadPool(2)
+        try {
+            val compiti = (0 until perThread).map { i ->
+                esecutore.submit {
+                    registro.registra(unaVoce(progettoId = ProgettoId("t1-$i"), percorso = "/t1/progetto-$i.snastro"))
+                }
+            } + (0 until perThread).map { i ->
+                esecutore.submit {
+                    registro.registra(unaVoce(progettoId = ProgettoId("t2-$i"), percorso = "/t2/progetto-$i.snastro"))
+                }
+            }
+            compiti.forEach { it.get() }
+        } finally {
+            esecutore.shutdown()
+        }
+
+        assertEquals(2 * perThread, registro.elenco().size)
     }
 
     @Test

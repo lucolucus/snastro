@@ -39,21 +39,29 @@ import java.time.format.DateTimeParseException
  * failure (e.g. a transient permission error) still propagates as an exception, in particular from
  * inside [registra]/[aggiorna]/[rimuovi]'s read-before-write, so a transient fault can never
  * masquerade as "empty" and overwrite still-valid content.
+ *
+ * The four operations are `@Synchronized` on this instance (F4): two threads sharing one
+ * [RegistroProgettiFile] never interleave a read-modify-write into a lost update. Two SEPARATE
+ * instances (e.g. two app processes) are NOT coordinated — out of scope pending a user decision.
  */
 public class RegistroProgettiFile(private val file: Path) : RegistroProgetti {
 
+    @Synchronized
     override fun elenco(): List<VoceRegistro> = leggi().sortedByDescending { it.ultimaAttivita }
 
+    @Synchronized
     override fun registra(v: VoceRegistro) {
         scrivi(leggi().filterNot { it.percorso == v.percorso } + v)
     }
 
+    @Synchronized
     override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) {
         val correnti = leggi()
         if (correnti.none { it.percorso == percorso }) return
         scrivi(correnti.map { aggiornaVoce(it, percorso, numRegistrazioni, ultimaAttivita) })
     }
 
+    @Synchronized
     override fun rimuovi(percorso: String) {
         scrivi(leggi().filterNot { it.percorso == percorso })
     }
