@@ -571,3 +571,5 @@
 2026-09-23T23:17:20Z	schermata-registrazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (no HIGH)
 2026-09-23T23:17:20Z	schermata-registrazione	composer	merge	cycle=0	-	-	MERGED c15f136
 2026-09-23T23:17:20Z	schermata-registrazione	composer	pre-release	cycle=0	-	-	MED two quick clicks can play out of order (reuse LettorePresenter supersession); MED disponibile()/documento() failure turns whole S3 into Errore (degrade instead); LOW overlap highlights all containing segments; LOW highlight lost on pause; LOW row ▶ not dimmed when audio unavailable; LOW riprova no Caricamento; LOW pause icon emoji mismatch (BarraLettore)
+2026-09-23T23:17:27Z	scrittore-documento-md	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:17:27Z	lettore-trascritto-da-trascrizione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
