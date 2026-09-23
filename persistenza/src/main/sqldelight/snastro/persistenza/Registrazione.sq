@@ -13,3 +13,7 @@ VALUES (:id, :progettoId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazi
 
 aggiornaData:
 UPDATE registrazione SET data_registrazione = :dataRegistrazione WHERE id = :id;
+
+-- AC-326: single-column select — the repository never reconstitutes a Registrazione from this row.
+titoliDelProgetto:
+SELECT titolo FROM registrazione WHERE progetto_id = :progettoId;
