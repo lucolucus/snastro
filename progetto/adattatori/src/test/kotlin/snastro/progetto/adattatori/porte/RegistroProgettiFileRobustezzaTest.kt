@@ -59,6 +59,16 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `F8 una scape sconosciuta nel file mantiene entrambi i caratteri`() {
+        val file = cartella.resolve("progetti-recenti")
+        // riga scritta a mano (mai prodotta da `blocca`): `\x` non e una scape riconosciuta.
+        Files.writeString(file, "id-1\tNome\t/percorso/con\\xb.snastro\t1\t2026-09-23T10:15:30Z\n")
+        val registro = RegistroProgettiFile(file)
+
+        assertEquals(listOf("/percorso/con\\xb.snastro"), registro.elenco().map { it.percorso })
+    }
+
+    @Test
     fun `il percorso attraversa verbatim scrittura e rilettura su file - spazi parentesi unicode separatori Windows`() {
         val file = cartella.resolve("progetti-recenti")
         val percorsi = listOf(

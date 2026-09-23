@@ -137,7 +137,9 @@ private fun sblocca(testo: String): String {
                 't' -> esito.append('\t')
                 'n' -> esito.append('\n')
                 'r' -> esito.append('\r')
-                else -> esito.append(c)
+                // scape sconosciuta (mai prodotta da `blocca`, es. contenuto corrotto a mano): i
+                // due caratteri sopravvivono entrambi, invece di far sparire quello dopo `\` (F8).
+                else -> { esito.append(c); esito.append(testo[i + 1]) }
             }
             i += 2
         } else {
