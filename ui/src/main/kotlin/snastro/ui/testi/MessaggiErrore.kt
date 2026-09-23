@@ -41,6 +41,9 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
     ErroreProgetto.NomeProgettoVuoto -> "Il nome del progetto non può essere vuoto."
     ErroreProgetto.ProgettoGiaPresente -> "In questa cartella esiste già un progetto."
     is ErroreProgetto.RegistrazioneNonTrovata -> "Registrazione non trovata."
+    ErroreProgetto.TitoloVuoto -> "Il titolo della registrazione non può essere vuoto."
+    is ErroreProgetto.TitoloGiaUsato ->
+        "Il titolo \"${errore.titolo}\" è già usato da un'altra registrazione di questo progetto."
 }
 
 fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {

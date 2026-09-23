@@ -68,7 +68,7 @@ class MigrazioneSchemaTest {
         )
         db.registrazioneQueries.trovaPerId(registrazioneId).executeAsOne()
         db.registrazioneQueries.trovaDelProgetto(progettoId).executeAsList()
-        db.registrazioneQueries.aggiornaData("2026-09-24", registrazioneId)
+        db.registrazioneQueries.aggiorna("titolo rinominato", "2026-09-24", registrazioneId)
 
         db.parlanteQueries.inserisci(parlanteId, progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.parlanteQueries.trovaPerId(parlanteId).executeAsOne()

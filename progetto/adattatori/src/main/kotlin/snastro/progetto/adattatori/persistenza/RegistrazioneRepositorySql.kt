@@ -14,8 +14,8 @@ import migrations.Registrazione as RegistrazioneRiga
 /**
  * [RegistrazioneRepository] on the generated [SnastroDatabase] queries (dev-architecture-app.md#repository).
  * [salva] never opens its own transaction — the caller's [snastro.kernel.UnitaDiLavoro] does
- * (ADR 0012). Every field but `dataRegistrazione` is immutable at creation (R6/INV-1), so an update
- * only ever touches that one column ([SnastroDatabase.registrazioneQueries]'s `aggiornaData`).
+ * (ADR 0012). Only `titolo` (AC-360) and `dataRegistrazione` (INV-2) change after creation (INV-1),
+ * so an update touches just those two columns ([SnastroDatabase.registrazioneQueries]'s `aggiorna`).
  */
 public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : RegistrazioneRepository {
     override fun trova(id: RegistrazioneId): Registrazione? =
@@ -42,7 +42,11 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
                 aggiuntaAlle = r.aggiuntaAlle.toEpochMilli(),
             )
         } else {
-            db.registrazioneQueries.aggiornaData(r.dataRegistrazione.toString(), r.id.valore)
+            db.registrazioneQueries.aggiorna(
+                titolo = r.titolo,
+                dataRegistrazione = r.dataRegistrazione.toString(),
+                id = r.id.valore,
+            )
         }
     }
 }

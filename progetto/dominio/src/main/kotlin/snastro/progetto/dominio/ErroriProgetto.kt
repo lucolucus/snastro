@@ -13,4 +13,10 @@ public sealed interface ErroreProgetto : ErroreDominio {
 
     /** No Registrazione with that id exists (e.g. ModificaDataRegistrazione, AC-63). */
     public data class RegistrazioneNonTrovata(val id: RegistrazioneId) : ErroreProgetto
+
+    /** The new titolo of a Registrazione was empty or blank (RinominaRegistrazione, AC-360). */
+    public data object TitoloVuoto : ErroreProgetto
+
+    /** Another Registrazione of the same Progetto already has a titolo with this key (AC-361, AC-322). */
+    public data class TitoloGiaUsato(val titolo: String) : ErroreProgetto
 }

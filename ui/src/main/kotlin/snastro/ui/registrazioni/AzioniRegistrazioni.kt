@@ -11,6 +11,7 @@ import java.time.LocalDate
 data class AzioniRegistrazioni(
     val importa: (percorsi: List<String>) -> Unit,
     val modificaData: (RegistrazioneId, LocalDate) -> Unit,
+    val rinomina: (RegistrazioneId, String) -> Unit,
     val riproduci: (RegistrazioneId) -> Unit,
     val pausa: () -> Unit,
     val avviaElaborazione: (RegistrazioneId) -> Unit,

@@ -4,7 +4,8 @@ import java.text.Normalizer
 import java.util.Locale
 
 /**
- * The titolo a new Registrazione receives in `AggiungiRegistrazione` (AC-322..324): unique in its
+ * The titolo a new Registrazione receives in `AggiungiRegistrazione` (AC-322..324), and the key
+ * `RinominaRegistrazione` checks (AC-361): unique in its
  * Progetto on the file-safe, case-insensitive [chiave], so the Documento file name
  * `nomeFile(data, titolo)` of two Registrazioni can never collide (`tec-scrittore-documento`
  * keys.nomeFile). Pure; `internal` so the rule is table-tested directly.

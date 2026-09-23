@@ -9,6 +9,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.ProgettoCreato
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
+import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.ui.Cambiamento
 import java.time.LocalDate
 import kotlin.test.Test
@@ -38,6 +39,17 @@ class AggiornamentiVistaEventiTest {
         val nuova = LocalDate.parse("2026-02-02")
         delegata.unitaDiLavoro.inTransazione {
             delegata.pubblica(DataRegistrazioneModificata(id, precedente, nuova))
+            Esito.Ok(Unit)
+        }
+
+        assertEquals(Cambiamento(id), aggiornamenti.cambiamenti.replayCache.lastOrNull())
+    }
+
+    @Test
+    fun `AC-366 RegistrazioneRinominata dopo il commit produce un Cambiamento per la sua Registrazione`() {
+        val id = RegistrazioneId("id-4")
+        delegata.unitaDiLavoro.inTransazione {
+            delegata.pubblica(RegistrazioneRinominata(id, "Vecchio", "Nuovo"))
             Esito.Ok(Unit)
         }
 

@@ -4,6 +4,8 @@ import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +14,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.RegistrazioneId
+import snastro.progetto.dominio.ErroreProgetto
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
@@ -19,6 +22,7 @@ import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.etichettaInAttesa
+import snastro.ui.testi.messaggioPer
 import java.io.File
 import java.time.LocalDate
 import javax.imageio.ImageIO
@@ -31,6 +35,7 @@ private const val ALTEZZA_PICCOLA_PX = 640
 private val AZIONI_VUOTE = AzioniRegistrazioni(
     importa = {},
     modificaData = { _, _ -> },
+    rinomina = { _, _ -> },
     riproduci = {},
     pausa = {},
     avviaElaborazione = {},
@@ -60,7 +65,8 @@ private fun unaRiga(
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): every [RegistrazioniUiStato]/[RigaRegistrazione]
  * fixture at both sizes — sizing/overflow/contrast/state-rendering. R0 (AC-199/200/201/342/343): empty,
- * list with '▶', a playing row, an unavailable row, an import error. R1 (AC-203/344): the status
+ * list with '▶', a playing row, an unavailable row, an import error, an editable (long) titolo with a
+ * row-level rename error (AC-363). R1 (AC-203/344): the status
  * column, a failed/retry row, a NON_AVVIATA row with 'Trascrivi'. [SchermataRegistrazioni] renders
  * directly from fixture `UiStato` values (dev-architecture `#presenter`).
  */
@@ -148,6 +154,14 @@ class RegistrazioniRenderCheckTest {
     @Test
     fun `AC-344 NON_AVVIATA mostra Trascrivi a 1024x640`() =
         verificaNonAvviataConTrascrivi(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-363 il titolo e un campo modificabile e l errore di rinomina e inline sulla riga a 1280x800`() =
+        verificaTitoloModificabileConErrore(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-363 il titolo e un campo modificabile e l errore di rinomina e inline sulla riga a 1024x640`() =
+        verificaTitoloModificabileConErrore(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent { SchermataRegistrazioni(stato = RegistrazioniUiStato.Caricamento, azioni = AZIONI_VUOTE) }
@@ -266,6 +280,28 @@ class RegistrazioniRenderCheckTest {
         }
         onNodeWithText(ETICHETTA_TRASCRIVI).assertIsDisplayed()
         catturaPng("registrazioni-non-avviata-trascrivi", width, height)
+    }
+
+    private fun verificaTitoloModificabileConErrore(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        val titoloLungo = "Consiglio comunale straordinario sul bilancio di previsione e sulle opere pubbliche " +
+            "del quartiere nord, seduta pomeridiana con interventi dei cittadini"
+        val errore = messaggioPer(ErroreProgetto.TitoloGiaUsato("Intervista"))
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(unaRiga(titolo = titoloLungo).copy(erroreRiga = errore)),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazioni-titolo-${REG_1.valore}", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertIsEnabled()
+            .assertTextEquals(titoloLungo)
+        onNodeWithTag("registrazioni-errore-riga-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithText(errore).assertIsDisplayed()
+        onNodeWithTag("registrazioni-data-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        catturaPng("registrazioni-titolo-errore-riga", width, height)
     }
 
     @OptIn(ExperimentalTestApi::class)

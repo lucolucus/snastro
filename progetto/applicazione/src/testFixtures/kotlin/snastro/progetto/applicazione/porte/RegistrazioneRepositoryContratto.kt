@@ -55,6 +55,18 @@ public abstract class RegistrazioneRepositoryContratto {
     }
 
     @Test
+    public fun `AC-361 salvare una Registrazione rinominata ne persiste il titolo senza toccare il resto`() {
+        val a = ambiente()
+        val r = unaRegistrazione(a.progettoId)
+        a.salva(r)
+        r.rinomina("Consiglio di marzo").atteso()
+        r.modificaData(LocalDate.of(2026, 3, 1)).atteso()
+        a.salva(r)
+        assertEquals(r.stato(), assertNotNull(a.registrazioni.trova(r.id)).stato())
+        assertEquals(listOf("Consiglio di marzo"), a.registrazioni.titoliDelProgetto(a.progettoId))
+    }
+
+    @Test
     public fun `AC-25 una modifica non salvata non cambia lo stato persistito`() {
         val a = ambiente()
         val r = unaRegistrazione(a.progettoId)
