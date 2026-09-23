@@ -581,3 +581,5 @@
 2026-09-23T23:28:17Z	scrittore-documento-md	verifier	result	cycle=0	-	composer	PASS (light)
 2026-09-23T23:28:17Z	scrittore-documento-md	composer	merge	cycle=0	-	-	MERGED 360dd7b
 2026-09-23T23:28:22Z	rigenerazione-documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:30:54Z	fix-batch-15	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 44f99de (tests only)
+2026-09-23T23:30:54Z	fix-batch-15	composer	merge	cycle=0	-	-	MERGED 1b428d9
