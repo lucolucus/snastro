@@ -271,6 +271,10 @@
 Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
 - **R6 `titolo`:** `Registrazione` also guards `titolo` = the source file name without extension,
   set at `AggiungiRegistrazione`, immutable. It crosses to Trascrizione/Parlanti/Documento in `RegistrazioneVista`.
+  *(Amended 2026-09-23, user decision:)* `titolo` is **unique per `Progetto`** — a set rule checked by
+  `AggiungiRegistrazione` inside its transaction (one writer process per project, ADR 0010 `.lock`): on a clash
+  of the file-safe case-insensitive key it appends " (2)", " (3)"… once, never changed afterwards; this keys the
+  `Documento` file name (manifest `servizi-registrazione` AC-322..324, `documento` AC-320/321).
 - **R2 policy placement:** "on `RegistrazioneAggiunta` → `AvviaElaborazione`" is realized as a
   synchronous subscriber in Trascrizione (same transaction), NOT inside the aggiungi-registrazione
   service (Progetto must not depend on Trascrizione).

@@ -28,7 +28,9 @@ invariants:
 # documento — Proiezione Documento (markdown puro)
 
 ## What to do
-Pure projection: '# <titolo>' line, a blank line, 'Registrata il dd/MM/yyyy', a blank line, then one line per Segmento '**Nome** (mm:ss): testo' (mm = total minutes, not wrapped at 60), each line followed by a blank line so Markdown keeps them separate; consecutive Segmenti of the same Voce stay separate lines. nomeFile(data, titolo) = '<AAAA-MM-DD> <titolo>.md'.
+Pure projection: '# <titolo>' line, a blank line, 'Registrata il dd/MM/yyyy', a blank line, then one line per Segmento '**Nome** (mm:ss): testo' (mm = total minutes, not wrapped at 60), each line followed by a blank line so Markdown keeps them separate; consecutive Segmenti of the same Voce stay separate lines. nomeFile(data, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' — pure, sanitized (invalid chars → '_', trimmed, capped so the name and its '.tmp' fit 255 bytes, reserved names suffixed '_', empty → 'registrazione'); unique because titolo is unique per Progetto.
+
+Note: AMENDED 2026-09-23 (user decision, open-questions/documento.md answered and cleared): the Documento file name is unique per Progetto because titolo is unique per Progetto (servizi-registrazione AC-322..324 assigns ' (2)', ' (3)'… at import) — nomeFile itself adds no tie-breaker (an ordinal computed here would break INV-23). nomeFile SANITIZES the titolo with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : " / \ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. The same rule text is pinned in tec-scrittore-documento keys.nomeFile and applied by servizi-registrazione to compute the uniqueness key — keep the two table tests' shared rows identical. LOW carry-over (code-review): format dates with explicit patterns, independent of the default Locale (Locale.ROOT). FOLLOW-UP: branch block/documento (8e7167f, parked) must be reworked to AC-320/321 and the reversed-input INV-24 tie-break test.
 
 ### Invariants owned here (one test each, name starts with the tag)
 - INV-23 Documento = deterministic function of (Trascritto, Attribuzioni, Nomi): unchanged inputs → byte-identical output; the .md is never read back
@@ -41,9 +43,11 @@ Pure projection: '# <titolo>' line, a blank line, 'Registrata il dd/MM/yyyy', a 
 ## Tasks
 - INV-23 stessi input → markdown byte-identico
 - INV-24 Voce non attribuita → 'Voce n'; Parlante eliminato → il suo Nome
-- INV-24 Segmenti in ordine di inizio tra le Voci (a parità, segmentoId); testo IT/EN verbatim
+- INV-24 Segmenti in ordine di inizio tra le Voci (a parità di inizioMs, per segmentoId); testo IT/EN verbatim — il test fornisce i Segmenti a pari inizioMs in ordine di segmentoId INVERSO nell'input (un ordinamento stabile che ignorasse il tie-break deve far fallire il test)
 - AC-103 Il markdown inizia con '# <titolo>' e l'intestazione 'Registrata il dd/MM/yyyy', poi una riga '**Nome** (mm:ss): testo' per ogni Segmento, e due Segmenti consecutivi della stessa Voce restano righe separate
 - AC-104 nomeFile(2026-09-12, 'Riunione') = '2026-09-12 Riunione.md'
+- AC-320 nomeFile(data, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' (funzione pura, test a tabella con data 2026-09-12): 'Riunione 3/10: budget?' → '2026-09-12 Riunione 3_10_ budget_.md'; '  Nota finale.. ' → '2026-09-12 Nota finale.md'; 'a<b>c|d*e"f' → '2026-09-12 a_b_c_d_e_f.md'; un carattere di controllo U+0007 → '_'; 'con' → '2026-09-12 con_.md'; '...' e '' → '2026-09-12 registrazione.md'; 'e' + U+0301 (NFD) → '2026-09-12 é.md' (NFC); un titolo già pulito resta invariato (idempotenza: nomeFile(d, pulisci(t)) = nomeFile(d, t))
+- AC-321 Limite di lunghezza: per un titolo di 300 'è' (2 byte UTF-8) e per uno di 100 emoji (4 byte, coppie surrogate) nomeFile è lungo al più 251 byte UTF-8 (così nomeFile + '.tmp' ≤ 255), non spezza mai un code point né una coppia surrogata, e non termina con spazio o punto prima di '.md'
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**

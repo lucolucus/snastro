@@ -11,10 +11,12 @@
 # AMENDED 2026-09-23 (ADR 0012 Amendment (b) / ADR 0009 Amendment (b), user option (c)): SorgenteImpronta (new block sorgente-impronta),
 # no ML inside a transaction, Revisione split with after-commit RiallineaImpronte (new blocks riallinea-impronte, abbonato-riallineamento-impronte).
 # Blocks MERGED before this amendment keep their folder; their follow-up is listed in each block's `notes` (AMENDED … FOLLOW-UP).
+# AMENDED 2026-09-23 (user decisions in dispatch.log: titolo unique per Progetto + sanitized Documento file name; Mutex-wait spike gate;
+# multi-instance registry lock; ADR 0008 Amendment (c) archives/LOCALAPPDATA): AC-320..AC-340; tec-registro-progetti re-pinned to the merged port.
 # `depends_on` = non-boundary build dependencies (read-models a ui consumes, services a subscriber calls, suppliers an adapter wraps).
 feature: trascrizione-con-parlanti
 profile: .mismagent/profile.md
-ac_scheme: "AC-1..AC-319 feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
+ac_scheme: "AC-1..AC-340 feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
 blocks:
   - id: "scaffold-app"
     type: "scaffold"
@@ -340,7 +342,9 @@ blocks:
       - "AC-25 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le Finte (round-trip, delProgetto)"
       - "AC-26 SondaAudioContratto: file leggibile → durata > 0 e data del file; illeggibile → AudioNonLeggibile; formato non supportato → FormatoNonSupportato (passa contro SondaAudioFinta)"
       - "AC-27 ArchivioAudioContratto: copia → RiferimentoAudio 'audio/<registrazioneId>.<ext minuscola>'; copia fallita → CopiaFallita e nessun file residuo"
-      - "AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente"
+      - "AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna(percorso, …) cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente"
+      - "AC-325 RegistrazioneRepositoryContratto: titoliDelProgetto(id) restituisce i titoli di tutte e sole le Registrazioni di quel Progetto (lista vuota se nessuna, nessun ordine garantito) — passa contro RegistrazioneRepositoryFinta"
+    notes: "AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) — manifest drift fixed, no code change; (ii) new RegistrazioneRepository.titoliDelProgetto(id: ProgettoId): List<String> (repo-progetto) for the titolo uniqueness of AggiungiRegistrazione. FOLLOW-UP REQUIRED for (ii): merged before this amendment — the port, its Finta and RegistrazioneRepositoryContratto must gain titoliDelProgetto (AC-325)."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), dev-architecture-app.md #porta-contratto"
   - id: "porte-trascrizione"
     type: "port"
@@ -542,9 +546,13 @@ blocks:
       - "AC-58 Una copia fallita a metà → nulla creato (nessuna riga, nessun file parziale)"
       - "AC-59 L'audio è copiato in audio/<registrazioneId>.<ext> e il riferimento salvato è relativo alla cartella del progetto"
       - "AC-60 Se l'abbonato sincrono che accoda l'Elaborazione fallisce, la Registrazione non esiste (rollback dell'intero comando)"
-      - "AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi"
+      - "AC-61 Aggiungere due volte lo stesso file crea due Registrazioni distinte, senza blocchi; la seconda riceve il titolo '<nome> (2)' (AC-322)"
       - "AC-62 ModificaDataRegistrazione sostituisce la data e pubblica DataRegistrazioneModificata(precedente, nuova)"
       - "AC-63 ModificaDataRegistrazione su una Registrazione inesistente → RegistrazioneNonTrovata"
+      - "AC-322 AggiungiRegistrazione assegna un titolo UNICO nel Progetto: base = nome del file senza estensione (NFC, trim; vuoto → 'registrazione'); se chiave(base) coincide con chiave(t) di un titolo t di un'altra Registrazione dello stesso Progetto (titoliDelProgetto), prova 'base (2)', 'base (3)'… e assegna il primo libero; chiave(t) = pulisci(t) (la regola di nomeFile, vedi tec-scrittore-documento) in minuscolo con Locale.ROOT. Es.: esiste 'Riunione' → 'riunione.m4a' diventa 'riunione (2)'; esistono 'Riunione' e 'Riunione (2)' → 'Riunione (3)'; esiste 'Riunione*' → 'Riunione?' diventa 'Riunione? (2)' (stessa chiave 'riunione_')"
+      - "AC-323 Il titolo è deterministico e stabile: stessi titoli esistenti + stesso file → stesso titolo; una volta assegnato non cambia mai (ModificaDataRegistrazione non lo tocca); i titoli di Registrazioni di un ALTRO Progetto non contano (test con RegistrazioneRepositoryFinta che contiene 'Riunione' di un altro progettoId → il nuovo titolo resta 'Riunione')"
+      - "AC-324 Nomi lunghi: prima di aggiungere ' (n)' la base è troncata (su un confine di code point, poi rimossi spazi/punti finali) a 237 byte UTF-8 meno la lunghezza del suffisso, così il suffisso sopravvive sempre a pulisci e la ricerca termina: con un titolo esistente di 250 byte e un nuovo file con gli stessi primi 237 byte il nuovo titolo è '<primi 233 byte> (2)' e le due chiavi differiscono"
+    notes: "AMENDED 2026-09-23 (user decision, documento file-name collisions): titolo UNIQUE per Progetto (AC-322..324) via the new RegistrazioneRepository.titoliDelProgetto (repo-progetto). Uniqueness holds BY CONSTRUCTION, no DB index: the read of titoliDelProgetto and the insert run in the same UnitaDiLavoro transaction, and a project has one writer process (ADR 0010 .lock); the key lives in Kotlin (pulisci + Locale.ROOT lowercase), not in SQL (SQLite lower() is ASCII-only). pulisci = the rule pinned in tec-scrittore-documento keys.nomeFile, implemented here as a private pure function of :progetto:applicazione with the same table rows as documento AC-320 (Progetto may not depend on Documento). FOLLOW-UP REQUIRED: merged before this amendment; the merged code does not yet satisfy AC-61 (amended) and AC-322..324 — a rework/fix block must land them (after porte-progetto's follow-up adds titoliDelProgetto)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Progetto (+ R2, R6, R24), ADR 0010"
   - id: "avvia-elaborazione"
     type: "application-service"
@@ -943,9 +951,12 @@ blocks:
     tests_nl:
       - "INV-23 stessi input → markdown byte-identico"
       - "INV-24 Voce non attribuita → 'Voce n'; Parlante eliminato → il suo Nome"
-      - "INV-24 Segmenti in ordine di inizio tra le Voci (a parità, segmentoId); testo IT/EN verbatim"
+      - "INV-24 Segmenti in ordine di inizio tra le Voci (a parità di inizioMs, per segmentoId); testo IT/EN verbatim — il test fornisce i Segmenti a pari inizioMs in ordine di segmentoId INVERSO nell'input (un ordinamento stabile che ignorasse il tie-break deve far fallire il test)"
       - "AC-103 Il markdown inizia con '# <titolo>' e l'intestazione 'Registrata il dd/MM/yyyy', poi una riga '**Nome** (mm:ss): testo' per ogni Segmento, e due Segmenti consecutivi della stessa Voce restano righe separate"
       - "AC-104 nomeFile(2026-09-12, 'Riunione') = '2026-09-12 Riunione.md'"
+      - "AC-320 nomeFile(data, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' (funzione pura, test a tabella con data 2026-09-12): 'Riunione 3/10: budget?' → '2026-09-12 Riunione 3_10_ budget_.md'; '  Nota finale.. ' → '2026-09-12 Nota finale.md'; 'a<b>c|d*e\"f' → '2026-09-12 a_b_c_d_e_f.md'; un carattere di controllo U+0007 → '_'; 'con' → '2026-09-12 con_.md'; '...' e '' → '2026-09-12 registrazione.md'; 'e' + U+0301 (NFD) → '2026-09-12 é.md' (NFC); un titolo già pulito resta invariato (idempotenza: nomeFile(d, pulisci(t)) = nomeFile(d, t))"
+      - "AC-321 Limite di lunghezza: per un titolo di 300 'è' (2 byte UTF-8) e per uno di 100 emoji (4 byte, coppie surrogate) nomeFile è lungo al più 251 byte UTF-8 (così nomeFile + '.tmp' ≤ 255), non spezza mai un code point né una coppia surrogata, e non termina con spazio o punto prima di '.md'"
+    notes: "AMENDED 2026-09-23 (user decision, open-questions/documento.md answered and cleared): the Documento file name is unique per Progetto because titolo is unique per Progetto (servizi-registrazione AC-322..324 assigns ' (2)', ' (3)'… at import) — nomeFile itself adds no tie-breaker (an ordinal computed here would break INV-23). nomeFile SANITIZES the titolo with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : \" / \\ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. The same rule text is pinned in tec-scrittore-documento keys.nomeFile and applied by servizi-registrazione to compute the uniqueness key — keep the two table tests' shared rows identical. LOW carry-over (code-review): format dates with explicit patterns, independent of the default Locale (Locale.ROOT). FOLLOW-UP: branch block/documento (8e7167f, parked) must be reworked to AC-320/321 and the reversed-input INV-24 tie-break test."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Documento (INV-23, INV-24) + R24 format, ADR 0010; format details USER-CONFIRMED 2026-09-23: date line 'Registrata il dd/MM/yyyy', a blank line between Segmento lines, mm = total minutes not wrapping at 60"
   - id: "estratto-audio"
     type: "read-model"
@@ -990,6 +1001,7 @@ blocks:
     tests_nl:
       - "AC-108 Round-trip salva → trova per Progetto e Registrazione (stato osservabile uguale)"
       - "AC-109 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le implementazioni SQL su databaseInMemoria()"
+      - "AC-326 titoliDelProgetto su SQL legge la sola colonna titolo filtrata per progetto_id (nessuna ricostituzione di Registrazione) e passa RegistrazioneRepositoryContratto (AC-325)"
     sources: "ADR 0006, dev-architecture-app.md #repository"
   - id: "repository-sql-trascrizione"
     type: "adapter"
@@ -1057,6 +1069,8 @@ blocks:
       - "AC-119 RegistroProgettiContratto passa contro l'implementazione su file (cartella temporanea)"
       - "AC-120 Il file viene riscritto in modo atomico: un crash simulato a metà scrittura lascia il contenuto precedente"
       - "AC-121 Un file illeggibile → elenco vuoto senza crash, e il prossimo registra lo riscrive valido"
+      - "AC-328 Più istanze dell'app (progetti diversi, ADR 0010) condividono il registro senza perdere aggiornamenti: ogni read-modify-write (registra, aggiorna, rimuovi) avviene sotto un FileChannel.lock() ESCLUSIVO su un file di lock fratello nella stessa cartella (es. progetti-recenti.lock, mai il file dati che viene sostituito dallo spostamento atomico), preso prima di leggere e rilasciato dopo lo spostamento; test: un processo figlio (JVM separata) e il test registrano N voci distinte ciascuno in parallelo → alla fine elenco() le contiene tutte 2N; dentro la stessa JVM il lock di file è affiancato dal lock in-processo (FileChannel.lock lancia OverlappingFileLockException se preso due volte dalla stessa JVM)"
+    notes: "AMENDED 2026-09-23 (user decision: multiple app instances on DIFFERENT projects are supported — ADR 0010 per-project .lock): cross-process FileChannel.lock() on a sibling lock file around each read-modify-write (AC-328). tec-registro-progetti re-pinned to the merged port aggiorna(percorso, …) (no code change). FOLLOW-UP REQUIRED: merged before this amendment — fix-batch-6 (already in flight: per-line tolerance, fsync, in-process lock, mid-write crash test) must also land AC-328."
     sources: "R3 (user decision 2026-09-23), ADR 0010"
   - id: "audio-ffmpeg"
     type: "adapter"
@@ -1107,12 +1121,23 @@ blocks:
     related_adrs:
       - "0008"
     tests_nl:
-      - "AC-129 Un file con hash errato → HashNonValido e nessun file installato nella cache"
-      - "AC-130 Il download scrive in un file temporaneo e sposta atomicamente solo dopo la verifica"
+      - "AC-129 Un asset (archivio o file) con hash errato → HashNonValido(modelloId), il .part è eliminato (mai riusato) e nessuna directory è installata nella cache"
+      - "AC-130 Il download scrive in <id>.part; solo dopo la verifica dello sha256 l'asset è estratto/copiato in una directory temporanea accanto alla destinazione (<cartella>/<id>.tmp-<n>/) che è rinominata atomicamente in <cartella>/<id>/"
       - "AC-131 Un download interrotto riprende dal punto raggiunto"
       - "AC-132 Rete assente → ReteAssente; pronti() è false finché manca un modello del catalogo"
-      - "AC-133 La cartella cache segue il sistema operativo (macOS Application Support/snastro/modelli) e non è mai nel progetto"
+      - "AC-133 La cartella dei modelli segue il sistema operativo (funzione pura con os, env e user.home iniettati): macOS ~/Library/Application Support/snastro/modelli; Windows %LOCALAPPDATA%\\snastro\\modelli (mai %APPDATA%, roaming); Linux $XDG_DATA_HOME/snastro/modelli (mai XDG_CACHE_HOME); non è mai nel progetto"
       - "AC-134 I test usano una sorgente locale (nessuna rete reale nel gate)"
+      - "AC-330 Voce TAR_BZ2: un archivio .tar.bz2 costruito nel test con top/encoder.onnx e top/tokens.txt, servito dal server finto su loopback, è verificato ed estratto in <cartella>/<id>/encoder.onnx e <id>/tokens.txt (la directory di primo livello unica è rimossa); percorso(id) = <cartella>/<id>/ (una DIRECTORY); dopo l'installazione il .part non esiste più"
+      - "AC-331 Voce FILE: il file verificato è posto in <cartella>/<id>/<nome del file dell'url>; percorso(id) è comunque la directory"
+      - "AC-332 Un archivio con una voce che esce dalla destinazione ('../x', percorso assoluto) o con un link simbolico/fisico → ArchivioNonValido(modelloId), nulla è rinominato al posto della destinazione e nessuna directory temporanea resta"
+      - "AC-333 Marcatore <id>/.sha256 = hash dell'asset installato: installata(id) solo se la directory esiste E il marcatore coincide con lo sha256 del catalogo; marcatore diverso (hash del catalogo cambiato) o assente → la voce è in mancanti() e scarica la reinstalla sostituendo la vecchia directory (rinominata da parte, poi eliminata); le directory *.tmp-* rimaste da un crash sono eliminate all'avvio"
+      - "AC-334 Windows: LOCALAPPDATA assoluto → <LOCALAPPDATA>\\snastro\\modelli; LOCALAPPDATA assente, vuoto/solo spazi o RELATIVO → <user.home>\\AppData\\Local\\snastro\\modelli"
+      - "AC-335 Linux: XDG_DATA_HOME assoluto → <XDG_DATA_HOME>/snastro/modelli; assente, vuoto/solo spazi o RELATIVO → <user.home>/.local/share/snastro/modelli (spec XDG)"
+      - "AC-336 (code-review HIGH) I redirect HTTP sono seguiti: il server finto risponde 302 verso un secondo percorso che serve l'asset (come i release di GitHub) → download completato e verificato; un ciclo di redirect → DownloadFallito, mai un blocco"
+      - "AC-337 (code-review HIGH) Un .part bloccato si recupera: una richiesta Range a cui il server risponde 416, o un .part più grande di dimensioneByte, → il .part è scartato e il download riparte da 0 (una volta) e riesce; un upstream corto (la connessione si chiude prima di dimensioneByte / Content-Length) → DownloadFallito con il .part conservato, e lo scarica successivo riprende e completa"
+      - "AC-338 (code-review HIGH) Timeout di lettura/inattività: un server che smette di inviare byte a metà corpo → il download fallisce entro il timeout di inattività (iniettato, es. 200 ms nel test) con DownloadFallito, mai un blocco indefinito; il .part resta per la ripresa; anche la connessione ha un timeout"
+      - "AC-339 Un errore del disco (cartella non scrivibile, rinomina fallita) → ScritturaFallita(motivo), mai ReteAssente"
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c), user decisions: %LOCALAPPDATA% + ARCHIVE entries): VoceCatalogo describes the downloaded asset (url, sha256 and dimensioneByte OF THE ASSET, formato TAR_BZ2 | FILE); verify → extract into a temp dir next to the target → atomic dir rename; percorso(id) = the directory; <id>/.sha256 marker; blank/relative LOCALAPPDATA / XDG_DATA_HOME ignored. Extraction via Apache Commons Compress (org.apache.commons:commons-compress, Apache-2.0, add to gradle/libs.versions.toml; :modelli only; BZip2CompressorInputStream + TarArchiveInputStream) — the JDK has no bzip2/tar reader. HashNonValido field renamed id → modelloId (reconciled with tec-modelli-ui); ErroreModelli gains ArchivioNonValido + ScritturaFallita. FOLLOW-UP REQUIRED: the queued code-review CHANGES rework (cycle 1) must cover AC-129/130/133 (amended) and AC-330..339 — incl. the three HIGH items (AC-336 redirects, AC-337 stuck .part, AC-338 inactivity timeout) — plus the review's MED patches (unguarded file ops, body stream leak, concurrent scarica, M8 early-EOF test)."
     sources: "ADR 0008"
   - id: "registrazione-da-progetto-tr"
     type: "adapter"
@@ -1274,6 +1299,7 @@ blocks:
       - "AC-144 ScrittoreDocumentoContratto passa contro l'implementazione su file"
       - "AC-145 Un errore simulato a metà scrittura lascia intatto il file precedente (mai un file parziale)"
       - "AC-146 Nessuna API di lettura nel modulo documento (regola enforced_by di ADR 0010)"
+      - "AC-340 Il file temporaneo della scrittura atomica è '<nomeFile>.tmp' nella stessa cartella documenti/ (mai un nome più lungo), così il limite di 255 byte di AC-321 vale anche per lui; con un nomeFile di 251 byte scrivi riesce"
     sources: "ADR 0010"
   - id: "audio-progetto"
     type: "adapter"
@@ -1358,7 +1384,8 @@ blocks:
     tests_nl:
       - "AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto"
       - "AC-154 RigeneraDocumento su una Registrazione senza Trascritto → nessuna scrittura, Ok"
-      - "AC-155 Con una DataRegistrazioneModificata il nuovo file è scritto e poi il vecchio è rimosso"
+      - "AC-155 Con una DataRegistrazioneModificata il nuovo file nomeFile(nuova, titolo) è scritto e poi il vecchio nomeFile(precedente, titolo) è rimosso — entrambi calcolati con la stessa funzione pulita di documento (AC-320)"
+      - "AC-327 Il vecchio file rimosso non appartiene mai a un'altra Registrazione: con 'Riunione' (data 2026-09-12) e 'Riunione (2)' (data 2026-09-13) spostare la data di 'Riunione (2)' al 2026-09-12 scrive '2026-09-12 Riunione (2).md', rimuove '2026-09-13 Riunione (2).md' e non tocca '2026-09-12 Riunione.md'; se precedente = nuova il file è riscritto e nulla è rimosso"
       - "AC-156 ParlanteRinominato → rigenerate tutte e sole le Registrazioni con un'Attribuzione a P; ParlantePromosso con nomeCambiato = false → nulla; ParlanteEliminato → nulla"
       - "AC-157 Un errore di scrittura → Esito.Errore (così l'abbonato può riprovare)"
       - "AC-158 RigeneraTuttiIDocumenti rigenera ogni Registrazione con Trascritto"
@@ -1801,6 +1828,8 @@ blocks:
       - "UnisciVoci"
       - "DividiVoce"
       - "RiassegnaSegmento"
+    gated_by:
+      - "ADR closing spike attesa-mutex-estrazione"
     tests_nl:
       - "AC-207 Caricamento: scheletro del trascritto"
       - "AC-208 Click su un Segmento → riproduzione dal suo inizio e Segmento evidenziato"
@@ -1817,7 +1846,7 @@ blocks:
       - "AC-219 Una Voce attribuita mostra 'cambia' e non 'salta'"
       - "AC-318 Errore VoceCambiata su 'conferma' o 'salta' → messaggio in linguaggio semplice sulla card ('La voce è cambiata nel frattempo: riprova'), nulla cambia e il comando può essere ripetuto"
       - "AC-319 Dopo ImpronteRiallineate della Registrazione aperta la Proposta visibile è ricaricata senza perdere la selezione"
-    notes: "Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni)."
+    notes: "Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24)"
   - id: "schermata-parlanti"
     type: "ui"
@@ -1895,6 +1924,8 @@ blocks:
       - "0004"
       - "0008"
       - "0012"
+    gated_by:
+      - "ADR closing spike attesa-mutex-estrazione"
     tests_nl:
       - "AC-233 All'avvio RecuperaElaborazioniInterrotte gira prima che la coda parta"
       - "AC-234 Con due in_attesa la seconda parte solo quando la prima è terminale"
@@ -1903,7 +1934,7 @@ blocks:
       - "AC-312 (F-C) Se qualcosa sfugge a EseguiProssimaElaborazione.esegui (cancellazione, interrupt, Error come OutOfMemoryError, eccezione inattesa) il dispatcher esegue RecuperaElaborazioniInterrotte prima di prendere l'elemento successivo; lo esegue anche quando un progetto è riaperto senza riavviare l'app — nessuna Elaborazione resta in_corso mentre l'app gira"
       - "AC-313 (F-G) Un abbonato sincrono che fallisce sempre su ElaborazioneAvviata annulla ogni volta la transazione di avvio: il dispatcher non gira a vuoto sull'elemento di testa (tentativi limitati con back-off, poi lo lascia in_attesa per la sessione e lo segnala) e gli altri elementi proseguono"
       - "AC-314 Un solo dispatcher single-thread prende gli elementi: due richieste concorrenti di avanzamento non portano mai due Elaborazioni in_corso (la transizione in_attesa → in_corso non ha controllo di versione e si affida a questo)"
-    notes: "PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built."
+    notes: "PINNED REQUIREMENT (esegui-elaborazione cycle-1 code-review F-G): the start in_attesa → in_corso relies on the SINGLE-THREAD dispatcher (no version check / compare-and-set on that transition) — never run two dispatchers. Carry-over F-C: after anything escapes esegui no run is live, so RecuperaElaborazioniInterrotte runs before the next item and on project re-open. OPEN — DEFERRED [user] (ADR 0012 Amendment (b) Consequences): a Conferma/SaltaVoce/Proposta requested during an Elaborazione still waits for the native Mutex (potentially minutes); it no longer blocks the DB, but the user-facing wait is unresolved (candidates: Mutex timeout with 'riprova dopo l'elaborazione', per-call release between pipeline chunks, separate extractor session) — to be DECIDED BEFORE this block is built. GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl."
     sources: "ADR 0004/0008/0012 (+ R12)"
   - id: "avvio-composizione"
     type: "adapter"
@@ -1965,7 +1996,8 @@ blocks:
       - "AC-315 abbonato-riallineamento-impronte è registrato come AbbonatoDopoCommit sul DispatcherEventi: una Revisione committata porta a un RiallineaImpronte della sua Registrazione (test end-to-end su databaseInMemoria con le Finte ML)"
       - "AC-316 All'apertura del progetto RiallineaTutteLeImpronte gira in background DOPO RecuperaElaborazioniInterrotte, senza bloccare la UI (la schermata è usabile mentre gira)"
       - "AC-317 ImpronteRiallineate(registrazioneId) produce un Cambiamento su AggiornamentiVista per quella Registrazione e invalida la cache della Proposta (nessuna Rigenerazione del Documento)"
-    notes: "USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (variant removed from tec-shell-ui's pinned ErroreSessione, re-pinned 2026-09-23, user decision). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime. AMENDED 2026-09-23 (ADR 0012 Amendment (b)): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte."
+      - "AC-329 ServizioModelli (porta di :ui) è implementato in :avvio sopra ProvisioningModelli: ogni variante di snastro.modelli.ErroreModelli è mappata 1:1 nella variante omonima di ErroreServizioModelli (HashNonValido(modelloId), ArchivioNonValido(modelloId), ReteAssente, ScritturaFallita(motivo), DownloadFallito(motivo)) — test a tabella sul mapper; :ui non importa mai snastro.modelli (verificaDipendenzeModuli)"
+    notes: "USER DECISION 2026-09-23 (dispatch.log): project folder name derived from NomeProgetto by cleaning (AC-263), ' (n)' on an existing folder (AC-264), the Progetto keeps the typed name (AC-265) — 60 code points keeps <nome> (NN).snastro within the 255-byte NAME_MAX of APFS/ext4 (60×4 UTF-8 bytes + 13) and within NTFS's 255 UTF-16 units, leaving room for the 260-char Windows MAX_PATH under the default parent; Windows reserved names are handled because the Windows route stays open (ADR 0010). SessioneProgetto.crea no longer produces ErroreSessione.CartellaGiaEsistente (variant removed from tec-shell-ui's pinned ErroreSessione, re-pinned 2026-09-23, user decision). CARRY-OVER (revisione code-review): wire each command service with `eventi.unitaDiLavoro` (DispatcherEventiInMemoria's own UnitaDiLavoro), never the raw delegate — otherwise pubblica fails at runtime. AMENDED 2026-09-23 (ADR 0012 Amendment (b)): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. AMENDED 2026-09-23: tec-registro-progetti re-pinned to aggiorna(percorso, …) — AC-240 updates the registry entry by the session's percorso; tec-modelli-ui error type is now the UI-side ErroreServizioModelli, mapped here from :modelli (AC-329); tec-modelli percorso(id) is a DIRECTORY (ADR 0008 Amendment (c))."
     sources: "architecture.md (:avvio), ADR 0010 (+ R3, R15), profile run binding, user decision 2026-09-23 (folder naming)"
   - id: "ml-sherpa-motore"
     type: "adapter"
@@ -1987,6 +2019,7 @@ blocks:
       - "AC-243 [@modelli] i nativi si caricano su macOS arm64 da ./gradlew :avvio:run"
       - "AC-244 [@modelli] ogni sessione è rilasciata dopo l'uso (nessuna handle nativa sopravvive a conSessione)"
       - "AC-245 com.k2fsa e System.load compaiono solo in :ml-sherpa (regola enforced_by di ADR 0004)"
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry."
     sources: "ADR 0004, spike packaging-modelli-desktop"
   - id: "allineatore"
     type: "adapter"
@@ -2442,7 +2475,7 @@ boundaries:
     projection: "in-process"
     pinned_types:
       ProgettoRepository: "interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB"
-      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; salva(r: Registrazione) }"
+      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }"
     keys: {}
     contract_test: "consumer-driven"
     related_adrs:
@@ -2698,7 +2731,7 @@ boundaries:
       - "avvio-composizione"
     projection: "in-process"
     pinned_types:
-      RegistroProgetti: "interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant); rimuovi(percorso: String) }"
+      RegistroProgetti: "interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }"
       VoceRegistro: "data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)"
     keys:
       percorso: "minted by avvio-composizione (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open"
@@ -2861,7 +2894,7 @@ boundaries:
     pinned_types:
       ScrittoreDocumento: "interface { fun scrivi(nomeFile: String, markdown: String); fun rimuovi(nomeFile: String) } — write-only, never reads (ADR 0010)"
     keys:
-      nomeFile: "minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> <titolo>.md' under documenti/ — changes only when dataRegistrazione changes (titolo immutable)"
+      nomeFile: "minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' under documenti/, with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : \" / \\ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. UNIQUE per Progetto: titolo is unique per Progetto on the key pulisci(titolo).lowercase(Locale.ROOT) (servizi-registrazione AC-322) — so two Registrazioni never share a nomeFile whatever their dates; changes only when dataRegistrazione changes (titolo immutable). The atomic write's temp file is '<nomeFile>.tmp' in the same folder (AC-340)."
     contract_test: "consumer-driven"
     related_adrs:
       - "0010"
@@ -2890,10 +2923,12 @@ boundaries:
     projection: "in-process"
     pinned_types:
       "snastro.modelli.CatalogoModelli": "val voci: List<VoceCatalogo>"
-      VoceCatalogo: "data class(id: String, ruolo: String, url: String, sha256: String, dimensioneByte: Long, licenza: String, attribuzione: String)"
-      "snastro.modelli.ProvisioningModelli": "fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit> /* ErroreModelli (sealed : ErroreDominio, file ErroriModelli.kt): HashNonValido(id) | ReteAssente | DownloadFallito(motivo) */; fun percorso(id: String): Path"
+      VoceCatalogo: "data class(id: String, ruolo: String, url: String, sha256: String /* of the downloaded ASSET (the archive, or the single file) */, dimensioneByte: Long /* of the asset */, formato: FormatoVoce, licenza: String, attribuzione: String) — ADR 0008 Amendment (c)"
+      FormatoVoce: "enum class { TAR_BZ2 /* k2-fsa .tar.bz2 release: extracted, a single top-level directory stripped */, FILE /* single asset, placed as <id>/<file name of the url> */ }"
+      "snastro.modelli.ProvisioningModelli": "fun pronti(): Boolean; fun mancanti(): List<VoceCatalogo>; fun scarica(progresso: (id: String, scaricati: Long, totali: Long) -> Unit): Esito<Unit>; fun percorso(id: String): Path /* the installed DIRECTORY <cartella>/<id>/ — never a file */"
+      "snastro.modelli.ErroreModelli": "sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String, motivo: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — declared in :modelli, NEVER referenced by :ui (avvio-composizione maps it to the :ui ErroreServizioModelli)"
     keys:
-      "VoceCatalogo.id": "minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across catalogue edits"
+      "VoceCatalogo.id": "minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across edits of licence/attribution text, but NEVER reused for different bytes: any change of the entry's sha256 MINTS A NEW id (ADR 0008 Amendment (c)) — the embedding model's id is EstrattoreImpronta.modello, and ADR 0012 (b) staleness (modello_impronta ≠ EstrattoreImpronta.modello) relies on it; also the installed directory name <cartella>/<id>/, whose .sha256 marker records the installed asset hash"
     contract_test: "consumer-driven"
     related_adrs:
       - "0008"
@@ -2956,8 +2991,8 @@ boundaries:
     projection: "in-process"
     pinned_types:
       ServizioModelli: "interface { val stato: StateFlow<StatoModelli>; fun scarica(); fun licenze(): List<LicenzaVista> }"
-      StatoModelli: "sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreModelli) }"
-      ErroreModelli: "sealed interface : ErroreDominio (file ErroriModelli.kt) { HashNonValido(modelloId: String); ReteAssente; DownloadFallito(motivo: String) }"
+      StatoModelli: "sealed interface { Pronti; Mancanti(numero: Int, totaleByte: Long); InDownload(modelloId: String, scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreServizioModelli) }"
+      ErroreServizioModelli: "sealed interface : ErroreDominio (file ErroriServizioModelli.kt in snastro.ui.modelli — declared on the UI side because :ui must not depend on :modelli) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — 1:1 image of snastro.modelli.ErroreModelli, mapped in :avvio (avvio-composizione AC-329); same field name modelloId on both sides"
       LicenzaVista: "data class(nome: String, ruolo: String, licenza: String, attribuzione: String)"
     keys: {}
     contract_test: "consumer-driven"

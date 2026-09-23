@@ -18,12 +18,15 @@ related_adrs:
 # registro-progetti-file — Registro dei progetti recenti (file per utente)
 
 ## What to do
-RegistroProgetti over a per-user file progetti-recenti in the OS app-data dir (macOS ~/Library/Application Support/snastro/), written atomically (R3).
+RegistroProgetti over a per-user file progetti-recenti in the OS app-data dir (macOS ~/Library/Application Support/snastro/), written atomically (R3); every read-modify-write holds a cross-process exclusive FileChannel lock on a sibling lock file, since several app instances (on different projects) may run at once.
+
+Note: AMENDED 2026-09-23 (user decision: multiple app instances on DIFFERENT projects are supported — ADR 0010 per-project .lock): cross-process FileChannel.lock() on a sibling lock file around each read-modify-write (AC-328). tec-registro-progetti re-pinned to the merged port aggiorna(percorso, …) (no code change). FOLLOW-UP REQUIRED: merged before this amendment — fix-batch-6 (already in flight: per-line tolerance, fsync, in-process lock, mid-write crash test) must also land AC-328.
 
 ## Tasks
 - AC-119 RegistroProgettiContratto passa contro l'implementazione su file (cartella temporanea)
 - AC-120 Il file viene riscritto in modo atomico: un crash simulato a metà scrittura lascia il contenuto precedente
 - AC-121 Un file illeggibile → elenco vuoto senza crash, e il prossimo registra lo riscrive valido
+- AC-328 Più istanze dell'app (progetti diversi, ADR 0010) condividono il registro senza perdere aggiornamenti: ogni read-modify-write (registra, aggiorna, rimuovi) avviene sotto un FileChannel.lock() ESCLUSIVO su un file di lock fratello nella stessa cartella (es. progetti-recenti.lock, mai il file dati che viene sostituito dallo spostamento atomico), preso prima di leggere e rilasciato dopo lo spostamento; test: un processo figlio (JVM separata) e il test registrano N voci distinte ciascuno in parallelo → alla fine elenco() le contiene tutte 2N; dentro la stessa JVM il lock di file è affiancato dal lock in-processo (FileChannel.lock lancia OverlappingFileLockException se preso due volte dalla stessa JVM)
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -58,7 +61,7 @@ RegistroProgetti over a per-user file progetti-recenti in the OS app-data dir (m
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 - **tec-registro-progetti** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(progettoId: ProgettoId, numRegistrazioni: Int, ultimaAttivita: Instant); rimuovi(percorso: String) }
+    - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }
     - `VoceRegistro`: data class(progettoId: ProgettoId, nome: String, percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant)
   - keys (minting rules):
     - `percorso`: minted by avvio-composizione (SessioneProgetto crea/apri): absolute path of the <nome>.snastro folder as an opaque string; the registry is keyed by it — a moved folder re-registers on open

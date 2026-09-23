@@ -41,13 +41,15 @@ triggers:
   - "UnisciVoci"
   - "DividiVoce"
   - "RiassegnaSegmento"
+gated_by:
+  - "ADR closing spike attesa-mutex-estrazione"
 ---
 # schermata-registrazione — S3 · Registrazione (identificazione + Revisione)
 
 ## What to do
 S3 concept B: header with audio bar + 'Apri documento' / 'Mostra nella cartella' (ApriEsterno + documento.nomeFile), transcript centre, Voci panel right; presenter joins trascritto-view + identificazione-voci (R1).
 
-Note: Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni).
+Note: Declared: Documento content is never shown in-app (ux decision); 'salta' is not offered on an attributed Voce (use 'cambia', R24). OPEN — DEFERRED [user] (ADR 0012 Amendment (b)): the user-facing wait on the native Mutex during an Elaborazione must be decided before this block is built (see avvio-coda-elaborazioni). GATE 2026-09-23 (user decision): the Mutex-wait question is now the spike node tasks/app/backlog/attesa-mutex-estrazione.md (separate small ONNX session for the print extractor vs pipeline releasing the lock between chunks vs UI 'occupato' state); this block is NOT READY until the ADR closing it lands and build-manifest folds the decision into its tests_nl.
 
 ### Consumes read-models: trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio, documento
 ### Triggers: ConfermaAttribuzione, SaltaVoce, UnisciVoci, DividiVoce, RiassegnaSegmento
@@ -71,6 +73,7 @@ Note: Declared: Documento content is never shown in-app (ux decision); 'salta' i
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
+- **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione
 - Blocks built first: `trascritto-view` (wave 5), `identificazione-voci` (wave 5), `proposta` (wave 5), `proposta-unione` (wave 5), `parlanti-attivi` (wave 5), `estratto-audio` (wave 4), `documento` (wave 4), `conferma-attribuzione` (wave 4), `salta-voce` (wave 4), `revisione` (wave 4), `ui-fondamenta` (wave 6)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
