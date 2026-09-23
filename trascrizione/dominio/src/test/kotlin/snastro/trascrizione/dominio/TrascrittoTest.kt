@@ -19,10 +19,12 @@ class TrascrittoTest {
     @Test
     fun `AC-20 crea numera le Voci per prima apparizione e i Segmenti per inizio poi voce`() {
         val turni = listOf(
-            unSegmentoIniziale(voceIndice = 0, inizioMs = 2_000, fineMs = 3_000, testo = "d"),
-            unSegmentoIniziale(voceIndice = 5, inizioMs = 0, fineMs = 1_000, testo = "a"),
-            unSegmentoIniziale(voceIndice = 2, inizioMs = 500, fineMs = 1_500, testo = "c"),
-            unSegmentoIniziale(voceIndice = 0, inizioMs = 500, fineMs = 900, testo = "b"),
+            unSegmentoIniziale(voceIndice = 0, inizioMs = 2_000, fineMs = 3_000, testo = "f"),
+            unSegmentoIniziale(voceIndice = 5, inizioMs = 0, fineMs = 1_000, testo = "b"),
+            unSegmentoIniziale(voceIndice = 2, inizioMs = 500, fineMs = 1_500, testo = "d"),
+            unSegmentoIniziale(voceIndice = 0, inizioMs = 500, fineMs = 900, testo = "c"),
+            unSegmentoIniziale(voceIndice = 5, inizioMs = 2_000, fineMs = 2_500, testo = "e"),
+            unSegmentoIniziale(voceIndice = 5, inizioMs = 0, fineMs = 400, testo = "a"),
         )
 
         val creato = Trascritto.crea(registrazioneId, DURATA_TRASCRITTO_MS, turni).atteso()
@@ -30,19 +32,23 @@ class TrascrittoTest {
         val t = creato.aggregato
         assertEquals(TrascrittoCreato(registrazioneId), creato.evento)
         assertEquals(registrazioneId, t.registrazioneId)
-        // diarizer 5 speaks first → Voce 1; 0 and 2 tie at 500 ms → the lower voceIndice (0) is Voce 2
+        // diarizer 5 speaks first → Voce 1; 0 and 2 tie at 500 ms → the lower voceIndice (0) is Voce 2.
+        // At 2000 ms Voce 1 (voceIndice 5) and Voce 2 (voceIndice 0) tie: ordered by VoceId, not voceIndice.
+        // At 0 ms Voce 1 has two turns: ordered by fine, not by input order.
         assertEquals(
             listOf(
-                Segmento(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "a"),
-                Segmento(SegmentoId(2), VoceId(2), IntervalloMs(500, 900), "b"),
-                Segmento(SegmentoId(3), VoceId(3), IntervalloMs(500, 1_500), "c"),
-                Segmento(SegmentoId(4), VoceId(2), IntervalloMs(2_000, 3_000), "d"),
+                Segmento(SegmentoId(1), VoceId(1), IntervalloMs(0, 400), "a"),
+                Segmento(SegmentoId(2), VoceId(1), IntervalloMs(0, 1_000), "b"),
+                Segmento(SegmentoId(3), VoceId(2), IntervalloMs(500, 900), "c"),
+                Segmento(SegmentoId(4), VoceId(3), IntervalloMs(500, 1_500), "d"),
+                Segmento(SegmentoId(5), VoceId(1), IntervalloMs(2_000, 2_500), "e"),
+                Segmento(SegmentoId(6), VoceId(2), IntervalloMs(2_000, 3_000), "f"),
             ),
             t.segmenti,
         )
         assertEquals(listOf(1, 2, 3), t.voci.map { it.id.numero })
         assertEquals(4, t.prossimaVoce)
-        assertEquals(5, t.prossimoSegmento)
+        assertEquals(7, t.prossimoSegmento)
     }
 
     @Test
@@ -237,6 +243,25 @@ class TrascrittoTest {
         assertEquals(listOf(2, 3), t.voci.map { it.id.numero })
         assertEquals(listOf(1, 2, 4), t.voce(2))
         t.riassegna(SegmentoId(2), VoceId(1)).erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
+    }
+
+    @Test
+    fun `INV-11 riassegnare verso una Voce nuova l unico Segmento della sua Voce e rifiutato e non cambia nulla`() {
+        val t = unTrascritto(voci = 2, segmentiPerVoce = 1) // V1:S1 V2:S2
+        val segmenti = t.segmenti
+        val voci = t.voci
+        val prossimaVoce = t.prossimaVoce
+
+        assertEquals(
+            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(2), null),
+            t.riassegna(SegmentoId(2), null).erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>(),
+        )
+
+        assertEquals(segmenti, t.segmenti)
+        assertEquals(voci, t.voci)
+        assertEquals(prossimaVoce, t.prossimaVoce)
+        // towards an EXISTING other Voce the only Segmento may still leave, removing its Voce
+        assertTrue(t.riassegna(SegmentoId(2), VoceId(1)).atteso().daRimossa)
     }
 
     // --- INV-12 -----------------------------------------------------------------------------------

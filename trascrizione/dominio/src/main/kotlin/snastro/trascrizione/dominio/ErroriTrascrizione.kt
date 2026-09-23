@@ -36,9 +36,12 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
     /** INV-10: the Segmenti to split off must be a non-empty proper subset of [origine]'s Segmenti. */
     public data class DivisioneNonAmmessa(val origine: VoceId, val segmenti: Set<SegmentoId>) : ErroreTrascrizione
 
-    /** INV-11: the Segmento is already on [destinazione]. */
+    /**
+     * INV-11: the Segmento is already on [destinazione], or [destinazione] is `null` (a new Voce) while the
+     * Segmento is the only one of its Voce — a move that changes no grouping yet would remove the Voce.
+     */
     public data class RiassegnazioneNonAmmessa(
         val segmentoId: SegmentoId,
-        val destinazione: VoceId,
+        val destinazione: VoceId?,
     ) : ErroreTrascrizione
 }

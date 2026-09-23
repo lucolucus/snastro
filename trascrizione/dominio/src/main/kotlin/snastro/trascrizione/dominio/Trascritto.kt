@@ -77,13 +77,16 @@ public class Trascritto private constructor(
     }
 
     /**
-     * INV-11: moves [segmento] to [destinazione], an existing other Voce, or to a NEW Voce when `null`;
-     * the source Voce is removed if emptied (INV-6).
+     * INV-11: moves [segmento] to [destinazione], an existing other Voce (the source Voce is removed if
+     * emptied, INV-6), or to a NEW Voce when `null`. A NEW Voce is refused for the only Segmento of its
+     * Voce [user decision]: it would change no grouping yet remove the Voce, losing its Attribuzione and
+     * ImprontaVocale (INV-21). A refusal changes nothing, [prossimaVoce] included.
      */
     public fun riassegna(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> {
         val da = _segmenti[segmento]?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento))
         return when {
-            destinazione == da -> Esito.Errore(RiassegnazioneNonAmmessa(segmento, destinazione))
+            destinazione == da || destinazione == null && idsDi(da).size == 1 ->
+                Esito.Errore(RiassegnazioneNonAmmessa(segmento, destinazione))
             destinazione != null && !esiste(destinazione) -> Esito.Errore(VoceNonTrovata(destinazione))
             else -> {
                 val a = destinazione ?: nuovaVoce()
@@ -120,8 +123,8 @@ public class Trascritto private constructor(
         /**
          * Builds the Trascritto from the pipeline's turns (AC-20): Voci are numbered 1..n by FIRST
          * APPEARANCE (smallest inizio, tie: lower [SegmentoIniziale.voceIndice]); Segmenti 1..m by
-         * (inizio, Voce). No turn → [NessunParlatoRilevato] (AC-21); a turn ending after [durataMs] →
-         * [SegmentoOltreLaDurata] (INV-7).
+         * (inizio, Voce, fine), independent of the input order. No turn → [NessunParlatoRilevato] (AC-21);
+         * a turn ending after [durataMs] → [SegmentoOltreLaDurata] (INV-7).
          */
         public fun crea(
             registrazioneId: RegistrazioneId,
@@ -135,7 +138,13 @@ public class Trascritto private constructor(
                 else -> {
                     val voceDi = numeraPerPrimaApparizione(segmenti)
                     val numerati = segmenti
-                        .sortedWith(compareBy({ it.intervallo.inizioMs }, { voceDi.getValue(it.voceIndice).numero }))
+                        .sortedWith(
+                            compareBy(
+                                { it.intervallo.inizioMs },
+                                { voceDi.getValue(it.voceIndice).numero },
+                                { it.intervallo.fineMs },
+                            ),
+                        )
                         .mapIndexed { i, s ->
                             Segmento(SegmentoId(i + 1), voceDi.getValue(s.voceIndice), s.intervallo, s.testo)
                         }
@@ -154,13 +163,25 @@ public class Trascritto private constructor(
                 .mapIndexed { i, (voceIndice, _) -> voceIndice to VoceId(i + 1) }
                 .toMap()
 
-        /** Rebuilds from persisted state; re-validates nothing (the DB is trusted). */
+        /**
+         * Rebuilds from persisted state; re-validates no rule (the DB is trusted), but refuses (`require`,
+         * programmer error, ADR 0003) counters behind the stored ids or duplicate ids: a stale
+         * [prossimaVoce] would let [dividi]/[riassegna] mint an existing `VoceId` and silently merge Voci.
+         * Not testable in `dominio` (CR-15): the repository round-trip test (AC-30) must cover it.
+         */
         @RicostituzioneDaPersistenza
         public fun ricostituisci(
             registrazioneId: RegistrazioneId,
             segmenti: List<Segmento>,
             prossimaVoce: Int,
             prossimoSegmento: Int,
-        ): Trascritto = Trascritto(registrazioneId, segmenti, prossimaVoce, prossimoSegmento)
+        ): Trascritto {
+            require(segmenti.distinctBy { it.id }.size == segmenti.size) { "SegmentoId duplicati in $registrazioneId" }
+            require(segmenti.all { it.voceId.numero < prossimaVoce }) { "prossimaVoce $prossimaVoce non oltre le Voci" }
+            require(segmenti.all { it.id.numero < prossimoSegmento }) {
+                "prossimoSegmento $prossimoSegmento non oltre i Segmenti"
+            }
+            return Trascritto(registrazioneId, segmenti, prossimaVoce, prossimoSegmento)
+        }
     }
 }
