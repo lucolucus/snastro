@@ -62,13 +62,29 @@ public class Parlante private constructor(
             ParlanteEliminato(id)
         }
 
-    /** [INV-14] inserts, or replaces the ONE print of [voceRef]; the others are never touched. */
-    public fun registraImpronta(voceRef: VoceRef, impronta: Impronta): Esito<Unit> =
-        seModificabile {
-            val nuova = ImprontaVocale(voceRef, impronta)
-            val indice = _impronte.indexOfFirst { it.voceRef == voceRef }
-            if (indice >= 0) _impronte[indice] = nuova else _impronte.add(nuova)
-        }
+    /**
+     * [INV-14] inserts, or replaces the ONE print of [voceRef]; the others are never touched.
+     * [sorgente] = `SorgenteImpronta.chiave`, [modello] = `EstrattoreImpronta.modello`.
+     */
+    public fun registraImpronta(voceRef: VoceRef, impronta: Impronta, sorgente: String, modello: String): Esito<Unit> =
+        seModificabile { metti(ImprontaVocale(voceRef, impronta, sorgente, modello)) }
+
+    /**
+     * POLICY-ONLY ([INV-21] unire inheritance): re-keys the print of [da] onto [a], keeping impronta,
+     * sorgente and modello — stale by construction, refreshed after commit by `RiallineaImpronte`.
+     * No print for [da] → no-op (always so for an `eliminato`: it holds none, [INV-13]).
+     */
+    public fun trasferisciImpronta(da: VoceRef, a: VoceRef) {
+        val indice = _impronte.indexOfFirst { it.voceRef == da }
+        if (indice < 0) return
+        require(_impronte.none { it.voceRef == a }) { "il Parlante $id ha gia un'impronta per $a" }
+        _impronte[indice] = _impronte[indice].copy(voceRef = a)
+    }
+
+    private fun metti(nuova: ImprontaVocale) {
+        val indice = _impronte.indexOfFirst { it.voceRef == nuova.voceRef }
+        if (indice >= 0) _impronte[indice] = nuova else _impronte.add(nuova)
+    }
 
     /** Removes the print of [voceRef], if any (a physical removal: biometric rows, ADR 0009). */
     public fun rimuoviImpronta(voceRef: VoceRef) {

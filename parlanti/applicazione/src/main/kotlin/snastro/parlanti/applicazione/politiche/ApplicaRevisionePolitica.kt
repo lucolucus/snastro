@@ -6,6 +6,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.mappa
 import snastro.kernel.poi
+import snastro.parlanti.applicazione.comandi.chiaveSorgenteProvvisoria
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
@@ -145,7 +146,10 @@ public class ApplicaRevisionePolitica(
             }
             val impronta: Impronta =
                 estrattore.estrai(decodificatore.campioni(voceRef.registrazioneId, voce.intervalli))
-            parlante.registraImpronta(voceRef, impronta).poi { parlanti.salva(parlante) }
+            // TODO(option-c follow-up): re-derivation moves to RiallineaImpronte (after commit); sorgente = the
+            // intervals decoded above.
+            val sorgente = chiaveSorgenteProvvisoria(voce.intervalli)
+            parlante.registraImpronta(voceRef, impronta, sorgente, estrattore.modello).poi { parlanti.salva(parlante) }
         }
     }
 
