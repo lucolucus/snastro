@@ -427,3 +427,11 @@
 2026-09-23T13:23:23Z	elenco-progetti	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode: small read-model -> verifier only, HIGH-only gating)
 2026-09-23T13:25:59Z	elenco-progetti	verifier	result	cycle=0	tier=deep	model=opus	PASS (2 mutants killed)
 2026-09-23T13:27:17Z	audio-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	(R0 critical path)
+2026-09-23T13:41:56Z	audio-progetto	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (6ac6507; SondaAudioFfmpeg + ArchivioAudioFile; 6 gate + 6 opt-in contract tests; NOTE worker ran gradlew --stop which kills shared daemons of sibling builds -> forbid in future prompts)
+2026-09-23T13:41:56Z	audio-progetto	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode)
+2026-09-23T13:43:54Z	fix-batch-9	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW (12d3143; titoliDelProgetto + contract; TitoloRegistrazione unico/chiave/pulisci mirrored with documento; 13 mutants killed)
+2026-09-23T13:43:54Z	fix-batch-9	verifier	dispatch	cycle=0	tier=deep	model=opus	(release mode: verifier only)
+2026-09-23T13:46:32Z	audio-progetto	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-148 interrupted copy untested: fixture uses a missing source, mutant (no verify + no temp cleanup) survives; production correct) -> rework cycle=1 (test seam, small)
+2026-09-23T13:46:32Z	audio-progetto	worker	dispatch	cycle=1	tier=standard	model=sonnet
+2026-09-23T13:56:36Z	audio-progetto	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (f0ae2dd; test-only seam; 3 mutants red)
+2026-09-23T13:56:36Z	audio-progetto	verifier	result	cycle=1	-	-	RELEASE MODE: composer gate on merged tree instead of a full verifier (test-only cycle, worker mutation evidence)
