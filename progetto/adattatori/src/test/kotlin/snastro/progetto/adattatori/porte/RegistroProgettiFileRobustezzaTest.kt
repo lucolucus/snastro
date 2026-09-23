@@ -92,6 +92,39 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
+    fun `AC-121 un percorso che e una cartella produce elenco vuoto senza crash e registra lancia`() {
+        val percorso = Files.createDirectory(cartella.resolve("e-una-cartella-non-un-file"))
+        val registro = RegistroProgettiFile(percorso)
+
+        assertEquals(emptyList(), registro.elenco()) // tollerante: nessun crash (AC-121)
+
+        assertFailsWith<IOException> { registro.registra(unaVoce()) } // rigoroso: non maschera il guasto da "vuoto"
+    }
+
+    @Test
+    fun `un guasto IO non di corruzione si propaga da registra aggiorna rimuovi ma elenco resta vuoto`() {
+        val file = cartella.resolve("progetti-recenti")
+        val scrittore = RegistroProgettiFile(file)
+        scrittore.registra(unaVoce())
+        val contenutoPrimaDelGuasto = Files.readString(file)
+
+        // Seam di lettura (come quello di scrittura usato da F1): un guasto DETERMINISTICO, non
+        // NoSuchFileException (file mancante) ne un problema di decodifica — es. un errore disco
+        // transitorio o un permesso negato momentaneamente.
+        val registroGuasto = RegistroProgettiFile(file, leggiBytes = { throw IOException("guasto IO simulato") })
+
+        assertEquals(emptyList(), registroGuasto.elenco()) // tollerante
+
+        assertFailsWith<IOException> { registroGuasto.registra(unaVoce(percorso = "/altro/Assemblea.snastro")) }
+        assertFailsWith<IOException> {
+            registroGuasto.aggiorna(unaVoce().percorso, numRegistrazioni = 9, ultimaAttivita = Instant.now())
+        }
+        assertFailsWith<IOException> { registroGuasto.rimuovi(unaVoce().percorso) }
+
+        assertEquals(contenutoPrimaDelGuasto, Files.readString(file)) // mai toccato dai guasti sopra
+    }
+
+    @Test
     fun `F2 una riga malformata tra righe valide non cancella le altre e il prossimo registra le conserva`() {
         val file = cartella.resolve("progetti-recenti")
         val buona1 = "id-1\tConsiglio comunale\t/progetti/Consiglio comunale.snastro\t1\t2026-09-23T10:15:30Z"
@@ -129,12 +162,36 @@ class RegistroProgettiFileRobustezzaTest {
     }
 
     @Test
-    fun `F2 un file non decodificabile come UTF-8 produce un elenco vuoto`() {
+    fun `F2 un file interamente non decodificabile come UTF-8 produce un elenco vuoto`() {
         val file = cartella.resolve("progetti-recenti")
         Files.write(file, byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x82.toByte()))
         val registro = RegistroProgettiFile(file)
 
         assertEquals(emptyList(), registro.elenco())
+    }
+
+    @Test
+    fun `F2 una riga non decodificabile come UTF-8 tra righe valide non cancella le altre e sopravvive a registra`() {
+        val file = cartella.resolve("progetti-recenti")
+        val buona1 = "id-1\tConsiglio comunale\t/progetti/Consiglio comunale.snastro\t1\t2026-09-23T10:15:30Z\n"
+            .toByteArray(Charsets.UTF_8)
+        val corrotta = byteArrayOf(0x80.toByte(), 0x81.toByte(), 0x82.toByte(), '\n'.code.toByte())
+        val buona2 = "id-4\tConsulta\t/progetti/Consulta.snastro\t2\t2026-09-23T09:00:00Z\n".toByteArray(Charsets.UTF_8)
+        Files.write(file, buona1 + corrotta + buona2)
+        val registro = RegistroProgettiFile(file)
+
+        assertEquals(
+            setOf("/progetti/Consiglio comunale.snastro", "/progetti/Consulta.snastro"),
+            registro.elenco().map { it.percorso }.toSet(),
+        )
+
+        registro.registra(unaVoce(progettoId = ProgettoId("id-5"), percorso = "/progetti/Nuovo.snastro"))
+
+        val dopo = RegistroProgettiFile(file)
+        assertEquals(
+            setOf("/progetti/Consiglio comunale.snastro", "/progetti/Consulta.snastro", "/progetti/Nuovo.snastro"),
+            dopo.elenco().map { it.percorso }.toSet(),
+        )
     }
 
     @Test

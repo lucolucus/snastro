@@ -6,7 +6,8 @@ import snastro.progetto.applicazione.porte.VoceRegistro
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
-import java.nio.charset.MalformedInputException
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
 import java.nio.file.Files
 import java.nio.file.NoSuchFileException
 import java.nio.file.Path
@@ -32,15 +33,19 @@ import java.util.concurrent.locks.ReentrantLock
  * content survives untouched, and the failure propagates as an exception (ADR 0003 — this port has
  * no `Esito` channel) (AC-120).
  *
- * A missing [file], or one whose bytes are not valid UTF-8 at all, is treated as an empty registry
- * rather than crashing the caller; a single malformed LINE (wrong field count, a numeric/date field
- * that doesn't parse) is skipped and every other line survives (AC-121). This is a deliberate
- * **exception to CR-7** ("no swallowed failure"), mandated by AC-121: the registry is a disposable
- * per-user cache (every entry is reconstructible by reopening the project), and there is no logging
- * sink yet to record what was discarded — this KDoc is the record until one exists. Every OTHER read
- * failure (e.g. a transient permission error) still propagates as an exception, in particular from
- * inside [registra]/[aggiorna]/[rimuovi]'s read-before-write, so a transient fault can never
- * masquerade as "empty" and overwrite still-valid content.
+ * Reading is split in two ([leggiTollerante]/[leggiRigoroso], both built on [leggiRighe]): a
+ * missing [file] is an empty registry either way (there is nothing to read yet — not a fault), and
+ * a single malformed LINE (undecodable bytes, wrong field count, a numeric/date field that doesn't
+ * parse) is always skipped, every other line survives ([decodificaRiga]/[analizzaRigaOSalta]) — a
+ * deliberate **exception to CR-7** ("no swallowed failure"), mandated by AC-121: the registry is a
+ * disposable per-user cache (every entry is reconstructible by reopening the project), and there is
+ * no logging sink yet to record what was discarded — this KDoc is the record until one exists.
+ * Beyond that, the two variants diverge: [leggiTollerante] (used by [elenco], read-only — it can
+ * overwrite nothing) also swallows every OTHER read failure (a directory at [file]'s path, a denied
+ * permission, an I/O error…) as an empty registry, so an unreadable file never crashes the caller
+ * (AC-121 literally); [leggiRigoroso] (used by [registra]/[aggiorna]/[rimuovi]'s read-before-write)
+ * lets every such failure propagate, so a transient/non-corruption fault can never masquerade as
+ * "empty" and cause an overwrite of still-valid content.
  *
  * Every read-modify-write ([registra]/[aggiorna]/[rimuovi]) is serialized by [sottoLock] (F4,
  * AC-328): first an in-process [ReentrantLock] keyed by the file's normalized absolute path (the
@@ -54,53 +59,77 @@ import java.util.concurrent.locks.ReentrantLock
  * guarantees a reader always sees either the whole old content or the whole new one, never a
  * partial write.
  *
- * [scriviRighe] is the temp-file-write step of [scrivi], defaulted to [scriviRigheSuDisco]; the
- * `internal` constructor lets a test substitute it with one that fails PART-WAY through, to prove
- * AC-120 without the non-portable "deny write permission on the folder" trick (F1).
+ * [scriviRighe] is the temp-file-write step of [scrivi], defaulted to [scriviRigheSuDisco];
+ * [leggiBytes] is the raw-bytes-read step of [leggiRighe], defaulted to [leggiBytesDaDisco]. The
+ * `internal` constructor lets a test substitute either with one that fails on demand, to prove
+ * AC-120/AC-121/AC-328 without non-portable tricks (permission bits, real second JVMs) (F1).
  */
 public class RegistroProgettiFile internal constructor(
     private val file: Path,
-    private val scriviRighe: (Path, List<String>) -> Unit,
+    private val leggiBytes: (Path) -> ByteArray = leggiBytesDaDisco,
+    private val scriviRighe: (Path, List<String>) -> Unit = scriviRigheSuDisco,
 ) : RegistroProgetti {
 
-    public constructor(file: Path) : this(file, scriviRigheSuDisco)
+    public constructor(file: Path) : this(file, leggiBytesDaDisco, scriviRigheSuDisco)
 
-    override fun elenco(): List<VoceRegistro> = leggi().sortedByDescending { it.ultimaAttivita }
+    override fun elenco(): List<VoceRegistro> = leggiTollerante().sortedByDescending { it.ultimaAttivita }
 
     override fun registra(v: VoceRegistro) {
         sottoLock(file) {
-            scrivi(leggi().filterNot { it.percorso == v.percorso } + v)
+            scrivi(leggiRigoroso().filterNot { it.percorso == v.percorso } + v)
         }
     }
 
     override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) {
         sottoLock(file) {
-            val correnti = leggi()
-            if (correnti.none { it.percorso == percorso }) return@sottoLock
-            scrivi(correnti.map { aggiornaVoce(it, percorso, numRegistrazioni, ultimaAttivita) })
+            val correnti = leggiRigoroso()
+            if (correnti.any { it.percorso == percorso }) {
+                scrivi(
+                    correnti.map {
+                        if (it.percorso == percorso) {
+                            it.copy(numRegistrazioni = numRegistrazioni, ultimaAttivita = ultimaAttivita)
+                        } else {
+                            it
+                        }
+                    },
+                )
+            }
         }
     }
 
     override fun rimuovi(percorso: String) {
         sottoLock(file) {
-            scrivi(leggi().filterNot { it.percorso == percorso })
+            scrivi(leggiRigoroso().filterNot { it.percorso == percorso })
         }
     }
 
-    /**
-     * A missing file, or a whole-file UTF-8 decode failure, is an empty registry; a malformed
-     * INDIVIDUAL line is skipped, every other line survives (F2 — see the class KDoc's CR-7 note).
-     */
-    private fun leggi(): List<VoceRegistro> = try {
-        Files.readAllLines(file, Charsets.UTF_8)
-            .mapIndexed { indice, riga -> if (indice == 0) rimuoviBom(riga) else riga }
-            .filter { it.isNotEmpty() }
-            .mapNotNull(::analizzaRigaOSalta)
+    /** [leggiRighe], but ANY read failure (missing file or not) is an empty registry (F2, AC-121). */
+    private fun leggiTollerante(): List<VoceRegistro> = try {
+        leggiRighe()
     } catch (ignored: NoSuchFileException) {
         emptyList()
-    } catch (ignored: MalformedInputException) {
+    } catch (ignored: IOException) {
         emptyList()
     }
+
+    /** [leggiRighe], but only a missing file is empty — every other read failure propagates (F2). */
+    private fun leggiRigoroso(): List<VoceRegistro> = try {
+        leggiRighe()
+    } catch (ignored: NoSuchFileException) {
+        emptyList()
+    }
+
+    /**
+     * Splits [file]'s raw bytes on line feeds BEFORE decoding, so one line's invalid UTF-8 bytes
+     * can never spoil another's ([decodificaRiga]); a line that the whole file DID decode but that
+     * is individually malformed (wrong field count, bad number, bad date) is skipped too, not fatal
+     * ([analizzaRigaOSalta]) (F2).
+     */
+    private fun leggiRighe(): List<VoceRegistro> =
+        spezzaInRighe(leggiBytes(file))
+            .mapIndexedNotNull { indice, bytes -> decodificaRiga(bytes, primaRiga = indice == 0) }
+            .filter { it.isNotEmpty() }
+            .mapNotNull(::analizzaRigaOSalta)
 
     /**
      * Write-to-temp-then-atomic-rename, sibling directory so the rename never crosses filesystems.
@@ -153,14 +182,6 @@ private fun sottoLock(file: Path, azione: () -> Unit) {
     }
 }
 
-private fun aggiornaVoce(
-    v: VoceRegistro,
-    percorso: String,
-    numRegistrazioni: Int,
-    ultimaAttivita: Instant,
-): VoceRegistro =
-    if (v.percorso == percorso) v.copy(numRegistrazioni = numRegistrazioni, ultimaAttivita = ultimaAttivita) else v
-
 /** A line the whole file DID decode but that is individually malformed is skipped, not fatal (F2). */
 private fun analizzaRigaOSalta(riga: String): VoceRegistro? = try {
     analizzaRiga(riga)
@@ -171,8 +192,6 @@ private fun analizzaRigaOSalta(riga: String): VoceRegistro? = try {
 } catch (ignored: DateTimeParseException) {
     null
 }
-
-private fun rimuoviBom(riga: String): String = riga.removePrefix(BOM)
 
 private fun analizzaRiga(riga: String): VoceRegistro {
     val parti = riga.split(SEPARATORE)
@@ -186,7 +205,36 @@ private fun analizzaRiga(riga: String): VoceRegistro {
     )
 }
 
-/** Writes [righe] to [temporaneo] and fsyncs before returning (F3) — durable before the rename. */
+/** Splits raw bytes on line feeds — BEFORE any decoding, so one invalid line never touches another. */
+private fun spezzaInRighe(bytes: ByteArray): List<ByteArray> {
+    val righe = mutableListOf<ByteArray>()
+    var inizio = 0
+    for (i in bytes.indices) {
+        if (bytes[i] == LF) {
+            righe += bytes.copyOfRange(inizio, i)
+            inizio = i + 1
+        }
+    }
+    if (inizio < bytes.size) righe += bytes.copyOfRange(inizio, bytes.size)
+    return righe
+}
+
+/**
+ * Decodes one line's bytes as strict UTF-8; a line that doesn't decode is skipped (returns `null`)
+ * instead of failing the whole file (F2) — [CodingErrorAction.REPORT] makes the failure explicit
+ * rather than silently replacing bytes with `?` inside an otherwise-valid field.
+ */
+private fun decodificaRiga(bytes: ByteArray, primaRiga: Boolean): String? = try {
+    val decoder = Charsets.UTF_8.newDecoder()
+        .onMalformedInput(CodingErrorAction.REPORT)
+        .onUnmappableCharacter(CodingErrorAction.REPORT)
+    val decodificata = decoder.decode(ByteBuffer.wrap(bytes)).toString()
+    if (primaRiga) decodificata.removePrefix(BOM) else decodificata
+} catch (ignored: CharacterCodingException) {
+    null
+}
+
+/** The default [RegistroProgettiFile.scriviRighe] step of [RegistroProgettiFile.scrivi] — fsyncs before returning. */
 private val scriviRigheSuDisco: (Path, List<String>) -> Unit = { temporaneo, righe ->
     val contenuto = righe.joinToString(separator = "") { "$it\n" }.toByteArray(Charsets.UTF_8)
     FileChannel.open(temporaneo, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use { canale ->
@@ -194,6 +242,9 @@ private val scriviRigheSuDisco: (Path, List<String>) -> Unit = { temporaneo, rig
         canale.force(true)
     }
 }
+
+/** The default [RegistroProgettiFile.leggiBytes] step of [RegistroProgettiFile.leggiRighe]. */
+private val leggiBytesDaDisco: (Path) -> ByteArray = Files::readAllBytes
 
 /** Best-effort fsync of [cartella] (F3) — makes the rename's directory entry durable too. */
 private fun forzaCartella(cartella: Path) {
@@ -235,6 +286,7 @@ private const val SEPARATORE = "\t"
 private const val BOM = "﻿"
 private const val SUFFISSO_TEMPORANEO = ".tmp"
 private const val SUFFISSO_LOCK = ".lock"
+private const val LF: Byte = '\n'.code.toByte()
 private const val INDICE_PROGETTO_ID = 0
 private const val INDICE_NOME = 1
 private const val INDICE_PERCORSO = 2
