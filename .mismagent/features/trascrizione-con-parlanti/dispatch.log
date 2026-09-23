@@ -270,3 +270,7 @@
 2026-09-23T11:25:34Z	conferma-attribuzione	code-review	dispatch	cycle=1	tier=deep	model=opus
 2026-09-23T11:25:34Z	revisione-policy	worker	dispatch	cycle=2	tier=deep	model=opus	(LAST cycle: RC-9 throwing fake + drop dead every-stubs; scope limited, option c comes as a fresh series)
 2026-09-23T11:26:34Z	catalogo-registrazioni	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-23T11:27:11Z	esegui-elaborazione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (cd5c514; V1,F1-F7,F9,F12 + Completata asserted; mutation-checked V1)
+2026-09-23T11:27:11Z	esegui-elaborazione	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:27:11Z	esegui-elaborazione	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-23T11:27:11Z	registro-progetti-file	worker	dispatch	cycle=0	tier=standard	model=sonnet
