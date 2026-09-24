@@ -34,6 +34,7 @@ import snastro.ui.modelli.ServizioModelliFinta
 import snastro.ui.modelli.StatoModelli
 import snastro.ui.registrazione.RegistrazioneUiStato
 import snastro.ui.registrazioni.RegistrazioniUiStato
+import snastro.ui.registrazioni.RigaRegistrazione
 import snastro.ui.registrazioni.StatoElaborazioneRiga
 import snastro.ui.testi.etichetta
 import java.nio.file.Files
@@ -43,6 +44,7 @@ import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -168,6 +170,98 @@ class ComposizioneR1Test {
     }
 
     @Test
+    fun `AC-478 annullare B in coda lo riporta a Trascrivi, C sale a In coda 1 e la coda non esegue mai B`() {
+        val barriera = CountDownLatch(1) // A resta in_corso finche' non la si apre
+        AmbienteR1(radice, DiarizzatoreConBarriera(barriera, DiarizzatoreFinta())).use {
+            val a = it.importa()
+            val b = it.importa()
+            val c = it.importa()
+            val presenter = costruisciRegistrazioniPresenterR1(grafoR0Di(it), it.collaboratori, it.r1) {}
+            it.r1.avviaElaborazione(AvviaElaborazione(a)).atteso()
+            attendiFinche(messaggio = "A in corso") {
+                it.r1.statiElaborazione(listOf(a)).single().fase == FaseElaborazione.DIARIZZAZIONE
+            }
+            attendiFinche(messaggio = "S2 con A in corso") {
+                rigaDi(presenter.stato.value, a) is StatoElaborazioneRiga.InCorso
+            }
+            presenter.avviaElaborazione(b) // S2 'Trascrivi' (reloads the list: queuing publishes no event)
+            attendiFinche(messaggio = "B in coda") {
+                rigaDi(presenter.stato.value, b) is StatoElaborazioneRiga.InAttesa
+            }
+            presenter.avviaElaborazione(c)
+            attendiFinche(messaggio = "B 'In coda (1)' annullabile, C 'In coda (2)'") {
+                val rigaB = rigaCompleta(presenter.stato.value, b)
+                rigaB?.elaborazione == StatoElaborazioneRiga.InAttesa(1) && rigaB.annullabile &&
+                    rigaDi(presenter.stato.value, c) == StatoElaborazioneRiga.InAttesa(2)
+            }
+
+            presenter.annullaElaborazione(b) // S2 'Annulla'
+
+            attendiFinche(messaggio = "B 'Trascrivi' e C 'In coda (1)' in S2") {
+                val rigaB = rigaCompleta(presenter.stato.value, b)
+                rigaB?.elaborazione == StatoElaborazioneRiga.NonAvviata && !rigaB.operazioneInCorso &&
+                    rigaDi(presenter.stato.value, c) == StatoElaborazioneRiga.InAttesa(1)
+            }
+            assertNull(rigaCompleta(presenter.stato.value, b)?.erroreRiga)
+            val vistaB = it.r1.statiElaborazione(listOf(b)).single()
+            assertEquals(StatoElaborazioneVista.NON_AVVIATA, vistaB.stato)
+            assertNull(vistaB.elaborazioneId, "nessuna riga elaborazione resta per B")
+
+            barriera.countDown()
+            attendiFinche(messaggio = "la coda esegue C dopo A") {
+                it.r1.statiElaborazione(listOf(c)).single().stato == StatoElaborazioneVista.COMPLETATA
+            }
+            assertEquals(StatoElaborazioneVista.NON_AVVIATA, it.r1.statiElaborazione(listOf(b)).single().stato)
+            assertEquals(listOf(a, c), it.decodificate.toList(), "la pipeline non e mai invocata per B")
+        }
+    }
+
+    @Test
+    fun `AC-460 la composizione R1 non offre Ritrascrivi su una riga completata`() {
+        AmbienteR1(radice).use {
+            val id = it.importa()
+            it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
+            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+            val presenter = costruisciRegistrazioniPresenterR1(grafoR0Di(it), it.collaboratori, it.r1) {}
+
+            attendiFinche(messaggio = "riga completata in S2") {
+                rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.Completata
+            }
+            val riga = checkNotNull(rigaCompleta(presenter.stato.value, id))
+            assertFalse(riga.ritrascriviDisponibile, "nessun campo ne' bottone 'Ritrascrivi' in R1")
+            assertFalse(riga.annullabile)
+        }
+    }
+
+    @Test
+    fun `AC-478 S3 riceve stati e AggiornamentiVista e segue lo stato della sua Registrazione senza polling`() {
+        val diarizzatore = DiarizzatoreTrattenibile(dueVoci)
+        AmbienteR1(radice, diarizzatore).use {
+            val id = it.importa()
+            it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
+            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+            val grafo = GrafoR1(grafoR0Di(it), ServizioModelliFinta(StatoModelli.Pronti), ApriEsternoFinta())
+            val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
+            val presenter = costruisciRegistrazionePresenterR1(grafo, it.collaboratori, it.r1, id, scopeS3)
+            attendiFinche(messaggio = "S3 modificabile") {
+                (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == false
+            }
+
+            // A second run over the existing Trascritto (not offered by R1's S2, AC-460): S3 hears of it.
+            val barriera = CountDownLatch(1).also { b -> diarizzatore.barriera = b }
+            it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
+            attendiFinche(messaggio = "S3 in sola lettura durante la nuova elaborazione") {
+                (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == true
+            }
+            barriera.countDown()
+            attendiFinche(messaggio = "S3 di nuovo modificabile a fine elaborazione") {
+                (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == false
+            }
+            scopeS3.cancel()
+        }
+    }
+
+    @Test
     fun `carry-over 3 il recupero gira prima della coda, un in_corso lasciato da un crash diventa fallita`() {
         val ambiente = AmbienteR1(radice)
         val id = ambiente.importa()
@@ -206,7 +300,10 @@ class ComposizioneR1Test {
     }
 
     private fun rigaDi(stato: RegistrazioniUiStato, id: RegistrazioneId): StatoElaborazioneRiga? =
-        (stato as? RegistrazioniUiStato.Dati)?.righe?.find { it.registrazioneId == id }?.elaborazione
+        rigaCompleta(stato, id)?.elaborazione
+
+    private fun rigaCompleta(stato: RegistrazioniUiStato, id: RegistrazioneId): RigaRegistrazione? =
+        (stato as? RegistrazioniUiStato.Dati)?.righe?.find { it.registrazioneId == id }
 
     private fun documento(ambiente: AmbienteR1): String? =
         ambiente.cartellaDocumenti().takeIf(Files::isDirectory)
@@ -243,6 +340,16 @@ class ComposizioneR1Test {
     ) : Diarizzatore {
         override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
             barriera.await()
+            return delegato.diarizza(c, numeroPersone)
+        }
+    }
+
+    /** A Diarizzatore that holds a run in DIARIZZAZIONE only while a [barriera] is set and still closed. */
+    private class DiarizzatoreTrattenibile(private val delegato: Diarizzatore) : Diarizzatore {
+        @Volatile var barriera: CountDownLatch? = null
+
+        override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
+            barriera?.await()
             return delegato.diarizza(c, numeroPersone)
         }
     }

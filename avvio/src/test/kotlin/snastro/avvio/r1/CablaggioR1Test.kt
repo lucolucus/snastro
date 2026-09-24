@@ -44,6 +44,13 @@ class CablaggioR1Test {
     }
 
     @Test
+    fun `AC-460 la composizione R1 non fornisce Ritrascrivi a S2`() {
+        val r1 = sorgenti.filter { it.path.contains("snastro/avvio/r1/") }
+        assertEquals(emptyList(), righeCon("ritrascrivi", r1))
+        assertTrue(righeCon("annullaElaborazione =", r1).isNotEmpty(), "AC-478 Annulla fornito a S2")
+    }
+
+    @Test
     fun `AC-341 AC-355 la shell R1 non include la sezione Parlanti`() {
         assertEquals(setOf(DestinazioneShell.REGISTRAZIONI), SEZIONI_SHELL_R1)
         assertEquals(SEZIONI_SHELL_R0, SEZIONI_SHELL_R1)

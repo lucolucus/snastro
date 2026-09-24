@@ -8,6 +8,7 @@ import snastro.avvio.CodaElaborazioni
 import snastro.avvio.ProgettoEsteso
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
+import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -17,7 +18,8 @@ import java.util.logging.Logger
 
 /**
  * The R1 (Trascrizione) collaborators of ONE open project, built by [EstensioneR1]: the Trascrizione
- * sources S2 needs (AC-355: [statiElaborazione], [avviaElaborazione]), the read-only S3 sources
+ * sources S2 needs (AC-355: [statiElaborazione], [avviaElaborazione]; AC-478: [annullaElaborazione], the
+ * `AnnullaElaborazioneServizio` over `eventi.unitaDiLavoro`), the read-only S3 sources
  * ([trascritto], [percorsoDocumento]), the Revisione commands (no UI in R1), and the two background
  * workers [ferma] waits for: the Elaborazione queue ([coda]) and the Documento regeneration
  * ([lavoroDocumento], the job `AbbonatoDocumentoEventi` runs under). [recuperoConcluso] completes once
@@ -27,6 +29,7 @@ import java.util.logging.Logger
 internal class CollaboratoriR1(
     val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
     private val avvia: (AvviaElaborazione) -> Esito<Unit>,
+    val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
     val trascritto: (RegistrazioneId) -> TrascrittoView?,
     val percorsoDocumento: (RegistrazioneId) -> String?,
     val revisione: ComandiRevisione,

@@ -8,10 +8,12 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
+import snastro.trascrizione.applicazione.eventi.ElaborazioneAnnullata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import snastro.trascrizione.applicazione.letture.FasiInCorso
@@ -22,16 +24,21 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
-/** AC-354: every Elaborazione/Revisione event and every phase change of FasiInCorso is a Cambiamento. */
+/**
+ * AC-354/AC-478: every Elaborazione/Revisione event (ElaborazioneAnnullata and TrascrittoSostituito
+ * included, ADR 0018) and every phase change of FasiInCorso is a Cambiamento.
+ */
 class AggiornamentiVistaTrascrizioneTest {
     private val id = RegistrazioneId("rec-1")
 
     @Test
-    fun `AC-354 ogni evento di Elaborazione e di Revisione produce un Cambiamento dopo il commit`() {
+    fun `AC-354 AC-478 ogni evento di Elaborazione e di Revisione produce un Cambiamento dopo il commit`() {
         val eventi: List<EventoPubblicato> = listOf(
             ElaborazioneAvviata(id, Instant.parse("2026-01-01T10:00:00Z")),
             ElaborazioneCompletata(id),
             ElaborazioneFallita(id, "interrotta"),
+            ElaborazioneAnnullata(id),
+            TrascrittoSostituito(id),
             VociUnite(id, VoceId(1), VoceId(2)),
             VoceDivisa(id, VoceId(1), VoceId(3), listOf(SegmentoId(1))),
             SegmentoRiassegnato(id, SegmentoId(1), VoceId(1), VoceId(2), daRimossa = false, aNuova = false),
