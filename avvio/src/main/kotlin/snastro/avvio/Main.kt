@@ -26,6 +26,7 @@ import snastro.kernel.Esito
 import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
 import snastro.ui.ShellRoute
+import snastro.ui.modelli.StatoModelli
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.registrazioni.RegistrazioniPresenter
@@ -187,9 +188,12 @@ internal fun eseguiSmoke(fixtureDir: String) {
             onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
             attendi { esisteTag("avvio-nav-modelli") }
             onNodeWithTag("avvio-nav-modelli").performClick()
+            // AC-556: `licenze()` now also lists the bundled fonts, so it is no longer the model count —
+            // the actual missing-models number comes from `StatoModelli.Mancanti` itself.
+            val numeroModelliMancanti = (modelliReali.stato.value as StatoModelli.Mancanti).numero
             attendi {
                 esisteTag("modelli-mancanti") &&
-                    esisteTesto(etichettaModelliMancanti(modelliReali.licenze().size)) &&
+                    esisteTesto(etichettaModelliMancanti(numeroModelliMancanti)) &&
                     esisteTesto(ETICHETTA_SCARICA)
             }
             salvaSchermata(outputDir, "s5")

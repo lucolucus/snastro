@@ -13,6 +13,7 @@ import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.LicenzaVista
 import snastro.ui.modelli.ServizioModelli
 import snastro.ui.modelli.StatoModelli
+import snastro.ui.stile.LICENZE_CARATTERI
 import java.io.IOException
 import java.io.UncheckedIOException
 import java.nio.file.InvalidPathException
@@ -61,8 +62,10 @@ internal class ServizioModelliProvisioning(
         }
     }
 
+    // AC-556: the S5 licences list gains the three bundled OFL fonts, appended here (the composition
+    // root) rather than in `:modelli`'s own catalogue — they are a `:ui` asset, not a downloaded model.
     override fun licenze(): List<LicenzaVista> =
-        catalogo.voci.map { LicenzaVista(it.id, it.ruolo, it.licenza, it.attribuzione) }
+        catalogo.voci.map { LicenzaVista(it.id, it.ruolo, it.licenza, it.attribuzione) } + LICENZE_CARATTERI
 
     private fun statoAttuale(): StatoModelli = try {
         if (pronti()) StatoModelli.Pronti else mancantiDi(mancanti())

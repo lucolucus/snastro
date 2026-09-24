@@ -8,7 +8,13 @@ const val MESSAGGIO_REGISTRAZIONI_VUOTO: String = "Nessuna registrazione. Trasci
 const val ETICHETTA_IMPORTA_FILE: String = "Importa file audio…"
 const val ETICHETTA_TRASCRIVI: String = "Trascrivi"
 const val ETICHETTA_RIPROVA: String = "Riprova"
-const val ETICHETTA_COMPLETATA: String = "Completata"
+
+/** AC-576: the `DropZone` subtitle ("M4A, MP3, WAV, FLAC · oppure" in the design system). */
+const val MESSAGGIO_FORMATI_AUDIO_SUPPORTATI: String = "M4A, MP3, WAV, FLAC"
+
+/** AC-576: the `BannerSn Errore` title for a failed import (same wording the design system's own
+ * `Banner` example uses). */
+const val ETICHETTA_IMPORTAZIONE_NON_RIUSCITA: String = "Importazione non riuscita"
 
 /** ADR 0014: the optional field next to 'Trascrivi'/'Riprova' — empty means automatic. */
 const val ETICHETTA_NUMERO_PERSONE: String = "Numero di persone"

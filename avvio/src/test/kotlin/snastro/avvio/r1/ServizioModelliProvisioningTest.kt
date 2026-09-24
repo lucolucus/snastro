@@ -11,6 +11,7 @@ import snastro.modelli.VoceCatalogo
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.LicenzaVista
 import snastro.ui.modelli.StatoModelli
+import snastro.ui.stile.LICENZE_CARATTERI
 import java.io.IOException
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
@@ -121,7 +122,17 @@ class ServizioModelliProvisioningTest {
 
     @Test
     fun `AC-231 licenze elenca ogni voce del catalogo`() {
-        assertEquals(listOf(LicenzaVista("vad-prova", "vad", "MIT", "Autori di prova")), servizio().licenze())
+        assertEquals(
+            listOf(LicenzaVista("vad-prova", "vad", "MIT", "Autori di prova")) + LICENZE_CARATTERI,
+            servizio().licenze(),
+        )
+    }
+
+    @Test
+    fun `AC-556 licenze include anche i tre caratteri OFL in coda alla lista dei modelli`() {
+        val licenze = servizio().licenze()
+
+        assertEquals(LICENZE_CARATTERI, licenze.takeLast(LICENZE_CARATTERI.size))
     }
 
     @Test

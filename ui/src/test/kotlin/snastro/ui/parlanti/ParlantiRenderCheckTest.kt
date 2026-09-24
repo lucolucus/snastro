@@ -74,9 +74,9 @@ private fun unaRiga(
 
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): sizing/overflow/contrast/state-rendering at both
- * sizes for the states the block spec pins — loading (AC-221), empty (AC-220), the list with an
- * eliminato row (AC-222), a rename-in-progress row with an inline error (AC-223), and the delete
- * confirmation (AC-225). [SchermataParlanti] renders directly from fixture `UiStato` values
+ * sizes, both themes, for the states the block spec pins — loading (AC-221), empty (AC-220), the list
+ * with an eliminato row (AC-222), a rename-in-progress row with an inline error (AC-223), and the
+ * delete confirmation (AC-225/577). [SchermataParlanti] renders directly from fixture `UiStato` values
  * (dev-architecture `#presenter`), exactly like [snastro.ui.registrazioni.RegistrazioniRenderCheckTest].
  */
 @OptIn(ExperimentalTestApi::class)
@@ -93,12 +93,28 @@ class ParlantiRenderCheckTest {
         verificaCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
+    fun `AC-221 caricamento mostra un indicatore a 1280x800 (scuro)`() =
+        verificaCaricamento(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-221 caricamento mostra un indicatore a 1024x640 (scuro)`() =
+        verificaCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
     fun `AC-220 lista vuota mostra il messaggio dedicato a 1280x800`() =
         verificaVuoto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
     fun `AC-220 lista vuota mostra il messaggio dedicato a 1024x640`() =
         verificaVuoto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-220 lista vuota mostra il messaggio dedicato a 1280x800 (scuro)`() =
+        verificaVuoto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-220 lista vuota mostra il messaggio dedicato a 1024x640 (scuro)`() =
+        verificaVuoto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
     fun `AC-222 la lista mostra Ricorrenti Occasionali ed Eliminati a 1280x800`() =
@@ -109,12 +125,28 @@ class ParlantiRenderCheckTest {
         verificaLista(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
+    fun `AC-222 la lista mostra Ricorrenti Occasionali ed Eliminati a 1280x800 (scuro)`() =
+        verificaLista(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-222 la lista mostra Ricorrenti Occasionali ed Eliminati a 1024x640 (scuro)`() =
+        verificaLista(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
     fun `AC-223 rinomina in corso con un errore inline a 1280x800`() =
         verificaRinominaConErrore(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
     fun `AC-223 rinomina in corso con un errore inline a 1024x640`() =
         verificaRinominaConErrore(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-223 rinomina in corso con un errore inline a 1280x800 (scuro)`() =
+        verificaRinominaConErrore(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-223 rinomina in corso con un errore inline a 1024x640 (scuro)`() =
+        verificaRinominaConErrore(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
     fun `AC-225 la finestra di eliminazione riporta il testo privacy a 1280x800`() =
@@ -124,85 +156,119 @@ class ParlantiRenderCheckTest {
     fun `AC-225 la finestra di eliminazione riporta il testo privacy a 1024x640`() =
         verificaConfermaEliminazione(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
-    private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent { SchermataParlanti(stato = ParlantiUiStato.Caricamento, azioni = AZIONI_VUOTE) }
-        onNodeWithTag("parlanti-indicatore-caricamento").assertIsDisplayed()
-        catturaPng("parlanti-caricamento", width, height)
-    }
+    @Test
+    fun `AC-225 la finestra di eliminazione riporta il testo privacy a 1280x800 (scuro)`() =
+        verificaConfermaEliminazione(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
 
-    private fun verificaVuoto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent { SchermataParlanti(stato = ParlantiUiStato.Dati(), azioni = AZIONI_VUOTE) }
-        onNodeWithText(MESSAGGIO_PARLANTI_VUOTO).assertIsDisplayed()
-        catturaPng("parlanti-vuoto", width, height)
-    }
+    @Test
+    fun `AC-225 la finestra di eliminazione riporta il testo privacy a 1024x640 (scuro)`() =
+        verificaConfermaEliminazione(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
-    private fun verificaLista(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent {
-            SchermataParlanti(
-                stato = ParlantiUiStato.Dati(
-                    ricorrenti = listOf(unaRiga(id = PARLANTE_1, nome = "Marco")),
-                    occasionali = listOf(
-                        unaRiga(
-                            id = PARLANTE_2,
-                            nome = "Ospite del 12/03/2026",
-                            tipoParlante = TipoParlanteVista.OCCASIONALE,
-                            riproduzioneAbilitata = false,
+    private fun verificaCaricamento(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataParlanti(
+                    stato = ParlantiUiStato.Caricamento,
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("parlanti-indicatore-caricamento").assertIsDisplayed()
+            catturaPng("parlanti-caricamento", width, height, scuro)
+        }
+
+    private fun verificaVuoto(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataParlanti(
+                    stato = ParlantiUiStato.Dati(),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText(MESSAGGIO_PARLANTI_VUOTO).assertIsDisplayed()
+            catturaPng("parlanti-vuoto", width, height, scuro)
+        }
+
+    private fun verificaLista(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataParlanti(
+                    stato = ParlantiUiStato.Dati(
+                        ricorrenti = listOf(unaRiga(id = PARLANTE_1, nome = "Marco")),
+                        occasionali = listOf(
+                            unaRiga(
+                                id = PARLANTE_2,
+                                nome = "Ospite del 12/03/2026",
+                                tipoParlante = TipoParlanteVista.OCCASIONALE,
+                                riproduzioneAbilitata = false,
+                            ),
                         ),
+                        eliminati = listOf(RigaParlanteEliminato(PARLANTE_ELIMINATO, "Luca")),
                     ),
-                    eliminati = listOf(RigaParlanteEliminato(PARLANTE_ELIMINATO, "Luca")),
-                ),
-                azioni = AZIONI_VUOTE,
-            )
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText(ETICHETTA_SEZIONE_RICORRENTI).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_SEZIONE_OCCASIONALI).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_SEZIONE_ELIMINATI).assertIsDisplayed()
+            onNodeWithText("Luca").assertIsDisplayed()
+            onNodeWithTag("parlanti-riproduzione-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsEnabled()
+            onNodeWithTag("parlanti-riproduzione-${PARLANTE_2.valore}", useUnmergedTree = true).assertIsNotEnabled()
+            onNodeWithTag("parlanti-promuovi-${PARLANTE_2.valore}", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithTag("parlanti-elimina-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            catturaPng("parlanti-lista", width, height, scuro)
         }
-        onNodeWithText(ETICHETTA_SEZIONE_RICORRENTI).assertIsDisplayed()
-        onNodeWithText(ETICHETTA_SEZIONE_OCCASIONALI).assertIsDisplayed()
-        onNodeWithText(ETICHETTA_SEZIONE_ELIMINATI).assertIsDisplayed()
-        onNodeWithText("Luca").assertIsDisplayed()
-        onNodeWithTag("parlanti-riproduzione-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsEnabled()
-        onNodeWithTag("parlanti-riproduzione-${PARLANTE_2.valore}", useUnmergedTree = true).assertIsNotEnabled()
-        onNodeWithTag("parlanti-promuovi-${PARLANTE_2.valore}", useUnmergedTree = true).assertIsDisplayed()
-        onNodeWithTag("parlanti-elimina-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
-        catturaPng("parlanti-lista", width, height)
-    }
 
-    private fun verificaRinominaConErrore(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        val errore = messaggioPer(ErroreParlanti.NomeGiaInUso("Anna"))
-        setContent {
-            SchermataParlanti(
-                stato = ParlantiUiStato.Dati(
-                    ricorrenti = listOf(unaRiga(operazioneInCorso = true, erroreRiga = errore)),
-                ),
-                azioni = AZIONI_VUOTE,
-            )
+    private fun verificaRinominaConErrore(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            val errore = messaggioPer(ErroreParlanti.NomeGiaInUso("Anna"))
+            setContent {
+                SchermataParlanti(
+                    stato = ParlantiUiStato.Dati(
+                        ricorrenti = listOf(unaRiga(operazioneInCorso = true, erroreRiga = errore)),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("parlanti-nome-${PARLANTE_1.valore}", useUnmergedTree = true)
+                .assertIsDisplayed()
+                .assertIsNotEnabled()
+            onNodeWithTag("parlanti-operazione-in-corso-${PARLANTE_1.valore}", useUnmergedTree = true)
+                .assertIsDisplayed()
+            onNodeWithTag("parlanti-errore-riga-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithText(errore).assertIsDisplayed()
+            catturaPng("parlanti-rinomina-errore", width, height, scuro)
         }
-        onNodeWithTag("parlanti-nome-${PARLANTE_1.valore}", useUnmergedTree = true)
-            .assertIsDisplayed()
-            .assertIsNotEnabled()
-        onNodeWithTag("parlanti-operazione-in-corso-${PARLANTE_1.valore}", useUnmergedTree = true)
-            .assertIsDisplayed()
-        onNodeWithTag("parlanti-errore-riga-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
-        onNodeWithText(errore).assertIsDisplayed()
-        catturaPng("parlanti-rinomina-errore", width, height)
-    }
 
-    private fun verificaConfermaEliminazione(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent {
-            SchermataParlanti(
-                stato = ParlantiUiStato.Dati(ricorrenti = listOf(unaRiga(confermaEliminazione = true))),
-                azioni = AZIONI_VUOTE,
-            )
+    private fun verificaConfermaEliminazione(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataParlanti(
+                    stato = ParlantiUiStato.Dati(ricorrenti = listOf(unaRiga(confermaEliminazione = true))),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("parlanti-conferma-eliminazione-${PARLANTE_1.valore}", useUnmergedTree = true)
+                .assertIsDisplayed()
+            onNodeWithText(MESSAGGIO_CONFERMA_ELIMINAZIONE_PARLANTE).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_CONFERMA_ELIMINAZIONE).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_ANNULLA).assertIsDisplayed()
+            catturaPng("parlanti-conferma-eliminazione", width, height, scuro)
         }
-        onNodeWithTag("parlanti-conferma-eliminazione-${PARLANTE_1.valore}", useUnmergedTree = true)
-            .assertIsDisplayed()
-        onNodeWithText(MESSAGGIO_CONFERMA_ELIMINAZIONE_PARLANTE).assertIsDisplayed()
-        onNodeWithText(ETICHETTA_CONFERMA_ELIMINAZIONE).assertIsDisplayed()
-        onNodeWithText(ETICHETTA_ANNULLA).assertIsDisplayed()
-        catturaPng("parlanti-conferma-eliminazione", width, height)
-    }
 
     @OptIn(ExperimentalTestApi::class)
-    private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int) {
-        val png = File(outputDir, "$nome-${width}x$height.png")
+    private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int, scuro: Boolean = false) {
+        val suffisso = if (scuro) "-scuro" else ""
+        val png = File(outputDir, "$nome$suffisso-${width}x$height.png")
         val bitmap = onRoot().captureToImage().toAwtImage()
         ImageIO.write(bitmap, "PNG", png)
         check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }

@@ -1,6 +1,7 @@
 package snastro.ui.testi
 
 /** S1 · Progetti screen labels, Italian (dev-architecture `#presenter`: UI strings live in `snastro.ui.testi`). */
+const val ETICHETTA_PROGETTI: String = "Progetti"
 const val MESSAGGIO_PROGETTI_VUOTO: String = "Nessun progetto. Crea il primo"
 const val ETICHETTA_NUOVO_PROGETTO: String = "Nuovo progetto"
 const val ETICHETTA_NOME_PROGETTO: String = "Nome progetto"
