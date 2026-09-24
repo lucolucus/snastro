@@ -13,6 +13,9 @@ import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -43,10 +46,13 @@ class StileRenderCheckTest {
 
     private fun sfondo(scuro: Boolean) = if (scuro) ColoriScuri.ground else ColoriChiari.ground
 
+    // riduciMovimento is always pinned `true` here (never left to auto-detection): a captured PNG
+    // is a still frame regardless, but pinning also means no fixture ever builds a running
+    // `rememberInfiniteTransition` (AC-565's pulse) inside a headless Compose UI test.
     private fun fissaggio(nomeComponente: String, scuro: Boolean, contenuto: @Composable () -> Unit) =
         runDesktopComposeUiTest(LARGHEZZA_PX, ALTEZZA_PX) {
             setContent {
-                SnastroTema(scuro = scuro) {
+                SnastroTema(scuro = scuro, riduciMovimento = true) {
                     Surface(color = sfondo(scuro)) {
                         Column(Modifier.padding(SnastroMisure.space4)) { contenuto() }
                     }
@@ -120,13 +126,15 @@ class StileRenderCheckTest {
 
     @Test
     fun `AC-565 il testo di InCoda mostra la posizione`() = runDesktopComposeUiTest {
-        setContent { SnastroTema { ChipStato(TipoChipStato.InCoda(2)) } }
+        setContent { SnastroTema(riduciMovimento = true) { ChipStato(TipoChipStato.InCoda(2)) } }
         onNodeWithText("In coda · 2").assertIsDisplayed()
     }
 
     @Test
     fun `AC-565 InCorso mostra la fase e il tempo trascorso in formato AC-557`() = runDesktopComposeUiTest {
-        setContent { SnastroTema { ChipStato(TipoChipStato.InCorso("Separazione voci", 192_000)) } }
+        setContent {
+            SnastroTema(riduciMovimento = true) { ChipStato(TipoChipStato.InCorso("Separazione voci", 192_000)) }
+        }
         onNodeWithText("Separazione voci").assertIsDisplayed()
         onNodeWithText("3:12").assertIsDisplayed()
     }
@@ -225,25 +233,44 @@ class StileRenderCheckTest {
     }
 
     @Test
-    fun `AC-570 focus chiaro`() = verificaFocus(scuro = false)
+    fun `AC-570 focus bottone chiaro`() = verificaFocusBottone(scuro = false)
 
     @Test
-    fun `AC-570 focus scuro`() = verificaFocus(scuro = true)
+    fun `AC-570 focus bottone scuro`() = verificaFocusBottone(scuro = true)
 
-    private fun verificaFocus(scuro: Boolean) = runDesktopComposeUiTest(LARGHEZZA_PX, ALTEZZA_PX) {
+    // One Primario alone, focused — a separate fixture from the field (a shared setContent that
+    // requests focus on two nodes in turn leaves only the LAST one focused: the button's ring never
+    // actually rendered before).
+    private fun verificaFocusBottone(scuro: Boolean) = runDesktopComposeUiTest(LARGHEZZA_PX, ALTEZZA_PX) {
         setContent {
-            SnastroTema(scuro = scuro) {
+            SnastroTema(scuro = scuro, riduciMovimento = true) {
                 Surface(color = sfondo(scuro)) {
-                    Column(
-                        modifier = Modifier.padding(SnastroMisure.space4),
-                        verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3),
-                    ) {
+                    Column(Modifier.padding(SnastroMisure.space4)) {
                         BottoneSn(
                             etichetta = "Trascrivi",
                             onClick = {},
                             variante = VarianteBottone.Primario,
                             modifier = Modifier.testTag("focus-bottone"),
                         )
+                    }
+                }
+            }
+        }
+        onNodeWithTag("focus-bottone").requestFocus()
+        catturaPng("focus-bottone", scuro)
+    }
+
+    @Test
+    fun `AC-570 focus campo chiaro`() = verificaFocusCampo(scuro = false)
+
+    @Test
+    fun `AC-570 focus campo scuro`() = verificaFocusCampo(scuro = true)
+
+    private fun verificaFocusCampo(scuro: Boolean) = runDesktopComposeUiTest(LARGHEZZA_PX, ALTEZZA_PX) {
+        setContent {
+            SnastroTema(scuro = scuro, riduciMovimento = true) {
+                Surface(color = sfondo(scuro)) {
+                    Column(Modifier.padding(SnastroMisure.space4)) {
                         CampoSn(
                             valore = "",
                             onValoreCambiato = {},
@@ -254,9 +281,11 @@ class StileRenderCheckTest {
                 }
             }
         }
-        onNodeWithTag("focus-bottone").requestFocus()
-        onNodeWithTag("focus-campo").requestFocus()
-        catturaPng("focus", scuro)
+        // CampoSn merges label+input into ONE semantics node at its "focus-campo" tag (review
+        // MED-7's outer container) — but a text field's RequestFocus/SetText actions live on its
+        // OWN merge boundary node underneath, not on that outer node. Reach it directly.
+        onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("focus-campo"))).requestFocus()
+        catturaPng("focus-campo", scuro)
     }
 
     @OptIn(ExperimentalTestApi::class)

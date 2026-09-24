@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 private val PADDING_ORIZZONTALE_CAMPO = 10.dp
@@ -44,7 +45,10 @@ public fun CampoSn(
     val bordo = if (errore != null) colori.danger else colori.lineStrong
     val interazione = remember { MutableInteractionSource() }
     val focused by interazione.collectIsFocusedAsState()
-    Column {
+    // mergeDescendants: the caller's modifier (width/weight/testTag) sits on this outer container
+    // (review MED-7), so it must present the label+input+helper as ONE semantics node — otherwise a
+    // testTag placed here could never reach the BasicTextField's own RequestFocus/click actions.
+    Column(modifier = modifier.semantics(mergeDescendants = true) {}) {
         if (etichetta != null) {
             Text(text = etichetta, style = tipografia.caption, color = colori.inkMuted)
             Box(Modifier.height(SnastroMisure.space1))
@@ -70,7 +74,7 @@ public fun CampoSn(
                 textStyle = tipografia.body.copy(color = colori.ink),
                 cursorBrush = SolidColor(colori.accentInk),
                 interactionSource = interazione,
-                modifier = modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         val sotto = errore ?: aiuto

@@ -48,7 +48,10 @@ public fun CampoNumeroPersone(
     val bordo = if (errore) colori.danger else colori.lineStrong
     val interazione = remember { MutableInteractionSource() }
     val focused by interazione.collectIsFocusedAsState()
-    TooltipArea(tooltip = { Suggerimento() }) {
+    // mergeDescendants: the caller's modifier (width/testTag) sits on TooltipArea (review MED-7),
+    // so this box must present itself + the BasicTextField as ONE semantics node — otherwise a
+    // testTag placed there could never reach the field's own RequestFocus/click actions.
+    TooltipArea(tooltip = { Suggerimento() }, modifier = modifier) {
         Box(
             modifier = Modifier
                 .width(LARGHEZZA_CAMPO)
@@ -57,7 +60,7 @@ public fun CampoNumeroPersone(
                 .background(colori.raised, RoundedCornerShape(SnastroMisure.radiusControl))
                 .border(1.dp, bordo, RoundedCornerShape(SnastroMisure.radiusControl))
                 .padding(horizontal = SnastroMisure.space2)
-                .semantics { contentDescription = TOOLTIP_NUMERO_PERSONE },
+                .semantics(mergeDescendants = true) { contentDescription = TOOLTIP_NUMERO_PERSONE },
             contentAlignment = Alignment.Center,
         ) {
             if (valore.isEmpty()) {
@@ -80,7 +83,6 @@ public fun CampoNumeroPersone(
                 ),
                 cursorBrush = SolidColor(colori.accentInk),
                 interactionSource = interazione,
-                modifier = modifier,
             )
         }
     }
