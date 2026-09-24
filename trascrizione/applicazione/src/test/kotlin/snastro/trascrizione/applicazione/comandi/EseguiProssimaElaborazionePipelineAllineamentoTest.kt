@@ -64,7 +64,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         )
         elaborazioni.salva(unaInAttesa(id)).atteso()
 
-        servizio.esegui(EseguiProssimaElaborazione).atteso()
+        servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
         val salvata = elaborazioni.diRegistrazione(id).single()
         assertTrue(salvata.fallita)
@@ -99,7 +99,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         )
         elaborazioni.salva(unaInAttesa(id)).atteso()
 
-        servizio.esegui(EseguiProssimaElaborazione).atteso()
+        servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
         assertTrue(elaborazioni.diRegistrazione(id).single().completata)
         val trascritto = checkNotNull(trascritti.trova(id))

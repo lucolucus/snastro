@@ -187,7 +187,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 trascritti,
                 pipeline,
                 eventiTrascrizione,
-            ).esegui(EseguiProssimaElaborazione).atteso()
+            ).esegui(EseguiProssimaElaborazione()).atteso()
         }
     }
 }
