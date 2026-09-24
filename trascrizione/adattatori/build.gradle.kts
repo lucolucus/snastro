@@ -58,7 +58,7 @@ dependencies {
     implementation(project(":persistenza"))
 
     // org.sqlite.SQLiteException/SQLiteErrorCode: mapping a unique-constraint violation (INV-4, ADR
-    // 0007) to ElaborazioneGiaAperta/ElaborazioneGiaCompletata (CR-3 confinement allows org.sqlite here).
+    // 0007) to ElaborazioneGiaAperta (CR-3 confinement allows org.sqlite here).
     implementation(libs.sqlite.jdbc)
 
     // The ports' contracts + fakes (DecodificatoreAudioContratto, AllineatoreContratto,
@@ -69,6 +69,10 @@ dependencies {
 
     // databaseInMemoria() (testFixtures) — a fresh in-memory SnastroDatabase per contract test.
     testImplementation(testFixtures(project(":persistenza")))
+
+    // AC-445 (ADR 0018): the deferred-FK backstop test seeds/purges Parlanti rows with RAW SQL on its own
+    // in-memory JdbcSqliteDriver — never through the generated Parlanti queries (ADR 0018 enforced_by).
+    testImplementation(libs.sqldelight.driver)
 
     // Progetto's own commands (CreaProgettoServizio, AggiungiRegistrazioneServizio,
     // ModificaDataRegistrazioneServizio) + its port fakes (RegistrazioneRepositoryFinta,
