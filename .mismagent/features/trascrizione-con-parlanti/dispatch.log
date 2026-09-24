@@ -622,3 +622,6 @@
 2026-09-24T01:07:54Z	avvio-composizione	composer	merge	cycle=0	-	-	MERGED 003ca8e — R1 RUNNABLE
 2026-09-24T01:07:54Z	fix-batch-16	worker	dispatch	cycle=0	tier=deep	model=opus	close-during-transcription safety (MED-1 UI freeze + DB closed under live worker, MED-2 recognizer use-after-free), LOW-1 real S5 in smoke, LOW-3 chiudi on window close
 2026-09-24T01:07:54Z	avvio-composizione	composer	pre-release	cycle=0	-	-	MED testFixtures on app classpath (move Finte to smoke source set/module); LOW R0 guard only import lines; LOW FALLITA close() test
+2026-09-24T01:36:19Z	fix-batch-16	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW ef78cad (fixes proven red on old code)
+2026-09-24T01:36:19Z	fix-batch-16	composer	merge	cycle=0	-	-	MERGED ceb0a3e (gate + real e2e green)
+2026-09-24T01:36:19Z	fix-batch-16	composer	pre-release	cycle=0	-	-	LOW :ml-sherpa RiconoscitoreSherpaModelliTest reads per-user cache (env issue, fails without installed models); LOW S5 Mancanti shows count not model names; LOW window close may be unresponsive up to 3 s
