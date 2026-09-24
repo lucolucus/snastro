@@ -864,6 +864,10 @@ private class ElaborazioneRepositoryCheRifiutaLaConclusione(
 
     override fun inCorso(): List<Elaborazione> = delegata.inCorso()
 
+    override fun trova(id: ElaborazioneId): Elaborazione? = delegata.trova(id)
+
+    override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = delegata.rimuoviInAttesa(id)
+
     override fun salva(e: Elaborazione): Esito<Unit> = if (e.terminale) conclusione(e) else delegata.salva(e)
 
     override fun istantanea(): () -> Unit = delegata.istantanea()
@@ -901,6 +905,10 @@ private class ElaborazioneRepositoryCheRifiutaIlCompletamento(
     override fun inAttesa(): List<Elaborazione> = delegata.inAttesa()
 
     override fun inCorso(): List<Elaborazione> = delegata.inCorso()
+
+    override fun trova(id: ElaborazioneId): Elaborazione? = delegata.trova(id)
+
+    override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = delegata.rimuoviInAttesa(id)
 
     override fun salva(e: Elaborazione): Esito<Unit> = if (e.completata) {
         Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(e.registrazioneId))

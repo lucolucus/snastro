@@ -10,6 +10,8 @@ import snastro.persistenza.SnastroDatabase
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import java.time.Instant
@@ -34,6 +36,20 @@ public class ElaborazioneRepositorySql(private val db: SnastroDatabase) : Elabor
 
     override fun inCorso(): List<Elaborazione> =
         db.elaborazioneQueries.trovaInCorso().executeAsList().map { it.inDominio() }
+
+    override fun trova(id: ElaborazioneId): Elaborazione? =
+        db.elaborazioneQueries.trovaPerId(id.valore).executeAsOneOrNull()?.inDominio()
+
+    /**
+     * `eliminaInAttesa` carries the `in_attesa` condition in the DELETE itself (never a stale read); only when it
+     * deleted nothing is the row re-read, just to tell a started row from an absent one (AC-472).
+     */
+    override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = when {
+        db.elaborazioneQueries.eliminaInAttesa(id.valore).value > 0 -> Esito.Ok(Unit)
+        db.elaborazioneQueries.trovaPerId(id.valore).executeAsOneOrNull() != null ->
+            Esito.Errore(ElaborazioneGiaAvviata(id))
+        else -> Esito.Errore(ElaborazioneNonTrovata(id))
+    }
 
     override fun salva(e: Elaborazione): Esito<Unit> = try {
         val esistente = db.elaborazioneQueries.trovaPerId(e.id.valore).executeAsOneOrNull()

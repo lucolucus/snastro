@@ -9,6 +9,8 @@ import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
@@ -18,11 +20,13 @@ import snastro.trascrizione.dominio.StatoElaborazione.IN_CORSO
 import snastro.trascrizione.dominio.unaElaborazione
 import java.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /**
  * Consumer-driven contract of [ElaborazioneRepository] (boundary `repo-trascrizione`, ADR 0006/0007): INV-4
  * refused like the partial unique index (a second open → [ElaborazioneGiaAperta], store unchanged; several
- * `completata` are allowed, ADR 0018), `inAttesa` FIFO by creation (ties by id), `salva` as an
+ * `completata` are allowed, ADR 0018), `trova` by id, `rimuoviInAttesa` as a compare-and-delete (ADR 0018
+ * Amendment (b): only an `in_attesa` row goes; [ElaborazioneGiaAvviata] / [ElaborazioneNonTrovata] otherwise), `inAttesa` FIFO by creation (ties by id), `salva` as an
  * upsert whose transitions round-trip every field, no aliasing between callers and the store.
  * One subclass per implementation (the Finta here, `ElaborazioneRepositorySql` in `:trascrizione:adattatori`).
  */
@@ -58,6 +62,83 @@ public abstract class ElaborazioneRepositoryContratto {
         repo.salva(una(IN_ATTESA, "elaborazione-2")).erroreAtteso<ElaborazioneGiaAperta>()
 
         assertEquals(listOf(IN_CORSO), repo.diRegistrazione(REGISTRAZIONE).map { it.stato })
+    }
+
+    @Test
+    public fun `AC-433 due completata della stessa Registrazione sono salvate entrambe`() {
+        repo.salva(una(COMPLETATA, "elaborazione-1")).atteso()
+        val seconda = una(IN_ATTESA, "elaborazione-2", creataAlle = DOPO)
+        repo.salva(seconda).atteso()
+        seconda.avvia(DOPO).atteso()
+        repo.salva(seconda).atteso()
+        seconda.completa().atteso()
+
+        repo.salva(seconda).atteso()
+
+        assertEquals(
+            mapOf("elaborazione-1" to COMPLETATA, "elaborazione-2" to COMPLETATA),
+            repo.diRegistrazione(REGISTRAZIONE).associate { it.id.valore to it.stato },
+        )
+    }
+
+    @Test
+    public fun `AC-433 una aperta accanto a una o piu completata e accettata ma una seconda aperta no`() {
+        repo.salva(una(COMPLETATA, "elaborazione-1")).atteso()
+        repo.salva(una(COMPLETATA, "elaborazione-2", creataAlle = DOPO)).atteso()
+        repo.salva(una(IN_ATTESA, "elaborazione-3", creataAlle = ANCORA_DOPO)).atteso()
+        val seconda = una(IN_CORSO, "elaborazione-4", creataAlle = ANCORA_DOPO)
+
+        val errore = repo.salva(seconda).erroreAtteso<ElaborazioneGiaAperta>()
+
+        assertEquals(ElaborazioneGiaAperta(REGISTRAZIONE), errore)
+        assertEquals(
+            setOf("elaborazione-1", "elaborazione-2", "elaborazione-3"),
+            repo.diRegistrazione(REGISTRAZIONE).map { it.id.valore }.toSet(),
+        )
+    }
+
+    @Test
+    public fun `AC-463 trova restituisce l Elaborazione salvata oppure null`() {
+        val e = una(IN_CORSO, "elaborazione-1", numeroPersone = NumeroPersone.di(4).atteso())
+        repo.salva(e).atteso()
+
+        assertEquals(righe(e), righe(checkNotNull(repo.trova(ElaborazioneId("elaborazione-1")))))
+        assertNull(repo.trova(ElaborazioneId("sconosciuta")))
+    }
+
+    @Test
+    public fun `AC-463 rimuoviInAttesa su una in_attesa la toglie da diRegistrazione inAttesa e trova`() {
+        repo.salva(una(COMPLETATA, "elaborazione-1")).atteso()
+        repo.salva(una(IN_ATTESA, "elaborazione-2", creataAlle = DOPO)).atteso()
+
+        repo.rimuoviInAttesa(ElaborazioneId("elaborazione-2")).atteso()
+
+        assertEquals(listOf("elaborazione-1"), repo.diRegistrazione(REGISTRAZIONE).map { it.id.valore })
+        assertEquals(emptyList(), repo.inAttesa())
+        assertNull(repo.trova(ElaborazioneId("elaborazione-2")))
+    }
+
+    @Test
+    public fun `AC-463 rimuoviInAttesa su una avviata e ElaborazioneGiaAvviata e il repository non cambia`() {
+        val avviate = listOf(IN_CORSO, COMPLETATA, FALLITA).mapIndexed { i, stato ->
+            una(stato, "elaborazione-$i", registrazioneId = REGISTRAZIONI[i]).also { repo.salva(it).atteso() }
+        }
+
+        avviate.forEach { e ->
+            val errore = repo.rimuoviInAttesa(e.id).erroreAtteso<ElaborazioneGiaAvviata>()
+            assertEquals(ElaborazioneGiaAvviata(e.id), errore)
+            assertEquals(listOf(righe(e)), repo.diRegistrazione(e.registrazioneId).map(::righe), "${e.stato} intatta")
+        }
+    }
+
+    @Test
+    public fun `AC-463 rimuoviInAttesa su un id sconosciuto e ElaborazioneNonTrovata`() {
+        repo.salva(una(IN_ATTESA, "elaborazione-1")).atteso()
+
+        val errore = repo.rimuoviInAttesa(ElaborazioneId("sconosciuta")).erroreAtteso<ElaborazioneNonTrovata>()
+
+        assertEquals(ElaborazioneNonTrovata(ElaborazioneId("sconosciuta")), errore)
+        assertEquals(listOf("elaborazione-1"), repo.inAttesa().map { it.id.valore })
     }
 
     @Test

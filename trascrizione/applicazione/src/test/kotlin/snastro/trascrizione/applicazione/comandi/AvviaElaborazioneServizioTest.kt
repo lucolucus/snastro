@@ -170,7 +170,11 @@ class AvviaElaborazioneServizioTest {
 
         override fun inCorso(): List<Elaborazione> = emptyList()
 
+        override fun trova(id: ElaborazioneId): Elaborazione? = null
+
         override fun salva(e: Elaborazione): Esito<Unit> = Esito.Errore(ElaborazioneGiaAperta(e.registrazioneId))
+
+        override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = error("non usato da AvviaElaborazione")
     }
 
     private companion object {
