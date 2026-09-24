@@ -693,3 +693,4 @@
 2026-09-24T14:35:18Z	sa-b	composer	merge	-	-	-	MERGED 3c819c1 — new diarization reproduces experiment exactly (Via Roquel k=4 [1136,971,803,584], stability 0.940); real extractor live (1000 extractions 30 s)
 2026-09-24T14:37:15Z	sa-c	composer	merge	-	-	-	MERGED b7bb0ab (+ lettore-voci-da-trascrizione rework)
 2026-09-24T14:37:15Z	sa-d	worker	dispatch	-	deep	opus	S3 panel: Dai un nome a questa frase, pin/Togli conferma, Riassegna per somiglianza preview/apply + avvio-parlanti wiring
+2026-09-24T15:12:45Z	sa-d	composer	merge	-	-	-	MERGED 6947dd7 — semi-automatic separation complete and runnable
