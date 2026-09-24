@@ -61,6 +61,7 @@
   see `AvviaElaborazione` in Trascrizione.
 
 ## Tactical model — Trascrizione — every row names the consumer, or it is not written
+*(amended 2026-09-24 [user], ADR 0019: [INV-8] reworded, [INV-26], `ConfermaSegmento`, `RiassegnaSegmenti`, `SegmentoConfermato` — see "Amendment 2026-09-24 (ADR 0019)" below)*
 - **Aggregates / entities:**
   - `Elaborazione` (root, one per run) guards `StatoElaborazione`, `registrazioneId`, failure reason,
     and *(amended 2026-09-23 [user], ADR 0014)* the optional `NumeroPersone` (1..10), fixed at
@@ -133,6 +134,7 @@
   → side-effect at startup in the avvia-elaborazione application-service block
 
 ## Tactical model — Parlanti — every row names the consumer, or it is not written
+*(amended 2026-09-24 [user], ADR 0019 + its Amendment (b): [INV-27], `PianoRiassegnazione`, frase di riferimento — see "Amendment 2026-09-24 (ADR 0019)" below)*
 - **Aggregates / entities:**
   - `Parlante` (root) guards `Nome`, `TipoParlante`, `StatoParlante`, `progettoId` and its
     `ImprontaVocale` entities (≥ 0, one per contributing `VoceRef`, never averaged).
@@ -358,3 +360,52 @@ Source: [ADR 0018](../../decisions/0018-ritrascrivi.md) and the user's answers o
   stays — confirmed by the user) → application-service block sostituzione-trascritto-policy, reached through
   abbonato-revisione-parlanti (synchronous). [INV-21] / [INV-17] untouched.
 - **S3 during a re-run** is read-only (presentation rule, not an invariant): see ux-proposal amendment.
+
+## Amendment 2026-09-24 (ADR 0019 "Separazione semi-automatica" + its Amendment 2026-09-24 (b)) [user]
+Source: [ADR 0019](../../decisions/0019-separazione-semi-automatica.md) and the user's answers of 2026-09-24; manifest
+delta `manifest-deltas/2026-09-24-semi-automatica.md` (AC-480..AC-550). The texts above are kept; these add to them
+or replace them.
+
+**Trascrizione**
+- **[INV-8] (reworded):** the set of `Segmento`s (ids, intervals, text) is identical before and after any `Revisione`;
+  only their `Voce` and their `confermato` flag may change. → trascritto block (INV-8 test updated).
+- **[INV-26] (new):** a `Segmento` is `confermato` iff an explicit user act placed or confirmed it on its current `Voce`
+  (manual `riassegnare`, the moved subset of `dividere`, `ConfermaSegmento(true)`) and no `ConfermaSegmento(false)`
+  has revoked it since. `unire` keeps every flag. `riassegnaInBlocco` never moves a `confermato` `Segmento`, never
+  creates a `Voce` and never changes a flag. `crea` starts every flag at false. → trascritto block (6 INV-26 tests)
+  + `4.sqm` (persistenza-conferma-segmento).
+- **Commands:**
+  - `RiassegnaSegmento` returns the destination `VoceId` and confirms the moved `Segmento` → revisione (AC-516).
+  - **`ConfermaSegmento`** (registrazioneId, segmentoId, confermato) (actor: utente — "Dai un nome a una frase" case (a),
+    "Togli conferma") → revisione (AC-517).
+  - **`RiassegnaSegmenti`** (registrazioneId, spostamenti) (actor: utente, through "Riassegna per somiglianza" →
+    Applica): ONE transaction, all or nothing. Every entry is validated against the pre-batch state, and the `Voce`s
+    that are empty at the END of the batch are removed ([INV-6]). A stale plan → `TrascrittoCambiato`.
+    → riassegna-segmenti (AC-518..520) + trascritto (AC-511..515).
+- **Domain event:** `SegmentoConfermato` (registrazioneId, segmentoId, confermato) → read-model Trascritto (view
+  refresh, after commit) only.
+
+**Parlanti**
+- **Frase di riferimento (derived, never stored).** A frase di riferimento of an `attivo` `Parlante` P in a
+  `Registrazione` is a `confermato` `Segmento` of ≥ 1 s on a `Voce` attributed to P ("frasi confermate"). **If P has
+  none, every `Segmento` of ≥ 1 s of P's `Voce`s** is one instead ("intera Voce"; user 2026-09-24). An `eliminato`
+  never has any.
+- **[INV-27] (new, `piano-riassegnazione` read-model):** a `PianoRiassegnazione` of Registrazione R moves a `Segmento`
+  s to `Voce` T only if all of these hold:
+  - s is not `confermato`, is ≥ 1 000 ms, and lies on a `Voce` that is not frozen (unattributed, or attributed to a
+    reference `Parlante`);
+  - s is classified Sicura(P) for a reference `Parlante` P;
+  - T is P's target `Voce` (the lowest `voceId` attributed to P in R), and s is not already on T;
+  - after the whole plan, every reference `Parlante` still has ≥ 1 `Segmento` in R. Otherwise every move out of that
+    `Parlante`'s `Voce`s is dropped and counted as incerta, repeated until stable.
+
+  A reference `Parlante` is an `attivo` `Parlante` attributed in R with ≥ 1 frase di riferimento. A plan needs ≥ 2.
+  It writes nothing, keeps no embedding, and exposes no similarity number. → piano-riassegnazione (INV-27 table test,
+  AC-501..510, AC-543, AC-544).
+- **Read-model `PianoRiassegnazione`** (computed, never stored). Consumer: S3 via the `:avvio` glue, which shows it as
+  a **preview** ("Sposterò N frasi, M incerte restano dove sono") and, on **Applica**, sends exactly that plan as
+  `RiassegnaSegmenti`. Annulla discards it. → avvio-parlanti (AC-537, AC-549).
+- **Idempotence** holds only when every reference `Parlante` has confirmed sentences. With the "intera Voce" fallback,
+  a second run may move more, and the preview is the user's check.
+- **The `Proposta`** is fed by the real extractor (TitaNet-small, ADR 0019 §2) with **provisional** `SoglieFascia`
+  (user 2026-09-24: show them).

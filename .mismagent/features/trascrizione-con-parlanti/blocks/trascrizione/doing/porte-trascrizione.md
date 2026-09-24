@@ -19,6 +19,7 @@ related_adrs:
   - "0012"
   - "0014"
   - "0018"
+  - "0019"
 owns_boundaries:
   repo-trascrizione:
     projection: "in-process"
@@ -35,7 +36,7 @@ owns_boundaries:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      Diarizzatore: "interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)"
+      Diarizzatore: "interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014 rules; clustering per ADR 0019 §1.2: with k above the real count it tends to split one voice, never to fail); no sherpa type crosses the port (ADR 0004)"
       NumeroPersone: "see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)"
       Turno: "data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index"
   tec-riconoscitore:
@@ -98,7 +99,7 @@ Note: AMENDED 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: 
     - `DecodificatoreAudio`: interface { fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio); fun tutti(id: RegistrazioneId): CampioniAudio; fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio } — infra faults throw (ADR 0003); campioni count = (fine-inizio)*16
 - **tec-diarizzatore** (OWNED here — built before its consumers) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)
+    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014 rules; clustering per ADR 0019 §1.2: with k above the real count it tends to split one voice, never to fail); no sherpa type crosses the port (ADR 0004)
     - `NumeroPersone`: see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)
     - `Turno`: data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index
   - keys (minting rules):
@@ -151,4 +152,4 @@ Note: AMENDED 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: 
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0012, 0014, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004, ADR 0014.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0012, 0014, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004, ADR 0014.

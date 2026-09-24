@@ -20,6 +20,7 @@ related_adrs:
   - "0007"
   - "0009"
   - "0012"
+  - "0019"
 view_shape:
   voci: "List<{voceId, parlanteId?, nome?, tipoParlante?: TipoParlanteVista}>"
 view_sources:
@@ -103,10 +104,12 @@ Voce → Parlante identity for S3 (R1 split).
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
 - **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>? } — null iff no Trascritto (INV-5); Voci ordered by voceId
+    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>?; fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? } — null iff no Trascritto (INV-5); Voci ordered by voceId; segmenti = every current Segmento once, ordered by (inizioMs, segmentoId), NEVER text (ADR 0019 §4.1)
+    - `SegmentoDiVoce`: data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, confermato: Boolean) — NEVER text; supplier side: api-trascritto segmentiDiVoce(id) with its own SegmentoDiVoceVista, mapped 1:1
     - `VoceVista`: data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1).
+Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1).

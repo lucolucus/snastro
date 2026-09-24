@@ -98,7 +98,9 @@ For these, the glue is sequenced in **`:avvio`**, which implements a `:ui`-decla
 the per-project scope of ADR 0017 §3. **No context commands another context.** Parlanti still only
 reads Trascrizione (a consumer-owned port) and reacts to its events. The glue holds no domain rule:
 the plan is a Parlanti read-model, and every invariant is checked by the command that writes. The
-edges table is unchanged.
+edges table is unchanged. *(Amended 2026-09-24 [user], ADR 0019 Amendment (b).2: the glue shows the plan as a
+preview and sends the Trascrizione command only on "Applica", with the plan it holds in memory. Holding it is
+allowed because it carries ids and intervals only, never an embedding.)*
 
 ## Enforcement channels (all inside `./gradlew check`)
 1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).

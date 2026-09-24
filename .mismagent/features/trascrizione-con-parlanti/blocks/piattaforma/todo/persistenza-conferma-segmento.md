@@ -1,37 +1,36 @@
 ---
-id: "lettore-voci-da-trascrizione"
+id: "persistenza-conferma-segmento"
 type: "adapter"
-context: "parlanti"
+context: "piattaforma"
 side: "app"
-wave: 5
+wave: 4
 release: "R2"
-module: ":parlanti:adattatori (..porte)"
+module: ":persistenza"
 consumes:
   - "kernel-pl"
-  - "voci-per-parlanti"
 depends_on:
-  - "api-trascritto"
+  - "persistenza-ritrascrivi"
 related_adrs:
   - "0002"
   - "0003"
+  - "0006"
   - "0012"
   - "0019"
+tables:
+  - "segmento"
 ---
-# lettore-voci-da-trascrizione — LettoreVoci da VociDelTrascritto
+# persistenza-conferma-segmento — Migrazione 4.sqm (Segmento confermato)
 
 ## What to do
-Cross-context READ adapter: implements LettoreVoci by calling the supplier's public API VociDelTrascritto, mapping to the consumer's own DTO; delegates, never re-decides.
+Forward-only migration migrations/4.sqm (schema 4 → 5) whose only statement adds segmento.confermato INTEGER NOT NULL DEFAULT 0 CHECK (confermato IN (0, 1)), plus the Segmento.sq queries reading and writing the column (ADR 0019 §3). Existing rows get 0. No other table or index changes.
 
-REWORK 2026-09-24 (ADR 0019): implement LettoreVoci.segmenti over api-trascritto's segmentiDiVoce (1:1 map, never text). Test AC-524 (LettoreVociContratto real-on-real, including the AC-494 cases).
-
-Note: AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): implements LettoreVoci.segmenti over api-trascritto.segmentiDiVoce (1:1).
+Note: NEW 2026-09-24 (ADR 0019 §3, manifest delta 2026-09-24-semi-automatica; wave 4 = right after persistenza-ritrascrivi's 3.sqm, the delta's 'wave 3' corrected at fold): owns migrations/4.sqm (forward-only, ADR 0006 (a)) and the Segmento.sq queries that read and write the confermato column. Release R2 (only R2 actions write the flag), but the trascritto aggregate (R1 module) carries the field: this block is built BEFORE the repository-sql-trascrizione rework whatever the release (repository-sql-trascrizione depends_on it).
 
 ## Tasks
-- AC-137 LettoreVociContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)
-- AC-524 (ADR 0019) LettoreVociContratto, including the new segmenti cases of AC-494, passes real-on-real: lettore-voci-da-trascrizione over api-trascritto's segmentiDiVoce, seeded through the supplier's applicazione commands and testFixtures fakes (CR-1); the adapter never receives Segmento text
+- AC-521 migrations/4.sqm (schema 4 → 5, forward-only) holds exactly one statement, `ALTER TABLE segmento ADD COLUMN confermato INTEGER NOT NULL DEFAULT 0 CHECK (confermato IN (0, 1));`, and SnastroDatabase.Schema.version = 5; the CR-13 migration test stays green (Schema.migrate from empty equals Schema.create); fixture test: a DB frozen at version 4 holding a Trascritto of 3 Segmenti migrates to 5 with every row intact and confermato = 0; inserting confermato = 2 is refused
 
 ## Dependencies
-- Blocks built first: `api-trascritto` (wave 4)
+- Blocks built first: `persistenza-ritrascrivi` (wave 3)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -62,14 +61,5 @@ Note: AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 20
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>?; fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? } — null iff no Trascritto (INV-5); Voci ordered by voceId; segmenti = every current Segmento once, ordered by (inizioMs, segmentoId), NEVER text (ADR 0019 §4.1)
-    - `SegmentoDiVoce`: data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, confermato: Boolean) — NEVER text; supplier side: api-trascritto segmentiDiVoce(id) with its own SegmentoDiVoceVista, mapped 1:1
-    - `VoceVista`: data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text
-  - keys (minting rules):
-    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
 
-Sources: ADRs 0002, 0003, 0012, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process.
+Sources: ADRs 0002, 0003, 0006, 0012, 0019 (.mismagent/decisions/); ADR 0006, ADR 0019 §3, manifest delta 2026-09-24-semi-automatica.

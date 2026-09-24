@@ -23,6 +23,7 @@ related_adrs:
   - "0014"
   - "0015"
   - "0016"
+  - "0019"
 gated_by:
   - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016"
   - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
@@ -32,11 +33,12 @@ gated_by:
 ## What to do
 Wire ./gradlew benchmarkElaborazione -Pcampione=<path> to run one real Elaborazione with the real adapters, print per-phase timings and fail above 600 s (ADR 0011, R17). Not part of check.
 
-Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by.
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by. AMENDED 2026-09-24 (ADR 0019): runs after the diarizzatore-sherpa rework; prints the diarization split (AC-542).
 
 ## Tasks
 - AC-261 [opt-in, fuori gate] su un campione reale di 60 minuti con modelli scaricati, l'Elaborazione completa va da in_corso a completata in <= 600 s sull'M3 Pro; i tempi per fase sono stampati
 - AC-262 Il task fallisce se il tempo supera 600 s
+- AC-542 [opt-in, fuori gate] Besides the per-phase times (AC-261) the benchmark prints the diarizzazione sub-times: step 1 (the one native hold, i.e. the worst-case Mutex wait, ADR 0019 §1.5), the piece embeddings, and clustering + assignment; pass condition AC-261 (<= 600 s per 60 min; ADR 0019 estimates ≈ 346 s under load)
 
 ## Dependencies
 - **GATED — not ready until:** the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016; diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged
@@ -72,4 +74,4 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0011, 0012, 0013, 0014, 0015, 0016 (.mismagent/decisions/); ADR 0011 (+ R17).
+Sources: ADRs 0002, 0003, 0011, 0012, 0013, 0014, 0015, 0016, 0019 (.mismagent/decisions/); ADR 0011 (+ R17).

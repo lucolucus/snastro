@@ -19,19 +19,20 @@ related_adrs:
   - "0007"
   - "0012"
   - "0018"
+  - "0019"
 view_shape:
   registrazioneId: "RegistrazioneId"
   titolo: "String"
   dataRegistrazione: "LocalDate"
   durataMs: "Long"
-  segmenti: "List<{segmentoId, voceId, inizioMs, fineMs, testo}>"
+  segmenti: "List<{segmentoId, voceId, inizioMs, fineMs, testo, confermato}>"
   voci: "List<{voceId, etichetta}>"
 view_sources:
   registrazioneId: "← input"
   titolo: "← registrazione-per-trascrizione"
   dataRegistrazione: "← registrazione-per-trascrizione"
   durataMs: "← registrazione-per-trascrizione"
-  segmenti: "← Trascritto (ordered by inizio then segmentoId across Voci)"
+  segmenti: "← Trascritto (ordered by inizio then segmentoId across Voci); confermato ← Segmento.confermato (agg-trascritto)"
   voci: "← Trascritto; etichetta = 'Voce ' + voceId.numero"
 ---
 # trascritto-view — TrascrittoView — fetta Trascrizione (S3)
@@ -39,19 +40,22 @@ view_sources:
 ## What to do
 Trascrizione slice of S3 (R1/R8 split).
 
-Note: R8: documentoPath → documento.nomeFile; audioDisponibile → LettoreAudio.disponibile; colore → ui palette(voceId). Nome/tipo/parlanteId → identificazione-voci (R1).
+REWORK 2026-09-24 (ADR 0019): each segmenti item gains confermato as stored (view_shape). Test AC-523; AC-167 otherwise unchanged.
+
+Note: R8: documentoPath → documento.nomeFile; audioDisponibile → LettoreAudio.disponibile; colore → ui palette(voceId). Nome/tipo/parlanteId → identificazione-voci (R1). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): segmenti gain confermato (S3 pin marker, 'Togli conferma', reference-mode lines of the 'Riassegna per somiglianza' button).
 
 ### view_shape (field ← source)
 - `registrazioneId`: RegistrazioneId ← ← input
 - `titolo`: String ← ← registrazione-per-trascrizione
 - `dataRegistrazione`: LocalDate ← ← registrazione-per-trascrizione
 - `durataMs`: Long ← ← registrazione-per-trascrizione
-- `segmenti`: List<{segmentoId, voceId, inizioMs, fineMs, testo}> ← ← Trascritto (ordered by inizio then segmentoId across Voci)
+- `segmenti`: List<{segmentoId, voceId, inizioMs, fineMs, testo, confermato}> ← ← Trascritto (ordered by inizio then segmentoId across Voci); confermato ← Segmento.confermato (agg-trascritto)
 - `voci`: List<{voceId, etichetta}> ← ← Trascritto; etichetta = 'Voce ' + voceId.numero
 
 ## Tasks
 - AC-167 La vista espone registrazioneId, titolo, dataRegistrazione, durataMs, i segmenti (segmentoId, voceId, inizioMs, fineMs, testo) in ordine di tempo attraverso le Voci e le voci con etichetta 'Voce n'
 - AC-168 Registrazione senza Trascritto → null
+- AC-523 (ADR 0019) The view exposes confermato per Segmento as stored; AC-167 otherwise unchanged
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -88,9 +92,14 @@ Note: R8: documentoPath → documento.nomeFile; audioDisponibile → LettoreAudi
   - pinned types:
     - `Trascritto.crea`: (registrazioneId, durataMs: Long, segmenti: List<SegmentoIniziale>): Esito<Creato<Trascritto, TrascrittoCreato>> — Errore(NessunParlatoRilevato) on empty input
     - `SegmentoIniziale`: data class(voceIndice: Int, intervallo: IntervalloMs, testo: String) — trascrizione:dominio input VO
-    - `Trascritto.unisci`: (sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite>
-    - `Trascritto.dividi`: (origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa>
-    - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce
+    - `Trascritto.unisci`: (sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite> — keeps every confermato flag
+    - `Trascritto.dividi`: (origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa> — sets confermato = true on every Segmento of S (INV-26, ADR 0019)
+    - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce; the event carries a (the destination); sets confermato = true on the moved Segmento (INV-26, ADR 0019)
+    - `Trascritto.riassegnaInBlocco`: (spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>> — every entry validated against the PRE-batch state, moves applied in list order, then the Voci empty at the END of the batch removed (INV-6; a Voce emptied and refilled within the batch is kept); never creates a Voce, never changes a flag (INV-26); any stale entry (Segmento missing / not on da / interval differs / a missing / Segmento confermato) → Errore(TrascrittoCambiato(registrazioneId)); a == da or a duplicated segmentoId → Errore(RiassegnazioneNonAmmessa); a refusal leaves the state unchanged; empty list → Ok(emptyList()); events one per move in list order, aNuova = false, daRimossa = true on the LAST move out of each Voce empty at the end (ADR 0019 §4.5 + Amendment (b).1)
+    - `SpostamentoSegmento`: data class(segmentoId: SegmentoId, da: VoceId, a: VoceId, intervallo: IntervalloMs) — trascrizione:dominio input VO; intervallo = the Segmento's interval when planned (stale guard, also against a Ritrascrivi generation swap)
+    - `Trascritto.confermaSegmento`: (segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> — the same value → Ok(null), no change; unknown segment → Errore(SegmentoNonTrovato) (INV-26)
+    - `Segmento.confermato`: Boolean, read-only — true iff an explicit user act placed or confirmed the Segmento on its current Voce and no ConfermaSegmento(false) revoked it (INV-26); crea starts every flag at false
+    - `errors (ErroreTrascrizione, ErroriTrascrizione.kt)`: + TrascrittoCambiato(registrazioneId: RegistrazioneId) — ONE sweep owned by the trascritto rework, :ui MessaggiErrore included (ADR 0019 §4.5)
     - `read accessors`: voci: List<Voce>, segmenti: List<Segmento> (read-only copies)
   - keys (minting rules):
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
@@ -111,4 +120,4 @@ Note: R8: documentoPath → documento.nomeFile; audioDisponibile → LettoreAudi
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
     - `titolo`: minted by servizi-registrazione: source file name without extension; immutable
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0012, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8).
+Sources: ADRs 0002, 0003, 0006, 0007, 0012, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8).

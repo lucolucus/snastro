@@ -39,6 +39,7 @@ related_adrs:
   - "0012"
   - "0014"
   - "0018"
+  - "0019"
 ---
 # avvio-composizione — Composizione R1 (Trascrizione): coda, pipeline, Revisione, Documento, Modelli, S3/S5
 
@@ -62,7 +63,7 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): thi
 - AC-478 The R1 composition supplies AnnullaElaborazione to the S2 presenter (over eventi.unitaDiLavoro), and AggiornamentiVistaTrascrizione maps ElaborazioneAnnullata after commit to ONE Cambiamento(registrazioneId). E2E on databaseInMemoria with fake ML ports and a held pipeline: A is in_corso, B and C are queued; cancel B → B has no elaborazione row, S2 shows B 'Trascrivi' (NON_AVVIATA) and C 'In coda (1)'; when A ends the queue runs C, and the fake pipeline is never invoked for B
 
 ## Dependencies
-- Blocks built first: `avvio-r0` (wave 9), `avvio-coda-elaborazioni` (wave 9), `schermata-registrazione` (wave 8), `schermata-modelli` (wave 8), `repository-sql-trascrizione` (wave 4), `registrazione-da-progetto-tr` (wave 5), `decodifica-trascrizione` (wave 5), `lettore-trascritto-da-trascrizione` (wave 5), `scrittore-documento-md` (wave 5), `abbonato-documento` (wave 6), `modelli-provisioning` (wave 4), `annulla-elaborazione` (wave 4)
+- Blocks built first: `avvio-r0` (wave 9), `avvio-coda-elaborazioni` (wave 9), `schermata-registrazione` (wave 8), `schermata-modelli` (wave 8), `repository-sql-trascrizione` (wave 5), `registrazione-da-progetto-tr` (wave 5), `decodifica-trascrizione` (wave 5), `lettore-trascritto-da-trascrizione` (wave 5), `scrittore-documento-md` (wave 5), `abbonato-documento` (wave 6), `modelli-provisioning` (wave 4), `annulla-elaborazione` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -113,16 +114,17 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): thi
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
   - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit
-- **eventi-revisione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `revisione`, projection in-process, contract_test **consumer-driven**
+- **eventi-revisione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `revisione (VociUnite, VoceDivisa, SegmentoRiassegnato, SegmentoConfermato), riassegna-segmenti (SegmentoRiassegnato, N per batch)`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `VociUnite`: data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato
     - `VoceDivisa`: data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato
     - `SegmentoRiassegnato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato
+    - `SegmentoConfermato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, confermato: Boolean) : EventoPubblicato — after commit only (view refresh); no synchronous subscriber (ADR 0019 §3)
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
     - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
-  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. ADR 0019: a RiassegnaSegmenti commit publishes N SegmentoRiassegnato in list order — the synchronous revisione-policy runs once per event inside the one transaction (an Errore rolls the whole batch back); after-commit subscribers are coalesced per registrazioneId as today (one Rigenerazione, one RiallineaImpronte). SegmentoConfermato → after commit only
 - **nomi-per-documento** (consumed/implemented) — owner `porta-lettore-nomi`, supplier `nomi-delle-voci`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `LettoreNomi`: interface { fun nomi(id: RegistrazioneId): Map<VoceRef, String>; fun registrazioniCon(p: ParlanteId): List<RegistrazioneId> } — attributed Voci only; an eliminato Parlante still resolves to its Nome (INV-24)
@@ -155,4 +157,4 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): thi
     - `ErroreServizioModelli`: sealed interface : ErroreDominio (file ErroriServizioModelli.kt in snastro.ui.modelli — declared on the UI side because :ui must not depend on :modelli) { HashNonValido(modelloId: String); ArchivioNonValido(modelloId: String); ReteAssente; ScritturaFallita(motivo: String); DownloadFallito(motivo: String) } — 1:1 image of snastro.modelli.ErroreModelli, mapped in :avvio (avvio-composizione AC-329); same field name modelloId on both sides
     - `LicenzaVista`: data class(nome: String, ruolo: String, licenza: String, attribuzione: String)
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0008, 0010, 0012, 0014, 0018 (.mismagent/decisions/); architecture.md (:avvio), ADR 0004/0008/0010/0012, release pivot 2026-09-23 (R1 Trascrizione).
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0008, 0010, 0012, 0014, 0018, 0019 (.mismagent/decisions/); architecture.md (:avvio), ADR 0004/0008/0010/0012, release pivot 2026-09-23 (R1 Trascrizione).

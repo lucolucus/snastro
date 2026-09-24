@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial: the auto-start policy of ADR 0012 Amendment R2 / ADR 0004 Execution — superseded in place by their dated amendments, pointing here
 closes_spike: scelta-diarizzatore
 enforced_by: null
-amended: 2026-09-24   # see also "Amendment 2026-09-24 (c)" → ADR 0019 (config rows, catalogue embedding entry, Embedding reuse superseded). 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count" and "Amendment 2026-09-24 (b)" (Ritrascrivi, ADR 0018)
+amended: 2026-09-24   # see also "Amendment 2026-09-24 (c)" → ADR 0019 (segmentation file and clustering rows, Embedding reuse superseded; TitaNet-S entry added). 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count" and "Amendment 2026-09-24 (b)" (Ritrascrivi, ADR 0018)
 ---
 # 0014 — Diarization: sherpa-onnx pyannote-3.0 + WeSpeaker ResNet34-LM, threshold 0.4; optional "Numero di persone" → `num_clusters`
 
@@ -200,15 +200,17 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
 ## Amendment 2026-09-24 (c) — diarization config and embedding superseded by [ADR 0019](0019-separazione-semi-automatica.md) (pointer; ADR 0019 is the home)
 - **Superseded rows of the Decision table:**
   - Segmentation file: now `model.onnx` (fp32). The catalogue entry is unchanged.
-  - Embedding: now **NeMo TitaNet-small** (`embedding-nemo-titanet-small`).
-  - Clustering: **our own average-linkage cosine AHC** on ≤ 3 s pieces, then nearest-centroid
-    assignment (ADR 0019 §1.2). sherpa `FastClustering`'s labels are no longer used, and
-    `threshold = 0.4` is gone.
+  - Clustering: sherpa runs only as step 1, with an over-split `FastClustering` (`numClusters = -1`,
+    `threshold = 0.2`) and **ResNet34-LM kept**. Its labels are discarded.
+  - Voices now come from **TitaNet-small** piece embeddings (`embedding-nemo-titanet-small`, a new
+    entry) and **our own average-linkage cosine AHC**, followed by nearest-centroid assignment
+    (ADR 0019 §1.2). `threshold = 0.4` is gone; the auto cut is AHC distance 0.5.
 
   `windowShiftRatio`, the durations, the threads and CPU are unchanged.
-- **Superseded catalogue entry:** `embedding-wespeaker-resnet34-lm` leaves the catalogue. The
-  segmentation entry stays, and its file used becomes `model.onnx`.
-- **"Embedding reuse":** decided. TitaNet-small is ALSO the `EstrattoreImpronta` model (ADR 0019 §2).
+- **Catalogue:** add `embedding-nemo-titanet-small`. `embedding-wespeaker-resnet34-lm` stays (step 1
+  only). The segmentation entry stays, and its file used becomes `model.onnx`.
+- **"Embedding reuse":** decided. TitaNet-small, not ResNet34-LM, is the `EstrattoreImpronta` model
+  (ADR 0019 §2).
 - **"Numero di persone"** rules are unchanged (optional, 1..10, the real count, stored on the
   `Elaborazione`). With the new k-cut, a `k` above the real count tends to **split** one voice
   instead of merging people (ADR 0019 §1.3).

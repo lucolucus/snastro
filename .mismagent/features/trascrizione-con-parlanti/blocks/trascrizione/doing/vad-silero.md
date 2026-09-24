@@ -22,6 +22,7 @@ related_adrs:
   - "0015"
   - "0016"
   - "0017"
+  - "0019"
 gated_by:
   - "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015 (accepted 2026-09-24)"
   - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
@@ -76,6 +77,7 @@ Real Vad adapter on Silero (ADR 0013 catalogue entry URL + SHA-256 + licence add
 - **tec-ml-sherpa** (consumed/implemented) — owner `ml-sherpa-motore`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; holds ONE process-wide FAIR Mutex for one native session (ONE native call at a time); the wait is INTERRUPTIBLE: an interrupt while waiting → InterruptedException, and no session, no native load and no uso run; not reentrant; the Mutex is released on return or exception; every adapter holds it for ONE port call only (ADR 0017 §1)
+    - `snastro.ml.EmbeddingSherpa`: class(motore: MotoreSherpa, percorsoModello: Path, threadIntraOp: Int) : AutoCloseable { fun calcola(campioni: FloatArray): FloatArray; override fun close() } — ONE conSessione per calcola; the model is loaded at the first call, cached across calls and released by close (the RiconoscitoreSherpa pattern); Mutex rules per ADR 0017 §1; code owned by diarizzatore-sherpa (first user), shared by estrattore-impronta-sherpa (ADR 0019 §1.4)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013, 0015, 0016, 0017 (.mismagent/decisions/); spike allineamento-parole-voci, ADR 0004/0008/0013/0015/0016.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013, 0015, 0016, 0017, 0019 (.mismagent/decisions/); spike allineamento-parole-voci, ADR 0004/0008/0013/0015/0016.

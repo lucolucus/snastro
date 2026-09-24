@@ -7,7 +7,7 @@ pointers, ADR 0014 (diarization config + catalogue), ADR 0017 §1.1 (diarizza ho
 (transient embeddings) and architecture.md (cross-context UI glue in `:avvio`).
 
 New ACs start at **AC-480**. The current max is AC-479, plus AC-155bis and AC-186bis. This delta uses
-**AC-480…AC-542**.
+**AC-480…AC-550**: AC-543…AC-550 come from ADR 0019 Amendment 2026-09-24 (b).
 
 **Release.**
 - **R1:** the diarization change inside `diarizzatore-sherpa`, which fixes the unstable R1 result.
@@ -16,50 +16,68 @@ New ACs start at **AC-480**. The current max is AC-479, plus AC-155bis and AC-18
   `4.sqm`, `RiassegnaSegmenti`, `ConfermaSegmento`, `SegmentoConfermato`). They are harmless in R1,
   where no composition triggers them.
 
-**Open user points (ADR 0019 "Points for the user").** The ACs below encode the DEFAULTS:
-- explicit references only;
-- apply at once with no preview and no undo;
-- incerte stay where they are;
-- the Proposta goes live with provisional Fasce.
+**User points: ANSWERED 2026-09-24 [user]** (ADR 0019 Amendment 2026-09-24 (b)). The ACs below encode the
+answers:
+- references are the confirmed sentences first, then **the whole named Voce** as a fallback ((b).1; INV-27
+  reworded; AC-501/502/503/507/510 reworded; AC-543, AC-544);
+- a **preview** before apply, with Applica / Annulla, executing the SAME plan ((b).2; B8 re-pinned;
+  AC-515/530/531/533/537/538/539 reworded; AC-545…AC-549);
+- incerte stay where they are (default confirmed);
+- the Proposta goes live with provisional Fasce (default confirmed, AC-541).
 
-If the user picks another option, the ACs noted `[default §P-n]` change before the fold.
+Found at fold (rule 19):
+- `riassegnaInBlocco` validates against the pre-batch state and removes emptied Voci at the END of the
+  batch (AC-511/512/518 reworded);
+- AC-494 belongs to `porta-lettore-voci`, the owner of B3, not `porte-parlanti`;
+- the supplier side of `LettoreVoci.segmenti` needs its own Trascrizione API method, `api-trascritto`
+  (AC-550);
+- AC-484/485/488 are made exact from ADR 0019 §1.9 "Parametri misurati".
 
 ## Summary of the decision (see the ADR for the rationale)
 - **Diarization** (`diarizzatore-sherpa`; the `Diarizzatore` port is unchanged):
-  - step 1, sherpa `OfflineSpeakerDiarization` with seg-3.0 **fp32** + **TitaNet-small**. Only its
-    segments are kept, not its labels;
+  - step 1, sherpa `OfflineSpeakerDiarization` with seg-3.0 **fp32** + ResNet34-LM, over-split
+    with `FastClustering(-1, 0.2)`. Only its segments are kept, not its labels;
   - ≤ 3 s pieces;
   - one TitaNet-S embedding per piece;
-  - our own average-linkage cosine AHC, which cuts at k while ignoring clusters < min(60 s, 10 % of
-    speech), or cuts at `SOGLIA_AHC_AUTO` when there is no k;
-  - nearest-centroid assignment of every piece.
+  - our own average-linkage cosine AHC over pieces ≥ 1.5 s, which cuts at k while ignoring clusters
+    < min(60 s, 10 % of speech), or cuts at distance 0.5 when there is no k;
+  - duration-weighted centroids, then nearest-centroid assignment of every piece.
+
+  The settings come from the experiment scripts in the session scratch `diar2/`, which the
+  orchestrator hands to the worker.
 
   The pure clustering lives in `:trascrizione:adattatori ..ml`. The new `EmbeddingSherpa` wrapper
   lives in `:ml-sherpa`.
 - **Catalogue:**
   - new `embedding-nemo-titanet-small`;
-  - `embedding-wespeaker-resnet34-lm` removed;
+  - `embedding-wespeaker-resnet34-lm` is kept (step 1);
   - the segmentation entry is unchanged, but its file is now `model.onnx`.
 - **TitaNet-small is also the ImprontaVocale model** → `estrattore-impronta-sherpa` is unblocked. The
   `impronta-vocale-affidabilita` spike is partially answered, and `SoglieFascia` stays provisional.
 - **Reference sentences.** `Segmento.confermato` (Trascrizione, migration `4.sqm`, [INV-26]) is set
   by a manual riassegna, by dividi's S, and by `ConfermaSegmento`. A confirmed Segmento of ≥ 1 s on
-  a Voce attributed to an attivo P is a **frase di riferimento** of P.
+  a Voce attributed to an attivo P is a **frase di riferimento** of P. **If P has none, every
+  Segmento of ≥ 1 s of P's Voci is a reference** (the "intera Voce" fallback, Amendment (b).1).
 - **"Riassegna per somiglianza"** has three parts:
   - the Parlanti read-model `PianoRiassegnazione` ([INV-27]; no writes, no numbers);
   - the Trascrizione batch command `RiassegnaSegmenti`: ONE transaction, all or nothing, N
     `SegmentoRiassegnato`, a stale plan → `TrascrittoCambiato`;
-  - the glue in `avvio-parlanti`.
+  - the glue in `avvio-parlanti`: compute → **preview** → Applica runs the held plan (Amendment (b).2).
 
 ## BOUNDARIES
 - **B1 `agg-trascritto`** (owner trascritto) — add to `pinned_types`:
   - `Segmento.confermato`: `Boolean`, read-only, [INV-26].
   - `Trascritto.riassegnaInBlocco`: `(spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>>`.
-    It moves in list order, never creates a Voce, never changes a flag. Any stale entry
-    (Segmento missing / not on `da` / interval differs / `a` missing / Segmento confermato) →
-    `Errore(TrascrittoCambiato(registrazioneId))`. `a == da` or a duplicated segmentoId →
-    `Errore(RiassegnazioneNonAmmessa)`. A refusal leaves the state unchanged. An empty list →
-    `Ok(emptyList())`.
+    - Every entry is validated against the **pre-batch** state, all moves are applied in list order,
+      and then the Voci **empty at the end of the batch** are removed ([INV-6]). A Voce emptied and
+      refilled within the batch is kept (Amendment (b).1, batch semantics).
+    - It never creates a Voce and never changes a flag.
+    - Any stale entry (Segmento missing / not on `da` / interval differs / `a` missing / Segmento
+      confermato) → `Errore(TrascrittoCambiato(registrazioneId))`.
+    - `a == da` or a duplicated segmentoId → `Errore(RiassegnazioneNonAmmessa)`.
+    - A refusal leaves the state unchanged. An empty list → `Ok(emptyList())`.
+    - Events: one per move, in list order. `aNuova = false`. `daRimossa = true` on the LAST move out
+      of each Voce that is empty at the end.
   - `SpostamentoSegmento`: `data class(segmentoId: SegmentoId, da: VoceId, a: VoceId, intervallo: IntervalloMs)`, a `:trascrizione:dominio` input VO.
   - `Trascritto.confermaSegmento`: `(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?>`.
     The same value → `Ok(null)`, with no change. An unknown segment → `Errore(SegmentoNonTrovato)`.
@@ -82,6 +100,10 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
     **never text**.
   - Add `SegmentoDiVoce`: `data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, confermato: Boolean)`.
   - Add the consumer `piano-riassegnazione`.
+  - Supplier side (rule 19, AC-550): `api-trascritto` gains
+    `segmentiDiVoce(id: RegistrazioneId): List<SegmentoDiVoceVista>?`. `SegmentoDiVoceVista` is its own
+    Trascrizione-side type, with the same four fields and no text. `lettore-voci-da-trascrizione` maps
+    it 1:1, as `VoceVista` is today.
 - **B4 NEW `tec-classificatore-somiglianza`** (owner porte-parlanti; consumers piano-riassegnazione,
   classificatore-somiglianza; in-process, consumer-driven):
   - `ClassificatoreSomiglianza`:
@@ -94,7 +116,8 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - `ClassificatoreSomiglianzaFinta`: in testFixtures, with a configurable table from frase index to
     `Classificazione`.
 - **B5 NEW `piano-per-somiglianza`** (owner piano-riassegnazione; consumer avvio-parlanti; in-process,
-  consumer-driven: the glue is the consumer):
+  consumer-driven: the glue is the consumer). The shape is unchanged by Amendment (b). The plan is
+  **held** by the glue between the preview and Applica, and it carries no embedding and no number:
   - `PianoRiassegnazioneQuery`:
     `fun calcola(id: RegistrazioneId, progresso: (fatti: Int, totale: Int) -> Unit): Esito<PianoRiassegnazione>`.
     - Errors: `TrascrittoNonTrovato`, and the new `ErroreParlanti.RiferimentiInsufficienti(registrazioneId)`.
@@ -114,12 +137,19 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   0014)" with "(ADR 0014 rules; clustering per ADR 0019 §1.2: at most k; with k above the real count
   it tends to split one voice, never to fail)".
 - **B8 UI port (owner schermata-registrazione-identificazione, implemented by avvio-parlanti)** in
-  `snastro.ui.registrazione`:
+  `snastro.ui.registrazione`. It was RE-PINNED by Amendment (b).2 (preview):
   - `AzioniSomiglianza`, which has:
-    - `fun avvia(id: RegistrazioneId)`;
-    - `fun annulla(id: RegistrazioneId)`;
+    - `fun calcola(id: RegistrazioneId)`: computes and ends in `Anteprima`; it replaces `avvia`;
+    - `fun applica(id: RegistrazioneId)`: sends the HELD plan; it is ignored unless the state is
+      `Anteprima` with N > 0;
+    - `fun annulla(id: RegistrazioneId)`: interrupts a computation or discards a preview, and writes
+      nothing;
     - `val stato: StateFlow<Map<RegistrazioneId, StatoSomiglianza>>`.
-  - `StatoSomiglianza`: `sealed { InCorso(fatti: Int, totale: Int, ultimoAvanzamentoMs: Long); Esito(spostate: Int, incerte: Int); Errore(messaggio: ErroreSomiglianzaUi) }`.
+  - `StatoSomiglianza`: `sealed { InCorso(fatti: Int, totale: Int, ultimoAvanzamentoMs: Long); Anteprima(gruppi: List<GruppoSpostamenti>, incerte: Int); Applicazione; Esito(spostate: Int, incerte: Int); Errore(errore: ErroreSomiglianzaUi) }`.
+    A Registrazione with no entry is idle.
+  - `GruppoSpostamenti`: `data class(da: VoceId, a: VoceId, frasi: Int)`, ordered by (`a`, `da`). N is the
+    sum of `frasi`.
+  - `ErroreSomiglianzaUi`: `sealed { data object TrascrittoCambiato; data object RiferimentiInsufficienti; data class Altro(testo: String) }`.
   - Add `ComandiVoce.nominaFrase(registrazioneId, segmentoId, passi: PassiNominaFrase)` in the same
     per-project scope and pending state as ADR 0017 §3, keyed by the Segmento. The UI-side
     `PassiNominaFrase` (sealed: `SoloConferma | AttribuisciVoce(voceId, obiettivo) | Sposta(voceId) | NuovaVoce(obiettivo)`)
@@ -141,7 +171,8 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
 - Command `RiassegnaSegmenti(registrazioneId: RegistrazioneId, spostamenti: List<SpostamentoSegmento>)`.
 - AC-518 One `inTransazione`: `trova` → `riassegnaInBlocco` → ONE `salva` → the N
   `SegmentoRiassegnato` published in list order. Each has `aNuova = false`, and `daRimossa = true`
-  exactly on the move that empties its `da`. Test with a recording synchronous subscriber: N
+  exactly on the last move out of a Voce that is empty at the end of the batch (REWORDED, batch
+  semantics). Test with a recording synchronous subscriber: N
   deliveries in order, all inside the one transaction.
 - AC-519 If the synchronous subscriber returns `Esito.Errore` on the k-th event, the whole batch is
   rolled back. The Trascritto equals its pre-command state, and after-commit subscribers see nothing
@@ -151,29 +182,43 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   `Ok(Unit)` with no transaction write and no event.
 
 ### `piano-riassegnazione` (read-model, parlanti, R2, wave 5, `:parlanti:applicazione ..letture`; consumes kernel-pl, agg-parlante, agg-attribuzione, repo-parlanti, voci-per-parlanti, tec-decodifica-parlanti, tec-estrattore-impronta, tec-classificatore-somiglianza, sorgente-impronta-pl; related_adrs 0009, 0012, 0017, 0019)
-- invariants: INV-27 (text in ADR 0019 §4.4).
+- invariants: INV-27 (text in ADR 0019 **Amendment 2026-09-24 (b).1**, which REWORDS §4.4).
 - view_shape: `piano: {registrazioneId, spostamenti: List<{segmentoId, da, a, intervallo}>, incerte: Int}`.
   view_sources:
   - spostamenti ← `LettoreVoci.segmenti`, `AttribuzioneRepository.diRegistrazione`, `Parlante`
     (stato `attivo`), and `ClassificatoreSomiglianza` over transient `Impronta`s;
   - incerte ← the movable Segmenti that are Incerta or < 1 000 ms.
-- INV-27 table test: a Segmento moves only if all four conditions of INV-27 hold. One row per
-  failing condition, each giving no spostamento.
-- AC-501 References: `confermato` Segmenti of ≥ 1 000 ms on Voci attributed to an `attivo` Parlante.
-  - A Parlante `eliminato` has none, even if a confirmed Segmento sits on its Voce.
-  - A Parlante whose only confirmed Segmenti are < 1 000 ms has none.
+- INV-27 table test: a Segmento moves only if all four conditions of the reworded INV-27 hold (not
+  confermato / ≥ 1 s / not frozen; Sicura(P) for a reference P; not already on P's target; the
+  last-Segmento guard). One row per failing condition, each giving no spostamento.
+- AC-501 (REWORDED, Amendment (b).1) Reference modes (table on fixture Voci and Attribuzioni, with a
+  classifier fake that records the `riferimenti` map it receives):
+  - P with a confirmed 2 s Segmento and 5 unconfirmed ≥ 1 s Segmenti → P's references = the confirmed
+    one only ("frasi confermate"). The 5 others are movable.
+  - P with no confirmed Segmento, whose Voce holds 3 s, 2 s and 0.6 s Segmenti → references = the 3 s and
+    2 s ones ("intera Voce"). The 0.6 s one is an incerta.
+  - P whose only confirmed Segmento is 0.8 s → the "intera Voce" fallback applies.
+  - P attributed to Voci 2 and 4, neither confirmed → references = the ≥ 1 s Segmenti of BOTH Voci.
+  - An `eliminato` Parlante has none, even with a confirmed Segmento on its Voce.
   - A confirmed Segmento on an unattributed Voce is no one's reference.
-- AC-502 Fewer than 2 reference Parlanti → `Errore(RiferimentiInsufficienti)`, with 0 calls to
-  `DecodificatoreAudio` and `EstrattoreImpronta` (counting fakes).
-- AC-503 Frozen Voci: the Segmenti of a Voce attributed to a Parlante without references (or an
-  `eliminato`) are never extracted, never appear in `spostamenti` as `da`, and are never a target
-  `a`. Confirmed Segmenti never appear in `spostamenti`.
+- AC-502 (REWORDED) Fewer than 2 reference Parlanti, in either mode → `Errore(RiferimentiInsufficienti)`,
+  with 0 calls to `DecodificatoreAudio` and `EstrattoreImpronta` (counting fakes). Fixtures:
+  - one named attivo Parlante → error;
+  - two named attivo Parlanti with no confirmed sentence, each with a ≥ 1 s Segmento → NO error (fallback).
+- AC-503 (REWORDED) Frozen Voci are exactly the Voci attributed to an `eliminato`, or to an `attivo`
+  Parlante with no Segmento of ≥ 1 000 ms on any of its Voci.
+  - Their Segmenti are never extracted, never appear in `spostamenti` as `da`, and are never a target `a`.
+  - A named Voce whose Parlante has no confirmed sentence is NOT frozen: its non-confermato ≥ 1 s
+    Segmenti appear as candidates (fixture: one of them Sicura(Q) → a spostamento to Q's target).
+  - Confirmed Segmenti never appear in `spostamenti`.
 - AC-504 Movable Segmenti < 1 000 ms are not extracted. Each counts once in `incerte`.
 - AC-505 Target Voce = the lowest `voceId` among the Voci attributed to the chosen Parlante (fixture:
   P on Voci 4 and 2 → target 2). A Sicura Segmento already on the target → no spostamento. One on
   another Voce, including P's other Voce 4 → `spostamento(da, a = 2, intervallo = the Segmento's)`.
 - AC-506 Incerta → no spostamento, counted in `incerte`.
-- AC-507 Exactly one `estrai` per extracted Segmento (references + movable ≥ 1 s), each over
+- AC-507 (REWORDED) Exactly one `estrai` per extracted Segmento: the union of references and movable
+  Segmenti ≥ 1 s. A Segmento that is both an "intera Voce" reference and a candidate is extracted ONCE,
+  and its embedding is used in both roles (a counting fake keyed by interval). Each extraction is over
   `DecodificatoreAudio.campioni(id, SorgenteImpronta.di(listOf(intervallo)).intervalli)`.
   - No transaction is open: the fakes throw if one is.
   - `progresso(fatti, totale)` is called once after each `estrai`, with a constant `totale` equal to
@@ -183,9 +228,23 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
 - AC-509 `calcola` writes nothing: attribuzione / impronta_vocale / parlante row counts are unchanged.
   Two consecutive `calcola` calls make 2× the `estrai` calls, so no embedding is retained (ADR 0009;
   code review: no field or cache holds an `Impronta`).
-- AC-510 Idempotence: apply the plan to the `LettoreVoci` fake (move the Segmenti), keep the same
-  deterministic extractor fake, and call `calcola` again → `spostamenti` is empty and `incerte` is
-  unchanged.
+- AC-510 (REWORDED) Idempotence **when every reference Parlante is in the "frasi confermate" mode**.
+  Apply the plan to the `LettoreVoci` fake (move the Segmenti), keep the same deterministic extractor
+  fake, and call `calcola` again → `spostamenti` is empty and `incerte` is unchanged. With a fallback
+  Parlante, idempotence is NOT claimed (AC-543).
+- AC-543 (NEW, Amendment (b).1) The "intera Voce" references are derived from the CURRENT state at every
+  `calcola`, with no memory of earlier runs.
+  - Fixture: Q is in fallback mode on Voce 5. Run 1 plans moving Voce 3's Segmento s onto Q's target
+    Voce 5, and Voce 5's Segmento t away to P. Apply the plan to the fake and run `calcola` again.
+  - The classifier fake records that Q's references include s and exclude t.
+  - The plan never moves a `confermato` Segmento in either run.
+- AC-544 (NEW, Amendment (b).1) Last-Segmento guard: the plan never leaves a reference Parlante with no
+  Segmento in the Registrazione.
+  - Fixture: Q is in fallback mode with one Voce of 3 Segmenti ≥ 1 s, and the classifier fake gives all
+    three Sicura(P). The plan has NO spostamento out of Q's Voce, and those 3 count in `incerte`.
+  - Same fixture, but Q also has a second Voce that keeps an incerta Segmento → the 3 moves ARE planned.
+  - A cascade fixture: dropping Q's moves would empty R's Voce → R's moves are dropped too. The result
+    is deterministic (the same plan twice).
 - Notes: the plan's `intervallo` is the Segmento's current interval, the stale-guard of B1. The
   `PianoRiassegnazione` exposes no similarity (by type).
 
@@ -212,9 +271,15 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
 
 ## REWORKED BLOCKS
 ### `diarizzatore-sherpa` (R1, doing → REWORK 2026-09-24 (ADR 0019))
-- module stays `:ml-sherpa + :trascrizione:adattatori (..ml)`, plus the `:avvio` wiring edit in
-  `snastro.avvio.r1.SelezioneAdattatoriMl` (file paths and catalogue list only) and
-  `:modelli` `CatalogoDiarizzazione`.
+- module stays `:ml-sherpa + :trascrizione:adattatori (..ml)`, plus:
+  - the `:avvio` wiring edit in `snastro.avvio.r1.SelezioneAdattatoriMl`: three model files
+    (segmentation `model.onnx`, ResNet34-LM for step 1, TitaNet-S for the pieces), and the catalogue
+    list adds TitaNet-S;
+  - `:modelli` `CatalogoDiarizzazione`.
+- Reference implementation: the experiment scripts `diar2/common.py` (`diarize`, `embed`,
+  `stability`), `clus.py` (`pieces`, `ahc`, `cut`, `ahc_labels`, `centroids`) and
+  `stage1.py`/`stage2.py`, from session 1f80eddf's scratch. The orchestrator hands them to the
+  worker. They are not committed.
 - related_adrs +0017 +0019
 - KEEP AC-249, AC-251
 - REWRITE AC-250: the `:modelli` entries of `CatalogoDiarizzazione` must match ADR 0019 §1.7 /
@@ -224,11 +289,15 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - **`embedding-nemo-titanet-small`**: FILE, `nemo_en_titanet_small.onnx`, url, sha256
     `ad4a1802…789e`, dimensioneByte `40257283`, CC-BY-4.0, attribution text.
 
-  `embedding-wespeaker-resnet34-lm` is in neither `CatalogoDiarizzazione.voci` nor
-  `SelezioneAdattatoriMl.catalogo(REALI)`. The ADR 0019 `enforced_by` is green.
+  - `embedding-wespeaker-resnet34-lm`: unchanged and kept.
+
+  `CatalogoDiarizzazione.voci` = [segmentazione, resnet34-lm, titanet-small]. No main source of
+  `:avvio` or `:trascrizione:adattatori` references `model.int8.onnx`. The ADR 0019 `enforced_by` is
+  green.
 - REWRITE AC-373: `numeroPersone = k` → the AHC k-cut of ADR 0019 §1.2; the result has at most k
-  distinct `voceIndice`. Absent → the `SOGLIA_AHC_AUTO` cut. A `k` above the qualifying clusters
-  never fails the Elaborazione. `FastClustering`'s labels are never used.
+  distinct `voceIndice`. Absent → the `SOGLIA_AHC_AUTO = 0.5` cut. A `k` above the qualifying
+  clusters never fails the Elaborazione. Step 1 is configured with `numClusters = -1`,
+  `threshold = 0.2`, and its labels are never used (a test on the built `ConfigDiarizzazione`).
 - AC-480 (gate, synthetic embeddings, no natives) The clustering on pieces with 4 blobs of 100 s,
   80 s, 70 s and 20 s of speech, k = 3 → exactly 3 `voceIndice`. The 20 s blob's pieces are assigned
   to their nearest kept centroid, and no `voceIndice` stands for it alone.
@@ -241,11 +310,20 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   assign every piece to its nearest centroid. Non-empty speech in which nothing qualifies gives
   exactly one `voceIndice`.
 - AC-484 (gate) Determinism: the same input gives the same `List<Turno>`, twice in one JVM and across
-  instances. Ties break on the lowest index (a fixture with equal distances).
+  instances. Ties break on the lowest index: the merge picks the lowest (i, j) row-major, and the
+  assignment picks the lowest centroid index (a fixture with equal distances; ADR 0019 §1.9).
 - AC-485 (gate) Pieces:
   - a step-1 segment of 7 500 ms → 3 pieces of 2 500 ms; one of 3 000 ms → 1 piece;
   - no piece crosses a step-1 segment boundary;
-  - pieces < 1 000 ms stay out of the AHC but get a `voceIndice` by nearest centroid;
+  - pieces < 1 500 ms stay out of the AHC but get a `voceIndice` by nearest centroid;
+  - pieces are `max(1, ceil(d / 3000))` EQUAL parts with no overlap between them (ADR 0019 §1.9);
+  - the average linkage is weighted by piece COUNT (UPGMA), not by duration: a fixture where count
+    and duration weighting give different merge orders follows the count (ADR 0019 §1.9);
+  - the k-rule raises the cut from m = k until ≥ k clusters qualify, then keeps the k with the most
+    qualifying speech, summed over the pieces ≥ 1.5 s only;
+  - centroids are the duration-weighted sum of normalized embeddings, L2-normalized (a fixture where
+    weighting changes the winner);
+  - piece embeddings are normalized as v / (‖v‖ + 1e-9);
   - two overlapping step-1 segments both yield Turni ([INV-7], nothing trimmed);
   - every Turno has `inizio < fine`, in ms.
 - AC-486 (gate, injectable fake session / fake loader)
@@ -256,23 +334,25 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
 - AC-487 (gate) More than `PEZZI_MASSIMI_AHC = 6000` pieces → the AHC runs on every ⌈n/6000⌉-th piece
   (deterministic), and every piece still gets a `voceIndice`. Test with 13 000 synthetic pieces: it
   completes, and the subsample size is ≤ 6000.
-- AC-488 [@modelli, opt-in] Stability.
-  - Input: a real sample of ≥ 15 min from `sample/`, at its real speaker count k, as is and shifted by
-    +10 ms and +500 ms (leading silence).
-  - Measure: speech-time-weighted label agreement under the best one-to-one mapping against the
-    unshifted run.
-  - Pass: ≥ 0.90 for each shift. The test prints the three values.
-- AC-489 [@modelli, opt-in] Reproduction and calibration on Via Roquel, k = 4.
-  - Pass: 4 `voceIndice`, whose speech seconds, sorted, are each within ±15 % of 1136, 971, 803 and
-    584.
-  - The block records `SOGLIA_PASSO_1` and the calibrated `SOGLIA_AHC_AUTO` (sweep on Via Roquel and
-    NR4, reporting counts against the real 4 and 2) in its notes, for an ADR 0019 amendment.
+- AC-488 [@modelli, opt-in] Stability on Via Roquel, k = 4.
+  - Input: the recording as is and shifted by +10, +48 and +500 ms (leading silence).
+  - Measure: frame-level (10 ms) label agreement under the best one-to-one mapping (Hungarian), over
+    all 6 pairs, as in the experiment's `stability`. The shifts prepend 160 / 766 / 8000 zero samples.
+    Frames are `round((s − offset)·100)`, and a later Turno overwrites an earlier one. Only the frames
+    labelled in both runs count (ADR 0019 §1.9).
+  - Pass: mean ≥ 0.92 and min ≥ 0.90. The experiment measured 0.940 / 0.928.
+  - The test also prints NR4 at k = 2 (measured 0.72). This is information only, not a pass
+    condition (ADR 0019 §1.8).
+- AC-489 [@modelli, opt-in] Reproduction.
+  - Via Roquel, k = 4: 4 `voceIndice`, whose speech seconds, sorted, are each within ±15 % of 1136,
+    971, 803 and 584.
+  - Auto (`SOGLIA_AHC_AUTO = 0.5`): Via Roquel gives 4 voices of ≥ 60 s, and NR4 gives 3.
   - If AC-488 or AC-489 cannot pass, the block stops as BOUNCED to the architect. It never ships an
     unproven clustering.
 - AC-490 (code review) These named constants are defined once, in the adapter:
-  - `PEZZO_MS = 3000`, `DURATA_MINIMA_PEZZO_AHC_MS = 1000`, `DURATA_MINIMA_CLUSTER_MS = 60000`,
+  - `PEZZO_MS = 3000`, `DURATA_MINIMA_PEZZO_AHC_MS = 1500`, `DURATA_MINIMA_CLUSTER_MS = 60000`,
     `QUOTA_MINIMA_CLUSTER = 0.10`, `PEZZI_MASSIMI_AHC = 6000`;
-  - `SOGLIA_AHC_AUTO` and `SOGLIA_PASSO_1`;
+  - `SOGLIA_AHC_AUTO = 0.5` and `SOGLIA_PASSO_1 = 0.2`;
   - the step-1 settings (wsr 0.5, minDurationOn 0.3, minDurationOff 0.5).
 
   No duplicated literal.
@@ -283,8 +363,8 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
     failure;
   - at runtime, `com.k2fsa` appears only in `:ml-sherpa` (AC-245).
 - Notes: the pure clustering is `internal` in `snastro.trascrizione.adattatori.ml`. Its cosine is
-  its own; there is no shared math module. The experiment script is not in the repo; the settings
-  come from the orchestrator if available (ADR 0019 "Points for the user" 5).
+  its own; there is no shared math module. The experiment's k-cut loop (`ahc_labels`) is the
+  reference behaviour for AC-480/481.
 
 ### `ml-sherpa-motore` (R1, doing)
 - No AC change. Its boundary `tec-ml-sherpa` gains `EmbeddingSherpa` (B6). The code is written by
@@ -308,11 +388,13 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   sample, with no Elaborazione running, take ≤ 60 s in total on the M3 Pro. The test prints the time
   (ADR 0019 §4.7 cost estimate).
 
-### `porte-parlanti` (R2, doing → REWORK)
+### `porta-lettore-voci` (R2, doing → REWORK; reconciled at fold: the owner of B3 — the delta first put AC-494 on porte-parlanti)
 - AC-494 `LettoreVoci.segmenti` (B3):
   - `LettoreVociContratto` gains cases: null iff no Trascritto; every Segmento once, ordered by
     (inizio, segmentoId); `confermato` as stored; no text field (by type);
   - `LettoreVociFinta` supports it.
+
+### `porte-parlanti` (R2, doing → REWORK)
 - AC-495 The `ClassificatoreSomiglianza` port, `Classificazione`, `SoglieSomiglianza`,
   `ClassificatoreSomiglianzaFinta` and the abstract `ClassificatoreSomiglianzaContratto` exist as
   pinned in B4. `ErroreParlanti.RiferimentiInsufficienti(registrazioneId)` is added. `:ui`
@@ -330,23 +412,28 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - `riassegnaInBlocco` never changes a flag;
   - `confermaSegmento(s, false)` revokes.
 - INV-8 test updated: after each Revisione the (id, interval, text) set is identical.
-- AC-511 `riassegnaInBlocco` on a valid list:
-  - every Segmento ends on its `a`, in list order;
-  - one `SegmentoRiassegnato` per move, `aNuova = false`, `daRimossa` true exactly on the move that
-    empties `da`;
-  - an emptied Voce is removed ([INV-6]), and its number is never reused ([INV-12]);
+- AC-511 (REWORDED, batch semantics) `riassegnaInBlocco` on a valid list:
+  - every entry is validated against the pre-batch state, and every Segmento ends on its `a`;
+  - one `SegmentoRiassegnato` per move, in list order, `aNuova = false`, and `daRimossa` true exactly
+    on the LAST move out of each Voce that is empty at the end of the batch;
+  - the Voci empty at the end are removed ([INV-6]), and their numbers are never reused ([INV-12]);
+  - a Voce emptied and then refilled within the list is kept. Fixture: [s1: V2→V3, s2: V4→V2], where
+    s1 is V2's only Segmento → Ok, V2 still exists and holds s2, and no `daRimossa` for V2;
   - no Voce is created.
 - AC-512 `riassegnaInBlocco` refusals (table; state unchanged after each, compared by value):
   - Segmento missing, not on `da`, interval differs, `a` missing, Segmento `confermato` →
     `TrascrittoCambiato`;
   - `a == da`, duplicated segmentoId → `RiassegnazioneNonAmmessa`;
-  - one stale entry at the END of a 10-entry list → nothing applied.
+  - one stale entry at the END of a 10-entry list → nothing applied;
+  - an entry whose `a` is emptied by an EARLIER entry of the same list is NOT stale (pre-batch
+    validation).
 - AC-513 `confermaSegmento`: sets the flag and returns the event; the same value → `Ok(null)`; an
   unknown Segmento → `SegmentoNonTrovato`.
 - AC-514 Empty list → `Ok(emptyList())`, with the state unchanged.
 - AC-515 (sweep) `ErroreTrascrizione.TrascrittoCambiato` is added in ONE change, together with every
-  exhaustive `when`. `:ui` `MessaggiErrore` maps it to "La trascrizione è cambiata durante il
-  confronto: riprova". The pipeline's `motivo` table and the fakes compile.
+  exhaustive `when`. `:ui` `MessaggiErrore` maps it to "La trascrizione è cambiata dopo il confronto:
+  ricalcola l'anteprima" (REWORDED, Amendment (b).2). The pipeline's `motivo` table and the fakes
+  compile.
 
 ### `revisione` (application-service, doing → REWORK)
 - AC-516 `RiassegnaSegmentoServizio.esegui` returns `Esito<VoceId>`, the destination: the new VoceId
@@ -369,7 +456,17 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
 - view_shape: `segmenti: List<{segmentoId, voceId, inizioMs, fineMs, testo, confermato}>`.
 - AC-523 The view exposes `confermato` per Segmento as stored. AC-167 is otherwise unchanged.
 
-### `api-trascritto` + `lettore-voci-da-trascrizione` (doing → REWORK)
+### `api-trascritto` (doing → REWORK; split out at fold, rule 19)
+- view_shape `SegmentoDiVoceVista: segmentoId, voceId, intervallo, confermato` (≡ pinned type
+  `SegmentoDiVoce` of voci-per-parlanti ← Trascritto).
+- AC-550 (NEW) `segmentiDiVoce(id)`:
+  - it returns every current Segmento once, ordered by (inizio, segmentoId), with `confermato` as
+    stored;
+  - no Trascritto → null;
+  - the type has no text field (by type);
+  - AC-99 `segmenti(id)` with text is unchanged (Documento).
+
+### `lettore-voci-da-trascrizione` (doing → REWORK; depends_on api-trascritto)
 - AC-524 `LettoreVociContratto` (including the new `segmenti` cases of AC-494) passes real-on-real:
   `lettore-voci-da-trascrizione` over the Trascrizione read API, seeded through its applicazione
   commands and testFixtures fakes (CR-1). The API exposes the Segmenti with `confermato`, and never
@@ -405,16 +502,20 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - "In attesa dell'elaborazione…" + "Annulla" after `SOGLIA_ATTESA_VISIBILE_MS`;
   - an error (e.g. `NomeGiaInUso` on step (d)) is shown inline in plain words, and the new Voce
     appears unnamed.
-- AC-530 A "Riassegna per somiglianza" button sits in the Voci panel header.
+- AC-530 (REWORDED, Amendment (b).1/(b).6) A "Riassegna per somiglianza" button sits in the Voci panel header.
   - It is enabled iff all of these hold:
-    - ≥ 2 `attivo` Parlanti have ≥ 1 frase di riferimento: a confirmed Segmento of ≥ 1 000 ms on a
-      Voce attributed to them, derived from trascritto-view + identificazione-voci;
+    - ≥ 2 `attivo` Parlanti attributed in this Registrazione each have ≥ 1 Segmento of ≥ 1 000 ms on
+      their Voci, so each has a reference in either mode (derived from trascritto-view +
+      identificazione-voci);
     - S3 is not read-only;
     - no Parlanti command or `nominaFrase` is pending for this Registrazione;
-    - no run is in progress.
-  - Disabled hint: "Dai un nome ad almeno una frase di due persone diverse".
-  - Under the button: "Riferimenti: <Nomi>". If any attributed attivo Parlante has no reference, a
-    line reads "Senza frase di riferimento (non toccate): <Nomi>".
+    - no computation, preview or application is in progress.
+  - Disabled hint: "Dai un nome ad almeno due persone".
+  - Under the button: "Riferimenti: <Nomi> (frasi confermate) · <Nomi> (tutta la voce)", where a
+    person is "frasi confermate" iff they have a confirmed Segmento ≥ 1 s. With ≥ 1 "tutta la voce"
+    person a line reads "Senza una frase confermata uso tutta la voce: il risultato può cambiare se
+    ripeti. Conferma una frase per persona per renderlo stabile.". Attributed attivo Parlanti with no
+    ≥ 1 s Segmento → "Non toccate: <Nomi>". Table test on fixture views.
 - AC-531 Running (fake `AzioniSomiglianza` held by a latch, virtual time):
   - the button area shows "Confronto le frasi… n di N" with a determinate bar;
   - every editing action of the panel and of the selection toolbar is disabled, and no command is
@@ -422,55 +523,92 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - playback and "▶ estratto" still work;
   - with no progress tick for `SOGLIA_ATTESA_VISIBILE_MS`, "In attesa dell'elaborazione…" is added;
   - "Annulla" is visible for the whole run.
-- AC-532 "Annulla" → `AzioniSomiglianza.annulla(id)`. The panel returns to its previous state with
+- AC-532 "Annulla" during the computation → `AzioniSomiglianza.annulla(id)`. The panel returns to its previous state with
   no error message.
-- AC-533 Result texts:
+- AC-533 (REWORDED) Result texts after Applica:
   - `Esito(3, 2)` → "3 frasi spostate, 2 incerte (rimaste dov'erano)";
   - `Esito(1, 1)` → "1 frase spostata, 1 incerta (rimasta dov'era)";
-  - `Esito(0, 4)` → "Nessuna frase da spostare (4 incerte)";
-  - `TrascrittoCambiato` → "La trascrizione è cambiata durante il confronto: riprova";
+  - `Errore(TrascrittoCambiato)` → "La trascrizione è cambiata dopo il confronto: ricalcola
+    l'anteprima" (see AC-547);
   - any other error → a plain message (AC-404 rule).
 
-  The message is dismissible, and cleared by the next run or by leaving S3.
-- AC-534 The run state comes from the per-project `AzioniSomiglianza.stato`. A presenter recreated
+  The message is dismissible, and cleared by the next run or by leaving S3. (An empty plan never reaches
+  `Esito`: see AC-545.)
+- AC-545 (NEW, Amendment (b).2) Preview: `Anteprima(gruppi, incerte)` renders:
+  - "Sposterò N frasi, M incerte restano dove sono", with N = Σ frasi, and singulars "1 frase",
+    "1 incerta resta dove è";
+  - one line per group, "<da> → <a>: <frasi>", where the labels are each Voce's current name
+    (identificazione-voci) or "Voce n", grouped by destination and ordered by (a, da);
+  - the buttons "Applica" and "Annulla";
+  - with N = 0: "Nessuna frase da spostare (M incerte restano dove sono)" and only "Chiudi";
+  - while the preview is shown, every editing action of the panel and toolbar is disabled (the fakes
+    record zero command calls), and playback and "▶ estratto" work.
+- AC-546 (NEW) "Applica" → `AzioniSomiglianza.applica(id)` exactly once (a double click → one call). While
+  `Applicazione`, both buttons are disabled and no "Annulla" is offered. "Annulla" on the preview →
+  `annulla(id)`, and the panel returns to its previous state with no message and zero commands. "Chiudi"
+  (N = 0) → `annulla(id)`.
+- AC-547 (NEW) `Errore(TrascrittoCambiato)` after Applica → the AC-533 text plus a "Ricalcola" button →
+  `calcola(id)`. No other command is sent, and the old preview is not shown again.
+- AC-548 (NEW) The preview lives in the per-project `stato`: a presenter recreated while in
+  `Anteprima` (the user left S3 and came back) shows the same preview. When S3 turns read-only (AC-452)
+  during a computation OR a preview, the presenter calls `annulla(id)`.
+- AC-534 The run state (computation, preview, application) comes from the per-project
+  `AzioniSomiglianza.stato`. A presenter recreated
   while a run is in progress (the user left S3 and came back) shows it running again, with its
   progress.
 - AC-535 When S3 turns read-only (AC-452) during a run, the presenter calls `annulla(id)`.
-- AC-536 The presenter never runs the plan, the batch or `nominaFrase` on the UI thread (the AC-417
+- AC-536 The presenter never runs `calcola`, `applica` or `nominaFrase` on the UI thread (the AC-417
   rule; the fakes record their thread).
 
 ### `avvio-parlanti` (R2, doing → REWORK)
 - depends_on +piano-riassegnazione +classificatore-somiglianza +riassegna-segmenti
   +estrattore-impronta-sherpa. related_adrs +0019.
-- AC-537 `AzioniSomiglianza` (B8), implemented in the per-project scope:
-  - `avvia` runs `PianoRiassegnazioneQuery.calcola` on a background dispatcher, via
-    `runInterruptible`;
-  - if `spostamenti` is non-empty, it runs `RiassegnaSegmenti` (mapped 1:1). If empty, no command is
-    sent;
-  - then it publishes `Esito(spostamenti.size, incerte)`;
-  - there is at most one run per Registrazione, and a second `avvia` while running is ignored;
-  - `annulla` interrupts the computation, and nothing is written;
+- AC-537 (REWORDED, Amendment (b).2) `AzioniSomiglianza` (B8), implemented in the per-project scope:
+  - `calcola` runs `PianoRiassegnazioneQuery.calcola` on a background dispatcher, via
+    `runInterruptible`, publishing `InCorso` progress, and ends in `Anteprima(gruppi, incerte)`, with
+    the groups computed from the spostamenti ordered by (a, da). NOTHING is written (row counts are
+    unchanged);
+  - `applica` runs `RiassegnaSegmenti` with the HELD plan (see AC-549) and publishes `Applicazione`,
+    then `Esito(spostamenti.size, incerte)` or `Errore`;
+  - there is at most one computation, preview or application per Registrazione. A second `calcola`
+    while one of them exists is ignored;
+  - `annulla` interrupts the computation or discards the preview; nothing is written and the entry is
+    removed;
   - the final transaction is not interrupted once started;
   - closing the project cancels and joins, bounded like `CollaboratoriR1.ferma`, with no DB access
     after `chiudi` (AC-420 rule);
-  - `AvviaElaborazione` for the same Registrazione (Ritrascrivi queued) cancels the run.
-- AC-538 E2E on databaseInMemoria with fake ML ports (the extractor returns a vector per interval
-  from a table).
-  - Setup: Voce 1 attributed to Anna, with one confirmed 2 s Segmento; Voce 2 attributed to Marco,
-    with one confirmed Segmento; Voce 3 unattributed, with 4 Segmenti (2 Anna-like, 1 Marco-like, 1
-    ambiguous); Voce 4 attributed to Luca, with no confirmed Segmento.
-  - Run. Expected:
-    - Voce 3's Anna-like Segmenti are on Voce 1, and its Marco-like one on Voce 2;
-    - the ambiguous one is still on Voce 3;
-    - Voce 4 is untouched;
-    - no confirmed Segmento moved;
-    - the summary is `Esito(3, 1)`;
-    - exactly one `Documento` regeneration and one `RiallineaImpronte` of that Registrazione after
-      commit.
-  - Run again → zero commands and `Esito(0, 1)`.
-- AC-539 E2E stale plan: during the computation (fake extractor held), a manual `RiassegnaSegmento`
-  commits a planned Segmento elsewhere. On release the batch → `TrascrittoCambiato`: nothing from
-  the batch is written, and the state is the error.
+  - `AvviaElaborazione` for the same Registrazione (Ritrascrivi queued) cancels the computation or
+    discards the preview.
+- AC-538 (REWORDED, Amendment (b).1/(b).2) E2E on databaseInMemoria with fake ML ports (the extractor
+  returns a vector per interval from a table).
+  - Setup:
+    - Voce 1 attributed to Anna, with one confirmed 2 s Segmento;
+    - Voce 2 attributed to Marco, with one confirmed Segmento;
+    - Voce 3 unattributed, with 4 Segmenti (2 Anna-like, 1 Marco-like, 1 ambiguous);
+    - Voce 4 attributed to Luca, with NO confirmed Segmento and 3 Segmenti ≥ 1 s (2 Luca-like, 1
+      Anna-like). Luca is in the "intera Voce" mode.
+  - `calcola` → `Anteprima` with groups {3→1: 2, 3→2: 1, 4→1: 1} and incerte 1. The attribuzione /
+    segmento-voce rows are unchanged before `applica`.
+  - `applica` → Voce 3's Anna-like Segmenti and Voce 4's Anna-like one are on Voce 1, Marco-like on
+    Voce 2, and the ambiguous one still on Voce 3. Voce 4 keeps its 2 Luca-like Segmenti and its
+    Attribuzione. No confirmed Segmento moved.
+  - The summary is `Esito(4, 1)`, with exactly one `Documento` regeneration and one
+    `RiallineaImpronte` of that Registrazione after commit.
+  - Confirm one Luca Segmento, then `calcola` again → `Anteprima` with N = 0, and `Chiudi` sends no
+    command.
+- AC-539 (REWORDED) E2E stale plan: while the preview is shown, a manual `RiassegnaSegmento` (called on
+  the service directly) commits a planned Segmento elsewhere. `applica` → `TrascrittoCambiato`:
+  - nothing from the batch is written;
+  - the held plan is discarded, and the state is `Errore(TrascrittoCambiato)`;
+  - a new `calcola` computes a fresh plan from the new state.
+- AC-549 (NEW, Amendment (b).2) The held plan:
+  - `applica` sends EXACTLY the spostamenti computed by the last `calcola` (1:1 into
+    `SpostamentoSegmento`), with 0 calls to `EstrattoreImpronta` / `DecodificatoreAudio` during
+    `applica` (counting fakes);
+  - `applica` with no preview, or with N = 0 → no command;
+  - the plan is dropped after `applica` (whatever the outcome), on `annulla`, on project close, and on
+    `AvviaElaborazione` of the same Registrazione. A later `applica` then sends nothing;
+  - the plan holds no `Impronta` (code review, ADR 0009).
 - AC-540 E2E "Dai un nome a una frase", case (d):
   - `nominaFrase(NuovaVoce(nuovo "Dario"))` on a Segmento of a 3-Segmento unattributed Voce → a new
     Voce holds that Segmento, `confermato`, attributed to the new ricorrente "Dario" with one print
@@ -503,10 +641,9 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
 ## Not changed
 - `modelli-provisioning`: the mechanics (download, SHA, FILE install) are unchanged. The new entry is
   data in `CatalogoDiarizzazione` (owner `diarizzatore-sherpa`, AC-250). S5 shows the 40 MB entry as
-  missing at the next start. The orphaned `embedding-wespeaker-resnet34-lm/` folder is not cleaned
-  (LOW; no AC).
-- `schermata-modelli` (S5): the licence list is derived from the catalogue, so WeSpeaker disappears
-  and TitaNet appears with no code change.
+  missing at the next start. ResNet34-LM stays in use for step 1.
+- `schermata-modelli` (S5): the licence list is derived from the catalogue, so TitaNet appears with
+  no code change.
 - `allineatore`: ADR 0015 is unchanged. It merges consecutive same-voice pieces (gap 0 < 1 000 ms).
 - `revisione-policy`, `abbonato-revisione-parlanti`, `riallinea-impronte`, `abbonato-riallineamento-impronte`,
   `abbonato-documento`, `rigenerazione-documento`: they consume `SegmentoRiassegnato` unchanged. The
@@ -525,10 +662,11 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - `RiassegnaSegmento` returns the destination and confirms the moved Segmento;
   - event `SegmentoConfermato` → read-model Trascritto (view refresh) only.
 - **tactical-model.md § Parlanti:**
-  - add [INV-27] (ADR 0019 §4.4);
+  - add [INV-27] (ADR 0019 Amendment (b).1, which rewords §4.4);
   - read-model `PianoRiassegnazione` (computed, never stored, consumer: S3 via the `:avvio` glue);
   - `Frase di riferimento` is derived (a confirmed Segmento of ≥ 1 s on a Voce attributed to an
-    attivo P);
+    attivo P; if P has none, every Segmento ≥ 1 s of P's Voci — the "intera Voce" fallback);
+  - "Riassegna per somiglianza" is compute → preview → Applica (the held plan) / Annulla;
   - the `Proposta` is fed by the real extractor (TitaNet-small) with provisional `SoglieFascia`.
 - **context-map.md ubiquitous language:**
   - Trascrizione — **Segmento confermato** ("placed or confirmed on its Voce by the user; never moved
@@ -537,4 +675,5 @@ If the user picks another option, the ACs noted `[default §P-n]` change before 
   - The `impronta-vocale-affidabilita` spike line is annotated by the architect (partially answered,
     model chosen, ADR 0019).
 - **UI/ux-proposal.md S3:** the entry point, the pin marker, "Togli conferma", the panel-header button
-  with its states and texts (ADR 0019 §6).
+  with its states and texts (ADR 0019 §6 + Amendment (b).2/(b).6: preview, Applica / Annulla / Chiudi /
+  Ricalcola, reference-mode lines).

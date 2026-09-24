@@ -15,6 +15,7 @@ related_adrs:
   - "0012"
   - "0014"
   - "0018"
+  - "0019"
 owns_boundaries:
   eventi-progetto:
     projection: "in-process"
@@ -40,6 +41,7 @@ owns_boundaries:
       VociUnite: "data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato"
       VoceDivisa: "data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato"
       SegmentoRiassegnato: "data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato"
+      SegmentoConfermato: "data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, confermato: Boolean) : EventoPubblicato — after commit only (view refresh); no synchronous subscriber (ADR 0019 §3)"
   eventi-parlanti:
     projection: "in-process"
     contract_test: "consumer-driven"
@@ -61,13 +63,16 @@ REWORK 2026-09-24 (ADR 0014): no behaviour change — RegistrazioneAggiunta has 
 
 REWORK 2026-09-24 (ADR 0018): add TrascrittoSostituito(registrazioneId) and ElaborazioneAnnullata(registrazioneId) in snastro.trascrizione.applicazione.eventi; shape tests (AC-14 now 17 events), sync-in-transaction vs after-commit delivery (AC-442, AC-470).
 
-Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): two new published events on eventi-elaborazione: TrascrittoSostituito (one SYNCHRONOUS subscriber: the Parlanti purge) and ElaborazioneAnnullata (after commit only).
+REWORK 2026-09-24 (ADR 0019): new published event SegmentoConfermato(registrazioneId, segmentoId, confermato: Boolean) in snastro.trascrizione.applicazione.eventi (boundary eventi-revisione), after commit only. AC-14 now counts 18 events. Tests AC-14 reworded, AC-525.
+
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): two new published events on eventi-elaborazione: TrascrittoSostituito (one SYNCHRONOUS subscriber: the Parlanti purge) and ElaborazioneAnnullata (after commit only). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): new published event SegmentoConfermato on eventi-revisione (after commit only; its only consumer is the view refresh).
 
 ## Tasks
-- AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 17 eventi, inclusi ImpronteRiallineate, TrascrittoSostituito ed ElaborazioneAnnullata — REWORDED 2026-09-24, ADR 0018)
+- AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 18 eventi, inclusi ImpronteRiallineate, TrascrittoSostituito, ElaborazioneAnnullata e SegmentoConfermato — REWORDED 2026-09-24, ADR 0018 + ADR 0019)
 - AC-15 Tutti gli eventi pubblicati implementano EventoPubblicato e sono data class con soli val (Konsist CR-5)
 - AC-442 snastro.trascrizione.applicazione.eventi.TrascrittoSostituito(registrazioneId: RegistrazioneId) : EventoPubblicato exists, with no other field; DispatcherEventiInMemoria delivers it to synchronous subscribers inside the publishing transaction, and to after-commit subscribers only after COMMIT, never on rollback (test with a synchronous and an after-commit recording subscriber on a rolled-back and on a committed transaction)
 - AC-470 snastro.trascrizione.applicazione.eventi.ElaborazioneAnnullata(registrazioneId: RegistrazioneId) : EventoPubblicato exists with no other field; delivered to after-commit subscribers only after COMMIT, never on rollback
+- AC-525 (ADR 0019) snastro.trascrizione.applicazione.eventi.SegmentoConfermato(registrazioneId, segmentoId, confermato: Boolean) : EventoPubblicato exists with no other field and is delivered to after-commit subscribers only after COMMIT, never on rollback
 
 ## Dependencies
 - **eventi-progetto** (OWNED here — built before its consumers) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione, RinominaRegistrazione (progetto:applicazione, fix-batch-11)`, projection in-process, contract_test **consumer-driven**
@@ -90,16 +95,17 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteR
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
   - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit
-- **eventi-revisione** (OWNED here — built before its consumers) — owner `eventi-pubblicati`, supplier `revisione`, projection in-process, contract_test **consumer-driven**
+- **eventi-revisione** (OWNED here — built before its consumers) — owner `eventi-pubblicati`, supplier `revisione (VociUnite, VoceDivisa, SegmentoRiassegnato, SegmentoConfermato), riassegna-segmenti (SegmentoRiassegnato, N per batch)`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `VociUnite`: data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato
     - `VoceDivisa`: data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato
     - `SegmentoRiassegnato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato
+    - `SegmentoConfermato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, confermato: Boolean) : EventoPubblicato — after commit only (view refresh); no synchronous subscriber (ADR 0019 §3)
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
     - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
-  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
+  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. ADR 0019: a RiassegnaSegmenti commit publishes N SegmentoRiassegnato in list order — the synchronous revisione-policy runs once per event inside the one transaction (an Errore rolls the whole batch back); after-commit subscribers are coalesced per registrazioneId as today (one Rigenerazione, one RiallineaImpronte). SegmentoConfermato → after commit only
 - **eventi-parlanti** (OWNED here — built before its consumers) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `AttribuzioneConfermata`: data class(voceRef: VoceRef, parlanteId: ParlanteId, precedente: ParlanteId?) : EventoPubblicato
@@ -146,4 +152,4 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteR
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0012, 0014, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012.
+Sources: ADRs 0002, 0003, 0012, 0014, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012.

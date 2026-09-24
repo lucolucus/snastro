@@ -55,6 +55,7 @@ and **Parlanti**. There is no global menu logic beyond this.
 ## Screen S3 · Registrazione (the core: identification + Revisione), concept B [user]
 *(amended 2026-09-24: in R1 S3 is READ-ONLY, without the Voci panel and the Revisione UI; see "Amendment 2026-09-24 (S3 read-only in R1)" below)*
 *(amended 2026-09-24, ADR 0018: S3 is READ-ONLY while a re-run is queued or running; see "Amendment 2026-09-24 (Ritrascrivi, Annulla)" below)*
+*(amended 2026-09-24 [user], ADR 0019 + Amendment (b): "Dai un nome a questa frase", the pin marker, "Togli conferma", and "Riassegna per somiglianza" with a preview; see "Amendment 2026-09-24 (Separazione semi-automatica)" below)*
 
 Layout: a header, the transcript in the center, and the **Voci** panel on the right.
 
@@ -259,3 +260,44 @@ The S2/S3 text above is kept; this amendment adds to it.
 - **Blocks:** `schermata-registrazioni` (S2), `schermata-registrazione` (S3 banner + read-only flag),
   `schermata-registrazione-identificazione` (S3 panel disabled), `stati-elaborazione` (`trascrittoDisponibile`,
   `elaborazioneId`), `annulla-elaborazione`.
+
+## Amendment 2026-09-24 (Separazione semi-automatica) [user]
+Source: ADR 0019 §6 and its Amendment 2026-09-24 (b) (the user's answers); manifest delta
+`manifest-deltas/2026-09-24-semi-automatica.md`. The S3 text above is kept; this amendment adds to it. It applies to R2
+(block `schermata-registrazione-identificazione`, wired by `avvio-parlanti`).
+- **"Dai un nome a questa frase ▾"** is in the selection toolbar, shown iff exactly ONE `Segmento` is selected. The
+  menu lists the `attivo` `Parlanti`, then "nuovo…" (Nome, ricorrente preselected, occasionale toggle).
+  - It confirms or moves the sentence and names its person, following the four cases of ADR 0019 §5.
+  - The row shows the ADR 0017 pending state ("In attesa dell'elaborazione…" + "Annulla" after 2 s).
+  - An error is shown inline. On `NomeGiaInUso`, the new `Voce` stays unnamed.
+- **Pin marker** on a `Segmento confermato`. Its tooltip reads "Frase confermata: «Riassegna per somiglianza» non la
+  sposta". Selected alone, the toolbar offers **"Togli conferma"**.
+- **"Riassegna per somiglianza"** is in the Voci panel header.
+  - **Enabled iff** all of these hold:
+    - ≥ 2 named `attivo` people each have a `Segmento` of ≥ 1 s;
+    - S3 is not read-only;
+    - nothing is pending;
+    - no computation, preview or application is in progress.
+  - **Disabled hint:** "Dai un nome ad almeno due persone".
+  - **Under the button:**
+    - "Riferimenti: Anna, Marco (frasi confermate) · Luca (tutta la voce)";
+    - when someone is in the "tutta la voce" mode: "Senza una frase confermata uso tutta la voce: il risultato può
+      cambiare se ripeti. Conferma una frase per persona per renderlo stabile.";
+    - "Non toccate: <Nomi>" for named people with no `Segmento` of ≥ 1 s.
+  - **Computing:**
+    - "Confronto le frasi… n di N" with a determinate bar;
+    - "In attesa dell'elaborazione…" after 2 s without progress;
+    - "Annulla" throughout;
+    - every editing action disabled, playback and "▶ estratto" still enabled.
+  - **Preview** (nothing written yet):
+    - "Sposterò N frasi, M incerte restano dove sono";
+    - one line per move pair, "Voce 3 → Anna: 8";
+    - **Applica** / **Annulla**;
+    - with no moves, "Nessuna frase da spostare (M incerte restano dove sono)" + **Chiudi**;
+    - editing stays disabled;
+    - leaving S3 keeps the preview;
+    - a queued Ritrascrivi discards it.
+  - **Applica** runs exactly the previewed plan. The result reads "N frasi spostate, M incerte (rimaste dov'erano)".
+  - **If the transcript changed** in between: "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima" +
+    **Ricalcola**.
+  - **Annulla** closes the preview. Nothing changes.

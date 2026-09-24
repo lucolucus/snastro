@@ -21,29 +21,38 @@ related_adrs:
   - "0010"
   - "0012"
   - "0018"
+  - "0019"
 view_shape:
   VoceVista: "voceRef, intervalli"
   SegmentoVista: "segmentoId, voceId, intervallo, testo"
   registrazioniConTrascritto: "List<RegistrazioneId>"
+  SegmentoDiVoceVista: "segmentoId, voceId, intervallo, confermato"
 view_sources:
   VoceVista: "≡ pinned type of voci-per-parlanti ← Trascritto"
   SegmentoVista: "≡ pinned type of trascritto-per-documento ← Trascritto"
   registrazioniConTrascritto: "← TrascrittoRepository.conTrascritto"
+  SegmentoDiVoceVista: "≡ pinned type SegmentoDiVoce of voci-per-parlanti ← Trascritto (segmentiDiVoce(id))"
 ---
 # api-trascritto — VociDelTrascritto (API pubblica della Trascrizione)
 
 ## What to do
 Supplier query API voci(id), segmenti(id), registrazioniConTrascritto() — shapes ARE the pinned types.
 
+REWORK 2026-09-24 (ADR 0019): new read segmentiDiVoce(id): List<SegmentoDiVoceVista>? (segmentoId, voceId, intervallo, confermato; ordered by (inizio, segmentoId); null iff no Trascritto; NEVER text) — the supplier side of LettoreVoci.segmenti, split out at fold (rule 19). AC-99 segmenti(id) with text unchanged. Test AC-550.
+
+Note: AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): supplier side of LettoreVoci.segmenti — segmentiDiVoce(id) with its own Trascrizione-side type SegmentoDiVoceVista (same four fields, never text), mapped 1:1 by lettore-voci-da-trascrizione (rule 19: the delta named only the adapter).
+
 ### view_shape (field ← source)
 - `VoceVista`: voceRef, intervalli ← ≡ pinned type of voci-per-parlanti ← Trascritto
 - `SegmentoVista`: segmentoId, voceId, intervallo, testo ← ≡ pinned type of trascritto-per-documento ← Trascritto
 - `registrazioniConTrascritto`: List<RegistrazioneId> ← ← TrascrittoRepository.conTrascritto
+- `SegmentoDiVoceVista`: segmentoId, voceId, intervallo, confermato ← ≡ pinned type SegmentoDiVoce of voci-per-parlanti ← Trascritto (segmentiDiVoce(id))
 
 ## Tasks
 - AC-98 voci(id) restituisce per ogni Voce voceRef e intervalli ordinati; senza Trascritto → null
 - AC-99 segmenti(id) restituisce segmentoId, voceId, intervallo e testo ordinati per inizio e segmentoId attraverso le Voci
 - AC-100 registrazioniConTrascritto elenca solo le Registrazioni con un Trascritto
+- AC-550 (NEW, ADR 0019, split out at fold) segmentiDiVoce(id): List<SegmentoDiVoceVista>? returns every current Segmento once, ordered by (inizio, segmentoId), with confermato as stored; no Trascritto → null; the type has no text field (by type); AC-99 segmenti(id) with text is unchanged (Documento)
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -80,9 +89,14 @@ Supplier query API voci(id), segmenti(id), registrazioniConTrascritto() — shap
   - pinned types:
     - `Trascritto.crea`: (registrazioneId, durataMs: Long, segmenti: List<SegmentoIniziale>): Esito<Creato<Trascritto, TrascrittoCreato>> — Errore(NessunParlatoRilevato) on empty input
     - `SegmentoIniziale`: data class(voceIndice: Int, intervallo: IntervalloMs, testo: String) — trascrizione:dominio input VO
-    - `Trascritto.unisci`: (sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite>
-    - `Trascritto.dividi`: (origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa>
-    - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce
+    - `Trascritto.unisci`: (sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite> — keeps every confermato flag
+    - `Trascritto.dividi`: (origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa> — sets confermato = true on every Segmento of S (INV-26, ADR 0019)
+    - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce; the event carries a (the destination); sets confermato = true on the moved Segmento (INV-26, ADR 0019)
+    - `Trascritto.riassegnaInBlocco`: (spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>> — every entry validated against the PRE-batch state, moves applied in list order, then the Voci empty at the END of the batch removed (INV-6; a Voce emptied and refilled within the batch is kept); never creates a Voce, never changes a flag (INV-26); any stale entry (Segmento missing / not on da / interval differs / a missing / Segmento confermato) → Errore(TrascrittoCambiato(registrazioneId)); a == da or a duplicated segmentoId → Errore(RiassegnazioneNonAmmessa); a refusal leaves the state unchanged; empty list → Ok(emptyList()); events one per move in list order, aNuova = false, daRimossa = true on the LAST move out of each Voce empty at the end (ADR 0019 §4.5 + Amendment (b).1)
+    - `SpostamentoSegmento`: data class(segmentoId: SegmentoId, da: VoceId, a: VoceId, intervallo: IntervalloMs) — trascrizione:dominio input VO; intervallo = the Segmento's interval when planned (stale guard, also against a Ritrascrivi generation swap)
+    - `Trascritto.confermaSegmento`: (segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> — the same value → Ok(null), no change; unknown segment → Errore(SegmentoNonTrovato) (INV-26)
+    - `Segmento.confermato`: Boolean, read-only — true iff an explicit user act placed or confirmed the Segmento on its current Voce and no ConfermaSegmento(false) revoked it (INV-26); crea starts every flag at false
+    - `errors (ErroreTrascrizione, ErroriTrascrizione.kt)`: + TrascrittoCambiato(registrazioneId: RegistrazioneId) — ONE sweep owned by the trascritto rework, :ui MessaggiErrore included (ADR 0019 §4.5)
     - `read accessors`: voci: List<Voce>, segmenti: List<Segmento> (read-only copies)
   - keys (minting rules):
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
@@ -95,11 +109,13 @@ Supplier query API voci(id), segmenti(id), registrazioniConTrascritto() — shap
     - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)
 - **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>? } — null iff no Trascritto (INV-5); Voci ordered by voceId
+    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>?; fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? } — null iff no Trascritto (INV-5); Voci ordered by voceId; segmenti = every current Segmento once, ordered by (inizioMs, segmentoId), NEVER text (ADR 0019 §4.1)
+    - `SegmentoDiVoce`: data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, confermato: Boolean) — NEVER text; supplier side: api-trascritto segmentiDiVoce(id) with its own SegmentoDiVoceVista, mapped 1:1
     - `VoceVista`: data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text
   - keys (minting rules):
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
 - **trascritto-per-documento** (consumed/implemented) — owner `porta-lettore-trascritto`, supplier `api-trascritto + catalogo-registrazioni`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `LettoreTrascritto`: interface { fun trascritto(id: RegistrazioneId): TrascrittoTesto?; fun registrazioniConTrascritto(): List<RegistrazioneId> }
@@ -110,4 +126,4 @@ Supplier query API voci(id), segmenti(id), registrazioniConTrascritto() — shap
     - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
     - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0010, 0012, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Supplier API VociDelTrascritto).
+Sources: ADRs 0002, 0003, 0006, 0007, 0010, 0012, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Supplier API VociDelTrascritto).

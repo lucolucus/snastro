@@ -38,10 +38,22 @@
 # AnnullaElaborazione cancels a never-started in_attesa run (row deleted, INV-3 unchanged, R1). New blocks persistenza-ritrascrivi,
 # annulla-elaborazione, sostituzione-trascritto-policy; new AC-425..AC-479. Blocks already in doing/ carry a `REWORK 2026-09-24 (ADR 0018)`
 # line in their block file. The ErroreTrascrizione change is ONE sweep owned by the elaborazione rework (ADR 0018 Amendment (b) §4).
+# AMENDED 2026-09-24 (manifest delta 2026-09-24-semi-automatica = ADR 0019 + ADR 0019 Amendment 2026-09-24 (b), user answers 2026-09-24):
+# diarization = seg-3.0 fp32 + TitaNet-small + own AHC (diarizzatore-sherpa rework, R1; exact settings ADR 0019 §1.9 'Parametri misurati');
+# TitaNet-small is also the ImprontaVocale model → estrattore-impronta-sherpa gate SATISFIED for the model choice by ADR 0019 §2 (the spike
+# stays partially open for SoglieFascia / BUDGET_IMPRONTA_MS — provisional config, NOT a gate); Segmento.confermato + 4.sqm + INV-26;
+# 'Riassegna per somiglianza' = PianoRiassegnazione (INV-27 reworded: confirmed sentences first, else the whole named Voce) + the
+# RiassegnaSegmenti batch (pre-batch validation, emptied Voci removed at the end) + a PREVIEW in the :avvio glue (Applica runs the held plan).
+# New blocks persistenza-conferma-segmento, riassegna-segmenti, classificatore-somiglianza, piano-riassegnazione; new boundaries
+# tec-classificatore-somiglianza, piano-per-somiglianza, ui-azioni-somiglianza; new AC-480..AC-550. Blocks already in doing/ carry a
+# `REWORK 2026-09-24 (ADR 0019)` line in their block file. The ErroreTrascrizione change (TrascrittoCambiato) is ONE sweep owned by the
+# trascritto rework. Dependency order (no state folder moved): repository-sql-trascrizione wave 4 → 5 (after 4.sqm), estrattore-impronta-sherpa
+# 12 → 13 (after diarizzatore-sherpa's EmbeddingSherpa), avvio-parlanti 11 → 14 (the REALI wiring needs the extractor; the old
+# estrattore → avvio-parlanti edge is reversed, the extractor no longer wires itself).
 # `depends_on` = non-boundary build dependencies (read-models a ui consumes, services a subscriber calls, suppliers an adapter wraps).
 feature: trascrizione-con-parlanti
 profile: .mismagent/profile.md
-ac_scheme: "AC-1..AC-479 (+ AC-155bis, AC-186bis) feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
+ac_scheme: "AC-1..AC-550 (+ AC-155bis, AC-186bis) feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-27 from the tactical model"
 blocks:
   - id: "scaffold-app"
     type: "scaffold"
@@ -148,6 +160,27 @@ blocks:
       - "AC-471 Elaborazione.sq gains `eliminaInAttesa: DELETE FROM elaborazione WHERE id = :id AND stato = 'in_attesa';` (the only DELETE on elaborazione); SQL test: on an in_corso row it affects 0 rows and the row is intact; on an in_attesa row it affects 1"
     notes: "NEW 2026-09-24 (ADR 0018, manifest delta 2026-09-24-ritrascrivi; wave 3 = right after persistenza-schema, the delta's 'wave 1' corrected at fold): owns migrations/3.sqm (R0/R1 are released, so forward-only, never an edit of 1.sqm/2.sqm, ADR 0006 (a)) and the eliminaInAttesa query used by repository-sql-trascrizione (AnnullaElaborazione, ADR 0018 Amendment (b) §3). ADR 0018 enforced_by (presence clause) is exigible_from this block. Release R2 for 3.sqm; eliminaInAttesa is needed by R1's AnnullaElaborazione — this block is therefore built before repository-sql-trascrizione's rework whatever the release."
     sources: "ADR 0006/0007/0018 (+ Amendment 2026-09-24 (b)), features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-4), manifest delta 2026-09-24-ritrascrivi"
+  - id: "persistenza-conferma-segmento"
+    type: "adapter"
+    context: "piattaforma"
+    side: "app"
+    wave: 4
+    release: "R2"
+    module: ":persistenza"
+    title: "Migrazione 4.sqm (Segmento confermato)"
+    consumes:
+      - "kernel-pl"
+    depends_on:
+      - "persistenza-ritrascrivi"
+    related_adrs:
+      - "0006"
+      - "0019"
+    tables:
+      - "segmento"
+    tests_nl:
+      - "AC-521 migrations/4.sqm (schema 4 → 5, forward-only) holds exactly one statement, `ALTER TABLE segmento ADD COLUMN confermato INTEGER NOT NULL DEFAULT 0 CHECK (confermato IN (0, 1));`, and SnastroDatabase.Schema.version = 5; the CR-13 migration test stays green (Schema.migrate from empty equals Schema.create); fixture test: a DB frozen at version 4 holding a Trascritto of 3 Segmenti migrates to 5 with every row intact and confermato = 0; inserting confermato = 2 is refused"
+    notes: "NEW 2026-09-24 (ADR 0019 §3, manifest delta 2026-09-24-semi-automatica; wave 4 = right after persistenza-ritrascrivi's 3.sqm, the delta's 'wave 3' corrected at fold): owns migrations/4.sqm (forward-only, ADR 0006 (a)) and the Segmento.sq queries that read and write the confermato column. Release R2 (only R2 actions write the flag), but the trascritto aggregate (R1 module) carries the field: this block is built BEFORE the repository-sql-trascrizione rework whatever the release (repository-sql-trascrizione depends_on it)."
+    sources: "ADR 0006, ADR 0019 §3, manifest delta 2026-09-24-semi-automatica"
   - id: "eventi-pubblicati"
     type: "port"
     context: "piattaforma"
@@ -162,12 +195,14 @@ blocks:
     related_adrs:
       - "0012"
       - "0018"
+      - "0019"
     tests_nl:
-      - "AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 17 eventi, inclusi ImpronteRiallineate, TrascrittoSostituito ed ElaborazioneAnnullata — REWORDED 2026-09-24, ADR 0018)"
+      - "AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 18 eventi, inclusi ImpronteRiallineate, TrascrittoSostituito, ElaborazioneAnnullata e SegmentoConfermato — REWORDED 2026-09-24, ADR 0018 + ADR 0019)"
       - "AC-15 Tutti gli eventi pubblicati implementano EventoPubblicato e sono data class con soli val (Konsist CR-5)"
       - "AC-442 snastro.trascrizione.applicazione.eventi.TrascrittoSostituito(registrazioneId: RegistrazioneId) : EventoPubblicato exists, with no other field; DispatcherEventiInMemoria delivers it to synchronous subscribers inside the publishing transaction, and to after-commit subscribers only after COMMIT, never on rollback (test with a synchronous and an after-commit recording subscriber on a rolled-back and on a committed transaction)"
       - "AC-470 snastro.trascrizione.applicazione.eventi.ElaborazioneAnnullata(registrazioneId: RegistrazioneId) : EventoPubblicato exists with no other field; delivered to after-commit subscribers only after COMMIT, never on rollback"
-    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): two new published events on eventi-elaborazione: TrascrittoSostituito (one SYNCHRONOUS subscriber: the Parlanti purge) and ElaborazioneAnnullata (after commit only)."
+      - "AC-525 (ADR 0019) snastro.trascrizione.applicazione.eventi.SegmentoConfermato(registrazioneId, segmentoId, confermato: Boolean) : EventoPubblicato exists with no other field and is delivered to after-commit subscribers only after COMMIT, never on rollback"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): two new published events on eventi-elaborazione: TrascrittoSostituito (one SYNCHRONOUS subscriber: the Parlanti purge) and ElaborazioneAnnullata (after commit only). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): new published event SegmentoConfermato on eventi-revisione (after commit only; its only consumer is the view refresh)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012"
   - id: "progetto"
     type: "aggregate"
@@ -271,18 +306,21 @@ blocks:
     related_adrs:
       - "0003"
       - "0012"
+      - "0019"
     invariants:
       - "INV-6 every Segmento belongs to exactly one existing Voce of the same Trascritto; every Voce has >= 1 Segmento — a Voce left empty is removed"
       - "INV-7 within a Voce, Segmenti are ordered by inizio (ties by segmentoId); inizio < fine within the duration; overlaps allowed, no Revisione blocked by an overlap"
-      - "INV-8 Revisione conserves the Segmenti: same set (ids, intervals, text) before and after, only their Voce changes; text immutable"
+      - "INV-8 Revisione conserves the Segmenti: same set (ids, intervals, text) before and after, only their Voce and their confermato flag change; text immutable (REWORDED 2026-09-24, ADR 0019)"
       - "INV-9 unire(A, B): A != B, both Voci of the same Trascritto; afterwards every Segmento of B is on A and B no longer exists"
       - "INV-10 dividere(A, S): S non-empty proper subset of A's Segmenti; S becomes a NEW Voce (new voceId, next label number), the rest stays on A"
       - "INV-11 riassegnare(segmento, destinazione): an existing other Voce of the same Trascritto or a NEW Voce; the source is removed if emptied"
       - "INV-12 voceId is never reused within a Trascritto; the 'Voce n' number is fixed at creation"
+      - "INV-26 a Segmento is confermato iff an explicit user act placed or confirmed it on its current Voce (manual riassegnare, the moved subset of dividere, ConfermaSegmento(true)) and no ConfermaSegmento(false) has revoked it since; unire keeps every flag; riassegnaInBlocco never moves a confermato Segmento, never creates a Voce and never changes a flag; crea starts every flag at false (ADR 0019 §3)"
     invariant_fields:
       - "segmento→voce assignment"
       - "prossimaVoce"
       - "prossimoSegmento"
+      - "segmento.confermato"
     identity: "registrazioneId (one Trascritto per Registrazione)"
     tables:
       - "trascritto"
@@ -291,13 +329,25 @@ blocks:
     tests_nl:
       - "INV-6 riassegnare l'ultimo Segmento di una Voce la rimuove; unire rimuove B; nessuna Voce resta vuota"
       - "INV-7 i Segmenti di una Voce sono ordinati per inizio con pareggio per segmentoId; Segmenti sovrapposti sono accettati e una Revisione su di essi non è mai bloccata"
-      - "INV-8 dopo unire, dividere e riassegnare l'insieme (id, intervallo, testo) dei Segmenti è identico a prima"
+      - "INV-8 dopo unire, dividere, riassegnare, riassegnaInBlocco e confermaSegmento l'insieme (id, intervallo, testo) dei Segmenti è identico a prima (REWORDED 2026-09-24, ADR 0019: only the Voce and the confermato flag may change)"
       - "INV-9 unire(A, A) → Errore(UnioneNonAmmessa); unire(A, B) sposta tutti i Segmenti di B su A e rimuove B"
       - "INV-10 dividere con S vuoto o S = tutti i Segmenti di A → Errore(DivisioneNonAmmessa); con S valido nasce una Voce con il prossimo numero"
       - "INV-11 riassegnare verso la stessa Voce o verso una Voce inesistente → Errore; verso null crea una Voce nuova"
       - "INV-12 dopo unire e dividere il nuovo voceId è sempre maggiore di tutti quelli mai usati (anche rimossi)"
       - "AC-20 crea numera le Voci per prima apparizione (la Voce che parla per prima è Voce 1) e i Segmenti per (inizio, voce)"
       - "AC-21 crea con zero segmenti → Errore(NessunParlatoRilevato)"
+      - "INV-26 crea → every confermato flag is false"
+      - "INV-26 a manual riassegna → the moved Segmento is confermato"
+      - "INV-26 dividi → every Segmento of S is confermato, and the Segmenti left on A keep their flags"
+      - "INV-26 unisci → every flag is kept"
+      - "INV-26 riassegnaInBlocco never changes a flag and refuses a confermato Segmento (TrascrittoCambiato)"
+      - "INV-26 confermaSegmento(s, false) revokes the flag"
+      - "AC-511 (REWORDED 2026-09-24, batch semantics — ADR 0019 Amendment (b).1) riassegnaInBlocco on a valid list: every entry is validated against the pre-batch state and every Segmento ends on its a; one SegmentoRiassegnato per move in list order, aNuova = false, daRimossa true exactly on the LAST move out of each Voce that is empty at the end of the batch; the Voci empty at the end are removed (INV-6) and their numbers never reused (INV-12); a Voce emptied and then refilled within the list is kept (fixture [s1: V2→V3, s2: V4→V2], s1 being V2's only Segmento → Ok, V2 exists and holds s2, no daRimossa for V2); no Voce is created"
+      - "AC-512 riassegnaInBlocco refusals (table; state unchanged after each, compared by value): Segmento missing, not on da, interval differs, a missing, Segmento confermato → TrascrittoCambiato; a == da, duplicated segmentoId → RiassegnazioneNonAmmessa; one stale entry at the END of a 10-entry list → nothing applied; an entry whose a is emptied by an EARLIER entry of the same list is NOT stale (pre-batch validation)"
+      - "AC-513 confermaSegmento sets the flag and returns the event; the same value → Ok(null) with no change; an unknown Segmento → SegmentoNonTrovato"
+      - "AC-514 riassegnaInBlocco(emptyList()) → Ok(emptyList()), state unchanged"
+      - "AC-515 (sweep) ErroreTrascrizione.TrascrittoCambiato(registrazioneId) is added in ONE change together with every exhaustive when; :ui MessaggiErrore maps it to 'La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima' (REWORDED, Amendment (b).2); the pipeline's motivo table and the fakes compile"
+    notes: "AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): Segmento.confermato ([INV-26]), INV-8 reworded, riassegnaInBlocco (pre-batch validation, emptied Voci removed at the END of the batch) and confermaSegmento; OWNS the ErroreTrascrizione sweep for TrascrittoCambiato (every exhaustive when in :trascrizione and :ui MessaggiErrore in ONE change, as ADR 0018 Amendment (b) §4)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Trascrizione + Seam granularity"
   - id: "parlante"
     type: "aggregate"
@@ -470,6 +520,7 @@ blocks:
       - "0007"
       - "0009"
       - "0012"
+      - "0019"
     tests_nl:
       - "AC-37 ParlanteRepositoryContratto: un secondo attivo con lo stesso nome normalizzato nello stesso Progetto → NomeGiaInUso; il nome di un eliminato è accettato; round-trip con impronte (passa contro la Finta)"
       - "AC-38 AttribuzioneRepositoryContratto: chiave VoceRef, diRegistrazione, diParlante, rimuovi"
@@ -480,7 +531,8 @@ blocks:
       - "AC-271 ParlanteRepositoryContratto: impronteDiRegistrazione e impronteDelProgetto restituiscono tutte e sole le RigaImpronta (parlanteId, voceRef, sorgente, modello) della Registrazione / del Progetto; il round-trip di un Parlante conserva sorgente e modello di ogni impronta"
       - "AC-272 EstrattoreImprontaFinta e DecodificatoreAudioFinta lanciano IllegalStateException se invocate mentre la UnitaDiLavoroFinta passata ha transazioneAperta = true; fuori dalla transazione rispondono normalmente"
       - "AC-273 EstrattoreImprontaContratto: modello è non vuoto e costante per l'istanza"
-    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; ParlanteRepository compare-and-set aggiornaImpronta + impronteDiRegistrazione / impronteDelProgetto (RigaImpronta); ML Finte guard against an open transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
+      - "AC-495 (ADR 0019) The ClassificatoreSomiglianza port, Classificazione, SoglieSomiglianza, ClassificatoreSomiglianzaFinta and the abstract ClassificatoreSomiglianzaContratto exist as pinned in tec-classificatore-somiglianza; ErroreParlanti.RiferimentiInsufficienti(registrazioneId) is added (ErroriParlanti.kt); :ui MessaggiErrore needs no text for it (the button is disabled before it can happen; the glue maps it to the generic message)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; ParlanteRepository compare-and-set aggiornaImpronta + impronteDiRegistrazione / impronteDelProgetto (RigaImpronta); ML Finte guard against an open transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): owns the new boundary tec-classificatore-somiglianza (AC-495) and ErroreParlanti.RiferimentiInsufficienti. LettoreVoci.segmenti (AC-494) belongs to porta-lettore-voci, the owner of voci-per-parlanti (reconciled at fold)."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004/0009"
   - id: "porte-documento"
     type: "port"
@@ -543,11 +595,14 @@ blocks:
     depends_on: []
     related_adrs:
       - "0002"
+      - "0019"
     tests_nl:
       - "AC-45 LettoreVociContratto: senza Trascritto → null"
       - "AC-46 LettoreVociContratto: gli intervalli di ogni Voce sono ordinati per inizio"
       - "AC-47 LettoreVociContratto: dopo una Revisione le Voci riflettono unioni e divisioni"
       - "AC-48 VoceVista non espone testo (by-construction: il tipo non ha un campo testo)"
+      - "AC-494 (ADR 0019) LettoreVoci.segmenti: LettoreVociContratto gains cases — null iff no Trascritto; every Segmento once, ordered by (inizio, segmentoId); confermato as stored; no text field (by type); LettoreVociFinta supports it"
+    notes: "AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): voci-per-parlanti re-pinned (LettoreVoci.segmenti + SegmentoDiVoce, consumer piano-riassegnazione); AC-494 moved here from porte-parlanti at fold (rule 19: this block owns the boundary)."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), features/trascrizione-con-parlanti/tactical-model.md Seam granularity"
   - id: "porta-lettore-trascritto"
     type: "port"
@@ -782,10 +837,12 @@ blocks:
     related_adrs:
       - "0003"
       - "0012"
+      - "0019"
     commands:
       - "UnisciVoci"
       - "DividiVoce"
       - "RiassegnaSegmento"
+      - "ConfermaSegmento"
     tests_nl:
       - "AC-76 UnisciVoci valido pubblica VociUnite esattamente una volta con il payload fissato"
       - "AC-77 UnisciVoci(A, A) → UnioneNonAmmessa e nessun evento"
@@ -795,7 +852,36 @@ blocks:
       - "AC-81 RiassegnaSegmento verso la stessa Voce → rifiutato e nessun evento"
       - "AC-82 Su una Registrazione senza Trascritto → TrascrittoNonTrovato"
       - "AC-83 Se un abbonato sincrono restituisce Errore la Revisione è annullata (Trascritto invariato)"
+      - "AC-516 (ADR 0019 §5) RiassegnaSegmentoServizio.esegui returns Esito<VoceId>, the destination (the new VoceId when destinazione = null); the moved Segmento is confermato after the commit (repository round-trip through the fake); AC-80..83 unchanged"
+      - "AC-517 NEW command ConfermaSegmento(registrazioneId, segmentoId, confermato), service ConfermaSegmentoServizio: one transaction; publishes SegmentoConfermato exactly once on a change and nothing on a no-op; no Trascritto → TrascrittoNonTrovato; an unknown Segmento → SegmentoNonTrovato, nothing written"
+    notes: "AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): RiassegnaSegmento returns the destination VoceId and confirms the moved Segmento; new ConfermaSegmento (actor utente: 'Dai un nome a una frase' case (a), 'Togli conferma'), supplier of SegmentoConfermato on eventi-revisione. DividiVoce needs no service change (the aggregate sets the flags)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (Commands)"
+  - id: "riassegna-segmenti"
+    type: "application-service"
+    context: "trascrizione"
+    side: "app"
+    wave: 4
+    release: "R2"
+    module: ":trascrizione:applicazione (..comandi)"
+    title: "RiassegnaSegmenti (batch di Revisione, tutto o niente)"
+    consumes:
+      - "kernel-pl"
+      - "agg-trascritto"
+      - "repo-trascrizione"
+      - "eventi-revisione"
+    depends_on: []
+    related_adrs:
+      - "0003"
+      - "0012"
+      - "0019"
+    commands:
+      - "RiassegnaSegmenti"
+    tests_nl:
+      - "AC-518 RiassegnaSegmenti(registrazioneId, spostamenti: List<SpostamentoSegmento>) runs ONE inTransazione: trova → Trascritto.riassegnaInBlocco → ONE salva → the N SegmentoRiassegnato published in list order, each with aNuova = false and daRimossa = true exactly on the last move out of a Voce that is empty at the end of the batch (batch semantics, ADR 0019 Amendment (b).1); test with a recording synchronous subscriber: N deliveries in order, all inside the one transaction"
+      - "AC-519 If the synchronous subscriber returns Esito.Errore on the k-th event, the whole batch is rolled back: the Trascritto equals its pre-command state and after-commit subscribers see nothing (AC-83 rule)"
+      - "AC-520 A stale plan (each stale case of agg-trascritto Trascritto.riassegnaInBlocco in a table) → Errore(TrascrittoCambiato): nothing is written and no event is published; no Trascritto → TrascrittoNonTrovato; an empty list → Ok(Unit) with no transaction write and no event"
+    notes: "NEW 2026-09-24 (ADR 0019 §4.5 + Amendment (b).1, manifest delta 2026-09-24-semi-automatica): the Trascrizione half of 'Riassegna per somiglianza' — structural only, no names, no prints; invoked by the avvio-parlanti glue with the HELD plan on Applica (Amendment (b).2). Release-neutral, built in the R2 wave (harmless in R1: no composition triggers it). After commit the existing subscribers coalesce Rigenerazione and RiallineaImpronte per registrazioneId (one of each, not N)."
+    sources: "ADR 0003/0012, ADR 0019 §4.5 + Amendment 2026-09-24 (b), features/trascrizione-con-parlanti/tactical-model.md § Amendment 2026-09-24 (ADR 0019)"
   - id: "conferma-attribuzione"
     type: "application-service"
     context: "parlanti"
@@ -1067,18 +1153,23 @@ blocks:
     depends_on: []
     related_adrs:
       - "0002"
+      - "0019"
     view_shape:
       VoceVista: "voceRef, intervalli"
       SegmentoVista: "segmentoId, voceId, intervallo, testo"
       registrazioniConTrascritto: "List<RegistrazioneId>"
+      SegmentoDiVoceVista: "segmentoId, voceId, intervallo, confermato"
     view_sources:
       VoceVista: "≡ pinned type of voci-per-parlanti ← Trascritto"
       SegmentoVista: "≡ pinned type of trascritto-per-documento ← Trascritto"
       registrazioniConTrascritto: "← TrascrittoRepository.conTrascritto"
+      SegmentoDiVoceVista: "≡ pinned type SegmentoDiVoce of voci-per-parlanti ← Trascritto (segmentiDiVoce(id))"
     tests_nl:
       - "AC-98 voci(id) restituisce per ogni Voce voceRef e intervalli ordinati; senza Trascritto → null"
       - "AC-99 segmenti(id) restituisce segmentoId, voceId, intervallo e testo ordinati per inizio e segmentoId attraverso le Voci"
       - "AC-100 registrazioniConTrascritto elenca solo le Registrazioni con un Trascritto"
+      - "AC-550 (NEW, ADR 0019, split out at fold) segmentiDiVoce(id): List<SegmentoDiVoceVista>? returns every current Segmento once, ordered by (inizio, segmentoId), with confermato as stored; no Trascritto → null; the type has no text field (by type); AC-99 segmenti(id) with text is unchanged (Documento)"
+    notes: "AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): supplier side of LettoreVoci.segmenti — segmentiDiVoce(id) with its own Trascrizione-side type SegmentoDiVoceVista (same four fields, never text), mapped 1:1 by lettore-voci-da-trascrizione (rule 19: the delta named only the adapter)."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Supplier API VociDelTrascritto)"
   - id: "nomi-delle-voci"
     type: "read-model"
@@ -1192,7 +1283,7 @@ blocks:
     type: "adapter"
     context: "trascrizione"
     side: "app"
-    wave: 4
+    wave: 5
     release: "R1"
     module: ":trascrizione:adattatori (..persistenza)"
     title: "Repository SQL della Trascrizione"
@@ -1203,11 +1294,13 @@ blocks:
       - "repo-trascrizione"
     depends_on:
       - "persistenza-ritrascrivi"
+      - "persistenza-conferma-segmento"
     related_adrs:
       - "0006"
       - "0007"
       - "0014"
       - "0018"
+      - "0019"
     tests_nl:
       - "AC-110 Round-trip di Elaborazione e di Trascritto (Voci, Segmenti, contatori)"
       - "AC-111 (REWRITTEN 2026-09-24, ADR 0018) A violation of elaborazione_aperta_unica becomes ElaborazioneGiaAperta, never a raw exception. There is no other constraint mapping (elaborazione_completata_unica no longer exists)"
@@ -1219,7 +1312,8 @@ blocks:
       - "AC-445 Deferred-FK backstop, documented by test on a real SQLite UnitaDiLavoroSql: replacement in one transaction with an attribuzione on old Voce 5 (absent from the new Trascritto) and NO purge → the COMMIT fails, and the old Trascritto and the attribuzione are intact afterwards; the same transaction with the rows of Voce 5 deleted first → commits"
       - "AC-472 rimuoviInAttesa over eliminaInAttesa: 1 row → Ok; 0 rows → re-read by id: present → ElaborazioneGiaAvviata, absent → ElaborazioneNonTrovata; ElaborazioneRepositoryContratto (AC-463) passes against SQL"
       - "AC-473 Claim vs cancel on a real SQLite FILE database with two UnitaDiLavoroSql threads started on a barrier, repeated 200 times: thread A claims the head (inAttesa().first() → avvia → salva in one transaction), thread B runs rimuoviInAttesa on the same id; every run ends in exactly one of (row deleted, A started nothing or the next row) or (row in_corso, B got ElaborazioneGiaAvviata) — never both, never a thrown exception (no SQLITE_BUSY)"
-    notes: "AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no completata constraint mapping any more; trova(id) over trovaPerId; rimuoviInAttesa over persistenza-ritrascrivi's eliminaInAttesa (compare-and-delete); TrascrittoRepositorySql.salva already rewrites counters and deletes/re-inserts voce/segmento (proved as a replacement by AC-444)."
+      - "AC-522 (ADR 0019) Round-trip: a Trascritto with mixed confermato flags is saved (delete + re-insert, as today) and re-read identically; a Trascritto created by crea saves every flag as 0; the ADR 0018 replacement writes 0 everywhere"
+    notes: "AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no completata constraint mapping any more; trova(id) over trovaPerId; rimuoviInAttesa over persistenza-ritrascrivi's eliminaInAttesa (compare-and-delete); TrascrittoRepositorySql.salva already rewrites counters and deletes/re-inserts voce/segmento (proved as a replacement by AC-444). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): persists segmento.confermato; depends_on persistenza-conferma-segmento (4.sqm), hence wave 4 → 5 (no state change)."
     sources: "ADR 0006/0007/0014"
   - id: "repository-sql-parlanti"
     type: "adapter"
@@ -1308,6 +1402,29 @@ blocks:
       - "AC-127 ConfrontoImpronteContratto passa contro l'implementazione reale (nel gate, senza modelli)"
       - "AC-128 Con soglie forte = 0.7 e debole = 0.5: similarità 0.8 → FORTE, 0.6 → DEBOLE, 0.3 → NESSUNA; conta la migliore tra le impronte"
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (ConfrontoImpronte), spike impronta-vocale-affidabilita"
+  - id: "classificatore-somiglianza"
+    type: "adapter"
+    context: "parlanti"
+    side: "app"
+    wave: 4
+    release: "R2"
+    module: ":parlanti:adattatori (..ml)"
+    title: "ClassificatoreSomiglianzaCoseno (frase → Sicura(P) | Incerta, Kotlin puro)"
+    consumes:
+      - "kernel-pl"
+      - "tec-classificatore-somiglianza"
+    depends_on: []
+    related_adrs:
+      - "0004"
+      - "0019"
+    tests_nl:
+      - "AC-496 ClassificatoreSomiglianzaContratto passes against the real implementation, in the gate, with no models"
+      - "AC-497 With SoglieSomiglianza(0.30, 0.05) and orthogonal unit references A and B (table test): frase = A → Sicura(A); frase at 45° (cos 0.707 / 0.707) → Incerta (margin 0); cos(A) = 0.25, cos(B) = 0 → Incerta (below minima); cos 0.80 / 0.76 → Incerta (margin 0.04 < 0.05); cos 0.80 / 0.70 → Sicura(A); three references A, B, C with best = C by 0.1 → Sicura(C)"
+      - "AC-498 Centroid = normalized mean of the normalized reference embeddings: two references of A, (1,0) and (0.6,0.8), give a centroid ∝ (1.6, 0.8); a frase closer to that centroid than to B is Sicura(A) even when it is nearer to one single reference of B than to either single reference of A (fixture) — the centroid rule, not the max rule"
+      - "AC-499 A non-comparable frase (zero vector, NaN, infinite, dimension ≠ the references') → Incerta, never an exception; a non-comparable reference is ignored in its Parlante's centroid; a Parlante with no comparable reference is left out of the ranking"
+      - "AC-500 SIMILARITA_MINIMA = 0.30 and MARGINE_MINIMO = 0.05 are named constants defined once, marked PROVISIONAL with a KDoc pointer to ADR 0019 §4.3; SoglieSomiglianza rejects margine <= 0, NaN and minima outside [-1, 1]"
+    notes: "NEW 2026-09-24 (ADR 0019 §4.3, manifest delta 2026-09-24-semi-automatica): pure Kotlin, no natives, runs in the gate. Score = cosine to each reference Parlante's centroid (whatever its reference mode, ADR 0019 Amendment (b).1); Sicura(best) iff best >= SIMILARITA_MINIMA and best − second >= MARGINE_MINIMO, else Incerta. Thresholds PROVISIONAL [hypothesis], injected as SoglieSomiglianza (calibration: Via Roquel with the user's references, recorded by amendment); no number leaves the adapter (code review). Leave-one-out centroids are the first calibration alternative."
+    sources: "ADR 0019 §4.3, manifest delta 2026-09-24-semi-automatica"
   - id: "modelli-provisioning"
     type: "adapter"
     context: "piattaforma"
@@ -1391,8 +1508,11 @@ blocks:
       - "api-trascritto"
     related_adrs:
       - "0002"
+      - "0019"
     tests_nl:
       - "AC-137 LettoreVociContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)"
+      - "AC-524 (ADR 0019) LettoreVociContratto, including the new segmenti cases of AC-494, passes real-on-real: lettore-voci-da-trascrizione over api-trascritto's segmentiDiVoce, seeded through the supplier's applicazione commands and testFixtures fakes (CR-1); the adapter never receives Segmento text"
+    notes: "AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): implements LettoreVoci.segmenti over api-trascritto.segmentiDiVoce (1:1)."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process"
   - id: "lettore-trascritto-da-trascrizione"
     type: "adapter"
@@ -1707,24 +1827,26 @@ blocks:
     depends_on: []
     related_adrs:
       - "0002"
+      - "0019"
     view_shape:
       registrazioneId: "RegistrazioneId"
       titolo: "String"
       dataRegistrazione: "LocalDate"
       durataMs: "Long"
-      segmenti: "List<{segmentoId, voceId, inizioMs, fineMs, testo}>"
+      segmenti: "List<{segmentoId, voceId, inizioMs, fineMs, testo, confermato}>"
       voci: "List<{voceId, etichetta}>"
     view_sources:
       registrazioneId: "← input"
       titolo: "← registrazione-per-trascrizione"
       dataRegistrazione: "← registrazione-per-trascrizione"
       durataMs: "← registrazione-per-trascrizione"
-      segmenti: "← Trascritto (ordered by inizio then segmentoId across Voci)"
+      segmenti: "← Trascritto (ordered by inizio then segmentoId across Voci); confermato ← Segmento.confermato (agg-trascritto)"
       voci: "← Trascritto; etichetta = 'Voce ' + voceId.numero"
     tests_nl:
       - "AC-167 La vista espone registrazioneId, titolo, dataRegistrazione, durataMs, i segmenti (segmentoId, voceId, inizioMs, fineMs, testo) in ordine di tempo attraverso le Voci e le voci con etichetta 'Voce n'"
       - "AC-168 Registrazione senza Trascritto → null"
-    notes: "R8: documentoPath → documento.nomeFile; audioDisponibile → LettoreAudio.disponibile; colore → ui palette(voceId). Nome/tipo/parlanteId → identificazione-voci (R1)."
+      - "AC-523 (ADR 0019) The view exposes confermato per Segmento as stored; AC-167 otherwise unchanged"
+    notes: "R8: documentoPath → documento.nomeFile; audioDisponibile → LettoreAudio.disponibile; colore → ui palette(voceId). Nome/tipo/parlanteId → identificazione-voci (R1). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): segmenti gain confermato (S3 pin marker, 'Togli conferma', reference-mode lines of the 'Riassegna per somiglianza' button)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8)"
   - id: "identificazione-voci"
     type: "read-model"
@@ -1822,6 +1944,53 @@ blocks:
       - "INV-22 compare la coppia (voceA, voceB, parlanteId, nome) quando due Voci sono attribuite allo stesso Parlante, con voceA < voceB"
       - "INV-22 la coppia scompare dopo l'unione o dopo un cambio di Attribuzione; la vista non unisce mai da sola"
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-22)"
+  - id: "piano-riassegnazione"
+    type: "read-model"
+    context: "parlanti"
+    side: "app"
+    wave: 5
+    release: "R2"
+    module: ":parlanti:applicazione (..letture)"
+    title: "PianoRiassegnazione (il piano di «Riassegna per somiglianza»)"
+    consumes:
+      - "kernel-pl"
+      - "agg-parlante"
+      - "agg-attribuzione"
+      - "repo-parlanti"
+      - "voci-per-parlanti"
+      - "tec-decodifica-parlanti"
+      - "tec-estrattore-impronta"
+      - "tec-classificatore-somiglianza"
+      - "sorgente-impronta-pl"
+    depends_on: []
+    related_adrs:
+      - "0009"
+      - "0012"
+      - "0017"
+      - "0019"
+    model_hint: "deep"
+    invariants:
+      - "INV-27 a PianoRiassegnazione of Registrazione R moves a Segmento s to Voce T only if: s is not confermato, is >= 1 000 ms and lies on a Voce that is not frozen (unattributed, or attributed to a reference Parlante); s is classified Sicura(P) for a reference Parlante P; T is P's target Voce (the lowest voceId attributed to P in R) and s is not already on T; after the whole plan every reference Parlante still has >= 1 Segmento in R (otherwise every move out of that Parlante's Voci is dropped and counted as incerta, repeated until stable). A reference Parlante is an attivo Parlante attributed to >= 1 Voce of R with >= 1 reference: its confermato Segmenti >= 1 000 ms if it has any ('frasi confermate'), otherwise every Segmento >= 1 000 ms on its Voci ('intera Voce'); an eliminato never is one; a plan needs >= 2. It writes nothing, keeps no embedding after it returns and exposes no similarity number (ADR 0019 Amendment 2026-09-24 (b).1)"
+    view_shape:
+      piano: "{registrazioneId, spostamenti: List<{segmentoId, da, a, intervallo}>, incerte: Int}"
+    view_sources:
+      piano: "≡ pinned type PianoRiassegnazione of piano-per-somiglianza; spostamenti ← LettoreVoci.segmenti (voci-per-parlanti) + AttribuzioneRepository.diRegistrazione + Parlante stato attivo (repo-parlanti) + ClassificatoreSomiglianza over transient Impronte (DecodificatoreAudio + SorgenteImpronta.di + EstrattoreImpronta); incerte ← the movable Segmenti classified Incerta, shorter than 1 000 ms, or dropped by the INV-27 guard"
+    tests_nl:
+      - "INV-27 table test on fixture Voci / Attribuzioni / Segmenti with a classifier fake: a Segmento moves only if all four conditions hold (not confermato / >= 1 s / not frozen; Sicura(P) for a reference P; not already on P's target Voce; the last-Segmento guard); one row per failing condition, each giving no spostamento"
+      - "AC-501 (REWORDED 2026-09-24, Amendment (b).1) Reference modes, table test with a classifier fake that records the riferimenti map it receives: P with a confirmed 2 s Segmento and 5 unconfirmed >= 1 s Segmenti → references = the confirmed one only ('frasi confermate'), the 5 are movable; P with no confirmed Segmento whose Voce holds 3 s, 2 s and 0.6 s Segmenti → references = the 3 s and 2 s ones ('intera Voce'), the 0.6 s one is an incerta; P whose only confirmed Segmento is 0.8 s → the fallback applies; P on Voci 2 and 4, neither confirmed → the >= 1 s Segmenti of BOTH Voci; an eliminato Parlante has none even with a confirmed Segmento on its Voce; a confirmed Segmento on an unattributed Voce is no one's reference"
+      - "AC-502 (REWORDED) Fewer than 2 reference Parlanti, in either mode → Errore(RiferimentiInsufficienti) with 0 calls to DecodificatoreAudio and EstrattoreImpronta (counting fakes): one named attivo Parlante → error; two named attivo Parlanti with no confirmed sentence, each with a >= 1 s Segmento → NO error (fallback)"
+      - "AC-503 (REWORDED) Frozen Voci are exactly the Voci attributed to an eliminato, or to an attivo Parlante with no Segmento >= 1 000 ms on any of its Voci: their Segmenti are never extracted, never appear in spostamenti as da and are never a target a; a named Voce whose Parlante has no confirmed sentence is NOT frozen — its non-confermato >= 1 s Segmenti are candidates (fixture: one of them Sicura(Q) → a spostamento to Q's target); confirmed Segmenti never appear in spostamenti"
+      - "AC-504 Movable Segmenti shorter than 1 000 ms are not extracted; each counts once in incerte"
+      - "AC-505 Target Voce = the lowest voceId among the Voci attributed to the chosen Parlante (fixture: P on Voci 4 and 2 → target 2); a Sicura Segmento already on the target → no spostamento; one on another Voce, including P's other Voce 4 → spostamento(da, a = 2, intervallo = the Segmento's)"
+      - "AC-506 Incerta → no spostamento, counted in incerte"
+      - "AC-507 (REWORDED) Exactly one estrai per extracted Segmento — the union of references and movable Segmenti >= 1 s; a Segmento that is both an 'intera Voce' reference and a candidate is extracted ONCE and its embedding serves both roles (counting fake keyed by interval); each over DecodificatoreAudio.campioni(id, SorgenteImpronta.di(listOf(intervallo)).intervalli); no transaction is open (the fakes throw if one is); progresso(fatti, totale) is called once after each estrai with a constant totale = number of extractions and fatti = 1..totale"
+      - "AC-508 An InterruptedException from estrai (at the 3rd call) propagates: no result, nothing written, and the next calcola extracts again from the start"
+      - "AC-509 calcola writes nothing (attribuzione / impronta_vocale / parlante row counts unchanged); two consecutive calcola make 2x the estrai calls, so no embedding is retained (ADR 0009; code review: no field or cache holds an Impronta)"
+      - "AC-510 (REWORDED) Idempotence when EVERY reference Parlante is in the 'frasi confermate' mode: apply the plan to the LettoreVoci fake, keep the same deterministic extractor fake, calcola again → spostamenti empty and incerte unchanged; with a fallback Parlante idempotence is NOT claimed (AC-543)"
+      - "AC-543 (NEW, Amendment (b).1) 'Intera Voce' references are derived from the CURRENT state at every calcola, with no memory of earlier runs: fixture — Q in fallback mode on Voce 5; run 1 plans s (Voce 3) onto Q's target Voce 5 and t (Voce 5) away to P; apply to the fake and calcola again → the classifier fake records Q's references include s and exclude t; no confermato Segmento is moved in either run"
+      - "AC-544 (NEW, Amendment (b).1) Last-Segmento guard: Q in fallback mode with one Voce of 3 Segmenti >= 1 s, all Sicura(P) → NO spostamento out of Q's Voce and those 3 count in incerte; the same with Q owning a second Voce that keeps an incerta → the 3 moves ARE planned; cascade fixture (dropping Q's moves would empty R's Voce) → R's moves are dropped too; the result is deterministic (same plan twice)"
+    notes: "NEW 2026-09-24 (ADR 0019 §4.1–4.4, §4.7–4.8 + Amendment 2026-09-24 (b).1, manifest delta 2026-09-24-semi-automatica): computed, never stored, never writes; embeds outside any transaction (one estrai per extracted Segmento, one Mutex hold each, ADR 0017 §1.2), classifies through ClassificatoreSomiglianza, throws InterruptedException on cancellation. The plan's intervallo is the Segmento's CURRENT interval (the stale-guard of agg-trascritto riassegnaInBlocco); the plan exposes no similarity (by type) and holds no Impronta, so the glue may HOLD it until Applica (Amendment (b).2). model_hint deep: folds >= 2 boundaries and carries the reference-mode + guard rule."
+    sources: "ADR 0009/0012/0017, ADR 0019 §4 + Amendment 2026-09-24 (b).1, features/trascrizione-con-parlanti/tactical-model.md § Amendment 2026-09-24 (ADR 0019)"
   - id: "parlanti-attivi"
     type: "read-model"
     context: "parlanti"
@@ -2178,24 +2347,29 @@ blocks:
       - "salta-voce"
       - "revisione"
       - "ui-fondamenta"
+      - "trascritto-view"
     related_adrs:
       - "0003"
       - "0005"
       - "0012"
       - "0017"
       - "0018"
+      - "0019"
     consumes_rm:
       - "identificazione-voci"
       - "proposta"
       - "proposta-unione"
       - "parlanti-attivi"
       - "estratto-audio"
+      - "trascritto-view"
     triggers:
       - "ConfermaAttribuzione"
       - "SaltaVoce"
       - "UnisciVoci"
       - "DividiVoce"
       - "RiassegnaSegmento"
+      - "ConfermaSegmento"
+      - "RiassegnaSegmenti"
     gated_by:
       - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
     tests_nl:
@@ -2223,7 +2397,22 @@ blocks:
       - "AC-454 (Amendment 2026-09-24 (b): S3 read-only, user) While S3 is read-only (AC-452) the banner adds 'Le correzioni e i nomi assegnati andranno persi.' and every editing action of the panel is disabled: 'Conferma', 'altri ▾', 'nuovo…', 'cambia', 'salta', 'Unisci con ▾', the merge banner's action, the selection toolbar's 'Dividi voce' and 'Riassegna a ▾'; no command is invoked (the command fakes record zero calls) and no Proposta job is started; '▶ estratto' and Segmento playback still work — presenter test with the stati source at IN_ATTESA and at IN_CORSO"
       - "AC-455 A Conferma or Salta already pending in the per-project scope (AC-418) from BEFORE the re-run was queued, resolving after the replacement, shows AC-318 VoceCambiata or the Voce-not-found message in plain words, never a crash; after the replacement the panel shows the new Voci, all 'da identificare', and is editable again"
       - "AC-461 When the read-only state of AC-452 ends because the re-run FAILED or was CANCELLED (Cambiamento → latest FALLITA or COMPLETATA, Trascritto unchanged) the banner goes away and every action of AC-454 is enabled again, on the same Voci and the same attributed Nomi (nothing lost); the Proposta job starts again — presenter test: stati source IN_CORSO → FALLITA and IN_ATTESA → COMPLETATA"
-    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; the chosen wait behaviour is AC-411..AC-417 (per-card pending state, 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS = 2000 ms, defined once in the S3 presenter). OWNER (rule 10): this block declares, in snastro.ui.registrazione, the per-VoceRef pending-state source with annulla(voceRef) that the presenter reads; avvio-parlanti implements it in a per-project scope (AC-418). 'Annulla' cancels a pending command, it is not a domain command (no new triggers entry). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): S3 is READ-ONLY while a re-run is queued or running (user 2026-09-24, replaces ADR 0018 §4 'fully usable'): the panel reads the read-only flag of the S3 presenter (schermata-registrazione, AC-452) and disables every command it triggers; this closes ADR 0018's accepted residual race for S3. No Proposta job while read-only (it would only wait on the Mutex held by the pipeline, ADR 0017)."
+      - "AC-526 (ADR 0019 §6) With exactly ONE Segmento selected the toolbar shows 'Dai un nome a questa frase ▾': the menu lists the attivo Parlanti (parlanti-attivi), then 'nuovo…' (Nome field, ricorrente preselected, occasionale toggle, Q-7); the action is absent with 0 or >= 2 Segmenti selected and disabled while S3 is read-only (AC-454)"
+      - "AC-527 The presenter's case decision (pure; table test on fixture views) matches ADR 0019 §5: (a) the Segmento is on a Voce attributed to P → SoloConferma; (b) it is alone in its Voce → AttribuisciVoce(thatVoce, P); (c) P has Voci here → Sposta(lowest voceId of P); (d) otherwise → NuovaVoce(P | nuovo Nome); every case goes through ComandiVoce.nominaFrase, the presenter never calls a command directly"
+      - "AC-528 A confermato Segmento renders a pin marker with the tooltip 'Frase confermata: «Riassegna per somiglianza» non la sposta'; selected alone, the toolbar offers 'Togli conferma' → ConfermaSegmento(false)"
+      - "AC-529 While a nominaFrase is pending, that Segmento row shows the ADR 0017 pending state: progress at once; 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS; an error (e.g. NomeGiaInUso on step (d)) inline in plain words, the new Voce appearing unnamed"
+      - "AC-530 (REWORDED 2026-09-24, Amendment (b).1/(b).6) A 'Riassegna per somiglianza' button in the Voci panel header, enabled iff: >= 2 attivo Parlanti attributed in this Registrazione each have >= 1 Segmento >= 1 000 ms on their Voci (a reference in either mode; derived from trascritto-view + identificazione-voci); S3 is not read-only; no Parlanti command or nominaFrase is pending; no computation, preview or application is in progress. Disabled hint 'Dai un nome ad almeno due persone'. Under the button 'Riferimenti: <Nomi> (frasi confermate) · <Nomi> (tutta la voce)' (a person is 'frasi confermate' iff they have a confirmed Segmento >= 1 s); with >= 1 'tutta la voce' person the line 'Senza una frase confermata uso tutta la voce: il risultato può cambiare se ripeti. Conferma una frase per persona per renderlo stabile.'; attributed attivo Parlanti with no >= 1 s Segmento → 'Non toccate: <Nomi>' (table test on fixture views)"
+      - "AC-531 Computing (fake AzioniSomiglianza held by a latch, virtual time): the button area shows 'Confronto le frasi… n di N' with a determinate bar; every editing action of the panel and of the selection toolbar is disabled and no command is invoked (fakes record zero calls); playback and '▶ estratto' still work; with no progress tick for SOGLIA_ATTESA_VISIBILE_MS 'In attesa dell'elaborazione…' is added; 'Annulla' is visible for the whole computation"
+      - "AC-532 'Annulla' during the computation → AzioniSomiglianza.annulla(id); the panel returns to its previous state with no error message"
+      - "AC-533 (REWORDED, Amendment (b).2) Result texts after Applica: Esito(3, 2) → '3 frasi spostate, 2 incerte (rimaste dov'erano)'; Esito(1, 1) → '1 frase spostata, 1 incerta (rimasta dov'era)'; Errore(TrascrittoCambiato) → 'La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima' (AC-547); any other error → a plain message (AC-404 rule); dismissible, cleared by the next run or by leaving S3"
+      - "AC-534 The state (computation, preview, application) comes from the per-project AzioniSomiglianza.stato: a presenter recreated during a computation (the user left S3 and came back) shows it running again with its progress"
+      - "AC-535 When S3 turns read-only (AC-452) during a computation, the presenter calls annulla(id)"
+      - "AC-536 The presenter never runs calcola, applica or nominaFrase on the UI thread (AC-417 rule; the fakes record their thread)"
+      - "AC-545 (NEW, Amendment (b).2) Preview: Anteprima(gruppi, incerte) renders 'Sposterò N frasi, M incerte restano dove sono' (N = sum of frasi; singulars '1 frase', '1 incerta resta dove è'), one line per group '<da> → <a>: <frasi>' with each Voce's current name (identificazione-voci) or 'Voce n', grouped by destination and ordered by (a, da), and the buttons 'Applica' / 'Annulla'; with N = 0 'Nessuna frase da spostare (M incerte restano dove sono)' and only 'Chiudi'; while the preview is shown every editing action of the panel and toolbar is disabled (fakes record zero command calls) and playback / '▶ estratto' work"
+      - "AC-546 (NEW) 'Applica' → AzioniSomiglianza.applica(id) exactly once (a double click → one call); during Applicazione both buttons are disabled and no 'Annulla' is offered; 'Annulla' on the preview → annulla(id), the panel returns to its previous state with no message and zero commands; 'Chiudi' (N = 0) → annulla(id)"
+      - "AC-547 (NEW) Errore(TrascrittoCambiato) after Applica → the AC-533 text plus a 'Ricalcola' button → calcola(id); no other command is sent and the old preview is never shown again"
+      - "AC-548 (NEW) A presenter recreated while in Anteprima (the user left S3 and came back) shows the same preview; when S3 turns read-only (AC-452) during a computation OR a preview the presenter calls annulla(id)"
+    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; the chosen wait behaviour is AC-411..AC-417 (per-card pending state, 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS = 2000 ms, defined once in the S3 presenter). OWNER (rule 10): this block declares, in snastro.ui.registrazione, the per-VoceRef pending-state source with annulla(voceRef) that the presenter reads; avvio-parlanti implements it in a per-project scope (AC-418). 'Annulla' cancels a pending command, it is not a domain command (no new triggers entry). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): S3 is READ-ONLY while a re-run is queued or running (user 2026-09-24, replaces ADR 0018 §4 'fully usable'): the panel reads the read-only flag of the S3 presenter (schermata-registrazione, AC-452) and disables every command it triggers; this closes ADR 0018's accepted residual race for S3. No Proposta job while read-only (it would only wait on the Mutex held by the pipeline, ADR 0017). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): 'Dai un nome a questa frase ▾', the pin marker + 'Togli conferma', and the 'Riassegna per somiglianza' button with compute → PREVIEW → Applica / Annulla (user 2026-09-24). OWNER (rule 10): this block declares in snastro.ui.registrazione the UI port AzioniSomiglianza and ComandiVoce.nominaFrase (boundary ui-azioni-somiglianza); avvio-parlanti implements them in the per-project scope. 'Annulla' / 'Chiudi' / 'Ricalcola' are not domain commands (no triggers entry)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (Part 3 (b), User decisions 2026-09-24)"
   - id: "avvio-coda-elaborazioni"
     type: "adapter"
@@ -2358,7 +2547,7 @@ blocks:
     type: "adapter"
     context: "piattaforma"
     side: "app"
-    wave: 11
+    wave: 14
     release: "R2"
     module: ":avvio"
     title: "Composizione R2 (Parlanti): repository, abbonati, riallineamento impronte, S4, badge S2, pannello S3"
@@ -2368,6 +2557,8 @@ blocks:
       - "eventi-parlanti"
       - "tec-shell-ui"
       - "eventi-elaborazione"
+      - "piano-per-somiglianza"
+      - "ui-azioni-somiglianza"
     depends_on:
       - "avvio-composizione"
       - "schermata-parlanti"
@@ -2383,12 +2574,17 @@ blocks:
       - "abbonato-riallineamento-impronte"
       - "riallinea-impronte"
       - "sostituzione-trascritto-policy"
+      - "piano-riassegnazione"
+      - "classificatore-somiglianza"
+      - "riassegna-segmenti"
+      - "estrattore-impronta-sherpa"
     related_adrs:
       - "0004"
       - "0009"
       - "0012"
       - "0017"
       - "0018"
+      - "0019"
     gated_by:
       - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
     tests_nl:
@@ -2408,7 +2604,13 @@ blocks:
       - "AC-458 E2E on databaseInMemoria with fake ML ports. Setup: Registrazione completata; Voce 1 → ricorrente 'Mario' with a print, Mario also attributed in another Registrazione; Voce 2 → occasionale 'Ospite del 12/09/2026' with a print, nowhere else. Action: Ritrascrivi with 2 persons, the fake pipeline completes with 3 Voci. Expected: zero attribuzione and zero impronta_vocale rows for that Registrazione; Mario exists with his other Attribuzione and print; the Ospite no longer exists; trascritto-view shows the 3 new Voci; the Documento file is rewritten with only 'Voce 1..3' labels and the new texts; the S2 row is 'Completata' with the badge '3 voci · 3 da identificare'"
       - "AC-459 E2E failure, same setup: the fake pipeline fails in diarization; the attribuzione and impronta_vocale rows, the Trascritto, the Documento file bytes and the Galleria are unchanged; S2 shows 'Ritrascrizione non riuscita: errore nella separazione delle voci'"
       - "AC-479 E2E, AC-458's setup: 'Ritrascrivi', then cancel while it is queued → the attribuzione/impronta_vocale rows, the Trascritto, the Documento file bytes and the Galleria are unchanged; no TrascrittoSostituito is published; S2 shows 'Completata' + 'Ritrascrivi'; S3 is editable again (AC-461)"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): AggiornamentiVistaParlanti handles TrascrittoSostituito after commit (invalidate every cached Proposta, Cambiamento(null)); supplies 'Ritrascrivi' to S2 (R2 only) and keeps AnnullaElaborazione supplied; the sync subscriber with the sostituzione policy is registered before the first command, so 'Ritrascrivi' is offered only by a composition that purges."
+      - "AC-537 (REWORDED 2026-09-24, Amendment (b).2) AzioniSomiglianza implemented in the per-project scope: calcola runs PianoRiassegnazioneQuery.calcola on a background dispatcher via runInterruptible, publishing InCorso progress, and ends in Anteprima(gruppi ordered by (a, da), incerte) — NOTHING written (row counts unchanged); applica runs RiassegnaSegmenti with the HELD plan (AC-549), publishing Applicazione then Esito(spostamenti.size, incerte) or Errore; at most one computation, preview or application per Registrazione (a second calcola meanwhile is ignored); annulla interrupts the computation or discards the preview, nothing written; the final transaction is not interrupted once started; closing the project cancels and joins, bounded like CollaboratoriR1.ferma, with no DB access after chiudi (AC-420 rule); AvviaElaborazione for the same Registrazione (Ritrascrivi queued) cancels the computation or discards the preview"
+      - "AC-538 (REWORDED, Amendment (b).1/(b).2) E2E on databaseInMemoria with fake ML ports (extractor vector per interval from a table). Setup: Voce 1 → Anna with one confirmed 2 s Segmento; Voce 2 → Marco with one confirmed Segmento; Voce 3 unattributed with 4 Segmenti (2 Anna-like, 1 Marco-like, 1 ambiguous); Voce 4 → Luca with NO confirmed Segmento and 3 Segmenti >= 1 s (2 Luca-like, 1 Anna-like: 'intera Voce'). calcola → Anteprima groups {3→1: 2, 3→2: 1, 4→1: 1}, incerte 1, attribuzione / segmento rows unchanged; applica → Anna-like Segmenti on Voce 1, Marco-like on Voce 2, the ambiguous one still on Voce 3, Voce 4 keeps its 2 Luca-like Segmenti and its Attribuzione, no confirmed Segmento moved; Esito(4, 1); exactly one Documento regeneration and one RiallineaImpronte of that Registrazione after commit. Confirm one Luca Segmento, calcola again → Anteprima with N = 0 and 'Chiudi' sends no command"
+      - "AC-539 (REWORDED) E2E stale plan: while the preview is shown a manual RiassegnaSegmento (called on the service) commits a planned Segmento elsewhere; applica → TrascrittoCambiato: nothing from the batch is written, the held plan is discarded, the state is Errore(TrascrittoCambiato), and a new calcola computes a fresh plan from the new state"
+      - "AC-540 E2E 'Dai un nome a una frase' case (d): nominaFrase(NuovaVoce(nuovo 'Dario')) on a Segmento of a 3-Segmento unattributed Voce → a new Voce holds that Segmento, confermato, attributed to the new ricorrente 'Dario' with one print row; the Documento shows 'Dario' on that line; with 'Dario' already used by an attivo the new Voce exists unnamed, the error is NomeGiaInUso and nothing else is written"
+      - "AC-541 REALI wiring: EstrattoreImprontaSherpa(EmbeddingSherpa on embedding-nemo-titanet-small) + DecodificatoreAudioFfmpeg, proposte = true (provisional Fasce, user 2026-09-24); ClassificatoreSomiglianzaCoseno(SoglieSomiglianza(SIMILARITA_MINIMA, MARGINE_MINIMO)); EstrattoreImprontaAssente / DecodificatoreAudioAssente removed; the extractor's chiudi called at project close; SegmentoConfermato → one Cambiamento(registrazioneId) after commit; existing 'nessun-estrattore' print rows re-derived by RiallineaTutteLeImpronte at the next open (AC-316 test with such a row)"
+      - "AC-549 (NEW, Amendment (b).2) The held plan: applica sends EXACTLY the spostamenti of the last calcola (1:1 into SpostamentoSegmento) with 0 calls to EstrattoreImpronta / DecodificatoreAudio during applica (counting fakes); applica with no preview or with N = 0 → no command; the plan is dropped after applica (whatever the outcome), on annulla, on project close and on AvviaElaborazione of the same Registrazione, after which applica sends nothing; the plan holds no Impronta (code review, ADR 0009)"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): AggiornamentiVistaParlanti handles TrascrittoSostituito after commit (invalidate every cached Proposta, Cambiamento(null)); supplies 'Ritrascrivi' to S2 (R2 only) and keeps AnnullaElaborazione supplied; the sync subscriber with the sostituzione policy is registered before the first command, so 'Ritrascrivi' is offered only by a composition that purges. AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): implements the UI port of ui-azioni-somiglianza (AzioniSomiglianza: calcola → preview, applica with the HELD plan, annulla; ComandiVoce.nominaFrase running the ADR 0019 §5 steps) — the cross-context glue of architecture.md, no domain rule; REALI wiring of the real extractor (TitaNet-small) and of the classifier (AC-541). Wave 11 → 14: it now depends_on estrattore-impronta-sherpa (wave 13); the extractor no longer wires itself (edge reversed; no state folder moved)."
     sources: "architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti)"
   - id: "ml-sherpa-motore"
     type: "adapter"
@@ -2427,6 +2629,7 @@ blocks:
       - "0008"
       - "0016"
       - "0017"
+      - "0019"
     gated_by:
       - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
     tests_nl:
@@ -2445,7 +2648,7 @@ blocks:
       - "AC-399 conSessione chiama caricaNativi() in modo pigro, prima della creazione del primo oggetto sherpa; nessun codice di :avvio né alcun adattatore consumatore chiama LibraryUtils o System.load (ADR 0004 enforced_by, AC-245); nessun test del gate carica i nativi"
       - "AC-400 ConfigSessione.provider vale \"cpu\" per default; R1 non espone alcuna impostazione utente per un altro provider (ADR 0016 §6)"
       - "AC-401 conSessione serializza: due conSessione concorrenti non si sovrappongono mai (la seconda attende il Mutex nativo) e il Mutex è rilasciato anche su eccezione — parte R1 del contratto del Mutex, con un solo detentore (la pipeline); ADR 0017 mantiene questo contratto e aggiunge un'attesa equa e interrompibile (portata da estrattore-impronta-sherpa, AC-408/409); testabile nel gate se la factory della sessione è sostituibile, altrimenti [@modelli]"
-    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta. AMENDED 2026-09-24 (reality, merge fbd6e46; ADR 0016 Amendment 2026-09-24): AC-397 now records LibraryLoader.setAutoLoadEnabled(false) before LibraryUtils.load(), as built. ADR 0017: AC-401 unchanged; the fair, interruptible wait on the same Mutex is carried by estrattore-impronta-sherpa (AC-408/409)."
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta. AMENDED 2026-09-24 (reality, merge fbd6e46; ADR 0016 Amendment 2026-09-24): AC-397 now records LibraryLoader.setAutoLoadEnabled(false) before LibraryUtils.load(), as built. ADR 0017: AC-401 unchanged; the fair, interruptible wait on the same Mutex is carried by estrattore-impronta-sherpa (AC-408/409). AMENDED 2026-09-24 (ADR 0019 §1.4, manifest delta 2026-09-24-semi-automatica): tec-ml-sherpa gains snastro.ml.EmbeddingSherpa; its code is written in :ml-sherpa by the diarizzatore-sherpa rework (first user, AC-491) — no AC change and no rework for this block."
     sources: "ADR 0004, ADR 0016 (§1 pinned artifacts, §2-§6), spike packaging-modelli-desktop, research/spike-packaging-modelli-desktop.md"
   - id: "allineatore"
     type: "adapter"
@@ -2487,7 +2690,7 @@ blocks:
     side: "app"
     wave: 12
     release: "R1"
-    module: ":ml-sherpa + :trascrizione:adattatori (..ml)"
+    module: ":ml-sherpa (EmbeddingSherpa) + :trascrizione:adattatori (..ml) + :modelli (CatalogoDiarizzazione) + :avvio (snastro.avvio.r1.SelezioneAdattatoriMl wiring edit)"
     title: "Diarizzatore reale su sherpa-onnx"
     consumes:
       - "kernel-pl"
@@ -2500,14 +2703,28 @@ blocks:
       - "0008"
       - "0014"
       - "0016"
+      - "0017"
+      - "0019"
     gated_by:
       - "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014 (accepted 2026-09-23)"
     tests_nl:
       - "AC-249 [@modelli] DiarizzatoreContratto passa contro l'adattatore reale su un campione di sample/"
-      - "AC-250 Le voci di catalogo di :modelli segmentazione-pyannote-3.0 (TAR_BZ2, file usato model.int8.onnx) e embedding-wespeaker-resnet34-lm (FILE, wespeaker_en_voxceleb_resnet34_LM.onnx) hanno url, sha256, dimensioneByte, licenza (MIT / CC-BY-4.0) e attribuzione esattamente come nella tabella di ADR 0014 § ':modelli catalogue entries' — REWRITTEN 2026-09-24"
-      - "AC-373 (ex AC-NP6) [@modelli] numeroPersone = k → l'adattatore configura numClusters = k e restituisce al più k voceIndice distinti; assente → numClusters = -1 e threshold 0.4 (config di ADR 0014: segmentation-3.0 int8, windowShiftRatio 0.5, minDurationOn 0.3, minDurationOff 0.5); un k superiore a quanto l'audio supporta non fa fallire l'Elaborazione (se sherpa rifiuta k, fallback automatico a numClusters = -1)"
+      - "AC-250 (REWRITTEN 2026-09-24, ADR 0019) The :modelli entries of CatalogoDiarizzazione match ADR 0019 §1.7 / ADR 0014 exactly: segmentazione-pyannote-3.0 unchanged asset (TAR_BZ2, sha 24615ee8…6488, 6958444 B, MIT) whose file used is model.onnx (fp32); embedding-nemo-titanet-small FILE nemo_en_titanet_small.onnx, url, sha256 ad4a1802…789e, dimensioneByte 40257283, CC-BY-4.0, attribution text; embedding-wespeaker-resnet34-lm unchanged and kept (step 1). CatalogoDiarizzazione.voci = [segmentazione, resnet34-lm, titanet-small]; no main source of :avvio or :trascrizione:adattatori references model.int8.onnx; the ADR 0019 enforced_by is green"
+      - "AC-373 (REWRITTEN 2026-09-24, ADR 0019) numeroPersone = k → the AHC k-cut of ADR 0019 §1.2 and the result has at most k distinct voceIndice; absent → the SOGLIA_AHC_AUTO = 0.5 cut; a k above the qualifying clusters never fails the Elaborazione; step 1 is configured with numClusters = -1, threshold = 0.2 and its labels are never used (test on the built ConfigDiarizzazione)"
       - "AC-251 Tutte le risorse native sono rilasciate a fine uso (use {})"
-    notes: "AMENDED 2026-09-24 (ADR 0014): runtime config and catalogue entries are pinned by ADR 0014; the adapter implements diarizza(c, numeroPersone)."
+      - "AC-480 (gate, synthetic embeddings, no natives) Clustering on pieces with 4 blobs of 100 s, 80 s, 70 s and 20 s of speech, k = 3 → exactly 3 voceIndice; the 20 s blob's pieces are assigned to their nearest kept centroid and no voceIndice stands for it alone"
+      - "AC-481 (gate) 2 tight blobs of 100 s each, k = 4 → exactly 2 voceIndice, no exception: the cut keeps searching while fewer than k clusters qualify and neither blob can split into two parts of >= 60 s"
+      - "AC-482 (gate) Qualifying minimum = min(60 000 ms, 10 % of total speech): 30 min of speech → 60 000 ms; 5 min → 30 000 ms; 0 → no clusters and an empty list of Turni"
+      - "AC-483 (gate) Without k: cut at SOGLIA_AHC_AUTO, keep the qualifying clusters (at least 1) and assign every piece to its nearest centroid; non-empty speech in which nothing qualifies gives exactly one voceIndice"
+      - "AC-484 (gate) Determinism: the same input gives the same List<Turno>, twice in one JVM and across instances; ties break on the lowest index — the merge picks the lowest (i, j) row-major and the assignment the lowest centroid index (fixture with equal distances; ADR 0019 §1.9)"
+      - "AC-485 (gate) Pieces and clustering exactly as ADR 0019 §1.9: a step-1 segment of 7 500 ms → 3 pieces of 2 500 ms, one of 3 000 ms → 1 piece (max(1, ceil(d / 3000)) equal parts, no overlap between them); no piece crosses a step-1 segment boundary; piece embeddings normalized as v / (‖v‖ + 1e-9); pieces < 1 500 ms stay out of the AHC but get a voceIndice by nearest centroid; the average linkage is weighted by piece COUNT (UPGMA), not by duration (fixture where the two give different merge orders follows the count); the k-rule raises the cut from m = k until >= k clusters qualify, then keeps the k with the most qualifying speech summed over pieces >= 1.5 s only; centroids are the duration-weighted sum of normalized embeddings, L2-normalized (fixture where weighting changes the winner); two overlapping step-1 segments both yield Turni (INV-7, nothing trimmed); every Turno has inizio < fine, in ms"
+      - "AC-486 (gate, injectable fake session / fake loader) Step 1 is exactly ONE conSessione and each piece embedding is ONE conSessione; the clustering runs with the Mutex free: a probe conSessione from another thread, started while clustering, gets the Mutex at once (ADR 0019 §1.5, amending ADR 0017 §1.1)"
+      - "AC-487 (gate) More than PEZZI_MASSIMI_AHC = 6000 pieces → the AHC runs on every ceil(n/6000)-th piece (deterministic) and every piece still gets a voceIndice; test with 13 000 synthetic pieces: it completes and the subsample size is <= 6000"
+      - "AC-488 [@modelli, opt-in] Stability on Via Roquel, k = 4: the recording as is and with 160 / 766 / 8000 leading zero samples (+10 / +47.9 / +500 ms); frame-level (10 ms, round((s − offset)·100), a later Turno overwrites an earlier one, only frames labelled in both runs) agreement under the best one-to-one mapping (Hungarian) over all 6 pairs, as the experiment's stability (ADR 0019 §1.9); pass: mean >= 0.92 and min >= 0.90 (measured 0.940 / 0.928); also PRINTS NR4 at k = 2 (measured 0.72), information only"
+      - "AC-489 [@modelli, opt-in] Reproduction: Via Roquel k = 4 → 4 voceIndice whose speech seconds, sorted, are each within ±15 % of 1136, 971, 803 and 584; auto (SOGLIA_AHC_AUTO = 0.5): Via Roquel gives 4 voices of >= 60 s and NR4 gives 3. If AC-488 or AC-489 cannot pass the block stops BOUNCED to the architect; it never ships an unproven clustering"
+      - "AC-490 (code review) Named constants defined once in the adapter: PEZZO_MS = 3000, DURATA_MINIMA_PEZZO_AHC_MS = 1500, DURATA_MINIMA_CLUSTER_MS = 60000, QUOTA_MINIMA_CLUSTER = 0.10, PEZZI_MASSIMI_AHC = 6000, SOGLIA_AHC_AUTO = 0.5, SOGLIA_PASSO_1 = 0.2 and the step-1 settings (wsr 0.5, minDurationOn 0.3, minDurationOff 0.5); no duplicated literal"
+      - "AC-491 (gate with a fake loader, plus [@modelli]) EmbeddingSherpa: N calcola in one Elaborazione → 1 model load; one conSessione per call and the Mutex free between calls; close releases the model and is called at the end of the Elaborazione, also on failure; at runtime com.k2fsa appears only in :ml-sherpa (AC-245)"
+    notes: "AMENDED 2026-09-24 (ADR 0014): runtime config and catalogue entries are pinned by ADR 0014; the adapter implements diarizza(c, numeroPersone). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): the diarization is replaced by ADR 0019 §1.2 (step 1 sherpa seg fp32 + ResNet34-LM over-split, labels discarded; <= 3 s pieces; TitaNet-small piece embeddings through the new :ml-sherpa EmbeddingSherpa, owned HERE as its first user; pure-Kotlin internal AHC in snastro.trascrizione.adattatori.ml with its own cosine; nearest-centroid assignment); exact settings in ADR 0019 §1.9 'Parametri misurati'. Reference implementation: the experiment scripts diar2/{common,clus,stage1,stage2}.py of session 1f80eddf's scratch, handed to the worker by the orchestrator (not committed). Also carries the :modelli CatalogoDiarizzazione entry (AC-250) and the :avvio SelezioneAdattatoriMl wiring edit (three model files; avvio-composizione is not reopened). ADR 0019 enforced_by is exigible_from this block's merge."
     sources: "spike scelta-diarizzatore, ADR 0004/0008/0014"
   - id: "riconoscitore-sherpa"
     type: "adapter"
@@ -2571,7 +2788,7 @@ blocks:
     type: "adapter"
     context: "parlanti"
     side: "app"
-    wave: 12
+    wave: 13
     release: "R2"
     module: ":ml-sherpa + :parlanti:adattatori (..ml)"
     title: "EstrattoreImpronta reale su sherpa-onnx"
@@ -2580,27 +2797,30 @@ blocks:
       - "tec-estrattore-impronta"
       - "tec-ml-sherpa"
     depends_on:
-      - "avvio-parlanti"
+      - "diarizzatore-sherpa"
     related_adrs:
       - "0004"
       - "0008"
       - "0012"
       - "0017"
+      - "0019"
     gated_by:
-      - "ADR closing spike impronta-vocale-affidabilita"
+      - "ADR closing spike impronta-vocale-affidabilita — satisfied for this block (model choice + catalogue entry): ADR 0019 §2 (accepted 2026-09-24); SoglieFascia and BUDGET_IMPRONTA_MS stay PROVISIONAL configuration and do not gate the build; the spike itself stays OPEN (partially answered)"
     tests_nl:
       - "AC-258 [@modelli] EstrattoreImprontaContratto passa contro l'adattatore reale su un campione di sample/"
-      - "AC-259 La voce del modello nel catalogo ha URL, SHA-256 e licenza come da ADR dello spike"
+      - "AC-259 (REWRITTEN 2026-09-24, ADR 0019) The model entry is embedding-nemo-titanet-small (ADR 0019 §1.7), the SAME VoceCatalogo as the diarizer's: no second entry, no second download"
       - "AC-260 Tutte le risorse native sono rilasciate a fine uso (use {})"
-      - "AC-310 modello = l'id della voce di catalogo del modello di embedding (ADR 0008), costante per l'istanza e uguale a quello registrato in :modelli"
+      - "AC-310 (REWRITTEN 2026-09-24, ADR 0019) modello == 'embedding-nemo-titanet-small', constant per instance and equal to the id registered in :modelli"
       - "AC-311 Il Mutex nativo è acquisito DENTRO estrai (mai dal chiamante, mai dentro una transazione) e rilasciato anche in caso di eccezione"
       - "AC-406 (ADR 0017 §1) estrai apre esattamente UNA conSessione per chiamata, per UNA sola impronta, e non la trattiene dopo il ritorno: dopo che estrai ritorna, una conSessione da un altro thread ottiene subito il Mutex"
       - "AC-407 (ADR 0017 §1.5) Se il thread è interrotto durante l'estrazione nativa, estrai lancia InterruptedException dopo la chiusura della sessione e non restituisce alcuna Impronta — test del gate con un estrattore nativo finto"
       - "AC-408 (ADR 0017; modifica a MotoreSherpa di :ml-sherpa, portata qui perché vive nel modulo di questo blocco e serve solo a R2) conSessione attende con lockInterruptibly(): A tiene il Mutex, B attende in conSessione, B è interrotto → B riceve InterruptedException, l'uso di B non gira mai e nessun nativo è caricato; A rilascia normalmente; AC-401 (serializzazione, rilascio su eccezione) resta verde"
       - "AC-409 (ADR 0017 §1.3) Il Mutex è equo: A lo tiene, poi B e C si accodano → lo ottengono nell'ordine B, C; la pipeline che lo richiede di nuovo dopo il suo rilascio si accoda dietro un'estrazione in attesa"
       - "AC-410 (regressione ADR 0017, portata da riconoscitore-sherpa che non è riaperto) Il Mutex è libero tra due chiamate riconosci: con il MotoreRiconoscimento finto iniettabile e un MotoreSherpa con loader finto, dopo il ritorno di riconosci una conSessione da un altro thread ottiene subito il Mutex e il modello resta in cache (nessun secondo caricamento)"
-    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): wires itself into avvio-parlanti (R2), no longer the R1 composition. AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): AC-406..AC-410; this block also carries the :ml-sherpa MotoreSherpa change (lockInterruptibly on the fair Mutex, AC-408/409) and the riconoscitore-sherpa Mutex regression (AC-410, gate test in :ml-sherpa). Its own gate impronta-vocale-affidabilita stays OPEN."
-    sources: "spike impronta-vocale-affidabilita, ADR 0004/0008"
+      - "AC-492 (gate with a fake loader) The extractor uses EmbeddingSherpa: N estrai → 1 model load and still ONE conSessione per estrai (AC-406); the model is released by the adapter's chiudi, which avvio-parlanti calls at project close; after chiudi a new estrai reloads"
+      - "AC-493 [@modelli, opt-in] 1 000 estrai over 1 000 distinct 1–10 s intervals of a real sample, with no Elaborazione running, take <= 60 s in total on the M3 Pro; the test prints the time (ADR 0019 §4.7 cost estimate)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): wires itself into avvio-parlanti (R2), no longer the R1 composition. AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): AC-406..AC-410; this block also carries the :ml-sherpa MotoreSherpa change (lockInterruptibly on the fair Mutex, AC-408/409) and the riconoscitore-sherpa Mutex regression (AC-410, gate test in :ml-sherpa). Its own gate impronta-vocale-affidabilita stays OPEN. AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): GATE SATISFIED for the model choice by ADR 0019 §2 — TitaNet-small (embedding-nemo-titanet-small, shared with the diarizer, via EmbeddingSherpa); SoglieFascia stay provisional config (ADR 0004: injected), not a gate. depends_on is now diarizzatore-sherpa (EmbeddingSherpa + the catalogue entry); the old edge to avvio-parlanti is REVERSED: this block no longer wires itself — avvio-parlanti's rework does the REALI wiring (AC-541). Existing print rows of model 'nessun-estrattore' are re-derived by RiallineaTutteLeImpronte (AC-316); no migration."
+    sources: "spike impronta-vocale-affidabilita, ADR 0004/0008, ADR 0019 §1.4, §1.7, §2"
   - id: "benchmark-elaborazione"
     type: "adapter"
     context: "piattaforma"
@@ -2623,13 +2843,15 @@ blocks:
       - "0014"
       - "0015"
       - "0016"
+      - "0019"
     gated_by:
       - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016"
       - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
     tests_nl:
       - "AC-261 [opt-in, fuori gate] su un campione reale di 60 minuti con modelli scaricati, l'Elaborazione completa va da in_corso a completata in <= 600 s sull'M3 Pro; i tempi per fase sono stampati"
       - "AC-262 Il task fallisce se il tempo supera 600 s"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by."
+      - "AC-542 [opt-in, fuori gate] Besides the per-phase times (AC-261) the benchmark prints the diarizzazione sub-times: step 1 (the one native hold, i.e. the worst-case Mutex wait, ADR 0019 §1.5), the piece embeddings, and clustering + assignment; pass condition AC-261 (<= 600 s per 60 min; ADR 0019 estimates ≈ 346 s under load)"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by. AMENDED 2026-09-24 (ADR 0019): runs after the diarizzatore-sherpa rework; prints the diarization split (AC-542)."
     sources: "ADR 0011 (+ R17)"
 boundaries:
   - id: "kernel-pl"
@@ -2721,6 +2943,10 @@ boundaries:
       - "persistenza-ritrascrivi"
       - "annulla-elaborazione"
       - "sostituzione-trascritto-policy"
+      - "persistenza-conferma-segmento"
+      - "riassegna-segmenti"
+      - "classificatore-somiglianza"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       ProgettoId: "@JvmInline value class(valore: String) — UUID"
@@ -2835,13 +3061,19 @@ boundaries:
       - "api-trascritto"
       - "trascritto-view"
       - "stati-elaborazione"
+      - "riassegna-segmenti"
     projection: "in-process"
     pinned_types:
       "Trascritto.crea": "(registrazioneId, durataMs: Long, segmenti: List<SegmentoIniziale>): Esito<Creato<Trascritto, TrascrittoCreato>> — Errore(NessunParlatoRilevato) on empty input"
       SegmentoIniziale: "data class(voceIndice: Int, intervallo: IntervalloMs, testo: String) — trascrizione:dominio input VO"
-      "Trascritto.unisci": "(sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite>"
-      "Trascritto.dividi": "(origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa>"
-      "Trascritto.riassegna": "(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce"
+      "Trascritto.unisci": "(sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite> — keeps every confermato flag"
+      "Trascritto.dividi": "(origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa> — sets confermato = true on every Segmento of S (INV-26, ADR 0019)"
+      "Trascritto.riassegna": "(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce; the event carries a (the destination); sets confermato = true on the moved Segmento (INV-26, ADR 0019)"
+      "Trascritto.riassegnaInBlocco": "(spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>> — every entry validated against the PRE-batch state, moves applied in list order, then the Voci empty at the END of the batch removed (INV-6; a Voce emptied and refilled within the batch is kept); never creates a Voce, never changes a flag (INV-26); any stale entry (Segmento missing / not on da / interval differs / a missing / Segmento confermato) → Errore(TrascrittoCambiato(registrazioneId)); a == da or a duplicated segmentoId → Errore(RiassegnazioneNonAmmessa); a refusal leaves the state unchanged; empty list → Ok(emptyList()); events one per move in list order, aNuova = false, daRimossa = true on the LAST move out of each Voce empty at the end (ADR 0019 §4.5 + Amendment (b).1)"
+      SpostamentoSegmento: "data class(segmentoId: SegmentoId, da: VoceId, a: VoceId, intervallo: IntervalloMs) — trascrizione:dominio input VO; intervallo = the Segmento's interval when planned (stale guard, also against a Ritrascrivi generation swap)"
+      "Trascritto.confermaSegmento": "(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> — the same value → Ok(null), no change; unknown segment → Errore(SegmentoNonTrovato) (INV-26)"
+      "Segmento.confermato": "Boolean, read-only — true iff an explicit user act placed or confirmed the Segmento on its current Voce and no ConfermaSegmento(false) revoked it (INV-26); crea starts every flag at false"
+      "errors (ErroreTrascrizione, ErroriTrascrizione.kt)": "+ TrascrittoCambiato(registrazioneId: RegistrazioneId) — ONE sweep owned by the trascritto rework, :ui MessaggiErrore included (ADR 0019 §4.5)"
       "read accessors": "voci: List<Voce>, segmenti: List<Segmento> (read-only copies)"
     keys:
       VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
@@ -2850,6 +3082,7 @@ boundaries:
     related_adrs:
       - "0003"
       - "0012"
+      - "0019"
     gates:
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(trascrittoQueries|voceQueries|segmentoQueries)\\b' . | grep -vE '^\\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
   - id: "agg-parlante"
@@ -2868,6 +3101,7 @@ boundaries:
       - "nomi-delle-voci"
       - "proposta-unione"
       - "sostituzione-trascritto-policy"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       "Parlante.crea": "(id, progettoId, nome: Nome, tipo: TipoParlante): Creato<Parlante, ParlanteCreato>"
@@ -2906,6 +3140,7 @@ boundaries:
       - "nomi-delle-voci"
       - "parlanti-del-progetto"
       - "sostituzione-trascritto-policy"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       "Attribuzione.conferma": "(voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>"
@@ -2929,6 +3164,7 @@ boundaries:
       - "riallinea-impronte"
       - "estratto-audio"
       - "proposta"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       SorgenteImpronta: "data class(intervalli: List<IntervalloMs>) in snastro.parlanti.dominio — non-empty, pairwise disjoint, ordered by inizioMs; val chiave: String = intervalli joined as \"<inizioMs>-<fineMs>\" with \",\" (e.g. \"1200-5400,8000-15000\")"
@@ -2972,6 +3208,7 @@ boundaries:
       - "stati-elaborazione"
       - "repository-sql-trascrizione"
       - "annulla-elaborazione"
+      - "riassegna-segmenti"
     projection: "in-process"
     pinned_types:
       ElaborazioneRepository: "interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }"
@@ -2999,6 +3236,7 @@ boundaries:
       - "nomi-delle-voci"
       - "repository-sql-parlanti"
       - "sostituzione-trascritto-policy"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       ParlanteRepository: "interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */; impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>; impronteDelProgetto(id: ProgettoId): List<RigaImpronta>; aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean /* compare-and-set UPDATE of the ONE row (attesa.parlanteId, attesa.voceRef) only if it still exists with sorgente == attesa.sorgente AND modello == attesa.modello; true iff 1 row updated; NEVER inserts (ADR 0009/0012 Amendment (b): no resurrection) */ }"
@@ -3067,16 +3305,20 @@ boundaries:
       - "identificazione-registrazioni"
       - "lettore-voci-da-trascrizione"
       - "api-trascritto"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
-      LettoreVoci: "interface { fun voci(id: RegistrazioneId): List<VoceVista>? } — null iff no Trascritto (INV-5); Voci ordered by voceId"
+      LettoreVoci: "interface { fun voci(id: RegistrazioneId): List<VoceVista>?; fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? } — null iff no Trascritto (INV-5); Voci ordered by voceId; segmenti = every current Segmento once, ordered by (inizioMs, segmentoId), NEVER text (ADR 0019 §4.1)"
+      SegmentoDiVoce: "data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, confermato: Boolean) — NEVER text; supplier side: api-trascritto segmentiDiVoce(id) with its own SegmentoDiVoceVista, mapped 1:1"
       VoceVista: "data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text"
     keys:
       VoceRef: "composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts"
       VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
+      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)"
     contract_test: "consumer-driven"
     related_adrs:
       - "0002"
+      - "0019"
   - id: "trascritto-per-documento"
     owner: "porta-lettore-trascritto"
     supplier: "api-trascritto + catalogo-registrazioni"
@@ -3166,7 +3408,7 @@ boundaries:
     delivery: "in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit"
   - id: "eventi-revisione"
     owner: "eventi-pubblicati"
-    supplier: "revisione"
+    supplier: "revisione (VociUnite, VoceDivisa, SegmentoRiassegnato, SegmentoConfermato), riassegna-segmenti (SegmentoRiassegnato, N per batch)"
     consumers:
       - "revisione"
       - "revisione-policy"
@@ -3175,11 +3417,13 @@ boundaries:
       - "abbonato-documento"
       - "avvio-composizione"
       - "avvio-parlanti"
+      - "riassegna-segmenti"
     projection: "in-process"
     pinned_types:
       VociUnite: "data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato"
       VoceDivisa: "data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato"
       SegmentoRiassegnato: "data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato"
+      SegmentoConfermato: "data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, confermato: Boolean) : EventoPubblicato — after commit only (view refresh); no synchronous subscriber (ADR 0019 §3)"
     keys:
       RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
       VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
@@ -3187,7 +3431,8 @@ boundaries:
     contract_test: "consumer-driven"
     related_adrs:
       - "0012"
-    delivery: "Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard"
+      - "0019"
+    delivery: "Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. ADR 0019: a RiassegnaSegmenti commit publishes N SegmentoRiassegnato in list order — the synchronous revisione-policy runs once per event inside the one transaction (an Errore rolls the whole batch back); after-commit subscribers are coalesced per registrazioneId as today (one Rigenerazione, one RiallineaImpronte). SegmentoConfermato → after commit only"
   - id: "eventi-parlanti"
     owner: "eventi-pubblicati"
     supplier: "conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte"
@@ -3269,6 +3514,7 @@ boundaries:
       - "riallinea-impronte"
       - "proposta"
       - "decodifica-parlanti"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       DecodificatoreAudio: "interface { fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio } — concatenation in the given order (Parlanti's own copy); NEVER called while a UnitaDiLavoro transaction is open (ADR 0012 Amendment (b))"
@@ -3285,7 +3531,7 @@ boundaries:
       - "diarizzatore-sherpa"
     projection: "in-process"
     pinned_types:
-      Diarizzatore: "interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014); no sherpa type crosses the port (ADR 0004)"
+      Diarizzatore: "interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014 rules; clustering per ADR 0019 §1.2: with k above the real count it tends to split one voice, never to fail); no sherpa type crosses the port (ADR 0004)"
       NumeroPersone: "see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)"
       Turno: "data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index"
     keys:
@@ -3294,6 +3540,7 @@ boundaries:
     related_adrs:
       - "0004"
       - "0014"
+      - "0019"
   - id: "tec-riconoscitore"
     owner: "porte-trascrizione"
     consumers:
@@ -3356,6 +3603,7 @@ boundaries:
       - "riallinea-impronte"
       - "proposta"
       - "estrattore-impronta-sherpa"
+      - "piano-riassegnazione"
     projection: "in-process"
     pinned_types:
       EstrattoreImpronta: "interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5); ONE conSessione per estrai call, for ONE print, never kept after return; an interrupt (cancellation) while waiting for the Mutex or during the native extraction → InterruptedException after the session closes, and no Impronta (ADR 0017 §1.2, §1.5)"
@@ -3382,6 +3630,41 @@ boundaries:
     contract_test: "consumer-driven"
     related_adrs:
       - "0004"
+  - id: "tec-classificatore-somiglianza"
+    owner: "porte-parlanti"
+    consumers:
+      - "piano-riassegnazione"
+      - "classificatore-somiglianza"
+    projection: "in-process"
+    pinned_types:
+      ClassificatoreSomiglianza: "interface { fun classifica(riferimenti: Map<ParlanteId, List<Impronta>>, frasi: List<Impronta>): List<Classificazione> } — output has the size and order of frasi; riferimenti has >= 2 keys, each non-empty (the caller guarantees it: require); never throws on print data (ADR 0019 §4.3)"
+      Classificazione: "sealed interface (parlanti:applicazione) { data class Sicura(val parlanteId: ParlanteId); data object Incerta } — no number"
+      SoglieSomiglianza: "data class(minima: Double, margine: Double) — require(margine > 0 && minima in -1.0..1.0), NaN rejected; injected as config; PROVISIONAL (ADR 0019 §4.3)"
+      ClassificatoreSomiglianzaFinta: "testFixtures — configurable table frase index → Classificazione; records the riferimenti map it receives"
+      Impronta: "see agg-parlante (parlanti:dominio)"
+    keys:
+      ParlanteId: "minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)"
+    contract_test: "consumer-driven"
+    related_adrs:
+      - "0004"
+      - "0019"
+  - id: "piano-per-somiglianza"
+    owner: "piano-riassegnazione"
+    consumers:
+      - "avvio-parlanti"
+    projection: "in-process"
+    pinned_types:
+      PianoRiassegnazioneQuery: "fun calcola(id: RegistrazioneId, progresso: (fatti: Int, totale: Int) -> Unit): Esito<PianoRiassegnazione> — errors TrascrittoNonTrovato, ErroreParlanti.RiferimentiInsufficienti(registrazioneId); throws InterruptedException on cancellation; never opens a transaction; writes nothing"
+      PianoRiassegnazione: "data class(registrazioneId: RegistrazioneId, spostamenti: List<SpostamentoProposto>, incerte: Int) — no similarity number, no Impronta: the glue may HOLD it until Applica (ADR 0019 Amendment (b).2)"
+      SpostamentoProposto: "data class(segmentoId: SegmentoId, da: VoceId, a: VoceId, intervallo: IntervalloMs) — primitives + kernel VOs only; the glue maps it 1:1 to SpostamentoSegmento; ordered by (intervallo.inizioMs, segmentoId)"
+      "ErroreParlanti.RiferimentiInsufficienti": "data class(registrazioneId: RegistrazioneId) : ErroreParlanti (ErroriParlanti.kt) — fewer than 2 reference Parlanti (INV-27)"
+    keys:
+      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
+      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)"
+    contract_test: "consumer-driven"
+    related_adrs:
+      - "0009"
+      - "0019"
   - id: "tec-scrittore-documento"
     owner: "porte-documento"
     consumers:
@@ -3439,12 +3722,14 @@ boundaries:
     projection: "in-process"
     pinned_types:
       "snastro.ml.MotoreSherpa": "fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; holds ONE process-wide FAIR Mutex for one native session (ONE native call at a time); the wait is INTERRUPTIBLE: an interrupt while waiting → InterruptedException, and no session, no native load and no uso run; not reentrant; the Mutex is released on return or exception; every adapter holds it for ONE port call only (ADR 0017 §1)"
+      "snastro.ml.EmbeddingSherpa": "class(motore: MotoreSherpa, percorsoModello: Path, threadIntraOp: Int) : AutoCloseable { fun calcola(campioni: FloatArray): FloatArray; override fun close() } — ONE conSessione per calcola; the model is loaded at the first call, cached across calls and released by close (the RiconoscitoreSherpa pattern); Mutex rules per ADR 0017 §1; code owned by diarizzatore-sherpa (first user), shared by estrattore-impronta-sherpa (ADR 0019 §1.4)"
       ConfigSessione: "data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = \"cpu\")"
     keys: {}
     contract_test: "consumer-driven"
     related_adrs:
       - "0004"
       - "0017"
+      - "0019"
   - id: "tec-lettore-audio"
     owner: "lettore-audio"
     consumers:
@@ -3502,26 +3787,45 @@ boundaries:
     contract_test: "consumer-driven"
     related_adrs:
       - "0008"
+  - id: "ui-azioni-somiglianza"
+    owner: "schermata-registrazione-identificazione"
+    consumers:
+      - "avvio-parlanti"
+    projection: "in-process"
+    pinned_types:
+      AzioniSomiglianza: "interface (snastro.ui.registrazione) { fun calcola(id: RegistrazioneId); fun applica(id: RegistrazioneId); fun annulla(id: RegistrazioneId); val stato: StateFlow<Map<RegistrazioneId, StatoSomiglianza>> } — calcola ends in Anteprima and writes nothing; applica sends the HELD plan (ignored unless Anteprima with N > 0); annulla interrupts a computation or discards a preview; no entry = idle (ADR 0019 Amendment (b).2)"
+      StatoSomiglianza: "sealed interface { InCorso(fatti: Int, totale: Int, ultimoAvanzamentoMs: Long); Anteprima(gruppi: List<GruppoSpostamenti>, incerte: Int); Applicazione; Esito(spostate: Int, incerte: Int); Errore(errore: ErroreSomiglianzaUi) }"
+      GruppoSpostamenti: "data class(da: VoceId, a: VoceId, frasi: Int) — ordered by (a, da); N = sum of frasi"
+      ErroreSomiglianzaUi: "sealed interface { data object TrascrittoCambiato; data object RiferimentiInsufficienti; data class Altro(testo: String) }"
+      "ComandiVoce.nominaFrase": "(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, passi: PassiNominaFrase) — same per-project scope and pending state as ADR 0017 §3, keyed by the Segmento; the steps are separate commands, not one transaction (ADR 0019 §5)"
+      PassiNominaFrase: "sealed interface (UI side, computed by the presenter) { SoloConferma; AttribuisciVoce(voceId: VoceId, obiettivo: ObiettivoNome); Sposta(voceId: VoceId); NuovaVoce(obiettivo: ObiettivoNome) }"
+      ObiettivoNome: "sealed interface { Esistente(parlanteId: ParlanteId); Nuovo(nome: String, ricorrente: Boolean) } — 'nuovo…' of Q-7"
+    keys: {}
+    contract_test: "consumer-driven"
+    related_adrs:
+      - "0017"
+      - "0019"
 build_order:
   - [scaffold-app]  # wave 0
   - [kernel]  # wave 1
   - [persistenza-schema, eventi-pubblicati, progetto, registrazione, elaborazione, trascritto, parlante, attribuzione, sorgente-impronta]  # wave 2
   - [porte-progetto, porte-trascrizione, porte-parlanti, porte-documento, porta-registrazione-trascrizione, porta-registrazione-parlanti, porta-lettore-voci, porta-lettore-trascritto, porta-lettore-nomi, persistenza-ritrascrivi]  # wave 3
-  - [crea-progetto, servizi-registrazione, avvia-elaborazione, annulla-elaborazione, esegui-elaborazione, revisione, conferma-attribuzione, salta-voce, gestione-parlante, revisione-policy, sostituzione-trascritto-policy, riallinea-impronte, catalogo-registrazioni, api-trascritto, nomi-delle-voci, documento, estratto-audio, repository-sql-progetto, repository-sql-trascrizione, repository-sql-parlanti, registro-progetti-file, audio-ffmpeg, confronto-impronte, modelli-provisioning]  # wave 4
-  - [registrazione-da-progetto-tr, registrazione-da-progetto-pa, lettore-voci-da-trascrizione, lettore-trascritto-da-trascrizione, lettore-nomi-da-parlanti, abbonato-revisione-parlanti, abbonato-riallineamento-impronte, scrittore-documento-md, audio-progetto, decodifica-trascrizione, decodifica-parlanti, rigenerazione-documento, elenco-progetti, registrazioni-del-progetto, stati-elaborazione, identificazione-registrazioni, trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, parlanti-del-progetto]  # wave 5
+  - [crea-progetto, servizi-registrazione, avvia-elaborazione, annulla-elaborazione, esegui-elaborazione, revisione, riassegna-segmenti, conferma-attribuzione, salta-voce, gestione-parlante, revisione-policy, sostituzione-trascritto-policy, riallinea-impronte, catalogo-registrazioni, api-trascritto, nomi-delle-voci, documento, estratto-audio, repository-sql-progetto, repository-sql-parlanti, registro-progetti-file, audio-ffmpeg, confronto-impronte, classificatore-somiglianza, modelli-provisioning, persistenza-conferma-segmento]  # wave 4
+  - [registrazione-da-progetto-tr, registrazione-da-progetto-pa, lettore-voci-da-trascrizione, lettore-trascritto-da-trascrizione, lettore-nomi-da-parlanti, abbonato-revisione-parlanti, abbonato-riallineamento-impronte, scrittore-documento-md, audio-progetto, decodifica-trascrizione, decodifica-parlanti, rigenerazione-documento, elenco-progetti, registrazioni-del-progetto, stati-elaborazione, identificazione-registrazioni, trascritto-view, identificazione-voci, proposta, proposta-unione, piano-riassegnazione, parlanti-attivi, parlanti-del-progetto, repository-sql-trascrizione]  # wave 5  # repository-sql-trascrizione 4 → 5 (ADR 0019: after 4.sqm)
   - [ui-fondamenta, abbonato-documento]  # wave 6
   - [lettore-audio]  # wave 7
   - [schermata-progetti, schermata-registrazioni, schermata-registrazione, schermata-parlanti, schermata-modelli]  # wave 8
   - [avvio-r0, schermata-registrazioni-identificazione, schermata-registrazione-identificazione, avvio-coda-elaborazioni]  # wave 9
   - [avvio-composizione]  # wave 10
-  - [avvio-parlanti, ml-sherpa-motore, allineatore]  # wave 11  # R1 ML spike gates satisfied (ADR 0013-0016); avvio-parlanti (R2) Mutex gate satisfied by ADR 0017
-  - [diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, estrattore-impronta-sherpa]  # wave 12  # R1 gates satisfied; estrattore-impronta-sherpa gated (R2)
-  - [benchmark-elaborazione]  # wave 13  # spike gates satisfied; waits on the wave-12 R1 adapters merged
+  - [ml-sherpa-motore, allineatore]  # wave 11  # R1 ML spike gates satisfied (ADR 0013-0016); avvio-parlanti (R2) Mutex gate satisfied by ADR 0017
+  - [diarizzatore-sherpa, riconoscitore-sherpa, vad-silero]  # wave 12  # R1 gates satisfied
+  - [benchmark-elaborazione, estrattore-impronta-sherpa]  # wave 13  # spike gates satisfied; waits on the wave-12 R1 adapters merged; estrattore-impronta-sherpa (R2) gate satisfied by ADR 0019 §2, after diarizzatore-sherpa (EmbeddingSherpa)
+  - [avvio-parlanti]  # wave 14  # 2026-09-24 (ADR 0019): moved from wave 11 — its REALI wiring needs estrattore-impronta-sherpa; the Mutex gate stays satisfied by ADR 0017
 release_plan:
   # RELEASE PIVOT 2026-09-23 (user decision). Every block carries `release:` = the minimal release that needs it.
   # A release is the set of blocks with release <= it; build_order/waves stay the dependency order inside it.
   R0: {name: "Archivio", scope: "native window; create/open a project (folder naming AC-263/264); import recordings (audio copied, titolo unique); list them (S2) and play them; real SQLite + real audio; NO ML, NO Trascrizione, NO Parlanti", composition_root: "avvio-r0"}
   # AMENDED 2026-09-24 (user decisions, delta 2026-09-24-packaging): R1 spike gates satisfied by ADR 0013/0014/0015/0016;
   # the attesa-mutex-estrazione gate MOVED to R2; S3 in R1 is READ-ONLY (variant A) with an explicit cut of the Revisione UI.
-  R1: {name: "Trascrizione", scope: "start a transcription (S2 'Trascrivi' + optional Numero di persone); pipeline VAD/ASR/diarization/alignment (strategy A per turn, ADR 0015) with real ML adapters on pinned sherpa-onnx 1.13.8 natives (ADR 0016); S3 READ-ONLY: transcript by Voce with 'Voce n' labels, play from each Segmento, open the Documento; Documento .md; cancel a queued transcription (S2 'Annulla' on 'In coda', AnnullaElaborazione — ADR 0018 Amendment (b))", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013", "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014", "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015", "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016"], cut: ["Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con'; AC-209/210/211, AC-404): the revisione domain block (UnisciVoci/DividiVoce/RiassegnaSegmento) is built in R1 WITHOUT UI — its commands are reachable only from tests (AC-354/AC-356); the UI arrives in R2 with schermata-registrazione-identificazione (user decision 2026-09-24, rule 9)", "S3 Voci panel / identification (AC-212..216, 219, 318, 319, 403, 405): R2, schermata-registrazione-identificazione", "packaging O-1 (JDK for jpackage) and O-2 (signing/notarization): deferred, R1 runs via ./gradlew :avvio:run (ADR 0016 OPEN)", "benchmark CoreML opt-in AC (packaging delta Part 2, optional): not folded, pending the user"]}
-  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment; Ritrascrivi (ADR 0018: re-run over a completata, atomic Trascritto replacement + Parlanti purge, S3 read-only during the re-run)", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236) — satisfied: ADR 0017 (accepted 2026-09-24)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa"]}
+  R1: {name: "Trascrizione", scope: "start a transcription (S2 'Trascrivi' + optional Numero di persone); pipeline VAD/ASR/diarization (ADR 0019 §1: seg-3.0 fp32 + TitaNet-small + own AHC)/alignment (strategy A per turn, ADR 0015) with real ML adapters on pinned sherpa-onnx 1.13.8 natives (ADR 0016); S3 READ-ONLY: transcript by Voce with 'Voce n' labels, play from each Segmento, open the Documento; Documento .md; cancel a queued transcription (S2 'Annulla' on 'In coda', AnnullaElaborazione — ADR 0018 Amendment (b))", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013", "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014", "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015", "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016"], cut: ["Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con'; AC-209/210/211, AC-404): the revisione domain block (UnisciVoci/DividiVoce/RiassegnaSegmento) is built in R1 WITHOUT UI — its commands are reachable only from tests (AC-354/AC-356); the UI arrives in R2 with schermata-registrazione-identificazione (user decision 2026-09-24, rule 9)", "S3 Voci panel / identification (AC-212..216, 219, 318, 319, 403, 405): R2, schermata-registrazione-identificazione", "packaging O-1 (JDK for jpackage) and O-2 (signing/notarization): deferred, R1 runs via ./gradlew :avvio:run (ADR 0016 OPEN)", "benchmark CoreML opt-in AC (packaging delta Part 2, optional): not folded, pending the user"]}
+  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment; Ritrascrivi (ADR 0018: re-run over a completata, atomic Trascritto replacement + Parlanti purge, S3 read-only during the re-run); semi-automatic separation (ADR 0019: reference sentences, 'Dai un nome a una frase', 'Riassegna per somiglianza' with a preview; real TitaNet-small extractor, provisional Proposte)", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236) — satisfied: ADR 0017 (accepted 2026-09-24)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa — satisfied for the model choice by ADR 0019 §2 (accepted 2026-09-24); SoglieFascia / BUDGET_IMPRONTA_MS stay provisional configuration, not a gate; the spike stays OPEN (partially answered)"]}

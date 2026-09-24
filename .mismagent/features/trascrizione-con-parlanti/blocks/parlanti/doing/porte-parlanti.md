@@ -19,6 +19,7 @@ related_adrs:
   - "0009"
   - "0012"
   - "0017"
+  - "0019"
 owns_boundaries:
   repo-parlanti:
     projection: "in-process"
@@ -47,13 +48,24 @@ owns_boundaries:
       ConfrontoImpronte: "interface { fun fascia(voce: Impronta, impronte: List<Impronta>): Fascia } — the BEST band over the Parlante's prints; empty list → NESSUNA"
       Fascia: "enum FORTE | DEBOLE | NESSUNA (parlanti:applicazione) — never a number outside the adapter"
       SoglieFascia: "data class(forte: Double, debole: Double) — require forte > debole; values from spike impronta-vocale-affidabilita, injected as config"
+  tec-classificatore-somiglianza:
+    projection: "in-process"
+    contract_test: "consumer-driven"
+    pinned_types:
+      ClassificatoreSomiglianza: "interface { fun classifica(riferimenti: Map<ParlanteId, List<Impronta>>, frasi: List<Impronta>): List<Classificazione> } — output has the size and order of frasi; riferimenti has >= 2 keys, each non-empty (the caller guarantees it: require); never throws on print data (ADR 0019 §4.3)"
+      Classificazione: "sealed interface (parlanti:applicazione) { data class Sicura(val parlanteId: ParlanteId); data object Incerta } — no number"
+      SoglieSomiglianza: "data class(minima: Double, margine: Double) — require(margine > 0 && minima in -1.0..1.0), NaN rejected; injected as config; PROVISIONAL (ADR 0019 §4.3)"
+      ClassificatoreSomiglianzaFinta: "testFixtures — configurable table frase index → Classificazione; records the riferimenti map it receives"
+      Impronta: "see agg-parlante (parlanti:dominio)"
 ---
 # porte-parlanti — Porte dei Parlanti: repository e ML
 
 ## What to do
 Declare ParlanteRepository (incl. rimuovi for INV-25, the compare-and-set aggiornaImpronta and the RigaImpronta reads per registrazione / per progetto), AttribuzioneRepository, DecodificatoreAudio (own copy), EstrattoreImpronta (+ modello), ConfrontoImpronte (+ Fascia, SoglieFascia) with Finta + Contratto each; ParlanteRepositoryFinta honours INV-16 like the index; EstrattoreImprontaFinta / DecodificatoreAudioFinta throw when invoked while the UnitaDiLavoroFinta has a transaction open.
 
-Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; ParlanteRepository compare-and-set aggiornaImpronta + impronteDiRegistrazione / impronteDelProgetto (RigaImpronta); ML Finte guard against an open transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them.
+REWORK 2026-09-24 (ADR 0019): add the pure port ClassificatoreSomiglianza + Classificazione (Sicura(parlanteId) | Incerta, no number) + SoglieSomiglianza (require margine > 0, minima in [-1, 1], PROVISIONAL) + ClassificatoreSomiglianzaFinta and the abstract ClassificatoreSomiglianzaContratto in testFixtures (boundary tec-classificatore-somiglianza, owned here); add ErroreParlanti.RiferimentiInsufficienti(registrazioneId) to ErroriParlanti.kt. Test AC-495.
+
+Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; ParlanteRepository compare-and-set aggiornaImpronta + impronteDiRegistrazione / impronteDelProgetto (RigaImpronta); ML Finte guard against an open transaction. FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): owns the new boundary tec-classificatore-somiglianza (AC-495) and ErroreParlanti.RiferimentiInsufficienti. LettoreVoci.segmenti (AC-494) belongs to porta-lettore-voci, the owner of voci-per-parlanti (reconciled at fold).
 
 ## Tasks
 - AC-37 ParlanteRepositoryContratto: un secondo attivo con lo stesso nome normalizzato nello stesso Progetto → NomeGiaInUso; il nome di un eliminato è accettato; round-trip con impronte (passa contro la Finta)
@@ -65,6 +77,7 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; P
 - AC-271 ParlanteRepositoryContratto: impronteDiRegistrazione e impronteDelProgetto restituiscono tutte e sole le RigaImpronta (parlanteId, voceRef, sorgente, modello) della Registrazione / del Progetto; il round-trip di un Parlante conserva sorgente e modello di ogni impronta
 - AC-272 EstrattoreImprontaFinta e DecodificatoreAudioFinta lanciano IllegalStateException se invocate mentre la UnitaDiLavoroFinta passata ha transazioneAperta = true; fuori dalla transazione rispondono normalmente
 - AC-273 EstrattoreImprontaContratto: modello è non vuoto e costante per l'istanza
+- AC-495 (ADR 0019) The ClassificatoreSomiglianza port, Classificazione, SoglieSomiglianza, ClassificatoreSomiglianzaFinta and the abstract ClassificatoreSomiglianzaContratto exist as pinned in tec-classificatore-somiglianza; ErroreParlanti.RiferimentiInsufficienti(registrazioneId) is added (ErroriParlanti.kt); :ui MessaggiErrore needs no text for it (the button is disabled before it can happen; the glue maps it to the generic message)
 
 ## Dependencies
 - **repo-parlanti** (OWNED here — built before its consumers) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
@@ -86,6 +99,15 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; P
     - `ConfrontoImpronte`: interface { fun fascia(voce: Impronta, impronte: List<Impronta>): Fascia } — the BEST band over the Parlante's prints; empty list → NESSUNA
     - `Fascia`: enum FORTE | DEBOLE | NESSUNA (parlanti:applicazione) — never a number outside the adapter
     - `SoglieFascia`: data class(forte: Double, debole: Double) — require forte > debole; values from spike impronta-vocale-affidabilita, injected as config
+- **tec-classificatore-somiglianza** (OWNED here — built before its consumers) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `ClassificatoreSomiglianza`: interface { fun classifica(riferimenti: Map<ParlanteId, List<Impronta>>, frasi: List<Impronta>): List<Classificazione> } — output has the size and order of frasi; riferimenti has >= 2 keys, each non-empty (the caller guarantees it: require); never throws on print data (ADR 0019 §4.3)
+    - `Classificazione`: sealed interface (parlanti:applicazione) { data class Sicura(val parlanteId: ParlanteId); data object Incerta } — no number
+    - `SoglieSomiglianza`: data class(minima: Double, margine: Double) — require(margine > 0 && minima in -1.0..1.0), NaN rejected; injected as config; PROVISIONAL (ADR 0019 §4.3)
+    - `ClassificatoreSomiglianzaFinta`: testFixtures — configurable table frase index → Classificazione; records the riferimenti map it receives
+    - `Impronta`: see agg-parlante (parlanti:dominio)
+  - keys (minting rules):
+    - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -117,4 +139,4 @@ Note: AMENDED 2026-09-23 (ADR 0012 Amendment (b)): EstrattoreImpronta.modello; P
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012, 0017 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004/0009.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012, 0017, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004/0009.

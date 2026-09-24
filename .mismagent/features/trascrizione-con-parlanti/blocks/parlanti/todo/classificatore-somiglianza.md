@@ -1,37 +1,37 @@
 ---
-id: "lettore-voci-da-trascrizione"
+id: "classificatore-somiglianza"
 type: "adapter"
 context: "parlanti"
 side: "app"
-wave: 5
+wave: 4
 release: "R2"
-module: ":parlanti:adattatori (..porte)"
+module: ":parlanti:adattatori (..ml)"
 consumes:
   - "kernel-pl"
-  - "voci-per-parlanti"
-depends_on:
-  - "api-trascritto"
+  - "tec-classificatore-somiglianza"
+depends_on: []
 related_adrs:
   - "0002"
   - "0003"
+  - "0004"
   - "0012"
   - "0019"
 ---
-# lettore-voci-da-trascrizione — LettoreVoci da VociDelTrascritto
+# classificatore-somiglianza — ClassificatoreSomiglianzaCoseno (frase → Sicura(P) | Incerta, Kotlin puro)
 
 ## What to do
-Cross-context READ adapter: implements LettoreVoci by calling the supplier's public API VociDelTrascritto, mapping to the consumer's own DTO; delegates, never re-decides.
+ClassificatoreSomiglianzaCoseno, the pure-Kotlin implementation of ClassificatoreSomiglianza: for each frase, cosine to each reference Parlante's centroid (normalized mean of its normalized reference embeddings), then Sicura(best) iff best >= SIMILARITA_MINIMA and best − second >= MARGINE_MINIMO, else Incerta. Non-comparable prints → Incerta, never an exception. No number leaves the adapter.
 
-REWORK 2026-09-24 (ADR 0019): implement LettoreVoci.segmenti over api-trascritto's segmentiDiVoce (1:1 map, never text). Test AC-524 (LettoreVociContratto real-on-real, including the AC-494 cases).
-
-Note: AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): implements LettoreVoci.segmenti over api-trascritto.segmentiDiVoce (1:1).
+Note: NEW 2026-09-24 (ADR 0019 §4.3, manifest delta 2026-09-24-semi-automatica): pure Kotlin, no natives, runs in the gate. Score = cosine to each reference Parlante's centroid (whatever its reference mode, ADR 0019 Amendment (b).1); Sicura(best) iff best >= SIMILARITA_MINIMA and best − second >= MARGINE_MINIMO, else Incerta. Thresholds PROVISIONAL [hypothesis], injected as SoglieSomiglianza (calibration: Via Roquel with the user's references, recorded by amendment); no number leaves the adapter (code review). Leave-one-out centroids are the first calibration alternative.
 
 ## Tasks
-- AC-137 LettoreVociContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)
-- AC-524 (ADR 0019) LettoreVociContratto, including the new segmenti cases of AC-494, passes real-on-real: lettore-voci-da-trascrizione over api-trascritto's segmentiDiVoce, seeded through the supplier's applicazione commands and testFixtures fakes (CR-1); the adapter never receives Segmento text
+- AC-496 ClassificatoreSomiglianzaContratto passes against the real implementation, in the gate, with no models
+- AC-497 With SoglieSomiglianza(0.30, 0.05) and orthogonal unit references A and B (table test): frase = A → Sicura(A); frase at 45° (cos 0.707 / 0.707) → Incerta (margin 0); cos(A) = 0.25, cos(B) = 0 → Incerta (below minima); cos 0.80 / 0.76 → Incerta (margin 0.04 < 0.05); cos 0.80 / 0.70 → Sicura(A); three references A, B, C with best = C by 0.1 → Sicura(C)
+- AC-498 Centroid = normalized mean of the normalized reference embeddings: two references of A, (1,0) and (0.6,0.8), give a centroid ∝ (1.6, 0.8); a frase closer to that centroid than to B is Sicura(A) even when it is nearer to one single reference of B than to either single reference of A (fixture) — the centroid rule, not the max rule
+- AC-499 A non-comparable frase (zero vector, NaN, infinite, dimension ≠ the references') → Incerta, never an exception; a non-comparable reference is ignored in its Parlante's centroid; a Parlante with no comparable reference is left out of the ranking
+- AC-500 SIMILARITA_MINIMA = 0.30 and MARGINE_MINIMO = 0.05 are named constants defined once, marked PROVISIONAL with a KDoc pointer to ADR 0019 §4.3; SoglieSomiglianza rejects margine <= 0, NaN and minima outside [-1, 1]
 
 ## Dependencies
-- Blocks built first: `api-trascritto` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -62,14 +62,14 @@ Note: AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 20
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **voci-per-parlanti** (consumed/implemented) — owner `porta-lettore-voci`, supplier `api-trascritto`, projection in-process, contract_test **consumer-driven**
+- **tec-classificatore-somiglianza** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `LettoreVoci`: interface { fun voci(id: RegistrazioneId): List<VoceVista>?; fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? } — null iff no Trascritto (INV-5); Voci ordered by voceId; segmenti = every current Segmento once, ordered by (inizioMs, segmentoId), NEVER text (ADR 0019 §4.1)
-    - `SegmentoDiVoce`: data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, confermato: Boolean) — NEVER text; supplier side: api-trascritto segmentiDiVoce(id) with its own SegmentoDiVoceVista, mapped 1:1
-    - `VoceVista`: data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text
+    - `ClassificatoreSomiglianza`: interface { fun classifica(riferimenti: Map<ParlanteId, List<Impronta>>, frasi: List<Impronta>): List<Classificazione> } — output has the size and order of frasi; riferimenti has >= 2 keys, each non-empty (the caller guarantees it: require); never throws on print data (ADR 0019 §4.3)
+    - `Classificazione`: sealed interface (parlanti:applicazione) { data class Sicura(val parlanteId: ParlanteId); data object Incerta } — no number
+    - `SoglieSomiglianza`: data class(minima: Double, margine: Double) — require(margine > 0 && minima in -1.0..1.0), NaN rejected; injected as config; PROVISIONAL (ADR 0019 §4.3)
+    - `ClassificatoreSomiglianzaFinta`: testFixtures — configurable table frase index → Classificazione; records the riferimenti map it receives
+    - `Impronta`: see agg-parlante (parlanti:dominio)
   - keys (minting rules):
-    - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
+    - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
 
-Sources: ADRs 0002, 0003, 0012, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process.
+Sources: ADRs 0002, 0003, 0004, 0012, 0019 (.mismagent/decisions/); ADR 0019 §4.3, manifest delta 2026-09-24-semi-automatica.
