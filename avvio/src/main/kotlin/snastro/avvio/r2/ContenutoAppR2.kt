@@ -1,26 +1,18 @@
 package snastro.avvio.r2
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import snastro.avvio.CollaboratoriProgettoAperto
 import snastro.avvio.GrafoR0
-import snastro.avvio.r1.BarraR1
+import snastro.avvio.r1.ContenutoProgetto
 import snastro.avvio.r1.SchermataR1
+import snastro.avvio.r1.ShellProgetto
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.mappa
-import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
-import snastro.ui.ShellRoute
 import snastro.ui.modelli.ModelliPresenter
 import snastro.ui.modelli.ModelliRoute
 import snastro.ui.modelli.StatoModelli
@@ -35,59 +27,49 @@ import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.registrazioni.RegistrazioniRoute
 
 /**
- * R2's app content: R1's (S1; with a project, the 'Registrazioni' / 'Modelli e licenze' bar over S2, S3
- * and S5) plus the shell's Parlanti section, S4 (AC-341/AC-177). S2 carries the identification badge
- * (AC-204/AC-345), S3 the Voci panel and the Revisione UI (AC-402: its [SorgentiParlanti]). The
- * Registrazioni section's own place (S2/S3/S5) and every presenter are remembered per project ABOVE the
- * section switch, so going to Parlanti and back keeps where the user was.
+ * R2's app content: R1's (S1; with a project, S2/S3/S5 — S5 reachable from the shell's sidebar footer,
+ * rework cycle 1, HIGH #9: the former standalone top bar is gone) plus the shell's Parlanti section,
+ * S4 (AC-341/AC-177). S2 carries the identification badge (AC-204/AC-345), S3 the Voci panel and the
+ * Revisione UI (AC-402: its [SorgentiParlanti]). The Registrazioni section's own place (S2/S3/S5) and
+ * every presenter are remembered per project ABOVE the section switch, so going to Parlanti and back
+ * keeps where the user was (re-clicking the sidebar's OWN 'Registrazioni' item, already selected,
+ * still jumps back to its list). Rework cycle 2 (HIGH #1): the footer opens S5 from ANY section and any
+ * nav click leaves it — [ShellProgetto]/[snastro.avvio.r1.NavigazioneProgetto].
  */
 @Composable
 internal fun ContenutoAppR2(grafo: GrafoR2) {
     val r0 = grafo.r0
     val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R2) }
     val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
-    ShellRoute(
-        presenter = shellPresenter,
+    val iniziale = {
+        if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) SchermataR1.Registrazioni else SchermataR1.Modelli
+    }
+    ShellProgetto(
+        shellPresenter = shellPresenter,
+        iniziale = iniziale,
         contenutoSenzaProgetto = {
             val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
             ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita)
         },
-        contenuto = { conProgetto ->
+        contenuto = { conProgetto, navigazione ->
             val collaboratori = r0.sessione.collaboratoriCorrenti()
             val r2 = collaboratori?.estensione as? CollaboratoriR2
             if (collaboratori != null && r2 != null) {
                 val progettoId = conProgetto.progetto.progettoId
-                var schermata by remember(progettoId) {
-                    mutableStateOf(
-                        if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) {
-                            SchermataR1.Registrazioni
-                        } else {
-                            SchermataR1.Modelli
-                        },
-                    )
-                }
                 val registrazioniPresenter = remember(progettoId) {
                     costruisciRegistrazioniPresenterR2(r0, collaboratori, r2) { id ->
-                        schermata = SchermataR1.Registrazione(id)
+                        navigazione.apriRegistrazione(id)
                     }
                 }
                 val parlantiPresenter = remember(progettoId) { costruisciParlantiPresenter(r0, collaboratori, r2) }
-                when (conProgetto.destinazioneSelezionata) {
-                    DestinazioneShell.PARLANTI -> ParlantiRoute(parlantiPresenter)
-                    DestinazioneShell.REGISTRAZIONI -> Column(modifier = Modifier.fillMaxSize()) {
-                        BarraR1(
-                            onRegistrazioni = { schermata = SchermataR1.Registrazioni },
-                            onModelli = { schermata = SchermataR1.Modelli },
-                        )
-                        Column(modifier = Modifier.fillMaxWidth().weight(1f)) {
-                            when (val s = schermata) {
-                                SchermataR1.Registrazioni -> RegistrazioniRoute(registrazioniPresenter)
-                                is SchermataR1.Registrazione -> SchermataRegistrazioneR2(grafo, collaboratori, r2, s.id)
-                                SchermataR1.Modelli -> ModelliRoute(modelliPresenter)
-                            }
-                        }
-                    }
-                }
+                ContenutoProgetto(
+                    conProgetto = conProgetto,
+                    navigazione = navigazione,
+                    elenco = { RegistrazioniRoute(registrazioniPresenter) },
+                    registrazione = { id -> SchermataRegistrazioneR2(grafo, collaboratori, r2, id) },
+                    modelli = { ModelliRoute(modelliPresenter) },
+                    parlanti = { ParlantiRoute(parlantiPresenter) },
+                )
             }
         },
     )

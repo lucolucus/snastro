@@ -13,6 +13,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.ProgettoId
+import snastro.ui.testi.ETICHETTA_MODELLI_E_LICENZE
 import java.io.File
 import javax.imageio.ImageIO
 
@@ -44,12 +45,28 @@ class ShellRenderCheckTest {
         verificaSenzaProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
+    fun `AC-177 senza progetto mostra solo S1 a 1280x800 (scuro)`() =
+        verificaSenzaProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-177 senza progetto mostra solo S1 a 1024x640 (scuro)`() =
+        verificaSenzaProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
     fun `AC-181 caricamento mostra un indicatore a 1280x800`() =
         verificaCaricamento(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
     fun `AC-181 caricamento mostra un indicatore a 1024x640`() =
         verificaCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-181 caricamento mostra un indicatore a 1280x800 (scuro)`() =
+        verificaCaricamento(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-181 caricamento mostra un indicatore a 1024x640 (scuro)`() =
+        verificaCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
     fun `AC-181 errore di apertura senza progetto mostra un banner su S1 a 1280x800`() =
@@ -60,12 +77,28 @@ class ShellRenderCheckTest {
         verificaErroreSenzaProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
+    fun `AC-181 errore di apertura senza progetto mostra un banner su S1 a 1280x800 (scuro)`() =
+        verificaErroreSenzaProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-181 errore di apertura senza progetto mostra un banner su S1 a 1024x640 (scuro)`() =
+        verificaErroreSenzaProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
     fun `H1 errore di apertura con un progetto aperto mostra un banner e mantiene la nav a 1280x800`() =
         verificaErroreConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
     fun `H1 errore di apertura con un progetto aperto mostra un banner e mantiene la nav a 1024x640`() =
         verificaErroreConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `H1 errore di apertura con un progetto aperto mostra un banner e mantiene la nav a 1280x800 (scuro)`() =
+        verificaErroreConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `H1 errore di apertura con un progetto aperto mostra un banner e mantiene la nav a 1024x640 (scuro)`() =
+        verificaErroreConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
     fun `AC-341 R0 senza la sezione Parlanti nasconde la voce Parlanti a 1280x800`() =
@@ -76,73 +109,120 @@ class ShellRenderCheckTest {
         verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = false)
 
     @Test
-    fun `AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800`() =
+    fun `AC-341 R0 senza la sezione Parlanti nasconde la voce Parlanti a 1280x800 (scuro)`() =
+        verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = false, scuro = true)
+
+    @Test
+    fun `AC-341 R0 senza la sezione Parlanti nasconde la voce Parlanti a 1024x640 (scuro)`() =
+        verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = false, scuro = true)
+
+    @Test
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800`() =
         verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true)
 
     @Test
-    fun `AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640`() =
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640`() =
         verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = true)
 
-    private fun verificaSenzaProgetto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent {
-            SchermataShell(
-                stato = ShellUiStato.SenzaProgetto(),
-                azioni = AZIONI_VUOTE,
-                contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
-            )
-        }
-        onNodeWithText("S1 - elenco progetti").assertIsDisplayed()
-        onNodeWithText("Registrazioni").assertDoesNotExist()
-        onNodeWithText("Parlanti").assertDoesNotExist()
-        catturaPng("shell-senza-progetto", width, height)
-    }
+    @Test
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800 (scuro)`() =
+        verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, scuro = true)
 
-    private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent { SchermataShell(stato = ShellUiStato.Caricamento, azioni = AZIONI_VUOTE) }
-        onNodeWithTag("shell-indicatore-caricamento").assertIsDisplayed()
-        catturaPng("shell-caricamento", width, height)
-    }
+    @Test
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640 (scuro)`() =
+        verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = true, scuro = true)
+
+    @Test
+    fun `AC-572 con S5 mostrato il piede Modelli e licenze e la voce selezionata a 1280x800`() =
+        verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, modelli = true)
+
+    @Test
+    fun `AC-572 con S5 mostrato il piede Modelli e licenze e la voce selezionata a 1280x800 (scuro)`() =
+        verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, modelli = true, scuro = true)
+
+    private fun verificaSenzaProgetto(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataShell(
+                    stato = ShellUiStato.SenzaProgetto(),
+                    azioni = AZIONI_VUOTE,
+                    contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText("S1 - elenco progetti").assertIsDisplayed()
+            onNodeWithText("Registrazioni").assertDoesNotExist()
+            onNodeWithText("Parlanti").assertDoesNotExist()
+            catturaPng("shell-senza-progetto", width, height, scuro)
+        }
+
+    private fun verificaCaricamento(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataShell(
+                    stato = ShellUiStato.Caricamento,
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("shell-indicatore-caricamento").assertIsDisplayed()
+            catturaPng("shell-caricamento", width, height, scuro)
+        }
 
     // H1: the error overlays S1 (a dismissible banner), it does not replace it.
-    private fun verificaErroreSenzaProgetto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        val messaggio = "La cartella scelta non è valida."
-        setContent {
-            SchermataShell(
-                stato = ShellUiStato.SenzaProgetto(erroreApertura = messaggio),
-                azioni = AZIONI_VUOTE,
-                contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
-            )
+    private fun verificaErroreSenzaProgetto(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            val messaggio = "La cartella scelta non è valida."
+            setContent {
+                SchermataShell(
+                    stato = ShellUiStato.SenzaProgetto(erroreApertura = messaggio),
+                    azioni = AZIONI_VUOTE,
+                    contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText("S1 - elenco progetti").assertIsDisplayed()
+            onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
+            onNodeWithText(messaggio).assertIsDisplayed()
+            catturaPng("shell-errore-apertura", width, height, scuro)
         }
-        onNodeWithText("S1 - elenco progetti").assertIsDisplayed()
-        onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
-        onNodeWithText(messaggio).assertIsDisplayed()
-        catturaPng("shell-errore-apertura", width, height)
-    }
 
     // H1: the error overlays the ConProgetto nav (still reachable), it does not replace it.
-    private fun verificaErroreConProgetto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        val messaggio = "La cartella scelta non è valida."
-        setContent {
-            SchermataShell(
-                stato = ShellUiStato.ConProgetto(
-                    PROGETTO_PROVA,
-                    OGNI_SEZIONE,
-                    DestinazioneShell.REGISTRAZIONI,
-                    erroreApertura = messaggio,
-                ),
-                azioni = AZIONI_VUOTE,
-                contenuto = { Text("Contenuto della sezione selezionata") },
-            )
+    private fun verificaErroreConProgetto(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            val messaggio = "La cartella scelta non è valida."
+            setContent {
+                SchermataShell(
+                    stato = ShellUiStato.ConProgetto(
+                        PROGETTO_PROVA,
+                        OGNI_SEZIONE,
+                        DestinazioneShell.REGISTRAZIONI,
+                        erroreApertura = messaggio,
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    contenuto = { Text("Contenuto della sezione selezionata") },
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
+            onNodeWithText("Registrazioni").assertIsDisplayed()
+            onNodeWithText("Parlanti").assertIsDisplayed()
+            onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
+            onNodeWithText(messaggio).assertIsDisplayed()
+            catturaPng("shell-errore-con-progetto", width, height, scuro)
         }
-        onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
-        onNodeWithText("Registrazioni").assertIsDisplayed()
-        onNodeWithText("Parlanti").assertIsDisplayed()
-        onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
-        onNodeWithText(messaggio).assertIsDisplayed()
-        catturaPng("shell-errore-con-progetto", width, height)
-    }
 
-    private fun verificaConProgetto(width: Int, height: Int, conParlanti: Boolean) =
+    private fun verificaConProgetto(
+        width: Int,
+        height: Int,
+        conParlanti: Boolean,
+        scuro: Boolean = false,
+        modelli: Boolean = false,
+    ) =
         runDesktopComposeUiTest(width, height) {
             val sezioni = if (conParlanti) {
                 setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
@@ -154,22 +234,29 @@ class ShellRenderCheckTest {
                     stato = ShellUiStato.ConProgetto(PROGETTO_PROVA, sezioni, DestinazioneShell.REGISTRAZIONI),
                     azioni = AZIONI_VUOTE,
                     contenuto = { Text("Contenuto della sezione selezionata") },
+                    onModelliELicenze = {},
+                    modelliSelezionati = modelli,
+                    scuro = scuro,
+                    riduciMovimento = true,
                 )
             }
             onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
             onNodeWithText("Registrazioni").assertIsDisplayed()
             onNodeWithText("Contenuto della sezione selezionata").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_MODELLI_E_LICENZE).assertIsDisplayed()
             if (conParlanti) {
                 onNodeWithText("Parlanti").assertIsDisplayed()
             } else {
                 onNodeWithText("Parlanti").assertDoesNotExist()
             }
-            catturaPng("shell-con-progetto-parlanti-$conParlanti", width, height)
+            val nome = if (modelli) "shell-modelli-selezionati" else "shell-con-progetto-parlanti-$conParlanti"
+            catturaPng(nome, width, height, scuro)
         }
 
     @OptIn(ExperimentalTestApi::class)
-    private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int) {
-        val png = File(outputDir, "$nome-${width}x$height.png")
+    private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int, scuro: Boolean = false) {
+        val suffisso = if (scuro) "-scuro" else ""
+        val png = File(outputDir, "$nome$suffisso-${width}x$height.png")
         val bitmap = onRoot().captureToImage().toAwtImage()
         ImageIO.write(bitmap, "PNG", png)
         check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }

@@ -17,6 +17,15 @@ const val ETICHETTA_ELIMINA: String = "Elimina…"
 const val ETICHETTA_CONFERMA_ELIMINAZIONE: String = "Elimina"
 const val ETICHETTA_ANNULLA: String = "Annulla"
 
+/** AC-577 rework cycle 1: `BottoneIcona Edit / More` — Edit focuses the always-editable Nome field
+ * (same rename command), More opens the `Menu.html`-style menu with Promuovi/Elimina. */
+const val ETICHETTA_RINOMINA: String = "Rinomina"
+const val ETICHETTA_ALTRE_AZIONI: String = "Altre azioni"
+
+/** AC-225/AC-577: the confirmation's title — same `Dialog.html` pattern as
+ * [snastro.ui.testi.titoloConfermaRitrascrivi] ("il titolo è la domanda"). */
+fun titoloConfermaEliminazioneParlante(nome: String): String = "Eliminare «$nome»?"
+
 /** AC-225: the privacy effect the confirmation reports before a Parlante is tombstoned (ADR 0009). */
 const val MESSAGGIO_CONFERMA_ELIMINAZIONE_PARLANTE: String =
     "Le impronte vocali vengono cancellate; il nome resta nei documenti passati."

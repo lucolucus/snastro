@@ -26,6 +26,7 @@ import snastro.kernel.Esito
 import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
 import snastro.ui.ShellRoute
+import snastro.ui.modelli.StatoModelli
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.registrazioni.RegistrazioniPresenter
@@ -136,7 +137,7 @@ internal fun costruisciRegistrazioniPresenter(
 /**
  * AC-237 + AC-351 + AC-357: S1, S2 (with the identification badge), then S3 of the fixture's first
  * COMPLETATA Registrazione with its Voci panel — reached through S2's own row click, the real wiring —
- * then S4 through the shell's Parlanti section, then S5 through the bar, over the REAL model catalogue on
+ * then S4 through the shell's Parlanti section, then S5 through the sidebar footer, over the REAL model catalogue on
  * the empty isolated cache (fix-batch-16 LOW-1: the entries missing, 'Scarica'). Isolated registry and
  * model cache, pipeline and print extractor on the ML Finte: nothing of the developer's own machine is
  * read or written, no native is loaded, nothing is downloaded.
@@ -165,9 +166,10 @@ internal fun eseguiSmoke(fixtureDir: String) {
             check(esito is Esito.Ok) { "smoke: impossibile aprire il progetto fixture '$fixtureDir': $esito" }
 
             // Models missing (the real catalogue on an empty cache): the project opens on S5 first, the
-            // onboarding path — S2 is one click on the bar away.
-            attendi { esisteTag("avvio-nav-registrazioni") }
-            onNodeWithTag("avvio-nav-registrazioni").performClick()
+            // onboarding path — S2 is one click on the sidebar's own (already-selected) 'Registrazioni'
+            // item away (rework cycle 1, HIGH #9: navigation is the sidebar, not a standalone top bar).
+            attendi { esisteTag("shell-nav-registrazioni") }
+            onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
             val completata = checkNotNull(grafo.primaRegistrazioneCompletata()) {
                 "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
             }
@@ -184,12 +186,15 @@ internal fun eseguiSmoke(fixtureDir: String) {
             attendi { esisteTag("parlanti-lista") }
             salvaSchermata(outputDir, "s4")
 
-            onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
-            attendi { esisteTag("avvio-nav-modelli") }
-            onNodeWithTag("avvio-nav-modelli").performClick()
+            // Rework cycle 2 (HIGH #1): S5 ('Modelli e licenze') is reached from the sidebar's own footer
+            // row from ANY section — straight from Parlanti here.
+            onNodeWithTag("shell-piede").performClick()
+            // AC-556: `licenze()` now also lists the bundled fonts, so it is no longer the model count —
+            // the actual missing-models number comes from `StatoModelli.Mancanti` itself.
+            val numeroModelliMancanti = (modelliReali.stato.value as StatoModelli.Mancanti).numero
             attendi {
                 esisteTag("modelli-mancanti") &&
-                    esisteTesto(etichettaModelliMancanti(modelliReali.licenze().size)) &&
+                    esisteTesto(etichettaModelliMancanti(numeroModelliMancanti)) &&
                     esisteTesto(ETICHETTA_SCARICA)
             }
             salvaSchermata(outputDir, "s5")
