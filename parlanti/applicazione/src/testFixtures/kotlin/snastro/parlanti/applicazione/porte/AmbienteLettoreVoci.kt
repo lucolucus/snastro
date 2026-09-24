@@ -44,4 +44,12 @@ public interface AmbienteLettoreVoci {
      * Returns the Voce it belongs to now.
      */
     public fun riassegna(registrazioneId: RegistrazioneId, segmento: SegmentoId, destinazione: VoceId?): VoceId
+
+    /**
+     * ADR 0019 §3/[INV-26]: marks [segmento] `confermato = true` on its CURRENT Voce (an explicit user
+     * act — a manual `RiassegnaSegmento`, the moved subset of `DividiVoce`, or `ConfermaSegmento`). No
+     * un-confirming action is seeded here: `ConfermaSegmento(…, false)` is Trascrizione's own command,
+     * out of `voci-per-parlanti`'s read-only scope.
+     */
+    public fun conferma(registrazioneId: RegistrazioneId, segmento: SegmentoId)
 }
