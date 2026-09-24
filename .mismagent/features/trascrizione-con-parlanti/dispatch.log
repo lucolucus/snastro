@@ -593,3 +593,6 @@
 2026-09-23T23:45:21Z	rigenerazione-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW f1d1f50
 2026-09-23T23:45:21Z	rigenerazione-documento	composer	merge	cycle=0	-	-	MERGED 3333164 (light verify); delta saved for AC-155bis + rename trigger
 2026-09-23T23:45:27Z	abbonato-documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 (+ rename trigger)
+2026-09-24T00:09:42Z	abbonato-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 9d0a707 (mutation-tested retry)
+2026-09-24T00:09:42Z	abbonato-documento	composer	merge	cycle=0	-	-	MERGED 3fdd4cb (light verify)
+2026-09-24T00:09:42Z	avvio-composizione	composer	carry	-	-	-	R1 needs a LettoreNomi with no names (lettore-nomi-da-parlanti is R2): Voci stay "Voce n" in the Documento
