@@ -658,3 +658,9 @@
 2026-09-24T07:56:24Z	schermata-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2
 2026-09-24T07:56:24Z	schermata-registrazione-identificazione	worker	dispatch	cycle=0	tier=deep	model=opus	R2 S3 panel (ADR 0017 pending UX)
 2026-09-24T08:15:00Z	schermata-parlanti	composer	merge	cycle=0	-	-	MERGED b885ee7 (light verify, 29 tests)
+2026-09-24T08:22:05Z	schermata-registrazione-identificazione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW dd38499
+2026-09-24T08:22:05Z	schermata-registrazione-identificazione	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-24T08:25:45Z	schermata-registrazione-identificazione	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-24T08:25:45Z	schermata-registrazione-identificazione	composer	merge	cycle=0	-	-	MERGED 133c9af
+2026-09-24T08:25:45Z	schermata-registrazione-identificazione	composer	pre-release	cycle=0	-	-	MED ricaricaParlanti not serialised (stale overwrite); MED multi-segment reassign failure midway w/o reload + no test; LOW null verso opens N voices; LOW L3 earlier-visit error silent
+2026-09-24T08:25:45Z	avvio-parlanti	composer	carry	-	-	-	ComandiVoce adapter: SupervisorJob project scope, register job before start (LAZY), body throw -> Errore and port stays usable (add contract case)
