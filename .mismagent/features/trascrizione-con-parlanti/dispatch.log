@@ -794,3 +794,8 @@
 2026-09-24T22:18:58Z	pr-b5	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
 2026-09-24T22:18:58Z	pr-b5	composer	merge	cycle=0	-	-	MERGED 2a286a6
 2026-09-24T22:18:58Z	pr-b5	composer	residue	-	-	-	MED seminaTrascrittoDiProva usable from any testFixtures(:persistenza) consumer — extend §14 grep with allow-list; MED AC-459 flake root cause: settle Documento before snapshot; LOW dev-arch §7 example wiring name; RegoleArchitetturaliTest KDoc cites verifySqlDelightMigration
+2026-09-24T22:31:54Z	pr-b3	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW a39ba84
+2026-09-24T22:31:54Z	pr-b3	verifier+code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T22:33:57Z	pr-b3	verifier+code-review	result	cycle=1	tier=deep	model=opus	PASS / APPROVE
+2026-09-24T22:33:57Z	pr-b3	composer	merge	cycle=1	-	-	MERGED 3a404a7
+2026-09-24T22:33:57Z	pr-b3	composer	residue	-	-	-	MED StatoVoci keeps last-good dati across a ritrascrivi (renumbered VoceIds show old Nome if reload fails) — drop dati when vista changed; LOW-MED queued pausa cancelled by a following no-op click; LOW lanes per presenter (LettorePresenter vs RegistrazionePresenter); comment 83-84 wording
