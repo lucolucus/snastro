@@ -690,3 +690,4 @@
 2026-09-24T13:39:24Z	sa-c	worker	dispatch	-	standard	sonnet	semi-auto C parlanti: porte-parlanti, porta-lettore-voci, classificatore-somiglianza, piano-riassegnazione
 2026-09-24T13:59:28Z	sa-a	composer	merge	-	-	-	MERGED 4508b55 (8 blocks)
 2026-09-24T13:59:28Z	repository-sql-parlanti	composer	pre-release	-	-	-	LOW agg-trascritto §14 gate red: parlanti adapter tests seed with db.trascrittoQueries/voceQueries — seed via applicazione or relax gate for test sources
+2026-09-24T14:35:18Z	sa-b	composer	merge	-	-	-	MERGED 3c819c1 — new diarization reproduces experiment exactly (Via Roquel k=4 [1136,971,803,584], stability 0.940); real extractor live (1000 extractions 30 s)
