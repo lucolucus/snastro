@@ -612,3 +612,5 @@
 2026-09-24T00:34:01Z	avvio-composizione	worker	dispatch	cycle=0	tier=deep	model=opus	R1 composition (model_hint: composition root folding many boundaries)
 2026-09-24T00:48:47Z	vad-silero	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 256db17 (4/4 real Silero)
 2026-09-24T00:48:47Z	vad-silero	composer	merge	cycle=0	-	-	MERGED 74ab762 (light verify)
+2026-09-24T00:49:38Z	diarizzatore-sherpa	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW ea8c70d
+2026-09-24T00:49:38Z	diarizzatore-sherpa	composer	merge	cycle=0	-	-	MERGED 41b70ff (composer: gate + real modelli 15/15 incl. VAD+diar); FINDING: sherpa never throws on k>speakers but may return FEWER clusters than a smaller k (k=10 -> 1 on 2-voice clip) — ADR 0014 amendment + benchmark on real recording
