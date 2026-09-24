@@ -19,6 +19,7 @@ import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.applicazione.porte.Fascia
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
@@ -112,7 +113,17 @@ internal class AmbienteVoci(
     var statoElaborazione: StatoRegistrazioneVista? = null
     val aggiornamenti = AggiornamentiVistaFinta()
     val lettore = LettoreAudioFinta()
-    val comandi = ComandiVoceFinta(progetto, clock) { c -> esitoComando(c).also { if (it is Esito.Ok) applica(c) } }
+    var esitoFrase: (PassiNominaFrase) -> Esito<Unit> = { Esito.Ok(Unit) }
+    val comandi = ComandiVoceFinta(
+        progetto,
+        clock,
+        rispostaFrase = { f, passi ->
+            esitoFrase(passi).also { if (it is Esito.Ok) applicaFrase(f.segmentoId, passi) }
+        },
+    ) { c -> esitoComando(c).also { if (it is Esito.Ok) applica(c) } }
+
+    /** ADR 0019: the per-project similarity port (idle until a test drives it). */
+    val somiglianza = AzioniSomiglianzaFinta(clock)
     val sorgenti = SorgentiParlanti(
         identificazione = {
             check(!identificazioneRotta) { "lettura rotta" }
@@ -131,6 +142,8 @@ internal class AmbienteVoci(
         riassegna = { c -> revisione(c) },
         aggiornamenti = aggiornamenti,
         clock = clock,
+        confermaSegmento = { c -> revisione(c) },
+        somiglianza = somiglianza,
     )
 
     private fun revisione(c: Any): Esito<Unit> {
@@ -150,7 +163,49 @@ internal class AmbienteVoci(
             is UnisciVoci -> vista.segmenti.filter { it.voceId == c.rimossa }.forEach {
                 vista = spostato(vista, it.segmentoId.numero, c.sopravvive)
             }
+            is ConfermaSegmento -> conferma(c.segmento, c.confermato)
         }
+    }
+
+    private fun conferma(segmento: SegmentoId, valore: Boolean) {
+        vista = vista.copy(
+            segmenti = vista.segmenti.map { if (it.segmentoId == segmento) it.copy(confermato = valore) else it },
+        )
+    }
+
+    private fun attribuisci(voce: VoceId, obiettivo: ObiettivoNome) {
+        val parlante = when (obiettivo) {
+            is ObiettivoNome.Esistente -> attivi.single { it.parlanteId == obiettivo.parlanteId }
+            is ObiettivoNome.Nuovo ->
+                ParlanteAttivo(ParlanteId("p-nuovo"), obiettivo.nome, TipoParlanteVista.RICORRENTE)
+        }
+        identificate = identificate.filter { it.voceId != voce } +
+            VoceIdentificata(voce, parlante.parlanteId, parlante.nome, parlante.tipoParlante)
+    }
+
+    /** What the real ADR 0019 §5 steps write (the moved/named Segmento ends confirmed). */
+    private fun applicaFrase(segmento: SegmentoId, passi: PassiNominaFrase) {
+        when (passi) {
+            PassiNominaFrase.SoloConferma -> Unit
+            is PassiNominaFrase.AttribuisciVoce -> attribuisci(passi.voceId, passi.obiettivo)
+            is PassiNominaFrase.Sposta -> vista = spostatoConservando(segmento, passi.voceId)
+            is PassiNominaFrase.NuovaVoce -> {
+                val nuova = nuovaVoce()
+                vista = spostatoConservando(segmento, nuova)
+                identificate = identificate + VoceIdentificata(nuova)
+                attribuisci(nuova, passi.obiettivo)
+            }
+        }
+        conferma(segmento, true)
+    }
+
+    private fun spostatoConservando(segmento: SegmentoId, voce: VoceId): TrascrittoView {
+        val segmenti = vista.segmenti.map { if (it.segmentoId == segmento) it.copy(voceId = voce) else it }
+        return vista.copy(
+            segmenti = segmenti,
+            voci = segmenti.map { it.voceId }.distinct().sortedBy { it.numero }
+                .map { VoceTrascrittoView(it, "Voce ${it.numero}") },
+        )
     }
 
     private fun applica(c: ComandoVoce) {

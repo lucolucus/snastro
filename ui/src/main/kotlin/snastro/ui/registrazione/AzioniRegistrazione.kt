@@ -39,4 +39,13 @@ data class AzioniRegistrazione(
     val chiudiErroreVoce: (VoceId) -> Unit = {},
     val riproduciEstrattoVoce: (VoceId) -> Unit = {},
     val riproduciEstratto: (EstrattoRef) -> Unit = {},
+    /** ADR 0019 §5/§6: 'Dai un nome a questa frase ▾' on the ONE selected Segmento. */
+    val nominaFrase: (ObiettivoNome) -> Unit = {},
+    val togliConferma: () -> Unit = {},
+    val annullaFrase: (SegmentoId) -> Unit = {},
+    /** 'Riassegna per somiglianza' and 'Ricalcola'. */
+    val calcolaSomiglianza: () -> Unit = {},
+    val applicaSomiglianza: () -> Unit = {},
+    /** 'Annulla' (computation or preview), 'Chiudi' (N = 0) and the result message's dismissal. */
+    val annullaSomiglianza: () -> Unit = {},
 )

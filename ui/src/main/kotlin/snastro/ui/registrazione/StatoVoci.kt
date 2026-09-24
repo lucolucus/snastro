@@ -21,6 +21,7 @@ import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.applicazione.porte.Fascia
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
@@ -67,6 +68,18 @@ internal class StatoVoci(
     private val soloLettura: Boolean
         get() = (stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == true
 
+    /**
+     * ADR 0019 §6 (AC-531/AC-545): every editing action of the panel and of the toolbar is disabled while
+     * read-only AND while a similarity run is computing, previewed or applying — the same controls, the
+     * same presenter backstops ([invia], [eseguiRevisione], [nominaFrase]).
+     */
+    private val modificheBloccate: Boolean
+        get() = soloLettura || somiglianza?.aperta == true
+
+    /** AC-530: a Parlanti card command or a naming is pending for this Registrazione. */
+    private val comandiPendenti: Boolean
+        get() = listOf(invii, inCorsoAltrove, inviiFrasi, frasiAltrove).any { it.isNotEmpty() }
+
     private class DatiParlanti(
         val identificate: Map<VoceId, VoceIdentificata>,
         val attivi: List<ParlanteAttivo>,
@@ -82,13 +95,29 @@ internal class StatoVoci(
     private var lavoroProposte: Job? = null
     private val invii = mutableMapOf<VoceRef, Instant>()
     private var inCorsoAltrove: Map<VoceRef, Instant> = emptyMap()
-    private val soglieProgrammate = mutableSetOf<Pair<VoceRef, Instant>>()
+    private val soglieProgrammate = mutableSetOf<Pair<Any, Instant>>()
+    private val inviiFrasi = mutableMapOf<SegmentoId, Instant>()
+    private var frasiAltrove: Map<SegmentoId, Instant> = emptyMap()
+    private val somiglianza: SomiglianzaVoci? = sorgenti.somiglianza?.let { porta ->
+        SomiglianzaVoci(
+            porta,
+            scope,
+            io,
+            registrazioneId,
+            sorgenti.clock,
+            pubblica = ::pubblica,
+            dopoApplicazione = { if (vista != null) ricaricaDopoRevisione(azzeraSelezione = true) },
+            errore = ::impostaErrore,
+        )
+    }
     private val erroriCarta = mutableMapOf<VoceId, String>()
     private var selezione: Set<SegmentoId> = emptySet()
     private var revisioneInCorso = false
 
     fun avvia() {
         scope.launch { sorgenti.comandi.stato.collect { mappa -> rifletti(mappa) } }
+        scope.launch { sorgenti.comandi.statoFrasi.collect { mappa -> riflettiFrasi(mappa) } }
+        somiglianza?.avvia()
         scope.launch {
             // AC-319: ImpronteRiallineate (& co.) reach S3 as a Cambiamento — the Proposte are re-read,
             // the selection is untouched.
@@ -193,8 +222,19 @@ internal class StatoVoci(
         if (conclusiAltrove.isNotEmpty() && vista != null) ricaricaParlanti()
     }
 
+    /** AC-529/AC-415: the pending namings of this Registrazione, as [rifletti] does for the cards. */
+    private suspend fun riflettiFrasi(mappa: Map<FraseRef, StatoComando>) {
+        val mie = mappa.entries.filter { it.key.registrazioneId == registrazioneId }
+            .associate { it.key.segmentoId to it.value.avviatoAlle }
+        val conclusiAltrove = frasiAltrove.keys - mie.keys - inviiFrasi.keys
+        frasiAltrove = mie
+        mie.forEach { (segmento, inizio) -> programmaSoglia(FraseRef(registrazioneId, segmento), inizio) }
+        pubblica()
+        if (conclusiAltrove.isNotEmpty() && vista != null) ricaricaDopoRevisione(azzeraSelezione = false)
+    }
+
     /** AC-412: re-publishes when [inizio] + the threshold is reached, so the card turns to 'In attesa…'. */
-    private fun programmaSoglia(ref: VoceRef, inizio: Instant) {
+    private fun programmaSoglia(ref: Any, inizio: Instant) {
         if (!soglieProgrammate.add(ref to inizio)) return
         val restante = RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS - trascorsiMs(inizio)
         if (restante > 0) {
@@ -207,8 +247,13 @@ internal class StatoVoci(
 
     private fun trascorsiMs(inizio: Instant): Long = Duration.between(inizio, sorgenti.clock.instant()).toMillis()
 
-    private fun attesaDi(ref: VoceRef): AttesaComando? {
-        val inizio = invii[ref] ?: inCorsoAltrove[ref] ?: return null
+    private fun attesaDi(ref: VoceRef): AttesaComando? = attesaDa(invii[ref] ?: inCorsoAltrove[ref])
+
+    private fun attesaFraseDi(segmento: SegmentoId): AttesaComando? =
+        attesaDa(inviiFrasi[segmento] ?: frasiAltrove[segmento])
+
+    private fun attesaDa(inizio: Instant?): AttesaComando? {
+        if (inizio == null) return null
         return if (trascorsiMs(inizio) >= RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS) {
             AttesaComando.IN_ATTESA
         } else {
@@ -356,7 +401,7 @@ internal class StatoVoci(
         // AC-454: dividiVoce/riassegnaA/unisci (the merge banner's action included) send no command
         // while read-only — the view already disables their controls, this is the presenter's own
         // backstop (unisci() in particular has no `abilitata` guard of its own to rely on).
-        if (soloLettura || revisioneInCorso) return
+        if (modificheBloccate || revisioneInCorso) return
         revisioneInCorso = true
         pubblica()
         scope.launch {
@@ -391,6 +436,60 @@ internal class StatoVoci(
         ricaricaParlanti()
     }
 
+    // --- "Dai un nome a questa frase" + "Riassegna per somiglianza" (ADR 0019 §5/§6) ----------------
+
+    /**
+     * AC-526/AC-527/AC-529: the case decision ([passiNominaFrase], pure) then ONE `nominaFrase` through the
+     * per-project [ComandiVoce] — the presenter never calls a command itself. The row goes pending at once;
+     * whatever the outcome the transcript and the panel are re-read (a first step may have committed: e.g.
+     * the new Voce of case (d) stays unnamed when naming it fails, NomeGiaInUso shown inline).
+     */
+    fun nominaFrase(obiettivo: ObiettivoNome) {
+        val v = vista
+        val segmento = v?.let(::barraDi)?.frase?.takeIf { it.abilitata }?.segmentoId
+        val passi = segmento?.let { passiNominaFrase(it, checkNotNull(v), dati?.identificate.orEmpty(), obiettivo) }
+        if (segmento == null || passi == null) return
+        val inizio = sorgenti.clock.instant()
+        inviiFrasi[segmento] = inizio
+        programmaSoglia(FraseRef(registrazioneId, segmento), inizio)
+        pubblica()
+        scope.launch {
+            try {
+                val esito = withContext(io) { sorgenti.comandi.nominaFrase(registrazioneId, segmento, passi) }
+                ricaricaDopoRevisione(azzeraSelezione = esito is Esito.Ok)
+                (esito as? Esito.Errore)?.let { impostaErrore(messaggioPer(it.errore)) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                impostaErrore(MESSAGGIO_ERRORE_GENERICO)
+            } finally {
+                inviiFrasi.remove(segmento)
+                pubblica()
+            }
+        }
+    }
+
+    /** AC-529: 'Annulla' on a naming past the threshold — the steps not yet run are skipped. */
+    fun annullaFrase(segmento: SegmentoId) = sorgenti.comandi.annullaFrase(FraseRef(registrazioneId, segmento))
+
+    /** AC-528: 'Togli conferma' → `ConfermaSegmento(false)` on the ONE selected, confirmed Segmento. */
+    fun togliConferma() {
+        val conferma = sorgenti.confermaSegmento ?: return
+        val menu = vista?.let(::barraDi)?.frase?.takeIf { it.abilitata && it.confermato } ?: return
+        eseguiRevisione {
+            val esito = conferma(ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false))
+            RisultatoRevisione(esito, esito is Esito.Ok)
+        }
+    }
+
+    fun calcolaSomiglianza() = somiglianza?.calcola()
+
+    fun applicaSomiglianza() = somiglianza?.applica()
+
+    fun annullaSomiglianza() = somiglianza?.annulla()
+
     private fun impostaErrore(messaggio: String) =
         stato.update { d -> if (d is RegistrazioneUiStato.Dati) d.copy(errore = messaggio) else d }
 
@@ -410,7 +509,13 @@ internal class StatoVoci(
                 d
             } else {
                 d.copy(
-                    segmenti = d.segmenti.map { it.copy(etichettaVoce = etichetta(v, it.voceId)) },
+                    segmenti = d.segmenti.map { riga ->
+                        riga.copy(
+                            etichettaVoce = etichetta(v, riga.voceId),
+                            confermato = v.segmenti.find { it.segmentoId == riga.segmentoId }?.confermato == true,
+                            attesaFrase = attesaFraseDi(riga.segmentoId),
+                        )
+                    },
                     pannello = pannelloDi(v, d.audioDisponibile),
                     selezione = selezione,
                     barraSelezione = barraDi(v),
@@ -420,6 +525,7 @@ internal class StatoVoci(
                 )
             }
         }
+        somiglianza?.controllaSolaLettura(soloLettura)
     }
 
     private fun etichetta(v: TrascrittoView, voceId: VoceId): String = etichettaDiVoce(v, voceId, nomeDi(voceId))
@@ -438,8 +544,9 @@ internal class StatoVoci(
                     inCorso = attesaDi(VoceRef(registrazioneId, voce.voceId)),
                     errore = erroriCarta[voce.voceId],
                     altreVoci = tutte.filter { it.voceId != voce.voceId },
-                    // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' disabled while read-only.
-                    soloLettura = soloLettura,
+                    // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' disabled while read-only —
+                    // and while a similarity run is open (AC-531/AC-545).
+                    soloLettura = modificheBloccate,
                 )
             },
             parlantiAttivi = dati?.attivi.orEmpty(),
@@ -447,7 +554,11 @@ internal class StatoVoci(
             estrattiDisponibili = audioDisponibile,
             // AC-454: the merge banner's action disabled too — '▶ estratto' stays governed only by
             // estrattiDisponibili (audio availability), untouched by soloLettura.
-            unioneAbilitata = !revisioneInCorso && !soloLettura,
+            unioneAbilitata = !revisioneInCorso && !modificheBloccate,
+            somiglianza = somiglianza?.pannello(
+                riferimentiDi(v, dati?.identificate.orEmpty(), dati?.attivi.orEmpty()),
+                bloccato = soloLettura || comandiPendenti || revisioneInCorso || dati == null,
+            ) { etichetta(v, it) },
         )
     }
 
@@ -484,10 +595,20 @@ internal class StatoVoci(
             dividiAbilitato = !interaVoce,
             spiegazioneDividi = if (interaVoce) SPIEGAZIONE_DIVIDI_INTERA_VOCE else null,
             destinazioni = opzioni(v).filter { it.voceId != voceId },
-            // AC-454: 'Riassegna a ▾'/'Dividi voce' disabled while read-only.
-            abilitata = !revisioneInCorso && !soloLettura,
+            // AC-454: 'Riassegna a ▾'/'Dividi voce' disabled while read-only (and during a similarity run).
+            abilitata = !revisioneInCorso && !modificheBloccate,
+            frase = if (selezione.size == 1) menuFrase(v, selezione.single()) else null,
         )
     }
+
+    /** AC-526/AC-528/AC-529: the naming menu of the ONE selected Segmento. */
+    private fun menuFrase(v: TrascrittoView, segmento: SegmentoId) = MenuFrase(
+        segmentoId = segmento,
+        parlanti = dati?.attivi.orEmpty(),
+        confermato = v.segmenti.find { it.segmentoId == segmento }?.confermato == true,
+        abilitata = !revisioneInCorso && !modificheBloccate && dati != null && attesaFraseDi(segmento) == null,
+        togliConfermaDisponibile = sorgenti.confermaSegmento != null,
+    )
 }
 
 /** AC-405: the Nome if attributed, else trascritto-view's own "Voce n". */

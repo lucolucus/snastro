@@ -63,6 +63,10 @@ sealed interface RegistrazioneUiStato {
  * (AC-208) is `true` while the shared player plays this Registrazione with a position inside
  * `[inizioMs, fineMs)` — computed live from [snastro.ui.lettore.StatoLettore], never re-decided by a
  * click (a click only asks [snastro.ui.lettore.LettoreAudio] to play from [inizioMs]).
+ *
+ * R2 only (ADR 0019 §6, set by the Voci panel's presenter half; always the defaults in R1): [confermato]
+ * renders the pin (AC-528); [attesaFrase] is the pending state of a 'Dai un nome a questa frase' on this
+ * Segmento (AC-529, ADR 0017 §3).
  */
 data class SegmentoRiga(
     val segmentoId: SegmentoId,
@@ -72,4 +76,6 @@ data class SegmentoRiga(
     val fineMs: Long,
     val testo: String,
     val inRiproduzione: Boolean = false,
+    val confermato: Boolean = false,
+    val attesaFrase: AttesaComando? = null,
 )

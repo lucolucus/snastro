@@ -22,6 +22,8 @@ import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.letture.VoceIdentificata
+import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.ui.AggiornamentiVista
 import snastro.ui.Cambiamento
 import java.util.logging.Level
@@ -60,6 +62,8 @@ internal class CollaboratoriR2(
     val r1: CollaboratoriR1,
     val letture: LettureParlanti,
     val comandi: ComandiVoceProgetto,
+    val somiglianza: AzioniSomiglianzaProgetto,
+    val confermaSegmento: (ConfermaSegmento) -> Esito<Unit>,
     val comandiParlante: ComandiParlante,
     val lavoro: Job,
     aggiornamentiParlanti: AggiornamentiVista,
@@ -69,6 +73,14 @@ internal class CollaboratoriR2(
         override val cambiamenti: Flow<Cambiamento> =
             merge(r1.aggiornamenti.cambiamenti, aggiornamentiParlanti.cambiamenti)
     }
+
+    /**
+     * 'Trascrivi' / 'Riprova' / 'Ritrascrivi' in R2: R1's own [CollaboratoriR1.avviaElaborazione]; once the run
+     * is queued, the similarity computation or preview of that Registrazione is dropped (AC-537/AC-549: its
+     * plan would point at a Trascritto about to be replaced).
+     */
+    fun avviaElaborazione(comando: AvviaElaborazione): Esito<Unit> =
+        r1.avviaElaborazione(comando).also { if (it is Esito.Ok) somiglianza.scarta(comando.registrazioneId) }
 
     /** S3's own scope over [genitore]'s context (its UI dispatcher), a CHILD of [lavoro]: [ferma] joins it. */
     fun scopeSchermata(genitore: CoroutineScope): CoroutineScope =

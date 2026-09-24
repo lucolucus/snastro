@@ -98,6 +98,7 @@ private const val TACCHE_FASCIA = 3
 internal fun PannelloVociVista(pannello: PannelloVoci, azioni: AzioniRegistrazione, modifier: Modifier = Modifier) {
     Column(modifier = modifier.testTag("voci-pannello")) {
         Text(TITOLO_PANNELLO_VOCI, style = MaterialTheme.typography.titleMedium)
+        pannello.somiglianza?.let { SezioneSomiglianza(it, azioni) }
         if (!pannello.estrattiDisponibili) {
             Text(
                 text = MESSAGGIO_ESTRATTI_NON_DISPONIBILI,
@@ -154,7 +155,7 @@ private fun CartaVoceVista(carta: CartaVoce, pannello: PannelloVoci, azioni: Azi
             carta.errore?.let { ErroreCarta(n, it) { azioni.chiudiErroreVoce(carta.voceId) } }
             AzioniCarta(carta, pannello, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
             if (nuovoAperto && carta.azioniAbilitate) {
-                ModuloNuovo(n) { nome, tipo ->
+                ModuloNuovo("voce-$n") { nome, tipo ->
                     nuovoAperto = false
                     azioni.nuovoParlante(carta.voceId, nome, tipo)
                 }
@@ -350,7 +351,7 @@ private fun PulsanteNuovo(n: Int, evidenziato: Boolean, abilitato: Boolean, onCl
 
 @Suppress("LongParameterList") // one parameter per menu attribute + its two callbacks
 @Composable
-private fun MenuParlanti(
+internal fun MenuParlanti(
     tag: String,
     etichetta: String,
     parlanti: List<ParlanteAttivo>,
@@ -417,18 +418,18 @@ internal fun MenuVoci(
     }
 }
 
-/** 'nuovo…': a Nome field, `ricorrente` preselected with an `occasionale` toggle (Q-7). */
+/** 'nuovo…': a Nome field, `ricorrente` preselected with an `occasionale` toggle (Q-7); tags under [prefisso]. */
 @Composable
-private fun ModuloNuovo(n: Int, onCrea: (String, TipoParlanteVista) -> Unit) {
-    var nome by remember(n) { mutableStateOf("") }
-    var occasionale by remember(n) { mutableStateOf(false) }
-    Column(modifier = Modifier.testTag("voce-$n-modulo-nuovo")) {
+internal fun ModuloNuovo(prefisso: String, onCrea: (String, TipoParlanteVista) -> Unit) {
+    var nome by remember(prefisso) { mutableStateOf("") }
+    var occasionale by remember(prefisso) { mutableStateOf(false) }
+    Column(modifier = Modifier.testTag("$prefisso-modulo-nuovo")) {
         OutlinedTextField(
             value = nome,
             onValueChange = { nome = it },
             label = { Text(ETICHETTA_NOME) },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("voce-$n-nuovo-nome"),
+            modifier = Modifier.fillMaxWidth().testTag("$prefisso-nuovo-nome"),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = occasionale, onCheckedChange = { occasionale = it })
@@ -437,7 +438,7 @@ private fun ModuloNuovo(n: Int, onCrea: (String, TipoParlanteVista) -> Unit) {
                 onClick = {
                     onCrea(nome, if (occasionale) TipoParlanteVista.OCCASIONALE else TipoParlanteVista.RICORRENTE)
                 },
-                modifier = Modifier.testTag("voce-$n-nuovo-crea"),
+                modifier = Modifier.testTag("$prefisso-nuovo-crea"),
             ) { Text(ETICHETTA_CREA) }
         }
     }

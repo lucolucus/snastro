@@ -4,10 +4,15 @@
 
 package snastro.ui.registrazione
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -20,37 +25,52 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
 import snastro.ui.formattaDurata
 import snastro.ui.lettore.BarraLettore
 import snastro.ui.palette
+import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_DESELEZIONA
 import snastro.ui.testi.ETICHETTA_DIVIDI_VOCE
 import snastro.ui.testi.ETICHETTA_MOSTRA_CARTELLA
+import snastro.ui.testi.ETICHETTA_NOMINA_FRASE
 import snastro.ui.testi.ETICHETTA_NUOVA_VOCE
 import snastro.ui.testi.ETICHETTA_RIASSEGNA_A
 import snastro.ui.testi.ETICHETTA_RIPROVA
+import snastro.ui.testi.ETICHETTA_TOGLI_CONFERMA
+import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_TRASCRITTO_VUOTO
+import snastro.ui.testi.SIMBOLO_FRASE_CONFERMATA
+import snastro.ui.testi.TOOLTIP_FRASE_CONFERMATA
 import snastro.ui.testi.testoSelezione
 
 private val PADDING_SCHERMO = 24.dp
 private val PADDING_SEZIONE = 16.dp
 private val PADDING_RIGA = 8.dp
 private val DIMENSIONE_PALLINO = 10.dp
+private val DIMENSIONE_INDICATORE = 14.dp
 private val ALTEZZA_RIGA_SCHELETRO = 16.dp
 private const val RIGHE_SCHELETRO = 4
 private const val LARGHEZZA_SCHELETRO_PARI = 0.8f
@@ -134,22 +154,27 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
 }
 
 /** AC-209..211: the selection toolbar — 'Riassegna a ▾' (other Voci + 'nuova voce') and 'Dividi voce'
- * (disabled with its explanation on the whole Voce, INV-10). Every decision is the presenter's. */
+ * (disabled with its explanation on the whole Voce, INV-10); ADR 0019 §6: with ONE Segmento selected,
+ * 'Dai un nome a questa frase ▾' (attivo Parlanti, then 'nuovo…') and 'Togli conferma' on a confirmed one.
+ * Every decision is the presenter's; the actions wrap (FlowRow) so nothing clips at 1024x640. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun BarraSelezioneVista(barra: BarraSelezione, azioni: AzioniRegistrazione) {
+    var nuovoAperto by remember(barra.frase?.segmentoId) { mutableStateOf(false) }
     Surface(
         color = MaterialTheme.colorScheme.secondaryContainer,
         modifier = Modifier.fillMaxWidth().padding(bottom = PADDING_RIGA).testTag("registrazione-barra-selezione"),
     ) {
         Column(modifier = Modifier.padding(horizontal = PADDING_RIGA)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = testoSelezione(barra.numeroSegmenti, barra.etichetta),
-                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
-                )
+            Text(
+                text = testoSelezione(barra.numeroSegmenti, barra.etichetta),
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(top = PADDING_RIGA),
+            )
+            FlowRow(verticalArrangement = Arrangement.Center) {
+                barra.frase?.let { AzioniFrase(it, azioni) { nuovoAperto = !nuovoAperto } }
                 MenuVoci(
                     "registrazione-riassegna",
                     ETICHETTA_RIASSEGNA_A,
@@ -164,6 +189,12 @@ private fun BarraSelezioneVista(barra: BarraSelezione, azioni: AzioniRegistrazio
                     modifier = Modifier.testTag("registrazione-dividi"),
                 ) { Text(ETICHETTA_DIVIDI_VOCE) }
                 TextButton(onClick = azioni.deseleziona) { Text(ETICHETTA_DESELEZIONA) }
+            }
+            if (nuovoAperto && barra.frase?.abilitata == true) {
+                ModuloNuovo("registrazione-frase") { nome, tipo ->
+                    nuovoAperto = false
+                    azioni.nominaFrase(ObiettivoNome.Nuovo(nome, ricorrente = tipo == TipoParlanteVista.RICORRENTE))
+                }
             }
             barra.spiegazioneDividi?.let {
                 Text(
@@ -310,11 +341,79 @@ private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, se
                 )
                 Spacer(modifier = Modifier.width(PADDING_RIGA))
                 Text(text = formattaDurata(segmento.inizioMs), style = MaterialTheme.typography.labelSmall)
+                if (segmento.confermato) PuntinaConfermata(segmento.segmentoId.numero)
+                segmento.attesaFrase?.let { AttesaFrase(segmento, it, azioni) }
             }
             Text(
                 text = segmento.testo,
                 modifier = Modifier.testTag("registrazione-testo-${segmento.segmentoId.numero}"),
             )
+        }
+    }
+}
+
+/** AC-526/AC-528: 'Dai un nome a questa frase ▾' (attivo Parlanti, then 'nuovo…') and 'Togli conferma'. */
+@Composable
+private fun AzioniFrase(frase: MenuFrase, azioni: AzioniRegistrazione, onNuovo: () -> Unit) {
+    MenuParlanti(
+        "registrazione-nomina-frase",
+        ETICHETTA_NOMINA_FRASE,
+        frase.parlanti,
+        frase.abilitata,
+        conNuovo = onNuovo,
+    ) { azioni.nominaFrase(ObiettivoNome.Esistente(it)) }
+    if (frase.confermato && frase.togliConfermaDisponibile) {
+        TextButton(
+            onClick = azioni.togliConferma,
+            enabled = frase.abilitata,
+            modifier = Modifier.testTag("registrazione-togli-conferma"),
+        ) { Text(ETICHETTA_TOGLI_CONFERMA) }
+    }
+}
+
+/** AC-528: the pin of a confirmed Segmento, with its tooltip (also its accessible description). */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun PuntinaConfermata(n: Int) {
+    TooltipArea(
+        tooltip = {
+            Surface(color = MaterialTheme.colorScheme.inverseSurface, shape = MaterialTheme.shapes.small) {
+                Text(
+                    TOOLTIP_FRASE_CONFERMATA,
+                    color = MaterialTheme.colorScheme.inverseOnSurface,
+                    modifier = Modifier.padding(PADDING_RIGA),
+                )
+            }
+        },
+    ) {
+        Text(
+            text = SIMBOLO_FRASE_CONFERMATA,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(start = PADDING_RIGA)
+                .semantics { contentDescription = TOOLTIP_FRASE_CONFERMATA }
+                .testTag("registrazione-confermato-$n"),
+        )
+    }
+}
+
+/** AC-529: a pending naming of this row — an indicator at once; past the threshold the wait line + 'Annulla'. */
+@Composable
+private fun AttesaFrase(segmento: SegmentoRiga, attesa: AttesaComando, azioni: AzioniRegistrazione) {
+    val n = segmento.segmentoId.numero
+    Spacer(modifier = Modifier.width(PADDING_RIGA))
+    when (attesa) {
+        AttesaComando.IN_CORSO -> CircularProgressIndicator(
+            modifier = Modifier.size(DIMENSIONE_INDICATORE).testTag("registrazione-frase-in-corso-$n"),
+        )
+        AttesaComando.IN_ATTESA -> Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.testTag("registrazione-frase-in-attesa-$n"),
+        ) {
+            Text(MESSAGGIO_COMANDO_IN_ATTESA, style = MaterialTheme.typography.labelSmall)
+            TextButton(
+                onClick = { azioni.annullaFrase(segmento.segmentoId) },
+                modifier = Modifier.testTag("registrazione-frase-annulla-$n"),
+            ) { Text(ETICHETTA_ANNULLA) }
         }
     }
 }

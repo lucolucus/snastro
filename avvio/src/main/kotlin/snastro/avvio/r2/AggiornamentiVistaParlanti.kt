@@ -10,6 +10,7 @@ import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
+import snastro.trascrizione.applicazione.eventi.SegmentoConfermato
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
@@ -32,7 +33,9 @@ import snastro.ui.Cambiamento
  *   by `VoceRef` and now point at the wrong Voci, the Galleria counts of any Parlante may have changed and an
  *   `occasionale` may be gone (the purge itself ran synchronously, inside the completion transaction);
  * - `VociUnite`/`VoceDivisa`/`SegmentoRiassegnato` → invalidate only (R1's `AggiornamentiVistaTrascrizione`
- *   already emits their `Cambiamento`).
+ *   already emits their `Cambiamento`);
+ * - `SegmentoConfermato` (ADR 0019 §3, after commit only) → invalidate, `Cambiamento(its Registrazione)`: the
+ *   S3 pin and the similarity button's reference lines (R1 has no confirmation, so no R1 `Cambiamento`).
  *
  * `replay = 1`: same reason as R0's `AggiornamentiVistaEventi`.
  */
@@ -54,6 +57,7 @@ internal class AggiornamentiVistaParlanti(
             is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato,
             is TrascrittoSostituito,
             -> Cambiamento(null)
+            is SegmentoConfermato -> Cambiamento(evento.registrazioneId)
             is VociUnite, is VoceDivisa, is SegmentoRiassegnato -> null
             else -> return
         }

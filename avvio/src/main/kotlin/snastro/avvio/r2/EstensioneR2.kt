@@ -20,6 +20,9 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.VoceRef
 import snastro.parlanti.adattatori.eventi.AbbonatoRevisioneParlanti
 import snastro.parlanti.adattatori.eventi.AbbonatoRiallineamentoImpronte
+import snastro.parlanti.adattatori.ml.ClassificatoreSomiglianzaCoseno
+import snastro.parlanti.adattatori.ml.ClassificatoreSomiglianzaCoseno.Companion.MARGINE_MINIMO
+import snastro.parlanti.adattatori.ml.ClassificatoreSomiglianzaCoseno.Companion.SIMILARITA_MINIMA
 import snastro.parlanti.adattatori.ml.ConfrontoImpronteCoseno
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
@@ -38,14 +41,18 @@ import snastro.parlanti.applicazione.letture.IdentificazioneVoci
 import snastro.parlanti.applicazione.letture.NomiDelleVoci
 import snastro.parlanti.applicazione.letture.ParlantiAttivi
 import snastro.parlanti.applicazione.letture.ParlantiDelProgetto
+import snastro.parlanti.applicazione.letture.PianoRiassegnazioneQuery
 import snastro.parlanti.applicazione.letture.Proposta
 import snastro.parlanti.applicazione.letture.PropostaUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
 import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
+import snastro.parlanti.applicazione.porte.SoglieSomiglianza
 import snastro.persistenza.SnastroDatabase
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmentoServizio
+import snastro.trascrizione.applicazione.comandi.RiassegnaSegmentiServizio
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import java.time.Clock
 import java.util.logging.Level
@@ -69,7 +76,11 @@ import snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto as Letto
  * 4. The per-project R2 job ([CollaboratoriR2.ferma] joins it): [AbbonatoRiallineamentoImpronte] (after
  *    commit, AC-315), `RiallineaTutteLeImpronte` in the background strictly after R1's
  *    `RecuperaElaborazioniInterrotte` (AC-316; failures logged, never the scope's end, AC-358), and the
- *    per-project [ComandiVoceProgetto] of S3 (AC-418).
+ *    per-project [ComandiVoceProgetto] of S3 (AC-418) — with ADR 0019 §5's naming steps ([ServiziFrase]:
+ *    `ConfermaSegmento`, R1's `RiassegnaSegmento`, `ConfermaAttribuzione`) — and [AzioniSomiglianzaProgetto]
+ *    (ADR 0019 §4.1 + Amendment (b).2: `PianoRiassegnazioneQuery` over the project's real decoder and print
+ *    extractor with the cosine classifier, then `RiassegnaSegmenti` with the held plan), every command
+ *    over the SAME `eventi.unitaDiLavoro`.
  */
 @Suppress("LongParameterList") // one parameter per app-wide collaborator of the per-project graph
 internal class EstensioneR2(
@@ -147,6 +158,21 @@ internal class EstensioneR2(
             ml.estrattore,
             dispatcher,
         )
+        val trascritti = TrascrittoRepositorySql(contesto.database)
+        val confermaSegmento = ConfermaSegmentoServizio(uow, trascritti, dispatcher)
+        val piano = PianoRiassegnazioneQuery(
+            porte.voci,
+            porte.attribuzioni,
+            porte.parlanti,
+            decodificatore,
+            ml.estrattore,
+            ClassificatoreSomiglianzaCoseno(SoglieSomiglianza(SIMILARITA_MINIMA, MARGINE_MINIMO)),
+        )
+        val servizFrase = ServiziFrase(
+            confermaSegmento = confermaSegmento::esegui,
+            riassegnaSegmento = collaboratoriR1.revisione.riassegnaSegmento::esegui,
+            confermaAttribuzione = conferma::esegui,
+        )
         val progettoId = contesto.progettoId
         val attivi = ParlantiAttivi(porte.parlanti)
         val delProgetto = ParlantiDelProgetto(porte.parlanti, porte.attribuzioni, porte.registrazione, estrattoAudio)
@@ -166,7 +192,16 @@ internal class EstensioneR2(
                 scope,
                 clock,
                 ComandiVoceProgetto.eseguiConServizi(io, conferma::esegui, salta::esegui),
+                ComandiVoceProgetto.eseguiFraseConServizi(io, servizFrase),
             ),
+            somiglianza = AzioniSomiglianzaProgetto(
+                scope,
+                io,
+                clock,
+                piano::calcola,
+                RiassegnaSegmentiServizio(uow, trascritti, dispatcher)::esegui,
+            ),
+            confermaSegmento = confermaSegmento::esegui,
             comandiParlante = ComandiParlante(
                 rinomina = RinominaParlanteServizio(uow, porte.parlanti, dispatcher)::esegui,
                 promuovi = PromuoviParlanteServizio(uow, porte.parlanti, dispatcher)::esegui,

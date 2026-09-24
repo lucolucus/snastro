@@ -272,6 +272,12 @@ class RegistrazionePresenter(
         chiudiErroreVoce = { voceId -> voci?.chiudiErrore(voceId) },
         riproduciEstrattoVoce = ::riproduciEstrattoVoce,
         riproduciEstratto = ::riproduciEstratto,
+        nominaFrase = { obiettivo -> voci?.nominaFrase(obiettivo) },
+        togliConferma = { voci?.togliConferma() },
+        annullaFrase = { segmento -> voci?.annullaFrase(segmento) },
+        calcolaSomiglianza = { voci?.calcolaSomiglianza() },
+        applicaSomiglianza = { voci?.applicaSomiglianza() },
+        annullaSomiglianza = { voci?.annullaSomiglianza() },
     )
 
     companion object {

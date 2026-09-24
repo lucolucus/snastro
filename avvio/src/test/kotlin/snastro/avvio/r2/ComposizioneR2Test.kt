@@ -12,10 +12,13 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.modelli.CatalogoDiarizzazione
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.applicazione.comandi.RinominaParlante
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
+import snastro.parlanti.applicazione.porte.EstrattoreImpronta
+import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.eventi.VociUnite
@@ -220,6 +223,20 @@ class ComposizioneR2Test {
     }
 
     @Test
+    fun `AC-541 le impronte scritte dal sostituto nessun-estrattore sono riderivate con TitaNet-small all apertura`() {
+        val (percorso, id) = progettoConImpronta(estrattore = EstrattoreImprontaFinta(modello = "nessun-estrattore"))
+        val titanet = EstrattoreImprontaFinta(modello = CatalogoDiarizzazione.embeddingTitanetSmall.id)
+        AmbienteR2(radice.resolve("ter").also(Files::createDirectories), estrattore = titanet).use {
+            it.sessione.chiudi()
+            it.sessione.apri(percorso).atteso()
+            attendiFinche(messaggio = "impronta riderivata al modello reale") {
+                val riga = ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(id).single()
+                riga.modello == CatalogoDiarizzazione.embeddingTitanetSmall.id
+            }
+        }
+    }
+
+    @Test
     fun `AC-492 chiudere il progetto rilascia una volta il modello delle impronte, a lavori fermati`() {
         val rilasci = AtomicInteger()
         AmbienteR2(radice, rilasciaMl = { rilasci.incrementAndGet() }).use {
@@ -235,8 +252,9 @@ class ComposizioneR2Test {
     /** A project with one Registrazione, Voce 1 attributed (print of the Finta's model); closed. */
     private fun progettoConImpronta(
         diarizzatore: DiarizzatoreFinta = DiarizzatoreFinta(AmbienteR2.DUE_VOCI),
+        estrattore: EstrattoreImpronta = EstrattoreImprontaFinta(),
     ): Pair<String, snastro.kernel.RegistrazioneId> {
-        val ambiente = AmbienteR2(radice, diarizzatore)
+        val ambiente = AmbienteR2(radice, diarizzatore, estrattore)
         val id = ambiente.importa()
         ambiente.trascrivi(id)
         runBlocking { ambiente.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) }
