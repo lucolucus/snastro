@@ -53,6 +53,7 @@ import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.porte.Fascia
 import snastro.ui.palette
+import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.testi.DESCRIZIONE_FASCIA_DEBOLE
 import snastro.ui.testi.DESCRIZIONE_FASCIA_FORTE
 import snastro.ui.testi.DESCRIZIONE_FASCIA_NESSUNA
@@ -166,8 +167,9 @@ private fun CartaVoceVista(carta: CartaVoce, pannello: PannelloVoci, azioni: Azi
 
 @Composable
 private fun IntestazioneCarta(carta: CartaVoce, estrattiDisponibili: Boolean, azioni: AzioniRegistrazione) {
+    val colori = LocalSnastroColori.current
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(DIMENSIONE_PALLINO).background(palette(carta.voceId), CircleShape))
+        Box(Modifier.size(DIMENSIONE_PALLINO).background(palette(carta.voceId, colori), CircleShape))
         Spacer(Modifier.width(SPAZIO))
         Text(carta.titolo, style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
         TextButton(

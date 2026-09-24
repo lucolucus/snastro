@@ -49,6 +49,7 @@ import snastro.ui.formattaData
 import snastro.ui.formattaDurata
 import snastro.ui.lettore.BarraLettore
 import snastro.ui.palette
+import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
@@ -297,6 +298,7 @@ private fun ElencoSegmenti(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegis
  * is the presenter's own live reflection of the shared player, never decided here. */
 @Composable
 private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, selezione: Boolean?) {
+    val colori = LocalSnastroColori.current
     val sfondo = when {
         segmento.inRiproduzione -> MaterialTheme.colorScheme.primaryContainer
         selezione == true -> MaterialTheme.colorScheme.secondaryContainer
@@ -328,7 +330,7 @@ private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, se
         Box(
             modifier = Modifier
                 .size(DIMENSIONE_PALLINO)
-                .background(color = palette(segmento.voceId), shape = CircleShape)
+                .background(color = palette(segmento.voceId, colori), shape = CircleShape)
                 .testTag("registrazione-pallino-${segmento.segmentoId.numero}"),
         )
         Spacer(modifier = Modifier.width(PADDING_RIGA))
