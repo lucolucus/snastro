@@ -1,5 +1,21 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     id("snastro.kotlin-jvm")
+}
+
+// Opt-in real-native contract (ADR 0005): DecodificatoreAudioFfmpegTest (real FFmpeg, AC-151/AC-152)
+// is `@Tag("modelli")`, so the default `test` task (which excludes "modelli", dev-architecture-app.md#test)
+// never runs it. A dedicated Test task configures its OWN useJUnitPlatform and does not inherit that
+// exclusion. Never wired into `check`. decodifica-parlanti
+tasks.register<Test>("modelliTest") {
+    group = "verification"
+    description = "Opt-in: real FFmpeg contract (@Tag(\"modelli\"), AC-151/AC-152)."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("modelli")
+    }
 }
 
 dependencies {
@@ -38,6 +54,10 @@ dependencies {
     // SQL repositories (ADR 0002, CR-1).
     // lettore-voci-da-trascrizione
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
+
+    // DecodificatoreAudioFfmpeg delegates to :audio's real FFmpeg decode, never touching
+    // org.bytedeco directly (ADR 0005, CR-3 confinement). decodifica-parlanti
+    implementation(project(":audio"))
 
     // Port Finte are kernel `Ripristinabile` (roll back with UnitaDiLavoroFinta); `atteso()` unwraps
     // an expected `Esito.Ok` in the test.
