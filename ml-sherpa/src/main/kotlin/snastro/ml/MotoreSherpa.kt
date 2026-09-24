@@ -5,7 +5,6 @@ import com.k2fsa.sherpa.onnx.LibraryUtils
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
-import kotlin.concurrent.withLock
 
 /**
  * The sherpa-onnx engine (boundary tec-ml-sherpa, ADR 0004/0016): the ONLY place that loads the
@@ -45,15 +44,21 @@ class MotoreSherpa internal constructor(
 
     /**
      * Runs [uso] inside one native session, holding the native Mutex: two sessions never overlap, the
-     * second waits (AC-401). The natives are loaded lazily first (AC-399). The session and the Mutex
-     * are released when [uso] returns or throws (AC-244). Not reentrant: a nested call fails.
+     * second waits (AC-401), in arrival order — the Mutex is fair (ADR 0017 §1.3, AC-409). The wait is
+     * INTERRUPTIBLE (ADR 0017 §1.4, AC-408): an interrupt while waiting — or already pending on entry —
+     * throws [InterruptedException], and then no session opens, no native is loaded and [uso] never
+     * runs. The natives are loaded lazily first (AC-399). The session and the Mutex are released when
+     * [uso] returns or throws (AC-244). Not reentrant: a nested call fails.
      */
     fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T {
         check(!mutexNativo.isHeldByCurrentThread) { "conSessione is not reentrant: one native session at a time" }
-        return mutexNativo.withLock {
+        mutexNativo.lockInterruptibly()
+        try {
             caricaNativi()
             sessioniAperte.incrementAndGet()
-            SessioneSherpa(config).use(uso)
+            return SessioneSherpa(config).use(uso)
+        } finally {
+            mutexNativo.unlock()
         }
     }
 

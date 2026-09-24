@@ -37,7 +37,13 @@ internal class GrafoR1(
 )
 
 /** The app-wide R1 pieces [costruisciGrafoR1] hands the R0 graph: the per-project extension and S5's port. */
-internal class ComponentiR1(val estensione: EstensioneR1, val servizioModelli: ServizioModelli)
+internal class ComponentiR1(
+    val estensione: EstensioneR1,
+    val servizioModelli: ServizioModelli,
+    /** The app's ONE engine and model provisioning, shared with R2's print extractor (ADR 0016 §4, 0019 §2). */
+    val motore: MotoreSherpa,
+    val provisioning: ProvisioningModelli,
+)
 
 /**
  * [scelta] picks the ML adapters and the model catalogue ([SelezioneAdattatoriMl], `-Dsnastro.ml`);
@@ -66,7 +72,7 @@ internal fun componentiR1(
         modelliPronti = { servizioModelli.stato.value == StatoModelli.Pronti },
         lettoreNomi = lettoreNomi,
     )
-    return ComponentiR1(estensione, servizioModelli)
+    return ComponentiR1(estensione, servizioModelli, motore, provisioning)
 }
 
 /**

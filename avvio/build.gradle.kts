@@ -49,7 +49,7 @@ dependencies {
     // subscribers (revisione-policy, riallineamento impronte) and the cosine comparison. The print
     // extractor + Parlanti decoder Finte (EstrattoreImprontaFinta / DecodificatoreAudioFinta) are the forced
     // choice of `-Dsnastro.ml=finte` (--smoke), exactly like the pipeline's ML Finte above; the real
-    // extractor (estrattore-impronta-sherpa) is not built yet — SelezioneAdattatoriMl.adattatoriParlanti.
+    // extractor (estrattore-impronta-sherpa) is the REALI choice — SelezioneAdattatoriMl.adattatoriParlanti.
     implementation(project(":parlanti:adattatori"))
     implementation(testFixtures(project(":parlanti:applicazione")))
     implementation(libs.kotlinx.coroutines.core)

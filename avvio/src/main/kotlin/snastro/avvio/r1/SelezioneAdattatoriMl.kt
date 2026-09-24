@@ -37,9 +37,8 @@ import java.nio.file.Path
  *
  * **R2 (Parlanti).** The print extractor's selection is the R2 half of this same point,
  * `SelezioneAdattatoriMl.adattatoriParlanti` (an extension declared in `snastro.avvio.r2`, so this R1 file
- * names no `:parlanti` type — AC-356). TODO(estrattore-impronta-sherpa, gated by spike
- * `impronta-vocale-affidabilita`): when it lands, its model's `VoceCatalogo` joins `catalogo(REALI)` below and
- * its adapter replaces the REALI branch of `adattatoriParlanti` (over the same [MotoreSherpa]).
+ * names no `:parlanti` type — AC-356): `EstrattoreImprontaSherpa` over the same [MotoreSherpa] and the same
+ * TitaNet-small entry the diarizer uses (ADR 0019 §2), already in `catalogo(REALI)` via `CatalogoDiarizzazione`.
  */
 internal object SelezioneAdattatoriMl {
     /** The model catalogue of [scelta]: what S5 provisions and what the Elaborazione queue waits for. */

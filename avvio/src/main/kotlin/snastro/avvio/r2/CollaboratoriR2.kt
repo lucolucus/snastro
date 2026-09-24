@@ -24,6 +24,7 @@ import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.ui.AggiornamentiVista
 import snastro.ui.Cambiamento
+import java.util.logging.Level
 import java.util.logging.Logger
 
 /** The Parlanti read-models of the open project, as plain functions (CR-1: `:ui` binds function types). */
@@ -62,6 +63,7 @@ internal class CollaboratoriR2(
     val comandiParlante: ComandiParlante,
     val lavoro: Job,
     aggiornamentiParlanti: AggiornamentiVista,
+    private val rilasciaMl: () -> Unit = {},
 ) : ProgettoEsteso {
     override val aggiornamenti: AggiornamentiVista = object : AggiornamentiVista {
         override val cambiamenti: Flow<Cambiamento> =
@@ -80,11 +82,28 @@ internal class CollaboratoriR2(
      * [poi] (the database close + `.lock` release) runs only when R2's AND R1's workers all ended —
      * deferred to the last one otherwise (fix-batch-16 MED-1: an extraction inside its native call cannot
      * be interrupted); never a database closed under a live Parlanti worker. Never throws on a timeout.
+     * Just before [poi], with every worker ended, [rilasciaMl] releases the print extractor's model (ADR 0019
+     * §1.4: it lives as long as the open project); a failing release is logged, never propagated.
      */
     override fun ferma(poi: () -> Unit) {
         val fermato = runBlocking { withTimeoutOrNull(TIMEOUT_ARRESTO_MS) { lavoro.join() } != null }
         if (!fermato) log.warning("lavori dei Parlanti non fermati in tempo: il database attende la loro fine")
-        r1.ferma { lavoro.invokeOnCompletion { poi() } }
+        r1.ferma {
+            lavoro.invokeOnCompletion {
+                rilasciaSilenziosamente()
+                poi()
+            }
+        }
+    }
+
+    private fun rilasciaSilenziosamente() {
+        try {
+            rilasciaMl()
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception, // a native release: any fault, logged
+        ) {
+            log.log(Level.WARNING, "rilascio del modello delle impronte fallito alla chiusura del progetto", e)
+        }
     }
 
     private companion object {

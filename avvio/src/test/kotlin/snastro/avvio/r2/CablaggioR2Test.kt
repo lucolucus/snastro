@@ -2,16 +2,20 @@ package snastro.avvio.r2
 
 import snastro.avvio.r1.SceltaMl
 import snastro.avvio.r1.SelezioneAdattatoriMl
+import snastro.ml.MotoreSherpa
+import snastro.modelli.CatalogoDiarizzazione
+import snastro.modelli.ProvisioningModelli
+import snastro.parlanti.adattatori.audio.DecodificatoreAudioFfmpeg
+import snastro.parlanti.adattatori.ml.EstrattoreImprontaSherpa
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.ui.DestinazioneShell
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** The static half of the R2 composition's ACs, checked on `avvio/src/main` and on the selection point. */
@@ -49,18 +53,31 @@ class CablaggioR2Test {
 
     @Test
     fun `selezione ML FINTE l'estrattore e il decodificatore finti, e la Proposta confronta davvero`() {
-        val adattatori = SelezioneAdattatoriMl.adattatoriParlanti(SceltaMl.FINTE)
+        val adattatori = SelezioneAdattatoriMl.adattatoriParlanti(SceltaMl.FINTE, MotoreSherpa(), modelli())
         assertIs<EstrattoreImprontaFinta>(adattatori.estrattore)
         assertIs<DecodificatoreAudioFinta>(adattatori.decodificatore(Path.of("progetto")))
         assertTrue(adattatori.proposte)
     }
 
     @Test
-    fun `selezione ML REALI finche estrattore-impronta-sherpa non esiste nessuna estrazione nativa, Galleria vuota`() {
-        val adattatori = SelezioneAdattatoriMl.adattatoriParlanti(SceltaMl.REALI)
-        assertSame(EstrattoreImprontaAssente, adattatori.estrattore)
-        assertSame(DecodificatoreAudioAssente, adattatori.decodificatore(Path.of("progetto")))
-        assertFalse(adattatori.proposte)
-        assertEquals("nessun-estrattore", adattatori.estrattore.modello)
+    fun `AC-259 AC-310 selezione ML REALI EstrattoreImprontaSherpa su TitaNet-small, FFmpeg, Proposta attiva`() {
+        val adattatori = SelezioneAdattatoriMl.adattatoriParlanti(SceltaMl.REALI, MotoreSherpa(), modelli())
+
+        assertIs<EstrattoreImprontaSherpa>(adattatori.estrattore)
+        assertIs<DecodificatoreAudioFfmpeg>(adattatori.decodificatore(Path.of("progetto")))
+        assertTrue(adattatori.proposte)
+        assertEquals(CatalogoDiarizzazione.embeddingTitanetSmall.id, adattatori.estrattore.modello)
+        adattatori.rilascia() // never loaded: releasing loads nothing and never throws
     }
+
+    @Test
+    fun `AC-259 una sola voce di catalogo TitaNet-small, condivisa da diarizzatore ed estrattore`() {
+        val ids = SelezioneAdattatoriMl.catalogo(SceltaMl.REALI).voci.map { it.id }
+
+        assertEquals(1, ids.count { it == CatalogoDiarizzazione.embeddingTitanetSmall.id })
+        assertEquals(ids.distinct(), ids)
+    }
+
+    private fun modelli(): ProvisioningModelli =
+        ProvisioningModelli(SelezioneAdattatoriMl.catalogo(SceltaMl.REALI), Files.createTempDirectory("modelli"))
 }
