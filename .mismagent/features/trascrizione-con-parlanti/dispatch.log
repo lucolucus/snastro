@@ -678,3 +678,4 @@
 2026-09-24T11:34:33Z	rit-a	composer	merge	-	-	-	MERGED ab57149 (9 blocks: elaborazione sweep, eventi-pubblicati, persistenza-ritrascrivi, porte, avvia, esegui, annulla-elaborazione, repo-sql, stati)
 2026-09-24T11:34:33Z	rit-b	worker	dispatch	-	standard	sonnet	parlanti: sostituzione-trascritto-policy + abbonato-revisione-parlanti
 2026-09-24T11:34:33Z	rit-c	worker	dispatch	-	standard	sonnet	ui: S2 Ritrascrivi/Annulla, S3 read-only, panel disabled
+2026-09-24T11:35:08Z	diarizzazione	experiment	result	-	deep	opus	seg fp32 + TitaNet-S + own AHC k (min 60 s): stability 0.94 vs 0.63; awaiting user listening check
