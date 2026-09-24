@@ -97,11 +97,15 @@ class TrascrizioneRealeR1Test {
         installa(VOCE_CATALOGO_VAD_SILERO, mapOf("silero_vad.onnx" to spike.resolve("silero_vad.onnx")))
         installa(
             CatalogoDiarizzazione.segmentazione,
-            mapOf("model.int8.onnx" to spike.resolve("sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx")),
+            mapOf("model.onnx" to spike.resolve("sherpa-onnx-pyannote-segmentation-3-0/model.onnx")),
         )
         installa(
             CatalogoDiarizzazione.embedding,
             mapOf(FILE_EMBEDDING to spike.resolve(FILE_EMBEDDING)),
+        )
+        installa(
+            CatalogoDiarizzazione.embeddingTitanetSmall,
+            mapOf(FILE_TITANET to spike.resolve(FILE_TITANET)),
         )
         installa(
             VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8,
@@ -115,6 +119,7 @@ class TrascrizioneRealeR1Test {
         const val VARIABILE = "SNASTRO_MODELLI_R1_DIR"
         const val CARTELLA_PARAKEET = "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
         const val FILE_EMBEDDING = "wespeaker_en_voxceleb_resnet34_LM.onnx"
+        const val FILE_TITANET = "nemo_en_titanet_small.onnx"
         const val TIMEOUT_MS = 300_000L
     }
 }

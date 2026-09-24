@@ -18,13 +18,15 @@ val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
 tasks.register<Test>("modelliTest") {
     group = "verification"
     description = "Opt-in: real FFmpeg/sherpa-onnx contracts (@Tag(\"modelli\"), " +
-        "AC-149/AC-150/AC-252/AC-255/AC-249/AC-373/AC-388)."
+        "AC-149/AC-150/AC-252/AC-255/AC-249/AC-373/AC-388/AC-488/AC-489/AC-491)."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("modelli")
     }
     forkEvery = 1 // one JVM per test class: sherpa's natives load once per JVM (MotoreSherpa).
+    // AC-488/489 hold a 75-min recording (and one shifted copy) as 16 kHz floats: ~300 MB each.
+    maxHeapSize = "4g"
     dependsOn(scaricaNativiSherpa)
     jvmArgumentProviders += CommandLineArgumentProvider {
         listOf("-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}")
@@ -66,6 +68,10 @@ dependencies {
     // VadFinta, synthetic-signal helpers, dominio fixtures) — D2: this module's adapter tests extend
     // the port contracts (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
+
+    // motoreSherpaSenzaNativi / ModelloEmbeddingFinto: DiarizzatoreSherpa's gate tests on the REAL Mutex and
+    // sessions with no native library and no model loaded (AC-486/AC-491, ADR 0019 §1.5).
+    testImplementation(testFixtures(project(":ml-sherpa")))
 
     // databaseInMemoria() (testFixtures) — a fresh in-memory SnastroDatabase per contract test.
     testImplementation(testFixtures(project(":persistenza")))

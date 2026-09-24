@@ -12,6 +12,8 @@ val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
 
 dependencies {
     implementation(files(scaricaJarSherpa.map { it.outputs.files }).builtBy(scaricaJarSherpa))
+    // ModelloEmbeddingFinto (testFixtures) builds EmbeddingSherpa's fake loader, typed over sherpa's config.
+    testFixturesImplementation(files(scaricaJarSherpa.map { it.outputs.files }).builtBy(scaricaJarSherpa))
 
     // CampioniAudio / IntervalloMs (Published Language, kernel-pl): RiconoscitoreSherpa's input/output
     // types, so sherpa's own types never cross tec-ml-sherpa's boundary (RC-3).

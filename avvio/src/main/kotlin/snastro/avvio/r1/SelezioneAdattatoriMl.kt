@@ -25,10 +25,11 @@ import java.nio.file.Path
  * [catalogo] and never names a concrete ML adapter.
  *
  * **Selection** ([SceltaMl], `-Dsnastro.ml`). [SceltaMl.REALI] — the default — is the sherpa-onnx
- * pipeline: Silero VAD, pyannote-3.0 + WeSpeaker diarization, Parakeet TDT ASR, all over the ONE
+ * pipeline: Silero VAD, the ADR 0019 diarization (pyannote-3.0 fp32 + ResNet34-LM + TitaNet-small), Parakeet
+ * TDT ASR, all over the ONE
  * [MotoreSherpa] of the app (native load + process-wide Mutex, ADR 0016 §4), their files resolved
  * inside each model's installed directory `ProvisioningModelli.percorso(id)` (ADR 0008 (c)); the
- * catalogue holds those four entries, so S5's 'Scarica' installs exactly what the pipeline reads, and
+ * catalogue holds those five entries, so S5's 'Scarica' installs exactly what the pipeline reads, and
  * the queue waits until it has (AC-235). [SceltaMl.FINTE] forces the Finte and an EMPTY catalogue: the
  * `--smoke` run (headless, no natives, no models, AC-351) and the gate's tests.
  *
@@ -75,21 +76,40 @@ internal object SelezioneAdattatoriMl {
                 thread,
             ),
         )
+        val diarizzatore = DiarizzatoreSherpa(
+            motore,
+            // ADR 0019 §1.1: the fp32 file of the unchanged asset (TAR_BZ2: the archive's top directory stripped)
+            percorsoSegmentazione = modelli.percorso(CatalogoDiarizzazione.segmentazione.id).resolve("model.onnx"),
+            percorsoEmbeddingPasso1 = fileInstallato(modelli, CatalogoDiarizzazione.embedding),
+            percorsoEmbeddingPezzi = fileInstallato(modelli, CatalogoDiarizzazione.embeddingTitanetSmall),
+            threadIntraOp = thread,
+        )
         return AdattatoriMl(
-            diarizzatore = DiarizzatoreSherpa(
-                motore,
-                percorsoSegmentazione = modelli.percorso(CatalogoDiarizzazione.segmentazione.id)
-                    .resolve("model.int8.onnx"), // TAR_BZ2: the archive's single top directory stripped
-                percorsoEmbedding = fileInstallato(modelli, CatalogoDiarizzazione.embedding),
-                threadIntraOp = thread,
-            ),
+            diarizzatore = diarizzatore,
             riconoscitore = riconoscitore,
             vad = VadSilero(
                 motore,
                 ConfigSessione(listOf(fileInstallato(modelli, VOCE_CATALOGO_VAD_SILERO)), thread),
             ),
-            rilasciaDopoElaborazione = riconoscitore::close, // ADR 0004: the ASR model lives one Elaborazione
+            // ADR 0004/0019 §1.4: the ASR model and the diarizer's piece model live one Elaborazione
+            rilasciaDopoElaborazione = { rilasciaTutti(riconoscitore, diarizzatore) },
         )
+    }
+
+    /** Closes every one of [risorse], even when one fails; the first failure is rethrown, the others suppressed. */
+    internal fun rilasciaTutti(vararg risorse: AutoCloseable) {
+        var errore: Exception? = null
+        for (r in risorse) {
+            try {
+                r.close()
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception, // a native release: any fault, kept
+            ) {
+                val primo = errore
+                if (primo == null) errore = e else primo.addSuppressed(e)
+            }
+        }
+        errore?.let { throw it }
     }
 
     /** A `FILE` entry is installed as `<percorso(id)>/<file name of its url>` (ADR 0008 (c), FormatoVoce.FILE). */

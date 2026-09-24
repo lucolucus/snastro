@@ -15,6 +15,7 @@ import snastro.trascrizione.applicazione.porte.VadFinta
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 /** The single ML wiring point: which adapters and which catalogue each [SceltaMl] gives. Loads no native. */
@@ -30,13 +31,14 @@ class SelezioneAdattatoriMlTest {
     }
 
     @Test
-    fun `REALI il catalogo di S5 contiene i quattro modelli che la pipeline legge`() {
+    fun `REALI il catalogo di S5 contiene i cinque modelli che la pipeline legge`() {
         val ids = SelezioneAdattatoriMl.catalogo(SceltaMl.REALI).voci.map { it.id }
 
         val attesi = listOf(
             VOCE_CATALOGO_VAD_SILERO,
             CatalogoDiarizzazione.segmentazione,
             CatalogoDiarizzazione.embedding,
+            CatalogoDiarizzazione.embeddingTitanetSmall,
             VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8,
         )
         assertEquals(attesi.map { it.id }, ids)
@@ -52,6 +54,22 @@ class SelezioneAdattatoriMlTest {
         assertIs<DiarizzatoreSherpa>(ml.diarizzatore)
         assertIs<RiconoscitoreParlatoSherpa>(ml.riconoscitore)
         assertIs<VadSilero>(ml.vad)
+    }
+
+    @Test
+    fun `AC-491 rilasciaTutti chiude ogni risorsa anche se una fallisce, e rilancia il primo errore`() {
+        val chiuse = mutableListOf<String>()
+        val guasta = AutoCloseable {
+            chiuse += "asr"
+            error("rilascio nativo fallito")
+        }
+
+        val errore = assertFailsWith<IllegalStateException> {
+            SelezioneAdattatoriMl.rilasciaTutti(guasta, AutoCloseable { chiuse += "diarizzatore" })
+        }
+
+        assertEquals(listOf("asr", "diarizzatore"), chiuse)
+        assertEquals("rilascio nativo fallito", errore.message)
     }
 
     @Test

@@ -3,6 +3,7 @@ package snastro.ml
 import com.k2fsa.sherpa.onnx.LibraryLoader
 import com.k2fsa.sherpa.onnx.LibraryUtils
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -21,6 +22,9 @@ class MotoreSherpa internal constructor(
 
     @Volatile
     private var caricati = false
+
+    /** Sessions opened by THIS engine — test-only evidence of "one conSessione per call" (AC-486/491). */
+    internal val sessioniAperte = AtomicInteger()
 
     /**
      * Loads onnxruntime + the sherpa JNI lib, once (idempotent, AC-398). Directory, in this order
@@ -48,6 +52,7 @@ class MotoreSherpa internal constructor(
         check(!mutexNativo.isHeldByCurrentThread) { "conSessione is not reentrant: one native session at a time" }
         return mutexNativo.withLock {
             caricaNativi()
+            sessioniAperte.incrementAndGet()
             SessioneSherpa(config).use(uso)
         }
     }

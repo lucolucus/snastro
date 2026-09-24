@@ -4,8 +4,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * AC-250: [CatalogoDiarizzazione]'s two [VoceCatalogo] entries match ADR 0014 § ":modelli catalogue
- * entries" exactly (url, sha256, dimensioneByte, licenza, attribuzione) — no models, no network.
+ * AC-250: [CatalogoDiarizzazione]'s three [VoceCatalogo] entries match ADR 0014 § ":modelli catalogue
+ * entries" and ADR 0019 §1.7 exactly (url, sha256, dimensioneByte, licenza, attribuzione) — no models,
+ * no network.
  */
 class CatalogoDiarizzazioneTest {
     @Test
@@ -52,8 +53,30 @@ class CatalogoDiarizzazioneTest {
     }
 
     @Test
-    fun `AC-250 voci elenca entrambe le voci`() {
-        val attese = listOf(CatalogoDiarizzazione.segmentazione, CatalogoDiarizzazione.embedding)
+    fun `AC-250 embedding-nemo-titanet-small corrisponde esattamente alla tabella di ADR 0019`() {
+        val voce = CatalogoDiarizzazione.embeddingTitanetSmall
+
+        assertEquals("embedding-nemo-titanet-small", voce.id)
+        assertEquals("embedding", voce.ruolo)
+        assertEquals(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/" +
+                "nemo_en_titanet_small.onnx",
+            voce.url,
+        )
+        assertEquals(FormatoVoce.FILE, voce.formato)
+        assertEquals("ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e", voce.sha256)
+        assertEquals(40_257_283L, voce.dimensioneByte)
+        assertEquals("CC-BY-4.0", voce.licenza)
+        assertEquals("NVIDIA NeMo TitaNet-small (CC-BY-4.0), ONNX export by k2-fsa sherpa-onnx", voce.attribuzione)
+    }
+
+    @Test
+    fun `AC-250 voci elenca segmentazione, ResNet34-LM e TitaNet-small`() {
+        val attese = listOf(
+            CatalogoDiarizzazione.segmentazione,
+            CatalogoDiarizzazione.embedding,
+            CatalogoDiarizzazione.embeddingTitanetSmall,
+        )
 
         assertEquals(attese, CatalogoDiarizzazione.voci)
     }
