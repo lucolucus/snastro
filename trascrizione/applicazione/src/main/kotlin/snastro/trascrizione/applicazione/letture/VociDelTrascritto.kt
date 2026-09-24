@@ -23,6 +23,15 @@ public class VociDelTrascritto(private val trascritti: TrascrittoRepository) {
             SegmentoVista(segmento.id, segmento.voceId, segmento.intervallo, segmento.testo)
         }
 
+    /**
+     * AC-550 (ADR 0019): every Segmento of [registrazioneId]'s Trascritto once, ordered by (inizio, segmentoId),
+     * with its `confermato` flag as stored and no text, or `null` without a Trascritto.
+     */
+    public fun segmentiDiVoce(registrazioneId: RegistrazioneId): List<SegmentoDiVoceVista>? =
+        trascritti.trova(registrazioneId)?.segmenti?.map { segmento ->
+            SegmentoDiVoceVista(segmento.id, segmento.voceId, segmento.intervallo, segmento.confermato)
+        }
+
     /** AC-100: every Registrazione that has a Trascritto. */
     public fun registrazioniConTrascritto(): List<RegistrazioneId> = trascritti.conTrascritto()
 }
