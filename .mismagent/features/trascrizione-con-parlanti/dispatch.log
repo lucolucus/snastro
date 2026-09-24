@@ -725,3 +725,11 @@
 2026-09-24T18:01:23Z	stile-snastro	composer	merge	cycle=2	-	-	MERGED 2bdc1f5 — ui-kit live (palette(voceId, colori); LICENZE_CARATTERI to wire in :avvio by restyle-shell-elenchi)
 2026-09-24T18:01:32Z	restyle-shell-elenchi	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 16
 2026-09-24T18:01:32Z	restyle-registrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 16
+2026-09-24T19:00:59Z	restyle-shell-elenchi	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW be4921d
+2026-09-24T19:00:59Z	restyle-shell-elenchi	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T19:00:59Z	restyle-shell-elenchi	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T19:01:21Z	restyle-shell-elenchi	composer	note	cycle=0	-	-	composer visual check: list container stretches full height; wide gap date↔duration; queued row duplicates chip + caption; old top tabs (Registrazioni|Modelli e licenze) still above content; completed row chip stacked above controls
+2026-09-24T19:06:14Z	restyle-shell-elenchi	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-576 drag-over/Scegli file; AC-577 Edit+More; AC-575/574 spec conflicts → amended per ADR 0018 [user] / part B4)
+2026-09-24T19:06:14Z	restyle-shell-elenchi	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: footer claims Modelli pronti always; close-project hidden behind chevron row)
+2026-09-24T19:06:14Z	restyle-shell-elenchi	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: 2 HIGH + verifier ACs + composer visual + MED
+2026-09-24T19:06:14Z	restyle-shell-elenchi	composer	pre-release	-	-	-	LOW loading states still CircularProgressIndicator (not sunken rows); S4 empty plain text; GlifiVietatiTest comment stripper blanks https:// in strings; BottonePlay (kit) lacks accessible name/tooltip
