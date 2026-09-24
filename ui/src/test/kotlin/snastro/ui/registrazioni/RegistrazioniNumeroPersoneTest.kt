@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
@@ -46,6 +47,9 @@ private fun statoVista(id: RegistrazioneId, stato: StatoElaborazioneVista, numer
         posizioneInCoda = if (stato == StatoElaborazioneVista.IN_ATTESA) 1 else null,
         numVoci = null,
         numeroPersone = numeroPersone,
+        trascrittoDisponibile = false,
+        elaborazioneId = ElaborazioneId("elaborazione-${id.valore}")
+            .takeIf { stato != StatoElaborazioneVista.NON_AVVIATA },
     )
 
 /**

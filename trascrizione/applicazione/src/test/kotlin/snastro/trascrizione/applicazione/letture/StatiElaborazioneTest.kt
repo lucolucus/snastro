@@ -39,6 +39,8 @@ class StatiElaborazioneTest {
                 posizioneInCoda = null,
                 numVoci = null,
                 numeroPersone = null,
+                trascrittoDisponibile = false,
+                elaborazioneId = null,
             ),
             riga,
         )
@@ -119,7 +121,7 @@ class StatiElaborazioneTest {
     }
 
     @Test
-    fun `AC-165 numVoci e presente solo per completata e conta le Voci del Trascritto`() {
+    fun `AC-165 numVoci conta le Voci del Trascritto quando esiste`() {
         elaborazioni.salva(unaElaborazione(COMPLETATA, registrazioneId = REGISTRAZIONE))
         trascritti.salva(unTrascritto(voci = 3, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))
 
@@ -129,7 +131,7 @@ class StatiElaborazioneTest {
     }
 
     @Test
-    fun `AC-165 numVoci resta nullo per in_attesa, in_corso, fallita e non avviata`() {
+    fun `AC-165 senza Trascritto numVoci e nullo per in_attesa, in_corso, fallita e non avviata`() {
         val inAttesa = RegistrazioneId("registrazione-attesa")
         val inCorso = RegistrazioneId("registrazione-corso")
         val fallitaId = RegistrazioneId("registrazione-fallita")
@@ -196,7 +198,90 @@ class StatiElaborazioneTest {
         assertEquals("seconda", riga.motivoFallimento) // "el-b" > "el-a"
     }
 
+    // --- ADR 0018 (+ Amendment (b)): trascrittoDisponibile, elaborazioneId, numVoci follows the Trascritto ---
+
+    @Test
+    fun `AC-447 stato e campi dall ULTIMA Elaborazione, trascrittoDisponibile e numVoci dal Trascritto`() {
+        fasi.fase(r("completata-in-corso"), DIARIZZAZIONE)
+        storia("completata", COMPLETATA, trascritto = 3)
+        storia("completata-in-attesa", COMPLETATA, IN_ATTESA, trascritto = 3)
+        storia("completata-in-corso", COMPLETATA, IN_CORSO, trascritto = 3)
+        storia("completata-fallita", COMPLETATA, FALLITA, trascritto = 3)
+        storia("fallita", FALLITA)
+        storia("completata-completata", COMPLETATA, COMPLETATA, trascritto = 2)
+
+        val righe = stati.stati(CASI.map(::r) + r("nessuna")).associateBy { it.registrazioneId.valore }
+
+        fun atteso(caso: String) = righe.getValue("registrazione-$caso").let {
+            listOf(it.stato, it.trascrittoDisponibile, it.numVoci, it.posizioneInCoda, it.fase, it.motivoFallimento)
+        }
+        val v = StatoElaborazioneVista.entries.associateBy { it.name }
+        assertEquals(listOf(v["COMPLETATA"], true, 3, null, null, null), atteso("completata"))
+        assertEquals(listOf(v["IN_ATTESA"], true, 3, 1, null, null), atteso("completata-in-attesa"))
+        assertEquals(listOf(v["IN_CORSO"], true, 3, null, DIARIZZAZIONE, null), atteso("completata-in-corso"))
+        assertEquals(listOf(v["FALLITA"], true, 3, null, null, MOTIVO), atteso("completata-fallita"))
+        assertEquals(listOf(v["FALLITA"], false, null, null, null, MOTIVO), atteso("fallita"))
+        assertEquals(listOf(v["COMPLETATA"], true, 2, null, null, null), atteso("completata-completata"))
+        assertEquals(listOf(v["NON_AVVIATA"], false, null, null, null, null), atteso("nessuna"))
+    }
+
+    @Test
+    fun `AC-474 elaborazioneId e l id dell ultima Elaborazione e nullo per NON_AVVIATA`() {
+        storia("completata-in-attesa", COMPLETATA, IN_ATTESA, trascritto = 3)
+
+        val righe = stati.stati(listOf(r("completata-in-attesa"), r("nessuna")))
+
+        assertEquals(listOf(idDi("completata-in-attesa-1"), null), righe.map { it.elaborazioneId })
+    }
+
+    @Test
+    fun `AC-474 dopo un annullamento la riga torna allo stato della sua ultima Elaborazione rimasta`() {
+        storia("prima", IN_ATTESA)
+        storia("ritrascrizione", COMPLETATA, IN_ATTESA, trascritto = 4)
+        storia("riprova", FALLITA, IN_ATTESA)
+        elaborazioni.salva(unaElaborazione(IN_ATTESA, idDi("in-coda-0"), r("in-coda"), creataAlle = t(5))).atteso()
+        assertEquals(4, stati.stati(listOf(r("in-coda"))).single().posizioneInCoda, "prima: dietro tre in coda")
+        listOf("prima-0", "ritrascrizione-1", "riprova-1").forEach { elaborazioni.rimuoviInAttesa(idDi(it)).atteso() }
+
+        val righe = stati.stati(listOf("prima", "ritrascrizione", "riprova", "in-coda").map(::r))
+
+        val campi = righe.map {
+            listOf(it.stato, it.trascrittoDisponibile, it.numVoci, it.elaborazioneId, it.motivoFallimento)
+        }
+        val v = StatoElaborazioneVista.entries.associateBy { it.name }
+        assertEquals(listOf(v["NON_AVVIATA"], false, null, null, null), campi[0], "prima trascrizione annullata")
+        val ritrascrizione = listOf(v["COMPLETATA"], true, 4, idDi("ritrascrizione-0"), null)
+        assertEquals(ritrascrizione, campi[1], "Ritrascrivi annullato")
+        assertEquals(listOf(v["FALLITA"], false, null, idDi("riprova-0"), MOTIVO), campi[2], "Riprova annullata")
+        assertEquals(1, righe[3].posizioneInCoda, "la coda rimasta e rinumerata da 1")
+    }
+
+    /**
+     * A Registrazione `registrazione-<caso>` whose Elaborazioni `<caso>-0`, `<caso>-1`, … have [stati], in creation
+     * order; with [trascritto] Voci, it also has a Trascritto.
+     */
+    private fun storia(caso: String, vararg stati: StatoElaborazione, trascritto: Int? = null) {
+        stati.forEachIndexed { i, stato ->
+            elaborazioni.salva(
+                unaElaborazione(stato, idDi("$caso-$i"), r(caso), creataAlle = t(i.toLong()), motivo = MOTIVO),
+            ).atteso()
+        }
+        trascritto?.let { trascritti.salva(unTrascritto(voci = it, segmentiPerVoce = 1, registrazioneId = r(caso))) }
+    }
+
     private companion object {
+        const val MOTIVO = "impossibile leggere l'audio"
+        val CASI = listOf(
+            "completata",
+            "completata-in-attesa",
+            "completata-in-corso",
+            "completata-fallita",
+            "fallita",
+            "completata-completata",
+        )
+
+        fun r(caso: String) = RegistrazioneId("registrazione-$caso")
+
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
         fun idDi(valore: String) = ElaborazioneId(valore)
         fun t(secondi: Long): Instant = Instant.parse("2026-09-23T10:00:00Z").plusSeconds(secondi)
