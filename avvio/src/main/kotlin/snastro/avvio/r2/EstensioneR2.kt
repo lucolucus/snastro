@@ -42,6 +42,7 @@ import snastro.parlanti.applicazione.letture.Proposta
 import snastro.parlanti.applicazione.letture.PropostaUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
+import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
 import snastro.persistenza.SnastroDatabase
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
@@ -97,7 +98,11 @@ internal class EstensioneR2(
             ),
         )
         val aggiornamenti = AggiornamentiVistaParlanti(dispatcher, proposte)
-        AbbonatoRevisioneParlanti(dispatcher, ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni))
+        AbbonatoRevisioneParlanti(
+            dispatcher,
+            ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
+            ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
+        )
 
         val collaboratoriR1 = r1.apri(contesto) as CollaboratoriR1
 

@@ -14,6 +14,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
+import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
@@ -23,7 +24,9 @@ import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
+import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import kotlin.test.Test
@@ -45,9 +48,13 @@ class AbbonatoRevisioneParlantiTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()
     private val transazioni = UnitaDiLavoroFinta(parlanti, attribuzioni)
 
-    private fun dispatcherCon(politica: ApplicaRevisionePolitica): DispatcherEventiInMemoria {
+    private fun dispatcherCon(
+        politica: ApplicaRevisionePolitica,
+        politicaSostituzione: ApplicaSostituzioneTrascrittoPolitica =
+            ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni),
+    ): DispatcherEventiInMemoria {
         val dispatcher = DispatcherEventiInMemoria(transazioni)
-        AbbonatoRevisioneParlanti(dispatcher, politica)
+        AbbonatoRevisioneParlanti(dispatcher, politica, politicaSostituzione)
         return dispatcher
     }
 
@@ -134,6 +141,49 @@ class AbbonatoRevisioneParlantiTest {
         val attribuzioneB = assertNotNull(trovata, "il rollback ripristina l'Attribuzione di B")
         assertEquals(pb.id, attribuzioneB.parlanteId)
         assertEquals(1, assertNotNull(parlanti.trova(pb.id)).impronte.size, "la riga d'impronta di B e ripristinata")
+    }
+
+    @Test
+    fun `AC-446 TrascrittoSostituito invoca politicaSostituzione applica dentro la transazione`() {
+        val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
+        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
+        val pa = unParlante("id-pa")
+        attribuisci(VoceRef(REG, VoceId(1)), pa)
+
+        commit(dispatcher, TrascrittoSostituito(REG)).atteso()
+
+        verify(exactly = 1) { politicaSostituzione.applica(REG) }
+        val messaggio = "l'effetto della policy e davvero applicato: purga la vecchia generazione"
+        assertNull(attribuzioni.trova(VoceRef(REG, VoceId(1))), messaggio)
+    }
+
+    @Test
+    fun `AC-446 un Errore della politicaSostituzione annulla e ripristina la transazione (end-to-end)`() {
+        val pa = unParlante("id-pa")
+        attribuisci(VoceRef(REG, VoceId(1)), pa)
+        val guasto = ApplicaSostituzioneTrascrittoPolitica(
+            ParlanteRepositorySalvaFallisce(parlanti),
+            attribuzioni,
+        )
+        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), guasto)
+
+        val esito = commit(dispatcher, TrascrittoSostituito(REG))
+
+        assertTrue(esito is Esito.Errore, "il completamento deve essere annullato")
+        val trovata = attribuzioni.trova(VoceRef(REG, VoceId(1)))
+        val attribuzioneA = assertNotNull(trovata, "il rollback ripristina l'Attribuzione di A")
+        assertEquals(pa.id, attribuzioneA.parlanteId)
+        assertEquals(1, assertNotNull(parlanti.trova(pa.id)).impronte.size, "la riga d'impronta di A e ripristinata")
+    }
+
+    @Test
+    fun `AC-446 ElaborazioneCompletata e ogni altro evento non invocano la politicaSostituzione`() {
+        val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
+        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
+
+        commit(dispatcher, ElaborazioneCompletata(REG)).atteso()
+
+        verify(exactly = 0) { politicaSostituzione.applica(any()) }
     }
 
     /** [ParlanteRepository] whose [salva] always fails, like ADR 0007's unique index (mirrors AC-96). */
