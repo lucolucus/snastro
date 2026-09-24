@@ -89,7 +89,6 @@ class MigrazioneSchemaTest {
         val driver = driverSqlite(url)
         try {
             assertEquals(SnastroDatabase.Schema.version, pragmaLong(driver, "user_version"))
-            assertEquals(VERSIONE_R0 + 1, SnastroDatabase.Schema.version)
             val riga = db.database.elaborazioneQueries.trovaDiRegistrazione(registrazioneId).executeAsOne()
             assertEquals(elaborazioneId, riga.id)
             assertEquals("interrotta", riga.motivo_fallimento)
@@ -168,6 +167,7 @@ class MigrazioneSchemaTest {
         db.elaborazioneQueries.trovaInAttesa().executeAsList()
         db.elaborazioneQueries.trovaInCorso().executeAsList()
         db.elaborazioneQueries.aggiornaStato("in_corso", 1L, null, elaborazioneId)
+        db.elaborazioneQueries.eliminaInAttesa(elaborazioneId) // in_corso: 0 rows (ADR 0018 Amendment (b))
     }
 
     private fun eseguiQueryAttribuzioneEImpronta(db: SnastroDatabase) {

@@ -1,5 +1,6 @@
 package snastro.persistenza
 
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.sqlite.SQLiteConfig
 import java.sql.SQLException
@@ -9,7 +10,8 @@ import kotlin.test.assertFailsWith
 
 /**
  * AC-9 / AC-13: the schema-level guards exist and actually reject a violating row — the ADR 0007
- * partial unique indexes (INV-4 x2, INV-16), the `attribuzione` primary key (AC-23, structural) and
+ * partial unique indexes still in force (INV-4 open, INV-16; ADR 0018 dropped the completata one), the
+ * `attribuzione` primary key (AC-23, structural) and
  * the `impronta_vocale` unique constraint (INV-14). The repository adapters (wave 4) map the
  * resulting [SQLException] to the matching `ErroreDominio`; here we only prove the store itself
  * refuses the second row.
@@ -27,14 +29,22 @@ class SchemaVincoliTest {
     }
 
     @Test
-    fun `AC-9 elaborazione_completata_unica rifiuta una seconda Elaborazione completata per la stessa Registrazione`() {
-        val db = databaseInMemoria()
-        val registrazioneId = db.seminaProgettoERegistrazione()
-        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "completata", 0L, 0L, null, null)
+    fun `AC-9 esistono solo i due indici unici parziali ancora in vigore e non elaborazione_completata_unica`() {
+        val (_, driver) = databaseEDriverInMemoria()
 
-        assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "completata", 1L, 1L, null, null)
-        }
+        val indici = driver.executeQuery(
+            null,
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND sql LIKE 'CREATE UNIQUE INDEX%'",
+            { cursore ->
+                val nomi = mutableSetOf<String>()
+                while (cursore.next().value) nomi += checkNotNull(cursore.getString(0))
+                QueryResult.Value(nomi)
+            },
+            0,
+        ).value
+
+        // ADR 0018: elaborazione_completata_unica is dropped by 3.sqm (AC-425).
+        assertEquals(setOf("elaborazione_aperta_unica", "parlante_nome_attivo_unico"), indici)
     }
 
     @Test
