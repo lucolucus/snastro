@@ -16,6 +16,7 @@ import snastro.ui.modelli.ModelliRoute
 import snastro.ui.modelli.StatoModelli
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
+import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazionePresenter
 import snastro.ui.registrazione.RegistrazioneRoute
 import snastro.ui.registrazioni.RegistrazioniPresenter
@@ -29,7 +30,7 @@ import snastro.ui.registrazioni.RegistrazioniRoute
  * (ux-proposal S5 "When: at startup") — it never blocks the app.
  */
 @Composable
-internal fun ContenutoAppR1(grafo: GrafoR1) {
+internal fun ContenutoAppR1(grafo: GrafoR1, sceltaCartella: SceltaCartella) {
     val r0 = grafo.r0
     val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R1) }
     val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
@@ -41,7 +42,7 @@ internal fun ContenutoAppR1(grafo: GrafoR1) {
         iniziale = iniziale,
         contenutoSenzaProgetto = {
             val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
-            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita)
+            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita, sceltaCartella)
         },
         contenuto = { conProgetto, navigazione ->
             val collaboratori = r0.sessione.collaboratoriCorrenti()

@@ -7,6 +7,7 @@ import java.nio.ByteOrder
 import java.nio.ShortBuffer
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 
 /**
  * Decodes a source audio file to a derived 16 kHz mono 16-bit PCM WAV (once, ADR 0005), and reads
@@ -17,7 +18,10 @@ public class DecodificaFfmpeg {
     /**
      * Decodes [sorgente] and resamples it to 16 kHz mono, writing a 16-bit PCM WAV to [destinazione]
      * (creating parent directories as needed). Streams frame by frame — never holds the whole
-     * recording in memory.
+     * recording in memory. L502d/L559b: writes to a sibling `.tmp` file first, then
+     * [Files.move]s it into place with `ATOMIC_MOVE` — a crash or I/O failure at any point before that
+     * rename leaves [destinazione]'s previous content (or its absence) untouched, never a half-written
+     * derived WAV mistaken for a good one (the temp file itself is always swept, success or failure).
      *
      * @throws AudioIlleggibile [sorgente] is missing, empty, a directory, or unreadable as media.
      * @throws FormatoNonSupportato [sorgente] opens fine but has no audio stream.
@@ -28,7 +32,18 @@ public class DecodificaFfmpeg {
             grabber.audioChannels = 1
             grabber.sampleRate = FREQUENZA_CAMPIONAMENTO_HZ
             destinazione.parent?.let(Files::createDirectories)
-            RandomAccessFile(destinazione.toFile(), "rw").use { raf -> scriviWav(raf, grabber, sorgente) }
+            val temporaneo = destinazione.resolveSibling("${destinazione.fileName}.$SUFFISSO_TEMPORANEO")
+            try {
+                RandomAccessFile(temporaneo.toFile(), "rw").use { raf -> scriviWav(raf, grabber, sorgente) }
+                Files.move(
+                    temporaneo,
+                    destinazione,
+                    StandardCopyOption.ATOMIC_MOVE,
+                    StandardCopyOption.REPLACE_EXISTING,
+                )
+            } finally {
+                Files.deleteIfExists(temporaneo) // no-op una volta che move l'ha gia' rinominato via
+            }
         } finally {
             chiudi(grabber)
         }
@@ -99,5 +114,6 @@ public class DecodificaFfmpeg {
 
     private companion object {
         const val AMPIEZZA_MASSIMA = 32_768f
+        const val SUFFISSO_TEMPORANEO = "tmp"
     }
 }

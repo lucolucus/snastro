@@ -1,7 +1,11 @@
 package snastro.avvio
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
@@ -29,6 +33,7 @@ import snastro.ui.ShellRoute
 import snastro.ui.modelli.StatoModelli
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
+import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.registrazioni.RegistrazioniRoute
 import snastro.ui.testi.ETICHETTA_SCARICA
@@ -68,14 +73,25 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
 
+    // L464d (ADR 0010: v1 is Mac-only) — switches java.awt.FileDialog from picking FILES to picking
+    // DIRECTORIES; must be set before any FileDialog is realized (SceltaCartellaFileDialog, below).
+    System.setProperty("apple.awt.fileDialogForDirectories", "true")
+
     val grafo = costruisciGrafoR2()
     application {
+        var finestra by remember { mutableStateOf<ComposeWindow?>(null) }
         val esci = {
+            // L627c: hide the window FIRST — the bounded join below (up to ATTESA_CHIUSURA_USCITA_MS)
+            // then runs invisibly, never a frozen-looking window on close.
+            finestra?.isVisible = false
             chiudiPrimaDiUscire(grafo.r0.sessione::chiudi) // LOW-3: bounded, never a hung exit
+            attendiScritturaRegistro() // L530e: bounded drain of the registry's own queued write
             exitApplication()
         }
         Window(onCloseRequest = esci, title = "snastro") {
-            ContenutoAppR2(grafo)
+            finestra = window
+            val sceltaCartella = remember { SceltaCartellaFileDialog(window) }
+            ContenutoAppR2(grafo, sceltaCartella)
         }
     }
 }
@@ -88,7 +104,7 @@ fun main(args: Array<String>) {
  * to the Progetto currently open.
  */
 @Composable
-internal fun ContenutoApp(grafo: GrafoR0) {
+internal fun ContenutoApp(grafo: GrafoR0, sceltaCartella: SceltaCartella) {
     val shellPresenter = remember {
         ShellPresenter(grafo.scope, grafo.io, grafo.sessione, SEZIONI_SHELL_R0)
     }
@@ -98,7 +114,7 @@ internal fun ContenutoApp(grafo: GrafoR0) {
             val progettiPresenter = remember {
                 ProgettiPresenter(grafo.scope, grafo.io, grafo.elencoProgetti, grafo.sessione)
             }
-            ProgettiRoute(progettiPresenter, grafo.cartellaProgettiPredefinita)
+            ProgettiRoute(progettiPresenter, grafo.cartellaProgettiPredefinita, sceltaCartella)
         },
         contenuto = { conProgetto ->
             val collaboratori = grafo.sessione.collaboratoriCorrenti()
@@ -157,7 +173,10 @@ internal fun eseguiSmoke(fixtureDir: String) {
 
     try {
         runDesktopComposeUiTest(LARGHEZZA_SMOKE_PX, ALTEZZA_SMOKE_PX) {
-            setContent { ContenutoAppR2(grafo) }
+            // The smoke script never exercises S1's folder pickers (it opens the fixture project
+            // directly through `sessione.apri`, below) — a `SceltaCartella` that always "cancels" is
+            // enough; a real `java.awt.FileDialog` has no owner window in this OFFSCREEN test harness.
+            setContent { ContenutoAppR2(grafo, SceltaCartella { null }) }
 
             attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
             salvaSchermata(outputDir, "s1")

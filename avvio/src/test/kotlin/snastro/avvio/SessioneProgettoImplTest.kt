@@ -7,6 +7,7 @@ import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.GeneratoreIdUuid
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.persistenza.SchemaProgettoNonValidoException
 import snastro.persistenza.SchemaProgettoPiuRecenteException
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.porte.RegistroProgetti
@@ -275,6 +276,25 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val secondoErrore = sessione.apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
         assertEquals(ErroreSessione.DatabasePiuRecente, secondoErrore)
         assertNotEquals(ErroreSessione.ProgettoGiaAperto, secondoErrore)
+    }
+
+    @Test
+    fun `L530f uno schema mai rilasciato (user_version 1) restituisce DatabasePiuRecente, non CartellaNonValida`() {
+        // Come sopra: SchemaProgettoNonValidoException e' l'ALTRO sottotipo sigillato di
+        // SchemaProgettoRifiutatoException (`:persistenza`'s own AC-12) — anch'esso deve mappare su
+        // DatabasePiuRecente, non cadere nel catch generico -> CartellaNonValida.
+        val cartellaProgetto = cartella.resolve("MaiRilasciato.snastro").also(Files::createDirectories)
+        Files.createFile(cartellaProgetto.resolve("progetto.db"))
+        val sessione = SessioneProgettoImpl(
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = Clock.fixed(ORA, ZoneOffset.UTC),
+            scopeGenitore = scopeDiProva(),
+            seams = SessioneProgettoSeams(apriDatabase = { throw SchemaProgettoNonValidoException(1) }),
+        )
+
+        val errore = sessione.apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
+        assertEquals(ErroreSessione.DatabasePiuRecente, errore)
     }
 
     @Test
