@@ -4,6 +4,8 @@
 
 package snastro.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -21,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,16 +34,21 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import snastro.ui.stile.BottoneIconaSn
 import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
-import snastro.ui.testi.ETICHETTA_MODELLI_PRONTI_FOOTER
+import snastro.ui.testi.ETICHETTA_CHIUDI_PROGETTO
+import snastro.ui.testi.ETICHETTA_MODELLI_E_LICENZE
+import snastro.ui.testi.ETICHETTA_TUTTO_IN_LOCALE
 import snastro.ui.testi.etichetta
 
 private val PADDING_MESSAGGIO = 24.dp
@@ -58,13 +66,16 @@ private val PADDING_PIEDE = 10.dp
  * [scuro]/[riduciMovimento] are render-check/test knobs (AC-571-style) — every existing call site
  * (production `ShellRoute`, every prior test) keeps the exact previous behaviour via these defaults.
  */
-@Suppress("LongParameterList") // one parameter per documented slot/knob (2 content slots + 2 render-check knobs)
+// one parameter per documented slot/knob (content slots + nav hooks + render-check knobs)
+@Suppress("LongParameterList")
 @Composable
 fun SchermataShell(
     stato: ShellUiStato,
     azioni: AzioniShell,
     contenutoSenzaProgetto: @Composable () -> Unit = {},
     contenuto: @Composable (ShellUiStato.ConProgetto) -> Unit = {},
+    onRegistrazioniSelezionata: (() -> Unit)? = null,
+    onModelliELicenze: (() -> Unit)? = null,
     scuro: Boolean = isSystemInDarkTheme(),
     riduciMovimento: Boolean? = null,
 ) {
@@ -86,6 +97,8 @@ fun SchermataShell(
                             NavigazioneShell(
                                 stato = stato,
                                 azioni = azioni,
+                                onRegistrazioniSelezionata = onRegistrazioniSelezionata,
+                                onModelliELicenze = onModelliELicenze,
                                 modifier = Modifier.width(SnastroMisure.sidebar).fillMaxHeight(),
                             )
                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) { contenuto(stato) }
@@ -148,7 +161,13 @@ private fun BannerErroreApertura(messaggio: String, onChiudi: () -> Unit) {
 
 /** AC-572: 232dp sidebar on `ground`, 1dp `line` right border, `space3` padding, `space1` gap. */
 @Composable
-private fun NavigazioneShell(stato: ShellUiStato.ConProgetto, azioni: AzioniShell, modifier: Modifier = Modifier) {
+private fun NavigazioneShell(
+    stato: ShellUiStato.ConProgetto,
+    azioni: AzioniShell,
+    onRegistrazioniSelezionata: (() -> Unit)?,
+    onModelliELicenze: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
     val colori = LocalSnastroColori.current
     Column(
         modifier = modifier
@@ -157,33 +176,39 @@ private fun NavigazioneShell(stato: ShellUiStato.ConProgetto, azioni: AzioniShel
             .padding(SnastroMisure.space3),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space1),
     ) {
-        SelettoreProgetto(nome = stato.progetto.nome, onClick = azioni.chiudi)
+        SelettoreProgetto(nome = stato.progetto.nome, onChiudi = azioni.chiudi)
         DestinazioneShell.entries.filter { it in stato.destinazioniDisponibili }.forEach { destinazione ->
+            val giaSelezionata = destinazione == stato.destinazioneSelezionata
             VoceNavigazione(
                 destinazione = destinazione,
-                selezionata = destinazione == stato.destinazioneSelezionata,
-                onClick = { azioni.seleziona(destinazione) },
+                selezionata = giaSelezionata,
+                onClick = {
+                    azioni.seleziona(destinazione)
+                    // Re-clicking the ALREADY-selected 'Registrazioni' item goes back to its own top
+                    // (e.g. out of the S5 sub-view) — switching INTO it from Parlanti preserves
+                    // whatever place it was left at instead (R2's own "keeps where the user was").
+                    if (destinazione == DestinazioneShell.REGISTRAZIONI && giaSelezionata) {
+                        onRegistrazioniSelezionata?.invoke()
+                    }
+                },
             )
         }
         Spacer(modifier = Modifier.weight(1f))
-        PiedeSidebar()
+        PiedeSidebar(onModelliELicenze = onModelliELicenze)
     }
 }
 
 /**
- * AC-572: Reel icon (`accentInk`) + project name (`heading`, ellipsised) + ChevronDown. No project
- * switcher exists in this slice (`AzioniShell` has no such command): the row reuses `chiudi` (back to
- * S1) — the closest existing affordance to "leave this project" (same command as before, only its
- * shape changed from a text link to this row).
+ * AC-572/rework cycle 1 (HIGH #2): Reel icon (`accentInk`) + project name (`heading`, ellipsised) —
+ * no longer clickable itself (a bare name + a bare chevron gave no visible affordance and silently
+ * closed the project). "Chiudi progetto" is now its own `BottoneIcona Close` at the row's end.
  */
 @Composable
-private fun SelettoreProgetto(nome: String, onClick: () -> Unit) {
+private fun SelettoreProgetto(nome: String, onChiudi: () -> Unit) {
     val colori = LocalSnastroColori.current
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(SnastroMisure.radiusControl))
-            .clickable(onClick = onClick)
             .padding(horizontal = PADDING_ORIZZONTALE_PROGETTO, vertical = PADDING_VERTICALE_PROGETTO)
             .testTag("shell-selettore-progetto"),
         verticalAlignment = Alignment.CenterVertically,
@@ -198,7 +223,13 @@ private fun SelettoreProgetto(nome: String, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        IconaSn(Icona.ChevronDown, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
+        BottoneIconaSn(
+            icona = Icona.Close,
+            descrizione = ETICHETTA_CHIUDI_PROGETTO,
+            onClick = onChiudi,
+            piccolo = true,
+            modifier = Modifier.testTag("shell-chiudi-progetto"),
+        )
     }
 }
 
@@ -236,21 +267,63 @@ private fun VoceNavigazione(destinazione: DestinazioneShell, selezionata: Boolea
     }
 }
 
-/** AC-572: 'Modelli pronti · tutto in locale' (Cube, caption `inkMuted`) — a static privacy footer;
- * the shell state carries no models-readiness field (views only, no new query). */
+/**
+ * AC-572/rework cycle 1: 'Tutto in locale' (Cube, caption `inkMuted`) — a neutral privacy line, no
+ * readiness claim the shell state cannot back (no models-readiness field, views only, no new query).
+ * HIGH #9: when [onModelliELicenze] is supplied, the row IS the S5 navigation entry point (the old
+ * top tabs are gone) — clickable, tooltip/accessible name "Modelli e licenze".
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PiedeSidebar() {
+private fun PiedeSidebar(onModelliELicenze: (() -> Unit)?) {
+    val base = Modifier
+        .fillMaxWidth()
+        .let {
+            if (onModelliELicenze != null) {
+                it.clickable(onClick = onModelliELicenze)
+                    .semantics { contentDescription = ETICHETTA_MODELLI_E_LICENZE }
+            } else {
+                it
+            }
+        }
+        .padding(PADDING_PIEDE)
+        .testTag("shell-piede")
+    if (onModelliELicenze != null) {
+        TooltipArea(tooltip = { EtichettaTooltip(ETICHETTA_MODELLI_E_LICENZE) }) {
+            PiedeContenuto(base)
+        }
+    } else {
+        PiedeContenuto(base)
+    }
+}
+
+@Composable
+private fun PiedeContenuto(modifier: Modifier) {
     val colori = LocalSnastroColori.current
     Row(
-        modifier = Modifier.fillMaxWidth().padding(PADDING_PIEDE).testTag("shell-piede"),
+        modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
     ) {
         IconaSn(Icona.Cube, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
         Text(
-            text = ETICHETTA_MODELLI_PRONTI_FOOTER,
+            text = ETICHETTA_TUTTO_IN_LOCALE,
             style = LocalSnastroTipografia.current.caption,
             color = colori.inkMuted,
+        )
+    }
+}
+
+@Composable
+private fun EtichettaTooltip(testo: String) {
+    Surface(
+        color = MaterialTheme.colorScheme.inverseSurface,
+        shape = RoundedCornerShape(SnastroMisure.radiusControl),
+    ) {
+        Text(
+            text = testo,
+            color = MaterialTheme.colorScheme.inverseOnSurface,
+            modifier = Modifier.padding(SnastroMisure.space2),
         )
     }
 }

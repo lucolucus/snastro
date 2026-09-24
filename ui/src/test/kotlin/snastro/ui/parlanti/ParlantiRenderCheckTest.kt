@@ -7,9 +7,11 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -133,6 +135,22 @@ class ParlantiRenderCheckTest {
         verificaLista(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
+    fun `AC-577 il menu Altre azioni mostra Promuovi ed Elimina a 1280x800`() =
+        verificaMenuAltreAzioni(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-577 il menu Altre azioni mostra Promuovi ed Elimina a 1024x640`() =
+        verificaMenuAltreAzioni(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-577 il menu Altre azioni mostra Promuovi ed Elimina a 1280x800 (scuro)`() =
+        verificaMenuAltreAzioni(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-577 il menu Altre azioni mostra Promuovi ed Elimina a 1024x640 (scuro)`() =
+        verificaMenuAltreAzioni(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
     fun `AC-223 rinomina in corso con un errore inline a 1280x800`() =
         verificaRinominaConErrore(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
@@ -213,15 +231,46 @@ class ParlantiRenderCheckTest {
                     riduciMovimento = true,
                 )
             }
-            onNodeWithText(ETICHETTA_SEZIONE_RICORRENTI).assertIsDisplayed()
-            onNodeWithText(ETICHETTA_SEZIONE_OCCASIONALI).assertIsDisplayed()
-            onNodeWithText(ETICHETTA_SEZIONE_ELIMINATI).assertIsDisplayed()
+            // AC-577 rework cycle 1 (MED #13): overline section headers render UPPERCASE (applied by
+            // the composable, never typed uppercase in the constants — README §Tipografia).
+            onNodeWithText(ETICHETTA_SEZIONE_RICORRENTI.uppercase()).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_SEZIONE_OCCASIONALI.uppercase()).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_SEZIONE_ELIMINATI.uppercase()).assertIsDisplayed()
             onNodeWithText("Luca").assertIsDisplayed()
             onNodeWithTag("parlanti-riproduzione-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsEnabled()
             onNodeWithTag("parlanti-riproduzione-${PARLANTE_2.valore}", useUnmergedTree = true).assertIsNotEnabled()
-            onNodeWithTag("parlanti-promuovi-${PARLANTE_2.valore}", useUnmergedTree = true).assertIsDisplayed()
-            onNodeWithTag("parlanti-elimina-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            // AC-577 rework cycle 1 (#4): Promuovi/Elimina moved into the `More` menu (see
+            // `verificaMenuAltreAzioni`) — the row itself shows the Edit/More icon buttons.
+            onNodeWithTag("parlanti-modifica-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithTag("parlanti-altre-azioni-${PARLANTE_1.valore}", useUnmergedTree = true).assertIsDisplayed()
             catturaPng("parlanti-lista", width, height, scuro)
+        }
+
+    /** AC-577 rework cycle 1 (#4): `BottoneIcona More` opens a `Menu.html`-style menu — "Promuovi a
+     * ricorrente" only for an occasionale row, "Elimina…" always, both the SAME commands as before. */
+    private fun verificaMenuAltreAzioni(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataParlanti(
+                    stato = ParlantiUiStato.Dati(
+                        occasionali = listOf(unaRiga(id = PARLANTE_2, tipoParlante = TipoParlanteVista.OCCASIONALE)),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("parlanti-altre-azioni-${PARLANTE_2.valore}", useUnmergedTree = true).performClick()
+            onNodeWithTag("parlanti-promuovi-${PARLANTE_2.valore}").assertIsDisplayed()
+            onNodeWithTag("parlanti-elimina-${PARLANTE_2.valore}").assertIsDisplayed()
+            // `DropdownMenu` opens its own Popup layer — a second semantics root distinct from the
+            // window's own, so `onRoot()` (which requires exactly one) cannot be used once it is open;
+            // the LAST root is the freshly-opened menu.
+            val radici = onAllNodes(isRoot()).fetchSemanticsNodes()
+            val png = File(outputDir, "parlanti-menu-altre-azioni${if (scuro) "-scuro" else ""}-${width}x$height.png")
+            val bitmap = onAllNodes(isRoot())[radici.size - 1].captureToImage().toAwtImage()
+            ImageIO.write(bitmap, "PNG", png)
+            check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }
         }
 
     private fun verificaRinominaConErrore(width: Int, height: Int, scuro: Boolean = false) =

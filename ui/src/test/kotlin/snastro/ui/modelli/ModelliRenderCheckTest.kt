@@ -1,10 +1,16 @@
 package snastro.ui.modelli
 
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
@@ -41,19 +47,19 @@ class ModelliRenderCheckTest {
     private val outputDir = File("build/render-check").apply { mkdirs() }
 
     @Test
-    fun `AC-227 mancanti mostra la dimensione totale e Scarica a 1280x800`() =
+    fun `AC-578 AC-227 mancanti mostra la dimensione totale e Scarica a 1280x800`() =
         verificaMancanti(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
-    fun `AC-227 mancanti mostra la dimensione totale e Scarica a 1024x640`() =
+    fun `AC-578 AC-227 mancanti mostra la dimensione totale e Scarica a 1024x640`() =
         verificaMancanti(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
-    fun `AC-227 mancanti mostra la dimensione totale e Scarica a 1280x800 (scuro)`() =
+    fun `AC-578 AC-227 mancanti mostra la dimensione totale e Scarica a 1280x800 (scuro)`() =
         verificaMancanti(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
 
     @Test
-    fun `AC-227 mancanti mostra la dimensione totale e Scarica a 1024x640 (scuro)`() =
+    fun `AC-578 AC-227 mancanti mostra la dimensione totale e Scarica a 1024x640 (scuro)`() =
         verificaMancanti(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
@@ -188,6 +194,15 @@ class ModelliRenderCheckTest {
             onNodeWithTag("modelli-download").assertIsDisplayed()
             onNodeWithTag("modelli-progresso").assertIsDisplayed()
             onNodeWithText("asr-parakeet-tdt-0.6b-v3-int8", substring = true).assertIsDisplayed()
+            // MED #15: the track carries `ProgressBarRangeInfo` (accessibility) — a determinate value,
+            // never `ProgressBarRangeInfo.Indeterminate`.
+            onNode(
+                SemanticsMatcher("ha ProgressBarRangeInfo determinato") { node ->
+                    val info = node.config.getOrNull(SemanticsProperties.ProgressBarRangeInfo)
+                    info != null && info != ProgressBarRangeInfo.Indeterminate
+                } and hasAnyAncestor(hasTestTag("modelli-progresso")),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
             catturaPng("modelli-in-download", width, height, scuro)
         }
 

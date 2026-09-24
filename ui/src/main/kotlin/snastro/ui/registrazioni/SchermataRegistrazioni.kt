@@ -22,12 +22,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -43,8 +43,13 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -53,6 +58,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import snastro.kernel.RegistrazioneId
 import snastro.ui.SnastroTema
@@ -75,19 +81,20 @@ import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
+import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
 import snastro.ui.testi.ETICHETTA_IMPORTAZIONE_NON_RIUSCITA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
+import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_FORMATI_AUDIO_SUPPORTATI
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
+import snastro.ui.testi.MESSAGGIO_RILASCIA_PER_IMPORTARE
 import snastro.ui.testi.etichettaIdentificazione
-import snastro.ui.testi.etichettaInAttesa
-import snastro.ui.testi.etichettaInCorso
 import snastro.ui.testi.etichettaRegistrazioni
 import snastro.ui.testi.etichettaRitrascrizioneInAttesa
 import snastro.ui.testi.etichettaRitrascrizioneInCorso
@@ -99,10 +106,13 @@ import java.time.format.DateTimeParseException
 import java.time.format.ResolverStyle
 import javax.swing.JFileChooser
 
-private val LARGHEZZA_CAMPO_DATA = 90.dp
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 private val LARGHEZZA_CONFERMA_RITRASCRIVI = 320.dp
 private val DIAMETRO_DROPZONE_ICONA = 28.dp
+private val SPESSORE_TRATTEGGIO_NORMALE = 1.dp
+private val SPESSORE_TRATTEGGIO_OVER = 1.5.dp
+private const val TRATTO_LUNGHEZZA = 8f
+private const val TRATTO_INTERVALLO = 6f
 
 /** M4: `uuuu` (proleptic year, not `yyyy`) + [ResolverStyle.STRICT] rejects an out-of-range day
  * (e.g. 31/02) instead of a SMART resolver silently rolling it into the next month (28/02). */
@@ -115,11 +125,8 @@ private val FORMATO_DATA_MODIFICABILE: DateTimeFormatter =
  * hand the chosen path to [AzioniRegistrazioni.importa] (frugality rung 3: platform-native over a
  * hand-rolled dialog).
  *
- * NOTE (restyle scope): AC-574's "project name in `display`" is not rendered here — the project's
- * name is [snastro.ui.ProgettoAperto], owned by the shell (`SchermataShell`'s sidebar), never passed
- * into this screen's [RegistrazioniUiStato]; adding it would mean a new field/wiring, which this
- * views-only block does not do. The "n registrazioni · durata" caption and the rest of AC-574..576
- * are implemented from data already in [RegistrazioniUiStato].
+ * NOTE (restyle scope): AC-574's "project name in `display`" is not rendered here (rework cycle 1:
+ * confirmed out of scope — the name stays in the shell's sidebar, [RegistrazioniUiStato] carries none).
  */
 @Composable
 fun SchermataRegistrazioni(
@@ -173,17 +180,23 @@ private fun ErroreCaricamentoRegistrazioni(messaggio: String, onRiprova: () -> U
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ContenutoRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: AzioniRegistrazioni) {
+    var dragAttivo by remember { mutableStateOf(false) }
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(vertical = SnastroMisure.space5, horizontal = SnastroMisure.space6)
             .dragAndDropTarget(
                 shouldStartDragAndDrop = { !stato.importoInCorso },
-                target = remember(azioni) { registrazioneDropTarget(azioni.importa) },
+                target = remember(azioni) { registrazioneDropTarget(azioni.importa) { dragAttivo = it } },
             )
-            .testTag("registrazioni-drop-target"),
+            .testTag("registrazioni-drop-target")
+            .verticalScroll(rememberScrollState()),
     ) {
-        IntestazioneRegistrazioni(stato, azioni)
+        if (stato.righe.isNotEmpty()) {
+            IntestazioneRegistrazioni(stato, azioni)
+        } else {
+            BarraImportazione(azioni, stato.importoInCorso)
+        }
         stato.errore?.let {
             Spacer(modifier = Modifier.height(SnastroMisure.space3))
             BannerSn(
@@ -196,7 +209,7 @@ private fun ContenutoRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: Azi
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         if (stato.righe.isEmpty()) {
-            DropZoneVuota()
+            DropZoneVuota(inDrop = dragAttivo, azioni = azioni)
         } else {
             ElencoRegistrazioni(stato.righe, azioni)
         }
@@ -204,7 +217,8 @@ private fun ContenutoRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: Azi
 }
 
 /** AC-574: "n registrazioni · <durata estesa totale>" (sum of `durataMs` — view arithmetic on the
- * rows already in state) + 'Importa audio…' `Primario`. */
+ * rows already in state) + 'Importa audio…' `Primario`. Hidden when the list is empty (rework cycle 1
+ * — a "0 registrazioni · 0 min" caption next to an empty `DropZone` says nothing useful). */
 @Composable
 private fun IntestazioneRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: AzioniRegistrazioni) {
     val colori = LocalSnastroColori.current
@@ -216,15 +230,22 @@ private fun IntestazioneRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: 
             color = colori.inkMuted,
             modifier = Modifier.weight(1f),
         )
+        BarraImportazione(azioni, stato.importoInCorso)
+    }
+}
+
+@Composable
+private fun BarraImportazione(azioni: AzioniRegistrazioni, importoInCorso: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         BottoneSn(
             etichetta = ETICHETTA_IMPORTA_FILE,
             onClick = { sceltaFileAudio()?.let { azioni.importa(listOf(it)) } },
             variante = VarianteBottone.Primario,
             icona = Icona.Import,
-            abilitato = !stato.importoInCorso,
+            abilitato = !importoInCorso,
             modifier = Modifier.testTag("registrazioni-importa"),
         )
-        if (stato.importoInCorso) {
+        if (importoInCorso) {
             CircularProgressIndicator(
                 modifier = Modifier.padding(start = SnastroMisure.space2).width(DIMENSIONE_INDICATORE_PICCOLO)
                     .testTag("registrazioni-import-in-corso"),
@@ -233,43 +254,82 @@ private fun IntestazioneRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: 
     }
 }
 
-/** AC-576: large `DropZone` — Import 28dp, the empty message, the supported formats + the existing
- * import action (kept as [ETICHETTA_IMPORTA_FILE] — same command, same text everywhere else). */
+/**
+ * AC-576: the empty-state `DropZone` — Import 28dp, the empty message, the supported formats and a
+ * `Secondario` "Scegli file…" (same [ETICHETTA_IMPORTA_FILE] command). While an OS drag is over the
+ * window (rework cycle 1: `onEntered`/`onExited` on [registrazioneDropTarget], pure view state) it
+ * switches to the `over` style — `accentInk` 1.5dp dashed border, `accentSoft` fill, the Import icon
+ * in `accentInk`, "Rilascia per importare". `internal` (not `private`): [inDrop] can only be driven by
+ * a REAL platform drag in production — `RegistrazioniRenderCheckTest` renders the `over` fixture by
+ * calling this directly with `inDrop = true` (no native-drag simulation API exists in the test harness).
+ */
 @Composable
-private fun DropZoneVuota() {
+internal fun DropZoneVuota(inDrop: Boolean, azioni: AzioniRegistrazioni) {
     val colori = LocalSnastroColori.current
+    val bordo = if (inDrop) colori.accentInk else colori.lineStrong
+    val fondo = if (inDrop) colori.accentSoft else colori.sunken
+    val spessore = if (inDrop) SPESSORE_TRATTEGGIO_OVER else SPESSORE_TRATTEGGIO_NORMALE
+    val coloreIcona = if (inDrop) colori.accentInk else colori.inkMuted
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(colori.sunken, RoundedCornerShape(SnastroMisure.radiusCard))
+            .background(fondo, RoundedCornerShape(SnastroMisure.radiusCard))
+            .bordoTratteggiato(bordo, spessore, SnastroMisure.radiusCard)
             .padding(SnastroMisure.space6)
             .testTag("registrazioni-vuoto"),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        IconaSn(Icona.Import, descrizione = null, tinta = colori.inkMuted, dimensione = DIAMETRO_DROPZONE_ICONA)
+        IconaSn(Icona.Import, descrizione = null, tinta = coloreIcona, dimensione = DIAMETRO_DROPZONE_ICONA)
         Spacer(modifier = Modifier.height(SnastroMisure.space3))
-        Text(text = MESSAGGIO_REGISTRAZIONI_VUOTO, style = LocalSnastroTipografia.current.body, color = colori.ink)
-        Spacer(modifier = Modifier.height(SnastroMisure.space1))
-        Text(
-            text = MESSAGGIO_FORMATI_AUDIO_SUPPORTATI,
-            style = LocalSnastroTipografia.current.caption,
-            color = colori.inkMuted,
-        )
+        if (inDrop) {
+            Text(
+                text = MESSAGGIO_RILASCIA_PER_IMPORTARE,
+                style = LocalSnastroTipografia.current.body,
+                color = colori.ink,
+            )
+        } else {
+            Text(text = MESSAGGIO_REGISTRAZIONI_VUOTO, style = LocalSnastroTipografia.current.body, color = colori.ink)
+            Spacer(modifier = Modifier.height(SnastroMisure.space1))
+            Text(
+                text = MESSAGGIO_FORMATI_AUDIO_SUPPORTATI,
+                style = LocalSnastroTipografia.current.caption,
+                color = colori.inkMuted,
+            )
+            Spacer(modifier = Modifier.height(SnastroMisure.space3))
+            BottoneSn(
+                etichetta = ETICHETTA_SCEGLI_FILE,
+                onClick = { sceltaFileAudio()?.let { azioni.importa(listOf(it)) } },
+                variante = VarianteBottone.Secondario,
+                piccolo = true,
+                modifier = Modifier.testTag("registrazioni-scegli-file"),
+            )
+        }
     }
 }
 
+/** A dashed border (`over`/empty `DropZone`) — Compose's `Modifier.border` has no dash support. */
+private fun Modifier.bordoTratteggiato(colore: Color, spessore: Dp, raggio: Dp): Modifier = drawBehind {
+    val tratto = Stroke(
+        width = spessore.toPx(),
+        pathEffect = PathEffect.dashPathEffect(floatArrayOf(TRATTO_LUNGHEZZA, TRATTO_INTERVALLO), 0f),
+    )
+    drawRoundRect(color = colore, style = tratto, cornerRadius = CornerRadius(raggio.toPx()))
+}
+
+/** AC-575/rework cycle 1 (composer finding #6): the container WRAPS its rows (a plain `Column`, not a
+ * `LazyColumn` filling the remaining height) — the screen itself scrolls ([ContenutoRegistrazioni]). */
 @Composable
 private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRegistrazioni) {
     val colori = LocalSnastroColori.current
     Surface(
-        modifier = Modifier.fillMaxSize().testTag("registrazioni-lista"),
+        modifier = Modifier.fillMaxWidth().testTag("registrazioni-lista"),
         color = colori.raised,
         shape = RoundedCornerShape(SnastroMisure.radiusCard),
         border = BorderStroke(1.dp, colori.line),
     ) {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            itemsIndexed(righe, key = { _, riga -> riga.registrazioneId.valore }) { indice, riga ->
+        Column(modifier = Modifier.fillMaxWidth()) {
+            righe.forEachIndexed { indice, riga ->
                 if (indice > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colori.line))
                 RigaRegistrazioneItem(riga, azioni)
             }
@@ -314,23 +374,40 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
     }
 }
 
-/** AC-575: date (editable) · duration (`timecode`) · the identification badge, when present. */
+/**
+ * AC-575: date (editable) · duration (`timecode`) · the FALLITA motivo (danger) · the identification
+ * badge — `·`-separated like `RecordingRow.html`, normal `space2` gaps throughout (rework cycle 1:
+ * the date field no longer forces a fixed width before its separator).
+ */
 @Composable
 private fun RigaMeta(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     val colori = LocalSnastroColori.current
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
+    ) {
         CampoData(riga, azioni = azioni)
-        Spacer(modifier = Modifier.width(SnastroMisure.space2))
+        Separatore()
         Text(
             text = formattaDurata(riga.durataMs),
             style = LocalSnastroTipografia.current.timecode,
             color = colori.inkMuted,
         )
+        val motivo = (riga.elaborazione as? StatoElaborazioneRiga.Fallita)?.motivo
+        if (motivo != null) {
+            Separatore()
+            Text(text = motivo, style = LocalSnastroTipografia.current.caption, color = colori.danger)
+        }
         riga.identificazione?.let {
-            Spacer(modifier = Modifier.width(SnastroMisure.space2))
+            Separatore()
             BadgeIdentificazione(it, riga.registrazioneId)
         }
     }
+}
+
+@Composable
+private fun Separatore() {
+    Text(text = "·", style = LocalSnastroTipografia.current.caption, color = LocalSnastroColori.current.inkMuted)
 }
 
 @Composable
@@ -436,7 +513,8 @@ private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
  * real change. M4: submits only on Enter or on losing focus — never on every keystroke, so a partial
  * date while typing never round-trips through the parser — and a value that fails to parse (STRICT:
  * no 31/02 silently rolled to 28/02) is shown as an inline error instead of being dropped. AC-575:
- * "renders as caption text with an Edit icon on hover (no boxed field at rest)".
+ * "renders as caption text with an Edit icon on hover (no boxed field at rest)" — sized to its own
+ * content (rework cycle 1: no fixed width, so the meta line's `·` separators sit right after it).
  */
 @Composable
 private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
@@ -465,7 +543,6 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { sottometti() }),
                 modifier = Modifier
-                    .width(LARGHEZZA_CAMPO_DATA)
                     .onFocusChanged { stato ->
                         if (eraFocalizzato && !stato.isFocused) sottometti()
                         eraFocalizzato = stato.isFocused
@@ -519,12 +596,21 @@ private fun BadgeIdentificazione(identificazione: IdentificazioneRiga, id: Regis
     )
 }
 
+/**
+ * AC-575/rework cycle 1 (composer finding #10): the trailing status content is ONE line (chip, then
+ * field, then button), vertically centred — never stacked. The one exception is [ConfermaRitrascrivi]
+ * (AC-449), a dialog-like panel that REPLACES this row entirely while open.
+ */
 @Composable
 private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     val id = riga.registrazioneId
-    val operazioneInCorso = riga.operazioneInCorso
-    Column(
-        horizontalAlignment = Alignment.End,
+    if (stato == StatoElaborazioneRiga.Completata && riga.confermaRitrascrivi) {
+        ConfermaRitrascrivi(riga, azioni)
+        return
+    }
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
         modifier = Modifier.testTag("registrazioni-stato-${id.valore}"),
     ) {
         when (stato) {
@@ -539,12 +625,7 @@ private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistra
                 )
             is StatoElaborazioneRiga.InAttesa -> StatoInAttesa(stato, riga, azioni)
             is StatoElaborazioneRiga.InCorso -> StatoInCorso(stato)
-            is StatoElaborazioneRiga.Fallita -> {
-                Text(
-                    text = stato.motivo,
-                    color = LocalSnastroColori.current.danger,
-                    style = LocalSnastroTipografia.current.caption,
-                )
+            is StatoElaborazioneRiga.Fallita ->
                 AvvioConNumeroPersone(
                     riga,
                     ETICHETTA_RIPROVA,
@@ -553,20 +634,20 @@ private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistra
                     azioni.modificaNumeroPersone,
                     azioni.avviaElaborazione,
                 )
-            }
             StatoElaborazioneRiga.Completata -> ColonnaCompletata(riga, azioni)
         }
-        if (operazioneInCorso) {
+        if (riga.operazioneInCorso) {
             CircularProgressIndicator(
-                modifier = Modifier.padding(top = SnastroMisure.space1).width(DIMENSIONE_INDICATORE_PICCOLO)
+                modifier = Modifier.width(DIMENSIONE_INDICATORE_PICCOLO)
                     .testTag("registrazioni-operazione-in-corso-${id.valore}"),
             )
         }
     }
 }
 
-/** AC-575: "In coda" chip + the optional 'Annulla' link (AC-475) + the distinguishing caption
- * (plain vs re-run — [TipoChipStato.InCoda] alone cannot tell them apart). */
+/** AC-475/rework cycle 1 (composer finding #8): the plain "In coda" chip already says the position
+ * ("In coda · n") — the distinguishing raw caption is shown ONLY for a re-run (`ritrascrizione`),
+ * which the chip alone cannot express. */
 @Composable
 private fun StatoInAttesa(
     stato: StatoElaborazioneRiga.InAttesa,
@@ -575,6 +656,13 @@ private fun StatoInAttesa(
 ) {
     val id = riga.registrazioneId
     ChipStato(TipoChipStato.InCoda(stato.posizione))
+    if (stato.ritrascrizione) {
+        Text(
+            text = etichettaRitrascrizioneInAttesa(stato.posizione),
+            style = LocalSnastroTipografia.current.caption,
+            color = LocalSnastroColori.current.inkMuted,
+        )
+    }
     // AC-475: 'Annulla' on ANY IN_ATTESA row (plain or re-run) when the source is supplied.
     if (riga.annullabile) {
         BottoneSn(
@@ -583,64 +671,56 @@ private fun StatoInAttesa(
             variante = VarianteBottone.Link,
             piccolo = true,
             abilitato = !riga.operazioneInCorso,
-            modifier = Modifier.padding(top = SnastroMisure.space1)
-                .testTag("registrazioni-annulla-${id.valore}"),
+            modifier = Modifier.testTag("registrazioni-annulla-${id.valore}"),
         )
     }
-    val etichettaAttesa = if (stato.ritrascrizione) {
-        etichettaRitrascrizioneInAttesa(stato.posizione)
-    } else {
-        etichettaInAttesa(stato.posizione)
-    }
-    Text(etichettaAttesa, style = LocalSnastroTipografia.current.caption, color = LocalSnastroColori.current.inkMuted)
 }
 
-/** AC-575: "In corso" chip + the distinguishing caption (plain vs re-run — [TipoChipStato.InCorso]
- * alone cannot tell them apart). */
+/** Same principle as [StatoInAttesa]: [ChipStato.TipoChipStato.InCorso] already shows the fase + the
+ * elapsed time — the raw caption is shown only for a re-run. */
 @Composable
 private fun StatoInCorso(stato: StatoElaborazioneRiga.InCorso) {
     ChipStato(TipoChipStato.InCorso(stato.faseEtichetta, stato.trascorsoMs))
-    Text(
-        if (stato.ritrascrizione) {
-            etichettaRitrascrizioneInCorso(stato.faseEtichetta, stato.trascorsoMs)
-        } else {
-            etichettaInCorso(stato.faseEtichetta, stato.trascorsoMs)
-        },
-        style = LocalSnastroTipografia.current.caption,
-        color = LocalSnastroColori.current.inkMuted,
-    )
+    if (stato.ritrascrizione) {
+        Text(
+            text = etichettaRitrascrizioneInCorso(stato.faseEtichetta, stato.trascorsoMs),
+            style = LocalSnastroTipografia.current.caption,
+            color = LocalSnastroColori.current.inkMuted,
+        )
+    }
 }
 
 /**
- * ADR 0018: 'Trascritta' chip plus, when applicable, AC-451's failed-re-run notice and AC-448/449's
- * 'Ritrascrivi' field/button — replaced by the inline confirmation (AC-449, styled like
- * `anteprime/Dialog.html`) once `riga.confermaRitrascrivi` is set.
+ * ADR 0018: the status chip plus, when applicable, AC-451's failed-re-run notice and AC-448/449's
+ * 'Ritrascrivi' field/button. AC-575/rework cycle 1 (MED #11): the chip is the `Avviso` "Da
+ * identificare" — not `Trascritta` — while the row still has unidentified Voci.
  */
 @Composable
 private fun ColonnaCompletata(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     val id = riga.registrazioneId
-    if (riga.confermaRitrascrivi) {
-        ConfermaRitrascrivi(riga, azioni)
+    val daIdentificare = (riga.identificazione?.numVociDaIdentificare ?: 0) > 0
+    if (daIdentificare) {
+        ChipStato(TipoChipStato.Avviso(ETICHETTA_DA_IDENTIFICARE, Icona.People))
     } else {
         ChipStato(TipoChipStato.Trascritta)
-        riga.ritrascrizioneFallita?.let {
-            Text(
-                text = messaggioRitrascrizioneNonRiuscita(it),
-                color = LocalSnastroColori.current.danger,
-                style = LocalSnastroTipografia.current.caption,
-                modifier = Modifier.testTag("registrazioni-ritrascrizione-fallita-${id.valore}"),
-            )
-        }
-        if (riga.ritrascriviDisponibile) {
-            AvvioConNumeroPersone(
-                riga,
-                ETICHETTA_RITRASCRIVI,
-                null,
-                VarianteBottone.Secondario,
-                azioni.modificaNumeroPersone,
-                azioni.ritrascrivi,
-            )
-        }
+    }
+    riga.ritrascrizioneFallita?.let {
+        Text(
+            text = messaggioRitrascrizioneNonRiuscita(it),
+            color = LocalSnastroColori.current.danger,
+            style = LocalSnastroTipografia.current.caption,
+            modifier = Modifier.testTag("registrazioni-ritrascrizione-fallita-${id.valore}"),
+        )
+    }
+    if (riga.ritrascriviDisponibile) {
+        AvvioConNumeroPersone(
+            riga,
+            ETICHETTA_RITRASCRIVI,
+            null,
+            VarianteBottone.Secondario,
+            azioni.modificaNumeroPersone,
+            azioni.ritrascrivi,
+        )
     }
 }
 
@@ -698,7 +778,8 @@ private fun ConfermaRitrascrivi(riga: RigaRegistrazione, azioni: AzioniRegistraz
  * ADR 0014: the plain 'Numero di persone' field (empty = automatic) next to a start/retry button
  * [etichetta] — shared by 'Trascrivi'/'Riprova'/'Ritrascrivi' ([onAvvia] carries which command). Its
  * text is presenter state ([RigaRegistrazione.numeroPersone]); validation and the inline message
- * (AC-375/449) are the presenter's, shown as the row's `erroreRiga`.
+ * (AC-375/449) are the presenter's, shown as the row's `erroreRiga`. Enter in the field starts the
+ * same command as the button (rework cycle 1, MED #12 — `CampoNumeroPersone.onInvio`).
  */
 @Suppress("LongParameterList") // one parameter per documented knob shared by Trascrivi/Riprova/Ritrascrivi
 @Composable
@@ -711,26 +792,22 @@ private fun AvvioConNumeroPersone(
     onAvvia: (RegistrazioneId) -> Unit,
 ) {
     val id = riga.registrazioneId
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
-    ) {
-        CampoNumeroPersone(
-            valore = riga.numeroPersone,
-            onValoreCambiato = { onModifica(id, it) },
-            errore = riga.erroreRiga != null,
-            abilitato = !riga.operazioneInCorso,
-            modifier = Modifier.testTag("registrazioni-numero-persone-${id.valore}"),
-        )
-        BottoneSn(
-            etichetta = etichetta,
-            onClick = { onAvvia(id) },
-            variante = variante,
-            piccolo = true,
-            icona = icona,
-            abilitato = !riga.operazioneInCorso,
-        )
-    }
+    CampoNumeroPersone(
+        valore = riga.numeroPersone,
+        onValoreCambiato = { onModifica(id, it) },
+        errore = riga.erroreRiga != null,
+        abilitato = !riga.operazioneInCorso,
+        onInvio = { onAvvia(id) },
+        modifier = Modifier.testTag("registrazioni-numero-persone-${id.valore}"),
+    )
+    BottoneSn(
+        etichetta = etichetta,
+        onClick = { onAvvia(id) },
+        variante = variante,
+        piccolo = true,
+        icona = icona,
+        abilitato = !riga.operazioneInCorso,
+    )
 }
 
 @Composable
@@ -769,18 +846,34 @@ private fun sceltaFileAudio(): String? {
 }
 
 /**
- * AC-199..201/LOW: an OS drag-and-drop of one or more files hands every SUCCESSFULLY decoded path to
- * [onFiles] (`snastro.ui.registrazioni` `percorsoDaUriFile`, H1: correct on non-ASCII paths — a
- * malformed `%` escape drops just that one file, never throws inside this AWT callback). Nothing
- * usable in the drop → `false` (rejects the drop, nothing imported).
+ * AC-199..201/LOW/AC-576: an OS drag-and-drop of one or more files hands every SUCCESSFULLY decoded
+ * path to [onFiles] (`snastro.ui.registrazioni` `percorsoDaUriFile`, H1: correct on non-ASCII paths —
+ * a malformed `%` escape drops just that one file, never throws inside this AWT callback). Nothing
+ * usable in the drop → `false` (rejects the drop, nothing imported). [onDragOverChange] drives the
+ * empty `DropZone`'s `over` style — pure view state, set while an OS drag is over the window and
+ * cleared the moment it leaves, is dropped, or ends.
  */
 @OptIn(ExperimentalComposeUiApi::class)
-private fun registrazioneDropTarget(onFiles: (List<String>) -> Unit) = object : DragAndDropTarget {
-    override fun onDrop(event: DragAndDropEvent): Boolean {
-        val uri = (event.dragData() as? DragData.FilesList)?.readFiles().orEmpty()
-        val percorsi = uri.mapNotNull(::percorsoDaUriFile)
-        if (percorsi.isEmpty()) return false
-        onFiles(percorsi)
-        return true
+private fun registrazioneDropTarget(onFiles: (List<String>) -> Unit, onDragOverChange: (Boolean) -> Unit) =
+    object : DragAndDropTarget {
+        override fun onEntered(event: DragAndDropEvent) {
+            onDragOverChange(true)
+        }
+
+        override fun onExited(event: DragAndDropEvent) {
+            onDragOverChange(false)
+        }
+
+        override fun onEnded(event: DragAndDropEvent) {
+            onDragOverChange(false)
+        }
+
+        override fun onDrop(event: DragAndDropEvent): Boolean {
+            onDragOverChange(false)
+            val uri = (event.dragData() as? DragData.FilesList)?.readFiles().orEmpty()
+            val percorsi = uri.mapNotNull(::percorsoDaUriFile)
+            if (percorsi.isEmpty()) return false
+            onFiles(percorsi)
+            return true
+        }
     }
-}

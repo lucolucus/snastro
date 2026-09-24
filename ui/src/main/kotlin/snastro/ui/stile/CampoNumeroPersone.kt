@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -32,8 +35,10 @@ private val LARGHEZZA_CAMPO = 72.dp
 
 /**
  * AC-567: the "Quante persone parlano?" field — 72dp wide, centred, tabular, `control-s` in rows,
- * no visible label.
+ * no visible label. [onInvio], when supplied, fires on the keyboard's "Done"/Enter action (rework
+ * cycle 1: rows next to this field start their command on Enter, like every other field on the row).
  */
+@Suppress("LongParameterList") // one parameter per documented knob of the field (AC-567) + onInvio
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 public fun CampoNumeroPersone(
@@ -42,6 +47,7 @@ public fun CampoNumeroPersone(
     modifier: Modifier = Modifier,
     errore: Boolean = false,
     abilitato: Boolean = true,
+    onInvio: (() -> Unit)? = null,
 ) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
@@ -84,6 +90,8 @@ public fun CampoNumeroPersone(
                 ),
                 cursorBrush = SolidColor(colori.accentInk),
                 interactionSource = interazione,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { onInvio?.invoke() }),
             )
         }
     }

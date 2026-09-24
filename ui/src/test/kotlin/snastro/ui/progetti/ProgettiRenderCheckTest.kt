@@ -84,19 +84,19 @@ class ProgettiRenderCheckTest {
         verificaListaVuota(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
-    fun `AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1280x800`() =
+    fun `AC-573 AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1280x800`() =
         verificaLista(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
     @Test
-    fun `AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1024x640`() =
+    fun `AC-573 AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1024x640`() =
         verificaLista(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     @Test
-    fun `AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1280x800 (scuro)`() =
+    fun `AC-573 AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1280x800 (scuro)`() =
         verificaLista(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
 
     @Test
-    fun `AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1024x640 (scuro)`() =
+    fun `AC-573 AC-198 la lista mostra nome numero di registrazioni e ultima attivita a 1024x640 (scuro)`() =
         verificaLista(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test

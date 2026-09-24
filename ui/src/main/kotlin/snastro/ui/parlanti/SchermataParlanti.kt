@@ -18,14 +18,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -56,11 +59,13 @@ import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_PROMUOVI
+import snastro.ui.testi.ETICHETTA_RINOMINA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_SEZIONE_ELIMINATI
 import snastro.ui.testi.ETICHETTA_SEZIONE_OCCASIONALI
@@ -137,6 +142,7 @@ private fun ContenutoParlanti(stato: ParlantiUiStato.Dati, azioni: AzioniParlant
         modifier = Modifier
             .fillMaxSize()
             .padding(vertical = SnastroMisure.space5, horizontal = SnastroMisure.space6)
+            .verticalScroll(rememberScrollState())
             .testTag("parlanti-contenuto"),
     ) {
         stato.errore?.let { MessaggioInlineErrore(it, azioni.chiudiErrore, "parlanti-errore") }
@@ -155,40 +161,36 @@ private fun ContenutoParlanti(stato: ParlantiUiStato.Dati, azioni: AzioniParlant
 
 // AC-222: Ricorrenti / Occasionali / Eliminati, in this order; a group with no rows renders no header
 // (frugality: no empty section clutter — the grouping itself is the AC, not a fixed set of headers).
+// Rework cycle 1 (composer finding #6): a plain `Column` that WRAPS its rows — the screen itself
+// scrolls ([ContenutoParlanti]), the list is never a box filling the remaining height.
 @Composable
 private fun ListaParlanti(stato: ParlantiUiStato.Dati, azioni: AzioniParlanti) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().testTag("parlanti-lista"),
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("parlanti-lista"),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space1),
     ) {
-        sezioneAttivi(stato.ricorrenti, ETICHETTA_SEZIONE_RICORRENTI, "ricorrenti", azioni)
-        sezioneAttivi(stato.occasionali, ETICHETTA_SEZIONE_OCCASIONALI, "occasionali", azioni)
+        SezioneAttivi(stato.ricorrenti, ETICHETTA_SEZIONE_RICORRENTI, "ricorrenti", azioni)
+        SezioneAttivi(stato.occasionali, ETICHETTA_SEZIONE_OCCASIONALI, "occasionali", azioni)
         if (stato.eliminati.isNotEmpty()) {
-            item { TitoloSezione(ETICHETTA_SEZIONE_ELIMINATI, "eliminati") }
-            items(stato.eliminati, key = { "eliminato-${it.parlanteId.valore}" }) { riga ->
-                RigaParlanteEliminatoItem(riga)
-            }
+            TitoloSezione(ETICHETTA_SEZIONE_ELIMINATI, "eliminati")
+            stato.eliminati.forEach { riga -> RigaParlanteEliminatoItem(riga) }
         }
     }
 }
 
-private fun LazyListScope.sezioneAttivi(
-    righe: List<RigaParlante>,
-    titolo: String,
-    tag: String,
-    azioni: AzioniParlanti,
-) {
+@Composable
+private fun SezioneAttivi(righe: List<RigaParlante>, titolo: String, tag: String, azioni: AzioniParlanti) {
     if (righe.isEmpty()) return
-    item { TitoloSezione(titolo, tag) }
-    items(righe, key = { "$tag-${it.parlanteId.valore}" }) { riga -> RigaParlanteItem(riga, azioni) }
+    TitoloSezione(titolo, tag)
+    righe.forEach { riga -> RigaParlanteItem(riga, azioni) }
 }
 
-/** AC-577: "Ricorrenti"/"Occasionali"/"Eliminati" as `overline` headers (uppercase applied by the
- * style, never typed uppercase in the string, README §Tipografia). */
+/** AC-577: "Ricorrenti"/"Occasionali"/"Eliminati" as `overline` headers — UPPERCASE applied HERE, by
+ * the composable (README §Tipografia: "mai scritte in maiuscolo nel testo"), never in the constants. */
 @Composable
 private fun TitoloSezione(titolo: String, tag: String) {
     Text(
-        text = titolo,
+        text = titolo.uppercase(),
         style = LocalSnastroTipografia.current.overline,
         color = LocalSnastroColori.current.inkMuted,
         modifier = Modifier.padding(top = SnastroMisure.space4, bottom = SnastroMisure.space1)
@@ -221,6 +223,7 @@ private fun RigaParlanteItem(riga: RigaParlante, azioni: AzioniParlanti) {
 
 @Composable
 private fun RigaParlanteControlli(riga: RigaParlante, azioni: AzioniParlanti) {
+    val richiestaFocus = remember { FocusRequester() }
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         PallinoNeutro()
         Spacer(modifier = Modifier.width(SnastroMisure.space2))
@@ -233,7 +236,7 @@ private fun RigaParlanteControlli(riga: RigaParlante, azioni: AzioniParlanti) {
         )
         Spacer(modifier = Modifier.width(SnastroMisure.space2))
         Column(modifier = Modifier.weight(1f)) {
-            CampoNomeParlante(riga, azioni)
+            CampoNomeParlante(riga, azioni, richiestaFocus)
             Text(
                 text = etichettaDettaglioParlante(riga.numImpronte, riga.numRegistrazioni, riga.ultimaApparizione),
                 style = LocalSnastroTipografia.current.caption,
@@ -241,30 +244,60 @@ private fun RigaParlanteControlli(riga: RigaParlante, azioni: AzioniParlanti) {
                 modifier = Modifier.testTag("parlanti-dettaglio-${riga.parlanteId.valore}"),
             )
         }
-        // AC-224: 'Promuovi' shown only for an occasionale row — a trivial `==` on already-known
-        // data, exactly like RigaRegistrazioneItem's `apribile` (RC-2: the view forwards no decision
-        // the presenter/read-model hasn't already made).
-        if (riga.tipoParlante == TipoParlanteVista.OCCASIONALE) {
-            BottoneSn(
-                etichetta = ETICHETTA_PROMUOVI,
-                onClick = { azioni.promuovi(riga.parlanteId) },
-                variante = VarianteBottone.Link,
-                piccolo = true,
-                abilitato = !riga.operazioneInCorso,
-                modifier = Modifier.testTag("parlanti-promuovi-${riga.parlanteId.valore}"),
-            )
-        }
+        // AC-577 rework cycle 1: Edit focuses the always-editable Nome field (same 'rinomina' command,
+        // AC-223); More opens the Menu.html-style menu with Promuovi/Elimina.
         BottoneIconaSn(
-            icona = Icona.Trash,
-            descrizione = ETICHETTA_ELIMINA,
-            onClick = { azioni.chiediConfermaEliminazione(riga.parlanteId) },
+            icona = Icona.Edit,
+            descrizione = ETICHETTA_RINOMINA,
+            onClick = { richiestaFocus.requestFocus() },
             abilitato = !riga.operazioneInCorso,
-            modifier = Modifier.testTag("parlanti-elimina-${riga.parlanteId.valore}"),
+            modifier = Modifier.testTag("parlanti-modifica-${riga.parlanteId.valore}"),
         )
+        MenuAltreAzioniParlante(riga, azioni)
         if (riga.operazioneInCorso) {
             CircularProgressIndicator(
                 modifier = Modifier.padding(start = SnastroMisure.space2).size(DIMENSIONE_INDICATORE_PICCOLO)
                     .testTag("parlanti-operazione-in-corso-${riga.parlanteId.valore}"),
+            )
+        }
+    }
+}
+
+/**
+ * AC-577 rework cycle 1: `BottoneIcona More` opening a `Menu.html`-style menu — "Promuovi a
+ * ricorrente" (AC-224, only for an occasionale row — same trivial `==` on already-known data as
+ * before) and "Elimina…" (`danger` text, same command as before: opens the existing inline
+ * confirmation, AC-225).
+ */
+@Composable
+private fun MenuAltreAzioniParlante(riga: RigaParlante, azioni: AzioniParlanti) {
+    var espanso by remember { mutableStateOf(false) }
+    Box {
+        BottoneIconaSn(
+            icona = Icona.More,
+            descrizione = ETICHETTA_ALTRE_AZIONI,
+            onClick = { espanso = true },
+            abilitato = !riga.operazioneInCorso,
+            modifier = Modifier.testTag("parlanti-altre-azioni-${riga.parlanteId.valore}"),
+        )
+        DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
+            if (riga.tipoParlante == TipoParlanteVista.OCCASIONALE) {
+                DropdownMenuItem(
+                    text = { Text(ETICHETTA_PROMUOVI) },
+                    onClick = {
+                        espanso = false
+                        azioni.promuovi(riga.parlanteId)
+                    },
+                    modifier = Modifier.testTag("parlanti-promuovi-${riga.parlanteId.valore}"),
+                )
+            }
+            DropdownMenuItem(
+                text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
+                onClick = {
+                    espanso = false
+                    azioni.chiediConfermaEliminazione(riga.parlanteId)
+                },
+                modifier = Modifier.testTag("parlanti-elimina-${riga.parlanteId.valore}"),
             )
         }
     }
@@ -286,10 +319,11 @@ private fun PallinoNeutro() {
  * focus and only when it differs from the Nome shown. Disabled while a row operation is in flight
  * (M3); a refused rename (blank, name already used — [INV-16]) comes back as the row's inline
  * `erroreRiga` and the row keeps its old Nome. AC-577: renders as plain `heading` text at rest (no
- * boxed field) — same borderless-field pattern as S2's editable date/title.
+ * boxed field) — same borderless-field pattern as S2's editable date/title. [richiestaFocus]: the
+ * row's own `BottoneIcona Edit` requests focus onto this same always-editable field (rework cycle 1).
  */
 @Composable
-private fun CampoNomeParlante(riga: RigaParlante, azioni: AzioniParlanti) {
+private fun CampoNomeParlante(riga: RigaParlante, azioni: AzioniParlanti, richiestaFocus: FocusRequester) {
     val colori = LocalSnastroColori.current
     var testo by remember(riga.nome) { mutableStateOf(riga.nome) }
     var eraFocalizzato by remember(riga.nome) { mutableStateOf(false) }
@@ -317,6 +351,7 @@ private fun CampoNomeParlante(riga: RigaParlante, azioni: AzioniParlanti) {
         keyboardActions = KeyboardActions(onDone = { sottometti() }),
         modifier = Modifier
             .fillMaxWidth()
+            .focusRequester(richiestaFocus)
             .onFocusChanged { stato ->
                 if (eraFocalizzato && !stato.isFocused) sottometti()
                 eraFocalizzato = stato.isFocused

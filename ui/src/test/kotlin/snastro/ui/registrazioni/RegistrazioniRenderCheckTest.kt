@@ -1,5 +1,8 @@
 package snastro.ui.registrazioni
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -22,18 +25,20 @@ import org.junit.jupiter.api.Test
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.ui.SnastroTema
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
+import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
+import snastro.ui.testi.MESSAGGIO_RILASCIA_PER_IMPORTARE
 import snastro.ui.testi.etichettaIdentificazione
-import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.etichettaRitrascrizioneInCorso
 import snastro.ui.testi.messaggioPer
 import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
@@ -148,6 +153,22 @@ class RegistrazioniRenderCheckTest {
     @Test
     fun `AC-199 lista vuota mostra il messaggio dedicato a 1024x640 (scuro)`() =
         verificaVuoto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-576 la DropZone vuota in trascinamento mostra lo stile over a 1280x800`() =
+        verificaVuotoConDrag(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-576 la DropZone vuota in trascinamento mostra lo stile over a 1280x800 (scuro)`() =
+        verificaVuotoConDrag(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-576 la DropZone vuota in trascinamento mostra lo stile over a 1024x640`() =
+        verificaVuotoConDrag(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-576 la DropZone vuota in trascinamento mostra lo stile over a 1024x640 (scuro)`() =
+        verificaVuotoConDrag(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
     fun `M5 un fallimento del caricamento iniziale mostra uno stato distinto con Riprova a 1280x800`() =
@@ -447,7 +468,24 @@ class RegistrazioniRenderCheckTest {
             }
             onNodeWithText(MESSAGGIO_REGISTRAZIONI_VUOTO).assertIsDisplayed()
             onNodeWithText(ETICHETTA_IMPORTA_FILE).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_SCEGLI_FILE).assertIsDisplayed()
             catturaPng("registrazioni-vuoto", width, height, scuro)
+        }
+
+    /** AC-576: the `over` style — `DropZoneVuota` rendered directly with `inDrop = true` (no
+     * native-drag simulation API exists in the test harness; see the composable's own doc). */
+    private fun verificaVuotoConDrag(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SnastroTema(scuro = scuro, riduciMovimento = true) {
+                    Surface(modifier = Modifier.fillMaxSize()) {
+                        DropZoneVuota(inDrop = true, azioni = AZIONI_VUOTE)
+                    }
+                }
+            }
+            onNodeWithText(MESSAGGIO_RILASCIA_PER_IMPORTARE).assertIsDisplayed()
+            onAllNodesWithText(MESSAGGIO_REGISTRAZIONI_VUOTO).assertCountEquals(0)
+            catturaPng("registrazioni-vuoto-trascinamento", width, height, scuro)
         }
 
     private fun verificaErroreCaricamento(width: Int, height: Int, scuro: Boolean = false) =
@@ -541,11 +579,13 @@ class RegistrazioniRenderCheckTest {
                     riduciMovimento = true,
                 )
             }
-            // The status Column is a plain (non-merge-boundary) node nested under the row's own
+            // The status Row is a plain (non-merge-boundary) node nested under the row's own
             // `clickable` — its testTag is folded into the row's merged node (Compose semantics merging);
             // `useUnmergedTree` reaches it directly, exactly as the failure's own hint suggests.
             onNodeWithTag("registrazioni-stato-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
-            onNodeWithText(etichettaInAttesa(2)).assertIsDisplayed()
+            // AC-475/rework cycle 1 (composer finding #8): the plain "In coda" chip already says the
+            // position — no more redundant "In coda (2)" raw caption next to it.
+            onNodeWithText("In coda · 2").assertIsDisplayed()
             catturaPng("registrazioni-colonna-stato", width, height, scuro)
         }
 
@@ -820,7 +860,7 @@ class RegistrazioniRenderCheckTest {
                     riduciMovimento = true,
                 )
             }
-            onNodeWithText(etichettaInAttesa(2)).assertIsDisplayed()
+            onNodeWithText("In coda · 2").assertIsDisplayed()
             onNodeWithTag("registrazioni-annulla-${REG_1.valore}", useUnmergedTree = true)
                 .assertIsDisplayed()
                 .assertIsEnabled()

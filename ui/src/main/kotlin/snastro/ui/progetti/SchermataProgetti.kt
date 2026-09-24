@@ -13,8 +13,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -100,7 +100,8 @@ private fun ContenutoProgetti(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(vertical = SnastroMisure.space5, horizontal = SnastroMisure.space6),
+            .padding(vertical = SnastroMisure.space5, horizontal = SnastroMisure.space6)
+            .verticalScroll(rememberScrollState()),
     ) {
         Text(text = ETICHETTA_PROGETTI, style = LocalSnastroTipografia.current.display, color = colori.ink)
         Spacer(modifier = Modifier.height(SnastroMisure.space5))
@@ -232,15 +233,15 @@ private fun ProgettiVuoto() {
     }
 }
 
+/** Rework cycle 1 (composer finding #6): the list WRAPS its rows (a plain `Column`) — the screen
+ * itself scrolls ([ContenutoProgetti]), the list is never a box filling the remaining height. */
 @Composable
 private fun ElencoProgettiLista(progetti: List<ProgettoVista>, abilitato: Boolean, apri: (String) -> Unit) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().testTag("progetti-lista"),
+    Column(
+        modifier = Modifier.fillMaxWidth().testTag("progetti-lista"),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3),
     ) {
-        items(progetti, key = { it.progettoId.valore }) { progetto ->
-            RigaProgetto(progetto, abilitato, apri)
-        }
+        progetti.forEach { progetto -> RigaProgetto(progetto, abilitato, apri) }
     }
 }
 

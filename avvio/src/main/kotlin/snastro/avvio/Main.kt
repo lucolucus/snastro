@@ -166,9 +166,10 @@ internal fun eseguiSmoke(fixtureDir: String) {
             check(esito is Esito.Ok) { "smoke: impossibile aprire il progetto fixture '$fixtureDir': $esito" }
 
             // Models missing (the real catalogue on an empty cache): the project opens on S5 first, the
-            // onboarding path — S2 is one click on the bar away.
-            attendi { esisteTag("avvio-nav-registrazioni") }
-            onNodeWithTag("avvio-nav-registrazioni").performClick()
+            // onboarding path — S2 is one click on the sidebar's own (already-selected) 'Registrazioni'
+            // item away (rework cycle 1, HIGH #9: navigation is the sidebar, not a standalone top bar).
+            attendi { esisteTag("shell-nav-registrazioni") }
+            onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
             val completata = checkNotNull(grafo.primaRegistrazioneCompletata()) {
                 "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
             }
@@ -186,8 +187,10 @@ internal fun eseguiSmoke(fixtureDir: String) {
             salvaSchermata(outputDir, "s4")
 
             onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
-            attendi { esisteTag("avvio-nav-modelli") }
-            onNodeWithTag("avvio-nav-modelli").performClick()
+            // Rework cycle 1 (HIGH #9): S5 ('Modelli e licenze') is reached from the sidebar's own
+            // footer row, not a standalone top bar.
+            attendi { esisteTag("shell-piede") }
+            onNodeWithTag("shell-piede").performClick()
             // AC-556: `licenze()` now also lists the bundled fonts, so it is no longer the model count —
             // the actual missing-models number comes from `StatoModelli.Mancanti` itself.
             val numeroModelliMancanti = (modelliReali.stato.value as StatoModelli.Mancanti).numero

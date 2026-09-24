@@ -116,19 +116,19 @@ class ShellRenderCheckTest {
         verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = false, scuro = true)
 
     @Test
-    fun `AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800`() =
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800`() =
         verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true)
 
     @Test
-    fun `AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640`() =
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640`() =
         verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = true)
 
     @Test
-    fun `AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800 (scuro)`() =
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1280x800 (scuro)`() =
         verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, scuro = true)
 
     @Test
-    fun `AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640 (scuro)`() =
+    fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640 (scuro)`() =
         verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = true, scuro = true)
 
     private fun verificaSenzaProgetto(width: Int, height: Int, scuro: Boolean = false) =

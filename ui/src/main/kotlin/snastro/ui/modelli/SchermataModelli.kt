@@ -18,6 +18,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import snastro.ui.SnastroTema
@@ -141,6 +144,7 @@ private fun BarraProgresso(etichetta: String, valore: String, avanzamento: Float
             modifier = Modifier
                 .fillMaxWidth()
                 .height(ALTEZZA_BARRA)
+                .semantics { progressBarRangeInfo = ProgressBarRangeInfo(avanzamento, 0f..1f) }
                 .background(colori.sunken, RoundedCornerShape(ALTEZZA_BARRA / 2)),
         ) {
             Box(

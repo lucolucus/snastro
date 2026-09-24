@@ -12,9 +12,19 @@ const val ETICHETTA_RIPROVA: String = "Riprova"
 /** AC-576: the `DropZone` subtitle ("M4A, MP3, WAV, FLAC · oppure" in the design system). */
 const val MESSAGGIO_FORMATI_AUDIO_SUPPORTATI: String = "M4A, MP3, WAV, FLAC"
 
+/** AC-576: the empty `DropZone`'s own file-picker action (same [ETICHETTA_IMPORTA_FILE] command). */
+const val ETICHETTA_SCEGLI_FILE: String = "Scegli file…"
+
+/** AC-576: the `over` style shown while an OS drag is over the window. */
+const val MESSAGGIO_RILASCIA_PER_IMPORTARE: String = "Rilascia per importare"
+
 /** AC-576: the `BannerSn Errore` title for a failed import (same wording the design system's own
  * `Banner` example uses). */
 const val ETICHETTA_IMPORTAZIONE_NON_RIUSCITA: String = "Importazione non riuscita"
+
+/** AC-575: the `Avviso` chip shown instead of `Trascritta` when the row has unidentified Voci
+ * (`StatusChip.md`: "warn per «Da identificare»"). */
+const val ETICHETTA_DA_IDENTIFICARE: String = "Da identificare"
 
 /** ADR 0014: the optional field next to 'Trascrivi'/'Riprova' — empty means automatic. */
 const val ETICHETTA_NUMERO_PERSONE: String = "Numero di persone"
