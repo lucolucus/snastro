@@ -17,8 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 private val PADDING_ORIZZONTALE_CAMPO = 10.dp
@@ -42,7 +45,7 @@ public fun CampoSn(
 ) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
-    val bordo = if (errore != null) colori.danger else colori.lineStrong
+    val coloriStato = coloriCampo(colori, abilitato, hasErrore = errore != null)
     val interazione = remember { MutableInteractionSource() }
     val focused by interazione.collectIsFocusedAsState()
     // mergeDescendants: the caller's modifier (width/weight/testTag) sits on this outer container
@@ -51,7 +54,7 @@ public fun CampoSn(
     // tests must target it with `hasSetTextAction() and hasAnyAncestor(hasTestTag(tag))`.
     Column(modifier = modifier.semantics(mergeDescendants = true) {}) {
         if (etichetta != null) {
-            Text(text = etichetta, style = tipografia.caption, color = colori.inkMuted)
+            Text(text = etichetta, style = etichettaCampoStile(tipografia), color = colori.inkMuted)
             Box(Modifier.height(SnastroMisure.space1))
         }
         Box(
@@ -59,8 +62,8 @@ public fun CampoSn(
                 .fillMaxWidth()
                 .height(if (piccolo) SnastroMisure.controlS else SnastroMisure.controlM)
                 .anelloFocus(colori.focus, focused, SnastroMisure.radiusControl)
-                .background(colori.raised, RoundedCornerShape(SnastroMisure.radiusControl))
-                .border(1.dp, bordo, RoundedCornerShape(SnastroMisure.radiusControl))
+                .background(coloriStato.sfondo, RoundedCornerShape(SnastroMisure.radiusControl))
+                .border(1.dp, coloriStato.bordo, RoundedCornerShape(SnastroMisure.radiusControl))
                 .padding(horizontal = PADDING_ORIZZONTALE_CAMPO),
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -72,7 +75,7 @@ public fun CampoSn(
                 onValueChange = onValoreCambiato,
                 enabled = abilitato,
                 singleLine = true,
-                textStyle = tipografia.body.copy(color = colori.ink),
+                textStyle = tipografia.body.copy(color = coloriStato.testo),
                 cursorBrush = SolidColor(colori.accentInk),
                 interactionSource = interazione,
                 modifier = Modifier.fillMaxWidth(),
@@ -88,4 +91,21 @@ public fun CampoSn(
             )
         }
     }
+}
+
+/** AC-567: the label is `caption` at weight `Medium` (500) — the token, not the plain 400 `caption`. */
+internal fun etichettaCampoStile(tipografia: SnastroTipografia): TextStyle =
+    tipografia.caption.copy(fontWeight = FontWeight.Medium)
+
+internal data class ColoriCampo(val sfondo: Color, val bordo: Color, val testo: Color)
+
+/**
+ * L705: a disabled field must look disabled (`sunken` fill, `inkFaint` border/text) — before this
+ * fix `enabled = abilitato` reached the [BasicTextField] but the container kept its enabled colors.
+ * An active error still wins over the disabled look (the two are not expected to coexist).
+ */
+internal fun coloriCampo(colori: SnastroColori, abilitato: Boolean, hasErrore: Boolean): ColoriCampo = when {
+    hasErrore -> ColoriCampo(colori.raised, colori.danger, colori.ink)
+    !abilitato -> ColoriCampo(colori.sunken, colori.inkFaint, colori.inkFaint)
+    else -> ColoriCampo(colori.raised, colori.lineStrong, colori.ink)
 }

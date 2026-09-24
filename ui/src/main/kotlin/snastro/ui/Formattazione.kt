@@ -13,10 +13,11 @@ private val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM
 /**
  * AC-557 (supersedes AC-179's duration half; AC-203's "3:12" now matches): under one hour `m:ss`
  * with NO leading zero on minutes ("1:15", "3:12", "59:59"); from one hour on, `h:mm:ss`
- * ("1:00:00", "1:15:03"). Seconds truncate to whole, as before.
+ * ("1:00:00", "1:15:03"). Seconds truncate to whole, as before. L709: a negative [durataMs] (never
+ * a valid duration) is clamped to zero rather than producing a negative/garbage string.
  */
 fun formattaDurata(durataMs: Long): String {
-    val secondiTotali = durataMs / MS_PER_SECONDO
+    val secondiTotali = durataMs.coerceAtLeast(0) / MS_PER_SECONDO
     val ore = secondiTotali / SECONDI_PER_ORA
     val minuti = (secondiTotali % SECONDI_PER_ORA) / SECONDI_PER_MINUTO
     val secondi = secondiTotali % SECONDI_PER_MINUTO
@@ -27,12 +28,20 @@ fun formattaDurata(durataMs: Long): String {
     }
 }
 
-/** AC-557: the prose form of a duration ("52 min", "1 h 04 min") — dates stay `formattaData`, unchanged. */
+/**
+ * AC-557: the prose form of a duration ("52 min", "1 h 04 min") — dates stay `formattaData`,
+ * unchanged. L709: under a minute reads "< 1 min" (not the misleading "0 min"); a negative
+ * [durataMs] is clamped to zero first, same as [formattaDurata].
+ */
 fun formattaDurataEstesa(durataMs: Long): String {
-    val secondiTotali = durataMs / MS_PER_SECONDO
+    val secondiTotali = durataMs.coerceAtLeast(0) / MS_PER_SECONDO
     val ore = secondiTotali / SECONDI_PER_ORA
     val minuti = (secondiTotali % SECONDI_PER_ORA) / SECONDI_PER_MINUTO
-    return if (ore > 0) String.format(Locale.ROOT, "%d h %02d min", ore, minuti) else "$minuti min"
+    return when {
+        ore > 0 -> String.format(Locale.ROOT, "%d h %02d min", ore, minuti)
+        minuti > 0 -> "$minuti min"
+        else -> "< 1 min"
+    }
 }
 
 /** AC-179: "dd/MM/yyyy". */
