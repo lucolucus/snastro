@@ -34,5 +34,6 @@ public class RiassegnaSegmentoServizio(
     }
 }
 
-private fun snastro.trascrizione.dominio.SegmentoRiassegnato.pubblicato(): SegmentoRiassegnato =
+/** Domain → published `SegmentoRiassegnato`; shared with [RiassegnaSegmentiServizio]. */
+internal fun snastro.trascrizione.dominio.SegmentoRiassegnato.pubblicato(): SegmentoRiassegnato =
     SegmentoRiassegnato(registrazioneId, segmentoId, da, a, daRimossa, aNuova)
