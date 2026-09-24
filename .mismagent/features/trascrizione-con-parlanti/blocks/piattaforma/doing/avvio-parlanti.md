@@ -11,6 +11,7 @@ consumes:
   - "eventi-revisione"
   - "eventi-parlanti"
   - "tec-shell-ui"
+  - "eventi-elaborazione"
 depends_on:
   - "avvio-composizione"
   - "schermata-parlanti"
@@ -25,6 +26,7 @@ depends_on:
   - "abbonato-revisione-parlanti"
   - "abbonato-riallineamento-impronte"
   - "riallinea-impronte"
+  - "sostituzione-trascritto-policy"
 related_adrs:
   - "0002"
   - "0003"
@@ -33,6 +35,7 @@ related_adrs:
   - "0010"
   - "0012"
   - "0017"
+  - "0018"
 gated_by:
   - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
 ---
@@ -41,7 +44,9 @@ gated_by:
 ## What to do
 R2 composition (release Parlanti, PAUSED): EXTENDS avvio-composizione's graph with the Parlanti SQL repositories and adapters, the revisione-policy sync subscriber, abbonato-revisione-parlanti and abbonato-riallineamento-impronte after commit, RiallineaTutteLeImpronte in background at project open (after RecuperaElaborazioniInterrotte, exceptions caught and logged, cancelled on close), lettore-nomi-da-parlanti replacing the empty LettoreNomi, the Parlanti shell section (S4), the S2 identification badge, the S3 Voci panel + Revisione UI (Parlanti sources and commands supplied to the S3 presenter), the native-Mutex wait of print extraction (AC-236), and the --smoke extension for S4.
 
-Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job).
+REWORK 2026-09-24 (ADR 0018): TrascrittoSostituito after commit → invalidate every Proposta + Cambiamento(null) (AC-456); supply 'Ritrascrivi' to S2 and register the synchronous purge subscriber before the first command (AC-457); e2e AC-458, AC-459, AC-479.
+
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): AggiornamentiVistaParlanti handles TrascrittoSostituito after commit (invalidate every cached Proposta, Cambiamento(null)); supplies 'Ritrascrivi' to S2 (R2 only) and keeps AnnullaElaborazione supplied; the sync subscriber with the sostituzione policy is registered before the first command, so 'Ritrascrivi' is offered only by a composition that purges.
 
 ## Tasks
 - AC-357 --smoke (esteso) salva anche lo screenshot di S4 e quello di S2 con il badge di identificazione, uscendo con 0; la shell mostra la sezione Parlanti (AC-341 con sezione fornita, AC-177)
@@ -55,10 +60,15 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 
 - AC-419 annulla(voceRef) durante l'attesa del Mutex → InterruptedException/cancellazione, nulla scritto (nessuna Attribuzione, nessuna riga d'impronta, nessun Parlante, nessun evento) e nessun errore mostrato come fallimento — test: conteggi delle righe invariati
 - AC-420 Chiudere il progetto annulla ogni comando Parlanti e ogni job di Proposta in corso; la chiusura (ferma) li attende, con un limite come CollaboratoriR1.ferma, prima della chiusura del database; nulla è scritto dopo chiudi — test: una finta trattenuta + chiudi, nessun accesso al DB dopo la chiusura
 - AC-421 Le Proposte della Registrazione aperta sono calcolate una Voce alla volta in UN solo job di background legato alla schermata; uscire da S3 o cambiare Registrazione lo annulla; mai N attese concorrenti sul Mutex per un pannello
+- AC-456 TrascrittoSostituito after commit → ProposteSerializzate.invalidaTutte() and ONE Cambiamento(null); never delivered on rollback
+- AC-457 The R2 composition supplies 'Ritrascrivi' to the S2 presenter and registers AbbonatoRevisioneParlanti (with the sostituzione policy) BEFORE the first command — test: the subscriber is registered before CodaElaborazioni starts
+- AC-458 E2E on databaseInMemoria with fake ML ports. Setup: Registrazione completata; Voce 1 → ricorrente 'Mario' with a print, Mario also attributed in another Registrazione; Voce 2 → occasionale 'Ospite del 12/09/2026' with a print, nowhere else. Action: Ritrascrivi with 2 persons, the fake pipeline completes with 3 Voci. Expected: zero attribuzione and zero impronta_vocale rows for that Registrazione; Mario exists with his other Attribuzione and print; the Ospite no longer exists; trascritto-view shows the 3 new Voci; the Documento file is rewritten with only 'Voce 1..3' labels and the new texts; the S2 row is 'Completata' with the badge '3 voci · 3 da identificare'
+- AC-459 E2E failure, same setup: the fake pipeline fails in diarization; the attribuzione and impronta_vocale rows, the Trascritto, the Documento file bytes and the Galleria are unchanged; S2 shows 'Ritrascrizione non riuscita: errore nella separazione delle voci'
+- AC-479 E2E, AC-458's setup: 'Ritrascrivi', then cancel while it is queued → the attribuzione/impronta_vocale rows, the Trascritto, the Documento file bytes and the Galleria are unchanged; no TrascrittoSostituito is published; S2 shows 'Completata' + 'Ritrascrivi'; S3 is editable again (AC-461)
 
 ## Dependencies
 - **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)
-- Blocks built first: `avvio-composizione` (wave 10), `schermata-parlanti` (wave 8), `schermata-registrazioni-identificazione` (wave 9), `schermata-registrazione-identificazione` (wave 9), `repository-sql-parlanti` (wave 4), `registrazione-da-progetto-pa` (wave 5), `lettore-voci-da-trascrizione` (wave 5), `lettore-nomi-da-parlanti` (wave 5), `decodifica-parlanti` (wave 5), `confronto-impronte` (wave 4), `abbonato-revisione-parlanti` (wave 5), `abbonato-riallineamento-impronte` (wave 5), `riallinea-impronte` (wave 4)
+- Blocks built first: `avvio-composizione` (wave 10), `schermata-parlanti` (wave 8), `schermata-registrazioni-identificazione` (wave 9), `schermata-registrazione-identificazione` (wave 9), `repository-sql-parlanti` (wave 4), `registrazione-da-progetto-pa` (wave 5), `lettore-voci-da-trascrizione` (wave 5), `lettore-nomi-da-parlanti` (wave 5), `decodifica-parlanti` (wave 5), `confronto-impronte` (wave 4), `abbonato-revisione-parlanti` (wave 5), `abbonato-riallineamento-impronte` (wave 5), `riallinea-impronte` (wave 4), `sostituzione-trascritto-policy` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -84,8 +94,8 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
@@ -96,8 +106,8 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 
     - `SegmentoRiassegnato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
   - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 - **eventi-parlanti** (consumed/implemented) — owner `eventi-pubblicati`, supplier `conferma-attribuzione, salta-voce, gestione-parlante, riallinea-impronte`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -124,5 +134,15 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 
     - `Cambiamento`: data class(registrazioneId: RegistrazioneId?) — null = everything may have changed
   - keys (minting rules):
     - `percorso`: see tec-registro-progetti
+- **eventi-elaborazione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `esegui-elaborazione (Avviata/Completata/Fallita/TrascrittoSostituito), annulla-elaborazione (ElaborazioneAnnullata)`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `ElaborazioneAvviata`: data class(registrazioneId: RegistrazioneId, avviataAlle: Instant) : EventoPubblicato
+    - `ElaborazioneCompletata`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato
+    - `ElaborazioneFallita`: data class(registrazioneId: RegistrazioneId, motivo: String) : EventoPubblicato — motivo in plain Italian
+    - `TrascrittoSostituito`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published ONLY in a completion transaction that replaced an existing Trascritto, BEFORE ElaborazioneCompletata (ADR 0018)
+    - `ElaborazioneAnnullata`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by AnnullaElaborazione in the cancelling transaction (a never-started in_attesa row deleted), AFTER COMMIT only; no synchronous subscriber (ADR 0018 Amendment (b))
+  - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+  - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit
 
-Sources: ADRs 0002, 0003, 0004, 0009, 0010, 0012, 0017 (.mismagent/decisions/); architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti).
+Sources: ADRs 0002, 0003, 0004, 0009, 0010, 0012, 0017, 0018 (.mismagent/decisions/); architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti).

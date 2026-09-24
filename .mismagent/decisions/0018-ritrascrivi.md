@@ -124,8 +124,9 @@ What makes it more than lifting a guard:
   - A `ricorrente` is **kept as it is**: Nome, tipo, and its prints from other Registrazioni. It is
     kept even with zero Attribuzioni and zero prints.
   - An `eliminato` tombstone is kept. Only its Attribuzione in this Registrazione goes.
-  - *(To confirm with the user. They wrote "any Parlante left with no attribution stays as it is (INV
-    rules)", and this reads it as "per the INV rules", i.e. [INV-25].)*
+  - ~~*(To confirm with the user. They wrote "any Parlante left with no attribution stays as it is (INV
+    rules)", and this reads it as "per the INV rules", i.e. [INV-25].)*~~ **Confirmed by the user,
+    see Amendment 2026-09-24 (b) §1.**
 - **Mechanical boundary.** Trascrizione never touches Parlanti tables. The purge lives in Parlanti,
   reached only through the published event (`enforced_by`, second clause). If the synchronous
   subscriber is missing, the deferred FKs still backstop one of the two outcomes: a missing number
@@ -170,13 +171,15 @@ What makes it more than lifting a guard:
   keep coming from the latest `Elaborazione`. No new enum value is added: the S2 presenter derives
   the "Ritrascrizione …" labels from the pair.
 - **S3 during a re-run.**
-  - S3 stays **fully usable**: reading, playing and, in R2, Revisione and naming. If the re-run fails,
-    that work is kept.
+  - ~~S3 stays **fully usable**: reading, playing and, in R2, Revisione and naming. If the re-run fails,
+    that work is kept.~~ **Superseded by Amendment 2026-09-24 (b) §2: S3 is READ-ONLY while a re-run is
+    queued or running.**
   - A banner warns: "Ritrascrizione in corso: questa trascrizione sarà sostituita quando la nuova sarà
     pronta." R2 adds: "Le correzioni e i nomi assegnati andranno persi."
   - After the replacement, S3 reloads on the view refresh. The selection is reset, and pending S3
     commands on old `VoceRef`s resolve as `VoceCambiata` / `VoceNonTrovata` in plain words.
-  - *(Alternative, for the user: make S3 read-only while a re-run is open.)*
+  - ~~*(Alternative, for the user: make S3 read-only while a re-run is open.)*~~ Chosen by the user:
+    Amendment 2026-09-24 (b) §2.
 
 ### 5. Events, Documento, view refresh
 - **New published event** (boundary `eventi-elaborazione`, `snastro.trascrizione.applicazione.eventi`,
@@ -230,7 +233,8 @@ What makes it more than lifting a guard:
   Trascrizione may not touch Parlanti tables either.
 
 ## Consequences
-- **Accepted residual race.** A Revisione or `ConfermaAttribuzione` fired from a stale S3 in the
+- ~~**Accepted residual race.**~~ *(Closed for S3 by Amendment 2026-09-24 (b) §2; text kept for
+  history.)* A Revisione or `ConfermaAttribuzione` fired from a stale S3 in the
   milliseconds between the replacement COMMIT and S3's reload runs on the **new** generation, with an
   old `voceId`.
   - `ConfermaAttribuzione`/`SaltaVoce` re-read the Voce in their transaction and compare
@@ -269,3 +273,120 @@ What makes it more than lifting a guard:
   - Discursive (code review): the purge never runs after commit; `TrascrittoSostituito` is published
     before `ElaborazioneCompletata` and only on replacement; `AvviaElaborazione` never writes the
     Trascritto.
+
+## Amendment 2026-09-24 (b) — the user's answers: INV-25 confirmed, S3 read-only during a re-run, cancel a queued Elaborazione [user]
+Source: the user's answers of 2026-09-24 to the open points of this ADR. The text above is kept; the
+points it changes carry a pointer here. New ACs AC-461…AC-479 are in the same manifest delta
+(`manifest-deltas/2026-09-24-ritrascrivi.md`, section "Amendment 2026-09-24 (b)").
+
+### 1. Parlanti left without Attribuzione — [INV-25] confirmed
+Point 3 stands as proposed. After the purge, an `attivo` `occasionale` left with no `Attribuzione` is
+deleted (`rimuovi`, [INV-25]). A `ricorrente` is **always** kept (Nome, tipo, prints from other
+Registrazioni), even with zero Attribuzioni and zero prints. An `eliminato` tombstone is kept. No AC
+changes: AC-429 already states this.
+
+### 2. S3 is READ-ONLY while a re-run is queued or running (replaces §4 "S3 stays fully usable")
+- **When.** A Trascritto exists and the latest `Elaborazione` of the shown Registrazione is
+  `in_attesa` or `in_corso` (the same pair S2 uses: `stato` + `trascrittoDisponibile` of
+  `stati-elaborazione`).
+- **Still allowed.** Reading the old transcript, playing from a Segmento, "▶ estratto", "Apri
+  documento" / "Mostra nella cartella".
+- **Disabled.** Naming ("Conferma", "altri ▾", "nuovo…", "cambia"), "salta", "Unisci con ▾" and the
+  merge banner's action, "Dividi voce" and "Riassegna a ▾". No command is sent. The panel starts no
+  Proposta job while read-only: no action could use it, and it would only wait on the native Mutex
+  held by the running pipeline (ADR 0017).
+- **Banner.** "Ritrascrizione in corso: modifiche disabilitate fino al termine". A second line says
+  "Questa trascrizione sarà sostituita quando la nuova sarà pronta." In R2 the panel adds "Le
+  correzioni e i nomi assegnati andranno persi."
+- **End of read-only.** It ends on the `Cambiamento` that shows another state:
+  - re-run `completata` → S3 reloads on the new generation (AC-453/455), editable;
+  - re-run `fallita` → editing is enabled again on the unchanged old transcript (nothing was lost);
+  - re-run cancelled while queued (§3 below) → the same: editing enabled again, nothing lost.
+- **Enforcement level.** It is a presentation rule (S3 presenter), not a domain guard. The domain
+  keeps the §6 and ADR 0012 (b) guarantees unchanged.
+- **This closes the "Accepted residual race" (Consequences, point 4) for S3.** From the moment a
+  re-run is queued, S3 issues no Revisione, Conferma or Salta. A stale S3 therefore cannot act on the
+  new Voci: at the replacement COMMIT it was already read-only, and it reloads on the new
+  generation before any action is enabled again. The only stragglers are Conferma/Salta commands
+  already pending in the per-project scope (ADR 0017 §3, AC-418) from before the re-run was
+  queued. They keep the `SorgenteImpronta` re-read guard and resolve as `VoceCambiata` /
+  `VoceNonTrovata` (AC-455). A Revisione cannot be pending in that scope. The generation token stays
+  not adopted.
+
+### 3. NEW — cancel a queued `Elaborazione`: `AnnullaElaborazione(elaborazioneId)`
+- **Scope.** An `Elaborazione` that is `in_attesa`, i.e. never started, whether a first
+  transcription ("Trascrivi", "Riprova") or a re-run ("Ritrascrivi"). Actor: the utente, from S2.
+- **A running (`in_corso`) Elaborazione cannot be cancelled by this command.** Neither can a
+  `completata` or `fallita` one. Stopping a running pipeline is out of scope (it would need
+  interruption of the native calls, ADR 0017, and a new outcome); the user waits for it to end.
+- **Domain effect: the never-started row is DELETED.** No new state, so **[INV-3] is unchanged**
+  (`completata` and `fallita` stay the only terminal states). An `in_attesa` row has produced
+  nothing: no Trascritto, no published event, no reference from any other table. Removing it
+  therefore loses no history, like the physical deletion of an unreferenced `occasionale` ([INV-25],
+  tactical R25). This is the only physical deletion of an `Elaborazione`.
+  - The Registrazione returns to the state derived from its **remaining** latest Elaborazione:
+    `NON_AVVIATA` if none is left (a cancelled first "Trascrivi"); `COMPLETATA` with its old
+    Trascritto (a cancelled "Ritrascrivi"); `FALLITA` (a cancelled "Riprova", or a cancelled re-run
+    after a failed re-run). [INV-4] and [INV-5] are untouched: the Trascritto is never read or
+    written by the cancellation.
+  - Aggregate: `Elaborazione.annulla(): Esito<ElaborazioneAnnullata>`, Ok only from `in_attesa`;
+    from any other state → `Errore(ElaborazioneGiaAvviata(elaborazioneId))`, state unchanged. It
+    is a check that returns the domain event, not a transition.
+  - Port: `ElaborazioneRepository.trova(id: ElaborazioneId): Elaborazione?` and
+    `rimuoviInAttesa(id: ElaborazioneId): Esito<Unit>`, a **compare-and-delete**: it deletes the row
+    iff it exists and is still `in_attesa`; if the row is started → `ElaborazioneGiaAvviata`; if it
+    is absent → `ElaborazioneNonTrovata`. SQL: `DELETE FROM elaborazione WHERE id = :id AND stato =
+    'in_attesa'`, 0 rows → re-read to tell the two errors apart.
+  - New errors in `ErroreTrascrizione` (`ErroriTrascrizione.kt`): `ElaborazioneGiaAvviata(elaborazioneId)`,
+    `ElaborazioneNonTrovata(elaborazioneId)`.
+  - Service `AnnullaElaborazioneServizio` (`:trascrizione:applicazione ..comandi`), one transaction:
+    `trova` → `annulla()` → `rimuoviInAttesa` → publish `ElaborazioneAnnullata(registrazioneId)`.
+- **The race with the dispatcher.** The queue claims the oldest `in_attesa` and marks it `in_corso`
+  in ONE short transaction that reads the head inside it (AC-314's pinned requirement). Since
+  fix-batch-17 every transaction starts with `BEGIN IMMEDIATE`, so the claim and the cancellation
+  are serialized on SQLite's write lock. Exactly one wins:
+  - **the cancellation commits first** → the row is gone; the claim, reading inside its own
+    transaction, never sees it and takes the next `in_attesa`, or none (Ok without effect, AC-68).
+    The queue needs no signal and no change: a cancellation never makes work available;
+  - **the claim commits first** → the row is `in_corso`; the cancellation fails cleanly with
+    `Errore(ElaborazioneGiaAvviata)`, writes nothing, publishes nothing, and the run proceeds
+    normally. The compare-and-delete makes this hold even if the service's own read was stale.
+
+  Never both, and never a raw `SQLITE_BUSY` (fix-batch-17).
+- **Events.** A new published event on boundary `eventi-elaborazione`:
+  **`ElaborazioneAnnullata(registrazioneId: RegistrazioneId) : EventoPubblicato`**, published in the
+  cancelling transaction and delivered **after commit only** (never on rollback). No synchronous
+  subscriber. No `TrascrittoSostituito`, no `ElaborazioneFallita`. Consumers:
+  - `AggiornamentiVistaTrascrizione` (R1 composition) → ONE `Cambiamento(registrazioneId)`. That
+    refreshes S2 (the row, and the `posizioneInCoda` of every other queued row, since S2 reloads
+    its whole list on any `Cambiamento`) and S3 if it shows that Registrazione (the read-only banner
+    goes away).
+  - Nothing else: Documento (no `Rigenerazione`: the Trascritto did not change), Parlanti (no purge,
+    no Proposta invalidation), `CodaElaborazioni` (no signal).
+- **UI (S2).** An **"Annulla"** button on a row that is "In coda (n)" or "Ritrascrizione in coda (n)",
+  and on no other row (not on "In corso"). It sends exactly one `AnnullaElaborazione(elaborazioneId)`
+  with no dialog, since nothing is lost. `stati-elaborazione` gains `elaborazioneId: ElaborazioneId?`
+  (the latest Elaborazione's id, null for `NON_AVVIATA`). `operazioneInCorso` blocks a second
+  click. On `ElaborazioneGiaAvviata` the row shows inline "La trascrizione è già partita: non si può
+  più annullare" and reloads to "In corso". On success the row shows its previous state (above).
+  The presenter shows "Annulla" only when the action is supplied (R1 and R2 compositions; not R0).
+- **Release: R1.** First transcriptions are R1, so `AnnullaElaborazione`, the event, the view field
+  and the S2 button are R1 and wired by `avvio-composizione`. The "Ritrascrizione in coda" case is
+  reachable only in R2, where "Ritrascrivi" exists.
+
+### 4. Build note: the `ErroreTrascrizione` sweep
+Adding `ElaborazioneGiaAvviata` / `ElaborazioneNonTrovata` and deleting `ElaborazioneGiaCompletata`
+changes a sealed hierarchy matched exhaustively (no `else`) in `:trascrizione:applicazione` (the
+pipeline's `motivo` table) and in `:ui` (`MessaggiErrore`, AC-180). Neither order of per-block merges
+compiles. So the change is **one sweep**, owned by the `elaborazione` rework: it edits the
+hierarchy and every exhaustive `when` and reference (service pre-check, SQL mapping, fakes/contract,
+`MessaggiErrore` with the texts of AC-477), with no other behaviour. Each block's own ACs then land
+their behaviour on top.
+
+### 5. Consequences of this amendment
+- [INV-3] unchanged; the tactical model records `AnnullaElaborazione` and `ElaborazioneAnnullata`,
+  and the one physical deletion of an `in_attesa` Elaborazione (like R25).
+- The §4 "S3 stays fully usable" text and the residual race are superseded as noted inline.
+- Enforcement is discursive (code review): the cancellation never touches the Trascritto; the
+  delete is conditional on `in_attesa` in the SQL itself; the claim reads the head inside its
+  transaction.

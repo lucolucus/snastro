@@ -1,18 +1,17 @@
 ---
-id: "repository-sql-trascrizione"
-type: "adapter"
+id: "annulla-elaborazione"
+type: "application-service"
 context: "trascrizione"
 side: "app"
 wave: 4
 release: "R1"
-module: ":trascrizione:adattatori (..persistenza)"
+module: ":trascrizione:applicazione (..comandi)"
 consumes:
   - "kernel-pl"
   - "agg-elaborazione"
-  - "agg-trascritto"
   - "repo-trascrizione"
-depends_on:
-  - "persistenza-ritrascrivi"
+  - "eventi-elaborazione"
+depends_on: []
 related_adrs:
   - "0002"
   - "0003"
@@ -22,30 +21,24 @@ related_adrs:
   - "0012"
   - "0014"
   - "0018"
+commands:
+  - "AnnullaElaborazione"
 ---
-# repository-sql-trascrizione — Repository SQL della Trascrizione
+# annulla-elaborazione — AnnullaElaborazione (ritiro di un'Elaborazione in coda)
 
 ## What to do
-ElaborazioneRepositorySql, TrascrittoRepositorySql (root + voce/segmento children, counters).
+AnnullaElaborazione(elaborazioneId): withdraws an Elaborazione that is still in_attesa (never started) — first transcription or re-run — by deleting its row in one transaction through the aggregate check Elaborazione.annulla() and the repository's compare-and-delete, then publishes ElaborazioneAnnullata(registrazioneId). An in_corso run cannot be cancelled; losing the race with the dispatcher gives ElaborazioneGiaAvviata.
 
-Note: AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no completata constraint mapping any more; trova(id) over trovaPerId; rimuoviInAttesa over persistenza-ritrascrivi's eliminaInAttesa (compare-and-delete); TrascrittoRepositorySql.salva already rewrites counters and deletes/re-inserts voce/segmento (proved as a replacement by AC-444).
-
-REWORK 2026-09-24 (ADR 0018): drop the elaborazione_completata_unica mapping (AC-111 rewritten); + trova(id) and rimuoviInAttesa over eliminaInAttesa (needs persistenza-ritrascrivi); tests AC-443..AC-445 (several completata, Trascritto replacement, deferred-FK backstop), AC-472 and AC-473 (claim vs cancel race on a file DB).
+Note: NEW 2026-09-24 (ADR 0018 Amendment 2026-09-24 (b) §3, user decision): AnnullaElaborazioneServizio(uow, elaborazioni: ElaborazioneRepository, eventi: DispatcherEventi).esegui(AnnullaElaborazione(elaborazioneId: ElaborazioneId)): Esito<Unit>, ONE transaction: trova → Elaborazione.annulla() → rimuoviInAttesa (compare-and-delete) → publish ElaborazioneAnnullata(registrazioneId). Actor: utente, S2 'Annulla' on a queued row. Only in_attesa (never started) can be cancelled; in_corso cannot (explicit). The never-started row is DELETED: INV-3 unchanged, the Registrazione returns to the state of its remaining latest Elaborazione (NON_AVVIATA / COMPLETATA with the old Trascritto / FALLITA). The race with the dispatcher is serialized by BEGIN IMMEDIATE (fix-batch-17): the loser gets ElaborazioneGiaAvviata. Never reads or writes the Trascritto; no signal to CodaElaborazioni. Release R1 (first transcriptions are R1).
 
 ## Tasks
-- AC-110 Round-trip di Elaborazione e di Trascritto (Voci, Segmenti, contatori)
-- AC-111 (REWRITTEN 2026-09-24, ADR 0018) A violation of elaborazione_aperta_unica becomes ElaborazioneGiaAperta, never a raw exception. There is no other constraint mapping (elaborazione_completata_unica no longer exists)
-- AC-112 Due inserimenti concorrenti di un'Elaborazione aperta per la stessa Registrazione → uno solo riesce
-- AC-113 I Contratti dei due repository passano contro le implementazioni SQL
-- AC-378 (ex AC-NP10, repository) Round-trip di Elaborazione con numeroPersone assente (NULL) e con 4: il valore riletto è identico e un'Elaborazione ricostituita lo conserva
-- AC-443 Round-trip: two completata Elaborazioni of the same Registrazione are both returned by diRegistrazione; ElaborazioneRepositoryContratto (AC-433) passes against SQL
-- AC-444 TrascrittoRepositorySql.salva of a NEW Trascritto over an existing one leaves only the new state (round-trip): the old one has Voci 1..5 and counters 6/40, the new one Voci 1..3 and counters 4/20; after the save there are exactly the new Voci, Segmenti and counters, and no row of the old one
-- AC-445 Deferred-FK backstop, documented by test on a real SQLite UnitaDiLavoroSql: replacement in one transaction with an attribuzione on old Voce 5 (absent from the new Trascritto) and NO purge → the COMMIT fails, and the old Trascritto and the attribuzione are intact afterwards; the same transaction with the rows of Voce 5 deleted first → commits
-- AC-472 rimuoviInAttesa over eliminaInAttesa: 1 row → Ok; 0 rows → re-read by id: present → ElaborazioneGiaAvviata, absent → ElaborazioneNonTrovata; ElaborazioneRepositoryContratto (AC-463) passes against SQL
-- AC-473 Claim vs cancel on a real SQLite FILE database with two UnitaDiLavoroSql threads started on a barrier, repeated 200 times: thread A claims the head (inAttesa().first() → avvia → salva in one transaction), thread B runs rimuoviInAttesa on the same id; every run ends in exactly one of (row deleted, A started nothing or the next row) or (row in_corso, B got ElaborazioneGiaAvviata) — never both, never a thrown exception (no SQLITE_BUSY)
+- AC-464 First transcription cancelled: with a single in_attesa for r, AnnullaElaborazione(id) → Ok; diRegistrazione(r) is empty; exactly one ElaborazioneAnnullata(r) is published (recording dispatcher fake), inside the transaction (one inTransazione)
+- AC-465 Queued re-run cancelled: with completata + in_attesa for r → Ok; only the completata is left, unchanged (same state and numeroPersone); TrascrittoRepository is never called (counting fake: no trova, no salva). A queued 'Riprova' (fallita + in_attesa) → Ok, the fallita stays
+- AC-466 Rejections, nothing written and nothing published: the id is in_corso, completata or fallita → Errore(ElaborazioneGiaAvviata(id)); unknown id → Errore(ElaborazioneNonTrovata(id))
+- AC-467 Race with the dispatcher: the repository fake answers rimuoviInAttesa with Errore(ElaborazioneGiaAvviata) (the claim won between trova and the delete) → the service returns that error unchanged, publishes nothing, and the transaction rolls back
+- AC-468 After a cancellation, AvviaElaborazione(r, n) is accepted again (INV-4: none open) and creates a new in_attesa
 
 ## Dependencies
-- Blocks built first: `persistenza-ritrascrivi` (wave 3)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -92,22 +85,19 @@ REWORK 2026-09-24 (ADR 0018): drop the elaborazione_completata_unica mapping (AC
   - §14 gates (must stay green):
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(elaborazioneQueries)\b' . | grep -vE '^\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q .`
     - `! grep -rnE --include='*.kt' --exclude-dir=build 'StatoElaborazione\.' . | grep -E '^\./[^:]*/src/main/' | grep -vE '^\./trascrizione/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q .`
-- **agg-trascritto** (consumed/implemented) — owner `trascritto`, projection in-process, contract_test **invariant-test**
-  - pinned types:
-    - `Trascritto.crea`: (registrazioneId, durataMs: Long, segmenti: List<SegmentoIniziale>): Esito<Creato<Trascritto, TrascrittoCreato>> — Errore(NessunParlatoRilevato) on empty input
-    - `SegmentoIniziale`: data class(voceIndice: Int, intervallo: IntervalloMs, testo: String) — trascrizione:dominio input VO
-    - `Trascritto.unisci`: (sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite>
-    - `Trascritto.dividi`: (origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa>
-    - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce
-    - `read accessors`: voci: List<Voce>, segmenti: List<Segmento> (read-only copies)
-  - keys (minting rules):
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
-  - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(trascrittoQueries|voceQueries|segmentoQueries)\b' . | grep -vE '^\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q .`
 - **repo-trascrizione** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }
     - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)
+- **eventi-elaborazione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `esegui-elaborazione (Avviata/Completata/Fallita/TrascrittoSostituito), annulla-elaborazione (ElaborazioneAnnullata)`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `ElaborazioneAvviata`: data class(registrazioneId: RegistrazioneId, avviataAlle: Instant) : EventoPubblicato
+    - `ElaborazioneCompletata`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato
+    - `ElaborazioneFallita`: data class(registrazioneId: RegistrazioneId, motivo: String) : EventoPubblicato — motivo in plain Italian
+    - `TrascrittoSostituito`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published ONLY in a completion transaction that replaced an existing Trascritto, BEFORE ElaborazioneCompletata (ADR 0018)
+    - `ElaborazioneAnnullata`: data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by AnnullaElaborazione in the cancelling transaction (a never-started in_attesa row deleted), AFTER COMMIT only; no synchronous subscriber (ADR 0018 Amendment (b))
+  - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+  - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit
 
-Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014, 0018 (.mismagent/decisions/); ADR 0006/0007/0014.
+Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014, 0018 (.mismagent/decisions/); ADR 0018 Amendment 2026-09-24 (b) §3, features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (Amendment 2026-09-24 (b)), ADR 0004/0007/0012.

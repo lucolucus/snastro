@@ -31,10 +31,17 @@
 # interruptible Mutex, one session per port call); AC-236 rewritten; new AC-406..AC-424; AC-155bis/AC-186bis recorded as BUILT;
 # eventi-progetto pins RegistrazioneRinominata. Rule-19 reality fold: read-adapter contracts AC-135..139 seed the supplier via its
 # applicazione commands + testFixtures fakes (CR-1); AC-149/151 synthetic audio; AC-8/AC-377 CR-13 migration test; AC-397 setAutoLoadEnabled(false).
+# AMENDED 2026-09-24 (manifest delta 2026-09-24-ritrascrivi = ADR 0018 "Ritrascrivi" + ADR 0018 Amendment 2026-09-24 (b), user answers
+# 2026-09-24): INV-4 rewritten (several completata, a new run iff none open), INV-5 reworded (Trascritto replaced whole on EACH completion),
+# INV-12/VoceId/SegmentoId scoped per Trascritto generation; 3.sqm drops elaborazione_completata_unica; ElaborazioneGiaCompletata deleted;
+# TrascrittoSostituito (sync Parlanti purge) and ElaborazioneAnnullata (after commit) published; S3 READ-ONLY during a re-run;
+# AnnullaElaborazione cancels a never-started in_attesa run (row deleted, INV-3 unchanged, R1). New blocks persistenza-ritrascrivi,
+# annulla-elaborazione, sostituzione-trascritto-policy; new AC-425..AC-479. Blocks already in doing/ carry a `REWORK 2026-09-24 (ADR 0018)`
+# line in their block file. The ErroreTrascrizione change is ONE sweep owned by the elaborazione rework (ADR 0018 Amendment (b) §4).
 # `depends_on` = non-boundary build dependencies (read-models a ui consumes, services a subscriber calls, suppliers an adapter wraps).
 feature: trascrizione-con-parlanti
 profile: .mismagent/profile.md
-ac_scheme: "AC-1..AC-424 (+ AC-155bis, AC-186bis) feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
+ac_scheme: "AC-1..AC-479 (+ AC-155bis, AC-186bis) feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
 blocks:
   - id: "scaffold-app"
     type: "scaffold"
@@ -104,17 +111,43 @@ blocks:
       - "0009"
       - "0012"
       - "0014"
+      - "0018"
     tests_nl:
       - "AC-8 (REWORDED 2026-09-24, CR-13 replaced verifySqlDelightMigration) il test di migrazione di :persistenza:test è verde: DB vuoto → versione corrente con integrità e ogni query, Schema.migrate da vuoto uguale a Schema.create"
-      - "AC-9 I tre indici unici parziali di ADR 0007 esistono, ciascuno su una sola riga (regola di presenza verde)"
+      - "AC-9 (REWORDED 2026-09-24, ADR 0018) I due indici unici parziali di ADR 0007 ancora in vigore (elaborazione_aperta_unica, parlante_nome_attivo_unico) esistono, ciascuno su una sola riga (regola di presenza verde); elaborazione_completata_unica è stato eliminato da 3.sqm (ADR 0018, AC-425)"
       - "AC-10 Il driver apre il DB con journal WAL, foreign_keys=ON e secure_delete=ON (pragma letti nel test)"
       - "AC-11 UnitaDiLavoroSql passa UnitaDiLavoroContratto: rollback su Errore e su eccezione"
       - "AC-12 Un DB con versione di schema più recente dell'app viene rifiutato con un errore chiaro, senza modificarlo"
       - "AC-13 attribuzione ha chiave (registrazione_id, voce_id) e impronta_vocale rifiuta una seconda riga con stessi (parlante_id, registrazione_id, voce_id); impronta_vocale ha le colonne sorgente_impronta TEXT NOT NULL e modello_impronta TEXT NOT NULL (un inserimento senza una delle due è rifiutato)"
       - "AC-267 impronta_vocale.sq espone: l'UPDATE compare-and-set di UNA riga (SET impronta, sorgente_impronta, modello_impronta WHERE parlante_id, registrazione_id, voce_id AND sorgente_impronta = :attesa AND modello_impronta = :atteso — nessun INSERT) e le letture dei metadati (parlante_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta, senza BLOB) per registrazione e per progetto; test SQL: l'UPDATE con valori attesi cambiati tocca 0 righe"
       - "AC-377 (ex AC-NP10, schema) Migrazione forward-only (nuovo file di migrazione dopo 1.sqm, user_version +1): elaborazione.numero_persone INTEGER NULL CHECK (numero_persone BETWEEN 1 AND 10); le righe esistenti restano con NULL (test: DB alla versione precedente con un'Elaborazione → migrato → numero_persone NULL); un INSERT con 0 o 11 è rifiutato; il test di migrazione di :persistenza:test resta verde (CR-13: DB vuoto → versione corrente con integrità e ogni query, Schema.migrate da vuoto uguale a Schema.create)"
-    notes: "ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema). AMENDED 2026-09-23 (ADR 0009/0012 Amendment (b)): schema v1 is UNRELEASED — the two columns go straight into v1, no migration; regenerate the committed 1.db snapshot (AC-8 stays green). AMENDED 2026-09-24 (ADR 0014, ADR 0006): R0 is released, so the new column is a FORWARD-ONLY migration (AC-377), never an edit of the existing schema/1.sqm."
+    notes: "ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema). AMENDED 2026-09-23 (ADR 0009/0012 Amendment (b)): schema v1 is UNRELEASED — the two columns go straight into v1, no migration; regenerate the committed 1.db snapshot (AC-8 stays green). AMENDED 2026-09-24 (ADR 0014, ADR 0006): R0 is released, so the new column is a FORWARD-ONLY migration (AC-377), never an edit of the existing schema/1.sqm. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): AC-9 reworded (the completata index is dropped by 3.sqm); the test change lands with persistenza-ritrascrivi, which owns 3.sqm and the same test file."
     sources: "ADR 0006/0007/0009/0012, dev-architecture-app.md #repository, features/trascrizione-con-parlanti/tactical-model.md (all aggregates)"
+  - id: "persistenza-ritrascrivi"
+    type: "adapter"
+    context: "piattaforma"
+    side: "app"
+    wave: 3
+    release: "R2"
+    module: ":persistenza"
+    title: "Migrazione 3.sqm (Ritrascrivi) + eliminaInAttesa"
+    consumes:
+      - "kernel-pl"
+    depends_on:
+      - "persistenza-schema"
+    related_adrs:
+      - "0006"
+      - "0007"
+      - "0018"
+    tables:
+      - "elaborazione"
+    tests_nl:
+      - "AC-425 migrations/3.sqm (schema 3 → 4, forward-only) contains exactly one statement, `DROP INDEX elaborazione_completata_unica;`, on one line; no other table or index changes, and SnastroDatabase.Schema.version = 4. The CR-13 migration test of :persistenza:test stays green: an empty DB migrates to the current version, passes integrity checks and runs every query; Schema.migrate from empty equals Schema.create"
+      - "AC-426 Migration fixture test: a DB frozen at version 3, holding one completata Elaborazione, its Trascritto (Voci/Segmenti), an attribuzione and an impronta_vocale row, is migrated to 4; every row is intact and user_version = 4; sqlite_master still has elaborazione_aperta_unica and parlante_nome_attivo_unico, and has no elaborazione_completata_unica"
+      - "AC-427 After the migration: two completata rows for the same registrazione_id insert fine; two rows in in_attesa | in_corso for the same registrazione_id are still refused by the index; a completata next to an in_attesa for the same Registrazione is accepted"
+      - "AC-471 Elaborazione.sq gains `eliminaInAttesa: DELETE FROM elaborazione WHERE id = :id AND stato = 'in_attesa';` (the only DELETE on elaborazione); SQL test: on an in_corso row it affects 0 rows and the row is intact; on an in_attesa row it affects 1"
+    notes: "NEW 2026-09-24 (ADR 0018, manifest delta 2026-09-24-ritrascrivi; wave 3 = right after persistenza-schema, the delta's 'wave 1' corrected at fold): owns migrations/3.sqm (R0/R1 are released, so forward-only, never an edit of 1.sqm/2.sqm, ADR 0006 (a)) and the eliminaInAttesa query used by repository-sql-trascrizione (AnnullaElaborazione, ADR 0018 Amendment (b) §3). ADR 0018 enforced_by (presence clause) is exigible_from this block. Release R2 for 3.sqm; eliminaInAttesa is needed by R1's AnnullaElaborazione — this block is therefore built before repository-sql-trascrizione's rework whatever the release."
+    sources: "ADR 0006/0007/0018 (+ Amendment 2026-09-24 (b)), features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-4), manifest delta 2026-09-24-ritrascrivi"
   - id: "eventi-pubblicati"
     type: "port"
     context: "piattaforma"
@@ -128,10 +161,13 @@ blocks:
     depends_on: []
     related_adrs:
       - "0012"
+      - "0018"
     tests_nl:
-      - "AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 15 eventi, incluso ImpronteRiallineate)"
+      - "AC-14 Ogni evento pubblicato ha esattamente i campi e i tipi fissati nel suo boundary (un test di forma per ciascuno dei 17 eventi, inclusi ImpronteRiallineate, TrascrittoSostituito ed ElaborazioneAnnullata — REWORDED 2026-09-24, ADR 0018)"
       - "AC-15 Tutti gli eventi pubblicati implementano EventoPubblicato e sono data class con soli val (Konsist CR-5)"
-    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them."
+      - "AC-442 snastro.trascrizione.applicazione.eventi.TrascrittoSostituito(registrazioneId: RegistrazioneId) : EventoPubblicato exists, with no other field; DispatcherEventiInMemoria delivers it to synchronous subscribers inside the publishing transaction, and to after-commit subscribers only after COMMIT, never on rollback (test with a synchronous and an after-commit recording subscriber on a rolled-back and on a committed transaction)"
+      - "AC-470 snastro.trascrizione.applicazione.eventi.ElaborazioneAnnullata(registrazioneId: RegistrazioneId) : EventoPubblicato exists with no other field; delivered to after-commit subscribers only after COMMIT, never on rollback"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b)): new published event ImpronteRiallineate(registrazioneId) in snastro.parlanti.applicazione.eventi (boundary eventi-parlanti). FOLLOW-UP REQUIRED: merged before ADR 0012 Amendment (b); the merged code does not yet satisfy the amended criteria above — a rework/fix block must land them. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): two new published events on eventi-elaborazione: TrascrittoSostituito (one SYNCHRONOUS subscriber: the Parlanti purge) and ElaborazioneAnnullata (after commit only)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md (Domain events of every context), ADR 0012"
   - id: "progetto"
     type: "aggregate"
@@ -201,6 +237,7 @@ blocks:
       - "0003"
       - "0004"
       - "0014"
+      - "0018"
     invariants:
       - "INV-3 StatoElaborazione moves only in_attesa → in_corso → completata | fallita; completata and fallita are terminal"
     invariant_fields:
@@ -216,7 +253,9 @@ blocks:
       - "AC-19 fallisci conserva il motivo; avvia registra avviataAlle"
       - "AC-367 (ex AC-NP1) Elaborazione.accoda fissa numeroPersone (anche assente) alla creazione; è immutabile e di sola lettura: nessuna transizione (avvia, completa, fallisci) lo cambia"
       - "AC-368 (ex AC-NP2) NumeroPersone.di: 1 e 10 → Ok; 0, -1 e 11 → Errore(NumeroPersoneFuoriIntervallo) (test a tabella)"
-    notes: "AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..10, NumeroPersoneFuoriIntervallo in ErroriTrascrizione.kt) and the immutable optional field numeroPersone live here; accoda takes it, the reconstitution restores it."
+      - "AC-432 ErroreTrascrizione no longer has ElaborazioneGiaCompletata; the block's own gate is the sealed hierarchy compiling without it (global check: `! grep -rn 'ElaborazioneGiaCompletata' --include='*.kt' --exclude-dir=build .` exits 0 once the sweep is merged); INV-3 tests unchanged and green: completata and fallita stay terminal"
+      - "AC-462 Elaborazione.annulla(): from in_attesa → Ok(ElaborazioneAnnullata(id, registrazioneId)) and the state is unchanged; from in_corso, completata, fallita → Errore(ElaborazioneGiaAvviata(id)), state unchanged; INV-3 tests unchanged (no new state, no new transition); ErroriTrascrizione.kt gains ElaborazioneGiaAvviata(elaborazioneId) and ElaborazioneNonTrovata(elaborazioneId)"
+    notes: "AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..10, NumeroPersoneFuoriIntervallo in ErroriTrascrizione.kt) and the immutable optional field numeroPersone live here; accoda takes it, the reconstitution restores it. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no change to the state machine (INV-3); Ritrascrivi = a NEW Elaborazione. annulla() is a check returning the domain event ElaborazioneAnnullata, not a transition; the never-started row is then physically deleted by the repository (the only deletion of an Elaborazione, like R25). OWNS the ErroreTrascrizione SWEEP (ADR 0018 Amendment (b) §4): +ElaborazioneGiaAvviata, +ElaborazioneNonTrovata, −ElaborazioneGiaCompletata, updating in ONE change every exhaustive when / reference (AvviaElaborazioneServizio pre-check, EseguiProssimaElaborazioneServizio motivo table, repository-sql-trascrizione constraint mapping, ElaborazioneRepositoryFinta/Contratto, :ui MessaggiErrore with the AC-477 texts and its test) with no other behaviour — per-block merges could not compile in any order."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (+ Amendment 2026-09-23 (c)), ADR 0014"
   - id: "trascritto"
     type: "aggregate"
@@ -399,8 +438,9 @@ blocks:
       - "0006"
       - "0007"
       - "0014"
+      - "0018"
     tests_nl:
-      - "AC-29 ElaborazioneRepositoryContratto: una seconda Elaborazione aperta per la stessa Registrazione → ElaborazioneGiaAperta; una seconda completata → ElaborazioneGiaCompletata; inAttesa in ordine FIFO di creazione (passa contro la Finta)"
+      - "AC-29 (REWORDED 2026-09-24, ADR 0018) ElaborazioneRepositoryContratto: una seconda Elaborazione aperta per la stessa Registrazione → ElaborazioneGiaAperta; inAttesa in ordine FIFO di creazione (passa contro la Finta); nessun ramo GiaCompletata"
       - "AC-30 TrascrittoRepositoryContratto: round-trip completo incluse Voci, Segmenti, prossimaVoce e prossimoSegmento"
       - "AC-31 DecodificatoreAudioContratto: campioni(intervallo) restituisce (fine - inizio) × 16 campioni"
       - "AC-32 DiarizzatoreContratto: ogni Turno ha inizio < fine entro la durata e voceIndice >= 0"
@@ -409,7 +449,9 @@ blocks:
       - "AC-35 AllineatoreContratto: ogni SegmentoGrezzo ha inizio < fine entro la durata, un voceIndice presente nei turni, e le sovrapposizioni tra turni non vengono tagliate né eliminate"
       - "AC-36 SegnalatoreFaseFinta registra la sequenza di fasi ricevute"
       - "AC-374 (ex AC-NP7) DiarizzatoreContratto: con numeroPersone = k i Turni hanno al più k voceIndice distinti; con numeroPersone assente vale AC-32 (passa contro la DiarizzatoreFinta, che registra l'ultimo numeroPersone ricevuto)"
-    notes: "AMENDED 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: NumeroPersone?; the DiarizzatoreFinta records the argument it received (used by esegui-elaborazione AC-370) and never returns more than k distinct voceIndice."
+      - "AC-433 ElaborazioneRepositoryContratto (fake, later SQL): two completata Elaborazioni of the same Registrazione are both saved and diRegistrazione returns both; salva of an open Elaborazione while another of the same Registrazione is open → Errore(ElaborazioneGiaAperta), store unchanged; an open one next to one or more completata → Ok. The fake honours exactly this, with no GiaCompletata branch"
+      - "AC-463 ElaborazioneRepositoryContratto: trova(id) returns the saved Elaborazione or null; rimuoviInAttesa(id) on an in_attesa → Ok and it is gone from diRegistrazione/inAttesa/trova; on in_corso/completata/fallita → Errore(ElaborazioneGiaAvviata) and the store is unchanged; on an unknown id → Errore(ElaborazioneNonTrovata)"
+    notes: "AMENDED 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: NumeroPersone?; the DiarizzatoreFinta records the argument it received (used by esegui-elaborazione AC-370) and never returns more than k distinct voceIndice. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): ElaborazioneRepository: salva KDoc re-pinned (only ElaborazioneGiaAperta; several completata allowed); + trova(id: ElaborazioneId) and rimuoviInAttesa(id) (compare-and-delete) for AnnullaElaborazione; the Finta mirrors both."
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004, ADR 0014"
   - id: "porte-parlanti"
     type: "port"
@@ -611,7 +653,7 @@ blocks:
     wave: 4
     release: "R1"
     module: ":trascrizione:applicazione (..comandi)"
-    title: "AvviaElaborazione (accodamento e riprova)"
+    title: "AvviaElaborazione (accodamento, riprova e ritrascrizione)"
     consumes:
       - "kernel-pl"
       - "agg-elaborazione"
@@ -623,20 +665,52 @@ blocks:
       - "0007"
       - "0012"
       - "0014"
+      - "0018"
     commands:
       - "AvviaElaborazione"
     invariants:
-      - "INV-4 per Registrazione at most one Elaborazione in_attesa|in_corso and at most one completata; a new one only if every previous one is fallita"
+      - "INV-4 (REWRITTEN 2026-09-24, ADR 0018) per Registrazione at most one Elaborazione in_attesa|in_corso; a new one iff none is open (after none, fallita, or completata = Ritrascrivi); several completata allowed (history)"
     tests_nl:
       - "AC-64 AvviaElaborazione su una Registrazione senza Elaborazioni crea un'Elaborazione in_attesa"
       - "INV-4 con un'Elaborazione in_attesa o in_corso già presente → ElaborazioneGiaAperta e nessuna riga nuova"
-      - "INV-4 dopo una completata → ElaborazioneGiaCompletata (nessuna ri-elaborazione)"
       - "AC-65 Dopo una fallita → nuova Elaborazione in_attesa; la fallita resta nello storico"
       - "AC-66 Se il repository segnala la violazione dell'indice, il servizio restituisce lo stesso ErroreDominio (mai un'eccezione grezza)"
       - "AC-67 Registrazione inesistente → RegistrazioneNonTrovata"
       - "AC-369 (ex AC-NP3) AvviaElaborazione con numeroPersone assente → Elaborazione in_attesa senza numero; con 4 → in_attesa con numeroPersone 4; con 0 o 11 → Errore(NumeroPersoneFuoriIntervallo) e nessuna riga nuova; la riprova dopo una fallita salva il valore inviato (la fallita resta invariata)"
-    notes: "AMENDED 2026-09-24 (ADR 0014, ADR 0012 Amendment (c)): signature AvviaElaborazione(registrazioneId, numeroPersone: Int? = null); the ONLY actor is the utente ('Trascrivi' on NON_AVVIATA, 'Riprova' on fallita) — no subscriber calls it (Q-6 superseded); numeroPersone is validated via NumeroPersone.di BEFORE any write."
+      - "AC-434 (Ritrascrivi) After a completata, AvviaElaborazione(r, 3) creates a new in_attesa with numeroPersone 3; the completata row is unchanged (same state, same numeroPersone), and so is the Trascritto: same Voci, Segmenti and counters, and no TrascrittoRepository.salva call (counting fake)"
+      - "AC-435 With completata + in_attesa (a Ritrascrizione queued), or with completata + in_corso, another AvviaElaborazione → Errore(ElaborazioneGiaAperta), and no new row"
+      - "AC-436 History: completata, then a fallita re-run, then AvviaElaborazione → Ok (3 rows, the first two unchanged); completata, completata, then AvviaElaborazione → Ok; NumeroPersoneFuoriIntervallo still wins before any write (AC-369)"
+    notes: "AMENDED 2026-09-24 (ADR 0014, ADR 0012 Amendment (c)): signature AvviaElaborazione(registrazioneId, numeroPersone: Int? = null); the ONLY actor is the utente ('Trascrivi' on NON_AVVIATA, 'Riprova' on fallita) — no subscriber calls it (Q-6 superseded); numeroPersone is validated via NumeroPersone.di BEFORE any write. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): the only pre-check is 'any open → ElaborazioneGiaAperta'; actors add 'Ritrascrivi' on a completata row (prefilled with the latest numeroPersone). AvviaElaborazione never touches the Trascritto."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-4, Q-6 superseded by Amendment 2026-09-23 (c)), ADR 0007, ADR 0014"
+  - id: "annulla-elaborazione"
+    type: "application-service"
+    context: "trascrizione"
+    side: "app"
+    wave: 4
+    release: "R1"
+    module: ":trascrizione:applicazione (..comandi)"
+    title: "AnnullaElaborazione (ritiro di un'Elaborazione in coda)"
+    consumes:
+      - "kernel-pl"
+      - "agg-elaborazione"
+      - "repo-trascrizione"
+      - "eventi-elaborazione"
+    depends_on: []
+    related_adrs:
+      - "0004"
+      - "0007"
+      - "0012"
+      - "0018"
+    commands:
+      - "AnnullaElaborazione"
+    tests_nl:
+      - "AC-464 First transcription cancelled: with a single in_attesa for r, AnnullaElaborazione(id) → Ok; diRegistrazione(r) is empty; exactly one ElaborazioneAnnullata(r) is published (recording dispatcher fake), inside the transaction (one inTransazione)"
+      - "AC-465 Queued re-run cancelled: with completata + in_attesa for r → Ok; only the completata is left, unchanged (same state and numeroPersone); TrascrittoRepository is never called (counting fake: no trova, no salva). A queued 'Riprova' (fallita + in_attesa) → Ok, the fallita stays"
+      - "AC-466 Rejections, nothing written and nothing published: the id is in_corso, completata or fallita → Errore(ElaborazioneGiaAvviata(id)); unknown id → Errore(ElaborazioneNonTrovata(id))"
+      - "AC-467 Race with the dispatcher: the repository fake answers rimuoviInAttesa with Errore(ElaborazioneGiaAvviata) (the claim won between trova and the delete) → the service returns that error unchanged, publishes nothing, and the transaction rolls back"
+      - "AC-468 After a cancellation, AvviaElaborazione(r, n) is accepted again (INV-4: none open) and creates a new in_attesa"
+    notes: "NEW 2026-09-24 (ADR 0018 Amendment 2026-09-24 (b) §3, user decision): AnnullaElaborazioneServizio(uow, elaborazioni: ElaborazioneRepository, eventi: DispatcherEventi).esegui(AnnullaElaborazione(elaborazioneId: ElaborazioneId)): Esito<Unit>, ONE transaction: trova → Elaborazione.annulla() → rimuoviInAttesa (compare-and-delete) → publish ElaborazioneAnnullata(registrazioneId). Actor: utente, S2 'Annulla' on a queued row. Only in_attesa (never started) can be cancelled; in_corso cannot (explicit). The never-started row is DELETED: INV-3 unchanged, the Registrazione returns to the state of its remaining latest Elaborazione (NON_AVVIATA / COMPLETATA with the old Trascritto / FALLITA). The race with the dispatcher is serialized by BEGIN IMMEDIATE (fix-batch-17): the loser gets ElaborazioneGiaAvviata. Never reads or writes the Trascritto; no signal to CodaElaborazioni. Release R1 (first transcriptions are R1)."
+    sources: "ADR 0018 Amendment 2026-09-24 (b) §3, features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (Amendment 2026-09-24 (b)), ADR 0004/0007/0012"
   - id: "esegui-elaborazione"
     type: "application-service"
     context: "trascrizione"
@@ -664,11 +738,12 @@ blocks:
       - "0012"
       - "0014"
       - "0015"
+      - "0018"
     commands:
       - "EseguiProssimaElaborazione"
       - "RecuperaElaborazioniInterrotte"
     invariants:
-      - "INV-5 a Trascritto exists iff its Registrazione has a completata Elaborazione; created atomically with the transition to completata"
+      - "INV-5 (REWORDED 2026-09-24, ADR 0018) a Trascritto exists iff the Registrazione has ≥ 1 completata; written (created or REPLACED whole) atomically with EACH transition to completata; never touched by any other outcome"
     tests_nl:
       - "AC-68 Parte sempre l'Elaborazione in_attesa più vecchia (FIFO); senza in_attesa → Ok senza effetti"
       - "AC-69 Le fasi sono segnalate in ordine: decodifica, diarizzazione, trascrizione, allineamento"
@@ -682,7 +757,13 @@ blocks:
       - "AC-370 (ex AC-NP4) La pipeline passa a Diarizzatore.diarizza esattamente il numeroPersone dell'Elaborazione eseguita (assente → assente), anche per un'Elaborazione riletta dal repository dopo un riavvio (DiarizzatoreFinta che registra l'argomento)"
       - "AC-386 (estende AC-72, ADR 0015 regola 7) Se l'Allineatore restituisce una lista vuota (ogni turno scartato perché corto o senza testo) l'Elaborazione diventa fallita con motivo 'nessun parlato rilevato' e nessun Trascritto esiste (AllineatoreFinto che restituisce emptyList)"
       - "AC-387 (INV-7, ADR 0015 regola 9) SegmentoGrezzo sovrapposti di Voci diverse arrivano TUTTI nel Trascritto: nessuno è tagliato, unito o scartato dalla pipeline (AllineatoreFinto con due segmenti sovrapposti di voceIndice diversi → due Segmenti con gli stessi intervalli)"
-    notes: "The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here. AMENDED 2026-09-24 (ADR 0014): diarizza(campioni, elaborazione.numeroPersone). AMENDED 2026-09-24 (ADR 0015): the Allineatore may legitimately return an empty list (rules 2/7) → the pipeline fails with 'nessun parlato rilevato' (AC-386); overlapping SegmentoGrezzo of different voices pass through untouched (AC-387)."
+      - "AC-437 A first completion (no Trascritto before) publishes ElaborazioneCompletata and never TrascrittoSostituito (recording dispatcher fake)"
+      - "AC-438 Completion over an existing Trascritto, in ONE transaction (fake UnitaDiLavoro records a single inTransazione): the Elaborazione becomes completata; the Trascritto is replaced whole by the new one (Voci numbered from 1 by first appearance, AC-71; counters from the new Trascritto.crea; no Voce or Segmento of the old one left); TrascrittoSostituito(r) is published strictly BEFORE ElaborazioneCompletata(r); the earlier completata row stays completata"
+      - "AC-439 The old Trascritto stays readable until then: while the pipeline is inside Diarizzatore.diarizza (fake blocked on a latch), TrascrittoRepository.trova(r) returns the old Voci and Segmenti unchanged, and no transaction is open (AC-73)"
+      - "AC-440 A re-run ending fallita publishes no TrascrittoSostituito, the old Trascritto is unchanged (equal before and after) and the previous completata stays completata — for each of: a fault in any phase; 'nessun parlato rilevato' (AC-72/AC-386); Trascritto.crea refusing its input; RecuperaElaborazioniInterrotte → 'interrotta'"
+      - "AC-441 A synchronous subscriber that answers TrascrittoSostituito with Esito.Errore rolls back the whole completion: the old Trascritto is intact, no ElaborazioneCompletata reaches after-commit subscribers, and the compensation marks the run fallita with 'salvataggio del risultato non riuscito' (existing F2 path)"
+      - "AC-469 An in_attesa removed by rimuoviInAttesa (AnnullaElaborazione) before EseguiProssimaElaborazione is never started: the next oldest in_attesa starts instead, or, if none is left, Ok without effects (AC-68); the pipeline fakes are not invoked for the removed id"
+    notes: "The ADR 0011 NFR AC lives on benchmark-elaborazione (R17), not here. AMENDED 2026-09-24 (ADR 0014): diarizza(campioni, elaborazione.numeroPersone). AMENDED 2026-09-24 (ADR 0015): the Allineatore may legitimately return an empty list (rules 2/7) → the pipeline fails with 'nessun parlato rilevato' (AC-386); overlapping SegmentoGrezzo of different voices pass through untouched (AC-387). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): the completion transaction re-reads the existing Trascritto inside it and, if one exists, replaces it whole via TrascrittoRepository.salva and publishes TrascrittoSostituito BEFORE ElaborazioneCompletata (its synchronous Parlanti subscriber purges before COMMIT); the MOTIVO_ELABORAZIONE_GIA_COMPLETATA branch goes with the ErroreTrascrizione sweep (owned by elaborazione). The claim keeps reading the head inside its transaction (AC-314), which is what makes AnnullaElaborazione safe (AC-469)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-5, startup policy), ADR 0004/0012, architecture.md § Pipeline"
   - id: "revisione"
     type: "application-service"
@@ -871,6 +952,36 @@ blocks:
     notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 3-4, user option (c)): structural part only; print freshness moved to riallinea-impronte (after commit, abbonato-riallineamento-impronte). ADR 0012 enforced_by (no EstrattoreImpronta/DecodificatoreAudio/CampioniAudio/Impronta under politiche/) is red on the in-flight branch (c2f1b72/af0540d import them) BY DESIGN — green once this rework lands. Uses Attribuzione.trasferisci + Parlante.trasferisciImpronta (follow-ups of attribuzione/parlante) for the inheritance."
     model_hint: "deep"
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-21, INV-25, Q-2, Q-3), ADR 0012"
+  - id: "sostituzione-trascritto-policy"
+    type: "application-service"
+    context: "parlanti"
+    side: "app"
+    wave: 4
+    release: "R2"
+    module: ":parlanti:applicazione (..politiche)"
+    title: "Policy di sostituzione del Trascritto (purga dei dati Parlanti della vecchia generazione)"
+    consumes:
+      - "kernel-pl"
+      - "agg-parlante"
+      - "agg-attribuzione"
+      - "repo-parlanti"
+    depends_on: []
+    related_adrs:
+      - "0009"
+      - "0012"
+      - "0018"
+    commands:
+      - "ApplicaSostituzioneTrascritto"
+    invariants:
+      - "INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo — after a replacement NO row keyed by an old VoceRef of the Registrazione survives (defensively also a print row with no Attribuzione)"
+      - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept"
+    tests_nl:
+      - "AC-428 (INV-15) After applica(r) there are zero Attribuzioni and zero print rows keyed by any VoceRef of r, for every Parlante, attivo or eliminato, including a print row of r with no Attribuzione (defensive, via impronteDiRegistrazione); Attribuzioni and prints of any other Registrazione are untouched (fakes: 2 Registrazioni, 3 Parlanti; rows of the other Registrazione identical before and after)"
+      - "AC-429 (INV-25) after the purge: an attivo occasionale whose only Attribuzioni were in r no longer exists (rimuovi); an attivo occasionale that also has an Attribuzione in another Registrazione is kept, with that print; a ricorrente is kept with the same Nome, tipo and stato and its prints of other Registrazioni, even with zero Attribuzioni and zero prints; an eliminato tombstone is kept (still eliminato, same Nome) and its Attribuzione in r is gone"
+      - "AC-430 Idempotent and cheap: applica twice gives the same state as once; on a Registrazione with no Attribuzione and no print it returns Ok and does no salva/rimuovi (counting fakes); EstrattoreImprontaFinta and DecodificatoreAudioFinta are never invoked"
+      - "AC-431 An Esito.Errore from ParlanteRepository.salva is returned unchanged; nothing is swallowed, so the caller's transaction rolls back"
+    notes: "NEW 2026-09-24 (ADR 0018 §3, INV-25 confirmed by the user in Amendment 2026-09-24 (b) §1): ApplicaSostituzioneTrascrittoPolitica(parlanti: ParlanteRepository, attribuzioni: AttribuzioneRepository).applica(registrazioneId: RegistrazioneId): Esito<Unit>. Structural only (ADR 0012 (b) enforced_by covers ..politiche: no EstrattoreImpronta/DecodificatoreAudio/CampioniAudio/Impronta), goes through the aggregates (RC-1: AttribuzioneRepository.diRegistrazione + rimuovi, Parlante.rimuoviImpronta + ParlanteRepository.salva, ParlanteRepository.rimuovi for INV-25), no new port. Invoked by abbonato-revisione-parlanti on TrascrittoSostituito, inside the completion transaction. No mapping old→new Voci is ever attempted."
+    sources: "ADR 0018 §3 (+ Amendment 2026-09-24 (b) §1), features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy (Amendment 2026-09-24 ADR 0018), ADR 0009/0012"
   - id: "riallinea-impronte"
     type: "application-service"
     context: "parlanti"
@@ -1090,17 +1201,25 @@ blocks:
       - "agg-elaborazione"
       - "agg-trascritto"
       - "repo-trascrizione"
-    depends_on: []
+    depends_on:
+      - "persistenza-ritrascrivi"
     related_adrs:
       - "0006"
       - "0007"
       - "0014"
+      - "0018"
     tests_nl:
       - "AC-110 Round-trip di Elaborazione e di Trascritto (Voci, Segmenti, contatori)"
-      - "AC-111 Una violazione di elaborazione_aperta_unica / elaborazione_completata_unica diventa ElaborazioneGiaAperta / ElaborazioneGiaCompletata, mai un'eccezione grezza"
+      - "AC-111 (REWRITTEN 2026-09-24, ADR 0018) A violation of elaborazione_aperta_unica becomes ElaborazioneGiaAperta, never a raw exception. There is no other constraint mapping (elaborazione_completata_unica no longer exists)"
       - "AC-112 Due inserimenti concorrenti di un'Elaborazione aperta per la stessa Registrazione → uno solo riesce"
       - "AC-113 I Contratti dei due repository passano contro le implementazioni SQL"
       - "AC-378 (ex AC-NP10, repository) Round-trip di Elaborazione con numeroPersone assente (NULL) e con 4: il valore riletto è identico e un'Elaborazione ricostituita lo conserva"
+      - "AC-443 Round-trip: two completata Elaborazioni of the same Registrazione are both returned by diRegistrazione; ElaborazioneRepositoryContratto (AC-433) passes against SQL"
+      - "AC-444 TrascrittoRepositorySql.salva of a NEW Trascritto over an existing one leaves only the new state (round-trip): the old one has Voci 1..5 and counters 6/40, the new one Voci 1..3 and counters 4/20; after the save there are exactly the new Voci, Segmenti and counters, and no row of the old one"
+      - "AC-445 Deferred-FK backstop, documented by test on a real SQLite UnitaDiLavoroSql: replacement in one transaction with an attribuzione on old Voce 5 (absent from the new Trascritto) and NO purge → the COMMIT fails, and the old Trascritto and the attribuzione are intact afterwards; the same transaction with the rows of Voce 5 deleted first → commits"
+      - "AC-472 rimuoviInAttesa over eliminaInAttesa: 1 row → Ok; 0 rows → re-read by id: present → ElaborazioneGiaAvviata, absent → ElaborazioneNonTrovata; ElaborazioneRepositoryContratto (AC-463) passes against SQL"
+      - "AC-473 Claim vs cancel on a real SQLite FILE database with two UnitaDiLavoroSql threads started on a barrier, repeated 200 times: thread A claims the head (inAttesa().first() → avvia → salva in one transaction), thread B runs rimuoviInAttesa on the same id; every run ends in exactly one of (row deleted, A started nothing or the next row) or (row in_corso, B got ElaborazioneGiaAvviata) — never both, never a thrown exception (no SQLITE_BUSY)"
+    notes: "AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no completata constraint mapping any more; trova(id) over trovaPerId; rimuoviInAttesa over persistenza-ritrascrivi's eliminaInAttesa (compare-and-delete); TrascrittoRepositorySql.salva already rewrites counters and deletes/re-inserts voce/segmento (proved as a replacement by AC-444)."
     sources: "ADR 0006/0007/0014"
   - id: "repository-sql-parlanti"
     type: "adapter"
@@ -1319,17 +1438,22 @@ blocks:
     wave: 5
     release: "R2"
     module: ":parlanti:adattatori (..eventi)"
-    title: "Abbonato sincrono agli eventi di Revisione → revisione-policy"
+    title: "Abbonato sincrono agli eventi di Revisione e a TrascrittoSostituito → revisione-policy / sostituzione-trascritto-policy"
     consumes:
       - "kernel-pl"
       - "eventi-revisione"
+      - "eventi-elaborazione"
     depends_on:
       - "revisione-policy"
+      - "sostituzione-trascritto-policy"
     related_adrs:
       - "0012"
+      - "0018"
     tests_nl:
       - "AC-142 Ciascuno dei tre eventi invoca ApplicaRevisione dentro la transazione della Revisione"
       - "AC-143 Un Errore della policy annulla la Revisione (test end-to-end su databaseInMemoria)"
+      - "AC-446 TrascrittoSostituito(r) → ApplicaSostituzioneTrascrittoPolitica.applica(r) inside the publishing transaction; its Esito.Errore dooms and rolls back the transaction (test on DispatcherEventiInMemoria with a fake UnitaDiLavoro); ElaborazioneCompletata and every other event → no call"
+    notes: "AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): gains the translation TrascrittoSostituito → sostituzione-trascritto-policy (synchronous, in the completion transaction); it is already registered by the R2 composition before the first command (AC-457)."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy, ADR 0012"
   - id: "abbonato-riallineamento-impronte"
     type: "adapter"
@@ -1530,16 +1654,19 @@ blocks:
     related_adrs:
       - "0004"
       - "0014"
+      - "0018"
     view_shape:
-      stati: "List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?}>"
+      stati: "List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?, trascrittoDisponibile: Boolean, elaborazioneId: ElaborazioneId?}>"
     view_sources:
-      stati: "stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto; numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA)"
+      stati: "stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto (non-null iff trascrittoDisponibile, whatever the latest run's state); numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA); trascrittoDisponibile ← TrascrittoRepository (a Trascritto exists for the Registrazione, ADR 0018); elaborazioneId ← latest Elaborazione.id (agg-elaborazione; null for NON_AVVIATA; the id AnnullaElaborazione takes)"
     tests_nl:
       - "AC-162 La vista espone stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci e numeroPersone per Registrazione (numeroPersone = quello dell'ultima Elaborazione, null se assente o se NON_AVVIATA; serve a precompilare 'Riprova', AC-376) — REWRITTEN 2026-09-24 (ADR 0014)"
       - "AC-163 posizioneInCoda segue l'ordine FIFO delle in_attesa (1 = la prossima)"
       - "AC-164 fase è presente solo per in_corso e riflette l'ultima fase segnalata; scompare quando l'Elaborazione termina"
-      - "AC-165 numVoci è presente solo per completata"
-    notes: "AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewritten)."
+      - "AC-165 (REWORDED 2026-09-24, ADR 0018) numVoci = the Trascritto's Voci count whenever a Trascritto exists, null otherwise"
+      - "AC-447 Table test: stato, posizioneInCoda, fase, motivoFallimento and numeroPersone always come from the LATEST Elaborazione (AC-162). History (creation order) → stato / trascrittoDisponibile / numVoci: completata → COMPLETATA / true / of the Trascritto; completata, in_attesa → IN_ATTESA (posizione n) / true / old count; completata, in_corso → IN_CORSO (fase) / true / old count; completata, fallita → FALLITA (motivo) / true / old count; fallita → FALLITA / false / null; completata, completata → COMPLETATA / true / new count; none → NON_AVVIATA / false / —"
+      - "AC-474 elaborazioneId = the latest Elaborazione's id (null for NON_AVVIATA). After a cancellation: (in_attesa cancelled) → NON_AVVIATA, trascrittoDisponibile false, elaborazioneId null; (completata, in_attesa cancelled) → COMPLETATA, true, old numVoci, the completata's id; (fallita, in_attesa cancelled) → FALLITA with its motivo; the posizioneInCoda of the remaining queued rows is renumbered 1..n"
+    notes: "AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewritten). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): view_shape gains trascrittoDisponibile (the S2/S3 'Ritrascrizione …' states and the S3 read-only flag derive from the pair stato + trascrittoDisponibile; no new enum value) and elaborazioneId (for S2 'Annulla'); numVoci follows the Trascritto, not the latest state."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1, amendment 2026-09-24), architecture.md § Pipeline, ADR 0014"
   - id: "identificazione-registrazioni"
     type: "read-model"
@@ -1757,6 +1884,7 @@ blocks:
     related_adrs:
       - "0003"
       - "0010"
+      - "0018"
     consumes_rm: []
     triggers: []
     tests_nl:
@@ -1766,7 +1894,8 @@ blocks:
       - "AC-180 MessaggiErrore copre ogni errore di ogni contesto senza ramo else (un nuovo errore rompe la compilazione)"
       - "AC-181 Stati della shell: caricamento del progetto (indicatore), errore di apertura (messaggio) resi dal render-check"
       - "AC-341 (R0) La shell riceve dalla composizione l'insieme delle sezioni disponibili: se la sezione Parlanti non è fornita (release R0 e R1) la voce di navigazione 'Parlanti' NON compare e nessuna schermata Parlanti è raggiungibile; se è fornita (R2) la shell si comporta come in AC-177 — test sul presenter della shell con e senza la sezione"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the shell sections are injected by the composition root (AC-341) so R0 (avvio-r0) and R1 (avvio-composizione) ship without the Parlanti section; AC-177 describes the R2 composition (avvio-parlanti). Added while the block is in doing: the composer must hand AC-341 to the in-flight worker (or land it as a follow-up before avvio-r0)."
+      - "AC-477 MessaggiErrore: ElaborazioneGiaAvviata → 'La trascrizione è già partita: non si può più annullare'; ElaborazioneNonTrovata → 'Questa trascrizione non è più in coda'; ElaborazioneGiaCompletata has no branch (removed, AC-432) and its MessaggiErroreTest case goes with it; AC-180 still holds"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the shell sections are injected by the composition root (AC-341) so R0 (avvio-r0) and R1 (avvio-composizione) ship without the Parlanti section; AC-177 describes the R2 composition (avvio-parlanti). Added while the block is in doing: the composer must hand AC-341 to the in-flight worker (or land it as a follow-up before avvio-r0). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): MessaggiErrore follows the ErroreTrascrizione sweep (landed by the elaborazione rework, ADR 0018 Amendment (b) §4); this block owns the texts (AC-477)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md App shell, dev-architecture-app.md #presenter, R8/R15"
   - id: "abbonato-documento"
     type: "adapter"
@@ -1870,10 +1999,12 @@ blocks:
       - "avvia-elaborazione"
       - "lettore-audio"
       - "ui-fondamenta"
+      - "annulla-elaborazione"
     related_adrs:
       - "0003"
       - "0004"
       - "0014"
+      - "0018"
     consumes_rm:
       - "registrazioni-del-progetto"
       - "stati-elaborazione"
@@ -1881,12 +2012,13 @@ blocks:
       - "AggiungiRegistrazione"
       - "ModificaDataRegistrazione"
       - "AvviaElaborazione"
+      - "AnnullaElaborazione"
     tests_nl:
       - "AC-199 Vuoto: 'Nessuna registrazione. Trascina qui un file audio'"
       - "AC-200 Caricamento mostrato come indicatore"
       - "AC-201 Errore di aggiunta mostrato inline, nessuna riga nuova"
       - "AC-202 Ordinamento per data, dalla più recente"
-      - "AC-203 in_attesa → 'In coda (n)'; in_corso → 'In corso · separazione voci · 3:12' (tempo da avviataAlle, nessuna percentuale); fallita → motivo + campo 'Numero di persone' + 'Riprova' (solo su fallita; campo precompilato, AC-376); completata apre S3 — REWRITTEN 2026-09-24 (ADR 0014)"
+      - "AC-203 in_attesa → 'In coda (n)'; in_corso → 'In corso · separazione voci · 3:12' (tempo da avviataAlle, nessuna percentuale); fallita → motivo + campo 'Numero di persone' + 'Riprova' (solo su fallita senza Trascritto; campo precompilato, AC-376); una riga apre S3 sse trascrittoDisponibile (non sse COMPLETATA) — REWRITTEN 2026-09-24 (ADR 0014, ADR 0018)"
       - "AC-205 La riga si aggiorna quando cambiano stato o fase"
       - "AC-206 Modifica della data inline"
       - "AC-342 (R0 variant) Le sorgenti di Trascrizione sono OPZIONALI: il presenter costruito SENZA StatiElaborazione e AvviaElaborazione (R0, avvio-r0) mostra per ogni riga solo titolo, data (modificabile, AC-206), durata e '▶' (AC-343); nessuna colonna di stato, nessun 'Riprova'/'Trascrivi', nessun badge, e il click su una riga non apre S3 — test del presenter con le sole finte di RegistrazioniDelProgetto, AggiungiRegistrazione, ModificaDataRegistrazione e LettoreAudio; con le sorgenti fornite (R1, avvio-composizione) valgono AC-203/AC-205/AC-344"
@@ -1895,7 +2027,13 @@ blocks:
       - "AC-372 (ex AC-NP5, parte S2) Una Registrazione appena aggiunta con le sorgenti di Trascrizione fornite resta NON_AVVIATA: il presenter non invoca AvviaElaborazione dopo AggiungiRegistrazione (nessuna chiamata sulla finta) e la riga mostra 'Trascrivi' con il campo vuoto"
       - "AC-375 (ex AC-NP8) 'Trascrivi' e 'Riprova' leggono il campo 'Numero di persone' della riga: vuoto → AvviaElaborazione(id, null); 1..10 → AvviaElaborazione(id, n); altro (0, 11, testo, decimale) → messaggio inline 'Da 1 a 10, oppure lascia vuoto' e nessun comando invocato (test a tabella sul presenter)"
       - "AC-376 (ex AC-NP9) Su una riga fallita il campo è precompilato con il numeroPersone dell'Elaborazione fallita (StatiElaborazione.numeroPersone; vuoto se assente) ed è modificabile: 'Riprova' invia il valore presente nel campo al momento del click"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 ships in R0 WITHOUT Trascrizione/Parlanti features: the Trascrizione sources (stati-elaborazione, avvia-elaborazione — both already merged, compile-time only) are optional presenter inputs, absent in R0 (AC-342) and supplied by avvio-composizione in R1. The identification badge (AC-204, Parlanti read-model identificazione-registrazioni, R2) MOVED to block schermata-registrazioni-identificazione (R2) so R0 needs no R2 block. NEW SURFACE (user decision: R0 = 'import, list and play'): a per-row '▶' over the LettoreAudio port (AC-343) — not in the original ux-proposal S2, recorded as a ux amendment. Carry (stati-elaborazione code-review): NON_AVVIATA must be rendered with an action → AC-344. AMENDED 2026-09-24 (ADR 0014, user decisions 2026-09-23/24; ux-proposal.md S2 amendment 2026-09-24): no automatic start on import — every new Registrazione is NON_AVVIATA; the row carries a plain fillable 'Numero di persone' field (not a dialog) next to 'Trascrivi' (NON_AVVIATA) and 'Riprova' (fallita), validated by the presenter (AC-375), prefilled on 'Riprova' (AC-376); NO 'Trascrivi tutte' (explicit cut, user 2026-09-24: transcriptions start one row at a time). The field is state of the presenter only (not a read-model): its source for 'Riprova' is stati-elaborazione.numeroPersone."
+      - "AC-448 Row with a Trascritto and latest COMPLETATA, 'Ritrascrivi' supplied: it shows 'Completata', the 'Numero di persone' field prefilled with the latest numeroPersone (empty if absent), and 'Ritrascrivi'; a click opens S3; without the 'Ritrascrivi' source (R1) it shows neither the field nor the button"
+      - "AC-449 'Ritrascrivi' first validates the field exactly like AC-375 (invalid → inline 'Da 1 a 10, oppure lascia vuoto', no dialog, no command). If valid it shows the confirmation dialog: title 'Ritrascrivere «<titolo>»?'; text 'La trascrizione attuale resta consultabile finché la nuova non è pronta, poi viene sostituita. Le correzioni delle voci e le assegnazioni dei nomi di questa registrazione andranno perse.'; buttons 'Ritrascrivi' / 'Annulla'. 'Annulla' → no command, field unchanged. 'Ritrascrivi' → exactly ONE AvviaElaborazione(id, n) with the validated value; operazioneInCorso blocks a second submission; a command error is shown inline on the row (AC-344 behaviour)"
+      - "AC-450 During a re-run (Trascritto present, latest IN_ATTESA / IN_CORSO): the row shows 'Ritrascrizione in coda (n)' / 'Ritrascrizione in corso · <fase> · mm:ss' (same data as AC-203); no 'Ritrascrivi'/'Trascrivi'/'Riprova' and no field; 'Ritrascrizione in coda (n)' shows 'Annulla' (AC-475), 'Ritrascrizione in corso' does not; the row still opens S3 and the badge keeps the old counts. A row WITHOUT a Trascritto keeps the plain AC-203 labels"
+      - "AC-451 After a failed re-run (Trascritto present, latest FALLITA): the row shows 'Completata' plus the inline notice 'Ritrascrizione non riuscita: <motivo>', the field prefilled with the failed run's numeroPersone, and 'Ritrascrivi' (same dialog, AC-449); the row opens S3. A FALLITA row WITHOUT a Trascritto keeps 'Riprova', with no dialog (AC-203/AC-376 unchanged)"
+      - "AC-475 A row IN_ATTESA ('In coda (n)' or 'Ritrascrizione in coda (n)') shows 'Annulla' when the AnnullaElaborazione source is supplied; IN_CORSO, COMPLETATA, FALLITA and NON_AVVIATA rows never do; without the source (R0) no row does. A click sends exactly ONE AnnullaElaborazione(elaborazioneId of the row), with no dialog; operazioneInCorso blocks a second click"
+      - "AC-476 On Ok the row reloads to its previous state (NON_AVVIATA 'Trascrivi' with an empty field; 'Completata' + prefilled field + 'Ritrascrivi'; FALLITA 'Riprova' prefilled). On ElaborazioneGiaAvviata the row shows inline 'La trascrizione è già partita: non si può più annullare' and reloads (now 'In corso'); on ElaborazioneNonTrovata it just reloads"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): S2 ships in R0 WITHOUT Trascrizione/Parlanti features: the Trascrizione sources (stati-elaborazione, avvia-elaborazione — both already merged, compile-time only) are optional presenter inputs, absent in R0 (AC-342) and supplied by avvio-composizione in R1. The identification badge (AC-204, Parlanti read-model identificazione-registrazioni, R2) MOVED to block schermata-registrazioni-identificazione (R2) so R0 needs no R2 block. NEW SURFACE (user decision: R0 = 'import, list and play'): a per-row '▶' over the LettoreAudio port (AC-343) — not in the original ux-proposal S2, recorded as a ux amendment. Carry (stati-elaborazione code-review): NON_AVVIATA must be rendered with an action → AC-344. AMENDED 2026-09-24 (ADR 0014, user decisions 2026-09-23/24; ux-proposal.md S2 amendment 2026-09-24): no automatic start on import — every new Registrazione is NON_AVVIATA; the row carries a plain fillable 'Numero di persone' field (not a dialog) next to 'Trascrivi' (NON_AVVIATA) and 'Riprova' (fallita), validated by the presenter (AC-375), prefilled on 'Riprova' (AC-376); NO 'Trascrivi tutte' (explicit cut, user 2026-09-24: transcriptions start one row at a time). The field is state of the presenter only (not a read-model): its source for 'Riprova' is stati-elaborazione.numeroPersone. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): AzioniRegistrazioni + ritrascrivi / confermaRitrascrivi / annullaRitrascrivi (dialog) and + annullaElaborazione (queued row); RigaRegistrazione + trascrittoDisponibile, confermaRitrascrivi: Boolean, ritrascrizioneFallita: String?, annullabile. The 'Ritrascrivi' action and the AnnullaElaborazione source are OPTIONAL presenter inputs like AC-342: 'Ritrascrivi' is null in R0/R1 and supplied by avvio-parlanti (R2); AnnullaElaborazione is null in R0 and supplied by avvio-composizione (R1) and avvio-parlanti (R2). The row opens S3 iff trascrittoDisponibile. Render-check: the dialog, the three new row states and the 'Annulla' row, no overflow at the minimum window width (run-app-smoke)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1, amendment 2026-09-24), ADR 0014"
   - id: "schermata-registrazione"
     type: "ui"
@@ -1913,12 +2051,15 @@ blocks:
       - "trascritto-view"
       - "documento"
       - "ui-fondamenta"
+      - "stati-elaborazione"
     related_adrs:
       - "0003"
       - "0005"
+      - "0018"
     consumes_rm:
       - "trascritto-view"
       - "documento"
+      - "stati-elaborazione"
     triggers: []
     tests_nl:
       - "AC-207 Caricamento: scheletro del trascritto"
@@ -1926,7 +2067,9 @@ blocks:
       - "AC-217 (REWRITTEN 2026-09-24, metà R1; la metà estratti delle Voci è AC-403) Audio sorgente mancante (LettoreAudio.disponibile = false) → barra audio disabilitata con messaggio, il click su un Segmento non riproduce, il trascritto resta leggibile"
       - "AC-218 'Apri documento' e 'Mostra nella cartella' usano il percorso del Documento"
       - "AC-402 (R1, specchio di AC-342/AC-345) Le sorgenti Parlanti del presenter di S3 (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio) e i comandi ConfermaAttribuzione, SaltaVoce, UnisciVoci, DividiVoce e RiassegnaSegmento sono OPZIONALI: il presenter costruito senza di essi (R1, avvio-composizione) mostra i Segmenti in ordine di tempo attraverso le Voci, ciascuno con il pallino colorato e l'etichetta 'Voce n' di trascritto-view, e '▶'/click da ogni Segmento; nessun pannello Voci, card, banner di unione, 'conferma'/'salta'/'cambia'/'Unisci con', selezione multipla né barra di selezione, nessun '▶ estratto'; mai un conteggio provvisorio né una galleria vuota; nessuna azione della schermata raggiunge il Mutex nativo — test del presenter con le sole finte di TrascrittoView, Documento, LettoreAudio e ApriEsterno"
-    notes: "Declared: Documento content is never shown in-app (ux decision). AMENDED 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A, READ-ONLY): R1 S3 only reads — text by Voce with 'Voce n' labels, play from each Segmento, open/show the Documento. NO gated_by: the attesa-mutex-estrazione gate moved to R2 with the Parlanti features. EXPLICIT CUT (rule 9, ux-proposal amendment 2026-09-24 S3): the Voci panel (AC-212/213/214/216/219/318/319, AC-215, excerpts half of AC-217 = AC-403) AND the Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con' — AC-209/210/211, Revisione error = AC-404) moved to the R2 block schermata-registrazione-identificazione (S3 panel; NOT schermata-registrazioni-identificazione, which is the S2 badge). The already-built revisione domain block stays in R1 with no UI. 'Voce n' labels only (no Nome) — the Nome/colour join from identificazione-voci is R2."
+      - "AC-452 (Amendment 2026-09-24 (b): S3 read-only) While the latest Elaborazione of the shown Registrazione is in_attesa / in_corso and a Trascritto exists, S3 is READ-ONLY and shows the banner 'Ritrascrizione in corso: modifiche disabilitate fino al termine' with the second line 'Questa trascrizione sarà sostituita quando la nuova sarà pronta.'; the presenter exposes this read-only flag for the R2 panel; the transcript stays readable and playable ('▶'/click on a Segmento, 'Apri documento', 'Mostra nella cartella'); banner and flag go away on the next Cambiamento that shows another state (completata, fallita, or the run cancelled). Without the optional stati source there is no banner (R1 test: never read-only)"
+      - "AC-453 On the Cambiamento after a replacement S3 reloads: the new Segmenti and 'Voce n' labels are shown, any selection is cleared, playback of an old Segmento stops (no stale Segmento id is kept) — presenter test with a fake view source swapped between two generations"
+    notes: "Declared: Documento content is never shown in-app (ux decision). AMENDED 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A, READ-ONLY): R1 S3 only reads — text by Voce with 'Voce n' labels, play from each Segmento, open/show the Documento. NO gated_by: the attesa-mutex-estrazione gate moved to R2 with the Parlanti features. EXPLICIT CUT (rule 9, ux-proposal amendment 2026-09-24 S3): the Voci panel (AC-212/213/214/216/219/318/319, AC-215, excerpts half of AC-217 = AC-403) AND the Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con' — AC-209/210/211, Revisione error = AC-404) moved to the R2 block schermata-registrazione-identificazione (S3 panel; NOT schermata-registrazioni-identificazione, which is the S2 badge). The already-built revisione domain block stays in R1 with no UI. 'Voce n' labels only (no Nome) — the Nome/colour join from identificazione-voci is R2. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): + the OPTIONAL stati-elaborazione source (state of the shown Registrazione) → the read-only flag + banner (AC-452) and the reload on replacement (AC-453). It adds no command: in R1 S3 has none, and in R2 the panel block disables its own (AC-454)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (User decisions 2026-09-24)"
   - id: "schermata-parlanti"
     type: "ui"
@@ -2040,6 +2183,7 @@ blocks:
       - "0005"
       - "0012"
       - "0017"
+      - "0018"
     consumes_rm:
       - "identificazione-voci"
       - "proposta"
@@ -2076,7 +2220,10 @@ blocks:
       - "AC-415 Lo stato in corso viene dalla sorgente per progetto fornita da avvio-parlanti (per VoceRef): un presenter ricreato mentre un comando è ancora in corso (l'utente è uscito da S3 ed è tornato) mostra di nuovo quella card in corso, o in attesa oltre la soglia"
       - "AC-416 Una Proposta non ancora arrivata dopo SOGLIA_ATTESA_VISIBILE_MS fa mostrare alla card 'Proposta in attesa dell'elaborazione…' al posto dei Candidati, senza 'Annulla'; 'altri ▾', 'nuovo…' e 'salta' restano abilitati durante l'attesa"
       - "AC-417 Il presenter non esegue mai un comando né una Proposta sul thread UI: il comando finto registra il suo thread e verifica che non sia il dispatcher UI né quello main del test; è eseguito tramite il dispatcher di background iniettato"
-    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; the chosen wait behaviour is AC-411..AC-417 (per-card pending state, 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS = 2000 ms, defined once in the S3 presenter). OWNER (rule 10): this block declares, in snastro.ui.registrazione, the per-VoceRef pending-state source with annulla(voceRef) that the presenter reads; avvio-parlanti implements it in a per-project scope (AC-418). 'Annulla' cancels a pending command, it is not a domain command (no new triggers entry)."
+      - "AC-454 (Amendment 2026-09-24 (b): S3 read-only, user) While S3 is read-only (AC-452) the banner adds 'Le correzioni e i nomi assegnati andranno persi.' and every editing action of the panel is disabled: 'Conferma', 'altri ▾', 'nuovo…', 'cambia', 'salta', 'Unisci con ▾', the merge banner's action, the selection toolbar's 'Dividi voce' and 'Riassegna a ▾'; no command is invoked (the command fakes record zero calls) and no Proposta job is started; '▶ estratto' and Segmento playback still work — presenter test with the stati source at IN_ATTESA and at IN_CORSO"
+      - "AC-455 A Conferma or Salta already pending in the per-project scope (AC-418) from BEFORE the re-run was queued, resolving after the replacement, shows AC-318 VoceCambiata or the Voce-not-found message in plain words, never a crash; after the replacement the panel shows the new Voci, all 'da identificare', and is editable again"
+      - "AC-461 When the read-only state of AC-452 ends because the re-run FAILED or was CANCELLED (Cambiamento → latest FALLITA or COMPLETATA, Trascritto unchanged) the banner goes away and every action of AC-454 is enabled again, on the same Voci and the same attributed Nomi (nothing lost); the Proposta job starts again — presenter test: stati source IN_CORSO → FALLITA and IN_ATTESA → COMPLETATA"
+    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; the chosen wait behaviour is AC-411..AC-417 (per-card pending state, 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS = 2000 ms, defined once in the S3 presenter). OWNER (rule 10): this block declares, in snastro.ui.registrazione, the per-VoceRef pending-state source with annulla(voceRef) that the presenter reads; avvio-parlanti implements it in a per-project scope (AC-418). 'Annulla' cancels a pending command, it is not a domain command (no new triggers entry). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): S3 is READ-ONLY while a re-run is queued or running (user 2026-09-24, replaces ADR 0018 §4 'fully usable'): the panel reads the read-only flag of the S3 presenter (schermata-registrazione, AC-452) and disables every command it triggers; this closes ADR 0018's accepted residual race for S3. No Proposta job while read-only (it would only wait on the Mutex held by the pipeline, ADR 0017)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (Part 3 (b), User decisions 2026-09-24)"
   - id: "avvio-coda-elaborazioni"
     type: "adapter"
@@ -2184,6 +2331,7 @@ blocks:
       - "scrittore-documento-md"
       - "abbonato-documento"
       - "modelli-provisioning"
+      - "annulla-elaborazione"
     related_adrs:
       - "0004"
       - "0005"
@@ -2192,16 +2340,19 @@ blocks:
       - "0010"
       - "0012"
       - "0014"
+      - "0018"
     tests_nl:
       - "AC-351 --smoke (esteso) salva anche gli screenshot di S3 (progetto fixture con un Trascritto completato, etichette 'Voce n') e di S5 in avvio/build/smoke/, uscendo con 0; S1/S2 restano come in AC-237"
       - "AC-329 ServizioModelli (porta di :ui) è implementato in :avvio sopra ProvisioningModelli: ogni variante di snastro.modelli.ErroreModelli è mappata 1:1 nella variante omonima di ErroreServizioModelli (HashNonValido(modelloId), ArchivioNonValido(modelloId), ReteAssente, ScritturaFallita(motivo), DownloadFallito(motivo)) — test a tabella sul mapper; :ui non importa mai snastro.modelli (verificaDipendenzeModuli)"
       - "AC-352 Un'eccezione che sfugge a ProvisioningModelli (IOException o InvalidPathException da scarica() o pronti()) è catturata in :avvio: scarica → StatoModelli.Errore(ScritturaFallita(motivo)), mai un crash né uno stato bloccato in InDownload, e 'Riprova' la ripete; pronti() che lancia all'avvio → Mancanti (l'app parte comunque) — test con un ProvisioningModelli finto che lancia"
       - "AC-353 Una sola istanza di FasiInCorso per progetto aperto è passata sia alla pipeline (SegnalatoreFase di EseguiProssimaElaborazione) sia a StatiElaborazione: una fase segnalata dalla pipeline è visibile nella vista di S2 (test end-to-end con le Finte ML)"
-      - "AC-354 ElaborazioneAvviata/Completata/Fallita, VociUnite, VoceDivisa, SegmentoRiassegnato e OGNI cambio di fase di FasiInCorso producono un Cambiamento su AggiornamentiVista per la loro Registrazione (così S2 aggiorna stato e fase, AC-205, senza polling)"
+      - "AC-354 ElaborazioneAvviata/Completata/Fallita/Annullata, VociUnite, VoceDivisa, SegmentoRiassegnato e OGNI cambio di fase di FasiInCorso producono un Cambiamento su AggiornamentiVista per la loro Registrazione (così S2 aggiorna stato e fase, AC-205, senza polling) — ElaborazioneAnnullata added 2026-09-24 (ADR 0018 Amendment (b))"
       - "AC-355 La composizione R1 fornisce a S2 le sorgenti di Trascrizione (AC-342 → colonna di stato, campo 'Numero di persone' + 'Trascrivi'/'Riprova', apertura di S3 su completata) e rende raggiungibile S5; NESSUN abbonato sincrono è registrato su RegistrazioneAggiunta (nessun avvio automatico, ADR 0014) e abbonato-documento è registrato come AbbonatoDopoCommit; ogni servizio di comando della Trascrizione usa eventi.unitaDiLavoro (come AC-346); la sezione Parlanti resta assente (AC-341) — REWRITTEN 2026-09-24 (ADR 0014)"
       - "AC-371 (ex AC-NP5, e2e) In R1 AggiungiRegistrazione non crea alcuna Elaborazione: dopo un'importazione nella composizione R1 la tabella elaborazione non ha righe per quella Registrazione, la vista StatiElaborazione la dà NON_AVVIATA e S2 mostra 'Trascrivi' (test end-to-end con la composizione R1 e le Finte ML)"
       - "AC-356 Senza Parlanti (R1) il Documento è generato con un LettoreNomi vuoto (nomi = mappa vuota, registrazioniCon = lista vuota): ogni Voce è resa 'Voce n' (INV-24) e una Revisione committata rigenera il Documento; nessuna classe di :parlanti è istanziata dalla composizione R1"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): this block is now the R1 (Trascrizione) half of the former monolithic composition root; the R0 half is avvio-r0 (SessioneProgetto, folder naming AC-239/263/264/265, registry AC-240/347/348, LettoreAudio AC-241, AggiornamentiVista AC-242, smoke S1/S2 AC-237, 'progetto già aperto' AC-238) and the R2 half is avvio-parlanti (AC-315/316/317). It EXTENDS avvio-r0's graph (never re-creates SessioneProgetto, the dispatcher or LettoreAudio): SQL repositories of Trascrizione, the serial queue (avvio-coda-elaborazioni), pipeline adapters with config-driven selection (Finte until the gated ML blocks land — diarizzatore/riconoscitore/vad wire themselves here), Revisione commands, Documento (rigenerazione after commit, empty LettoreNomi AC-356), ServizioModelli over :modelli (AC-329, exceptions caught AC-352), S3/S5. Carry-overs owned here: eventi.unitaDiLavoro wiring for every Trascrizione command (revisione code-review); FasiInCorso ONE shared instance for pipeline + read-model (stati-elaborazione, AC-353) and phase changes emitting a Cambiamento (stati-elaborazione code-review, AC-354); ServizioModelli must catch the IOExceptions escaping scarica()/pronti() (modelli-provisioning cycle-1 code-review, AC-352); RecuperaElaborazioniInterrotte strictly before the dispatcher (owned by avvio-coda-elaborazioni AC-233). AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): abbonato-registrazione-aggiunta is REMOVED — the composition registers no sync subscriber on RegistrazioneAggiunta; AvviaElaborazione is reached only from S2 ('Trascrivi'/'Riprova' with the optional Numero di persone). tec-modelli percorso(id) is a DIRECTORY (ADR 0008 Amendment (c)); tec-modelli-ui error type is the UI-side ErroreServizioModelli (AC-329). AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): S3 is built READ-ONLY in R1 (variant A) — the composition supplies it trascritto-view, documento, LettoreAudio and ApriEsterno only (no Parlanti sources, no Revisione commands: explicit cut, the Revisione UI arrives in R2 with schermata-registrazione-identificazione). The Revisione services and their events stay wired (AC-354/AC-356 are proved end-to-end by tests, not from the UI). avvio-coda-elaborazioni is no longer gated (Mutex gate scoped to R2), so this block is buildable once its depends_on are merged. The real ML adapters (ml-sherpa-motore wave 11, the three sherpa adapters wave 12) are built after it and wire themselves here; until then the pipeline runs on the Finte."
+      - "AC-460 The R1 composition does NOT supply 'Ritrascrivi' to S2: a completata row shows no field and no button (AC-448, second part); it registers no Parlanti subscriber (unchanged)"
+      - "AC-478 The R1 composition supplies AnnullaElaborazione to the S2 presenter (over eventi.unitaDiLavoro), and AggiornamentiVistaTrascrizione maps ElaborazioneAnnullata after commit to ONE Cambiamento(registrazioneId). E2E on databaseInMemoria with fake ML ports and a held pipeline: A is in_corso, B and C are queued; cancel B → B has no elaborazione row, S2 shows B 'Trascrivi' (NON_AVVIATA) and C 'In coda (1)'; when A ends the queue runs C, and the fake pipeline is never invoked for B"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): this block is now the R1 (Trascrizione) half of the former monolithic composition root; the R0 half is avvio-r0 (SessioneProgetto, folder naming AC-239/263/264/265, registry AC-240/347/348, LettoreAudio AC-241, AggiornamentiVista AC-242, smoke S1/S2 AC-237, 'progetto già aperto' AC-238) and the R2 half is avvio-parlanti (AC-315/316/317). It EXTENDS avvio-r0's graph (never re-creates SessioneProgetto, the dispatcher or LettoreAudio): SQL repositories of Trascrizione, the serial queue (avvio-coda-elaborazioni), pipeline adapters with config-driven selection (Finte until the gated ML blocks land — diarizzatore/riconoscitore/vad wire themselves here), Revisione commands, Documento (rigenerazione after commit, empty LettoreNomi AC-356), ServizioModelli over :modelli (AC-329, exceptions caught AC-352), S3/S5. Carry-overs owned here: eventi.unitaDiLavoro wiring for every Trascrizione command (revisione code-review); FasiInCorso ONE shared instance for pipeline + read-model (stati-elaborazione, AC-353) and phase changes emitting a Cambiamento (stati-elaborazione code-review, AC-354); ServizioModelli must catch the IOExceptions escaping scarica()/pronti() (modelli-provisioning cycle-1 code-review, AC-352); RecuperaElaborazioniInterrotte strictly before the dispatcher (owned by avvio-coda-elaborazioni AC-233). AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): abbonato-registrazione-aggiunta is REMOVED — the composition registers no sync subscriber on RegistrazioneAggiunta; AvviaElaborazione is reached only from S2 ('Trascrivi'/'Riprova' with the optional Numero di persone). tec-modelli percorso(id) is a DIRECTORY (ADR 0008 Amendment (c)); tec-modelli-ui error type is the UI-side ErroreServizioModelli (AC-329). AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): S3 is built READ-ONLY in R1 (variant A) — the composition supplies it trascritto-view, documento, LettoreAudio and ApriEsterno only (no Parlanti sources, no Revisione commands: explicit cut, the Revisione UI arrives in R2 with schermata-registrazione-identificazione). The Revisione services and their events stay wired (AC-354/AC-356 are proved end-to-end by tests, not from the UI). avvio-coda-elaborazioni is no longer gated (Mutex gate scoped to R2), so this block is buildable once its depends_on are merged. The real ML adapters (ml-sherpa-motore wave 11, the three sherpa adapters wave 12) are built after it and wire themselves here; until then the pipeline runs on the Finte. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): wires AnnullaElaborazioneServizio into S2 (R1: first transcriptions can be cancelled while queued) and maps ElaborazioneAnnullata → Cambiamento; does NOT supply 'Ritrascrivi' (R2 only, AC-460). CodaElaborazioni needs no change (no signal on cancellation)."
     sources: "architecture.md (:avvio), ADR 0004/0008/0010/0012, release pivot 2026-09-23 (R1 Trascrizione)"
   - id: "avvio-parlanti"
     type: "adapter"
@@ -2216,6 +2367,7 @@ blocks:
       - "eventi-revisione"
       - "eventi-parlanti"
       - "tec-shell-ui"
+      - "eventi-elaborazione"
     depends_on:
       - "avvio-composizione"
       - "schermata-parlanti"
@@ -2230,11 +2382,13 @@ blocks:
       - "abbonato-revisione-parlanti"
       - "abbonato-riallineamento-impronte"
       - "riallinea-impronte"
+      - "sostituzione-trascritto-policy"
     related_adrs:
       - "0004"
       - "0009"
       - "0012"
       - "0017"
+      - "0018"
     gated_by:
       - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
     tests_nl:
@@ -2249,7 +2403,12 @@ blocks:
       - "AC-419 annulla(voceRef) durante l'attesa del Mutex → InterruptedException/cancellazione, nulla scritto (nessuna Attribuzione, nessuna riga d'impronta, nessun Parlante, nessun evento) e nessun errore mostrato come fallimento — test: conteggi delle righe invariati"
       - "AC-420 Chiudere il progetto annulla ogni comando Parlanti e ogni job di Proposta in corso; la chiusura (ferma) li attende, con un limite come CollaboratoriR1.ferma, prima della chiusura del database; nulla è scritto dopo chiudi — test: una finta trattenuta + chiudi, nessun accesso al DB dopo la chiusura"
       - "AC-421 Le Proposte della Registrazione aperta sono calcolate una Voce alla volta in UN solo job di background legato alla schermata; uscire da S3 o cambiare Registrazione lo annulla; mai N attese concorrenti sul Mutex per un pannello"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job)."
+      - "AC-456 TrascrittoSostituito after commit → ProposteSerializzate.invalidaTutte() and ONE Cambiamento(null); never delivered on rollback"
+      - "AC-457 The R2 composition supplies 'Ritrascrivi' to the S2 presenter and registers AbbonatoRevisioneParlanti (with the sostituzione policy) BEFORE the first command — test: the subscriber is registered before CodaElaborazioni starts"
+      - "AC-458 E2E on databaseInMemoria with fake ML ports. Setup: Registrazione completata; Voce 1 → ricorrente 'Mario' with a print, Mario also attributed in another Registrazione; Voce 2 → occasionale 'Ospite del 12/09/2026' with a print, nowhere else. Action: Ritrascrivi with 2 persons, the fake pipeline completes with 3 Voci. Expected: zero attribuzione and zero impronta_vocale rows for that Registrazione; Mario exists with his other Attribuzione and print; the Ospite no longer exists; trascritto-view shows the 3 new Voci; the Documento file is rewritten with only 'Voce 1..3' labels and the new texts; the S2 row is 'Completata' with the badge '3 voci · 3 da identificare'"
+      - "AC-459 E2E failure, same setup: the fake pipeline fails in diarization; the attribuzione and impronta_vocale rows, the Trascritto, the Documento file bytes and the Galleria are unchanged; S2 shows 'Ritrascrizione non riuscita: errore nella separazione delle voci'"
+      - "AC-479 E2E, AC-458's setup: 'Ritrascrivi', then cancel while it is queued → the attribuzione/impronta_vocale rows, the Trascritto, the Documento file bytes and the Galleria are unchanged; no TrascrittoSostituito is published; S2 shows 'Completata' + 'Ritrascrivi'; S3 is editable again (AC-461)"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): AggiornamentiVistaParlanti handles TrascrittoSostituito after commit (invalidate every cached Proposta, Cambiamento(null)); supplies 'Ritrascrivi' to S2 (R2 only) and keeps AnnullaElaborazione supplied; the sync subscriber with the sostituzione policy is registered before the first command, so 'Ritrascrivi' is offered only by a composition that purges."
     sources: "architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti)"
   - id: "ml-sherpa-motore"
     type: "adapter"
@@ -2559,6 +2718,9 @@ boundaries:
       - "avvio-parlanti"
       - "schermata-registrazioni-identificazione"
       - "schermata-registrazione-identificazione"
+      - "persistenza-ritrascrivi"
+      - "annulla-elaborazione"
+      - "sostituzione-trascritto-policy"
     projection: "in-process"
     pinned_types:
       ProgettoId: "@JvmInline value class(valore: String) — UUID"
@@ -2584,8 +2746,8 @@ boundaries:
     keys:
       ProgettoId: "minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder"
       RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
-      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)"
-      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever"
+      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
+      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)"
       VoceRef: "composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts"
       ParlanteId: "minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)"
       RiferimentoAudio: "minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable"
@@ -2640,6 +2802,7 @@ boundaries:
       - "esegui-elaborazione"
       - "repository-sql-trascrizione"
       - "stati-elaborazione"
+      - "annulla-elaborazione"
     projection: "in-process"
     pinned_types:
       "Elaborazione.accoda": "(id: ElaborazioneId, registrazioneId, creataAlle: Instant, numeroPersone: NumeroPersone?): Creato<Elaborazione, ElaborazioneAccodata> — numeroPersone fixed at creation (may be absent), immutable (ADR 0014)"
@@ -2648,7 +2811,9 @@ boundaries:
       "Elaborazione.avvia": "(alle: Instant): Esito<ElaborazioneAvviata>"
       "Elaborazione.completa": "(): Esito<ElaborazioneCompletata>"
       "Elaborazione.fallisci": "(motivo: String): Esito<ElaborazioneFallita>"
-      "named predicates": "aperta (in_attesa|in_corso), completata, fallita, terminale — never compare StatoElaborazione outside the aggregate"
+      "Elaborazione.annulla": "(): Esito<ElaborazioneAnnullata> — Ok ONLY from in_attesa (domain event ElaborazioneAnnullata(id, registrazioneId), state unchanged: a check, not a transition — the repository then deletes the never-started row, ADR 0018 Amendment (b)); any other state → Errore(ElaborazioneGiaAvviata(id))"
+      "named predicates": "aperta (in_attesa|in_corso), inAttesa, completata, fallita, terminale — never compare StatoElaborazione outside the aggregate"
+      "errors (ErroreTrascrizione, ErroriTrascrizione.kt)": "ElaborazioneGiaAperta(registrazioneId); ElaborazioneGiaAvviata(elaborazioneId: ElaborazioneId); ElaborazioneNonTrovata(elaborazioneId: ElaborazioneId); NumeroPersoneFuoriIntervallo(valore) — ElaborazioneGiaCompletata is DELETED (ADR 0018)"
     keys:
       ElaborazioneId: "minted by avvia-elaborazione via GeneratoreId (UUID v4) — internal, never crosses a context boundary"
     contract_test: "invariant-test"
@@ -2657,6 +2822,7 @@ boundaries:
       - "0004"
       - "0007"
       - "0014"
+      - "0018"
     gates:
       - "! grep -rnE --include='*.kt' --exclude-dir=build '\\b(elaborazioneQueries)\\b' . | grep -vE '^\\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
       - "! grep -rnE --include='*.kt' --exclude-dir=build 'StatoElaborazione\\.' . | grep -E '^\\./[^:]*/src/main/' | grep -vE '^\\./trascrizione/(dominio/|adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q ."
@@ -2678,8 +2844,8 @@ boundaries:
       "Trascritto.riassegna": "(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce"
       "read accessors": "voci: List<Voce>, segmenti: List<Segmento> (read-only copies)"
     keys:
-      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)"
-      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever"
+      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
+      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)"
     contract_test: "invariant-test"
     related_adrs:
       - "0003"
@@ -2701,6 +2867,7 @@ boundaries:
       - "identificazione-voci"
       - "nomi-delle-voci"
       - "proposta-unione"
+      - "sostituzione-trascritto-policy"
     projection: "in-process"
     pinned_types:
       "Parlante.crea": "(id, progettoId, nome: Nome, tipo: TipoParlante): Creato<Parlante, ParlanteCreato>"
@@ -2738,6 +2905,7 @@ boundaries:
       - "proposta-unione"
       - "nomi-delle-voci"
       - "parlanti-del-progetto"
+      - "sostituzione-trascritto-policy"
     projection: "in-process"
     pinned_types:
       "Attribuzione.conferma": "(voceRef, progettoId, parlanteId): Creato<Attribuzione, AttribuzioneConfermata>"
@@ -2803,15 +2971,17 @@ boundaries:
       - "trascritto-view"
       - "stati-elaborazione"
       - "repository-sql-trascrizione"
+      - "annulla-elaborazione"
     projection: "in-process"
     pinned_types:
-      ElaborazioneRepository: "interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta | ElaborazioneGiaCompletata) from the ADR 0007 indexes */ }"
-      TrascrittoRepository: "interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento"
+      ElaborazioneRepository: "interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }"
+      TrascrittoRepository: "interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)"
     keys: {}
     contract_test: "consumer-driven"
     related_adrs:
       - "0006"
       - "0007"
+      - "0018"
   - id: "repo-parlanti"
     owner: "porte-parlanti"
     consumers:
@@ -2828,6 +2998,7 @@ boundaries:
       - "identificazione-registrazioni"
       - "nomi-delle-voci"
       - "repository-sql-parlanti"
+      - "sostituzione-trascritto-policy"
     projection: "in-process"
     pinned_types:
       ParlanteRepository: "interface { trova(id: ParlanteId): Parlante?; delProgetto(id: ProgettoId): List<Parlante>; nomeAttivoInUso(progettoId, nome: Nome, escluso: ParlanteId?): Boolean; salva(p: Parlante): Esito<Unit> /* Errore(NomeGiaInUso) from the index */; rimuovi(id: ParlanteId) /* ONLY for INV-25 occasionale cessation */; impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>; impronteDelProgetto(id: ProgettoId): List<RigaImpronta>; aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean /* compare-and-set UPDATE of the ONE row (attesa.parlanteId, attesa.voceRef) only if it still exists with sorgente == attesa.sorgente AND modello == attesa.modello; true iff 1 row updated; NEVER inserts (ADR 0009/0012 Amendment (b): no resurrection) */ }"
@@ -2902,7 +3073,7 @@ boundaries:
       VoceVista: "data class(voceRef: VoceRef, intervalli: List<IntervalloMs>) — intervals of the Voce's current Segmenti, ordered by inizioMs (tie: segmentoId); NEVER text"
     keys:
       VoceRef: "composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts"
-      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)"
+      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
     contract_test: "consumer-driven"
     related_adrs:
       - "0002"
@@ -2922,8 +3093,8 @@ boundaries:
       SegmentoVista: "data class(segmentoId: SegmentoId, voceId: VoceId, intervallo: IntervalloMs, testo: String) — list ordered by inizioMs then segmentoId ACROSS Voci; testo verbatim"
     keys:
       RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
-      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)"
-      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever"
+      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
+      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)"
     contract_test: "consumer-driven"
     related_adrs:
       - "0002"
@@ -2971,22 +3142,28 @@ boundaries:
     delivery: "All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code)"
   - id: "eventi-elaborazione"
     owner: "eventi-pubblicati"
-    supplier: "esegui-elaborazione"
+    supplier: "esegui-elaborazione (Avviata/Completata/Fallita/TrascrittoSostituito), annulla-elaborazione (ElaborazioneAnnullata)"
     consumers:
       - "esegui-elaborazione"
       - "abbonato-documento"
       - "avvio-composizione"
+      - "annulla-elaborazione"
+      - "abbonato-revisione-parlanti"
+      - "avvio-parlanti"
     projection: "in-process"
     pinned_types:
       ElaborazioneAvviata: "data class(registrazioneId: RegistrazioneId, avviataAlle: Instant) : EventoPubblicato"
       ElaborazioneCompletata: "data class(registrazioneId: RegistrazioneId) : EventoPubblicato"
       ElaborazioneFallita: "data class(registrazioneId: RegistrazioneId, motivo: String) : EventoPubblicato — motivo in plain Italian"
+      TrascrittoSostituito: "data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published ONLY in a completion transaction that replaced an existing Trascritto, BEFORE ElaborazioneCompletata (ADR 0018)"
+      ElaborazioneAnnullata: "data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published by AnnullaElaborazione in the cancelling transaction (a never-started in_attesa row deleted), AFTER COMMIT only; no synchronous subscriber (ADR 0018 Amendment (b))"
     keys:
       RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
     contract_test: "consumer-driven"
     related_adrs:
       - "0012"
-    delivery: "in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard"
+      - "0018"
+    delivery: "in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit"
   - id: "eventi-revisione"
     owner: "eventi-pubblicati"
     supplier: "revisione"
@@ -3005,8 +3182,8 @@ boundaries:
       SegmentoRiassegnato: "data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato"
     keys:
       RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
-      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)"
-      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever"
+      VoceId: "minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)"
+      SegmentoId: "minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)"
     contract_test: "consumer-driven"
     related_adrs:
       - "0012"
@@ -3329,8 +3506,8 @@ build_order:
   - [scaffold-app]  # wave 0
   - [kernel]  # wave 1
   - [persistenza-schema, eventi-pubblicati, progetto, registrazione, elaborazione, trascritto, parlante, attribuzione, sorgente-impronta]  # wave 2
-  - [porte-progetto, porte-trascrizione, porte-parlanti, porte-documento, porta-registrazione-trascrizione, porta-registrazione-parlanti, porta-lettore-voci, porta-lettore-trascritto, porta-lettore-nomi]  # wave 3
-  - [crea-progetto, servizi-registrazione, avvia-elaborazione, esegui-elaborazione, revisione, conferma-attribuzione, salta-voce, gestione-parlante, revisione-policy, riallinea-impronte, catalogo-registrazioni, api-trascritto, nomi-delle-voci, documento, estratto-audio, repository-sql-progetto, repository-sql-trascrizione, repository-sql-parlanti, registro-progetti-file, audio-ffmpeg, confronto-impronte, modelli-provisioning]  # wave 4
+  - [porte-progetto, porte-trascrizione, porte-parlanti, porte-documento, porta-registrazione-trascrizione, porta-registrazione-parlanti, porta-lettore-voci, porta-lettore-trascritto, porta-lettore-nomi, persistenza-ritrascrivi]  # wave 3
+  - [crea-progetto, servizi-registrazione, avvia-elaborazione, annulla-elaborazione, esegui-elaborazione, revisione, conferma-attribuzione, salta-voce, gestione-parlante, revisione-policy, sostituzione-trascritto-policy, riallinea-impronte, catalogo-registrazioni, api-trascritto, nomi-delle-voci, documento, estratto-audio, repository-sql-progetto, repository-sql-trascrizione, repository-sql-parlanti, registro-progetti-file, audio-ffmpeg, confronto-impronte, modelli-provisioning]  # wave 4
   - [registrazione-da-progetto-tr, registrazione-da-progetto-pa, lettore-voci-da-trascrizione, lettore-trascritto-da-trascrizione, lettore-nomi-da-parlanti, abbonato-revisione-parlanti, abbonato-riallineamento-impronte, scrittore-documento-md, audio-progetto, decodifica-trascrizione, decodifica-parlanti, rigenerazione-documento, elenco-progetti, registrazioni-del-progetto, stati-elaborazione, identificazione-registrazioni, trascritto-view, identificazione-voci, proposta, proposta-unione, parlanti-attivi, parlanti-del-progetto]  # wave 5
   - [ui-fondamenta, abbonato-documento]  # wave 6
   - [lettore-audio]  # wave 7
@@ -3346,5 +3523,5 @@ release_plan:
   R0: {name: "Archivio", scope: "native window; create/open a project (folder naming AC-263/264); import recordings (audio copied, titolo unique); list them (S2) and play them; real SQLite + real audio; NO ML, NO Trascrizione, NO Parlanti", composition_root: "avvio-r0"}
   # AMENDED 2026-09-24 (user decisions, delta 2026-09-24-packaging): R1 spike gates satisfied by ADR 0013/0014/0015/0016;
   # the attesa-mutex-estrazione gate MOVED to R2; S3 in R1 is READ-ONLY (variant A) with an explicit cut of the Revisione UI.
-  R1: {name: "Trascrizione", scope: "start a transcription (S2 'Trascrivi' + optional Numero di persone); pipeline VAD/ASR/diarization/alignment (strategy A per turn, ADR 0015) with real ML adapters on pinned sherpa-onnx 1.13.8 natives (ADR 0016); S3 READ-ONLY: transcript by Voce with 'Voce n' labels, play from each Segmento, open the Documento; Documento .md", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013", "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014", "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015", "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016"], cut: ["Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con'; AC-209/210/211, AC-404): the revisione domain block (UnisciVoci/DividiVoce/RiassegnaSegmento) is built in R1 WITHOUT UI — its commands are reachable only from tests (AC-354/AC-356); the UI arrives in R2 with schermata-registrazione-identificazione (user decision 2026-09-24, rule 9)", "S3 Voci panel / identification (AC-212..216, 219, 318, 319, 403, 405): R2, schermata-registrazione-identificazione", "packaging O-1 (JDK for jpackage) and O-2 (signing/notarization): deferred, R1 runs via ./gradlew :avvio:run (ADR 0016 OPEN)", "benchmark CoreML opt-in AC (packaging delta Part 2, optional): not folded, pending the user"]}
-  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236) — satisfied: ADR 0017 (accepted 2026-09-24)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa"]}
+  R1: {name: "Trascrizione", scope: "start a transcription (S2 'Trascrivi' + optional Numero di persone); pipeline VAD/ASR/diarization/alignment (strategy A per turn, ADR 0015) with real ML adapters on pinned sherpa-onnx 1.13.8 natives (ADR 0016); S3 READ-ONLY: transcript by Voce with 'Voce n' labels, play from each Segmento, open the Documento; Documento .md; cancel a queued transcription (S2 'Annulla' on 'In coda', AnnullaElaborazione — ADR 0018 Amendment (b))", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013", "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014", "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015", "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016"], cut: ["Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con'; AC-209/210/211, AC-404): the revisione domain block (UnisciVoci/DividiVoce/RiassegnaSegmento) is built in R1 WITHOUT UI — its commands are reachable only from tests (AC-354/AC-356); the UI arrives in R2 with schermata-registrazione-identificazione (user decision 2026-09-24, rule 9)", "S3 Voci panel / identification (AC-212..216, 219, 318, 319, 403, 405): R2, schermata-registrazione-identificazione", "packaging O-1 (JDK for jpackage) and O-2 (signing/notarization): deferred, R1 runs via ./gradlew :avvio:run (ADR 0016 OPEN)", "benchmark CoreML opt-in AC (packaging delta Part 2, optional): not folded, pending the user"]}
+  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment; Ritrascrivi (ADR 0018: re-run over a completata, atomic Trascritto replacement + Parlanti purge, S3 read-only during the re-run)", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236) — satisfied: ADR 0017 (accepted 2026-09-24)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa"]}

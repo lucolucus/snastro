@@ -1,36 +1,40 @@
 ---
-id: "abbonato-riallineamento-impronte"
+id: "persistenza-ritrascrivi"
 type: "adapter"
-context: "parlanti"
+context: "piattaforma"
 side: "app"
-wave: 5
+wave: 3
 release: "R2"
-module: ":parlanti:adattatori (..eventi)"
+module: ":persistenza"
 consumes:
   - "kernel-pl"
-  - "eventi-revisione"
 depends_on:
-  - "riallinea-impronte"
+  - "persistenza-schema"
 related_adrs:
   - "0002"
   - "0003"
+  - "0006"
+  - "0007"
   - "0012"
+  - "0018"
+tables:
+  - "elaborazione"
 ---
-# abbonato-riallineamento-impronte — Abbonato dopo-commit agli eventi di Revisione → RiallineaImpronte
+# persistenza-ritrascrivi — Migrazione 3.sqm (Ritrascrivi) + eliminaInAttesa
 
 ## What to do
-AbbonatoDopoCommit on VociUnite / VoceDivisa / SegmentoRiassegnato → RiallineaImpronte(registrazioneId) on a background coroutine, coalesced per registrazioneId, retried with bounded back-off; nothing on a rolled-back Revisione.
+Forward-only migration migrations/3.sqm (schema 3 → 4) whose only statement drops elaborazione_completata_unica, so several completata Elaborazioni may exist (ADR 0018); plus the eliminaInAttesa query (compare-and-delete of a never-started row) used by AnnullaElaborazione. No other table or index changes.
 
-Note: Same discipline as the Documento Rigenerazione subscriber (ADR 0012): after commit, background coroutine, coalesced per registrazioneId, idempotent, retried.
+Note: NEW 2026-09-24 (ADR 0018, manifest delta 2026-09-24-ritrascrivi; wave 3 = right after persistenza-schema, the delta's 'wave 1' corrected at fold): owns migrations/3.sqm (R0/R1 are released, so forward-only, never an edit of 1.sqm/2.sqm, ADR 0006 (a)) and the eliminaInAttesa query used by repository-sql-trascrizione (AnnullaElaborazione, ADR 0018 Amendment (b) §3). ADR 0018 enforced_by (presence clause) is exigible_from this block. Release R2 for 3.sqm; eliminaInAttesa is needed by R1's AnnullaElaborazione — this block is therefore built before repository-sql-trascrizione's rework whatever the release.
 
 ## Tasks
-- AC-304 VociUnite, VoceDivisa e SegmentoRiassegnato sono ricevuti da un AbbonatoDopoCommit che invoca RiallineaImpronte(registrazioneId) solo dopo il commit della Revisione
-- AC-305 Una Revisione annullata (rollback, es. errore della revisione-policy) non innesca nessun RiallineaImpronte
-- AC-306 Più eventi ravvicinati della stessa Registrazione sono coalescenti: al più un RiallineaImpronte in corso e uno in coda per registrazioneId
-- AC-307 Un Errore o un'eccezione di RiallineaImpronte è ritentato con back-off limitato, senza toccare la Revisione già committata; esauriti i tentativi è riportato (la prossima apertura del progetto riallinea comunque)
+- AC-425 migrations/3.sqm (schema 3 → 4, forward-only) contains exactly one statement, `DROP INDEX elaborazione_completata_unica;`, on one line; no other table or index changes, and SnastroDatabase.Schema.version = 4. The CR-13 migration test of :persistenza:test stays green: an empty DB migrates to the current version, passes integrity checks and runs every query; Schema.migrate from empty equals Schema.create
+- AC-426 Migration fixture test: a DB frozen at version 3, holding one completata Elaborazione, its Trascritto (Voci/Segmenti), an attribuzione and an impronta_vocale row, is migrated to 4; every row is intact and user_version = 4; sqlite_master still has elaborazione_aperta_unica and parlante_nome_attivo_unico, and has no elaborazione_completata_unica
+- AC-427 After the migration: two completata rows for the same registrazione_id insert fine; two rows in in_attesa | in_corso for the same registrazione_id are still refused by the index; a completata next to an in_attesa for the same Registrazione is accepted
+- AC-471 Elaborazione.sq gains `eliminaInAttesa: DELETE FROM elaborazione WHERE id = :id AND stato = 'in_attesa';` (the only DELETE on elaborazione); SQL test: on an in_corso row it affects 0 rows and the row is intact; on an in_attesa row it affects 1
 
 ## Dependencies
-- Blocks built first: `riallinea-impronte` (wave 4)
+- Blocks built first: `persistenza-schema` (wave 2)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -61,15 +65,5 @@ Note: Same discipline as the Documento Rigenerazione subscriber (ADR 0012): afte
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **eventi-revisione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `revisione`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `VociUnite`: data class(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId) : EventoPubblicato
-    - `VoceDivisa`: data class(registrazioneId: RegistrazioneId, origine: VoceId, nuova: VoceId, segmentiSpostati: List<SegmentoId>) : EventoPubblicato
-    - `SegmentoRiassegnato`: data class(registrazioneId: RegistrazioneId, segmentoId: SegmentoId, da: VoceId, a: VoceId, daRimossa: Boolean, aNuova: Boolean) : EventoPubblicato
-  - keys (minting rules):
-    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
-  - delivery: Parlanti revisione-policy → in-process, SYNCHRONOUS inside the publishing command's UnitaDiLavoro transaction, in emission order, exactly once per commit attempt; an Esito.Errore or exception from a sync subscriber rolls the whole command back (ADR 0012). Documento / UI refresh / Parlanti RiallineaImpronte (abbonato-riallineamento-impronte) → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 
-Sources: ADRs 0002, 0003, 0012 (.mismagent/decisions/); ADR 0012 Amendment (b) point 3, features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy.
+Sources: ADRs 0002, 0003, 0006, 0007, 0012, 0018 (.mismagent/decisions/); ADR 0006/0007/0018 (+ Amendment 2026-09-24 (b)), features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (INV-4), manifest delta 2026-09-24-ritrascrivi.

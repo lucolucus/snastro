@@ -76,11 +76,11 @@
     `completata` and `fallita` are terminal. → invariant-test on the elaborazione aggregate block
   - [INV-4] per `Registrazione`: at most one `Elaborazione` in `in_attesa | in_corso`, at most one
     `completata`; a new `Elaborazione` can be started only if every previous one is `fallita`
-    (retry only after `fallita`; no re-run after `completata`) [user].
+    (retry only after `fallita`; no re-run after `completata`) [user]. *(REWRITTEN 2026-09-24 [user], ADR 0018 — see "Amendment 2026-09-24 (ADR 0018)" below.)*
     → set rule across `Elaborazione` instances: test on the **avvia-elaborazione application-service
     block** + repository uniqueness (architect), not an aggregate-local test
   - [INV-5] a `Trascritto` exists iff its `Registrazione` has a `completata` `Elaborazione`; it is
-    created atomically with the transition to `completata`. Hence `Revisione` (and every
+    created atomically with the transition to `completata` *(REWORDED 2026-09-24, ADR 0018 — see below)*. Hence `Revisione` (and every
     `Parlanti` operation on its `Voce`s) is possible only on a `completata` `Elaborazione`.
     → test on the avvia-elaborazione application-service block (atomic completion)
   - [INV-6] every `Segmento` belongs to exactly one existing `Voce` of the same `Trascritto`; every
@@ -104,7 +104,7 @@
     `Trascritto` other than the current one, or a NEW `Voce`; the source `Voce` is removed if emptied
     ([INV-6]). → invariant-test on the trascritto aggregate block
   - [INV-12] `voceId` is never reused within a `Trascritto`; the "Voce n" label number is fixed at
-    creation. → invariant-test on the trascritto aggregate block
+    creation. → invariant-test on the trascritto aggregate block *(scoped per Trascritto generation 2026-09-24, ADR 0018 — see below)*
 - **Domain events:**
   - `ElaborazioneAvviata` → `read-model` Registrazioni del Progetto (stato)
   - `ElaborazioneCompletata` → `read-model` Registrazioni del Progetto + `read-model` Trascritto
@@ -324,3 +324,37 @@ Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
   absent, clustering is automatic. A value outside 1..10 is rejected with
   `NumeroPersoneFuoriIntervallo` → AC-tests on the avvia-elaborazione block, plus a VO table test
   on the elaborazione block. "Riprova" prefills the value of the failed `Elaborazione`.
+
+## Amendment 2026-09-24 (ADR 0018 "Ritrascrivi" + its Amendment 2026-09-24 (b)) [user]
+Source: [ADR 0018](../../decisions/0018-ritrascrivi.md) and the user's answers of 2026-09-24; manifest delta
+`manifest-deltas/2026-09-24-ritrascrivi.md` (AC-425..AC-479). The texts above are kept; these replace them.
+- **[INV-3] unchanged.** `completata` and `fallita` stay terminal; no new state.
+- **[INV-4] (rewritten):** per `Registrazione`, at most one `Elaborazione` is `in_attesa | in_corso`. A new
+  `Elaborazione` can be started iff none is open, whatever the earlier ones ended in (none, `fallita`, or
+  `completata` = "Ritrascrivi"). Several `completata` may exist (history). → avvia-elaborazione block (AC-434..436)
+  + index `elaborazione_aperta_unica` (the `completata` index is dropped by `3.sqm`, persistenza-ritrascrivi).
+- **[INV-5] (reworded):** a `Trascritto` exists iff its `Registrazione` has at least one `completata`
+  `Elaborazione`. It is written (created, or **replaced whole**) atomically with **each** transition to
+  `completata`, and is never touched by any other outcome of a run. → esegui-elaborazione block (AC-437..441).
+- **[INV-12] (scope):** per `Trascritto` **generation**: a replacement is a fresh `Trascritto.crea`, numbered
+  from 1 by first appearance; every `VoceRef`-keyed Parlanti row of the old generation is purged in the same
+  transaction. → esegui-elaborazione (AC-438) + sostituzione-trascritto-policy (AC-428).
+- **Commands:**
+  - `AvviaElaborazione` — actor adds **"Ritrascrivi"** on a `completata` one, prefilled with the latest
+    `numeroPersone`, after a confirmation (R2 only).
+  - **`AnnullaElaborazione` (elaborazioneId)** (actor: utente — S2 "Annulla" on a queued row) → application-service
+    block annulla-elaborazione. Only an `in_attesa` (never started) `Elaborazione`, first transcription or re-run;
+    an `in_corso` one cannot be annullata. The never-started row is **deleted** (the only physical deletion of an
+    `Elaborazione`, like R25: nothing references it); INV-3 unchanged; the `Registrazione` returns to the state of
+    its remaining latest `Elaborazione`. Expected errors `ElaborazioneGiaAvviata` (the dispatcher claimed it first),
+    `ElaborazioneNonTrovata`.
+- **Domain events:**
+  - `TrascrittoSostituito` (registrazioneId) — only in a completion that replaced an existing `Trascritto`,
+    before `ElaborazioneCompletata` → Parlanti sostituzione-policy (**in-transaction**) + `AggiornamentiVista` /
+    `Proposta` cache invalidation (after commit).
+  - `ElaborazioneAnnullata` (registrazioneId) → `AggiornamentiVista` only (after commit): S2/S3 refresh.
+- **Parlanti policy:** on `TrascrittoSostituito` → purge every `Attribuzione` and every `ImprontaVocale` of the
+  `Registrazione`, then [INV-25] (an `occasionale` left without `Attribuzione` ceases; a `ricorrente` always
+  stays — confirmed by the user) → application-service block sostituzione-trascritto-policy, reached through
+  abbonato-revisione-parlanti (synchronous). [INV-21] / [INV-17] untouched.
+- **S3 during a re-run** is read-only (presentation rule, not an invariant): see ux-proposal amendment.

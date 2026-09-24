@@ -39,7 +39,7 @@ and **Parlanti**. There is no global menu logic beyond this.
   - `in_attesa`: "In coda" (position in queue).
   - `in_corso`: **stage + elapsed time**, e.g. "In corso · separazione voci · 3:12". There is no
     percentage bar.
-  - `completata`: opens S3.
+  - `completata`: opens S3. *(amended 2026-09-24, ADR 0018: a row opens S3 iff a `Trascritto` exists; "Ritrascrivi" and "Annulla" — see "Amendment 2026-09-24 (Ritrascrivi, Annulla)" below)*
   - `fallita`: the reason in plain words + a "Riprova" button (→ `AvviaElaborazione`, retry) — *amended
     2026-09-24: with the "Numero di persone" field, prefilled*.
   - *(added 2026-09-24)* `NON_AVVIATA` (no `Elaborazione` yet — every new import): the "Numero di persone"
@@ -54,6 +54,7 @@ and **Parlanti**. There is no global menu logic beyond this.
 
 ## Screen S3 · Registrazione (the core: identification + Revisione), concept B [user]
 *(amended 2026-09-24: in R1 S3 is READ-ONLY, without the Voci panel and the Revisione UI; see "Amendment 2026-09-24 (S3 read-only in R1)" below)*
+*(amended 2026-09-24, ADR 0018: S3 is READ-ONLY while a re-run is queued or running; see "Amendment 2026-09-24 (Ritrascrivi, Annulla)" below)*
 
 Layout: a header, the transcript in the center, and the **Voci** panel on the right.
 
@@ -229,3 +230,32 @@ the release pivot of 2026-09-23. The S3 text above stays the target design; this
   "cambia", "Unisci con", merge banner, "▶ estratto"), the selection toolbar ("Riassegna a", "Dividi voce"), the
   attributed `Nome` in the labels, and the command errors (AC-209..216, 219, 318, 319, 403, 404, 405). It is gated on
   the spike `attesa-mutex-estrazione`, which decides how the UI shows the wait for the native Mutex.
+
+## Amendment 2026-09-24 (Ritrascrivi, Annulla) [user]
+Source: ADR 0018 and its Amendment 2026-09-24 (b) (user answers); manifest delta `manifest-deltas/2026-09-24-ritrascrivi.md`.
+The S2/S3 text above is kept; this amendment adds to it.
+- **S2 · "Ritrascrivi" (R2 only)** — row with a `Trascritto`, latest run `completata`: "Completata" (opens S3) + the
+  "Numero di persone" field prefilled with the latest run's value + "Ritrascrivi". The field is validated first
+  ("Da 1 a 10, oppure lascia vuoto"), then a confirmation dialog — title "Ritrascrivere «<titolo>»?", text "La
+  trascrizione attuale resta consultabile finché la nuova non è pronta, poi viene sostituita. Le correzioni delle
+  voci e le assegnazioni dei nomi di questa registrazione andranno perse.", buttons "Ritrascrivi" / "Annulla"
+  (AC-448/449). R0/R1 show no "Ritrascrivi".
+- **S2 · re-run states:** "Ritrascrizione in coda (n)" / "Ritrascrizione in corso · <fase> · mm:ss", the row still
+  opens S3 with the old badge (AC-450); after a failure "Completata" + "Ritrascrizione non riuscita: <motivo>" +
+  prefilled field + "Ritrascrivi" (AC-451). A `fallita` row without a `Trascritto` keeps "Riprova" (no dialog).
+  **A row opens S3 iff a `Trascritto` exists** (replaces "iff completata").
+- **S2 · "Annulla" on a queued row (R1 and R2)** — a row "In coda (n)" or "Ritrascrizione in coda (n)" shows
+  "Annulla" (→ `AnnullaElaborazione`, no dialog: nothing is lost). "In corso" rows never do: a running transcription
+  cannot be cancelled. The row returns to its previous state ("Trascrivi", or "Completata" + "Ritrascrivi", or
+  "Riprova"); if the transcription had just started, the row shows "La trascrizione è già partita: non si può più
+  annullare" and becomes "In corso" (AC-475/476).
+- **S3 · READ-ONLY while a re-run is queued or running** [user] (replaces ADR 0018's first proposal "fully usable"):
+  banner "Ritrascrizione in corso: modifiche disabilitate fino al termine" + "Questa trascrizione sarà sostituita
+  quando la nuova sarà pronta."; in R2 also "Le correzioni e i nomi assegnati andranno persi." Reading, playing,
+  "▶ estratto" and "Apri documento" stay; naming ("Conferma", "altri", "nuovo…", "cambia"), "salta", "Unisci con",
+  "Dividi voce", "Riassegna a" are disabled and no Proposta is computed (AC-452/454). If the re-run fails or is
+  annullata, editing comes back with nothing lost (AC-461); after the replacement S3 reloads on the new `Voce`s,
+  all "da identificare" (AC-453/455).
+- **Blocks:** `schermata-registrazioni` (S2), `schermata-registrazione` (S3 banner + read-only flag),
+  `schermata-registrazione-identificazione` (S3 panel disabled), `stati-elaborazione` (`trascrittoDisponibile`,
+  `elaborazioneId`), `annulla-elaborazione`.

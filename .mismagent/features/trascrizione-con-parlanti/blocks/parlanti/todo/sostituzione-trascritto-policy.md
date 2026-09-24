@@ -1,11 +1,11 @@
 ---
-id: "repository-sql-parlanti"
-type: "adapter"
+id: "sostituzione-trascritto-policy"
+type: "application-service"
 context: "parlanti"
 side: "app"
 wave: 4
 release: "R2"
-module: ":parlanti:adattatori (..persistenza)"
+module: ":parlanti:applicazione (..politiche)"
 consumes:
   - "kernel-pl"
   - "agg-parlante"
@@ -19,20 +19,29 @@ related_adrs:
   - "0007"
   - "0009"
   - "0012"
+  - "0018"
+commands:
+  - "ApplicaSostituzioneTrascritto"
+invariants:
+  - "INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo — after a replacement NO row keyed by an old VoceRef of the Registrazione survives (defensively also a print row with no Attribuzione)"
+  - "INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept"
 ---
-# repository-sql-parlanti — Repository SQL dei Parlanti (+ purge biometrica)
+# sostituzione-trascritto-policy — Policy di sostituzione del Trascritto (purga dei dati Parlanti della vecchia generazione)
 
 ## What to do
-ParlanteRepositorySql (root + impronta_vocale replace, incl. sorgente_impronta / modello_impronta; compare-and-set aggiornaImpronta — UPDATE only, never INSERT; RigaImpronta reads per registrazione / per progetto without BLOBs), AttribuzioneRepositorySql; wal_checkpoint(TRUNCATE) AFTER commit of an EliminaParlante (R23).
+ApplicaSostituzioneTrascrittoPolitica.applica(registrazioneId): when a Trascritto is replaced (TrascrittoSostituito, inside the completion transaction) purge every Attribuzione and every print row keyed by a VoceRef of that Registrazione, for every Parlante, then apply INV-25 (occasionale left without Attribuzioni ceases, ricorrente stays). Structural only, through the aggregates.
+
+Note: NEW 2026-09-24 (ADR 0018 §3, INV-25 confirmed by the user in Amendment 2026-09-24 (b) §1): ApplicaSostituzioneTrascrittoPolitica(parlanti: ParlanteRepository, attribuzioni: AttribuzioneRepository).applica(registrazioneId: RegistrazioneId): Esito<Unit>. Structural only (ADR 0012 (b) enforced_by covers ..politiche: no EstrattoreImpronta/DecodificatoreAudio/CampioniAudio/Impronta), goes through the aggregates (RC-1: AttribuzioneRepository.diRegistrazione + rimuovi, Parlante.rimuoviImpronta + ParlanteRepository.salva, ParlanteRepository.rimuovi for INV-25), no new port. Invoked by abbonato-revisione-parlanti on TrascrittoSostituito, inside the completion transaction. No mapping old→new Voci is ever attempted.
+
+### Invariants owned here (one test each, name starts with the tag)
+- INV-15 an ImprontaVocale from VoceRef v on Parlante P exists iff a confirmed Attribuzione(v) = P exists and P is attivo — after a replacement NO row keyed by an old VoceRef of the Registrazione survives (defensively also a print row with no Attribuzione)
+- INV-25 a Parlante left without Attribuzioni: occasionale ceases to exist; ricorrente is kept
 
 ## Tasks
-- AC-114 Round-trip di Parlante con impronte (BLOB float32 little-endian, sorgente_impronta e modello_impronta) e di Attribuzione
-- AC-115 Una violazione di parlante_nome_attivo_unico diventa NomeGiaInUso; due inserimenti concorrenti dello stesso nome attivo → uno solo riesce
-- AC-116 Dopo EliminaParlante non resta nessuna riga impronta_vocale di P nel DB e il checkpoint del WAL è eseguito dopo il commit
-- AC-117 rimuovi cancella il Parlante (solo per INV-25)
-- AC-118 I Contratti dei due repository passano contro le implementazioni SQL
-- AC-302 aggiornaImpronta è un UPDATE compare-and-set (WHERE chiave della riga AND sorgente_impronta = attesa AND modello_impronta = atteso): con valori cambiati o riga assente → false e nessuna riga toccata; non esegue mai un INSERT (conteggio righe invariato)
-- AC-303 impronteDiRegistrazione / impronteDelProgetto su SQL restituiscono i metadati (parlanteId, voceRef, sorgente, modello) senza leggere i BLOB
+- AC-428 (INV-15) After applica(r) there are zero Attribuzioni and zero print rows keyed by any VoceRef of r, for every Parlante, attivo or eliminato, including a print row of r with no Attribuzione (defensive, via impronteDiRegistrazione); Attribuzioni and prints of any other Registrazione are untouched (fakes: 2 Registrazioni, 3 Parlanti; rows of the other Registrazione identical before and after)
+- AC-429 (INV-25) after the purge: an attivo occasionale whose only Attribuzioni were in r no longer exists (rimuovi); an attivo occasionale that also has an Attribuzione in another Registrazione is kept, with that print; a ricorrente is kept with the same Nome, tipo and stato and its prints of other Registrazioni, even with zero Attribuzioni and zero prints; an eliminato tombstone is kept (still eliminato, same Nome) and its Attribuzione in r is gone
+- AC-430 Idempotent and cheap: applica twice gives the same state as once; on a Registrazione with no Attribuzione and no print it returns Ok and does no salva/rimuovi (counting fakes); EstrattoreImprontaFinta and DecodificatoreAudioFinta are never invoked
+- AC-431 An Esito.Errore from ParlanteRepository.salva is returned unchanged; nothing is swallowed, so the caller's transaction rolls back
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -100,4 +109,4 @@ ParlanteRepositorySql (root + impronta_vocale replace, incl. sorgente_impronta /
     - `RigaImpronta`: data class(parlanteId: ParlanteId, voceRef: VoceRef, sorgente: String, modello: String) in parlanti:applicazione.porte — print row metadata, never the embedding
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012 (.mismagent/decisions/); ADR 0006/0007/0009.
+Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012, 0018 (.mismagent/decisions/); ADR 0018 §3 (+ Amendment 2026-09-24 (b) §1), features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy (Amendment 2026-09-24 ADR 0018), ADR 0009/0012.

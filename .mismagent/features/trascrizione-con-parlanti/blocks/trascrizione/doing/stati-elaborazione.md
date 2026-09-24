@@ -21,10 +21,11 @@ related_adrs:
   - "0007"
   - "0012"
   - "0014"
+  - "0018"
 view_shape:
-  stati: "List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?}>"
+  stati: "List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?, trascrittoDisponibile: Boolean, elaborazioneId: ElaborazioneId?}>"
 view_sources:
-  stati: "stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto; numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA)"
+  stati: "stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto (non-null iff trascrittoDisponibile, whatever the latest run's state); numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA); trascrittoDisponibile ← TrascrittoRepository (a Trascritto exists for the Registrazione, ADR 0018); elaborazioneId ← latest Elaborazione.id (agg-elaborazione; null for NON_AVVIATA; the id AnnullaElaborazione takes)"
 ---
 # stati-elaborazione — StatiElaborazione — fetta Trascrizione (S2) + FasiInCorso
 
@@ -33,16 +34,20 @@ Trascrizione slice of S2 (R1 split) + the in-memory FasiInCorso holder (implemen
 
 REWORK 2026-09-24 (ADR 0014): each stati item gains numeroPersone: Int? = the latest Elaborazione's numeroPersone?.valore (null when absent or NON_AVVIATA); AC-162 test extended.
 
-Note: AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewritten).
+REWORK 2026-09-24 (ADR 0018): each item gains trascrittoDisponibile and elaborazioneId; numVoci follows the Trascritto whatever the latest state (AC-165 reworded); table tests AC-447, AC-474.
+
+Note: AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewritten). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): view_shape gains trascrittoDisponibile (the S2/S3 'Ritrascrizione …' states and the S3 read-only flag derive from the pair stato + trascrittoDisponibile; no new enum value) and elaborazioneId (for S2 'Annulla'); numVoci follows the Trascritto, not the latest state.
 
 ### view_shape (field ← source)
-- `stati`: List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?}> ← stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto; numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA)
+- `stati`: List<{registrazioneId, stato: StatoElaborazioneVista, fase: FaseElaborazione?, avviataAlle: Instant?, motivoFallimento: String?, posizioneInCoda: Int?, numVoci: Int?, numeroPersone: Int?, trascrittoDisponibile: Boolean, elaborazioneId: ElaborazioneId?}> ← stato ← latest Elaborazione (mapped via named predicates to StatoElaborazioneVista); fase ← in-memory FasiInCorso implementing SegnalatoreFase; avviataAlle, motivoFallimento ← Elaborazione; posizioneInCoda ← rank among ElaborazioneRepository.inAttesa (FIFO); numVoci ← Trascritto (non-null iff trascrittoDisponibile, whatever the latest run's state); numeroPersone ← latest Elaborazione.numeroPersone?.valore (write-path input of AvviaElaborazione, agg-elaborazione; null when absent or NON_AVVIATA); trascrittoDisponibile ← TrascrittoRepository (a Trascritto exists for the Registrazione, ADR 0018); elaborazioneId ← latest Elaborazione.id (agg-elaborazione; null for NON_AVVIATA; the id AnnullaElaborazione takes)
 
 ## Tasks
 - AC-162 La vista espone stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci e numeroPersone per Registrazione (numeroPersone = quello dell'ultima Elaborazione, null se assente o se NON_AVVIATA; serve a precompilare 'Riprova', AC-376) — REWRITTEN 2026-09-24 (ADR 0014)
 - AC-163 posizioneInCoda segue l'ordine FIFO delle in_attesa (1 = la prossima)
 - AC-164 fase è presente solo per in_corso e riflette l'ultima fase segnalata; scompare quando l'Elaborazione termina
-- AC-165 numVoci è presente solo per completata
+- AC-165 (REWORDED 2026-09-24, ADR 0018) numVoci = the Trascritto's Voci count whenever a Trascritto exists, null otherwise
+- AC-447 Table test: stato, posizioneInCoda, fase, motivoFallimento and numeroPersone always come from the LATEST Elaborazione (AC-162). History (creation order) → stato / trascrittoDisponibile / numVoci: completata → COMPLETATA / true / of the Trascritto; completata, in_attesa → IN_ATTESA (posizione n) / true / old count; completata, in_corso → IN_CORSO (fase) / true / old count; completata, fallita → FALLITA (motivo) / true / old count; fallita → FALLITA / false / null; completata, completata → COMPLETATA / true / new count; none → NON_AVVIATA / false / —
+- AC-474 elaborazioneId = the latest Elaborazione's id (null for NON_AVVIATA). After a cancellation: (in_attesa cancelled) → NON_AVVIATA, trascrittoDisponibile false, elaborazioneId null; (completata, in_attesa cancelled) → COMPLETATA, true, old numVoci, the completata's id; (fallita, in_attesa cancelled) → FALLITA with its motivo; the posizioneInCoda of the remaining queued rows is renumbered 1..n
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -70,8 +75,8 @@ Note: AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewr
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
@@ -83,7 +88,9 @@ Note: AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewr
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
-    - `named predicates`: aperta (in_attesa|in_corso), completata, fallita, terminale — never compare StatoElaborazione outside the aggregate
+    - `Elaborazione.annulla`: (): Esito<ElaborazioneAnnullata> — Ok ONLY from in_attesa (domain event ElaborazioneAnnullata(id, registrazioneId), state unchanged: a check, not a transition — the repository then deletes the never-started row, ADR 0018 Amendment (b)); any other state → Errore(ElaborazioneGiaAvviata(id))
+    - `named predicates`: aperta (in_attesa|in_corso), inAttesa, completata, fallita, terminale — never compare StatoElaborazione outside the aggregate
+    - `errors (ErroreTrascrizione, ErroriTrascrizione.kt)`: ElaborazioneGiaAperta(registrazioneId); ElaborazioneGiaAvviata(elaborazioneId: ElaborazioneId); ElaborazioneNonTrovata(elaborazioneId: ElaborazioneId); NumeroPersoneFuoriIntervallo(valore) — ElaborazioneGiaCompletata is DELETED (ADR 0018)
   - keys (minting rules):
     - `ElaborazioneId`: minted by avvia-elaborazione via GeneratoreId (UUID v4) — internal, never crosses a context boundary
   - §14 gates (must stay green):
@@ -98,17 +105,17 @@ Note: AMENDED 2026-09-24 (ADR 0014): view_shape gains numeroPersone (AC-162 rewr
     - `Trascritto.riassegna`: (segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> — null = a NEW Voce
     - `read accessors`: voci: List<Voce>, segmenti: List<Segmento> (read-only copies)
   - keys (minting rules):
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
   - §14 gates (must stay green):
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(trascrittoQueries|voceQueries|segmentoQueries)\b' . | grep -vE '^\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q .`
 - **repo-trascrizione** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta | ElaborazioneGiaCompletata) from the ADR 0007 indexes */ }
-    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento
+    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }
+    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)
 - **tec-segnalatore-fase** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `SegnalatoreFase`: interface { fun fase(id: RegistrazioneId, f: FaseElaborazione); fun terminata(id: RegistrazioneId) }
     - `FaseElaborazione`: enum DECODIFICA | DIARIZZAZIONE | TRASCRIZIONE | ALLINEAMENTO (trascrizione:applicazione) — progress only, not guarded state
 
-Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1, amendment 2026-09-24), architecture.md § Pipeline, ADR 0014.
+Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S2 (+ R1, amendment 2026-09-24), architecture.md § Pipeline, ADR 0014.

@@ -16,6 +16,7 @@ related_adrs:
   - "0007"
   - "0012"
   - "0014"
+  - "0018"
 invariants:
   - "INV-3 StatoElaborazione moves only in_attesa → in_corso → completata | fallita; completata and fallita are terminal"
 invariant_fields:
@@ -36,7 +37,9 @@ owns_boundaries:
       "Elaborazione.avvia": "(alle: Instant): Esito<ElaborazioneAvviata>"
       "Elaborazione.completa": "(): Esito<ElaborazioneCompletata>"
       "Elaborazione.fallisci": "(motivo: String): Esito<ElaborazioneFallita>"
-      "named predicates": "aperta (in_attesa|in_corso), completata, fallita, terminale — never compare StatoElaborazione outside the aggregate"
+      "Elaborazione.annulla": "(): Esito<ElaborazioneAnnullata> — Ok ONLY from in_attesa (domain event ElaborazioneAnnullata(id, registrazioneId), state unchanged: a check, not a transition — the repository then deletes the never-started row, ADR 0018 Amendment (b)); any other state → Errore(ElaborazioneGiaAvviata(id))"
+      "named predicates": "aperta (in_attesa|in_corso), inAttesa, completata, fallita, terminale — never compare StatoElaborazione outside the aggregate"
+      "errors (ErroreTrascrizione, ErroriTrascrizione.kt)": "ElaborazioneGiaAperta(registrazioneId); ElaborazioneGiaAvviata(elaborazioneId: ElaborazioneId); ElaborazioneNonTrovata(elaborazioneId: ElaborazioneId); NumeroPersoneFuoriIntervallo(valore) — ElaborazioneGiaCompletata is DELETED (ADR 0018)"
 ---
 # elaborazione — Aggregato Elaborazione
 
@@ -45,7 +48,9 @@ Elaborazione root: accoda (in_attesa, creataAlle), avvia(alle) → in_corso, com
 
 REWORK 2026-09-24 (ADR 0014): add the VO NumeroPersone (@JvmInline value class(valore: Int), NumeroPersone.di(n) → Esito, 1..10, else Errore(NumeroPersoneFuoriIntervallo) added to ErroriTrascrizione.kt); Elaborazione gains the immutable optional field numeroPersone (read-only accessor), taken by accoda(..., numeroPersone) and by the persistence reconstitution; transitions never touch it. New tests AC-367, AC-368.
 
-Note: AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..10, NumeroPersoneFuoriIntervallo in ErroriTrascrizione.kt) and the immutable optional field numeroPersone live here; accoda takes it, the reconstitution restores it.
+REWORK 2026-09-24 (ADR 0018): add Elaborazione.annulla() (Ok only from in_attesa → ElaborazioneAnnullata; otherwise ElaborazioneGiaAvviata) and the named predicate inAttesa; OWN the ErroreTrascrizione sweep: +ElaborazioneGiaAvviata, +ElaborazioneNonTrovata, −ElaborazioneGiaCompletata, updating every exhaustive when/reference in :trascrizione and :ui in ONE change (ADR 0018 Amendment (b) §4). New tests AC-432, AC-462; INV-3 unchanged.
+
+Note: AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..10, NumeroPersoneFuoriIntervallo in ErroriTrascrizione.kt) and the immutable optional field numeroPersone live here; accoda takes it, the reconstitution restores it. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no change to the state machine (INV-3); Ritrascrivi = a NEW Elaborazione. annulla() is a check returning the domain event ElaborazioneAnnullata, not a transition; the never-started row is then physically deleted by the repository (the only deletion of an Elaborazione, like R25). OWNS the ErroreTrascrizione SWEEP (ADR 0018 Amendment (b) §4): +ElaborazioneGiaAvviata, +ElaborazioneNonTrovata, −ElaborazioneGiaCompletata, updating in ONE change every exhaustive when / reference (AvviaElaborazioneServizio pre-check, EseguiProssimaElaborazioneServizio motivo table, repository-sql-trascrizione constraint mapping, ElaborazioneRepositoryFinta/Contratto, :ui MessaggiErrore with the AC-477 texts and its test) with no other behaviour — per-block merges could not compile in any order.
 
 ### Invariants owned here (one test each, name starts with the tag)
 - INV-3 StatoElaborazione moves only in_attesa → in_corso → completata | fallita; completata and fallita are terminal
@@ -56,6 +61,8 @@ Note: AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..1
 - AC-19 fallisci conserva il motivo; avvia registra avviataAlle
 - AC-367 (ex AC-NP1) Elaborazione.accoda fissa numeroPersone (anche assente) alla creazione; è immutabile e di sola lettura: nessuna transizione (avvia, completa, fallisci) lo cambia
 - AC-368 (ex AC-NP2) NumeroPersone.di: 1 e 10 → Ok; 0, -1 e 11 → Errore(NumeroPersoneFuoriIntervallo) (test a tabella)
+- AC-432 ErroreTrascrizione no longer has ElaborazioneGiaCompletata; the block's own gate is the sealed hierarchy compiling without it (global check: `! grep -rn 'ElaborazioneGiaCompletata' --include='*.kt' --exclude-dir=build .` exits 0 once the sweep is merged); INV-3 tests unchanged and green: completata and fallita stay terminal
+- AC-462 Elaborazione.annulla(): from in_attesa → Ok(ElaborazioneAnnullata(id, registrazioneId)) and the state is unchanged; from in_corso, completata, fallita → Errore(ElaborazioneGiaAvviata(id)), state unchanged; INV-3 tests unchanged (no new state, no new transition); ErroriTrascrizione.kt gains ElaborazioneGiaAvviata(elaborazioneId) and ElaborazioneNonTrovata(elaborazioneId)
 
 ## Dependencies
 - **agg-elaborazione** (OWNED here — built before its consumers) — owner `elaborazione`, projection in-process, contract_test **invariant-test**
@@ -66,7 +73,9 @@ Note: AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..1
     - `Elaborazione.avvia`: (alle: Instant): Esito<ElaborazioneAvviata>
     - `Elaborazione.completa`: (): Esito<ElaborazioneCompletata>
     - `Elaborazione.fallisci`: (motivo: String): Esito<ElaborazioneFallita>
-    - `named predicates`: aperta (in_attesa|in_corso), completata, fallita, terminale — never compare StatoElaborazione outside the aggregate
+    - `Elaborazione.annulla`: (): Esito<ElaborazioneAnnullata> — Ok ONLY from in_attesa (domain event ElaborazioneAnnullata(id, registrazioneId), state unchanged: a check, not a transition — the repository then deletes the never-started row, ADR 0018 Amendment (b)); any other state → Errore(ElaborazioneGiaAvviata(id))
+    - `named predicates`: aperta (in_attesa|in_corso), inAttesa, completata, fallita, terminale — never compare StatoElaborazione outside the aggregate
+    - `errors (ErroreTrascrizione, ErroriTrascrizione.kt)`: ElaborazioneGiaAperta(registrazioneId); ElaborazioneGiaAvviata(elaborazioneId: ElaborazioneId); ElaborazioneNonTrovata(elaborazioneId: ElaborazioneId); NumeroPersoneFuoriIntervallo(valore) — ElaborazioneGiaCompletata is DELETED (ADR 0018)
   - keys (minting rules):
     - `ElaborazioneId`: minted by avvia-elaborazione via GeneratoreId (UUID v4) — internal, never crosses a context boundary
   - §14 gates (must stay green):
@@ -97,10 +106,10 @@ Note: AMENDED 2026-09-24 (ADR 0014, user 2026-09-23): the VO NumeroPersone (1..1
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0004, 0007, 0012, 0014 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (+ Amendment 2026-09-23 (c)), ADR 0014.
+Sources: ADRs 0002, 0003, 0004, 0007, 0012, 0014, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Trascrizione (+ Amendment 2026-09-23 (c)), ADR 0014.

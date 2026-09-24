@@ -4,8 +4,12 @@ regenerate the rich block files.
 
 Source: ADR 0018 (decisions/0018-ritrascrivi.md), with amendments in place to ADR 0007
 (enforced_by), ADR 0014 (pointer) and architecture.md (pointer).
+**Amended 2026-09-24 (b) [user]** (ADR 0018 Amendment 2026-09-24 (b)): INV-25 confirmed; S3 READ-ONLY
+while a re-run is queued or running (AC-452/454/455 rewritten, AC-461); NEW `AnnullaElaborazione`
+for a queued Elaborazione (AC-462…AC-479). See the section "Amendment 2026-09-24 (b)" at the end.
 
 New ACs are numbered from **AC-425**. The current max is AC-424, plus AC-155bis and AC-186bis.
+After Amendment (b) this delta uses **AC-425…AC-479**.
 
 Release: **R2**. The action, the Parlanti purge and the view invalidation are wired only by
 `avvio-parlanti`. The Trascrizione-side reworks are release-neutral: they are built in the R2 wave
@@ -49,7 +53,7 @@ and are harmless in R1, where no composition offers the action.
   `trascrittoDisponibile: Boolean`. `numVoci` is non-null iff `trascrittoDisponibile`.
 
 ## NEW BLOCKS
-### persistenza-ritrascrivi (NEW, adapter/schema, `:persistenza`, wave 1, R2; related_adrs 0006, 0007, 0018)
+### persistenza-ritrascrivi (NEW, adapter/schema, `:persistenza`, ~~wave 1~~ wave 3 (after persistenza-schema, build-manifest fold), R2; related_adrs 0006, 0007, 0018)
 This block owns `migrations/3.sqm`. ADR 0018's `enforced_by` is `exigible_from` this block.
 - **AC-425** `migrations/3.sqm` (schema 3 → 4, forward-only) contains exactly one statement,
   `DROP INDEX elaborazione_completata_unica;`, on one line. No other table or index changes, and
@@ -241,7 +245,8 @@ enforced_by), goes through the aggregates (RC-1), and needs no new port.
 - **AC-450** During a re-run (Trascritto present, latest IN_ATTESA / IN_CORSO):
   - the row shows 'Ritrascrizione in coda (n)' / 'Ritrascrizione in corso · <fase> · mm:ss' (same
     data as AC-203);
-  - no 'Ritrascrivi'/'Trascrivi'/'Riprova' and no field;
+  - no 'Ritrascrivi'/'Trascrivi'/'Riprova' and no field; *(amended (b))* 'Ritrascrizione in coda (n)'
+    shows 'Annulla' (AC-475), 'Ritrascrizione in corso' does not;
   - the row still opens S3, and the badge keeps the old counts.
   - A row WITHOUT a Trascritto keeps the plain AC-203 labels ('In coda (n)', 'In corso · …').
 - **AC-451** After a failed re-run (Trascritto present, latest FALLITA):
@@ -255,10 +260,14 @@ enforced_by), goes through the aggregates (RC-1), and needs no new port.
 ### schermata-registrazione (ui, S3 read-only R1 part)
 - Consumes +`stati-elaborazione` (state of the shown Registrazione). This is an optional source, and
   without it no banner is shown.
-- **AC-452** While the latest Elaborazione of the shown Registrazione is `in_attesa` / `in_corso` and
-  a Trascritto exists, S3 shows the banner "Ritrascrizione in corso: questa trascrizione sarà
-  sostituita quando la nuova sarà pronta.". It disappears on the next `Cambiamento` that shows another
-  state. The transcript stays readable and playable.
+- **AC-452** *(REWRITTEN by Amendment (b))* While the latest Elaborazione of the shown Registrazione is
+  `in_attesa` / `in_corso` and a Trascritto exists, S3 is READ-ONLY and shows the banner
+  "Ritrascrizione in corso: modifiche disabilitate fino al termine" with the second line "Questa
+  trascrizione sarà sostituita quando la nuova sarà pronta.". The presenter exposes this read-only
+  flag for the R2 panel. The transcript stays readable and playable ('▶'/click on a Segmento, 'Apri
+  documento', 'Mostra nella cartella'). The banner and the flag go away on the next `Cambiamento`
+  that shows another state (completata, fallita, or the run cancelled: latest back to COMPLETATA/
+  FALLITA). Without the optional stati source there is no banner (R1 test: never read-only).
 - **AC-453** On the `Cambiamento` after a replacement, S3 reloads:
   - the new Segmenti and 'Voce n' labels are shown;
   - any selection is cleared;
@@ -267,11 +276,16 @@ enforced_by), goes through the aggregates (RC-1), and needs no new port.
   Presenter test with a fake view source swapped between two generations.
 
 ### schermata-registrazione-identificazione (ui, S3 R2 panel)
-- **AC-454** During a re-run the banner of AC-452 adds "Le correzioni e i nomi assegnati andranno
-  persi.". Revisione and naming stay enabled (ADR 0018 §4).
-- **AC-455** A pending Conferma or Salta on an old VoceRef that resolves after the replacement shows
-  AC-318 VoceCambiata, or the Voce-not-found message, in plain words, never a crash. The panel then
-  shows the new Voci, all 'da identificare'.
+- **AC-454** *(REWRITTEN by Amendment (b): S3 read-only, user 2026-09-24)* While S3 is read-only
+  (AC-452) the banner adds "Le correzioni e i nomi assegnati andranno persi." and every editing action
+  of the panel is disabled: 'Conferma', 'altri ▾', 'nuovo…', 'cambia', 'salta', 'Unisci con ▾', the
+  merge banner's action, the selection toolbar's 'Dividi voce' and 'Riassegna a ▾'. No command is
+  invoked (the command fakes record zero calls), and no Proposta job is started. '▶ estratto' and
+  Segmento playback still work. Presenter test with the stati source at IN_ATTESA and at IN_CORSO.
+- **AC-455** *(REWORDED by Amendment (b))* A Conferma or Salta already pending in the per-project
+  scope (AC-418) from BEFORE the re-run was queued, resolving after the replacement, shows AC-318
+  VoceCambiata, or the Voce-not-found message, in plain words, never a crash. After the replacement
+  the panel shows the new Voci, all 'da identificare', and is editable again.
 
 ### ui-fondamenta (MessaggiErrore)
 - AC-180 still holds. Remove the `ElaborazioneGiaCompletata` branch, since the variant no longer
@@ -337,4 +351,135 @@ enforced_by), goes through the aggregates (RC-1), and needs no new port.
     already has a `Trascritto`. The old `Trascritto` stays until the new run completes, and is then
     replaced whole, with the names of its Voci lost. Not: rielaborare, rifare, reset.
 - **UI/ux-proposal.md S2 + S3** (ux-designer): the S2 states and dialog of AC-448..451, and the S3
-  banner of AC-452/454.
+  banner of AC-452/454. *(Amendment (b))* S3 READ-ONLY during a re-run (AC-452/454/461); the S2
+  'Annulla' on queued rows (AC-475/476).
+- *(Amendment (b))* **tactical-model.md § Trascrizione:** Commands +`AnnullaElaborazione
+  (elaborazioneId)` (actor: utente, S2 'Annulla' on a queued row; only `in_attesa`; deletes the
+  never-started row, INV-3 unchanged; `in_corso` cannot be cancelled); Domain events
+  +`ElaborazioneAnnullata (registrazioneId)` → `AggiornamentiVista` (S2/S3 refresh) only.
+- *(Amendment (b))* **context-map.md § Trascrizione:** add `Annullare` (una `Elaborazione` in coda) =
+  withdrawing an `Elaborazione` that is still `in_attesa` (never started): it disappears and the
+  `Registrazione` returns to its previous state. A running one cannot be cancelled. Not: interrompere,
+  fermare, abortire.
+
+## Amendment 2026-09-24 (b) — user answers [user] (ADR 0018 Amendment 2026-09-24 (b))
+1. **INV-25 confirmed** as in AC-429: an `occasionale` left with no Attribuzione is deleted; a
+   `ricorrente` always stays. No AC change.
+2. **S3 READ-ONLY while a re-run is queued or running.** AC-452, AC-454 and AC-455 are rewritten
+   above; AC-461 below. This closes ADR 0018's "accepted residual race" for S3: a stale S3 cannot act
+   on the new Voci.
+3. **NEW: `AnnullaElaborazione(elaborazioneId)`** for an `in_attesa` Elaborazione (first transcription
+   or re-run). Deletes the never-started row (INV-3 unchanged); `in_corso` cannot be cancelled; the
+   dispatcher race is serialized by `BEGIN IMMEDIATE` and the loser gets `ElaborazioneGiaAvviata`;
+   publishes `ElaborazioneAnnullata(registrazioneId)` after commit → one `Cambiamento`. **Release R1**
+   (first transcriptions are R1).
+4. **Build note.** The `ErroreTrascrizione` change (+2 variants, −`ElaborazioneGiaCompletata`) is ONE
+   sweep owned by the `elaborazione` rework (exhaustive `when`s in `:trascrizione:applicazione` and
+   `:ui` would not compile under any per-block merge order).
+
+### BOUNDARIES (b)
+- **B1 `eventi-elaborazione`:** + pinned `ElaborazioneAnnullata: "data class(registrazioneId:
+  RegistrazioneId) : EventoPubblicato — published by AnnullaElaborazione in the cancelling
+  transaction, AFTER COMMIT only; no synchronous subscriber"`. Consumers +`annulla-elaborazione`
+  (publisher, like esegui-elaborazione), +`avvio-composizione` (already a consumer: AggiornamentiVista).
+- **B2 `agg-elaborazione`:** + `Elaborazione.annulla(): Esito<ElaborazioneAnnullata>` (Ok only from
+  in_attesa, else `Errore(ElaborazioneGiaAvviata)`; a check that returns the event, not a transition);
+  + named predicate `inAttesa`; errors +`ElaborazioneGiaAvviata(elaborazioneId)`,
+  +`ElaborazioneNonTrovata(elaborazioneId)`. Consumers +`annulla-elaborazione`.
+- **B2 `repo-trascrizione`:** `ElaborazioneRepository` + `trova(id: ElaborazioneId): Elaborazione?`
+  + `rimuoviInAttesa(id: ElaborazioneId): Esito<Unit>` (compare-and-delete: deletes iff still
+  in_attesa; started → `ElaborazioneGiaAvviata`; absent → `ElaborazioneNonTrovata`). Consumers
+  +`annulla-elaborazione`.
+- **B3 `stati-elaborazione` view_shape:** + `elaborazioneId: ElaborazioneId?` (latest Elaborazione's
+  id; null for NON_AVVIATA).
+
+### NEW BLOCK (b)
+#### annulla-elaborazione (NEW, application-service, `:trascrizione:applicazione (..comandi)`, wave 4, R1; related_adrs 0004, 0007, 0012, 0018)
+`AnnullaElaborazioneServizio(uow, elaborazioni: ElaborazioneRepository, eventi: DispatcherEventi)`,
+`fun esegui(comando: AnnullaElaborazione(elaborazioneId: ElaborazioneId)): Esito<Unit>`, one
+transaction: `trova` → `annulla()` → `rimuoviInAttesa` → publish `ElaborazioneAnnullata`.
+- **AC-464** First transcription cancelled: with a single `in_attesa` for r, `AnnullaElaborazione(id)`
+  → Ok; `diRegistrazione(r)` is empty; exactly one `ElaborazioneAnnullata(r)` is published (recording
+  dispatcher fake), inside the transaction (one `inTransazione`).
+- **AC-465** Queued re-run cancelled: with `completata` + `in_attesa` for r → Ok; only the `completata`
+  is left, unchanged (same state and numeroPersone); `TrascrittoRepository` is never called (counting
+  fake: no `trova`, no `salva`). A queued 'Riprova' (fallita + in_attesa) → Ok, the `fallita` stays.
+- **AC-466** Rejections, nothing written and nothing published: the id is `in_corso`, `completata` or
+  `fallita` → `Errore(ElaborazioneGiaAvviata(id))`; unknown id → `Errore(ElaborazioneNonTrovata(id))`.
+- **AC-467** Race with the dispatcher: the repository fake answers `rimuoviInAttesa` with
+  `Errore(ElaborazioneGiaAvviata)` (the claim won between `trova` and the delete) → the service returns
+  that error unchanged, publishes nothing, and the transaction rolls back.
+- **AC-468** After a cancellation, `AvviaElaborazione(r, n)` is accepted again (INV-4: none open) and
+  creates a new `in_attesa`.
+
+### REWORKED BLOCKS (b)
+- **elaborazione** — **AC-462** `Elaborazione.annulla()`: from `in_attesa` → Ok(`ElaborazioneAnnullata(id,
+  registrazioneId)`) and the state is unchanged; from `in_corso`, `completata`, `fallita` →
+  `Errore(ElaborazioneGiaAvviata(id))`, state unchanged. INV-3 tests unchanged (no new state, no new
+  transition). Owns the ErroreTrascrizione sweep (point 4).
+- **porte-trascrizione** — **AC-463** `ElaborazioneRepositoryContratto` (fake, later SQL): `trova(id)`
+  returns the saved Elaborazione or null; `rimuoviInAttesa(id)` on an `in_attesa` → Ok and it is gone
+  from `diRegistrazione`/`inAttesa`/`trova`; on `in_corso`/`completata`/`fallita` →
+  `Errore(ElaborazioneGiaAvviata)` and the store is unchanged; on an unknown id →
+  `Errore(ElaborazioneNonTrovata)`.
+- **esegui-elaborazione** — **AC-469** An `in_attesa` removed by `rimuoviInAttesa` before
+  `EseguiProssimaElaborazione` is never started: the next oldest `in_attesa` starts instead, or, if none
+  is left, Ok without effects (AC-68); the pipeline fakes are not invoked for the removed id.
+- **eventi-pubblicati** — **AC-470** `snastro.trascrizione.applicazione.eventi.ElaborazioneAnnullata(
+  registrazioneId: RegistrazioneId) : EventoPubblicato` exists with no other field (AC-14 now counts 17
+  events: + TrascrittoSostituito, + ElaborazioneAnnullata); delivered to after-commit subscribers only
+  after COMMIT, never on rollback.
+- **persistenza-ritrascrivi** — **AC-471** `Elaborazione.sq` gains `eliminaInAttesa: DELETE FROM
+  elaborazione WHERE id = :id AND stato = 'in_attesa';` (the only DELETE on `elaborazione`); SQL test:
+  on an `in_corso` row it affects 0 rows and the row is intact; on an `in_attesa` row it affects 1.
+- **repository-sql-trascrizione** —
+  - **AC-472** `rimuoviInAttesa` over `eliminaInAttesa`: 1 row → Ok; 0 rows → re-read by id: present →
+    `ElaborazioneGiaAvviata`, absent → `ElaborazioneNonTrovata`; `ElaborazioneRepositoryContratto`
+    (AC-463) passes against SQL.
+  - **AC-473** Claim vs cancel on a real SQLite FILE database with two `UnitaDiLavoroSql` threads
+    started on a barrier, repeated 200 times: thread A claims the head (`inAttesa().first()` →
+    `avvia` → `salva` in one transaction), thread B runs `rimuoviInAttesa` on the same id. Every run ends
+    in exactly one of: (row deleted, A started nothing or the next row) or (row `in_corso`, B got
+    `ElaborazioneGiaAvviata`). Never both, never a thrown exception (no `SQLITE_BUSY`).
+- **stati-elaborazione** — view_shape +`elaborazioneId`. **AC-474** `elaborazioneId` = the latest
+  Elaborazione's id (null for NON_AVVIATA). Table rows after a cancellation: (in_attesa cancelled) →
+  NON_AVVIATA, `trascrittoDisponibile` false, `elaborazioneId` null; (completata, in_attesa cancelled)
+  → COMPLETATA, true, old numVoci, the completata's id; (fallita, in_attesa cancelled) → FALLITA with
+  its motivo. The `posizioneInCoda` of the remaining queued rows is renumbered 1..n.
+- **schermata-registrazioni** — AzioniRegistrazioni +`annullaElaborazione: (RegistrazioneId) -> Unit`;
+  the presenter takes an optional `AnnullaElaborazione` source (like AC-342: null in R0).
+  - **AC-475** A row IN_ATTESA ('In coda (n)' or 'Ritrascrizione in coda (n)') shows 'Annulla' when
+    the source is supplied; IN_CORSO, COMPLETATA, FALLITA and NON_AVVIATA rows never do; without the
+    source (R0) no row does. A click sends exactly ONE `AnnullaElaborazione(elaborazioneId of the row)`,
+    with no dialog; `operazioneInCorso` blocks a second click.
+  - **AC-476** On Ok the row reloads to its previous state (NON_AVVIATA 'Trascrivi' with an empty
+    field; 'Completata' + prefilled field + 'Ritrascrivi'; FALLITA 'Riprova' prefilled). On
+    `ElaborazioneGiaAvviata` the row shows inline 'La trascrizione è già partita: non si può più
+    annullare' and reloads (now 'In corso'); on `ElaborazioneNonTrovata` it just reloads. Render-check:
+    the 'Annulla' row state at the minimum window width.
+- **schermata-registrazione-identificazione** — **AC-461** When the read-only state of AC-452 ends
+  because the re-run FAILED or was CANCELLED (Cambiamento → latest FALLITA or COMPLETATA, Trascritto
+  unchanged), the banner goes away and every action of AC-454 is enabled again, on the same Voci and
+  the same attributed Nomi (nothing lost); the Proposta job starts again. Presenter test: stati source
+  IN_CORSO → FALLITA and IN_ATTESA → COMPLETATA.
+- **ui-fondamenta** — **AC-477** `MessaggiErrore`: `ElaborazioneGiaAvviata` → 'La trascrizione è già
+  partita: non si può più annullare'; `ElaborazioneNonTrovata` → 'Questa trascrizione non è più in
+  coda'; `ElaborazioneGiaCompletata` has no branch (removed, AC-432). AC-180 still holds.
+- **avvio-composizione** (R1) — **AC-478** The R1 composition supplies `AnnullaElaborazione` to the S2
+  presenter (over `eventi.unitaDiLavoro`), and `AggiornamentiVistaTrascrizione` maps
+  `ElaborazioneAnnullata` after commit to ONE `Cambiamento(registrazioneId)` (AC-354 list extended).
+  E2E on `databaseInMemoria` with fake ML ports and a held pipeline: A is `in_corso`, B and C are
+  queued; cancel B → B has no `elaborazione` row, S2 shows B 'Trascrivi' (NON_AVVIATA) and C 'In coda
+  (1)'; when A ends the queue runs C, and the fake pipeline is never invoked for B.
+- **avvio-parlanti** (R2) — **AC-479** E2E, AC-458's setup: 'Ritrascrivi', then cancel while it is
+  queued → the `attribuzione`/`impronta_vocale` rows, the Trascritto, the Documento file bytes and the
+  Galleria are unchanged; no `TrascrittoSostituito` is published; S2 shows 'Completata' +
+  'Ritrascrivi'; S3 is editable again (AC-461).
+
+### Not changed (b)
+- **avvio-coda-elaborazioni / CodaElaborazioni:** no signal on cancellation (it never makes work
+  available); the claim already reads the head inside its transaction (AC-314) and fix-batch-17's
+  `BEGIN IMMEDIATE` serializes it against the cancellation (proved by AC-473).
+- **abbonato-documento, rigenerazione-documento, Parlanti subscribers:** do not subscribe to
+  `ElaborazioneAnnullata`.
+- **schermata-registrazione (R1 part):** gains no command; only its banner text changes (AC-452).
