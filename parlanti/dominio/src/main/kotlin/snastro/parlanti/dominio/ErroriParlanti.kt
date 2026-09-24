@@ -39,4 +39,11 @@ public sealed interface ErroreParlanti : ErroreDominio {
      * and the command's transaction; nothing written, the user retries.
      */
     public data class VoceCambiata(val voceRef: VoceRef) : ErroreParlanti
+
+    /**
+     * [INV-27] (`piano-riassegnazione`, ADR 0019 §4.2 + Amendment 2026-09-24 (b).1): fewer than 2
+     * reference Parlanti in the Registrazione — the plan needs at least 2 to compare against. No
+     * extraction runs.
+     */
+    public data class RiferimentiInsufficienti(val registrazioneId: RegistrazioneId) : ErroreParlanti
 }

@@ -272,6 +272,68 @@ public abstract class LettoreVociContratto {
         )
     }
 
+    @Test
+    public fun `AC-494 senza Trascritto segmenti restituisce null`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val mai = a.aggiungiRegistrazione()
+        val fallita = a.aggiungiRegistrazione()
+        a.fallisciElaborazione(fallita)
+
+        assertNull(lettore.segmenti(SCONOSCIUTA))
+        assertNull(lettore.segmenti(mai))
+        assertNull(lettore.segmenti(fallita))
+    }
+
+    @Test
+    public fun `AC-494 ogni Segmento corrente compare una volta ordinato per inizio poi segmentoId con confermato come memorizzato`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val id = a.aggiungiRegistrazione()
+        val turni = listOf(
+            SemeTurno(0, IntervalloMs(8_000, 10_000)),
+            SemeTurno(1, IntervalloMs(1_000, 3_000)),
+            SemeTurno(0, IntervalloMs(1_000, 3_000)), // stesso intervallo del precedente: l'ordine segue il segmentoId
+        )
+        val c = a.completaElaborazione(id, turni)
+        val (prima, seconda) = if (c[1].segmentoId.numero < c[2].segmentoId.numero) c[1] to c[2] else c[2] to c[1]
+        a.conferma(id, prima.segmentoId)
+
+        assertEquals(
+            listOf(
+                SegmentoDiVoce(prima.segmentoId, prima.voceId, IntervalloMs(1_000, 3_000), confermato = true),
+                SegmentoDiVoce(seconda.segmentoId, seconda.voceId, IntervalloMs(1_000, 3_000), confermato = false),
+                SegmentoDiVoce(c[0].segmentoId, c[0].voceId, turni[0].intervallo, confermato = false),
+            ),
+            lettore.segmenti(id),
+        )
+    }
+
+    @Test
+    public fun `AC-494 dopo DividiVoce i segmenti riflettono la Voce corrente e il sottoinsieme spostato e confermato`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val id = a.aggiungiRegistrazione()
+        val turni = listOf(
+            SemeTurno(0, IntervalloMs(0, 1_000)),
+            SemeTurno(0, IntervalloMs(1_000, 2_000)),
+            SemeTurno(1, IntervalloMs(2_000, 3_000)),
+        )
+        val c = a.completaElaborazione(id, turni)
+
+        val nuova = a.dividi(id, origine = c[0].voceId, segmenti = setOf(c[1].segmentoId))
+
+        // [INV-26]: DividiVoce conferma il sottoinsieme spostato (c[1]); l'origine e il resto restano com'erano.
+        assertEquals(
+            listOf(
+                SegmentoDiVoce(c[0].segmentoId, c[0].voceId, turni[0].intervallo, confermato = false),
+                SegmentoDiVoce(c[1].segmentoId, nuova, turni[1].intervallo, confermato = true),
+                SegmentoDiVoce(c[2].segmentoId, c[2].voceId, turni[2].intervallo, confermato = false),
+            ),
+            lettore.segmenti(id),
+        )
+    }
+
     private companion object {
         val SCONOSCIUTA = RegistrazioneId("registrazione-sconosciuta")
     }

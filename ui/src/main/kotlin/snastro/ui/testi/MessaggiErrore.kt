@@ -84,6 +84,9 @@ fun messaggioPer(errore: ErroreParlanti): String = when (errore) {
     ErroreParlanti.NomeVuoto -> "Il nome non può essere vuoto."
     is ErroreParlanti.VoceGiaAttribuita -> "Questa voce è già stata attribuita a un parlante."
     is ErroreParlanti.VoceCambiata -> "La voce è cambiata nel frattempo: riprova."
+    // AC-495: unreachable from the UI (the button is disabled before this can happen); a plain
+    // fallback line only, so the exhaustive `when` (RC-4) stays total.
+    is ErroreParlanti.RiferimentiInsufficienti -> "Servono almeno due parlanti con una frase di riferimento."
 }
 
 /** AC-229/230: nothing is ever installed on any of these (ADR 0008 (c) install protocol). */

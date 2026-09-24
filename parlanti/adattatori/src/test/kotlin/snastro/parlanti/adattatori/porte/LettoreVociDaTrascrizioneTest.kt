@@ -26,6 +26,8 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.DividiVoceServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
@@ -59,7 +61,8 @@ import java.time.ZoneOffset
  * catalogue row) and Trascrizione (the actual supplier of `voci-per-parlanti`) are populated
  * exclusively through THEIR OWN commands — Progetto's `CreaProgetto`/`AggiungiRegistrazione`,
  * Trascrizione's `AvviaElaborazione`/`EseguiProssimaElaborazione`/`UnisciVoci`/`DividiVoce`/
- * `RiassegnaSegmento` — this test never builds a `Registrazione`/`Trascritto` itself. The commands
+ * `RiassegnaSegmento`/`ConfermaSegmento` (AC-524) — this test never builds a `Registrazione`/
+ * `Trascritto` itself. The commands
  * run over each supplier's OWN in-memory port fakes (`applicazione` testFixtures): the cross-context
  * dependency rule (ADR 0002, CR-1) allows `parlanti:adattatori` to call only `progetto:applicazione` /
  * `trascrizione:applicazione`, never their `adattatori`'s SQL repositories — so minted ids are read
@@ -174,6 +177,12 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
                 .esegui(RiassegnaSegmento(registrazioneId, segmento, destinazione))
                 .atteso()
             return eventiTrascrizione.pubblicati.filterIsInstance<SegmentoRiassegnato>().last().a
+        }
+
+        override fun conferma(registrazioneId: RegistrazioneId, segmento: SegmentoId) {
+            ConfermaSegmentoServizio(eventiTrascrizione.unitaDiLavoro, trascritti, eventiTrascrizione)
+                .esegui(ConfermaSegmento(registrazioneId, segmento, confermato = true))
+                .atteso()
         }
 
         private fun avvia(registrazioneId: RegistrazioneId) {

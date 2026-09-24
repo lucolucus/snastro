@@ -12,4 +12,11 @@ public interface LettoreVoci {
      * `null` iff the Registrazione has no Trascritto (INV-5): unknown id, or no Elaborazione completata.
      */
     public fun voci(id: RegistrazioneId): List<VoceVista>?
+
+    /**
+     * Every CURRENT Segmento of the Trascritto of [id], once each, ordered by (inizioMs, segmentoId); or
+     * `null` iff the Registrazione has no Trascritto (INV-5), exactly as [voci]. NEVER the text
+     * (ADR 0019 §4.1, consumer `piano-riassegnazione`).
+     */
+    public fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>?
 }
