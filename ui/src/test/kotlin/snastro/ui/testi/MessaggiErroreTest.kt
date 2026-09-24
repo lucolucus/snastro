@@ -13,6 +13,7 @@ import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
+import snastro.ui.modelli.ErroreServizioModelli
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -150,6 +151,20 @@ class MessaggiErroreTest {
     }
 
     @Test
+    fun `AC-180 ErroreServizioModelli`() {
+        verificaCopertura(
+            ErroreServizioModelli::class.java,
+            listOf(
+                ErroreServizioModelli.HashNonValido("asr-parakeet-tdt-0.6b-v3-int8"),
+                ErroreServizioModelli.ArchivioNonValido("segmentazione-pyannote-3.0"),
+                ErroreServizioModelli.ReteAssente,
+                ErroreServizioModelli.ScritturaFallita("disco pieno"),
+                ErroreServizioModelli.DownloadFallito("connessione interrotta"),
+            ),
+        ) { messaggioPer(it) }
+    }
+
+    @Test
     fun `il punto di ingresso instrada ogni gerarchia raggiungibile`() {
         val esempi: List<ErroreDominio> = listOf(
             ErroreSessione.CartellaNonValida,
@@ -157,6 +172,7 @@ class MessaggiErroreTest {
             ErroreProgetto.ProgettoGiaPresente,
             ErroreTrascrizione.NessunParlatoRilevato,
             ErroreParlanti.NomeVuoto,
+            ErroreServizioModelli.ReteAssente,
         )
         esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank()) }
     }

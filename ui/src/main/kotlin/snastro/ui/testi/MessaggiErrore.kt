@@ -6,6 +6,7 @@ import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
+import snastro.ui.modelli.ErroreServizioModelli
 
 /**
  * R25: one exhaustive `messaggioPer` per context error hierarchy (no `else`, AC-180), plus this
@@ -20,6 +21,7 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
     is ErroreProgetto -> messaggioPer(errore)
     is ErroreTrascrizione -> messaggioPer(errore)
     is ErroreParlanti -> messaggioPer(errore)
+    is ErroreServizioModelli -> messaggioPer(errore)
     else -> error("ErroreDominio non mappato: $errore")
 }
 
@@ -77,4 +79,14 @@ fun messaggioPer(errore: ErroreParlanti): String = when (errore) {
     ErroreParlanti.NomeVuoto -> "Il nome non può essere vuoto."
     is ErroreParlanti.VoceGiaAttribuita -> "Questa voce è già stata attribuita a un parlante."
     is ErroreParlanti.VoceCambiata -> "La voce è cambiata nel frattempo: riprova."
+}
+
+/** AC-229/230: nothing is ever installed on any of these (ADR 0008 (c) install protocol). */
+fun messaggioPer(errore: ErroreServizioModelli): String = when (errore) {
+    is ErroreServizioModelli.HashNonValido -> "Il file scaricato non è valido: nessun modello è stato installato."
+    is ErroreServizioModelli.ArchivioNonValido ->
+        "L'archivio scaricato non è valido: nessun modello è stato installato."
+    ErroreServizioModelli.ReteAssente -> "Rete non raggiungibile: impossibile scaricare i modelli."
+    is ErroreServizioModelli.ScritturaFallita -> "Non è stato possibile salvare i modelli sul disco."
+    is ErroreServizioModelli.DownloadFallito -> "Il download dei modelli non è riuscito."
 }

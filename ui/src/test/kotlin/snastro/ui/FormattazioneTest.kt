@@ -19,4 +19,14 @@ class FormattazioneTest {
     fun `AC-179 2026-09-12 diventa 12 09 2026`() {
         assertEquals("12/09/2026", formattaData(LocalDate.of(2026, 9, 12)))
     }
+
+    @Test
+    fun `AC-227 487170055 byte diventano 464 6 MB`() {
+        assertEquals("464.6 MB", formattaByte(487_170_055))
+    }
+
+    @Test
+    fun `AC-227 0 byte diventano 0 0 MB`() {
+        assertEquals("0.0 MB", formattaByte(0))
+    }
 }
