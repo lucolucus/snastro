@@ -37,5 +37,17 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "snastro.avvio.MainKt"
+        nativeDistributions {
+            // ADR 0016 §3: generated under build/ (never src/), filled by the root task
+            // scaricaNativiSherpa (<this dir>/<os-arch>/ = the two sherpa-onnx libs). At runtime Compose
+            // exposes the merged folder as `compose.application.resources.dir` (MotoreSherpa.caricaNativi).
+            appResourcesRootDir.set(layout.buildDirectory.dir("risorse-app"))
+        }
     }
+}
+
+// ADR 0016 §2: the natives are fetched for run / distribution only — never for `check`. Compose's
+// validation also requires this edge for prepareAppResources, which reads appResourcesRootDir.
+tasks.matching { it.name in setOf("run", "createDistributable", "prepareAppResources") }.configureEach {
+    dependsOn(":scaricaNativiSherpa")
 }
