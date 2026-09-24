@@ -71,6 +71,11 @@ class ShellPresenter(
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
                 _stato.value = statoConErrore(MESSAGGIO_ERRORE_GENERICO)
+            } finally {
+                // L457a: same fallback as `chiudi` (:121) — a CancellationException above is rethrown
+                // without ever reaching `applica`/the catch block, which would otherwise leave `_stato`
+                // stuck at Caricamento forever for a `scope` that outlives this one cancelled operation.
+                if (_stato.value is ShellUiStato.Caricamento) _stato.value = statoDi(sessione.corrente.value)
             }
         }
     }
@@ -82,7 +87,16 @@ class ShellPresenter(
     // `chiudi` and any change to `sessione.corrente` from outside this call (RC-1: re-decides nothing).
     private fun applica(esito: Esito<ProgettoAperto>) {
         _stato.value = when (esito) {
-            is Esito.Ok -> ShellUiStato.ConProgetto(esito.valore, sezioniDisponibili, destinazioneCorrente)
+            // L457b: `sessione.corrente.value`, not `esito.valore` — if `corrente` already moved past
+            // what THIS call returned (a newer apri/crea/reload landed there meanwhile), showing
+            // `esito.valore` would overwrite that newer Progetto with a stale one. Falls back to
+            // `esito.valore` only in the impossible case `corrente` reads back `null` right after a
+            // successful apri/crea (CR-6: never `!!`).
+            is Esito.Ok -> ShellUiStato.ConProgetto(
+                sessione.corrente.value ?: esito.valore,
+                sezioniDisponibili,
+                destinazioneCorrente,
+            )
             is Esito.Errore -> statoConErrore(messaggioPer(esito.errore))
         }
     }

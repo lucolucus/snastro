@@ -40,9 +40,9 @@
 - One **SQLDelight + sqlite-jdbc** database per Progetto (`progetto.db`): source of truth for
   Registrazioni, Elaborazioni, Trascritti (Voci/Segmenti), Parlanti (+ ImprontaVocale), Attribuzioni.
   WAL, `foreign_keys=ON`, `secure_delete=ON`.
-- **Migrations forward-only**, verified in the gate (`verifySqlDelightMigration`); committed
-  schema snapshots `persistenza/src/main/sqldelight/databases/*.db` are the scoped exception to
-  "never commit DB files" (schema only).
+- **Migrations forward-only**, verified in the gate by the `:persistenza:test` migration test
+  (ADR 0006 Amendment (a)); a committed `.sqm` is never edited (a fix is a new migration), no down
+  migrations.
 - Set invariants INV-4 / INV-16 backed by partial unique indexes (ADR 0007).
 - Documenti `.md` are derived: written atomically, never read back (enforced_by, ADR 0010).
 

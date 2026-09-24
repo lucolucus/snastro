@@ -487,7 +487,9 @@ class RegistrazioniPresenterTest {
         )
         advanceUntilIdle()
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
-        assertEquals(StatoElaborazioneRiga.Fallita("audio illeggibile"), riga.elaborazione)
+        // L548c: Fallita now also carries elaborazioneId (equality includes it).
+        val fallitaAttesa = StatoElaborazioneRiga.Fallita("audio illeggibile", ElaborazioneId("elaborazione-id-1"))
+        assertEquals(fallitaAttesa, riga.elaborazione)
         assertEquals("2", riga.numeroPersone)
     }
 
@@ -656,7 +658,9 @@ class RegistrazioniPresenterTest {
 
         val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
         assertEquals(listOf(REG_1), dati.righe.map { it.registrazioneId })
-        assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
+        // L485a: a refresh failure is `erroreAggiornamento`, never the import-only `errore` field.
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.erroreAggiornamento)
+        assertNull(dati.errore)
     }
 
     // --- M1: a refresh merges into the current state, it never wipes in-flight flags -------------

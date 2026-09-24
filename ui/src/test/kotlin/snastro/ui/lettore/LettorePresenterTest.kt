@@ -218,7 +218,8 @@ class LettorePresenterTest {
             presenter.riproduci(REGISTRAZIONE_ID, 0)
             advanceUntilIdle()
 
-            val stato = assertIs<LettoreUiStato.NonDisponibile>(presenter.stato.value)
+            // L471d: a transient port fault is a distinct, retry-enabled `Errore` — NOT `NonDisponibile`.
+            val stato = assertIs<LettoreUiStato.Errore>(presenter.stato.value)
             assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.messaggio)
 
             // the `stato` collector survived the fault: a later, successful request still resolves.
@@ -244,7 +245,9 @@ class LettorePresenterTest {
             presenter.riproduci(REGISTRAZIONE_ID, 0)
             advanceUntilIdle()
 
-            val stato = assertIs<LettoreUiStato.NonDisponibile>(presenter.stato.value)
+            // L471d: same distinct `Errore` state as HIGH-2 (this is a spurious CancellationException
+            // from the port, mapped to the same generic fault — not `NonDisponibile`).
+            val stato = assertIs<LettoreUiStato.Errore>(presenter.stato.value)
             assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.messaggio)
 
             // the `stato` collector survived the fault: a later, successful request still resolves.
@@ -253,6 +256,96 @@ class LettorePresenterTest {
             advanceUntilIdle()
             assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
         }
+
+    @Test
+    fun `L471d un errore transitorio e un Errore distinto, e un nuovo play sullo stesso id riesce`() = runTest {
+        var primaChiamata = true
+        val fake = object : LettoreAudio {
+            private val _stato = MutableStateFlow(StatoLettore(null, 0, false))
+            override val stato: StateFlow<StatoLettore> = _stato.asStateFlow()
+
+            override fun disponibile(id: RegistrazioneId): Boolean = true
+
+            override fun riproduciDa(id: RegistrazioneId, daMs: Long) {
+                if (primaChiamata) {
+                    primaChiamata = false
+                    error("guasto transitorio")
+                }
+                _stato.value = StatoLettore(id, daMs, inRiproduzione = true)
+            }
+
+            override fun riproduciEstratto(e: EstrattoRef): Nothing = error("non usato in questo test")
+
+            override fun pausa() = Unit
+        }
+        val presenter = presentatore(this, fake)
+
+        presenter.riproduci(REGISTRAZIONE_ID, 0)
+        advanceUntilIdle()
+        val stato = assertIs<LettoreUiStato.Errore>(presenter.stato.value)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.messaggio)
+
+        // Unlike `NonDisponibile` (a real source problem, BarraLettore disables the control), a
+        // transient `Errore` leaves the play control enabled — retrying the SAME id must be able to
+        // succeed once the fault does not repeat.
+        presenter.riproduci(REGISTRAZIONE_ID, 0)
+        advanceUntilIdle()
+        val dopo = assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
+        assertEquals(0, dopo.posizioneMs)
+    }
+
+    @Test
+    fun `L471c una richiesta superata che lancia in ritardo non corrompe lo stato della richiesta vincente`() {
+        val eseguitori = Executors.newFixedThreadPool(4)
+        val ioReale = eseguitori.asCoroutineDispatcher()
+        try {
+            val idA = RegistrazioneId("id-A")
+            val idB = RegistrazioneId("id-B")
+            val entrataA = CountDownLatch(1)
+            val viaLiberaA = CountDownLatch(1)
+            val fake = object : LettoreAudio {
+                private val _stato = MutableStateFlow(StatoLettore(null, 0, false))
+                override val stato: StateFlow<StatoLettore> = _stato.asStateFlow()
+
+                override fun disponibile(id: RegistrazioneId) = true
+
+                override fun riproduciDa(id: RegistrazioneId, daMs: Long) {
+                    if (id == idA) {
+                        entrataA.countDown()
+                        assertTrue(viaLiberaA.await(5, TimeUnit.SECONDS), "timeout in attesa del via libera")
+                        // A is already SUPERSEDED by the time it throws — the late fault of a request
+                        // nobody is waiting for any more (L471c).
+                        error("guasto tardivo di una richiesta gia superata")
+                    }
+                    _stato.value = StatoLettore(id, daMs, inRiproduzione = true)
+                }
+
+                override fun riproduciEstratto(e: EstrattoRef): Nothing = error("non usato in questo test")
+
+                override fun pausa() = Unit
+            }
+            val scope = CoroutineScope(SupervisorJob() + ioReale)
+            val presenter = LettorePresenter(scope, ioReale, fake)
+
+            presenter.riproduci(idA, 0)
+            assertTrue(entrataA.await(5, TimeUnit.SECONDS), "A non e entrato in riproduciDa")
+
+            // B supersedes A while A is blocked inside its own (about to throw) port call. The single
+            // lane (HIGH-1) means B's own port call cannot even START until A's slot frees, so release
+            // A right away — otherwise this deadlocks (B waiting on the lane, the test waiting on B).
+            presenter.riproduci(idB, 0)
+            viaLiberaA.countDown()
+
+            // L471c: A's late throw (of a request already superseded when it started) must never
+            // surface as Caricamento/Errore — only B's own success is ever applied.
+            val statoFinale = attendiStato(presenter) { it is LettoreUiStato.Pronto }
+            val pronto = assertIs<LettoreUiStato.Pronto>(statoFinale)
+            assertEquals(0, pronto.posizioneMs)
+            assertEquals(idB, fake.stato.value.registrazioneId)
+        } finally {
+            eseguitori.shutdownNow()
+        }
+    }
 
     @Test
     fun `HIGH-1 un comando lento non viene mai eseguito in concorrenza con uno piu recente`() {

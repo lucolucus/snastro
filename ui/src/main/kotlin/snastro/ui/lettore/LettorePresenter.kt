@@ -102,7 +102,10 @@ class LettorePresenter(
             ) {
                 ensureActive()
                 nuovoIdAtteso = null
-                esito = LettoreUiStato.NonDisponibile(MESSAGGIO_ERRORE_GENERICO)
+                // L471d: a transient port fault is NOT "the source is unavailable" — `Errore` keeps the
+                // play control enabled so the user can just retry, instead of `NonDisponibile`'s disabled
+                // state (which would also block a retry of a fault that may well not repeat).
+                esito = LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
             } catch (
                 // HIGH-2: `disponibile`/`riproduciDa`/`riproduciEstratto`/`pausa` may throw (e.g.
                 // LineUnavailableException, IOException) — mapped to the one fixed message rather than
@@ -111,7 +114,8 @@ class LettorePresenter(
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
                 nuovoIdAtteso = null
-                esito = LettoreUiStato.NonDisponibile(MESSAGGIO_ERRORE_GENERICO)
+                // L471d: see the CancellationException branch above — same distinct, retry-enabled state.
+                esito = LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
             } finally {
                 // HIGH-1/HIGH-2: only the still-current request may touch shared state — a superseded one
                 // (cancelled, or merely finished late) is dropped here even where cancellation alone could

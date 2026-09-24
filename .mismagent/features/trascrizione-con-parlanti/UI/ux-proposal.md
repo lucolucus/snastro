@@ -49,6 +49,7 @@ and **Parlanti**. There is no global menu logic beyond this.
 - **Data view `RegistrazioniDelProgetto`:** `[{ registrazioneId, titolo, dataRegistrazione,
   durataMs, stato: StatoElaborazione, fase?: FaseElaborazione, avviataAlle?, motivoFallimento?,
   posizioneInCoda?, numVoci?, numVociDaIdentificare? }]`.
+- *(amended 2026-09-25 [user], ADR 0020)* Every row has a More menu with "Elimina…" (`EliminaRegistrazione`, R2) — see "Amendment 2026-09-25 (Elimina registrazione)" at the end.
 - **Commands:** `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` (~~retry~~ "Trascrivi" and
   "Riprova", with the optional `numeroPersone` — amended 2026-09-24).
 
@@ -308,3 +309,33 @@ Source: `UI/design-system/` (the approved Snastro design system) and manifest de
 follows the design system (part A, AC-551…589). Part B (`momenti.md`: recording page in every state,
 time estimate, Riassunto tab with facts, project home "Da fare" + summary, clickable voice lanes) is
 specified in the delta and waits for the user's confirmation item by item.
+
+## Amendment 2026-09-25 (Elimina registrazione) [user]
+Source: [ADR 0020](../../../decisions/0020-elimina-registrazione.md) §6 (the single home of the texts), user decision
+2026-09-25 (defaults accepted); manifest delta `manifest-deltas/2026-09-25-elimina-registrazione.md` (AC-625..629). The
+S2 text above is kept; this amendment adds to it.
+- **More menu on every S2 row (R2 only).**
+  - It replaces AC-575's "More only on Trascritta rows": the menu holds "Elimina…" (Trash icon), plus "Ritrascrivi"
+    where it is offered today.
+  - "Elimina…" is **disabled**, with a caption, on "In coda" rows ("Annulla prima la trascrizione in coda.") and on
+    "In corso" rows ("Non puoi eliminarla durante la trascrizione.").
+  - Queued runs are not cancelled implicitly: the user uses the row's "Annulla" first [user].
+  - R0/R1 show no "Elimina…".
+- **Confirmation dialog** (`anteprime/Dialog.html`, danger primary):
+  - title "Eliminare «<titolo>»?";
+  - with a transcript: "Verranno cancellati il file audio copiato nel progetto, la trascrizione con le correzioni
+    delle voci, i nomi dati alle voci, il documento e le impronte vocali ricavate da questa registrazione. Non si può
+    annullare." + "Le persone ricorrenti restano, con le impronte delle altre registrazioni. Le persone occasionali
+    che compaiono solo qui spariscono. Il file originale fuori dal progetto non viene toccato.";
+  - without a transcript: "Verrà cancellato il file audio copiato nel progetto. Il file originale fuori dal progetto
+    non viene toccato. Non si può annullare.";
+  - buttons "Annulla" / "Elimina".
+- **After "Elimina".**
+  - The row disappears, and a closable notice "«<titolo>» eliminata." appears above the list.
+  - If that recording was playing, playback stops.
+  - The S4 counts, the Proposte and the Galleria forget it on the refresh.
+  - The app never returns to S3 of a deleted recording: the navigation forgets it.
+  - If the transcription started meanwhile, the row shows "La trascrizione è partita: non puoi eliminarla finché non
+    è finita.".
+- **Blocks:** `schermata-registrazioni` (menu, dialog, notice, errors), `avvio-parlanti` (wiring, player stop,
+  navigation).

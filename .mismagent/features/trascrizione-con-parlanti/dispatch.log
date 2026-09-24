@@ -782,3 +782,25 @@
 2026-09-24T22:00:57Z	pr-b4	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
 2026-09-24T22:00:57Z	pr-b4	composer	merge	cycle=0	-	-	MERGED 0850776
 2026-09-24T22:00:57Z	pr-b4	composer	residue	-	-	-	MED DecodificaFfmpeg fixed tmp name races when 2 decoders hit the same id (use createTempFile); MED no failure-path test for atomic WAV; LOW FileDialog has no start dir; exit waits up to 3s+3s; tornaAllElenco KDoc stale; L530f copy says newer for v1
+2026-09-24T22:06:16Z	(elimina-registrazione)	decision	result	-	-	-	USER: add delete-recording with defaults — Elimina… in the row menu + confirmation listing what is lost; hard-delete audio copy, Trascritto, Documento .md and ImprontaVocale sourced from it (biometric, ADR 0009); ricorrenti stay (their other prints kept); orphan occasionali vanish (INV-25); refused while in_corso; in_attesa → annul first then delete
+2026-09-24T22:12:25Z	pr-b3	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 17680e9 (skipped L750b cross-boundary, L750c reverted — breaks panel visibility, L761f no fix direction)
+2026-09-24T22:12:25Z	pr-b3	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T22:14:17Z	pr-b5	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 6d008d7
+2026-09-24T22:14:17Z	pr-b5	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T22:15:13Z	pr-b3	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / CHANGES (1 HIGH: L573a supersession ineffective once a command is in flight on multi-thread io)
+2026-09-24T22:15:13Z	pr-b3	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework HIGH L573a + MED L665a regression + MED L573b thrown→Errore
+2026-09-24T22:15:13Z	pr-b3	composer	residue	-	-	-	L750b structured preview rows (PannelloSomiglianza unowned); L750c stacked-1024 layout rethink; L761f direction to pin; L573d highlight persists after playback ends (player has no end event); L761d Crea Primario can coexist with a card Primario
+2026-09-24T22:17:52Z	(elimina-registrazione)	architect	result	-	deep	opus	ADR 0020 + delta 2026-09-25 (AC-597..636, 5 new + 12 reworked blocks, waves 17-21); fold AFTER pr-b2/pr-b3 merge (file overlap)
+2026-09-24T22:18:58Z	pr-b5	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
+2026-09-24T22:18:58Z	pr-b5	composer	merge	cycle=0	-	-	MERGED 2a286a6
+2026-09-24T22:18:58Z	pr-b5	composer	residue	-	-	-	MED seminaTrascrittoDiProva usable from any testFixtures(:persistenza) consumer — extend §14 grep with allow-list; MED AC-459 flake root cause: settle Documento before snapshot; LOW dev-arch §7 example wiring name; RegoleArchitetturaliTest KDoc cites verifySqlDelightMigration
+2026-09-24T22:31:54Z	pr-b3	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW a39ba84
+2026-09-24T22:31:54Z	pr-b3	verifier+code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T22:33:57Z	pr-b3	verifier+code-review	result	cycle=1	tier=deep	model=opus	PASS / APPROVE
+2026-09-24T22:33:57Z	pr-b3	composer	merge	cycle=1	-	-	MERGED 3a404a7
+2026-09-24T22:33:57Z	pr-b3	composer	residue	-	-	-	MED StatoVoci keeps last-good dati across a ritrascrivi (renumbered VoceIds show old Nome if reload fails) — drop dati when vista changed; LOW-MED queued pausa cancelled by a following no-op click; LOW lanes per presenter (LettorePresenter vs RegistrazionePresenter); comment 83-84 wording
+2026-09-24T23:28:05Z	pr-b2	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 0306d4a (L478b skipped: ticker hangs advanceUntilIdle tests)
+2026-09-24T23:28:05Z	pr-b2	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T23:32:38Z	pr-b2	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE, no conflicts
+2026-09-24T23:32:38Z	pr-b2	composer	merge	cycle=0	-	-	MERGED 0b81c66 — pre-release triage list B1..B5 closed
+2026-09-24T23:32:38Z	pr-b2	composer	residue	-	-	-	MED L478b still open: view-only ticker (LaunchedEffect in StatoInCorso) viable; MED L548a parity test pins only the domain; MED L755c CampoData double Tab stop / Enter on focusable; LOW riprova guard; L755d untested

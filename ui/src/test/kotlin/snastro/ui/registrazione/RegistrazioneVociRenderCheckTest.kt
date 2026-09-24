@@ -74,6 +74,7 @@ import java.io.File
 import java.time.LocalDate
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 private const val W_GRANDE = 1280
@@ -522,6 +523,30 @@ class RegistrazioneVociRenderCheckTest {
     }
 
     @Test
+    fun `L718 il bersaglio di tocco di occasionale e l intera riga, non il solo quadratino`() {
+        var scelto: ObiettivoNome? = null
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, nominaFrase = { scelto = it })
+        scena(
+            "l718-occasionale-bersaglio",
+            stato(pannello(CARTE_TRE), selezione = setOf(SegmentoId(2)), barra = barraFrase(confermato = false)),
+            azioni,
+        ) {
+            onNodeWithTag("registrazione-nomina-frase").performClick()
+            onAllNodesWithText(ETICHETTA_NUOVA_PERSONA).onLast().performClick()
+            onNodeWithTag("registrazione-frase-modulo-nuovo").assertIsDisplayed()
+            onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("registrazione-frase-nuovo-nome")))
+                .performTextInput("Dario")
+            // L718: the checkbox alone used to be only SnastroMisure.iconM (20dp) — the tag now sits on
+            // the WHOLE toggleable row (checkbox + label); a click anywhere on it, not just the little
+            // square, must flip the state.
+            onNodeWithTag("registrazione-frase-nuovo-occasionale").assertIsOff().performClick()
+            onNodeWithTag("registrazione-frase-nuovo-occasionale").assertIsOn()
+            onNodeWithTag("registrazione-frase-nuovo-crea").performClick()
+        }
+        assertEquals(ObiettivoNome.Nuovo("Dario", ricorrente = false), scelto)
+    }
+
+    @Test
     fun `AC-528 frase confermata con la puntina e Togli conferma`() {
         var tolta = false
         val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, togliConferma = { tolta = true })
@@ -831,14 +856,55 @@ class RegistrazioneVociRenderCheckTest {
         }
 
     @Test
+    fun `L761d aprire il modulo nuovo declassa il Primario della card, il Crea del modulo resta Primario`() =
+        scena("l761d-crea-vs-primario-card", stato(pannello(listOf(CARTA_NESSUNA)))) {
+            assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-3-nuovo"))
+            onNodeWithTag("voce-3-nuovo").performClick()
+            onNodeWithTag("voce-3-modulo-nuovo").assertIsDisplayed()
+            // L761d: this card's own action, once its 'nuovo…' form is open, is demoted to Secondario —
+            // the form's own 'Crea' (always `VarianteBottone.Primario`, unconditionally, in `ModuloNuovo`)
+            // is the ONE Primario left on screen. (Not an exact `raised` match: the Secondario variant's
+            // own 1dp border now falls right at the sample point, so the pixel is a partial blend with
+            // it — "no longer the accent fill" is the precise, robust claim here.)
+            assertNotEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-3-nuovo"))
+        }
+
+    @Test
+    fun `L761d durante il calcolo di Riassegna per somiglianza nessuna card riceve il Primario`() =
+        scena(
+            "l761d-somiglianza-blocca-primario",
+            stato(
+                pannello(
+                    listOf(CARTA_CANDIDATI, CARTA_NESSUNA),
+                    somiglianza = somiglianza(
+                        FaseSomiglianza.Calcolo("Confronto le frasi… 1 di 3", fatti = 1, totale = 3, inAttesa = false),
+                    ),
+                ),
+            ),
+        ) {
+            // L761d: while the Somiglianza header shows its own Primario (computing/'Applica'), no card
+            // competes for it — this is the component's own defensive rule (independent of `soloLettura`,
+            // which the real composition also sets during this phase, AC-531/AC-545). The Somiglianza
+            // card itself now sits above the Voci in the list, so both need scrolling into view.
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-conferma"))
+            assertEquals(ColoriChiari.raised.toArgb(), coloreBottone("voce-2-conferma"))
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-3-nuovo"))
+            assertEquals(ColoriChiari.raised.toArgb(), coloreBottone("voce-3-nuovo"))
+        }
+
+    @Test
     fun `AC-580 Unisci con disponibile su una card non ancora identificata, gate solo su unioneAbilitata`() {
         var unite: Pair<VoceId, VoceId>? = null
         val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, unisci = { a, b -> unite = a to b })
         scena(
             "unisci-non-identificata",
-            // soloLettura=true drives azioniAbilitate/confermaAbilitata to false on the card — 'Altre
-            // azioni' must stay enabled anyway, gated only by pannello.unioneAbilitata (true here).
-            stato(pannello(listOf(CARTA_CANDIDATI.copy(soloLettura = true)))),
+            // L761b: a PENDING command on THIS card (AC-414) drives azioniAbilitate/confermaAbilitata to
+            // false — 'Altre azioni' must stay enabled anyway, gated only by pannello.unioneAbilitata
+            // (true here). The old fixture used `soloLettura = true` instead, a combination that never
+            // occurs in the real app: `StatoVoci.pannelloDi` always sets a card's own `soloLettura` from
+            // the SAME `modificheBloccate` that also drives `unioneAbilitata` false — so `soloLettura`
+            // and `unioneAbilitata` true never coexist there. `inCorso` is the real, reachable case.
+            stato(pannello(listOf(CARTA_CANDIDATI.copy(inCorso = AttesaComando.IN_CORSO)))),
             azioni,
         ) {
             onNodeWithTag("voce-2-cambia").assertIsEnabled().performClick()
@@ -885,6 +951,25 @@ class RegistrazioneVociRenderCheckTest {
             // second row: same Voce as the row right above it → who-line hidden (AC-582)...
             assertEquals(0, onAllNodes(hasTestTag("registrazione-voce-2")).fetchSemanticsNodes().size)
             // ...but it is still confirmed, so the pin (AC-528) must not silently disappear (HIGH-4).
+            onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun `L761c la puntina resta visibile su una riga confermata, consecutiva E selezionata`() {
+        val base = stato(pannello(listOf(CARTA_ATTRIBUITA)), selezione = setOf(SegmentoId(2)))
+        val consecutivi = base.copy(
+            segmenti = listOf(
+                riga(1, 1, "Marco", "Prima frase di Marco."),
+                riga(2, 1, "Marco", "Seconda frase, stessa Voce di seguito.").copy(confermato = true),
+            ),
+        )
+        scena("l761c-pin-selezionato-consecutivo", consecutivi) {
+            // second row: same Voce as the row above → who-line hidden (AC-582), AND selected → the
+            // checkbox (not the timecode) sits in the gutter. The pin must still show next to it — it
+            // used to disappear the moment the row was selected (L761c).
+            assertEquals(0, onAllNodes(hasTestTag("registrazione-voce-2")).fetchSemanticsNodes().size)
+            onNodeWithTag("registrazione-seleziona-2", useUnmergedTree = true).assert(isToggleable()).assertIsOn()
             onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
         }
     }
@@ -967,6 +1052,21 @@ class RegistrazioneVociRenderCheckTest {
         scena("ac585-menu-cambia", stato(pannello(listOf(CARTA_ATTRIBUITA)))) {
             onNodeWithTag("voce-1-cambia").assertIsEnabled().performClick()
             onNodeWithText(ETICHETTA_CAMBIA).assertIsDisplayed()
+        }
+
+    @Test
+    fun `L761a Cambia e Nuova persona sono disabilitati mentre un comando e pendente su quella card`() =
+        scena(
+            "l761a-cambia-disabilitato-pendente",
+            // AC-414: a command pending on THIS card (`inCorso`) already turns `azioniAbilitate`/`haCambia`
+            // off — the presenter's own `invia` already drops a 'Cambia'/'Nuova persona' sent then, so the
+            // menu items must render disabled, not a dead click. `parlantiAttivi` = Giulia + Marco, this
+            // card is Marco's, so the ONE 'Cambia' entry offered is Giulia's.
+            stato(pannello(listOf(CARTA_ATTRIBUITA.copy(inCorso = AttesaComando.IN_CORSO)))),
+        ) {
+            onNodeWithTag("voce-1-cambia").assertIsEnabled().performClick()
+            onNodeWithText(GIULIA.nome).assertIsNotEnabled()
+            onNodeWithText(ETICHETTA_NUOVA_PERSONA).assertIsNotEnabled()
         }
 
     @Test

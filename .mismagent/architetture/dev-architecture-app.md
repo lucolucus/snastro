@@ -141,6 +141,13 @@ public class Parlante private constructor(
   `Esito<List<Evento>>` when one operation emits several). The aggregate keeps no pending-event list.
 - No `data class`, no public `var`, no deletion method (soft state only; biometric rows are the
   documented exception, ADR 0009).
+  *(amended 2026-09-25, [ADR 0020](../decisions/0020-elimina-registrazione.md))* The documented physical deletions
+  are all REPOSITORY `rimuovi`s, reached only through a command or policy, never through an aggregate method:
+  - `Parlante` INV-25 (R25);
+  - an `in_attesa` `Elaborazione` (ADR 0018 (b));
+  - `EliminaRegistrazione`: the `Registrazione`, all of its `Elaborazione`s and its `Trascritto`.
+
+  The aggregate at most returns the domain event (`Registrazione.elimina()`, `Elaborazione.annulla()`).
 - `ricostituisci` is public (repositories live in another module) and gated by the kernel annotation
   `@RequiresOptIn(level = ERROR) annotation class RicostituzioneDaPersistenza`; only
   `..adattatori.persistenza..` may opt in (CR-15). It re-validates nothing — the DB is trusted.
@@ -273,6 +280,15 @@ public sealed interface RegistrazioneUiStato {
 - Per screen: `<X>Presenter` (state holder, unit-tested) · sealed immutable `<X>UiStato` ·
   `Azioni<X>` (lambdas, **one per user action** [user K-c]) · stateless `Schermata<X>` · one-line
   `<X>Route`. Presenters call only `applicazione` (RC-2); composables hold no logic and no I/O.
+- *(amended 2026-09-24, pre-release L478c)* **Function-typed collaborators.** A presenter
+  constructor parameter MAY be a plain function type — `() -> List<X>` for a query, `(Cmd) ->
+  Esito<Unit>` for a command — bound to a collaborator's single public method (a `*Servizio`'s
+  `esegui`, CR-16) instead of the whole typed object, when the presenter calls only that one
+  method: `RegistrazioniPresenter`, `ParlantiPresenter`, `RegistrazionePresenter`, `StatoVoci`
+  already do this (e.g. `private val rinominaParlante: (RinominaParlante) -> Esito<Unit>`, wired
+  as `rinominaParlanteServizio::esegui`). Same test/production wiring as the typed form above —
+  a fake presenter test just passes a lambda instead of a fake service instance; it is not a
+  weaker seam, only a leaner one for a single-method dependency (frugality ladder rung 5).
 - `:ui:renderCheck` renders `Schermata<X>` directly from fixture `UiStato` values (every state).
 - UI strings in `snastro.ui.testi` (Italian only, v1). `MessaggiErrore.kt` *(amended 2026-09-23,
   R25)*: one `messaggioPer(e: Errore<Contesto>)` per context hierarchy, each an exhaustive `when`

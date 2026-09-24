@@ -200,6 +200,14 @@ class RegistrazioniRenderCheckTest {
         verificaLista(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @Test
+    fun `L742d la lista non vuota in trascinamento mostra un feedback di drop a 1280x800`() =
+        verificaListaConDrag(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `L742d la lista non vuota in trascinamento mostra un feedback di drop a 1280x800 (scuro)`() =
+        verificaListaConDrag(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
     fun `AC-343 una riga in riproduzione mostra la pausa a 1280x800`() =
         verificaRigaInRiproduzione(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
 
@@ -516,6 +524,26 @@ class RegistrazioniRenderCheckTest {
             onNodeWithText("Seduta del 12 marzo").assertIsDisplayed()
             onNodeWithTag("registrazioni-riproduzione-${REG_1.valore}").assertIsDisplayed()
             catturaPng("registrazioni-lista", width, height, scuro)
+        }
+
+    /** L742d: a non-empty list gave no visual feedback at all while an OS drag was over the window —
+     * unlike the empty [DropZoneVuota]. The row content stays fully visible/interactive during the drag;
+     * the border/fill switch is proven visually by the captured PNG (same mechanism as
+     * `verificaVuotoConDrag` above, no native-drag simulation API exists in the test harness). */
+    private fun verificaListaConDrag(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = listOf(unaRiga())),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                    dragIniziale = true,
+                )
+            }
+            onNodeWithTag("registrazioni-lista").assertIsDisplayed()
+            onNodeWithText("Seduta del 12 marzo").assertIsDisplayed()
+            catturaPng("registrazioni-lista-trascinamento", width, height, scuro)
         }
 
     private fun verificaRigaInRiproduzione(width: Int, height: Int, scuro: Boolean = false) =

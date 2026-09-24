@@ -21,7 +21,7 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 |---|---|---|
 | `:kernel` | `snastro.kernel` | shared kernel: ids (`@JvmInline value class`: `ProgettoId`, `RegistrazioneId`, `ElaborazioneId`, `VoceId`, `SegmentoId`, `ParlanteId`), `VoceRef`, `IntervalloMs`, `RiferimentoAudio`, `CampioniAudio`, `EstrattoRef`, `Esito`, `ErroreDominio` base, `EventoDominio`, `EventoPubblicato`, `Creato`, `RicostituzioneDaPersistenza`, ports `GeneratoreId`, `UnitaDiLavoro`, `DispatcherEventi` *(amended 2026-09-23, R9)* |
 | `:progetto:dominio` | `snastro.progetto.dominio` | `Progetto`, `Registrazione` aggregates, VOs, events |
-| `:progetto:applicazione` | `snastro.progetto.applicazione` | commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`), queries/read-models, repository ports, `SondaAudio` port, public query API (`CatalogoRegistrazioni`) |
+| `:progetto:applicazione` | `snastro.progetto.applicazione` | commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`, *(2026-09-25, ADR 0020)* `EliminaRegistrazione`, `CompletaEliminazioniRegistrazioni`), queries/read-models, repository ports, `SondaAudio` port, public query API (`CatalogoRegistrazioni`) |
 | `:progetto:adattatori` | `snastro.progetto.adattatori` | SQLDelight repositories, file copy of sources, `SondaAudio` adapter (→ `:audio`) |
 | `:trascrizione:dominio` | `snastro.trascrizione.dominio` | `Elaborazione`, `Trascritto` (`Voce`, `Segmento`, `Revisione` methods), events |
 | `:trascrizione:applicazione` | `snastro.trascrizione.applicazione` | commands (`AvviaElaborazione`, `UnisciVoci`, `DividiVoce`, `RiassegnaSegmento`), read-models, ports (repository; `LettoreRegistrazione` → Progetto; ML: `DecodificatoreAudio`, `Diarizzatore`, `RiconoscitoreParlato`, `Vad`, `Allineatore`, `SegnalatoreFase`), public query API (`VociDelTrascritto`) |
@@ -101,6 +101,15 @@ the plan is a Parlanti read-model, and every invariant is checked by the command
 edges table is unchanged. *(Amended 2026-09-24 [user], ADR 0019 Amendment (b).2: the glue shows the plan as a
 preview and sends the Trascrizione command only on "Applica", with the plan it holds in memory. Holding it is
 allowed because it carries ids and intervals only, never an embedding.)*
+
+**Deleting a Registrazione (2026-09-25 [user], [ADR 0020](decisions/0020-elimina-registrazione.md)).**
+- `EliminaRegistrazione` (Progetto) publishes `RegistrazioneEliminata` inside its transaction. Trascrizione (a veto if
+  an `Elaborazione` is open, then its purge) and Parlanti (purge + INV-25) react as synchronous subscribers, and then
+  the `registrazione` row is removed.
+- Files (`audio/`, `cache/audio/`, the Documento `.md`) are removed after commit by their owners.
+- A Progetto-owned `eliminazione_in_sospeso` row, written in the same transaction, drives crash recovery at the next
+  project open.
+- The edges table is unchanged.
 
 ## Enforcement channels (all inside `./gradlew check`)
 1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).

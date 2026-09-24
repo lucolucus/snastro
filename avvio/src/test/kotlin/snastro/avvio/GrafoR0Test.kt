@@ -60,10 +60,20 @@ class GrafoR0Test {
         val fileR0 = radice.walkTopDown()
             .filter { file -> file.isFile && file.extension == "kt" && estensioni.none { file.startsWith(it) } }
             .toList()
+        // L624b: match the package prefix ANYWHERE a real code line could carry it (a plain
+        // `import`, an `as`-aliased one, or an inline FQN with no import at all) — not just the
+        // literal `import <pacchetto>` prefix, which missed the other two. Comment lines (KDoc
+        // continuation, `//`, or a one-line `/* … */`) are excluded: `CodaElaborazioni.kt` NAMES
+        // `snastro.trascrizione` in its class doc precisely to explain it never imports it.
+        val pattern = proibiti.map { pacchetto -> Regex("""\b${Regex.escape(pacchetto)}\b""") }
         val violazioni = fileR0
-            .flatMap { file -> file.readLines().map { riga -> file to riga } }
-            .filter { (_, riga) -> proibiti.any { riga.trimStart().startsWith("import $it") } }
-            .map { (file, riga) -> "$file: $riga" }
+            .flatMap { file -> file.readLines().mapIndexed { i, riga -> Triple(file, i + 1, riga) } }
+            .filter { (_, _, riga) ->
+                val codice = riga.trimStart()
+                val eCommento = codice.startsWith("*") || codice.startsWith("//") || codice.startsWith("/*")
+                !eCommento && pattern.any { it.containsMatchIn(riga) }
+            }
+            .map { (file, numero, riga) -> "$file:$numero: $riga" }
 
         assertTrue(fileR0.any { it.name == "SessioneProgettoImpl.kt" }, "la guardia deve vedere il grafo R0")
         assertTrue(violazioni.isEmpty(), "il grafo R0 non deve importare i contesti di R1: $violazioni")

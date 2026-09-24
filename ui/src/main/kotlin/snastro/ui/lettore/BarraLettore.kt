@@ -68,6 +68,8 @@ fun BarraLettore(
 ) {
     val colori = LocalSnastroColori.current
     val nonDisponibile = stato as? LettoreUiStato.NonDisponibile
+    // L471d: a transient Errore keeps play enabled — only NonDisponibile/Caricamento disable it.
+    val errore = stato as? LettoreUiStato.Errore
     val inRiproduzione = (stato as? LettoreUiStato.Pronto)?.inRiproduzione == true
     val posizioneMs = (stato as? LettoreUiStato.Pronto)?.posizioneMs ?: 0L
     val abilitato = stato !is LettoreUiStato.NonDisponibile && stato !is LettoreUiStato.Caricamento
@@ -124,6 +126,18 @@ fun BarraLettore(
             ) {
                 IconaSn(Icona.Alert, descrizione = null, tinta = colori.warning, dimensione = SnastroMisure.iconS)
                 Text(text = nd.messaggio, style = LocalSnastroTipografia.current.caption, color = colori.warning)
+            }
+        }
+        // L471d: same caption row as NonDisponibile, but the play control ABOVE stays enabled — this is
+        // a transient fault, not "the source is unavailable".
+        errore?.let { err ->
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space1),
+                modifier = Modifier.padding(top = SnastroMisure.space1).testTag("lettore-errore"),
+            ) {
+                IconaSn(Icona.Alert, descrizione = null, tinta = colori.warning, dimensione = SnastroMisure.iconS)
+                Text(text = err.messaggio, style = LocalSnastroTipografia.current.caption, color = colori.warning)
             }
         }
     }

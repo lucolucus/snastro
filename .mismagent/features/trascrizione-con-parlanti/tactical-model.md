@@ -30,6 +30,7 @@
   **set of `Segmento`s** under `Revisione` ([INV-8]).
 
 ## Tactical model — Progetto — every row names the consumer, or it is not written
+*(amended 2026-09-25 [user], ADR 0020: `EliminaRegistrazione`, `RegistrazioneEliminata`, [INV-28] — see "Amendment 2026-09-25 (ADR 0020)" at the end)*
 - **Aggregates / entities:**
   - `Progetto` (root) — identity + display name; scopes `Registrazione`s and `Parlante`s.
     → manifest `aggregate` block (progetto) + architect decision (persistence)
@@ -315,7 +316,7 @@ Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
   - `Documento` format: `# <titolo>`, a date line "Registrata il dd/MM/yyyy", then one line per
     `Segmento` `**Nome** (mm:ss): testo`; consecutive `Segmento`s of the same `Voce` stay separate lines.
 - **R25 (flag):** `INV-25` is realized with a repository `rimuovi` — the only physical deletion of a
-  `Parlante` (the "no deletion" aggregate rule does not apply: nothing references it).
+  `Parlante` (the "no deletion" aggregate rule does not apply: nothing references it). *(2026-09-25, ADR 0020: `EliminaRegistrazione` adds the physical deletion of a `Registrazione`, of its `Elaborazione`s and of its `Trascritto` — same reason: nothing references them after the command.)*
 
 ## Amendment 2026-09-23 (c): no automatic start; Numero di persone [user] (ADR 0014)
 - **Q-6 superseded.** No `Elaborazione` is started on `RegistrazioneAggiunta`. The Progetto policy
@@ -409,3 +410,55 @@ or replace them.
   a second run may move more, and the preview is the user's check.
 - **The `Proposta`** is fed by the real extractor (TitaNet-small, ADR 0019 §2) with **provisional** `SoglieFascia`
   (user 2026-09-24: show them).
+
+## Amendment 2026-09-25 (ADR 0020 "Elimina registrazione") [user]
+Source: [ADR 0020](../../decisions/0020-elimina-registrazione.md), user decision of 2026-09-25 (defaults accepted); manifest delta
+`manifest-deltas/2026-09-25-elimina-registrazione.md` (AC-597..AC-636). The texts above are kept; these add to them.
+
+**Progetto**
+- **Command `EliminaRegistrazione` (registrazioneId)** (actor: utente — S2 row, More menu, "Elimina…", after a
+  confirmation dialog; R2 only) → application-service block `elimina-registrazione`. ONE transaction, in this order:
+  1. `Registrazione.elimina()`, a pure check that returns the event;
+  2. the `eliminazione_in_sospeso` row;
+  3. publish `RegistrazioneEliminata`, whose synchronous subscribers run next (see below);
+  4. `RegistrazioneRepository.rimuovi`.
+
+  This is a physical deletion like R25: nothing references the row afterwards. Expected errors:
+  `RegistrazioneNonTrovata`, and `ElaborazioneGiaAperta` (the Trascrizione veto, returned unchanged).
+- **Domain event `RegistrazioneEliminata`** (registrazioneId, progettoId, titolo, dataRegistrazione, riferimentoAudio):
+  - **synchronous**: the Trascrizione elimination policy and the Parlanti purge;
+  - **after commit**: the Documento file removal (`abbonato-documento`), the `:avvio` cleanup (audio copy, derived
+    WAV, player, navigation) and `AggiornamentiVista` / `Proposta` invalidation.
+- **Command `CompletaEliminazioniRegistrazioni`** (actor: sistema, at project open) → block `completa-eliminazioni`.
+  It re-runs the file removals of every `eliminazione_in_sospeso` row, then deletes the row (crash recovery).
+- **[INV-28] (new).** A `Registrazione` can be eliminata only if none of its `Elaborazione`s is
+  `in_attesa | in_corso` [user: annullare first, no implicit cancellation]. Its elimination removes, in ONE
+  transaction:
+  - the `Registrazione`;
+  - every `Elaborazione` of it;
+  - its `Trascritto`;
+  - every `Attribuzione` and `ImprontaVocale` keyed by its `VoceRef`s, then [INV-25].
+
+  After the commit nothing keyed by its id survives except the `eliminazione_in_sospeso` row, which is removed once
+  its files are gone. A refused or failed elimination changes nothing.
+  → `elimina-registrazione` (AC-600..604), `eliminazione-registrazione-policy` (AC-608..610), `avvio-parlanti` e2e
+  (AC-634..636).
+
+**Trascrizione**
+- **Policy:** on `RegistrazioneEliminata` (SYNCHRONOUS, in the deleting transaction) → veto if an `Elaborazione` is
+  open (`ElaborazioneGiaAperta`); otherwise delete the `Trascritto` and EVERY `Elaborazione`, history included. This
+  amends ADR 0018 (b)'s "the only physical deletion of an `Elaborazione`". → blocks `eliminazione-registrazione-policy`
+  and `abbonato-eliminazione-trascrizione`.
+
+**Parlanti**
+- **Policy:** on `RegistrazioneEliminata` (SYNCHRONOUS) → the same purge as on `TrascrittoSostituito`: every
+  `Attribuzione` and `ImprontaVocale` of the `Registrazione`, then [INV-25]. A `ricorrente` is kept with its other
+  prints, an `occasionale` seen only there ceases to exist, and an `eliminato` tombstone is kept.
+  → `sostituzione-trascritto-policy` is reused unchanged, reached through `abbonato-revisione-parlanti` (AC-621).
+  [INV-13]/[INV-15]/[INV-17] are untouched. After commit, every print removal now runs `wal_checkpoint(TRUNCATE)`
+  (ADR 0009, AC-622).
+
+**Documento**
+- **Policy:** on `RegistrazioneEliminata` (after commit) → remove the `.md`, named from the event's titolo and date,
+  plus any names still pending from a rename or date change. The removal goes through the same per-`Registrazione`
+  queue as `Rigenerazione`. It never writes. → `rigenerazione-documento` (AC-623) and `abbonato-documento` (AC-624).

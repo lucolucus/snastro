@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
@@ -37,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -125,8 +127,18 @@ internal fun PannelloVociVista(
     }
     // AC-213 + "at most one Primario per screen" (rework cycle 1, HIGH-3): only the FIRST DaIdentificare
     // card in list order gets its own action as Primario; every other one renders the same action
-    // Secondario instead of stacking several Primario buttons on the same screen.
-    val primaCartaAzione = pannello.carte.firstOrNull { it.contenuto is ContenutoCarta.DaIdentificare }?.voceId
+    // Secondario instead of stacking several Primario buttons on the same screen. L761d: while the
+    // Somiglianza header is computing or previewing, ITS OWN 'Applica' (also Primario) is the true
+    // primary action on the screen — no card gets one then, whatever `pannello.carte` says. A card's own
+    // 'nuovo…' form (its 'Crea' is Primario too) demotes THAT card alone, in `CartaVoceVista` below.
+    val faseSomiglianza = pannello.somiglianza?.fase
+    val formSomiglianzaAperta = faseSomiglianza is FaseSomiglianza.Calcolo ||
+        faseSomiglianza is FaseSomiglianza.Anteprima
+    val primaCartaAzione = if (formSomiglianzaAperta) {
+        null
+    } else {
+        pannello.carte.firstOrNull { it.contenuto is ContenutoCarta.DaIdentificare }?.voceId
+    }
     // AC-581: the tab chrome and the somiglianza card are ITEMS of the same LazyColumn, not a fixed
     // header measured before it — a header of unbounded height (the Calcolo/Anteprima phases can grow
     // past a single line) would otherwise starve the list of nearly all its space in the stacked
@@ -236,7 +248,9 @@ private fun CartaVoceVista(
             ContenutoCartaVista(carta, pannello, azioni)
             AttesaCarta(carta, azioni)
             carta.errore?.let { ErroreCarta(n, it) { azioni.chiudiErroreVoce(carta.voceId) } }
-            AzioniCarta(carta, pannello, primario, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
+            // L761d: this card's own 'nuovo…' form, once open, shows its OWN Primario 'Crea' below — this
+            // card's action row is demoted to Secondario so the two don't both render as Primario at once.
+            AzioniCarta(carta, pannello, primario && !nuovoAperto, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
             if (nuovoAperto && carta.azioniAbilitate) {
                 ModuloNuovo("voce-$n") { nome, tipo ->
                     nuovoAperto = false
@@ -533,9 +547,14 @@ private fun AzioniDaIdentificare(
 /**
  * AC-585/AC-216: EVERY card's own 'More' — 'Cambia' (the other attivo Parlanti, named cards only) then,
  * after a divider, 'Unisci con…' (this Voce's own siblings, ANY card — rework cycle 1, HIGH-2: it used
- * to exist only on named cards). The merge items are gated ONLY on [PannelloVoci.unioneAbilitata], never
- * on the card's own `azioniAbilitate` (a queued re-run, ADR 0018, never blocks a merge). Keeps the
- * pre-restyle `voce-$n-cambia` tag: same entry point, now a single icon button on every card.
+ * to exist only on named cards). AC-414 (L761a): a command pending on THIS card already turns [haCambia]
+ * off (it folds in [CartaVoce.azioniAbilitate]) — the 'Cambia' entries are disabled by it too, so a
+ * pending card never shows a dead, clickable-looking item the presenter would just drop. 'Unisci con…'
+ * does NOT share that gate: its own items stay enabled by [PannelloVoci.unioneAbilitata] alone (a
+ * PANEL-wide flag, never this one card's own pending state), and the button itself is kept open by
+ * `unioneAbilitata && haUnisci` even when [haCambia] is `false` — a queued re-run (ADR 0018) never blocks
+ * a merge. Keeps the pre-restyle `voce-$n-cambia` tag: same entry point, now a single icon button on
+ * every card.
  */
 @Composable
 private fun MenuAltreAzioniCarta(
@@ -566,6 +585,9 @@ private fun MenuAltreAzioniCarta(
                 altriParlanti.forEach { p ->
                     DropdownMenuItem(
                         text = { EtichettaMenu(p.nome, etichettaTipo(p.tipoParlante)) },
+                        // L761a/AC-414: a command pending on THIS card must not offer a 'Cambia' that the
+                        // presenter would just drop (`invia` already ignores it) — disabled, not dead.
+                        enabled = haCambia,
                         onClick = {
                             aperto = false
                             azioni.confermaParlante(carta.voceId, p.parlanteId)
@@ -575,6 +597,7 @@ private fun MenuAltreAzioniCarta(
                 HorizontalDivider()
                 DropdownMenuItem(
                     text = { Text(ETICHETTA_NUOVA_PERSONA) },
+                    enabled = haCambia,
                     onClick = {
                         aperto = false
                         onNuovo()
@@ -744,17 +767,27 @@ internal fun ModuloNuovo(prefisso: String, onCrea: (String, TipoParlanteVista) -
             modifier = Modifier.fillMaxWidth().testTag("$prefisso-nuovo-nome"),
         )
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = occasionale,
-                onCheckedChange = { occasionale = it },
-                modifier = Modifier.size(SnastroMisure.iconM).testTag("$prefisso-nuovo-occasionale"),
-            )
-            Spacer(Modifier.width(SnastroMisure.space2))
-            Text(
-                ETICHETTA_OCCASIONALE,
-                style = LocalSnastroTipografia.current.body,
-                modifier = Modifier.weight(1f),
-            )
+            // L718: the checkbox alone was only SnastroMisure.iconM (20dp) — too small a touch target.
+            // The WHOLE row (checkbox + label) is the toggle now; the Checkbox itself only renders the
+            // visual (its own onCheckedChange is null, so it never double-toggles under the Row's own).
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f)
+                    .toggleable(
+                        value = occasionale,
+                        role = Role.Checkbox,
+                        onValueChange = { occasionale = it },
+                    )
+                    .testTag("$prefisso-nuovo-occasionale"),
+            ) {
+                Checkbox(
+                    checked = occasionale,
+                    onCheckedChange = null,
+                    modifier = Modifier.size(SnastroMisure.iconM),
+                )
+                Spacer(Modifier.width(SnastroMisure.space2))
+                Text(ETICHETTA_OCCASIONALE, style = LocalSnastroTipografia.current.body)
+            }
             BottoneSn(
                 ETICHETTA_CREA,
                 onClick = {
