@@ -69,12 +69,36 @@ class EventiRevisioneTest {
     }
 
     @Test
-    fun `AC-15 gli eventi di Revisione sono data class di soli val che implementano EventoPubblicato`() {
-        listOf("VociUnite", "VoceDivisa", "SegmentoRiassegnato").forEach(FormaEventi::verificaEventoPubblicato)
+    fun `AC-525 SegmentoConfermato ha registrazioneId, segmentoId e confermato`() {
+        val evento: EventoPubblicato =
+            SegmentoConfermato(registrazioneId = registrazione, segmentoId = SegmentoId(3), confermato = true)
+        assertEquals(SegmentoConfermato(RegistrazioneId("id-1"), SegmentoId(3), true), evento)
+        assertEquals(
+            listOf("registrazioneId: RegistrazioneId", "segmentoId: SegmentoId", "confermato: Boolean"),
+            FormaEventi.di("SegmentoConfermato"),
+        )
     }
 
     @Test
-    fun `AC-15 il pacchetto eventi di Trascrizione contiene solo gli otto eventi fissati`() {
+    fun `AC-525 SegmentoConfermato arriva al dopo-commit solo dopo il COMMIT e mai dopo un rollback`() {
+        val consegna = Consegna()
+        val evento = SegmentoConfermato(registrazione, SegmentoId(3), confermato = false)
+
+        consegna.inTransazione(evento, conferma = false)
+        assertEquals(emptyList(), consegna.dopoCommit)
+
+        consegna.inTransazione(evento, conferma = true)
+        assertEquals(listOf<EventoPubblicato>(evento), consegna.dopoCommit)
+    }
+
+    @Test
+    fun `AC-15 gli eventi di Revisione sono data class di soli val che implementano EventoPubblicato`() {
+        listOf("VociUnite", "VoceDivisa", "SegmentoRiassegnato", "SegmentoConfermato")
+            .forEach(FormaEventi::verificaEventoPubblicato)
+    }
+
+    @Test
+    fun `AC-15 il pacchetto eventi di Trascrizione contiene solo i nove eventi fissati`() {
         assertEquals(
             setOf(
                 "ElaborazioneAvviata",
@@ -85,6 +109,7 @@ class EventiRevisioneTest {
                 "VociUnite",
                 "VoceDivisa",
                 "SegmentoRiassegnato",
+                "SegmentoConfermato",
             ),
             FormaEventi.classi.map { it.name }.toSet(),
         )

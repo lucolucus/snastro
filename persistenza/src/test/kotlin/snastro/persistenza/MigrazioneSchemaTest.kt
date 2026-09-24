@@ -159,7 +159,7 @@ class MigrazioneSchemaTest {
         db.voceQueries.inserisci(registrazioneId, 1L)
         db.voceQueries.trovaDiTrascritto(registrazioneId).executeAsList()
 
-        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao")
+        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)
         db.segmentoQueries.trovaDiTrascritto(registrazioneId).executeAsList()
 
         db.elaborazioneQueries.inserisci(elaborazioneId, registrazioneId, "in_attesa", 0L, null, null, null)

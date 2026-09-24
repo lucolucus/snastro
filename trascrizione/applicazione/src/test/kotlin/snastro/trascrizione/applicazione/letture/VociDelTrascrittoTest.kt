@@ -76,6 +76,41 @@ class VociDelTrascrittoTest {
     }
 
     @Test
+    fun `AC-550 segmentiDiVoce restituisce ogni Segmento una volta ordinato con confermato e senza testo`() {
+        val trascritto = Trascritto.crea(
+            REGISTRAZIONE,
+            DURATA_TRASCRITTO_MS,
+            listOf(
+                unSegmentoIniziale(voceIndice = 4, inizioMs = 0, fineMs = 3_000),
+                unSegmentoIniziale(voceIndice = 2, inizioMs = 0, fineMs = 1_500),
+                unSegmentoIniziale(voceIndice = 4, inizioMs = 2_000, fineMs = 4_000),
+                unSegmentoIniziale(voceIndice = 2, inizioMs = 5_000, fineMs = 6_000),
+            ),
+        ).atteso().aggregato
+        trascritto.riassegna(SegmentoId(3), VoceId(1)).atteso() // a manual move: S3 is confermato
+        trascritti.salva(trascritto)
+
+        assertEquals(
+            listOf(
+                SegmentoDiVoceVista(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_500), confermato = false),
+                SegmentoDiVoceVista(SegmentoId(2), VoceId(2), IntervalloMs(0, 3_000), confermato = false),
+                SegmentoDiVoceVista(SegmentoId(3), VoceId(1), IntervalloMs(2_000, 4_000), confermato = true),
+                SegmentoDiVoceVista(SegmentoId(4), VoceId(1), IntervalloMs(5_000, 6_000), confermato = false),
+            ),
+            api.segmentiDiVoce(REGISTRAZIONE),
+        )
+    }
+
+    @Test
+    fun `AC-550 segmentiDiVoce senza Trascritto restituisce null e il tipo non ha testo`() {
+        assertNull(api.segmentiDiVoce(REGISTRAZIONE))
+        assertEquals(
+            setOf("segmentoId", "voceId", "intervallo", "confermato"),
+            SegmentoDiVoceVista::class.java.declaredFields.map { it.name }.toSet(),
+        )
+    }
+
+    @Test
     fun `AC-100 registrazioniConTrascritto elenca solo le Registrazioni con un Trascritto`() {
         trascritti.salva(unTrascritto(voci = 1, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))
         trascritti.salva(unTrascritto(voci = 1, segmentiPerVoce = 1, registrazioneId = ALTRA_REGISTRAZIONE))

@@ -1,0 +1,6 @@
+-- Schema 4 -> 5 (ADR 0019 §3, ADR 0006 (a)): forward-only — schema 4 (3.sqm) is never edited.
+-- Adds the Segmento's `confermato` flag (INV-26): 1 iff an explicit user act placed or confirmed the Segmento on
+-- its current Voce. Existing rows get 0; a Ritrascrivi generation writes 0 everywhere (Trascritto.crea).
+-- The column inside the CHECK is double-quoted: the SQLDelight compiler cannot resolve an unquoted column inside
+-- the CHECK of the ALTER that adds it (see 2.sqm); for SQLite "confermato" is the same column identifier.
+ALTER TABLE segmento ADD COLUMN confermato INTEGER NOT NULL DEFAULT 0 CHECK ("confermato" IN (0, 1));

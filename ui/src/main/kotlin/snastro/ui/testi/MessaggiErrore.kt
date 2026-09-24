@@ -69,6 +69,7 @@ fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
     is ErroreTrascrizione.DivisioneNonAmmessa -> "La selezione non può essere divisa in una nuova voce."
     is ErroreTrascrizione.RiassegnazioneNonAmmessa -> "Questo segmento non può essere riassegnato a questa voce."
     is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
+    is ErroreTrascrizione.TrascrittoCambiato -> "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima"
 }
 
 fun messaggioPer(errore: ErroreParlanti): String = when (errore) {

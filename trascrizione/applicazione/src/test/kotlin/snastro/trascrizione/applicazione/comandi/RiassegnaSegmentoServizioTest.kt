@@ -47,6 +47,22 @@ class RiassegnaSegmentoServizioTest {
     }
 
     @Test
+    fun `AC-516 RiassegnaSegmento restituisce la Voce di destinazione e il Segmento spostato e confermato`() {
+        trascritti.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
+
+        val nuova = servizio.esegui(RiassegnaSegmento(REGISTRAZIONE, segmento = SegmentoId(3), destinazione = null))
+            .atteso()
+        val esistente =
+            servizio.esegui(RiassegnaSegmento(REGISTRAZIONE, segmento = SegmentoId(2), destinazione = VoceId(1)))
+                .atteso()
+
+        assertEquals(VoceId(3), nuova)
+        assertEquals(VoceId(1), esistente)
+        val confermati = assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti.filter { it.confermato }
+        assertEquals(listOf(SegmentoId(2), SegmentoId(3)), confermati.map { it.id })
+    }
+
+    @Test
     fun `AC-81 RiassegnaSegmento verso la Voce di cui gia fa parte e rifiutato e non pubblica nulla`() {
         trascritti.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
         val comando = RiassegnaSegmento(REGISTRAZIONE, segmento = SegmentoId(1), destinazione = VoceId(1))

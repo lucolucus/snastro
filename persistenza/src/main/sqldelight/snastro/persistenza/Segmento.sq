@@ -1,11 +1,11 @@
--- Queries for `segmento` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+-- Queries for `segmento` — schema in migrations/1.sqm + 4.sqm (`confermato`, ADR 0019) (ADR 0006 Amendment (a)).
 
 trovaDiTrascritto:
 SELECT * FROM segmento WHERE registrazione_id = :registrazioneId ORDER BY inizio_ms, numero;
 
 inserisci:
-INSERT INTO segmento(registrazione_id, numero, voce_numero, inizio_ms, fine_ms, testo)
-VALUES (:registrazioneId, :numero, :voceNumero, :inizioMs, :fineMs, :testo);
+INSERT INTO segmento(registrazione_id, numero, voce_numero, inizio_ms, fine_ms, testo, confermato)
+VALUES (:registrazioneId, :numero, :voceNumero, :inizioMs, :fineMs, :testo, :confermato);
 
 eliminaDiRegistrazione:
 DELETE FROM segmento WHERE registrazione_id = :registrazioneId;

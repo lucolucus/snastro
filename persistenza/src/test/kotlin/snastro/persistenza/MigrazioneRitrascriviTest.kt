@@ -21,17 +21,17 @@ import kotlin.test.assertTrue
  */
 class MigrazioneRitrascriviTest {
     @Test
-    fun `AC-425 3 sqm contiene solo DROP INDEX elaborazione_completata_unica e lo schema e alla versione 4`() {
+    fun `AC-425 3 sqm contiene solo DROP INDEX elaborazione_completata_unica e lo schema e almeno alla versione 4`() {
         val istruzioni = File("src/main/sqldelight/migrations/3.sqm").readLines()
             .map(String::trim)
             .filter { it.isNotEmpty() && !it.startsWith("--") }
 
         assertEquals(listOf("DROP INDEX elaborazione_completata_unica;"), istruzioni)
-        assertEquals(VERSIONE_RITRASCRIVI, SnastroDatabase.Schema.version)
+        assertTrue(SnastroDatabase.Schema.version >= VERSIONE_RITRASCRIVI)
     }
 
     @Test
-    fun `AC-426 un DB v3 con completata Trascritto attribuzione e impronta migra a 4 con ogni riga intatta`(
+    fun `AC-426 un DB v3 con completata Trascritto attribuzione e impronta migra con ogni riga intatta`(
         @TempDir cartella: Path,
     ) {
         val url = "jdbc:sqlite:${cartella.resolve("progetto.db").absolutePathString()}"
@@ -39,14 +39,17 @@ class MigrazioneRitrascriviTest {
         SnastroDatabase.Schema.migrate(v3, 1L, VERSIONE_R1)
         v3.execute(null, "PRAGMA user_version = $VERSIONE_R1", 0)
         RIGHE_V3.forEach { v3.execute(null, it, 0) }
-        val prima = TABELLE.associateWith { contenuto(v3, it) }
+        val colonneV3 = TABELLE.associateWith { colonne(v3, it) }
+        val prima = TABELLE.associateWith { contenuto(v3, it, colonneV3.getValue(it)) }
         v3.close()
 
         val db = apriDatabaseProgetto(cartella.toFile())
         val driver = driverSqlite(url)
         try {
-            assertEquals(VERSIONE_RITRASCRIVI, pragmaLong(driver, "user_version"))
-            TABELLE.forEach { assertEquals(prima.getValue(it), contenuto(driver, it), "righe di $it intatte") }
+            assertEquals(SnastroDatabase.Schema.version, pragmaLong(driver, "user_version"))
+            TABELLE.forEach {
+                assertEquals(prima.getValue(it), contenuto(driver, it, colonneV3.getValue(it)), "righe di $it intatte")
+            }
             assertTrue(prima.values.all { it.isNotEmpty() }, "ogni tabella del fixture ha almeno una riga")
             val indici = indici(driver)
             assertTrue("elaborazione_aperta_unica" in indici)
@@ -122,9 +125,14 @@ class MigrazioneRitrascriviTest {
         return registrazioneId
     }
 
-    /** Every row of [tabella], each rendered as the SQL literals (`quote`) of all its columns, in rowid order. */
-    private fun contenuto(driver: SqlDriver, tabella: String): List<String> {
-        val colonne = stringhe(driver, "SELECT name FROM pragma_table_info('$tabella')")
+    private fun colonne(driver: SqlDriver, tabella: String): List<String> =
+        stringhe(driver, "SELECT name FROM pragma_table_info('$tabella')")
+
+    /**
+     * Every row of [tabella], each rendered as the SQL literals (`quote`) of [colonne] (the columns BEFORE the
+     * migration: later steps may add some, e.g. 4.sqm's `segmento.confermato`), in rowid order.
+     */
+    private fun contenuto(driver: SqlDriver, tabella: String, colonne: List<String>): List<String> {
         val riga = colonne.joinToString(" || ',' || ") { "quote($it)" }
         return stringhe(driver, "SELECT $riga FROM $tabella ORDER BY rowid")
     }

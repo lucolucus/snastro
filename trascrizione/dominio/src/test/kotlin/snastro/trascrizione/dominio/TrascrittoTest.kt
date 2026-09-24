@@ -117,7 +117,7 @@ class TrascrittoTest {
     // --- INV-8 ------------------------------------------------------------------------------------
 
     @Test
-    fun `INV-8 dopo unire dividere e riassegnare l insieme id intervallo testo dei Segmenti e identico a prima`() {
+    fun `INV-8 dopo ogni Revisione e confermaSegmento id intervallo e testo dei Segmenti sono identici`() {
         val t = unTrascritto(voci = 3, segmentiPerVoce = 3)
         val prima = t.contenuto()
 
@@ -128,6 +128,12 @@ class TrascrittoTest {
         t.riassegna(SegmentoId(3), null).atteso()
         assertEquals(prima, t.contenuto())
         t.riassegna(SegmentoId(5), VoceId(3)).atteso()
+        assertEquals(prima, t.contenuto())
+        val s6 = t.segmenti.single { it.id == SegmentoId(6) }
+        t.riassegnaInBlocco(listOf(SpostamentoSegmento(s6.id, s6.voceId, VoceId(1), s6.intervallo))).atteso()
+        assertEquals(prima, t.contenuto())
+        t.confermaSegmento(SegmentoId(6), true).atteso()
+        t.confermaSegmento(SegmentoId(3), false).atteso()
         assertEquals(prima, t.contenuto())
         assertEquals(9, t.segmenti.size)
 

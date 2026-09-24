@@ -23,7 +23,14 @@ public class TrascrittoQuery(
                     dataRegistrazione = registrazione.dataRegistrazione,
                     durataMs = registrazione.durataMs,
                     segmenti = trascritto.segmenti.map { s ->
-                        SegmentoTrascrittoView(s.id, s.voceId, s.intervallo.inizioMs, s.intervallo.fineMs, s.testo)
+                        SegmentoTrascrittoView(
+                            s.id,
+                            s.voceId,
+                            s.intervallo.inizioMs,
+                            s.intervallo.fineMs,
+                            s.testo,
+                            s.confermato,
+                        )
                     },
                     voci = trascritto.voci.map { v -> VoceTrascrittoView(v.id, "Voce ${v.id.numero}") },
                 )
