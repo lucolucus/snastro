@@ -1,12 +1,12 @@
 package snastro.modelli
 
 /**
- * The two [VoceCatalogo] entries `diarizzatore-sherpa` needs (ADR 0014 § ":modelli catalogue
- * entries", spike `scelta-diarizzatore`): pyannote segmentation-3.0 (segmentation) and WeSpeaker
- * ResNet34-LM trained on VoxCeleb (embedding). [voci] is composed into the app-wide
- * [CatalogoModelli] by `:avvio`. [embedding]'s id is also the first candidate for
- * `EstrattoreImpronta` (ADR 0014 "Embedding reuse") — a later block may add it there too, never
- * duplicate it under a different id while the two roles are meant to share one downloaded copy.
+ * The three [VoceCatalogo] entries `diarizzatore-sherpa` needs (ADR 0014 § ":modelli catalogue
+ * entries", amended by ADR 0019 §1.1/§1.7): pyannote segmentation-3.0 ([segmentazione], its fp32
+ * `model.onnx` is the file used), WeSpeaker ResNet34-LM ([embedding], step 1's internal over-split
+ * clustering only) and NeMo TitaNet-small ([embeddingTitanetSmall], the piece embeddings AND the
+ * `ImprontaVocale` model — one entry, one download, shared by both roles). [voci] is composed into the
+ * app-wide [CatalogoModelli] by `:avvio`.
  */
 public object CatalogoDiarizzazione {
     public val segmentazione: VoceCatalogo = VoceCatalogo(
@@ -35,5 +35,17 @@ public object CatalogoDiarizzazione {
             "Nagrani/Chung/Zisserman)",
     )
 
-    public val voci: List<VoceCatalogo> = listOf(segmentazione, embedding)
+    public val embeddingTitanetSmall: VoceCatalogo = VoceCatalogo(
+        id = "embedding-nemo-titanet-small",
+        ruolo = "embedding",
+        url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/" +
+            "nemo_en_titanet_small.onnx",
+        sha256 = "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e",
+        dimensioneByte = 40_257_283,
+        formato = FormatoVoce.FILE,
+        licenza = "CC-BY-4.0",
+        attribuzione = "NVIDIA NeMo TitaNet-small (CC-BY-4.0), ONNX export by k2-fsa sherpa-onnx",
+    )
+
+    public val voci: List<VoceCatalogo> = listOf(segmentazione, embedding, embeddingTitanetSmall)
 }

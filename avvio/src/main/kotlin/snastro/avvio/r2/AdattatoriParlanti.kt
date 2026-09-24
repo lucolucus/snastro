@@ -2,26 +2,28 @@ package snastro.avvio.r2
 
 import snastro.avvio.r1.SceltaMl
 import snastro.avvio.r1.SelezioneAdattatoriMl
-import snastro.kernel.CampioniAudio
-import snastro.kernel.IntervalloMs
-import snastro.kernel.RegistrazioneId
+import snastro.ml.MotoreSherpa
+import snastro.modelli.CatalogoDiarizzazione
+import snastro.modelli.ProvisioningModelli
+import snastro.parlanti.adattatori.audio.DecodificatoreAudioFfmpeg
+import snastro.parlanti.adattatori.ml.EstrattoreImprontaSherpa
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
-import snastro.parlanti.dominio.Impronta
 import java.nio.file.Path
 
 /**
  * The Parlanti ML/audio ports of one open project, as chosen by [SelezioneAdattatoriMl.adattatoriParlanti].
- * [decodificatore] is built per project folder. [proposte] is `false` while no real print extractor is
- * installed: the S3 Proposta is then an EMPTY gallery (no decode, no extraction) instead of a comparison of
- * meaningless prints.
+ * [decodificatore] is built per project folder. [proposte] `false` makes the S3 Proposta an EMPTY gallery
+ * (no decode, no extraction). [rilascia] frees what the extractor keeps loaded; the composition calls it
+ * once, when the project closes.
  */
 internal class AdattatoriParlanti(
     val estrattore: EstrattoreImpronta,
     val decodificatore: (Path) -> DecodificatoreAudio,
     val proposte: Boolean,
+    val rilascia: () -> Unit = {},
 )
 
 /**
@@ -31,42 +33,23 @@ internal class AdattatoriParlanti(
  *
  * - [SceltaMl.FINTE] (`--smoke`, the gate's tests): [EstrattoreImprontaFinta] + [DecodificatoreAudioFinta]
  *   — headless, no natives; the Proposta runs for real over the fake prints.
- * - [SceltaMl.REALI] (the app): **no print extractor exists yet** — `estrattore-impronta-sherpa` is gated by
- *   spike `impronta-vocale-affidabilita` (calibration). Until then manual naming works for real (Conferma
- *   'nuovo…'/'altri ▾', salta, S4, the Documento Nomi, the Revisione policy) over [EstrattoreImprontaAssente]
- *   and [DecodificatoreAudioAssente]: no decode, no native call, a constant print stored with the model id
- *   [EstrattoreImprontaAssente.MODELLO]; and the Proposta is an empty gallery ([AdattatoriParlanti.proposte]
- *   `false`). Those rows are stale for any real model (ADR 0012 Amendment (b) point 3: `modello_impronta` ≠
- *   the extractor's) — `RiallineaTutteLeImpronte` re-derives every one of them at the first project open
- *   after the real extractor lands, no migration needed.
- *
- *   TODO(estrattore-impronta-sherpa): **the plug-in point.** Replace the REALI branch with
- *   `AdattatoriParlanti(EstrattoreImprontaSherpa(motore, <its installed model file>),
- *   ::DecodificatoreAudioFfmpeg, proposte = true)` (`snastro.parlanti.adattatori.audio.DecodificatoreAudioFfmpeg`,
- *   the real FFmpeg decoder, already built and tested) — `motore`/`modelli` being the app's ONE `MotoreSherpa`
- *   and `ProvisioningModelli` built in `componentiR1` (ADR 0016 §4: one process-wide Mutex), threaded to
- *   here — and add its `VoceCatalogo` to `SelezioneAdattatoriMl.catalogo(REALI)` so S5 installs it.
+ * - [SceltaMl.REALI] (the app): [EstrattoreImprontaSherpa] over the app's ONE [motore] (ADR 0016 §4: one
+ *   process-wide Mutex) with TitaNet-small — the SAME `embedding-nemo-titanet-small` catalogue entry and
+ *   installed file as the diarizer's (ADR 0019 §2, AC-259: no second entry, no second download; S5 already
+ *   provisions it through `CatalogoDiarizzazione.voci`) — and the real FFmpeg [DecodificatoreAudioFfmpeg].
+ *   The Proposta is on with the provisional `SoglieFascia` (ADR 0019 Amendment (b).4). Print rows written
+ *   earlier by the R2 stand-in (model `nessun-estrattore`) are stale for this model: `RiallineaTutteLeImpronte`
+ *   re-derives them at the next project open (AC-316), no migration.
  */
-internal fun SelezioneAdattatoriMl.adattatoriParlanti(scelta: SceltaMl): AdattatoriParlanti = when (scelta) {
+internal fun SelezioneAdattatoriMl.adattatoriParlanti(
+    scelta: SceltaMl,
+    motore: MotoreSherpa,
+    modelli: ProvisioningModelli,
+): AdattatoriParlanti = when (scelta) {
     SceltaMl.FINTE -> AdattatoriParlanti(EstrattoreImprontaFinta(), { DecodificatoreAudioFinta() }, proposte = true)
-    SceltaMl.REALI -> AdattatoriParlanti(EstrattoreImprontaAssente, { DecodificatoreAudioAssente }, proposte = false)
-}
-
-/**
- * The REALI stand-in until `estrattore-impronta-sherpa` lands (see [adattatoriParlanti]): a constant,
- * non-biometric print, no native call, never throws. [modello] marks every row it writes as stale for the
- * real extractor.
- */
-internal object EstrattoreImprontaAssente : EstrattoreImpronta {
-    const val MODELLO: String = "nessun-estrattore"
-
-    override val modello: String = MODELLO
-
-    override fun estrai(c: CampioniAudio): Impronta = Impronta(FloatArray(1))
-}
-
-/** The REALI stand-in decoder paired with [EstrattoreImprontaAssente]: nothing to decode for a constant print. */
-internal object DecodificatoreAudioAssente : DecodificatoreAudio {
-    override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio =
-        CampioniAudio(FloatArray(0))
+    SceltaMl.REALI -> {
+        val titanet = fileInstallato(modelli, CatalogoDiarizzazione.embeddingTitanetSmall)
+        val estrattore = EstrattoreImprontaSherpa(motore, titanet)
+        AdattatoriParlanti(estrattore, ::DecodificatoreAudioFfmpeg, proposte = true, rilascia = estrattore::chiudi)
+    }
 }

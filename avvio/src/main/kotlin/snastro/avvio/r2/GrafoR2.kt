@@ -54,7 +54,7 @@ internal fun componentiR2(
         io = io,
         clock = clock,
         generatoreId = GeneratoreIdUuid(),
-        adattatori = { SelezioneAdattatoriMl.adattatoriParlanti(scelta) },
+        adattatori = { SelezioneAdattatoriMl.adattatoriParlanti(scelta, r1.motore, r1.provisioning) },
     )
     return ComponentiR2(estensione, r1.servizioModelli)
 }

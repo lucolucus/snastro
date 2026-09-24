@@ -17,14 +17,14 @@ import kotlin.test.assertTrue
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): the contract passes real-on-real against
- * [DiarizzatoreSherpa] (AC-249) — real sherpa-onnx natives, real pyannote segmentation-3.0 +
- * WeSpeaker embedding (ADR 0014). Models come from [CARTELLA_MODELLI_ENV] (never `:modelli`'s
- * provisioning cache, never committed — the env var points at the spike's local scratch download,
- * per the profile instructions for `@Tag("modelli")` tests). [parlato] is never a `sample/`
- * recording (forbidden by the profile): two short clips sherpa itself ships as ASR `test_wavs`
- * (different languages, `qwen3-asr`'s own demo set — the best proxy for "different speakers" this
- * archive offers), decoded through `:audio`'s real FFmpeg (ADR 0005, never `javax.sound` here,
- * CR-3) and concatenated.
+ * [DiarizzatoreSherpa] (AC-249) — real sherpa-onnx natives, real pyannote segmentation-3.0 fp32 +
+ * WeSpeaker ResNet34-LM (step 1) + NeMo TitaNet-small (pieces), ADR 0019. Models come from
+ * [CARTELLA_MODELLI_ENV] (never `:modelli`'s provisioning cache, never committed — the env var points
+ * at the spike's local scratch download, per the profile instructions for `@Tag("modelli")` tests).
+ * [parlato] is never a `sample/` recording (forbidden by the profile): two short clips sherpa itself
+ * ships as ASR `test_wavs` (different languages, `qwen3-asr`'s own demo set — the best proxy for
+ * "different speakers" this archive offers), decoded through `:audio`'s real FFmpeg (ADR 0005, never
+ * `javax.sound` here, CR-3) and concatenated.
  */
 @Tag("modelli")
 class DiarizzatoreSherpaTest : DiarizzatoreContratto() {
@@ -33,16 +33,17 @@ class DiarizzatoreSherpaTest : DiarizzatoreContratto() {
 
     override fun diarizzatore(): Diarizzatore = DiarizzatoreSherpa(
         motore = MotoreSherpa(),
-        percorsoSegmentazione = cartellaModelli().resolve("sherpa-onnx-pyannote-segmentation-3-0/model.int8.onnx"),
-        percorsoEmbedding = cartellaModelli().resolve("wespeaker_en_voxceleb_resnet34_LM.onnx"),
+        percorsoSegmentazione = cartellaModelli().resolve("sherpa-onnx-pyannote-segmentation-3-0/model.onnx"),
+        percorsoEmbeddingPasso1 = cartellaModelli().resolve("wespeaker_en_voxceleb_resnet34_LM.onnx"),
+        percorsoEmbeddingPezzi = cartellaModelli().resolve("nemo_en_titanet_small.onnx"),
         threadIntraOp = NUMERO_THREAD,
     )
 
     override fun parlato(): CampioniAudio = dueVociReali()
 
     /**
-     * AC-373: `numeroPersone` = 10 is above the 1-2 real voices these clips hold — measured
-     * (`DiarizzatoreSherpa` KDoc) to never throw. This pins that on the real adapter: the call
+     * AC-373: `numeroPersone` = 10 is above the 1-2 real voices these clips hold — the ADR 0019 k-cut
+     * then keeps fewer voices, never fails. This pins that on the real adapter: the call
      * below must return normally (a thrown exception fails this test) and still respect the port's
      * "at most k distinct voceIndice" (already covered generically by the inherited AC-374 above,
      * with k = 10 in its own list — this test names the specific acceptance criterion).
@@ -70,7 +71,7 @@ class DiarizzatoreSherpaTest : DiarizzatoreContratto() {
         val percorso = assertNotNull(
             System.getenv(CARTELLA_MODELLI_ENV),
             "$CARTELLA_MODELLI_ENV non impostata: percorso dei modelli sherpa-onnx scaricati per i test @modelli " +
-                "(pyannote segmentation-3.0, WeSpeaker embedding, i test_wavs di qwen3-asr)",
+                "(pyannote segmentation-3.0, WeSpeaker ResNet34-LM, TitaNet-small, i test_wavs di qwen3-asr)",
         )
         return Path.of(percorso)
     }

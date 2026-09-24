@@ -4,13 +4,17 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.concurrent.thread
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /** Gate tests: no native library is ever loaded here — the loader is a counting fake (AC-399). */
@@ -236,11 +240,130 @@ class MotoreSherpaTest {
         assertEquals("libero", motore.conSessione(config) { "libero" })
     }
 
+    @Test
+    fun `AC-408 un thread interrotto mentre attende in conSessione riceve InterruptedException, il suo uso non gira`() {
+        val proprieta = ProprietaSistemaFinte(PROPRIETA_RISORSE_COMPOSE to cartellaConLibrerie("r").toString())
+        val motore = MotoreSherpa(proprieta, caricatoreFinto)
+        val aDentro = CountDownLatch(1)
+        val rilasciaA = CountDownLatch(1)
+        val usoDiB = AtomicInteger()
+        val erroreDiB = AtomicReference<Throwable>()
+        val a = thread {
+            motore.conSessione(config) {
+                aDentro.countDown()
+                rilasciaA.await()
+            }
+        }
+        assertTrue(aDentro.await(TIMEOUT_S, TimeUnit.SECONDS))
+        val caricamentiPrimaDiB = caricamenti.get()
+        val b = thread {
+            try {
+                motore.conSessione(config) { usoDiB.incrementAndGet() }
+            } catch (e: InterruptedException) {
+                erroreDiB.set(e)
+            }
+        }
+        attendiFinche { b.state == Thread.State.WAITING }
+
+        b.interrupt()
+        b.join(TIMEOUT_S * MS_PER_S)
+        rilasciaA.countDown()
+        a.join(TIMEOUT_S * MS_PER_S)
+
+        assertIs<InterruptedException>(erroreDiB.get())
+        assertEquals(0, usoDiB.get())
+        assertEquals(caricamentiPrimaDiB, caricamenti.get(), "nessun nativo caricato per B")
+        assertEquals("libero", motore.conSessione(config) { "libero" }, "A ha rilasciato normalmente")
+    }
+
+    @Test
+    fun `AC-408 un thread gia interrotto non apre alcuna sessione`() {
+        val motore = MotoreSherpa(
+            ProprietaSistemaFinte(PROPRIETA_RISORSE_COMPOSE to cartellaConLibrerie("r").toString()),
+            caricatoreFinto,
+        )
+        var eseguito = false
+
+        Thread.currentThread().interrupt()
+        try {
+            assertFailsWith<InterruptedException> { motore.conSessione(config) { eseguito = true } }
+        } finally {
+            Thread.interrupted() // never leak the flag to the next test on this thread
+        }
+
+        assertFalse(eseguito)
+        assertEquals(0, caricamenti.get())
+    }
+
+    @Test
+    fun `AC-409 il Mutex e equo, B e C lo ottengono nell ordine in cui si sono accodati`() {
+        val motore = MotoreSherpa(
+            ProprietaSistemaFinte(PROPRIETA_RISORSE_COMPOSE to cartellaConLibrerie("r").toString()),
+            caricatoreFinto,
+        )
+        val ordine = CopyOnWriteArrayList<String>()
+        val aDentro = CountDownLatch(1)
+        val rilasciaA = CountDownLatch(1)
+        val a = thread {
+            motore.conSessione(config) {
+                aDentro.countDown()
+                rilasciaA.await()
+            }
+        }
+        assertTrue(aDentro.await(TIMEOUT_S, TimeUnit.SECONDS))
+        val b = thread { motore.conSessione(config) { ordine += "B" } }
+        attendiFinche { b.state == Thread.State.WAITING }
+        val c = thread { motore.conSessione(config) { ordine += "C" } }
+        attendiFinche { c.state == Thread.State.WAITING }
+
+        rilasciaA.countDown()
+        listOf(a, b, c).forEach { it.join(TIMEOUT_S * MS_PER_S) }
+
+        assertEquals(listOf("B", "C"), ordine)
+    }
+
+    @Test
+    fun `AC-409 la pipeline che richiede di nuovo il Mutex si accoda dietro un estrazione in attesa`() {
+        val motore = MotoreSherpa(
+            ProprietaSistemaFinte(PROPRIETA_RISORSE_COMPOSE to cartellaConLibrerie("r").toString()),
+            caricatoreFinto,
+        )
+        val ordine = CopyOnWriteArrayList<String>()
+        val pipelineDentro = CountDownLatch(1)
+        val estrazioneInCoda = CountDownLatch(1)
+        val pipeline = thread {
+            motore.conSessione(config) {
+                pipelineDentro.countDown()
+                estrazioneInCoda.await()
+                ordine += "pipeline 1"
+            }
+            motore.conSessione(config) { ordine += "pipeline 2" } // the next call, straight after the release
+        }
+        assertTrue(pipelineDentro.await(TIMEOUT_S, TimeUnit.SECONDS))
+        val estrazione = thread { motore.conSessione(config) { ordine += "estrazione" } }
+        attendiFinche { estrazione.state == Thread.State.WAITING }
+
+        estrazioneInCoda.countDown()
+        listOf(pipeline, estrazione).forEach { it.join(TIMEOUT_S * MS_PER_S) }
+
+        assertEquals(listOf("pipeline 1", "estrazione", "pipeline 2"), ordine)
+    }
+
+    private fun attendiFinche(condizione: () -> Boolean) {
+        val scadenza = System.currentTimeMillis() + TIMEOUT_S * MS_PER_S
+        while (!condizione()) {
+            check(System.currentTimeMillis() < scadenza) { "timeout: il thread non e in attesa sul Mutex" }
+            Thread.sleep(PASSO_ATTESA_MS)
+        }
+    }
+
     private companion object {
         const val PROPRIETA_PERCORSO_NATIVI = "sherpa_onnx.native.path"
         const val PROPRIETA_RISORSE_COMPOSE = "compose.application.resources.dir"
         val LIBRERIE_NATIVE = listOf("onnxruntime", "sherpa-onnx-jni").map(System::mapLibraryName)
         const val ATTESA_SOVRAPPOSIZIONE_MS = 200L
         const val TIMEOUT_S = 10L
+        const val MS_PER_S = 1_000L
+        const val PASSO_ATTESA_MS = 5L
     }
 }

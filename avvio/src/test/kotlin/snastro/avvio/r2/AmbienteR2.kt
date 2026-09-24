@@ -73,6 +73,7 @@ internal class AmbienteR2(
     estrattore: EstrattoreImpronta = EstrattoreImprontaFinta(),
     proposte: Boolean = true,
     chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
+    rilasciaMl: () -> Unit = {},
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
@@ -103,7 +104,7 @@ internal class AmbienteR2(
         io = Dispatchers.IO,
         clock = orologioApp(),
         generatoreId = GeneratoreIdUuid(),
-        adattatori = { AdattatoriParlanti(estrattore, { DecodificatoreParlantiFinta() }, proposte) },
+        adattatori = { AdattatoriParlanti(estrattore, { DecodificatoreParlantiFinta() }, proposte, rilasciaMl) },
     )
 
     val sessione = SessioneProgettoImpl(

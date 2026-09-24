@@ -6,6 +6,8 @@ import snastro.kernel.CampioniAudio
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.concurrent.thread
@@ -113,6 +115,29 @@ class RiconoscitoreSherpaTest {
         assertEquals(RisultatoRiconoscimento("", null), r)
     }
 
+    @Test
+    fun `AC-410 il Mutex e libero tra due riconosci e il modello resta in cache`() {
+        var caricamenti = 0
+        val motore = motore()
+        val riconoscitore = RiconoscitoreSherpa(motore, modello, threadIntraOp = 1, provider = "cpu") { _ ->
+            caricamenti++
+            MotoreRiconoscimentoFinto(RisultatoRiconoscimento("ciao", null))
+        }
+        val campioni = CampioniAudio(FloatArray(160) { 0.1f })
+        val altro = Executors.newSingleThreadExecutor()
+        try {
+            riconoscitore.riconosci(campioni)
+
+            val sonda = altro.submit<String> { motore.conSessione(ConfigSessione(emptyList(), 1)) { "libero" } }
+
+            assertEquals("libero", sonda.get(ATTESA_SONDA_S, TimeUnit.SECONDS))
+            riconoscitore.riconosci(campioni)
+            assertEquals(1, caricamenti, "nessun secondo caricamento")
+        } finally {
+            altro.shutdownNow()
+        }
+    }
+
     /**
      * fix-batch-16 MED-2: a fake native handle that RECORDS every use after its release — a decode
      * on it, or a second release (both a SIGSEGV on the real `OfflineRecognizer`). The first decode
@@ -184,6 +209,7 @@ class RiconoscitoreSherpaTest {
 
     private companion object {
         const val ITERAZIONI_CONCORRENTI = 300
+        const val ATTESA_SONDA_S = 5L
         const val ATTESA_MASSIMA_MS = 5_000L
         const val PASSO_ATTESA_MS = 5L
         const val PROPRIETA_RISORSE_COMPOSE = "compose.application.resources.dir"

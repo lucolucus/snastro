@@ -174,6 +174,7 @@ internal class EstensioneR2(
             ),
             lavoro = lavoro,
             aggiornamentiParlanti = aggiornamenti,
+            rilasciaMl = ml.rilascia,
         )
     }
 

@@ -1,20 +1,31 @@
 import org.gradle.api.tasks.testing.Test
+import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
     id("snastro.kotlin-jvm")
 }
 
-// Opt-in real-native contract (ADR 0005): DecodificatoreAudioFfmpegTest (real FFmpeg, AC-151/AC-152)
-// is `@Tag("modelli")`, so the default `test` task (which excludes "modelli", dev-architecture-app.md#test)
-// never runs it. A dedicated Test task configures its OWN useJUnitPlatform and does not inherit that
-// exclusion. Never wired into `check`. decodifica-parlanti
+// Opt-in real-native contracts (ADR 0005/0016): DecodificatoreAudioFfmpegTest (real FFmpeg, AC-151/AC-152)
+// and EstrattoreImprontaSherpaModelliTest (real sherpa-onnx + TitaNet-small, AC-258/AC-493) are
+// `@Tag("modelli")`, so the default `test` task (which excludes "modelli", dev-architecture-app.md#test)
+// never runs them. A dedicated Test task configures its OWN useJUnitPlatform and does not inherit that
+// exclusion. Never wired into `check`. `scaricaNativiSherpa` + `sherpa_onnx.native.path` mirror
+// `:ml-sherpa`'s own `modelliTest` (ADR 0016 §4). decodifica-parlanti, estrattore-impronta-sherpa
+val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
+
 tasks.register<Test>("modelliTest") {
     group = "verification"
-    description = "Opt-in: real FFmpeg contract (@Tag(\"modelli\"), AC-151/AC-152)."
+    description = "Opt-in: real FFmpeg / sherpa-onnx contracts (@Tag(\"modelli\"), AC-151/AC-152/AC-258/AC-493)."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("modelli")
+    }
+    forkEvery = 1 // one JVM per test class: sherpa's natives load once per JVM (MotoreSherpa).
+    maxHeapSize = "2g" // AC-493 holds a 75-min recording as 16 kHz floats (~300 MB)
+    dependsOn(scaricaNativiSherpa)
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}")
     }
 }
 
@@ -40,6 +51,10 @@ dependencies {
     // DecodificatoreAudioFfmpeg delegates to :audio's real FFmpeg decode, never touching
     // org.bytedeco directly (ADR 0005, CR-3 confinement). decodifica-parlanti
     implementation(project(":audio"))
+
+    // EstrattoreImprontaSherpa delegates to :ml-sherpa's EmbeddingSherpa (native load, Mutex, model cache,
+    // ADR 0019 §1.4) — com.k2fsa itself never appears here (CR-3). estrattore-impronta-sherpa
+    implementation(project(":ml-sherpa"))
 
     // ParlanteRepositorySql / AttribuzioneRepositorySql (..adattatori.persistenza) run on the
     // generated SnastroDatabase queries + UnitaDiLavoro impl (ADR 0006/0009/0012, CR-3 confinement).
@@ -67,6 +82,10 @@ dependencies {
     // databaseInMemoria() / apriDatabaseProgetto (testFixtures + main) — a fresh in-memory
     // SnastroDatabase per contract test, a file-backed one for the concurrency/checkpoint tests.
     testImplementation(testFixtures(project(":persistenza")))
+
+    // motoreSherpaSenzaNativi / ModelloEmbeddingFinto: EstrattoreImprontaSherpa's gate tests on the REAL
+    // Mutex and sessions with no native library and no model loaded (AC-406/407/492).
+    testImplementation(testFixtures(project(":ml-sherpa")))
 
     // Ripristinabile / UnitaDiLavoroFinta / ErroreDiProva / Esito test helpers.
     testImplementation(testFixtures(project(":kernel")))

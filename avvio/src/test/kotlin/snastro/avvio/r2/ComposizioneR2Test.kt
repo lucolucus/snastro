@@ -26,6 +26,7 @@ import snastro.ui.registrazioni.RegistrazioniUiStato
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Handler
 import java.util.logging.Level
 import java.util.logging.LogRecord
@@ -205,7 +206,7 @@ class ComposizioneR2Test {
     }
 
     @Test
-    fun `REALI senza estrattore la Proposta e una Galleria vuota, senza estrazione, e la nomina manuale funziona`() {
+    fun `con proposte false la Proposta e una Galleria vuota, senza estrazione, e la nomina manuale funziona`() {
         val estrattore = EstrattoreConMutex()
         AmbienteR2(radice, estrattore = estrattore, proposte = false).use {
             val id = it.importa()
@@ -216,6 +217,19 @@ class ComposizioneR2Test {
             assertEquals(emptyList(), it.r2.letture.proposta(voce(id, 2))?.candidati)
             assertEquals(chiamate, estrattore.chiamate.get())
         }
+    }
+
+    @Test
+    fun `AC-492 chiudere il progetto rilascia una volta il modello delle impronte, a lavori fermati`() {
+        val rilasci = AtomicInteger()
+        AmbienteR2(radice, rilasciaMl = { rilasci.incrementAndGet() }).use {
+            assertEquals(0, rilasci.get(), "aperto: il modello resta in cache")
+
+            it.sessione.chiudi()
+
+            attendiFinche(messaggio = "rilascio alla chiusura") { rilasci.get() == 1 }
+        }
+        assertEquals(1, rilasci.get())
     }
 
     /** A project with one Registrazione, Voce 1 attributed (print of the Finta's model); closed. */
