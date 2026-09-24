@@ -48,3 +48,24 @@ fun etichettaInCorso(faseEtichetta: String, trascorsoMs: Long): String =
  * (never "· 0 da identificare"). */
 fun etichettaIdentificazione(numVoci: Int, numVociDaIdentificare: Int): String =
     if (numVociDaIdentificare > 0) "$numVoci voci · $numVociDaIdentificare da identificare" else "$numVoci voci"
+
+/** ADR 0018 (R2, optional `ritrascrivi` source): the action on a `Completata` row that already has a
+ * Trascritto — same 'Numero di persone' field as 'Trascrivi'/'Riprova' (AC-448). */
+const val ETICHETTA_RITRASCRIVI: String = "Ritrascrivi"
+
+/** AC-449: the ONLY S2 action with a confirmation — inline, same style as S4's delete confirmation
+ * (never an AWT/OS modal dialog, ADR 0018 §4). */
+fun titoloConfermaRitrascrivi(titolo: String): String = "Ritrascrivere «$titolo»?"
+const val MESSAGGIO_CONFERMA_RITRASCRIVI: String =
+    "La trascrizione attuale resta consultabile finché la nuova non è pronta, poi viene sostituita. " +
+        "Le correzioni delle voci e le assegnazioni dei nomi di questa registrazione andranno perse."
+
+/** AC-450: "Ritrascrizione in coda (n)" / "Ritrascrizione in corso · <fase> · mm:ss" — the same data as
+ * [etichettaInAttesa]/[etichettaInCorso]; the label alone makes clear the shown transcript is current. */
+fun etichettaRitrascrizioneInAttesa(posizione: Int): String = "Ritrascrizione in coda ($posizione)"
+fun etichettaRitrascrizioneInCorso(faseEtichetta: String, trascorsoMs: Long): String =
+    "Ritrascrizione in corso · $faseEtichetta · ${formattaDurata(trascorsoMs)}"
+
+/** AC-451: a failed re-run over an existing Trascritto — the row stays 'Completata', this notice sits
+ * next to it. */
+fun messaggioRitrascrizioneNonRiuscita(motivo: String): String = "Ritrascrizione non riuscita: $motivo"

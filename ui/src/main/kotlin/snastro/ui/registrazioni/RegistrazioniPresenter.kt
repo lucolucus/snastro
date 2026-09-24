@@ -15,9 +15,11 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
+import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
+import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
@@ -62,6 +64,14 @@ import java.time.LocalDate
  * `RegistrazioneRepositoryFinta`/`Registrazione.aggiungi` pair would require importing
  * `snastro.progetto.dominio.Registrazione`, off-limits here even from a test file, since the CR-1
  * Konsist rule scans by package, not by source set).
+ *
+ * ADR 0018 (R2 only, `ritrascrivi`/`annullaElaborazione` optional collaborators): [ritrascrivi] backs
+ * 'Ritrascrivi' on a `Completata` row with a Trascritto (AC-448/449) — a NEW `Elaborazione` over the
+ * existing one, the same underlying command as [avviaElaborazione] but a distinct, independently
+ * supplied knob (`ElaborazioneGiaCompletata` no longer exists, ADR 0018 §1). [annullaElaborazione]
+ * (R1+) backs 'Annulla' on a queued row (AC-475/476), no dialog: nothing is lost. Both default to
+ * `null`, so a row shows neither control until `avvio-parlanti`/`avvio-composizione` supplies them —
+ * `:avvio`'s own existing calls (named args) keep compiling unchanged.
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazioniPresenter(
@@ -78,6 +88,8 @@ class RegistrazioniPresenter(
     private val avviaElaborazione: ((AvviaElaborazione) -> Esito<Unit>)? = null,
     private val apriRegistrazione: (RegistrazioneId) -> Unit = {},
     private val identificazioni: ((List<RegistrazioneId>) -> List<ConteggioIdentificazione>)? = null,
+    private val ritrascrivi: ((AvviaElaborazione) -> Esito<Unit>)? = null,
+    private val annullaElaborazione: ((AnnullaElaborazione) -> Esito<Unit>)? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -124,15 +136,15 @@ class RegistrazioniPresenter(
             if (vecchia == null) {
                 nuova
             } else {
+                // AC-376/AC-449: the user's text/open confirmation survive a refresh of the SAME
+                // elaborazione state; a state change (e.g. a re-run just got queued) takes the fresh
+                // prefill and closes a stale confirmation (nothing to confirm on a row that moved on).
+                val stessoStato = vecchia.elaborazione == nuova.elaborazione
                 nuova.copy(
                     operazioneInCorso = vecchia.operazioneInCorso,
                     erroreRiga = vecchia.erroreRiga,
-                    // AC-376: the user's text survives a refresh of the same state; a new state takes the prefill.
-                    numeroPersone = if (vecchia.elaborazione == nuova.elaborazione) {
-                        vecchia.numeroPersone
-                    } else {
-                        nuova.numeroPersone
-                    },
+                    numeroPersone = if (stessoStato) vecchia.numeroPersone else nuova.numeroPersone,
+                    confermaRitrascrivi = vecchia.confermaRitrascrivi && stessoStato,
                 )
             }
         }
@@ -170,22 +182,41 @@ class RegistrazioniPresenter(
         val statoLettore = lettore.stato.value
         return progetto.map { r ->
             val vista = stati?.get(r.registrazioneId)
+            val elaborazioneRiga = vista?.let(::elaborazioneDi)
+            // AC-451: FALLITA over an existing Trascritto renders as Completata + this notice, whatever
+            // the `ritrascrivi` source's presence — it reports a FACT, independent of the action's
+            // availability (which `ritrascriviDisponibile` gates on its own).
+            val ritrascrizioneFallita = vista
+                ?.takeIf { it.stato == StatoElaborazioneVista.FALLITA && it.trascrittoDisponibile }
+                ?.motivoFallimento
             RigaRegistrazione(
                 registrazioneId = r.registrazioneId,
                 titolo = r.titolo,
                 dataRegistrazione = r.dataRegistrazione,
                 durataMs = r.durataMs,
-                elaborazione = vista?.let(::elaborazioneDi),
+                elaborazione = elaborazioneRiga,
                 riproduzione = riproduzioneDi(
                     r.registrazioneId,
                     statoLettore,
                     disponibile = lettore.disponibile(r.registrazioneId),
                 ),
-                numeroPersone = vista?.takeIf { it.stato == StatoElaborazioneVista.FALLITA }
-                    ?.numeroPersone?.toString().orEmpty(), // AC-376: 'Riprova' prefilled
+                numeroPersone = numeroPersonePrefillDi(vista),
                 identificazione = identificazioneDi(vista, conteggiIdentificazione[r.registrazioneId]),
+                trascrittoDisponibile = vista?.trascrittoDisponibile == true,
+                elaborazioneId = vista?.elaborazioneId,
+                ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata && ritrascrivi != null,
+                ritrascrizioneFallita = ritrascrizioneFallita,
+                annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa && annullaElaborazione != null,
             )
         }
+    }
+
+    /** AC-376 (FALLITA, unconditional) / AC-448 (Completata, only with the `ritrascrivi` source): the
+     * 'Numero di persone' field prefilled from the row's latest Elaborazione — empty otherwise. */
+    private fun numeroPersonePrefillDi(v: StatoRegistrazioneVista?): String {
+        val fallita = v?.stato == StatoElaborazioneVista.FALLITA
+        val completataConRitrascrivi = v?.stato == StatoElaborazioneVista.COMPLETATA && ritrascrivi != null
+        return if (fallita || completataConRitrascrivi) v?.numeroPersone?.toString().orEmpty() else ""
     }
 
     /**
@@ -214,16 +245,26 @@ class RegistrazioniPresenter(
     ): IdentificazioneRiga? =
         vista?.numVoci?.let { numVoci -> conteggio?.let { IdentificazioneRiga(numVoci, it.numVociDaIdentificare) } }
 
+    // ADR 0018/AC-450: IN_ATTESA/IN_CORSO carry `ritrascrizione` = trascrittoDisponibile — a re-run
+    // over an existing Trascritto gets the "Ritrascrizione …" label instead of the plain one.
+    // AC-451: FALLITA over an existing Trascritto is NOT `Fallita` — it renders as `Completata`
+    // (`RigaRegistrazione.ritrascrizioneFallita` carries the notice); a plain FALLITA keeps 'Riprova'.
     private fun elaborazioneDi(v: StatoRegistrazioneVista): StatoElaborazioneRiga = when (v.stato) {
         StatoElaborazioneVista.NON_AVVIATA -> StatoElaborazioneRiga.NonAvviata
-        StatoElaborazioneVista.IN_ATTESA -> StatoElaborazioneRiga.InAttesa(v.posizioneInCoda ?: 0)
+        StatoElaborazioneVista.IN_ATTESA ->
+            StatoElaborazioneRiga.InAttesa(v.posizioneInCoda ?: 0, ritrascrizione = v.trascrittoDisponibile)
         StatoElaborazioneVista.IN_CORSO -> StatoElaborazioneRiga.InCorso(
             faseEtichetta = v.fase?.let(::etichetta).orEmpty(),
             trascorsoMs = v.avviataAlle
                 ?.let { Duration.between(it, clock.instant()).toMillis().coerceAtLeast(0) }
                 ?: 0,
+            ritrascrizione = v.trascrittoDisponibile,
         )
-        StatoElaborazioneVista.FALLITA -> StatoElaborazioneRiga.Fallita(v.motivoFallimento.orEmpty())
+        StatoElaborazioneVista.FALLITA -> if (v.trascrittoDisponibile) {
+            StatoElaborazioneRiga.Completata
+        } else {
+            StatoElaborazioneRiga.Fallita(v.motivoFallimento.orEmpty())
+        }
         StatoElaborazioneVista.COMPLETATA -> StatoElaborazioneRiga.Completata
     }
 
@@ -304,33 +345,98 @@ class RegistrazioniPresenter(
      * else → the inline [MESSAGGIO_NUMERO_PERSONE_NON_VALIDO] and NO command.
      */
     fun avviaElaborazione(id: RegistrazioneId) {
-        val comando = avviaElaborazione ?: return // R0: the button isn't rendered either (elaborazione == null)
-        val riga = (_stato.value as? RegistrazioniUiStato.Dati)?.righe
-            ?.find { it.registrazioneId == id }
-            ?.takeUnless { it.operazioneInCorso } // M3
-            ?: return
-        val testo = riga.numeroPersone.trim()
-        val numero = testo.toIntOrNull()?.takeIf { it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX }
-        if (testo.isNotEmpty() && numero == null) {
-            aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
-        } else {
-            suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, numero)) } }
+        val comando = avviaElaborazione ?: return // R0/R1 without the source: the button isn't rendered either
+        val riga = rigaLibera(id) ?: return
+        when (val campo = numeroPersoneCampo(riga.numeroPersone)) {
+            NumeroPersoneCampo.NonValido ->
+                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
+            is NumeroPersoneCampo.Valido ->
+                suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, campo.numero)) } }
         }
     }
 
-    /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only by [avviaElaborazione]). */
+    /**
+     * AC-449: 'Ritrascrivi' validates the field exactly like [avviaElaborazione] (invalid → the same
+     * inline message, no dialog); a valid field opens the inline confirmation instead of sending the
+     * command right away.
+     */
+    fun ritrascrivi(id: RegistrazioneId) {
+        if (ritrascrivi == null) return // R0/R1 without the source: neither the field nor the button render
+        val riga = rigaLibera(id) ?: return
+        when (numeroPersoneCampo(riga.numeroPersone)) {
+            NumeroPersoneCampo.NonValido ->
+                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
+            is NumeroPersoneCampo.Valido ->
+                aggiornaRiga(id) { it.copy(confermaRitrascrivi = true, erroreRiga = null) }
+        }
+    }
+
+    /** AC-449: 'Annulla' on the confirmation — no command is sent, the field keeps its value. */
+    fun annullaRitrascrivi(id: RegistrazioneId) = aggiornaRiga(id) { it.copy(confermaRitrascrivi = false) }
+
+    /** AC-449: the confirmed 'Ritrascrivi' — exactly ONE `AvviaElaborazione` with the value [ritrascrivi] validated. */
+    fun confermaRitrascrivi(id: RegistrazioneId) {
+        val comando = ritrascrivi ?: return
+        val riga = rigaLibera(id)?.takeIf { it.confermaRitrascrivi } ?: return
+        val numero = (numeroPersoneCampo(riga.numeroPersone) as? NumeroPersoneCampo.Valido)?.numero
+        suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, numero)) } }
+    }
+
+    /**
+     * ADR 0018 Amendment (b) §3: 'Annulla' on an `InAttesa` row (AC-475), no dialog — nothing is lost.
+     * AC-476: BOTH outcomes reload the list, unlike every other row action here (H1 "nulla cambia"
+     * does not hold for this one): `ElaborazioneGiaAvviata` means the dispatcher's claim raced ahead
+     * and the row's real state already changed elsewhere (ADR 0018 Amendment (b) §3's race, now shown
+     * inline too — "La trascrizione è già partita…"), and `ElaborazioneNonTrovata` means it is already
+     * gone — the reload alone shows the row's accurate current state, with NO inline message (AC-476:
+     * "it just reloads" — a message would refer to an Elaborazione the row no longer shows at all).
+     */
+    fun annullaElaborazione(id: RegistrazioneId) {
+        val comando = annullaElaborazione ?: return // R0, or R1/R2 without the source: no 'Annulla' rendered
+        val riga = rigaLibera(id) ?: return
+        // ReturnCount (detekt): the third guard (a NonAvviata row has no elaborazioneId) is folded into
+        // this `?.let` instead of a third `?: return`.
+        riga.elaborazioneId?.let { elaborazioneId ->
+            aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
+            scope.launch {
+                try {
+                    val esito = withContext(io) { comando(AnnullaElaborazione(elaborazioneId)) }
+                    carica() // AC-476: reload on both Ok and Errore (see the kdoc above)
+                    val messaggio = (esito as? Esito.Errore)?.errore
+                        ?.let { it as? ErroreTrascrizione.ElaborazioneGiaAvviata }
+                        ?.let(::messaggioPer)
+                    aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggio) }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (
+                    @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+                ) {
+                    aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                }
+            }
+        }
+    }
+
+    /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only when an action fires). */
     fun modificaNumeroPersone(id: RegistrazioneId, testo: String) = aggiornaRiga(id) { it.copy(numeroPersone = testo) }
 
+    /** M3: the row [id], unless one of its own operations is already in flight. */
+    private fun rigaLibera(id: RegistrazioneId): RigaRegistrazione? {
+        val dati = _stato.value as? RegistrazioniUiStato.Dati ?: return null
+        return dati.righe.find { it.registrazioneId == id }?.takeUnless { it.operazioneInCorso }
+    }
+
     private fun suRiga(id: RegistrazioneId, operazione: suspend () -> Esito<Unit>) {
-        val riga = (_stato.value as? RegistrazioniUiStato.Dati)?.righe?.find { it.registrazioneId == id } ?: return
-        if (riga.operazioneInCorso) return // M3
+        val riga = rigaLibera(id) ?: return
         aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
         scope.launch {
             try {
                 when (val esito = operazione()) {
                     is Esito.Ok -> {
                         carica() // M1: merges the refreshed list, preserving this row's flags until reset below
-                        aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = null) }
+                        aggiornaRiga(id) {
+                            it.copy(operazioneInCorso = false, erroreRiga = null, confermaRitrascrivi = false)
+                        }
                     }
                     is Esito.Errore ->
                         aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggioPer(esito.errore)) }
@@ -383,11 +489,13 @@ class RegistrazioniPresenter(
         }
     }
 
-    /** AC-203/AC-342: only a COMPLETATA row opens S3 — a click elsewhere (or in R0) is a no-op. */
+    /** AC-203/AC-342/AC-450/AC-451 (ADR 0018): a row opens S3 iff a Trascritto exists — replacing
+     * "iff COMPLETATA" — so a row mid re-run (`InAttesa`/`InCorso` with `ritrascrizione`) opens too, on
+     * the still-current old transcript; a click elsewhere (or in R0) is a no-op. */
     fun apriRiga(id: RegistrazioneId) {
         val dati = _stato.value as? RegistrazioniUiStato.Dati ?: return
         val riga = dati.righe.find { it.registrazioneId == id } ?: return
-        if (riga.elaborazione == StatoElaborazioneRiga.Completata) apriRegistrazione(id)
+        if (riga.trascrittoDisponibile) apriRegistrazione(id)
     }
 
     /** H1: dismisses the current list-level `errore` (import/refresh), if any. */
@@ -416,7 +524,24 @@ class RegistrazioniPresenter(
         chiudiErrore = ::chiudiErrore,
         chiudiErroreRiga = ::chiudiErroreRiga,
         riprova = ::riprova,
+        ritrascrivi = ::ritrascrivi,
+        annullaRitrascrivi = ::annullaRitrascrivi,
+        confermaRitrascrivi = ::confermaRitrascrivi,
+        annullaElaborazione = ::annullaElaborazione,
     )
+}
+
+/** ADR 0014/AC-375: the field's text → `null` (empty, automatic), 1..10, or [NonValido]. */
+private sealed interface NumeroPersoneCampo {
+    data class Valido(val numero: Int?) : NumeroPersoneCampo
+    data object NonValido : NumeroPersoneCampo
+}
+
+private fun numeroPersoneCampo(testo: String): NumeroPersoneCampo {
+    val t = testo.trim()
+    if (t.isEmpty()) return NumeroPersoneCampo.Valido(null)
+    val n = t.toIntOrNull()?.takeIf { it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX }
+    return if (n != null) NumeroPersoneCampo.Valido(n) else NumeroPersoneCampo.NonValido
 }
 
 /**

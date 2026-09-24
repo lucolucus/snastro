@@ -51,19 +51,26 @@ import snastro.kernel.RegistrazioneId
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
 import snastro.ui.formattaDurata
+import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_COMPLETATA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_NUMERO_PERSONE
 import snastro.ui.testi.ETICHETTA_RIPROVA
+import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
+import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.SUGGERIMENTO_NUMERO_PERSONE
 import snastro.ui.testi.etichettaIdentificazione
 import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.etichettaInCorso
+import snastro.ui.testi.etichettaRitrascrizioneInAttesa
+import snastro.ui.testi.etichettaRitrascrizioneInCorso
+import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
+import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -76,6 +83,7 @@ private val PADDING_RIGA = 8.dp
 private val LARGHEZZA_CAMPO_DATA = 120.dp
 private val LARGHEZZA_CAMPO_NUMERO_PERSONE = 170.dp
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
+private val LARGHEZZA_CONFERMA_RITRASCRIVI = 280.dp
 
 /** M4: `uuuu` (proleptic year, not `yyyy`) + [ResolverStyle.STRICT] rejects an out-of-range day
  * (e.g. 31/02) instead of a SMART resolver silently rolling it into the next month (28/02). */
@@ -184,7 +192,9 @@ private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRe
 
 @Composable
 private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
-    val apribile = riga.elaborazione == StatoElaborazioneRiga.Completata
+    // AC-450/AC-451 (ADR 0018): a row opens S3 iff a Trascritto exists — not iff COMPLETATA — so a
+    // row mid re-run opens on the still-current old transcript too.
+    val apribile = riga.trascrittoDisponibile
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -393,18 +403,40 @@ private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistra
         modifier = Modifier.padding(start = PADDING_RIGA).testTag("registrazioni-stato-${id.valore}"),
     ) {
         when (stato) {
-            StatoElaborazioneRiga.NonAvviata -> AvvioConNumeroPersone(riga, ETICHETTA_TRASCRIVI, azioni)
-            is StatoElaborazioneRiga.InAttesa -> Text(etichettaInAttesa(stato.posizione))
-            is StatoElaborazioneRiga.InCorso -> Text(etichettaInCorso(stato.faseEtichetta, stato.trascorsoMs))
+            StatoElaborazioneRiga.NonAvviata ->
+                AvvioConNumeroPersone(riga, ETICHETTA_TRASCRIVI, azioni.modificaNumeroPersone, azioni.avviaElaborazione)
+            is StatoElaborazioneRiga.InAttesa -> {
+                val etichettaAttesa = if (stato.ritrascrizione) {
+                    etichettaRitrascrizioneInAttesa(stato.posizione)
+                } else {
+                    etichettaInAttesa(stato.posizione)
+                }
+                Text(etichettaAttesa)
+                // AC-475: 'Annulla' on ANY IN_ATTESA row (plain or re-run) when the source is supplied.
+                if (riga.annullabile) {
+                    TextButton(
+                        onClick = { azioni.annullaElaborazione(id) },
+                        enabled = !operazioneInCorso,
+                        modifier = Modifier.testTag("registrazioni-annulla-${id.valore}"),
+                    ) { Text(ETICHETTA_ANNULLA) }
+                }
+            }
+            is StatoElaborazioneRiga.InCorso -> Text(
+                if (stato.ritrascrizione) {
+                    etichettaRitrascrizioneInCorso(stato.faseEtichetta, stato.trascorsoMs)
+                } else {
+                    etichettaInCorso(stato.faseEtichetta, stato.trascorsoMs)
+                },
+            )
             is StatoElaborazioneRiga.Fallita -> {
                 Text(
                     text = stato.motivo,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
                 )
-                AvvioConNumeroPersone(riga, ETICHETTA_RIPROVA, azioni)
+                AvvioConNumeroPersone(riga, ETICHETTA_RIPROVA, azioni.modificaNumeroPersone, azioni.avviaElaborazione)
             }
-            StatoElaborazioneRiga.Completata -> Text(ETICHETTA_COMPLETATA)
+            StatoElaborazioneRiga.Completata -> ColonnaCompletata(riga, azioni)
         }
         if (operazioneInCorso) {
             CircularProgressIndicator(
@@ -416,29 +448,97 @@ private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistra
 }
 
 /**
- * ADR 0014: the plain 'Numero di persone' field (empty = automatic) next to the 'Trascrivi'/'Riprova' button
- * [etichetta]. Its text is presenter state ([RigaRegistrazione.numeroPersone]); validation and the inline
- * message (AC-375) are the presenter's, shown as the row's `erroreRiga`.
+ * ADR 0018: 'Completata' plus, when applicable, AC-451's failed-re-run notice and AC-448/449's
+ * 'Ritrascrivi' field/button — replaced by the inline confirmation (AC-449, same style as S4's delete
+ * confirmation) once `riga.confermaRitrascrivi` is set.
  */
 @Composable
-private fun AvvioConNumeroPersone(riga: RigaRegistrazione, etichetta: String, azioni: AzioniRegistrazioni) {
+private fun ColonnaCompletata(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId
+    if (riga.confermaRitrascrivi) {
+        ConfermaRitrascrivi(riga, azioni)
+    } else {
+        Text(ETICHETTA_COMPLETATA)
+        riga.ritrascrizioneFallita?.let {
+            Text(
+                text = messaggioRitrascrizioneNonRiuscita(it),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.testTag("registrazioni-ritrascrizione-fallita-${id.valore}"),
+            )
+        }
+        if (riga.ritrascriviDisponibile) {
+            AvvioConNumeroPersone(riga, ETICHETTA_RITRASCRIVI, azioni.modificaNumeroPersone, azioni.ritrascrivi)
+        }
+    }
+}
+
+/**
+ * AC-449: the row's OWN 'Ritrascrivi' field/button are replaced by this panel — the destructive-action
+ * text plus Conferma/Annulla — never an OS-level modal dialog (same style as S4's
+ * `ConfermaEliminazioneParlante`). Wrapped to [LARGHEZZA_CONFERMA_RITRASCRIVI] so the long text wraps
+ * inside the row's trailing column instead of overflowing it.
+ */
+@Composable
+private fun ConfermaRitrascrivi(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId
+    Column(
+        modifier = Modifier
+            .width(LARGHEZZA_CONFERMA_RITRASCRIVI)
+            .testTag("registrazioni-conferma-ritrascrivi-${id.valore}"),
+    ) {
+        Text(text = titoloConfermaRitrascrivi(riga.titolo), style = MaterialTheme.typography.bodyMedium)
+        Text(
+            text = MESSAGGIO_CONFERMA_RITRASCRIVI,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+        )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = PADDING_RIGA)) {
+            Button(
+                onClick = { azioni.confermaRitrascrivi(id) },
+                enabled = !riga.operazioneInCorso,
+                modifier = Modifier.testTag("registrazioni-conferma-ritrascrivi-conferma-${id.valore}"),
+            ) { Text(ETICHETTA_RITRASCRIVI) }
+            Spacer(modifier = Modifier.width(PADDING_RIGA))
+            TextButton(
+                onClick = { azioni.annullaRitrascrivi(id) },
+                enabled = !riga.operazioneInCorso,
+                modifier = Modifier.testTag("registrazioni-annulla-ritrascrivi-${id.valore}"),
+            ) { Text(ETICHETTA_ANNULLA) }
+        }
+    }
+}
+
+/**
+ * ADR 0014: the plain 'Numero di persone' field (empty = automatic) next to a start/retry button
+ * [etichetta] — shared by 'Trascrivi'/'Riprova'/'Ritrascrivi' ([onAvvia] carries which command). Its
+ * text is presenter state ([RigaRegistrazione.numeroPersone]); validation and the inline message
+ * (AC-375/449) are the presenter's, shown as the row's `erroreRiga`.
+ */
+@Composable
+private fun AvvioConNumeroPersone(
+    riga: RigaRegistrazione,
+    etichetta: String,
+    onModifica: (RegistrazioneId, String) -> Unit,
+    onAvvia: (RegistrazioneId) -> Unit,
+) {
     val id = riga.registrazioneId
     Row(verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = riga.numeroPersone,
-            onValueChange = { azioni.modificaNumeroPersone(id, it) },
+            onValueChange = { onModifica(id, it) },
             singleLine = true,
             enabled = !riga.operazioneInCorso,
             label = { Text(ETICHETTA_NUMERO_PERSONE) },
             placeholder = { Text(SUGGERIMENTO_NUMERO_PERSONE) },
             textStyle = MaterialTheme.typography.bodySmall,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-            keyboardActions = KeyboardActions(onDone = { azioni.avviaElaborazione(id) }),
+            keyboardActions = KeyboardActions(onDone = { onAvvia(id) }),
             modifier = Modifier
                 .width(LARGHEZZA_CAMPO_NUMERO_PERSONE)
                 .testTag("registrazioni-numero-persone-${id.valore}"),
         )
-        TextButton(onClick = { azioni.avviaElaborazione(id) }, enabled = !riga.operazioneInCorso) {
+        TextButton(onClick = { onAvvia(id) }, enabled = !riga.operazioneInCorso) {
             Text(etichetta)
         }
     }

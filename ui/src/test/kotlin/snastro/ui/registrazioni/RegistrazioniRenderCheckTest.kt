@@ -16,19 +16,27 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.ui.testi.ETICHETTA_ANNULLA
+import snastro.ui.testi.ETICHETTA_COMPLETATA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_NUMERO_PERSONE
 import snastro.ui.testi.ETICHETTA_RIPROVA
+import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
+import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.etichettaIdentificazione
 import snastro.ui.testi.etichettaInAttesa
+import snastro.ui.testi.etichettaRitrascrizioneInCorso
 import snastro.ui.testi.messaggioPer
+import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
+import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.io.File
 import java.time.LocalDate
 import javax.imageio.ImageIO
@@ -50,18 +58,29 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     chiudiErrore = {},
     chiudiErroreRiga = {},
     riprova = {},
+    ritrascrivi = {},
+    annullaRitrascrivi = {},
+    confermaRitrascrivi = {},
+    annullaElaborazione = {},
 )
 
 private val REG_1 = RegistrazioneId("id-1")
 private val REG_2 = RegistrazioneId("id-2")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 
+@Suppress("LongParameterList") // one parameter per RigaRegistrazione field these fixtures vary
 private fun unaRiga(
     id: RegistrazioneId = REG_1,
     titolo: String = "Seduta del 12 marzo",
     elaborazione: StatoElaborazioneRiga? = null,
     riproduzione: StatoRiproduzioneRiga = StatoRiproduzioneRiga.Disponibile,
     identificazione: IdentificazioneRiga? = null,
+    trascrittoDisponibile: Boolean = false,
+    elaborazioneId: ElaborazioneId? = null,
+    ritrascriviDisponibile: Boolean = false,
+    confermaRitrascrivi: Boolean = false,
+    ritrascrizioneFallita: String? = null,
+    annullabile: Boolean = false,
 ) = RigaRegistrazione(
     registrazioneId = id,
     titolo = titolo,
@@ -70,6 +89,12 @@ private fun unaRiga(
     elaborazione = elaborazione,
     riproduzione = riproduzione,
     identificazione = identificazione,
+    trascrittoDisponibile = trascrittoDisponibile,
+    elaborazioneId = elaborazioneId,
+    ritrascriviDisponibile = ritrascriviDisponibile,
+    confermaRitrascrivi = confermaRitrascrivi,
+    ritrascrizioneFallita = ritrascrizioneFallita,
+    annullabile = annullabile,
 )
 
 /**
@@ -209,6 +234,38 @@ class RegistrazioniRenderCheckTest {
     @Test
     fun `AC-204 AC-345 un mix di righe con e senza badge a 1024x640`() =
         verificaBadgeMix(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-449 la conferma inline di Ritrascrivi a 1280x800`() =
+        verificaConfermaRitrascrivi(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-449 la conferma inline di Ritrascrivi a 1024x640`() =
+        verificaConfermaRitrascrivi(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-450 una riga Ritrascrizione in corso a 1280x800`() =
+        verificaRitrascrizioneInCorso(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-450 una riga Ritrascrizione in corso a 1024x640`() =
+        verificaRitrascrizioneInCorso(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-451 la notifica di ritrascrizione non riuscita a 1280x800`() =
+        verificaRitrascrizioneNonRiuscita(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-451 la notifica di ritrascrizione non riuscita a 1024x640`() =
+        verificaRitrascrizioneNonRiuscita(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-475 una riga In coda con Annulla a 1280x800`() =
+        verificaInCodaConAnnulla(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-475 una riga In coda con Annulla a 1024x640`() =
+        verificaInCodaConAnnulla(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent { SchermataRegistrazioni(stato = RegistrazioniUiStato.Caricamento, azioni = AZIONI_VUOTE) }
@@ -440,6 +497,99 @@ class RegistrazioniRenderCheckTest {
         onNodeWithText(etichettaIdentificazione(3, 1)).assertIsDisplayed()
         onAllNodesWithTag("registrazioni-identificazione-${REG_2.valore}", useUnmergedTree = true).assertCountEquals(0)
         catturaPng("registrazioni-badge-mix", width, height)
+    }
+
+    private fun verificaConfermaRitrascrivi(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            elaborazione = StatoElaborazioneRiga.Completata,
+                            trascrittoDisponibile = true,
+                            ritrascriviDisponibile = true,
+                            confermaRitrascrivi = true,
+                        ),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazioni-conferma-ritrascrivi-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithText(titoloConfermaRitrascrivi("Seduta del 12 marzo")).assertIsDisplayed()
+        onNodeWithText(MESSAGGIO_CONFERMA_RITRASCRIVI).assertIsDisplayed()
+        onNodeWithTag("registrazioni-conferma-ritrascrivi-conferma-${REG_1.valore}", useUnmergedTree = true)
+            .assertIsDisplayed()
+        onNodeWithTag("registrazioni-annulla-ritrascrivi-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        catturaPng("registrazioni-conferma-ritrascrivi", width, height)
+    }
+
+    private fun verificaRitrascrizioneInCorso(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            elaborazione = StatoElaborazioneRiga.InCorso(
+                                faseEtichetta = "separazione voci",
+                                trascorsoMs = 192_000,
+                                ritrascrizione = true,
+                            ),
+                            trascrittoDisponibile = true,
+                        ),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithText(etichettaRitrascrizioneInCorso("separazione voci", 192_000)).assertIsDisplayed()
+        onAllNodesWithTag("registrazioni-annulla-${REG_1.valore}", useUnmergedTree = true).assertCountEquals(0)
+        catturaPng("registrazioni-ritrascrizione-in-corso", width, height)
+    }
+
+    private fun verificaRitrascrizioneNonRiuscita(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            elaborazione = StatoElaborazioneRiga.Completata,
+                            trascrittoDisponibile = true,
+                            ritrascriviDisponibile = true,
+                            ritrascrizioneFallita = "audio illeggibile",
+                        ).copy(numeroPersone = "4"),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithText(ETICHETTA_COMPLETATA).assertIsDisplayed()
+        onNodeWithText(messaggioRitrascrizioneNonRiuscita("audio illeggibile")).assertIsDisplayed()
+        onNodeWithText(ETICHETTA_RITRASCRIVI).assertIsDisplayed()
+        catturaPng("registrazioni-ritrascrizione-non-riuscita", width, height)
+    }
+
+    private fun verificaInCodaConAnnulla(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            elaborazione = StatoElaborazioneRiga.InAttesa(2),
+                            elaborazioneId = ElaborazioneId("elaborazione-1"),
+                            annullabile = true,
+                        ),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithText(etichettaInAttesa(2)).assertIsDisplayed()
+        onNodeWithTag("registrazioni-annulla-${REG_1.valore}", useUnmergedTree = true)
+            .assertIsDisplayed()
+            .assertIsEnabled()
+        onNodeWithText(ETICHETTA_ANNULLA).assertIsDisplayed()
+        catturaPng("registrazioni-in-coda-annulla", width, height)
     }
 
     @OptIn(ExperimentalTestApi::class)
