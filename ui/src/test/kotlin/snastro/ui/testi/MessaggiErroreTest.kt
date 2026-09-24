@@ -122,6 +122,7 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.DivisioneNonAmmessa(VoceId(1), setOf(SegmentoId(1))),
                 ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
                 ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
+                ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1")),
             ),
         ) { messaggioPer(it) }
     }
@@ -135,6 +136,14 @@ class MessaggiErroreTest {
         assertEquals(
             "Questa trascrizione non è più in coda",
             messaggioPer(ErroreTrascrizione.ElaborazioneNonTrovata(ElaborazioneId("id-1"))),
+        )
+    }
+
+    @Test
+    fun `AC-515 il testo di TrascrittoCambiato`() {
+        assertEquals(
+            "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima",
+            messaggioPer(ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1"))),
         )
     }
 

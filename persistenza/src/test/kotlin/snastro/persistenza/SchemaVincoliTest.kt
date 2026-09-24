@@ -91,7 +91,7 @@ class SchemaVincoliTest {
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
         db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
-        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao")
+        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)
 
         // Trascritto's documented salva: DELETE voce ... then re-insert, in ONE transaction that
         // also carries the Parlanti revisione-policy on attribuzione/impronta_vocale (ADR 0012).

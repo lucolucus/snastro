@@ -688,3 +688,5 @@
 2026-09-24T13:39:24Z	sa-a	worker	dispatch	-	deep	opus	semi-auto A trascrizione: trascritto sweep, eventi, persistenza-conferma-segmento, revisione, riassegna-segmenti, api-trascritto, trascritto-view, repo-sql
 2026-09-24T13:39:24Z	sa-b	worker	dispatch	-	deep	opus	semi-auto B ML: diarizzatore-sherpa rework (seg fp32, TitaNet-S, own AHC, EmbeddingSherpa), estrattore-impronta-sherpa
 2026-09-24T13:39:24Z	sa-c	worker	dispatch	-	standard	sonnet	semi-auto C parlanti: porte-parlanti, porta-lettore-voci, classificatore-somiglianza, piano-riassegnazione
+2026-09-24T13:59:28Z	sa-a	composer	merge	-	-	-	MERGED 4508b55 (8 blocks)
+2026-09-24T13:59:28Z	repository-sql-parlanti	composer	pre-release	-	-	-	LOW agg-trascritto §14 gate red: parlanti adapter tests seed with db.trascrittoQueries/voceQueries — seed via applicazione or relax gate for test sources

@@ -299,6 +299,7 @@ public class EseguiProssimaElaborazioneServizio(
         const val MOTIVO_DIVISIONE_NON_AMMESSA = "divisione di voce non consentita"
         const val MOTIVO_RIASSEGNAZIONE_NON_AMMESSA = "riassegnazione del segmento non consentita"
         const val MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO = "numero di persone non valido"
+        const val MOTIVO_TRASCRITTO_CAMBIATO = "la trascrizione è cambiata nel frattempo"
 
         /** 16 kHz mono (`DecodificatoreAudio`, ADR 0005): samples per millisecond. */
         const val CAMPIONI_PER_MS = 16
@@ -325,6 +326,7 @@ public class EseguiProssimaElaborazioneServizio(
             is ErroreTrascrizione.DivisioneNonAmmessa -> MOTIVO_DIVISIONE_NON_AMMESSA
             is ErroreTrascrizione.RiassegnazioneNonAmmessa -> MOTIVO_RIASSEGNAZIONE_NON_AMMESSA
             is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO
+            is ErroreTrascrizione.TrascrittoCambiato -> MOTIVO_TRASCRITTO_CAMBIATO
         }
 
         /**

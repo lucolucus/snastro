@@ -11,17 +11,19 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.NessunParlatoRilevato
 import snastro.trascrizione.dominio.ErroreTrascrizione.RiassegnazioneNonAmmessa
 import snastro.trascrizione.dominio.ErroreTrascrizione.SegmentoNonTrovato
 import snastro.trascrizione.dominio.ErroreTrascrizione.SegmentoOltreLaDurata
+import snastro.trascrizione.dominio.ErroreTrascrizione.TrascrittoCambiato
 import snastro.trascrizione.dominio.ErroreTrascrizione.UnioneNonAmmessa
 import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
 
 /**
  * The transcript of one `Registrazione` (identity [registrazioneId]): its Voci and Segmenti, and the
- * `Revisione` operations [unisci], [dividi], [riassegna]. Owns INV-6…INV-12.
+ * `Revisione` operations [unisci], [dividi], [riassegna], [riassegnaInBlocco], [confermaSegmento].
+ * Owns INV-6…INV-12 and INV-26.
  *
- * The only state is the Segmento→Voce assignment plus the counters: a Voce exists iff at least one
- * Segmento is assigned to it, so no Voce is ever empty (INV-6) by construction; Segmenti are never
- * created after [crea] nor edited (INV-8); new Voci take [prossimaVoce]`++`, so a `VoceId` is never
- * reused nor renumbered (INV-12).
+ * The only state is the Segmento→Voce assignment, the `confermato` flags (INV-26) and the counters: a
+ * Voce exists iff at least one Segmento is assigned to it, so no Voce is ever empty (INV-6) by
+ * construction; Segmenti are never created after [crea] nor edited except for their Voce and their
+ * flag (INV-8); new Voci take [prossimaVoce]`++`, so a `VoceId` is never reused nor renumbered (INV-12).
  */
 public class Trascritto private constructor(
     public val registrazioneId: RegistrazioneId,
@@ -55,12 +57,15 @@ public class Trascritto private constructor(
         !esiste(sopravvive) -> Esito.Errore(VoceNonTrovata(sopravvive))
         !esiste(rimossa) -> Esito.Errore(VoceNonTrovata(rimossa))
         else -> {
-            sposta(idsDi(rimossa), verso = sopravvive)
+            sposta(idsDi(rimossa), verso = sopravvive, conferma = false)
             Esito.Ok(VociUnite(registrazioneId, sopravvissuta = sopravvive, rimossa = rimossa))
         }
     }
 
-    /** INV-10: [segmenti], a non-empty proper subset of [origine]'s Segmenti, become a NEW Voce. */
+    /**
+     * INV-10: [segmenti], a non-empty proper subset of [origine]'s Segmenti, become a NEW Voce; each of them is
+     * `confermato` afterwards (INV-26), the Segmenti left on [origine] keep their flags.
+     */
     public fun dividi(origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa> {
         val diOrigine = idsDi(origine)
         return when {
@@ -69,7 +74,7 @@ public class Trascritto private constructor(
                 Esito.Errore(DivisioneNonAmmessa(origine, segmenti))
             else -> {
                 val nuova = nuovaVoce()
-                sposta(segmenti, verso = nuova)
+                sposta(segmenti, verso = nuova, conferma = true)
                 val spostati = segmenti.map { _segmenti.getValue(it) }.sortedWith(ORDINE_NELLA_VOCE).map { it.id }
                 Esito.Ok(VoceDivisa(registrazioneId, origine, nuova, spostati))
             }
@@ -80,7 +85,8 @@ public class Trascritto private constructor(
      * INV-11: moves [segmento] to [destinazione], an existing other Voce (the source Voce is removed if
      * emptied, INV-6), or to a NEW Voce when `null`. A NEW Voce is refused for the only Segmento of its
      * Voce [user decision]: it would change no grouping yet remove the Voce, losing its Attribuzione and
-     * ImprontaVocale (INV-21). A refusal changes nothing, [prossimaVoce] included.
+     * ImprontaVocale (INV-21). A refusal changes nothing, [prossimaVoce] included. The moved Segmento is
+     * `confermato` afterwards: a manual move is an explicit user act (INV-26).
      */
     public fun riassegna(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> {
         val da = _segmenti[segmento]?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento))
@@ -90,7 +96,7 @@ public class Trascritto private constructor(
             destinazione != null && !esiste(destinazione) -> Esito.Errore(VoceNonTrovata(destinazione))
             else -> {
                 val a = destinazione ?: nuovaVoce()
-                sposta(setOf(segmento), verso = a)
+                sposta(setOf(segmento), verso = a, conferma = true)
                 Esito.Ok(
                     SegmentoRiassegnato(
                         registrazioneId,
@@ -105,6 +111,63 @@ public class Trascritto private constructor(
         }
     }
 
+    /**
+     * ADR 0019 §4.5 + Amendment (b).1: applies [spostamenti] as ONE all-or-nothing batch. Every entry is validated
+     * against the PRE-batch state, the moves are applied in list order, and a Voce empty at the END of the batch
+     * ceases to exist (INV-6) — one emptied and refilled within the batch is kept. Never creates a Voce, never
+     * changes a `confermato` flag (INV-26). A stale entry → [TrascrittoCambiato]; `a == da` or a duplicated
+     * Segmento → [RiassegnazioneNonAmmessa]; a refusal changes nothing. One event per move in list order,
+     * `aNuova = false`, `daRimossa` on the LAST move out of each Voce empty at the end.
+     */
+    public fun riassegnaInBlocco(spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>> {
+        val rifiuto = rifiutoDelBlocco(spostamenti)
+        if (rifiuto != null) return Esito.Errore(rifiuto)
+        spostamenti.forEach { m -> sposta(setOf(m.segmentoId), verso = m.a, conferma = false) }
+        val ultimaUscita = spostamenti.withIndex().associate { (i, m) -> m.da to i }
+        return Esito.Ok(
+            spostamenti.mapIndexed { i, m ->
+                SegmentoRiassegnato(
+                    registrazioneId,
+                    m.segmentoId,
+                    da = m.da,
+                    a = m.a,
+                    daRimossa = ultimaUscita[m.da] == i && !esiste(m.da),
+                    aNuova = false,
+                )
+            },
+        )
+    }
+
+    /**
+     * INV-26: sets ([confermato] = true) or revokes ("Togli conferma") the flag of [segmento]. The same value →
+     * `Ok(null)`, nothing changes; an unknown Segmento → [SegmentoNonTrovato].
+     */
+    public fun confermaSegmento(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> {
+        val attuale = _segmenti[segmento]
+        return when {
+            attuale == null -> Esito.Errore(SegmentoNonTrovato(segmento))
+            attuale.confermato == confermato -> Esito.Ok(null)
+            else -> {
+                _segmenti[segmento] = attuale.copy(confermato = confermato)
+                Esito.Ok(SegmentoConfermato(registrazioneId, segmento, confermato))
+            }
+        }
+    }
+
+    /** The first refusal of a [riassegnaInBlocco] batch, every entry checked against the PRE-batch state. */
+    private fun rifiutoDelBlocco(spostamenti: List<SpostamentoSegmento>): ErroreTrascrizione? {
+        val visti = mutableSetOf<SegmentoId>()
+        return spostamenti.firstNotNullOfOrNull { m ->
+            val s = _segmenti[m.segmentoId]
+            when {
+                m.a == m.da || !visti.add(m.segmentoId) -> RiassegnazioneNonAmmessa(m.segmentoId, m.a)
+                s == null || s.voceId != m.da || s.intervallo != m.intervallo || s.confermato || !esiste(m.a) ->
+                    TrascrittoCambiato(registrazioneId)
+                else -> null
+            }
+        }
+    }
+
     private fun esiste(voce: VoceId): Boolean = _segmenti.values.any { it.voceId == voce }
 
     private fun idsDi(voce: VoceId): Set<SegmentoId> =
@@ -112,9 +175,15 @@ public class Trascritto private constructor(
 
     private fun nuovaVoce(): VoceId = VoceId(_prossimaVoce++)
 
-    /** The only mutation of the aggregate: only the Voce changes, never id, intervallo or testo (INV-8). */
-    private fun sposta(segmenti: Set<SegmentoId>, verso: VoceId) {
-        segmenti.forEach { id -> _segmenti[id] = _segmenti.getValue(id).copy(voceId = verso) }
+    /**
+     * Moves [segmenti] to [verso]: only the Voce (and, when [conferma], the flag set to true) changes, never id,
+     * intervallo or testo (INV-8). Without [conferma] every flag is kept (INV-26).
+     */
+    private fun sposta(segmenti: Set<SegmentoId>, verso: VoceId, conferma: Boolean) {
+        segmenti.forEach { id ->
+            val s = _segmenti.getValue(id)
+            _segmenti[id] = s.copy(voceId = verso, confermato = s.confermato || conferma)
+        }
     }
 
     public companion object {

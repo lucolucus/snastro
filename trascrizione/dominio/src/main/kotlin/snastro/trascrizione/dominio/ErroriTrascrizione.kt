@@ -63,4 +63,10 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
         val segmentoId: SegmentoId,
         val destinazione: VoceId?,
     ) : ErroreTrascrizione
+
+    /**
+     * ADR 0019 §4.5: a `riassegnaInBlocco` plan no longer matches the Trascritto of [registrazioneId] (a Segmento
+     * is missing, moved, re-timed or confermato, or a destination Voce is gone). Nothing was applied.
+     */
+    public data class TrascrittoCambiato(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
 }
