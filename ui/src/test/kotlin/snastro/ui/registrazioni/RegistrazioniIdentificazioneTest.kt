@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
@@ -39,7 +40,18 @@ private fun statoVista(
     posizioneInCoda: Int? = null,
     numVoci: Int? = null,
     numeroPersone: Int? = null,
-) = StatoRegistrazioneVista(id, stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci, numeroPersone)
+) = StatoRegistrazioneVista(
+    id,
+    stato,
+    fase,
+    avviataAlle,
+    motivoFallimento,
+    posizioneInCoda,
+    numVoci,
+    numeroPersone,
+    trascrittoDisponibile = numVoci != null, // ADR 0018: numVoci is non-null iff a Trascritto exists
+    elaborazioneId = ElaborazioneId("elaborazione-${id.valore}").takeIf { stato != StatoElaborazioneVista.NON_AVVIATA },
+)
 
 /**
  * AC-204/AC-345 (R2, fetta Parlanti): the identification badge — [RegistrazioniPresenter.identificazioni]

@@ -1,5 +1,6 @@
 package snastro.ui.testi
 
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.ErroreDominio
 import snastro.kernel.IntervalloMs
@@ -109,7 +110,8 @@ class MessaggiErroreTest {
             listOf(
                 transizioneNonAmmessa("id-1", "IN_ATTESA", "IN_CORSO"),
                 ErroreTrascrizione.ElaborazioneGiaAperta(RegistrazioneId("id-1")),
-                ErroreTrascrizione.ElaborazioneGiaCompletata(RegistrazioneId("id-1")),
+                ErroreTrascrizione.ElaborazioneGiaAvviata(ElaborazioneId("id-1")),
+                ErroreTrascrizione.ElaborazioneNonTrovata(ElaborazioneId("id-1")),
                 ErroreTrascrizione.RegistrazioneNonTrovata(RegistrazioneId("id-1")),
                 ErroreTrascrizione.TrascrittoNonTrovato(RegistrazioneId("id-1")),
                 ErroreTrascrizione.NessunParlatoRilevato,
@@ -122,6 +124,18 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
             ),
         ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `AC-477 i testi di ElaborazioneGiaAvviata e ElaborazioneNonTrovata`() {
+        assertEquals(
+            "La trascrizione è già partita: non si può più annullare",
+            messaggioPer(ErroreTrascrizione.ElaborazioneGiaAvviata(ElaborazioneId("id-1"))),
+        )
+        assertEquals(
+            "Questa trascrizione non è più in coda",
+            messaggioPer(ErroreTrascrizione.ElaborazioneNonTrovata(ElaborazioneId("id-1"))),
+        )
     }
 
     @Test

@@ -10,7 +10,8 @@ import snastro.persistenza.SnastroDatabase
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
-import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import java.time.Instant
@@ -20,11 +21,11 @@ import migrations.Elaborazione as ElaborazioneRiga
  * [ElaborazioneRepository] on the generated [SnastroDatabase] queries (dev-architecture-app.md#repository).
  * [salva] never opens its own transaction — the caller's [snastro.kernel.UnitaDiLavoro] does (ADR 0012).
  *
- * INV-4 (ADR 0007) is backed by the two partial unique indexes on `elaborazione(registrazione_id)`: one
- * WHERE `stato IN ('in_attesa','in_corso')`, the other WHERE `stato = 'completata'`. Their predicates
- * partition `stato`, so a single write can only ever violate the index that matches the `stato` being
- * written — [e.aperta]/[e.completata] alone (no message parsing) tells [salva] which [snastro.trascrizione.dominio.ErroreTrascrizione]
- * to return. A `fallita` write can violate neither index.
+ * INV-4 (ADR 0007) is backed by the partial unique index `elaborazione_aperta_unica` on
+ * `elaborazione(registrazione_id)` WHERE `stato IN ('in_attesa','in_corso')` — the only unique constraint an
+ * `elaborazione` write can violate (`elaborazione_completata_unica` is dropped by `3.sqm`, ADR 0018). Only an
+ * open write can violate it, so [Elaborazione.aperta] alone (no message parsing) maps it to `ElaborazioneGiaAperta`;
+ * any other constraint fault is rethrown raw (AC-111).
  */
 public class ElaborazioneRepositorySql(private val db: SnastroDatabase) : ElaborazioneRepository {
     override fun diRegistrazione(id: RegistrazioneId): List<Elaborazione> =
@@ -35,6 +36,20 @@ public class ElaborazioneRepositorySql(private val db: SnastroDatabase) : Elabor
 
     override fun inCorso(): List<Elaborazione> =
         db.elaborazioneQueries.trovaInCorso().executeAsList().map { it.inDominio() }
+
+    override fun trova(id: ElaborazioneId): Elaborazione? =
+        db.elaborazioneQueries.trovaPerId(id.valore).executeAsOneOrNull()?.inDominio()
+
+    /**
+     * `eliminaInAttesa` carries the `in_attesa` condition in the DELETE itself (never a stale read); only when it
+     * deleted nothing is the row re-read, just to tell a started row from an absent one (AC-472).
+     */
+    override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = when {
+        db.elaborazioneQueries.eliminaInAttesa(id.valore).value > 0 -> Esito.Ok(Unit)
+        db.elaborazioneQueries.trovaPerId(id.valore).executeAsOneOrNull() != null ->
+            Esito.Errore(ElaborazioneGiaAvviata(id))
+        else -> Esito.Errore(ElaborazioneNonTrovata(id))
+    }
 
     override fun salva(e: Elaborazione): Esito<Unit> = try {
         val esistente = db.elaborazioneQueries.trovaPerId(e.id.valore).executeAsOneOrNull()
@@ -62,12 +77,8 @@ public class ElaborazioneRepositorySql(private val db: SnastroDatabase) : Elabor
     }
 
     private fun errore(e: Elaborazione, ex: SQLiteException): Esito<Unit> {
-        if (ex.resultCode != SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE) throw ex
-        return when {
-            e.aperta -> Esito.Errore(ElaborazioneGiaAperta(e.registrazioneId))
-            e.completata -> Esito.Errore(ElaborazioneGiaCompletata(e.registrazioneId))
-            else -> throw ex
-        }
+        if (ex.resultCode != SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE || !e.aperta) throw ex
+        return Esito.Errore(ElaborazioneGiaAperta(e.registrazioneId))
     }
 }
 

@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
@@ -61,7 +62,18 @@ private fun statoVista(
     posizioneInCoda: Int? = null,
     numVoci: Int? = null,
     numeroPersone: Int? = null,
-) = StatoRegistrazioneVista(id, stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci, numeroPersone)
+) = StatoRegistrazioneVista(
+    id,
+    stato,
+    fase,
+    avviataAlle,
+    motivoFallimento,
+    posizioneInCoda,
+    numVoci,
+    numeroPersone,
+    trascrittoDisponibile = numVoci != null, // ADR 0018: numVoci is non-null iff a Trascritto exists
+    elaborazioneId = ElaborazioneId("elaborazione-${id.valore}").takeIf { stato != StatoElaborazioneVista.NON_AVVIATA },
+)
 
 /**
  * AC-342: the R0 variant is exercised by simply omitting `stati`/`avvia` from [presentatore] (their

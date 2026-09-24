@@ -27,3 +27,12 @@ public data class ElaborazioneFallita(
     val registrazioneId: RegistrazioneId,
     val motivo: String,
 ) : EventoDominio
+
+/**
+ * ADR 0018 Amendment (b): [Elaborazione.annulla] accepted the cancellation of a never-started (`in_attesa`)
+ * Elaborazione; the repository then deletes its row.
+ */
+public data class ElaborazioneAnnullata(
+    val elaborazioneId: ElaborazioneId,
+    val registrazioneId: RegistrazioneId,
+) : EventoDominio

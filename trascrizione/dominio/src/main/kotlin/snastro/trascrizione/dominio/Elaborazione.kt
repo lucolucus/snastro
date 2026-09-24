@@ -5,6 +5,7 @@ import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
+import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
 import snastro.trascrizione.dominio.ErroreTrascrizione.TransizioneNonAmmessa
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
@@ -39,6 +40,10 @@ public class Elaborazione private constructor(
 
     /** `in_attesa` or `in_corso`. */
     public val aperta: Boolean get() = stato == IN_ATTESA || stato == IN_CORSO
+
+    /** `in_attesa`: never started (the only state [annulla] accepts). */
+    public val inAttesa: Boolean get() = stato == IN_ATTESA
+
     public val completata: Boolean get() = stato == COMPLETATA
     public val fallita: Boolean get() = stato == FALLITA
 
@@ -59,6 +64,13 @@ public class Elaborazione private constructor(
             _motivoFallimento = motivo
             ElaborazioneFallita(id, registrazioneId, motivo)
         }
+
+    /**
+     * ADR 0018 Amendment (b): a CHECK, not a transition — Ok only while never started (`in_attesa`), and the
+     * state is left unchanged either way (INV-3 has no "annullata" state: the repository deletes the row).
+     */
+    public fun annulla(): Esito<ElaborazioneAnnullata> =
+        if (inAttesa) Esito.Ok(ElaborazioneAnnullata(id, registrazioneId)) else Esito.Errore(ElaborazioneGiaAvviata(id))
 
     private inline fun <E> transizione(
         da: StatoElaborazione,

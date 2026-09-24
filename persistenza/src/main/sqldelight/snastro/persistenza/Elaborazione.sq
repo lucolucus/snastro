@@ -1,4 +1,4 @@
--- Queries for `elaborazione` — schema in migrations/1.sqm + 2.sqm (numero_persone) (ADR 0006 Amendment (a)).
+-- Queries for `elaborazione` — schema in migrations/1.sqm + 2.sqm (numero_persone) + 3.sqm (ADR 0018) (ADR 0006 Amendment (a)).
 
 trovaPerId:
 SELECT * FROM elaborazione WHERE id = :id;
@@ -19,3 +19,8 @@ VALUES (:id, :registrazioneId, :stato, :creataAlle, :avviataAlle, :motivoFallime
 aggiornaStato:
 UPDATE elaborazione SET stato = :stato, avviata_alle = :avviataAlle, motivo_fallimento = :motivoFallimento
     WHERE id = :id;
+
+-- ADR 0018 Amendment (b): compare-and-delete of a never-started row (AnnullaElaborazione) — the only DELETE on
+-- elaborazione. The `stato` condition lives in the SQL itself: 0 rows = started (or absent), never a stale read.
+eliminaInAttesa:
+DELETE FROM elaborazione WHERE id = :id AND stato = 'in_attesa';
