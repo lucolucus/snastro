@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial: the auto-start policy of ADR 0012 Amendment R2 / ADR 0004 Execution — superseded in place by their dated amendments, pointing here
 closes_spike: scelta-diarizzatore
 enforced_by: null
-amended: 2026-09-24   # 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count"
+amended: 2026-09-24   # 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count" and "Amendment 2026-09-24 (b)" (Ritrascrivi, ADR 0018)
 ---
 # 0014 — Diarization: sherpa-onnx pyannote-3.0 + WeSpeaker ResNet34-LM, threshold 0.4; optional "Numero di persone" → `num_clusters`
 
@@ -189,3 +189,10 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
   leaving it empty (automatic clustering) is the right choice when the count is unknown.
 - The 1..10 bound and the absent → automatic rule are unchanged. The re-measure trigger above also
   covers this: the benchmark on a real recording should check `k` = the real count.
+
+## Amendment 2026-09-24 (b) — "Ritrascrivi" also offers the field (pointer; [ADR 0018](0018-ritrascrivi.md) is its home)
+- User decision 2026-09-24: a `completata` `Registrazione` can be transcribed again ("Ritrascrivi", a new
+  `Elaborazione`, the Trascritto replaced only when it completes). The S2 row then offers the same optional
+  "Numero di persone" field under the rules above (plain field, empty = automatic, 1..10, real count — never an
+  upper bound), **prefilled with the latest `Elaborazione`'s value** exactly like "Riprova". ADR 0018 §4 owns
+  the confirmation dialog and the S2 states during/after a re-run.

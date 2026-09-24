@@ -113,7 +113,7 @@ Cross-context events flow `supplier:applicazione` (published events, Published L
   ⨝ `stati-elaborazione` ⨝ `identificazione-registrazioni`). Read-models compute on read over
   repository/query ports (R15); no event-folded tables in v1.
 - **R2:** *(superseded 2026-09-23 [user], ADR 0014 / ADR 0012 Amendment (c))* ~~the `RegistrazioneAggiunta` → `AvviaElaborazione` policy lives in `:trascrizione:adattatori`
-  (sync subscriber), never in Progetto~~. There is no automatic start: the user starts an `Elaborazione` from S2 with "Trascrivi" or "Riprova", with the optional `NumeroPersone` (1..10). `RegistrazioneAggiunta` has after-commit consumers only.
+  (sync subscriber), never in Progetto~~. There is no automatic start: the user starts an `Elaborazione` from S2 with "Trascrivi" or "Riprova", with the optional `NumeroPersone` (1..10) — and, since 2026-09-24 [user], with "Ritrascrivi" on a `completata` one (R2 composition only; the Trascritto is replaced atomically on completion and Parlanti purges the old `VoceRef`s in the same transaction through the synchronous `TrascrittoSostituito` subscriber — ADR 0018). `RegistrazioneAggiunta` has after-commit consumers only.
 - **R12:** one mutex serializes every native (sherpa) call, pipeline and `EstrattoreImpronta` alike.
 - **R25 (resolved 2026-09-23, ADR 0003 amendment):** `ErroreDominio` is a plain (non-sealed)
   interface — Kotlin forbids sealed subtypes across modules; each context owns one sealed hierarchy
