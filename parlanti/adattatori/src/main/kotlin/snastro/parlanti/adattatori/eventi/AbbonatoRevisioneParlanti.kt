@@ -5,18 +5,22 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
+import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 
 /**
  * `AbbonatoSincrono` (ADR 0012) that applies the structural half of [INV-21]/[INV-25] to every
- * Trascrizione Revisione (block `abbonato-revisione-parlanti`, AC-142/AC-143): translates
- * [VociUnite]/[VoceDivisa]/[SegmentoRiassegnato] 1:1 into an [ApplicaRevisionePolitica] call, run
- * INSIDE the publishing command's transaction — an [Esito.Errore] from the policy dooms and rolls
- * back the whole Revisione (the [DispatcherEventiInMemoria] rule). `:parlanti:applicazione` may not
- * import Trascrizione's published events (`architecture.md` edges), so this translation lives here,
- * mirroring `ApplicaRevisionePolitica`'s own KDoc.
+ * Trascrizione Revisione (block `abbonato-revisione-parlanti`, AC-142/AC-143), and (ADR 0018 §3 +
+ * Amendment 2026-09-24 (b) §1, AC-446) the [INV-15]/[INV-25] purge on [TrascrittoSostituito]:
+ * translates [VociUnite]/[VoceDivisa]/[SegmentoRiassegnato] 1:1 into an [ApplicaRevisionePolitica]
+ * call, and [TrascrittoSostituito] into an [ApplicaSostituzioneTrascrittoPolitica] call — run INSIDE
+ * the publishing command's transaction in both cases — an [Esito.Errore] from either policy dooms and
+ * rolls back the whole transaction (the [DispatcherEventiInMemoria] rule). `:parlanti:applicazione`
+ * may not import Trascrizione's published events (`architecture.md` edges), so this translation lives
+ * here, mirroring both policies' own KDoc.
  *
  * Registers itself on [dispatcher] in `init`. This is a plain component: wiring it into the app's
  * composition (registering it at startup, before the first command) is `avvio-parlanti`'s job, not
@@ -25,6 +29,7 @@ import snastro.trascrizione.applicazione.eventi.VociUnite
 public class AbbonatoRevisioneParlanti(
     dispatcher: DispatcherEventiInMemoria,
     private val politica: ApplicaRevisionePolitica,
+    private val politicaSostituzione: ApplicaSostituzioneTrascrittoPolitica,
 ) {
     init {
         dispatcher.registraSincrono(AbbonatoSincrono(::ricevi))
@@ -40,6 +45,7 @@ public class AbbonatoRevisioneParlanti(
             evento.daRimossa,
             evento.aNuova,
         )
+        is TrascrittoSostituito -> politicaSostituzione.applica(evento.registrazioneId)
         else -> Esito.Ok(Unit)
     }
 }
