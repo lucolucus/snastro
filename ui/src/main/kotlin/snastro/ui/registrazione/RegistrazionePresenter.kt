@@ -13,7 +13,10 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
+import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
+import snastro.ui.AggiornamentiVista
 import snastro.ui.ApriEsterno
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreUiStato
@@ -21,6 +24,7 @@ import snastro.ui.lettore.StatoLettore
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
+import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
 
 /**
  * State holder of S3 · Registrazione, READ-ONLY in R1 (RC-2, thin UI; AC-207/208/217/218). Joins
@@ -42,6 +46,13 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
  * path under `documenti/`, joined from `documento`'s `nomeFile` and the open Progetto's folder) — this
  * presenter's own test doubles stay plain lambdas over Published-Language values, never a `*:dominio`
  * type (CR-1(b)).
+ *
+ * ADR 0018 (AC-452/453, optional [stati]/[aggiornamenti]): while the latest Elaborazione of
+ * [registrazioneId] is `in_attesa`/`in_corso` (a re-run over the Trascritto shown here), the screen is
+ * READ-ONLY — [RegistrazioneUiStato.Dati.soloLettura] + the banner. [aggiornamenti] (R15, `tec-shell-ui`)
+ * reloads on the Cambiamento the replacement/cancellation publishes, so the read-only flag, the banner
+ * and (on a replacement) the transcript itself stay current (AC-453). Both default to `null`: R1
+ * (`avvio-composizione`) supplies neither, so a row is never read-only there.
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazionePresenter(
@@ -53,6 +64,8 @@ class RegistrazionePresenter(
     private val lettore: LettoreAudio,
     private val apriEsterno: ApriEsterno,
     private val parlanti: SorgentiParlanti? = null,
+    private val stati: (() -> StatoRegistrazioneVista?)? = null,
+    private val aggiornamenti: AggiornamentiVista? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -68,11 +81,22 @@ class RegistrazionePresenter(
     init {
         scope.launch { carica() }
         scope.launch { lettore.stato.collect { s -> rifletti(s) } }
+        // AC-453: reloads on any Cambiamento of this Registrazione — the replacement/cancellation event
+        // included (R15, same pattern as RegistrazioniPresenter/ParlantiPresenter).
+        aggiornamenti?.let { a ->
+            scope.launch {
+                a.cambiamenti.collect { c ->
+                    if (c.registrazioneId == null || c.registrazioneId == registrazioneId) carica()
+                }
+            }
+        }
         voci?.avvia()
     }
 
     private suspend fun carica() {
         try {
+            // AC-453/455: a reload never keeps a selection or a panel from a previous generation.
+            voci?.deseleziona()
             val vista = withContext(io) { trascritto() }
             if (vista == null) {
                 _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
@@ -81,6 +105,7 @@ class RegistrazionePresenter(
             val percorso = withContext(io) { documento() }
             val disponibile = withContext(io) { lettore.disponibile(registrazioneId) }
             val statoLettore = lettore.stato.value
+            val soloLettura = soloLetturaDi(withContext(io) { stati?.invoke() })
             voci?.vista = vista
             _stato.value = RegistrazioneUiStato.Dati(
                 titolo = vista.titolo,
@@ -90,6 +115,8 @@ class RegistrazionePresenter(
                 barra = barraDi(statoLettore, disponibile),
                 audioDisponibile = disponibile,
                 documentoPercorso = percorso,
+                soloLettura = soloLettura,
+                bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
             )
             voci?.pubblica()
         } catch (e: CancellationException) {
@@ -108,6 +135,12 @@ class RegistrazionePresenter(
     fun riprova() {
         scope.launch { carica() }
     }
+
+    /** AC-452: `true` iff the latest Elaborazione is `in_attesa`/`in_corso` — a re-run over the
+     * Trascritto shown here; `null` (no [stati] source, or `NON_AVVIATA`/`FALLITA`/`COMPLETATA`) → not
+     * read-only. */
+    private fun soloLetturaDi(v: StatoRegistrazioneVista?): Boolean =
+        v?.stato == StatoElaborazioneVista.IN_ATTESA || v?.stato == StatoElaborazioneVista.IN_CORSO
 
     private fun segmentiDi(vista: TrascrittoView, statoLettore: StatoLettore): List<SegmentoRiga> {
         return vista.segmenti.map { s ->

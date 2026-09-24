@@ -12,3 +12,9 @@ const val MESSAGGIO_TRASCRITTO_VUOTO: String = "Nessun parlato rilevato in quest
 /** M5-style: the INITIAL load of the trascritto failed — a thrown fault, or `TrascrittoQuery.vista`
  * returning `null` (no Trascritto yet for this Registrazione). Distinct from [MESSAGGIO_TRASCRITTO_VUOTO]. */
 const val MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO: String = "Non è stato possibile caricare la registrazione."
+
+/** ADR 0018 Amendment (b) §2 (AC-452): the R1 two-line banner while a re-run is queued/running — the
+ * R2 panel (`schermata-registrazione-identificazione`) adds its own third line (AC-454). */
+const val MESSAGGIO_RITRASCRIZIONE_IN_CORSO: String =
+    "Ritrascrizione in corso: modifiche disabilitate fino al termine\n" +
+        "Questa trascrizione sarà sostituita quando la nuova sarà pronta."

@@ -22,6 +22,7 @@ import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
+import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_TRASCRITTO_VUOTO
 import java.io.File
 import java.time.LocalDate
@@ -62,12 +63,15 @@ private fun unSegmento(
     inRiproduzione = inRiproduzione,
 )
 
+@Suppress("LongParameterList") // one parameter per RegistrazioneUiStato.Dati field these fixtures vary
 private fun uniStato(
     segmenti: List<SegmentoRiga>,
     barra: LettoreUiStato = LettoreUiStato.Inattivo,
     audioDisponibile: Boolean = true,
     documentoPercorso: String? = "/progetti/demo.snastro/documenti/2026-03-12 Seduta.md",
     errore: String? = null,
+    soloLettura: Boolean = false,
+    bannerRitrascrizione: String? = null,
 ) = RegistrazioneUiStato.Dati(
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = DATA_1,
@@ -77,6 +81,8 @@ private fun uniStato(
     audioDisponibile = audioDisponibile,
     documentoPercorso = documentoPercorso,
     errore = errore,
+    soloLettura = soloLettura,
+    bannerRitrascrizione = bannerRitrascrizione,
 )
 
 /**
@@ -137,6 +143,14 @@ class RegistrazioneRenderCheckTest {
     @Test
     fun `AC-217 sorgente audio mancante disabilita la barra con un messaggio a 1024x640`() =
         verificaAudioNonDisponibile(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-452 il banner di sola lettura durante una ritrascrizione a 1280x800`() =
+        verificaBannerSolaLettura(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-452 il banner di sola lettura durante una ritrascrizione a 1024x640`() =
+        verificaBannerSolaLettura(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent { SchermataRegistrazione(stato = RegistrazioneUiStato.Caricamento, azioni = AZIONI_VUOTE) }
@@ -220,6 +234,24 @@ class RegistrazioneRenderCheckTest {
         onNodeWithTag("lettore-riproduci").assert(!hasClickAction())
         onNodeWithText("Testo.").assertIsDisplayed()
         catturaPng("registrazione-audio-non-disponibile", width, height)
+    }
+
+    private fun verificaBannerSolaLettura(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazione(
+                stato = uniStato(
+                    segmenti = listOf(unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 2_000, testo = "Testo.")),
+                    soloLettura = true,
+                    bannerRitrascrizione = MESSAGGIO_RITRASCRIZIONE_IN_CORSO,
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazione-banner-ritrascrizione").assertIsDisplayed()
+        onNodeWithText("Ritrascrizione in corso: modifiche disabilitate fino al termine", substring = true)
+            .assertIsDisplayed()
+        onNodeWithText("Testo.").assertIsDisplayed()
+        catturaPng("registrazione-banner-sola-lettura", width, height)
     }
 
     @OptIn(ExperimentalTestApi::class)

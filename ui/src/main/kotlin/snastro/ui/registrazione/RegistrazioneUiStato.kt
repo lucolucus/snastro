@@ -22,7 +22,15 @@ sealed interface RegistrazioneUiStato {
      * `null` only while it has not resolved yet — 'Apri documento'/'Mostra nella cartella' are disabled
      * then (AC-218). [errore] is a dismissible inline message for the last failed
      * riproduzione/apertura (H1 pattern), never replacing [segmenti].
+     *
+     * ADR 0018 (optional `stati` source, AC-452): [soloLettura] is `true` while the latest Elaborazione
+     * of this Registrazione is `in_attesa`/`in_corso` (a re-run over the Trascritto shown here);
+     * [bannerRitrascrizione] is the R1 two-line banner text, `null` unless [soloLettura] (also `null`
+     * without the optional `stati` source — R1 test: never read-only). [bannerRitrascrizionePannello]
+     * is owned and set ONLY by the R2 panel (`schermata-registrazione-identificazione`, AC-454's third
+     * banner line) — the base presenter never writes it.
      */
+    @Suppress("LongParameterList") // one field per AC-207/208/217/218/402/452 datum of the screen
     data class Dati(
         val titolo: String,
         val dataRegistrazione: LocalDate,
@@ -38,6 +46,9 @@ sealed interface RegistrazioneUiStato {
         val selezione: Set<SegmentoId> = emptySet(),
         /** AC-209..211: the selection toolbar, `null` without a selection. */
         val barraSelezione: BarraSelezione? = null,
+        val soloLettura: Boolean = false,
+        val bannerRitrascrizione: String? = null,
+        val bannerRitrascrizionePannello: String? = null,
     ) : RegistrazioneUiStato
 
     /** M5-style: the INITIAL load failed (a thrown fault, or no Trascritto at all for this Registrazione) —
