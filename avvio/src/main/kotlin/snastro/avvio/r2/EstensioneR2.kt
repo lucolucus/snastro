@@ -61,9 +61,10 @@ import snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto as Letto
  * 1. The Parlanti SQL repositories, readers, read-models and services — every command, and
  *    `RiallineaImpronte`, over the SAME `eventi.unitaDiLavoro` (AC-359, the AC-346 pattern).
  * 2. [AggiornamentiVistaParlanti] (after commit: Proposta invalidation + `Cambiamento`), registered FIRST so
- *    a Proposta is invalid before any screen hears of a change; then the revisione-policy as the
- *    SYNCHRONOUS subscriber of the Revisione events ([AbbonatoRevisioneParlanti], AC-359) — both before R1
- *    starts its queue, so they precede every command.
+ *    a Proposta is invalid before any screen hears of a change; then the revisione-policy and the
+ *    `TrascrittoSostituito` purge (ADR 0018 §3) as the SYNCHRONOUS subscriber ([AbbonatoRevisioneParlanti],
+ *    AC-359/AC-457) — both before R1 builds its queue, so they precede every command, a re-run queued
+ *    before the project was closed included: 'Ritrascrivi' is offered only by a composition that purges.
  * 3. R1's own graph ([r1]): its Documento now reads the Nomi through `LettoreNomiDaParlanti` (AC-359).
  * 4. The per-project R2 job ([CollaboratoriR2.ferma] joins it): [AbbonatoRiallineamentoImpronte] (after
  *    commit, AC-315), `RiallineaTutteLeImpronte` in the background strictly after R1's

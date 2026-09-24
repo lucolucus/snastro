@@ -11,6 +11,7 @@ import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import snastro.ui.AggiornamentiVista
@@ -27,6 +28,9 @@ import snastro.ui.Cambiamento
  *   subscribe to it: prints do not change a Documento);
  * - `ParlanteCreato`/`Rinominato`/`Promosso`/`Eliminato` → invalidate, `Cambiamento(null)` (a Nome may show
  *   in every Registrazione);
+ * - `TrascrittoSostituito` (ADR 0018 §5, AC-456) → invalidate, `Cambiamento(null)`: cached Proposte are keyed
+ *   by `VoceRef` and now point at the wrong Voci, the Galleria counts of any Parlante may have changed and an
+ *   `occasionale` may be gone (the purge itself ran synchronously, inside the completion transaction);
  * - `VociUnite`/`VoceDivisa`/`SegmentoRiassegnato` → invalidate only (R1's `AggiornamentiVistaTrascrizione`
  *   already emits their `Cambiamento`).
  *
@@ -47,7 +51,9 @@ internal class AggiornamentiVistaParlanti(
         val cambiamento = when (evento) {
             is AttribuzioneConfermata -> Cambiamento(evento.voceRef.registrazioneId)
             is ImpronteRiallineate -> Cambiamento(evento.registrazioneId)
-            is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato -> Cambiamento(null)
+            is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato,
+            is TrascrittoSostituito,
+            -> Cambiamento(null)
             is VociUnite, is VoceDivisa, is SegmentoRiassegnato -> null
             else -> return
         }

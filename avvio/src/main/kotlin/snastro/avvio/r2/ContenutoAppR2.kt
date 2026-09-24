@@ -111,7 +111,12 @@ private fun SchermataRegistrazioneR2(
     RegistrazioneRoute(presenter)
 }
 
-/** S2 as R1's (AC-355) plus the identification badge ([LettureParlanti.identificazioni], AC-204/AC-345). */
+/**
+ * S2 as R1's (AC-355, 'Annulla' AC-478) plus the identification badge ([LettureParlanti.identificazioni],
+ * AC-204/AC-345) and 'Ritrascrivi' (ADR 0018, AC-457): offered only here, by the composition that registers
+ * the synchronous Parlanti purge (`EstensioneR2`). It is R1's own `AvviaElaborazione` over
+ * `eventi.unitaDiLavoro`, which also nudges the queue.
+ */
 internal fun costruisciRegistrazioniPresenterR2(
     grafo: GrafoR0,
     collaboratori: CollaboratoriProgettoAperto,
@@ -131,9 +136,15 @@ internal fun costruisciRegistrazioniPresenterR2(
     avviaElaborazione = r2.r1::avviaElaborazione,
     apriRegistrazione = apriRegistrazione,
     identificazioni = r2.letture.identificazioni,
+    ritrascrivi = r2.r1::avviaElaborazione,
+    annullaElaborazione = r2.r1.annullaElaborazione,
 )
 
-/** S3 with the R2 sources: the Voci panel, the Nome labels, the card commands (AC-418), the Revisione UI. */
+/**
+ * S3 with the R2 sources: the Voci panel, the Nome labels, the card commands (AC-418), the Revisione UI; plus
+ * the latest run's state of [id] and the project's AggiornamentiVista (ADR 0018 Amendment (b) §2): READ-ONLY
+ * while a re-run is queued or running, editable again on the Cambiamento that ends it (AC-461).
+ */
 internal fun costruisciRegistrazionePresenterR2(
     grafo: GrafoR2,
     collaboratori: CollaboratoriProgettoAperto,
@@ -161,6 +172,8 @@ internal fun costruisciRegistrazionePresenterR2(
         aggiornamenti = collaboratori.aggiornamentiVista,
         clock = grafo.r0.clock,
     ),
+    stati = { r2.r1.statiElaborazione(listOf(id)).firstOrNull() },
+    aggiornamenti = collaboratori.aggiornamentiVista,
 )
 
 /** S4 · Parlanti del Progetto on the project's session scope (as S2, H2). */

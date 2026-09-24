@@ -32,6 +32,17 @@ class CablaggioR2Test {
     }
 
     @Test
+    fun `AC-457 la purga sincrona e registrata prima che R1 costruisca la coda, e S2 riceve Ritrascrivi`() {
+        val estensione = File("src/main/kotlin/snastro/avvio/r2/EstensioneR2.kt").readLines()
+        val abbonato = estensione.indexOfFirst { "AbbonatoRevisioneParlanti(" in it }
+        val politica = estensione.indexOfFirst { "ApplicaSostituzioneTrascrittoPolitica(" in it }
+        val coda = estensione.indexOfFirst { "r1.apri(" in it }
+        assertTrue(abbonato in 0 until coda, "AbbonatoRevisioneParlanti prima di r1.apri (la coda)")
+        assertTrue(politica in abbonato until coda, "con la politica di sostituzione")
+        assertTrue(righeCon("ritrascrivi =").isNotEmpty(), "AC-457 'Ritrascrivi' fornito a S2")
+    }
+
+    @Test
     fun `AC-341 AC-177 la shell R2 include la sezione Parlanti`() {
         assertEquals(setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI), SEZIONI_SHELL_R2)
     }

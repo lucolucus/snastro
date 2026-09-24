@@ -155,8 +155,13 @@ internal class AmbienteR2(
         val prima = collaboratori.registrazioni().map { it.registrazioneId }.toSet()
         collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(sorgente.toString())).atteso()
         val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
-        sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS // minting rule of RiferimentoAudio
+        rendiLeggibile(id)
         return id
+    }
+
+    /** Makes [id]'s copied audio decodable by the fake decoder — also a Registrazione imported by another session. */
+    fun rendiLeggibile(id: RegistrazioneId) {
+        sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS // minting rule of RiferimentoAudio
     }
 
     /** 'Trascrivi' through R1's own command, then waits until its Trascritto is there. */
