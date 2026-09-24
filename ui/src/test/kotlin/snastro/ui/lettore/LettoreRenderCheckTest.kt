@@ -1,5 +1,6 @@
 package snastro.ui.lettore
 
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -11,14 +12,23 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import snastro.kernel.VoceId
 import snastro.ui.SnastroTema
+import snastro.ui.palette
+import snastro.ui.stile.ColoriChiari
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 
 private const val LARGHEZZA_GRANDE_PX = 1280
 private const val ALTEZZA_GRANDE_PX = 800
 private const val LARGHEZZA_PICCOLA_PX = 1024
 private const val ALTEZZA_PICCOLA_PX = 640
+
+/** rework cycle 1, verifier AC-579: half the `Scrubber`'s own private `ALTEZZA_CORSIA` (8.dp), the y
+ * offset from the Canvas' own top where a lane is actually painted. */
+private const val Y_CORSIA_PX = 4
 
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): every [LettoreUiStato] fixture at both sizes —
@@ -134,6 +144,52 @@ class LettoreRenderCheckTest {
         onNodeWithText("1:05").assertIsDisplayed() // AC-557: no leading zero on minutes under one hour
         catturaPng("lettore-pronto-in-pausa", width, height)
     }
+
+    /** rework cycle 1, verifier AC-579: the `Scrubber`'s lanes are Canvas-painted pixels, not semantics
+     * nodes — sampled at a fraction of the `lettore-scrubber` node's own width, at the lane's own y. */
+    @OptIn(ExperimentalTestApi::class)
+    private fun ComposeUiTest.coloreCorsia(xFrazione: Float): Int {
+        val bounds = onNodeWithTag("lettore-scrubber").fetchSemanticsNode().boundsInRoot
+        val x = (bounds.left + xFrazione * bounds.width).toInt()
+        val y = (bounds.top + Y_CORSIA_PX).toInt()
+        return onRoot().captureToImage().toAwtImage().getRGB(x, y)
+    }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `AC-579 le corsie sono dipinte proporzionalmente alla durata, un colore per Voce`() =
+        runDesktopComposeUiTest(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX) {
+            setContent {
+                BarraLettore(
+                    stato = LettoreUiStato.Pronto(posizioneMs = 0, inRiproduzione = false),
+                    onRiproduci = {},
+                    onPausa = {},
+                    durataMs = 4_000,
+                    corsie = listOf(CorsiaVoce(VoceId(1), 0, 2_000), CorsiaVoce(VoceId(2), 2_000, 4_000)),
+                )
+            }
+            assertEquals(palette(VoceId(1), ColoriChiari).toArgb(), coloreCorsia(0.25f))
+            assertEquals(palette(VoceId(2), ColoriChiari).toArgb(), coloreCorsia(0.75f))
+        }
+
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `AC-579 senza Segmenti nessuna corsia, la traccia resta comunque visibile`() =
+        runDesktopComposeUiTest(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX) {
+            setContent {
+                BarraLettore(
+                    stato = LettoreUiStato.Pronto(posizioneMs = 0, inRiproduzione = false),
+                    onRiproduci = {},
+                    onPausa = {},
+                    durataMs = 4_000,
+                    corsie = emptyList(),
+                )
+            }
+            val corsia = coloreCorsia(0.5f)
+            assertNotEquals(palette(VoceId(1), ColoriChiari).toArgb(), corsia)
+            assertNotEquals(palette(VoceId(2), ColoriChiari).toArgb(), corsia)
+            onNodeWithTag("lettore-scrubber").assertIsDisplayed()
+        }
 
     @OptIn(ExperimentalTestApi::class)
     private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int) {

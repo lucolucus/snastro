@@ -30,9 +30,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -45,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +59,7 @@ import snastro.ui.formattaDurata
 import snastro.ui.formattaDurataEstesa
 import snastro.ui.lettore.BarraLettore
 import snastro.ui.lettore.CorsiaVoce
+import snastro.ui.stile.BannerSn
 import snastro.ui.stile.BottoneIconaSn
 import snastro.ui.stile.BottoneSn
 import snastro.ui.stile.Icona
@@ -66,7 +68,9 @@ import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.PallinoVoce
 import snastro.ui.stile.SnastroMisure
+import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.testi.DESCRIZIONE_SELEZIONA_FRASE
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
 import snastro.ui.testi.ETICHETTA_BRICIOLA_REGISTRAZIONI
@@ -77,7 +81,6 @@ import snastro.ui.testi.ETICHETTA_NOMINA_FRASE
 import snastro.ui.testi.ETICHETTA_NUOVA_VOCE
 import snastro.ui.testi.ETICHETTA_RIASSEGNA_A
 import snastro.ui.testi.ETICHETTA_RIPROVA
-import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_TOGLI_CONFERMA
 import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_TRASCRITTO_VUOTO
@@ -190,7 +193,9 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
                     verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
                 ) {
                     ColonnaTrascritto(stato, azioni, Modifier.weight(1f).fillMaxWidth())
-                    stato.pannello?.let { PannelloVociVista(it, azioni, Modifier.weight(1f).fillMaxWidth()) }
+                    stato.pannello?.let {
+                        PannelloVociVista(it, stato.segmenti, azioni, Modifier.weight(1f).fillMaxWidth())
+                    }
                 }
             } else {
                 Row(
@@ -203,7 +208,12 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
                         Modifier.weight(1f).widthIn(max = LARGHEZZA_MASSIMA_TRASCRITTO).fillMaxHeight(),
                     )
                     stato.pannello?.let {
-                        PannelloVociVista(it, azioni, Modifier.width(SnastroMisure.pannello).fillMaxHeight())
+                        PannelloVociVista(
+                            it,
+                            stato.segmenti,
+                            azioni,
+                            Modifier.width(SnastroMisure.pannello).fillMaxHeight(),
+                        )
                     }
                 }
             }
@@ -214,7 +224,7 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
 @Composable
 private fun ColonnaTrascritto(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione, modifier: Modifier) {
     Column(modifier = modifier) {
-        stato.barraSelezione?.let { BarraSelezioneVista(it, azioni) }
+        stato.barraSelezione?.let { BarraSelezioneVista(it, stato.pannello?.carte.orEmpty(), azioni) }
         if (stato.segmenti.isEmpty()) {
             Text(
                 text = MESSAGGIO_TRASCRITTO_VUOTO,
@@ -237,7 +247,7 @@ private fun ColonnaTrascritto(stato: RegistrazioneUiStato.Dati, azioni: AzioniRe
 @Suppress("LongMethod")
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun BarraSelezioneVista(barra: BarraSelezione, azioni: AzioniRegistrazione) {
+private fun BarraSelezioneVista(barra: BarraSelezione, carte: List<CartaVoce>, azioni: AzioniRegistrazione) {
     val colori = LocalSnastroColori.current
     var nuovoAperto by remember(barra.frase?.segmentoId) { mutableStateOf(false) }
     Surface(
@@ -269,6 +279,7 @@ private fun BarraSelezioneVista(barra: BarraSelezione, azioni: AzioniRegistrazio
                     barra.abilitata,
                     icona = Icona.Reassign,
                     extra = ETICHETTA_NUOVA_VOCE,
+                    carte = carte,
                     onScelta = azioni.riassegnaA,
                 )
                 BottoneSn(
@@ -310,17 +321,15 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
     Column {
-        // AC-580: 'Registrazioni ›' duplicates the always-visible sidebar entry point — a real "go
-        // back" wire-up needs a callback threaded from the composition root (`avvio`, outside this
-        // block's `snastro.ui.registrazione`/`snastro.ui.lettore` scope; [AzioniRegistrazione] stays
-        // unchanged here). Left as a static breadcrumb until that block adds it; see the report.
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
+        // AC-580: plain, non-interactive caption — this screen has no callback to actually navigate
+        // back (the always-visible sidebar already offers that path); no chevron either, so nothing
+        // implies a click that would do nothing (rework cycle 1, HIGH-1).
+        Text(
+            text = ETICHETTA_BRICIOLA_REGISTRAZIONI,
+            style = tipografia.caption,
+            color = colori.inkMuted,
             modifier = Modifier.testTag("registrazione-briciole"),
-        ) {
-            Text(text = ETICHETTA_BRICIOLA_REGISTRAZIONI, style = tipografia.caption, color = colori.inkMuted)
-            IconaSn(Icona.ChevronRight, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
-        }
+        )
         Row(verticalAlignment = Alignment.Bottom) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -354,7 +363,6 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
                     abilitato = stato.documentoPercorso != null,
                     modifier = Modifier.testTag("registrazione-mostra-cartella"),
                 )
-                MenuAltreAzioni(stato.soloLettura)
             }
         }
     }
@@ -367,33 +375,6 @@ private fun testoIntestazione(stato: RegistrazioneUiStato.Dati): String {
     val daIdentificare = stato.pannello?.carte?.count { it.contenuto is ContenutoCarta.DaIdentificare } ?: 0
     return "${formattaData(stato.dataRegistrazione)} · ${formattaDurataEstesa(stato.durataMs)} · " +
         testoPersone(persone, daIdentificare)
-}
-
-/**
- * AC-580: the header's 'More' menu — 'Ritrascrivi' only, disabled while already read-only for a
- * re-run. Triggering a re-run is a `RegistrazioniPresenter`/`avvio` capability
- * ([snastro.ui.registrazioni.AzioniRegistrazioni.ritrascrivi], outside this screen's own
- * [AzioniRegistrazione] — which stays unchanged): the item stays a no-op here until a future block
- * threads that command down to S3; see the report.
- */
-@Composable
-private fun MenuAltreAzioni(soloLettura: Boolean) {
-    var aperto by remember { mutableStateOf(false) }
-    Box {
-        BottoneIconaSn(
-            Icona.More,
-            ETICHETTA_RITRASCRIVI,
-            onClick = { aperto = true },
-            modifier = Modifier.testTag("registrazione-altre-azioni"),
-        )
-        MenuSn(expanded = aperto, onDismissRequest = { aperto = false }) {
-            DropdownMenuItem(
-                text = { Text(ETICHETTA_RITRASCRIVI) },
-                enabled = !soloLettura,
-                onClick = { aperto = false },
-            )
-        }
-    }
 }
 
 @Composable
@@ -426,34 +407,36 @@ private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit) {
  */
 @Composable
 private fun BannerRitrascrizione(testo: String, pannello: String?) {
-    val colori = LocalSnastroColori.current
-    Surface(
-        color = colori.warningSoft,
-        shape = RoundedCornerShape(SnastroMisure.radiusCard),
-        modifier = Modifier.fillMaxWidth().testTag("registrazione-banner-ritrascrizione"),
-    ) {
-        Row(modifier = Modifier.padding(horizontal = SnastroMisure.space4, vertical = SnastroMisure.space3)) {
-            IconaSn(Icona.Retry, descrizione = null, tinta = colori.warning, dimensione = SnastroMisure.iconM)
-            Spacer(modifier = Modifier.width(SnastroMisure.space3))
-            Column {
-                Text(text = testo, style = LocalSnastroTipografia.current.body, color = colori.ink)
-                pannello?.let {
-                    Text(
-                        text = it,
-                        style = LocalSnastroTipografia.current.body,
-                        color = colori.ink,
-                        modifier = Modifier.testTag("registrazione-banner-ritrascrizione-pannello"),
-                    )
-                }
-            }
+    // The kit's own Avviso banner (AC-588, MED-9): same texts as before (ADR 0017/0018), reflowed into
+    // BannerSn's titolo (first line, bold) + testo (the rest, `pannello`'s own third line appended) —
+    // never a hand-drawn copy of what the kit already owns.
+    val righe = testo.split("\n", limit = 2)
+    val corpo = buildString {
+        righe.getOrNull(1)?.let { append(it) }
+        pannello?.let {
+            if (isNotEmpty()) append('\n')
+            append(it)
         }
     }
+    BannerSn(
+        tipo = TipoBanner.Avviso,
+        titolo = righe.first(),
+        testo = corpo,
+        modifier = Modifier.fillMaxWidth().testTag("registrazione-banner-ritrascrizione"),
+    )
 }
 
 @Composable
 private fun ElencoSegmenti(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione) {
     // AC-209: the selection toggle exists only with the R2 panel (AC-402: none in R1).
     val selezionabile = stato.pannello != null
+    // AC-582/MED-8: "named" is decided from the Nome already in the panel's own state (a Voce's card
+    // content is `ContenutoCarta.Attribuita` there), never by comparing `etichettaVoce` to a literal
+    // "Voce n" fallback string (rework cycle 1).
+    val vociConNome = stato.pannello?.carte
+        ?.mapNotNull { carta -> carta.voceId.takeIf { carta.contenuto is ContenutoCarta.Attribuita } }
+        ?.toSet()
+        .orEmpty()
     LazyColumn(modifier = Modifier.fillMaxSize().testTag("registrazione-lista")) {
         itemsIndexed(stato.segmenti, key = { _, s -> s.segmentoId.numero }) { indice, segmento ->
             // AC-582: consecutive Segmenti of the same Voce hide the who line.
@@ -463,6 +446,7 @@ private fun ElencoSegmenti(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegis
                 azioni,
                 selezione = if (selezionabile) segmento.segmentoId in stato.selezione else null,
                 mostraChi = mostraChi,
+                haNome = segmento.voceId in vociConNome,
             )
         }
     }
@@ -473,9 +457,16 @@ private fun ElencoSegmenti(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegis
  * are the presenter's own [SegmentoRiga] flags, never re-decided here. */
 // LongMethod/CyclomaticComplexMethod: one transcript row with every AC-582 visual branch (gutter,
 // who line, pin, pending naming) inline — RC-2 thin view, splitting further would scatter one row.
-@Suppress("LongMethod", "CyclomaticComplexMethod")
+// LongParameterList: one parameter per row-level decision the presenter/panel already made.
+@Suppress("LongMethod", "CyclomaticComplexMethod", "LongParameterList")
 @Composable
-private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, selezione: Boolean?, mostraChi: Boolean) {
+private fun SegmentoItem(
+    segmento: SegmentoRiga,
+    azioni: AzioniRegistrazione,
+    selezione: Boolean?,
+    mostraChi: Boolean,
+    haNome: Boolean,
+) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
     val interazione = remember { MutableInteractionSource() }
@@ -504,33 +495,51 @@ private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, se
                 if (selezione != null && selezionato) {
                     CasellaSelezionata(segmento.segmentoId, azioni)
                 } else {
-                    Text(
-                        text = formattaDurata(segmento.inizioMs),
-                        style = tipografia.timecode,
-                        color = if (segmento.inRiproduzione) colori.accentInk else colori.inkMuted,
-                        modifier = if (selezione != null) {
-                            Modifier.clickable { azioni.selezionaSegmento(segmento.segmentoId) }
-                                .testTag("registrazione-seleziona-$n")
-                        } else {
-                            Modifier
-                        },
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // AC-528/AC-582: a confirmed Segmento keeps its pin even when the who line is
+                        // hidden (a consecutive row of the same Voce) — drawn here, next to the timecode,
+                        // instead of silently disappearing (rework cycle 1, HIGH-4).
+                        if (!mostraChi && segmento.confermato) {
+                            PuntinaConfermata(n)
+                            Spacer(modifier = Modifier.width(SnastroMisure.space1))
+                        }
+                        Text(
+                            text = formattaDurata(segmento.inizioMs),
+                            style = tipografia.timecode,
+                            color = if (segmento.inRiproduzione) colori.accentInk else colori.inkMuted,
+                            modifier = if (selezione != null) {
+                                // AC-209/AC-582 accessibility (rework cycle 1, MED-7): the same toggle
+                                // [azioni.selezionaSegmento] already offers, exposed as a real checkbox
+                                // (`role`, `value`, a label) — not just a bare clickable text.
+                                Modifier
+                                    .toggleable(
+                                        value = false,
+                                        role = Role.Checkbox,
+                                        onValueChange = { azioni.selezionaSegmento(segmento.segmentoId) },
+                                    )
+                                    .semantics { contentDescription = DESCRIZIONE_SELEZIONA_FRASE }
+                                    .testTag("registrazione-seleziona-$n")
+                            } else {
+                                Modifier
+                            },
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(SnastroMisure.space3))
             Column(modifier = Modifier.weight(1f)) {
                 if (mostraChi) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        PallinoVoce(voceId = segmento.voceId, conNome = segmento.haNome)
+                        PallinoVoce(voceId = segmento.voceId, conNome = haNome)
                         Spacer(modifier = Modifier.width(SnastroMisure.space1))
                         Text(
                             text = segmento.etichettaVoce,
-                            style = if (segmento.haNome) {
+                            style = if (haNome) {
                                 tipografia.label.copy(fontWeight = FontWeight.SemiBold)
                             } else {
                                 tipografia.label
                             },
-                            color = if (segmento.haNome) colori.ink else colori.inkMuted,
+                            color = if (haNome) colori.ink else colori.inkMuted,
                             modifier = Modifier.testTag("registrazione-voce-$n"),
                         )
                         if (segmento.confermato) PuntinaConfermata(n)
@@ -549,11 +558,6 @@ private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, se
     }
 }
 
-/** [SegmentoRiga.etichettaVoce] is the presenter's own fallback ("Voce n") when the Voce has no Nome
- * yet (`etichettaDiVoce`) — the same convention every fixture in this codebase already relies on. */
-private val SegmentoRiga.haNome: Boolean
-    get() = etichettaVoce != "Voce ${voceId.numero}"
-
 /** AC-582: the 16dp checked box (accent fill, onAccent Check) that replaces the timecode once selected;
  * clicking it toggles the selection off (same [AzioniRegistrazione.selezionaSegmento], which already
  * toggles membership). */
@@ -566,7 +570,12 @@ private fun CasellaSelezionata(id: SegmentoId, azioni: AzioniRegistrazione) {
             .size(DIMENSIONE_CASELLA)
             .clip(RoundedCornerShape(SnastroMisure.radiusControl))
             .background(colori.accent)
-            .clickable { azioni.selezionaSegmento(id) }
+            .toggleable(
+                value = true,
+                role = Role.Checkbox,
+                onValueChange = { azioni.selezionaSegmento(id) },
+            )
+            .semantics { contentDescription = DESCRIZIONE_SELEZIONA_FRASE }
             .testTag("registrazione-seleziona-${id.numero}"),
     ) {
         IconaSn(Icona.Check, descrizione = null, tinta = colori.onAccent, dimensione = SnastroMisure.iconS)

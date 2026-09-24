@@ -5,11 +5,14 @@ package snastro.ui.testi
 const val ETICHETTA_APRI_DOCUMENTO: String = "Apri documento"
 const val ETICHETTA_MOSTRA_CARTELLA: String = "Mostra nella cartella"
 
-/** AC-580: the header breadcrumb back to S2 (an `Icona.ChevronRight` follows it, never a '›' glyph). */
+/** AC-580: the header breadcrumb back to S2 — plain caption text, not a link: this screen has no
+ * callback to actually navigate there (that's the always-visible sidebar's job); no chevron either,
+ * so nothing suggests a click that does nothing (rework cycle 1, HIGH-1). */
 const val ETICHETTA_BRICIOLA_REGISTRAZIONI: String = "Registrazioni"
 
-// AC-580's header 'More' menu reuses S2's own [ETICHETTA_RITRASCRIVI] (`TestiRegistrazioni.kt`) — same
-// word, same command family, one constant.
+/** AC-582/AC-209: the accessible name of the transcript row's own selection toggle (the 16dp checked
+ * box / the timecode gutter before it is checked) — same text either way, `Role.Checkbox`. */
+const val DESCRIZIONE_SELEZIONA_FRASE: String = "Seleziona frase"
 
 /** AC-580: "<n> persone" / "<n> persone, <k> da identificare" (singular-safe on both counts). */
 fun testoPersone(persone: Int, daIdentificare: Int): String {

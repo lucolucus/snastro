@@ -590,7 +590,10 @@ class RegistrazioneSomiglianzaTest {
         val usati = a.somiglianza.thread + a.comandi.thread
         assertTrue(a.somiglianza.thread.size >= 2)
         usati.forEach {
-            assertEquals("io-test", it.name)
+            // Known flaky (rework cycle 1): kotlinx.coroutines debug mode can append " @coroutine#N" to
+            // the pool's own thread name — `startsWith` still proves it is one of `io`'s threads, never
+            // the exact string a debug build happens to decorate it with.
+            assertTrue(it.name.startsWith("io-test"))
             assertNotEquals(Thread.currentThread(), it)
         }
         schermata.cancel()

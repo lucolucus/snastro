@@ -46,6 +46,7 @@ import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.letture.Candidato
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
+import snastro.ui.formattaDurata
 import snastro.ui.stile.AzioneBanner
 import snastro.ui.stile.BannerSn
 import snastro.ui.stile.BottoneIconaSn
@@ -107,12 +108,25 @@ internal fun MenuSn(expanded: Boolean, onDismissRequest: () -> Unit, content: @C
  * presenter's ([CartaVoce.azioniAbilitate], [CartaVoce.confermaAbilitata], [PannelloVoci.estrattiDisponibili],
  * [PannelloVoci.unioneAbilitata]) — and forwards [azioni]. Only open/closed menus and the 'nuovo…' text
  * being typed are view-local. AC-584: the Riassunto tab is part B — [SchedaVoci] shows the single 'Voci'
- * tab of part A.
+ * tab of part A. [segmenti] is the transcript's own row list (already in `RegistrazioneUiStato`, no new
+ * source) — AC-585's speaking-time caption sums each Voce's own durations from it (view arithmetic).
  */
 @Composable
-internal fun PannelloVociVista(pannello: PannelloVoci, azioni: AzioniRegistrazione, modifier: Modifier = Modifier) {
+internal fun PannelloVociVista(
+    pannello: PannelloVoci,
+    segmenti: List<SegmentoRiga>,
+    azioni: AzioniRegistrazione,
+    modifier: Modifier = Modifier,
+) {
     val colori = LocalSnastroColori.current
     val kDaIdentificare = pannello.carte.count { it.contenuto is ContenutoCarta.DaIdentificare }
+    val durataPerVoce = remember(segmenti) {
+        segmenti.groupBy { it.voceId }.mapValues { (_, segs) -> segs.sumOf { it.fineMs - it.inizioMs } }
+    }
+    // AC-213 + "at most one Primario per screen" (rework cycle 1, HIGH-3): only the FIRST DaIdentificare
+    // card in list order gets its own action as Primario; every other one renders the same action
+    // Secondario instead of stacking several Primario buttons on the same screen.
+    val primaCartaAzione = pannello.carte.firstOrNull { it.contenuto is ContenutoCarta.DaIdentificare }?.voceId
     // AC-581: the tab chrome and the somiglianza card are ITEMS of the same LazyColumn, not a fixed
     // header measured before it — a header of unbounded height (the Calcolo/Anteprima phases can grow
     // past a single line) would otherwise starve the list of nearly all its space in the stacked
@@ -145,7 +159,15 @@ internal fun PannelloVociVista(pannello: PannelloVoci, azioni: AzioniRegistrazio
             items(pannello.unioni, key = { "unione-${it.voceA.numero}-${it.voceB.numero}" }) { unione ->
                 BannerUnione(unione, pannello.unioneAbilitata, azioni)
             }
-            items(pannello.carte, key = { it.voceId.numero }) { carta -> CartaVoceVista(carta, pannello, azioni) }
+            items(pannello.carte, key = { it.voceId.numero }) { carta ->
+                CartaVoceVista(
+                    carta,
+                    pannello,
+                    durataPerVoce[carta.voceId] ?: 0L,
+                    primario = carta.voceId == primaCartaAzione,
+                    azioni,
+                )
+            }
         }
     }
 }
@@ -190,7 +212,13 @@ private fun BannerUnione(unione: PropostaDiUnione, abilitata: Boolean, azioni: A
 }
 
 @Composable
-private fun CartaVoceVista(carta: CartaVoce, pannello: PannelloVoci, azioni: AzioniRegistrazione) {
+private fun CartaVoceVista(
+    carta: CartaVoce,
+    pannello: PannelloVoci,
+    durata: Long,
+    primario: Boolean,
+    azioni: AzioniRegistrazione,
+) {
     val colori = LocalSnastroColori.current
     val n = carta.voceId.numero
     var nuovoAperto by remember(n) { mutableStateOf(false) }
@@ -204,11 +232,11 @@ private fun CartaVoceVista(carta: CartaVoce, pannello: PannelloVoci, azioni: Azi
             modifier = Modifier.padding(SnastroMisure.space4),
             verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3),
         ) {
-            IntestazioneCarta(carta, pannello, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
+            IntestazioneCarta(carta, pannello, durata, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
             ContenutoCartaVista(carta, pannello, azioni)
             AttesaCarta(carta, azioni)
             carta.errore?.let { ErroreCarta(n, it) { azioni.chiudiErroreVoce(carta.voceId) } }
-            AzioniCarta(carta, pannello, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
+            AzioniCarta(carta, pannello, primario, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
             if (nuovoAperto && carta.azioniAbilitate) {
                 ModuloNuovo("voce-$n") { nome, tipo ->
                     nuovoAperto = false
@@ -220,18 +248,20 @@ private fun CartaVoceVista(carta: CartaVoce, pannello: PannelloVoci, azioni: Azi
 }
 
 /**
- * AC-585: `EtichettaVoce` + the sum of this Voce's Segmenti durations (view arithmetic on state, no
- * new source) + a Fantasma 'Estratto'. A named card's head stays compact — per the `VoiceCard.html`
- * 'done' variant its own 'More' (Cambia, Unisci con…) sits inline here too, not as a separate row
- * ([AzioniCarta] renders nothing for [ContenutoCarta.Attribuita]).
+ * AC-585: `EtichettaVoce` + [durata] (the sum of this Voce's Segmenti durations, view arithmetic on
+ * state — no new source) + a Fantasma 'Estratto'. Every card's head — named or not — also carries its
+ * own 'More' ([MenuAltreAzioniCarta]: 'Cambia' on named cards, 'Unisci con…' on every card, rework cycle
+ * 1 HIGH-2) — [AzioniCarta] never duplicates it.
  */
 @Composable
 private fun IntestazioneCarta(
     carta: CartaVoce,
     pannello: PannelloVoci,
+    durata: Long,
     azioni: AzioniRegistrazione,
     onNuovo: () -> Unit,
 ) {
+    val colori = LocalSnastroColori.current
     val contenuto = carta.contenuto as? ContenutoCarta.Attribuita
     val nome = contenuto?.nome
     val n = carta.voceId.numero
@@ -243,6 +273,14 @@ private fun IntestazioneCarta(
             modifier = Modifier.weight(1f)
                 .let { if (nome != null) it.testTag("voce-$n-nome") else it },
         ) { EtichettaVoce(voceId = carta.voceId, nome = nome) }
+        if (durata > 0) {
+            Text(
+                text = formattaDurata(durata),
+                style = LocalSnastroTipografia.current.timecode,
+                color = colori.inkMuted,
+                modifier = Modifier.testTag("voce-$n-tempo"),
+            )
+        }
         if (nome == null) {
             BottoneSn(
                 ETICHETTA_ESTRATTO,
@@ -262,8 +300,8 @@ private fun IntestazioneCarta(
                 piccolo = true,
                 modifier = Modifier.testTag("voce-$n-estratto"),
             )
-            MenuAltreAzioniCarta(carta, contenuto, pannello, carta.azioniAbilitate, onNuovo, azioni)
         }
+        MenuAltreAzioniCarta(carta, contenuto, pannello, onNuovo, azioni)
     }
 }
 
@@ -405,19 +443,33 @@ private fun ErroreCarta(n: Int, messaggio: String, onChiudi: () -> Unit) {
 }
 
 /** Only [ContenutoCarta.DaIdentificare] has its own actions row — a named card's 'More' already sits
- * in [IntestazioneCarta] ('compact head only', AC-585). */
+ * in [IntestazioneCarta] ('compact head only', AC-585). [primario] marks the ONE card whose action may
+ * render Primario (rework cycle 1, HIGH-3: at most one Primario per screen). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun AzioniCarta(carta: CartaVoce, pannello: PannelloVoci, azioni: AzioniRegistrazione, onNuovo: () -> Unit) {
+private fun AzioniCarta(
+    carta: CartaVoce,
+    pannello: PannelloVoci,
+    primario: Boolean,
+    azioni: AzioniRegistrazione,
+    onNuovo: () -> Unit,
+) {
     val contenuto = carta.contenuto as? ContenutoCarta.DaIdentificare ?: return
     FlowRow(
         verticalArrangement = Arrangement.Center,
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
     ) {
-        AzioniDaIdentificare(carta, contenuto, pannello, carta.azioniAbilitate, azioni, onNuovo)
+        AzioniDaIdentificare(carta, contenuto, pannello, carta.azioniAbilitate, primario, azioni, onNuovo)
     }
 }
 
+/**
+ * AC-213/AC-585: [primario] picks which of this card's own actions is the Primario one — 'Dai un nome'
+ * always is (the one action of a first-recording card); otherwise 'È <Nome>' is Primario UNLESS
+ * `nuovoEvidenziato` (all Candidati 'nessuna'), in which case 'Nuova persona' takes the Primario spot
+ * instead (AC-213) — the other of the two stays Secondario either way, and both stay Secondario when
+ * [primario] is `false` (a later card in the list, HIGH-3).
+ */
 @Suppress("LongParameterList") // one parameter per action's own inputs (carta/contenuto/pannello read separately)
 @Composable
 private fun AzioniDaIdentificare(
@@ -425,29 +477,32 @@ private fun AzioniDaIdentificare(
     contenuto: ContenutoCarta.DaIdentificare,
     pannello: PannelloVoci,
     abilitate: Boolean,
+    primario: Boolean,
     azioni: AzioniRegistrazione,
     onNuovo: () -> Unit,
 ) {
     val voceId = carta.voceId
     val n = voceId.numero
-    val primo = (contenuto.proposta as? StatoProposta.Pronta)?.candidati?.firstOrNull()
+    val proposta = contenuto.proposta as? StatoProposta.Pronta
     if (contenuto.galleriaVuota) {
         // AC-585: first recording — no 'È <Nome>', no 'Altri' (no attivo Parlante exists yet).
         BottoneSn(
             ETICHETTA_DAI_UN_NOME,
             onClick = onNuovo,
             abilitato = abilitate,
-            variante = VarianteBottone.Primario,
+            variante = if (primario) VarianteBottone.Primario else VarianteBottone.Secondario,
             piccolo = true,
             icona = Icona.Plus,
             modifier = Modifier.testTag("voce-$n-nuovo"),
         )
     } else {
+        val primo = proposta?.candidati?.firstOrNull()
+        val nuovoEvidenziato = proposta?.nuovoEvidenziato == true
         BottoneSn(
             primo?.let { testoConferma(it.nome) } ?: ETICHETTA_CONFERMA,
             onClick = { azioni.conferma(voceId) },
             abilitato = carta.confermaAbilitata,
-            variante = VarianteBottone.Primario,
+            variante = if (primario && !nuovoEvidenziato) VarianteBottone.Primario else VarianteBottone.Secondario,
             piccolo = true,
             icona = Icona.Check,
             modifier = Modifier.testTag("voce-$n-conferma"),
@@ -459,7 +514,7 @@ private fun AzioniDaIdentificare(
             ETICHETTA_NUOVA_PERSONA,
             onClick = onNuovo,
             abilitato = abilitate,
-            variante = VarianteBottone.Secondario,
+            variante = if (primario && nuovoEvidenziato) VarianteBottone.Primario else VarianteBottone.Secondario,
             piccolo = true,
             icona = Icona.Plus,
             modifier = Modifier.testTag("voce-$n-nuovo"),
@@ -475,56 +530,63 @@ private fun AzioniDaIdentificare(
     )
 }
 
-/** AC-585: a named card's compact 'More' — 'Cambia' (the other attivo Parlanti) then, after a divider,
- * 'Unisci con…' (this Voce's own siblings). Keeps the pre-restyle `voce-$n-cambia` tag: same entry
- * point, now a single icon button instead of a standalone dropdown. */
-@Suppress("LongParameterList") // one parameter per menu's own inputs (carta/contenuto/pannello read separately)
+/**
+ * AC-585/AC-216: EVERY card's own 'More' — 'Cambia' (the other attivo Parlanti, named cards only) then,
+ * after a divider, 'Unisci con…' (this Voce's own siblings, ANY card — rework cycle 1, HIGH-2: it used
+ * to exist only on named cards). The merge items are gated ONLY on [PannelloVoci.unioneAbilitata], never
+ * on the card's own `azioniAbilitate` (a queued re-run, ADR 0018, never blocks a merge). Keeps the
+ * pre-restyle `voce-$n-cambia` tag: same entry point, now a single icon button on every card.
+ */
 @Composable
 private fun MenuAltreAzioniCarta(
     carta: CartaVoce,
-    contenuto: ContenutoCarta.Attribuita,
+    contenuto: ContenutoCarta.Attribuita?,
     pannello: PannelloVoci,
-    abilitato: Boolean,
     onNuovo: () -> Unit,
     azioni: AzioniRegistrazione,
 ) {
     var aperto by remember { mutableStateOf(false) }
     val n = carta.voceId.numero
-    val altriParlanti = pannello.parlantiAttivi.filter { it.parlanteId != contenuto.parlanteId }
+    val haCambia = contenuto != null && carta.azioniAbilitate
+    val haUnisci = carta.altreVoci.isNotEmpty()
+    val altriParlanti = contenuto?.let { c -> pannello.parlantiAttivi.filter { it.parlanteId != c.parlanteId } }
+        .orEmpty()
     Box {
         BottoneIconaSn(
             Icona.More,
-            "Altre azioni: cambia, unisci con…",
+            "Altre azioni",
             onClick = { aperto = true },
-            abilitato = abilitato,
+            abilitato = haCambia || (pannello.unioneAbilitata && haUnisci),
             piccolo = true,
             modifier = Modifier.testTag("voce-$n-cambia"),
         )
         MenuSn(expanded = aperto, onDismissRequest = { aperto = false }) {
-            EtichettaGruppoMenu(ETICHETTA_CAMBIA)
-            altriParlanti.forEach { p ->
+            if (contenuto != null) {
+                EtichettaGruppoMenu(ETICHETTA_CAMBIA)
+                altriParlanti.forEach { p ->
+                    DropdownMenuItem(
+                        text = { EtichettaMenu(p.nome, etichettaTipo(p.tipoParlante)) },
+                        onClick = {
+                            aperto = false
+                            azioni.confermaParlante(carta.voceId, p.parlanteId)
+                        },
+                    )
+                }
+                HorizontalDivider()
                 DropdownMenuItem(
-                    text = { EtichettaMenu(p.nome, etichettaTipo(p.tipoParlante)) },
+                    text = { Text(ETICHETTA_NUOVA_PERSONA) },
                     onClick = {
                         aperto = false
-                        azioni.confermaParlante(carta.voceId, p.parlanteId)
+                        onNuovo()
                     },
                 )
             }
-            HorizontalDivider()
-            DropdownMenuItem(
-                text = { Text(ETICHETTA_NUOVA_PERSONA) },
-                onClick = {
-                    aperto = false
-                    onNuovo()
-                },
-            )
-            if (carta.altreVoci.isNotEmpty()) {
-                HorizontalDivider()
+            if (haUnisci) {
+                if (contenuto != null) HorizontalDivider()
                 EtichettaGruppoMenu(ETICHETTA_UNISCI_CON)
                 carta.altreVoci.forEach { v ->
                     DropdownMenuItem(
-                        text = { EtichettaMenuVoce(v) },
+                        text = { EtichettaMenuVoce(v, pannello.carte) },
                         enabled = pannello.unioneAbilitata,
                         onClick = {
                             aperto = false
@@ -563,11 +625,15 @@ private fun EtichettaMenu(nome: String, tipo: String) {
     }
 }
 
-/** AC-586: an [OpzioneVoce] menu item — this one DOES have a [VoceId], so it is genuinely
- * `EtichettaVoce`-shaped (dot + name/"Voce n"), matching `Menu.html`. */
+/**
+ * AC-586: an [OpzioneVoce] menu item — this one DOES have a [VoceId], so it is genuinely
+ * `EtichettaVoce`-shaped (dot + name/"Voce n"), matching `Menu.html`. "Named" is read off [carte]'s own
+ * [ContenutoCarta.Attribuita] (the Nome already in state), never guessed from the label string
+ * (rework cycle 1, MED-8 — a fallback string is an implementation detail, not a state a view decides on).
+ */
 @Composable
-private fun EtichettaMenuVoce(opzione: OpzioneVoce) {
-    val nome = opzione.etichetta.takeIf { it != "Voce ${opzione.voceId.numero}" }
+private fun EtichettaMenuVoce(opzione: OpzioneVoce, carte: List<CartaVoce>) {
+    val nome = (carte.find { it.voceId == opzione.voceId }?.contenuto as? ContenutoCarta.Attribuita)?.nome
     EtichettaVoce(voceId = opzione.voceId, nome = nome)
 }
 
@@ -629,6 +695,7 @@ internal fun MenuVoci(
     abilitato: Boolean,
     icona: Icona? = null,
     extra: String? = null,
+    carte: List<CartaVoce> = emptyList(),
     onScelta: (VoceId?) -> Unit,
 ) {
     var aperto by remember { mutableStateOf(false) }
@@ -644,7 +711,7 @@ internal fun MenuVoci(
         )
         MenuSn(expanded = aperto, onDismissRequest = { aperto = false }) {
             voci.forEach { v ->
-                DropdownMenuItem(text = { EtichettaMenuVoce(v) }, onClick = {
+                DropdownMenuItem(text = { EtichettaMenuVoce(v, carte) }, onClick = {
                     aperto = false
                     onScelta(v.voceId)
                 })

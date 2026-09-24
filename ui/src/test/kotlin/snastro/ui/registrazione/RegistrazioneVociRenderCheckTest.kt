@@ -1,14 +1,19 @@
 package snastro.ui.registrazione
 
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsOff
+import androidx.compose.ui.test.assertIsOn
+import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
@@ -18,10 +23,12 @@ import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextInput
@@ -35,12 +42,19 @@ import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.porte.Fascia
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.ui.lettore.LettoreUiStato
+import snastro.ui.stile.ColoriChiari
 import snastro.ui.testi.AVVISO_TUTTA_LA_VOCE
 import snastro.ui.testi.ETICHETTA_ANNULLA
+import snastro.ui.testi.ETICHETTA_BRICIOLA_REGISTRAZIONI
+import snastro.ui.testi.ETICHETTA_CALCOLA
+import snastro.ui.testi.ETICHETTA_CAMBIA
+import snastro.ui.testi.ETICHETTA_DAI_UN_NOME
 import snastro.ui.testi.ETICHETTA_DIVIDI_VOCE
+import snastro.ui.testi.ETICHETTA_MOSTRA_CARTELLA
 import snastro.ui.testi.ETICHETTA_NUOVA_PERSONA
 import snastro.ui.testi.ETICHETTA_RICORRENTE
 import snastro.ui.testi.ETICHETTA_TOGLI_CONFERMA
+import snastro.ui.testi.ETICHETTA_UNISCI_CON
 import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
 import snastro.ui.testi.MESSAGGIO_ESTRATTI_NON_DISPONIBILI
@@ -50,18 +64,26 @@ import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_PERSA
 import snastro.ui.testi.SPIEGAZIONE_DIVIDI_INTERA_VOCE
 import snastro.ui.testi.SUGGERIMENTO_PRIMA_REGISTRAZIONE
 import snastro.ui.testi.SUGGERIMENTO_RIFERIMENTI_INSUFFICIENTI
+import snastro.ui.testi.TITOLO_PANNELLO_VOCI
 import snastro.ui.testi.TOOLTIP_FRASE_CONFERMATA
 import snastro.ui.testi.messaggioPer
+import snastro.ui.testi.testoPersone
+import snastro.ui.testi.testoSelezione
 import java.awt.image.BufferedImage
 import java.io.File
 import java.time.LocalDate
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 private const val W_GRANDE = 1280
 private const val H_GRANDE = 800
 private const val W_PICCOLA = 1024
 private const val H_PICCOLA = 640
+
+/** rework cycle 1, HIGH-3: how far in from a `BottoneSn`'s own left edge to sample its fill color —
+ * inside the smallest horizontal padding it ever uses (`piccolo`'s 10.dp), clear of its icon/label. */
+private const val PROFONDITA_CAMPIONE_BOTTONE = 3f
 
 private val contieneCifre = SemanticsMatcher("contiene cifre") { nodo ->
     nodo.config.getOrNull(SemanticsProperties.Text).orEmpty().any { t -> t.text.any(Char::isDigit) }
@@ -188,7 +210,7 @@ private fun stato(
  */
 @OptIn(ExperimentalTestApi::class)
 @Tag("render")
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass") // one test per tests_nl/AC item, rework cycle 1 added more
 class RegistrazioneVociRenderCheckTest {
     private val outputDir = File("build/render-check").apply { mkdirs() }
 
@@ -269,7 +291,10 @@ class RegistrazioneVociRenderCheckTest {
                 MESSAGGIO_RITRASCRIZIONE_IN_CORSO.substringBefore("\n"),
                 substring = true,
             ).assertIsDisplayed()
-            onNodeWithText(MESSAGGIO_RITRASCRIZIONE_PERSA).assertIsDisplayed()
+            // AC-588: BannerSn (the kit) renders `titolo` + `testo` as its own two Text nodes — the
+            // R2 third line lives inside the SAME `testo` node as the R1 second line (joined by '\n'),
+            // so it is found as a substring, not an exact match (rework cycle 1, MED-9).
+            onNodeWithText(MESSAGGIO_RITRASCRIZIONE_PERSA, substring = true).assertIsDisplayed()
             onNodeWithTag("voce-1-cambia").assertIsNotEnabled()
             onNodeWithTag("voce-2-conferma").assertIsNotEnabled()
             onNodeWithTag("voce-2-salta").assertIsNotEnabled()
@@ -764,5 +789,240 @@ class RegistrazioneVociRenderCheckTest {
             scuro = true,
         ) {
             onNodeWithText("Sposterò 12 frasi, 3 incerte restano dove sono").assertIsDisplayed()
+        }
+
+    // --- rework cycle 1: HIGH-2/3/4, MED-5/7 + the verifier's AC-579..AC-588 coverage checklist ---
+
+    /** rework cycle 1, HIGH-3 (AC-213): `BottoneSn`'s Primario/Secondario variant only differs in fill
+     * COLOR — no semantics-level signal — so proving the swap needs an actual pixel read. Sampled a few
+     * px in from the button's own left edge (inside its padding, clear of the icon/label glyphs) against
+     * the two known non-hover fill colors (`accent` for Primario, `raised` for Secondario). */
+    private fun ComposeUiTest.coloreBottone(tag: String): Int {
+        val bounds = onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        val x = (bounds.left + PROFONDITA_CAMPIONE_BOTTONE).toInt()
+        val y = bounds.center.y.toInt()
+        return onRoot().captureToImage().toAwtImage().getRGB(x, y)
+    }
+
+    @Test
+    fun `AC-213 nuovoEvidenziato false rende E Nome Primario e Nuova persona Secondario`() =
+        scena("ac213-conferma-primario", stato(pannello(listOf(CARTA_CANDIDATI)))) {
+            assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-2-conferma"))
+            assertEquals(ColoriChiari.raised.toArgb(), coloreBottone("voce-2-nuovo"))
+        }
+
+    @Test
+    fun `AC-213 nuovoEvidenziato true rende Nuova persona Primario e E Nome Secondario`() =
+        scena("ac213-nuovo-primario", stato(pannello(listOf(CARTA_NESSUNA)))) {
+            assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-3-nuovo"))
+            assertEquals(ColoriChiari.raised.toArgb(), coloreBottone("voce-3-conferma"))
+        }
+
+    @Test
+    fun `AC-213 al piu un Primario per schermata, solo la prima card da identificare lo riceve`() =
+        scena("ac213-un-solo-primario", stato(pannello(listOf(CARTA_CANDIDATI, CARTA_NESSUNA)))) {
+            // voce-2 (first DaIdentificare card in list order, nuovoEvidenziato=false) keeps its own
+            // Primario on 'conferma' — same assertion as the single-card case above.
+            assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-2-conferma"))
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-3-nuovo"))
+            // voce-3 is SECOND: even though its own nuovoEvidenziato=true would normally make 'nuovo'
+            // Primario, only one Primario is allowed on screen — it renders Secondario instead.
+            assertEquals(ColoriChiari.raised.toArgb(), coloreBottone("voce-3-nuovo"))
+        }
+
+    @Test
+    fun `AC-580 Unisci con disponibile su una card non ancora identificata, gate solo su unioneAbilitata`() {
+        var unite: Pair<VoceId, VoceId>? = null
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, unisci = { a, b -> unite = a to b })
+        scena(
+            "unisci-non-identificata",
+            // soloLettura=true drives azioniAbilitate/confermaAbilitata to false on the card — 'Altre
+            // azioni' must stay enabled anyway, gated only by pannello.unioneAbilitata (true here).
+            stato(pannello(listOf(CARTA_CANDIDATI.copy(soloLettura = true)))),
+            azioni,
+        ) {
+            onNodeWithTag("voce-2-cambia").assertIsEnabled().performClick()
+            onNodeWithText(ETICHETTA_UNISCI_CON).assertIsDisplayed()
+            // altreVoci = opzioni(2) = Voce 1 and Voce 3 (item 8: named only via `carte`, and no card
+            // for either exists in this pannello, so both render as "Voce n", their own labels unused).
+            // "Voce 1" is picked over "Voce 3": the default `stato()` transcript's own Segmento 4
+            // (Voce 3, unrelated to this menu) already shows that exact text in its who-line, so only
+            // "Voce 1" is unambiguous on this screen.
+            onNodeWithText("Voce 1").performClick()
+        }
+        assertEquals(VoceId(2) to VoceId(1), unite)
+    }
+
+    @Test
+    fun `AC-581 sotto i 1100dp il pannello Voci sta sotto il trascritto, non accanto`() =
+        runDesktopComposeUiTest(W_PICCOLA, H_PICCOLA) {
+            setContent {
+                SchermataRegistrazione(
+                    stato(pannello(listOf(CARTA_ATTRIBUITA))),
+                    AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}),
+                    riduciMovimento = true,
+                )
+            }
+            val trascritto = onNodeWithTag("registrazione-lista").fetchSemanticsNode().boundsInRoot
+            val pannello = onNodeWithTag("voci-pannello").fetchSemanticsNode().boundsInRoot
+            assertTrue(
+                pannello.top >= trascritto.bottom,
+                "atteso il pannello Voci sotto il trascritto (stacked, <1100dp): " +
+                    "pannello.top=${pannello.top} trascritto.bottom=${trascritto.bottom}",
+            )
+        }
+
+    @Test
+    fun `AC-582 la puntina della frase confermata resta visibile anche quando il chi e nascosto`() {
+        val base = stato(pannello(listOf(CARTA_ATTRIBUITA)))
+        val consecutivi = base.copy(
+            segmenti = listOf(
+                riga(1, 1, "Marco", "Prima frase di Marco."),
+                riga(2, 1, "Marco", "Seconda frase, stessa Voce di seguito.").copy(confermato = true),
+            ),
+        )
+        scena("ac582-pin-consecutivo", consecutivi) {
+            // second row: same Voce as the row right above it → who-line hidden (AC-582)...
+            assertEquals(0, onAllNodes(hasTestTag("registrazione-voce-2")).fetchSemanticsNodes().size)
+            // ...but it is still confirmed, so the pin (AC-528) must not silently disappear (HIGH-4).
+            onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
+        }
+    }
+
+    @Test
+    fun `AC-582 selezione esposta come Checkbox, non selezionata e selezionata`() =
+        scena(
+            "ac582-seleziona-checkbox",
+            stato(pannello(listOf(CARTA_ATTRIBUITA)), selezione = setOf(SegmentoId(2))),
+        ) {
+            // Segmento 1: unselected — the timecode itself carries the toggle, off.
+            onNodeWithTag("registrazione-seleziona-1", useUnmergedTree = true)
+                .assert(isToggleable())
+                .assertIsOff()
+            // Segmento 2: selected — the 16dp checked box replaces the timecode, on.
+            onNodeWithTag("registrazione-seleziona-2", useUnmergedTree = true)
+                .assert(isToggleable())
+                .assertIsOn()
+        }
+
+    @Test
+    fun `AC-583 la barra di selezione mostra n segmenti di Voce e i suoi pulsanti`() =
+        scena(
+            "ac583-barra-testo",
+            stato(
+                pannello(listOf(CARTA_ATTRIBUITA, CARTA_CANDIDATI)),
+                selezione = setOf(SegmentoId(2)),
+                barra = BarraSelezione(VoceId(2), "Voce 2", 1, true, null, opzioni(2), abilitata = true),
+            ),
+        ) {
+            onNodeWithTag("registrazione-barra-selezione").assertIsDisplayed()
+            onNodeWithText(testoSelezione(1, "Voce 2")).assertIsDisplayed()
+            onNodeWithTag("registrazione-riassegna").assertIsEnabled()
+            onNodeWithTag("registrazione-dividi").assertIsEnabled()
+        }
+
+    @Test
+    fun `AC-584 la scheda Voci mostra il titolo con k da identificare e il pulsante Calcola`() =
+        scena(
+            "ac584-scheda-titolo",
+            stato(pannello(CARTE_TRE, somiglianza = somiglianza(FaseSomiglianza.Inattiva))),
+        ) {
+            // CARTE_TRE: CARTA_CANDIDATI and CARTA_NESSUNA are DaIdentificare → 2.
+            onNodeWithText("$TITOLO_PANNELLO_VOCI · 2 da identificare").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_CALCOLA).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-585 card con candidato mostra E Nome e il tempo di parola sommato dai Segmenti`() =
+        scena("ac585-nome-e-tempo", stato(pannello(listOf(CARTA_CANDIDATI)))) {
+            // default `stato()` fixture: Voce 2 has Segmenti 2 and 5, 3500ms each → 7000ms → "0:07".
+            onNodeWithTag("voce-2-tempo").assertTextEquals("0:07")
+            onAllNodesWithText("Marco", substring = true)[0].assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-585 prima registrazione senza candidati mostra Dai un nome e il tempo di parola`() =
+        scena(
+            "ac585-prima-registrazione",
+            stato(
+                pannello(
+                    listOf(
+                        CartaVoce(
+                            VoceId(1),
+                            "Voce 1",
+                            daIdentificare(StatoProposta.Pronta(emptyList(), false), galleriaVuota = true),
+                            altreVoci = opzioni(1),
+                        ),
+                    ),
+                ).copy(parlantiAttivi = emptyList()),
+            ),
+        ) {
+            // default `stato()` fixture: Voce 1 has Segmenti 1 and 3, 3500ms each → 7000ms → "0:07".
+            onNodeWithTag("voce-1-tempo").assertTextEquals("0:07")
+            onNodeWithText(ETICHETTA_DAI_UN_NOME).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-585 il menu Altre azioni offre Cambia sulle card gia con un nome`() =
+        scena("ac585-menu-cambia", stato(pannello(listOf(CARTA_ATTRIBUITA)))) {
+            onNodeWithTag("voce-1-cambia").assertIsEnabled().performClick()
+            onNodeWithText(ETICHETTA_CAMBIA).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-587 l anteprima di riassegnazione mostra una riga per ogni spostamento`() =
+        scena(
+            "ac587-anteprima-righe",
+            stato(
+                bloccato(
+                    somiglianza(
+                        FaseSomiglianza.Anteprima(
+                            "Sposterò 3 frasi, 0 incerte restano dove sono",
+                            listOf("Voce 2 → Marco: 2", "Voce 3 → Marco: 1"),
+                            applicabile = true,
+                            inApplicazione = false,
+                        ),
+                    ),
+                ),
+            ),
+        ) {
+            onNodeWithTag("somiglianza-riga-0").assertIsDisplayed()
+            onNodeWithText("Voce 2 → Marco: 2").assertIsDisplayed()
+            onNodeWithTag("somiglianza-riga-1").assertIsDisplayed()
+            onNodeWithText("Voce 3 → Marco: 1").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-588 il banner di sola lettura usa BannerSn con le sue tre righe`() =
+        scena(
+            "ac588-banner-tre-righe",
+            stato(
+                pannello(listOf(CARTA_ATTRIBUITA.copy(soloLettura = true))).copy(unioneAbilitata = false),
+                soloLettura = true,
+                bannerRitrascrizionePannello = MESSAGGIO_RITRASCRIZIONE_PERSA,
+            ),
+        ) {
+            onNodeWithTag("registrazione-banner-ritrascrizione").assertIsDisplayed()
+            onNodeWithText(
+                MESSAGGIO_RITRASCRIZIONE_IN_CORSO.substringBefore("\n"),
+                substring = true,
+            ).assertIsDisplayed()
+            onNodeWithText(
+                MESSAGGIO_RITRASCRIZIONE_IN_CORSO.substringAfter("\n"),
+                substring = true,
+            ).assertIsDisplayed()
+            onNodeWithText(MESSAGGIO_RITRASCRIZIONE_PERSA, substring = true).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-580 intestazione mostra titolo, meta con persone e da identificare, e i suoi pulsanti`() =
+        scena("ac580-intestazione", stato(pannello(CARTE_TRE))) {
+            onNodeWithTag("registrazione-briciole").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_BRICIOLA_REGISTRAZIONI).assertIsDisplayed()
+            onNodeWithTag("registrazione-titolo").assertTextEquals("Seduta del 12 marzo")
+            // CARTE_TRE: 3 persone, 2 da identificare (CARTA_CANDIDATI + CARTA_NESSUNA).
+            onNodeWithText(testoPersone(3, 2), substring = true).assertIsDisplayed()
+            onNodeWithTag("registrazione-apri-documento").assertIsEnabled()
+            onNode(hasContentDescription(ETICHETTA_MOSTRA_CARTELLA)).assertIsDisplayed()
         }
 }
