@@ -616,3 +616,9 @@
 2026-09-24T00:49:38Z	diarizzatore-sherpa	composer	merge	cycle=0	-	-	MERGED 41b70ff (composer: gate + real modelli 15/15 incl. VAD+diar); FINDING: sherpa never throws on k>speakers but may return FEWER clusters than a smaller k (k=10 -> 1 on 2-voice clip) — ADR 0014 amendment + benchmark on real recording
 2026-09-24T00:57:06Z	riconoscitore-sherpa	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 56a2f99
 2026-09-24T00:57:06Z	riconoscitore-sherpa	composer	merge	cycle=0	-	-	MERGED 0eb5757 (composer: gate + all real ML tests 25/25); carry: composition must close() recognizer per Elaborazione (SegnalatoreFase.terminata decorator) to release ~1-2 GB
+2026-09-24T01:04:18Z	avvio-composizione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW af4026a (real e2e en.wav ok)
+2026-09-24T01:04:18Z	avvio-composizione	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-24T01:07:54Z	avvio-composizione	verifier	result	cycle=0	tier=deep	model=opus	PASS (real e2e green)
+2026-09-24T01:07:54Z	avvio-composizione	composer	merge	cycle=0	-	-	MERGED 003ca8e — R1 RUNNABLE
+2026-09-24T01:07:54Z	fix-batch-16	worker	dispatch	cycle=0	tier=deep	model=opus	close-during-transcription safety (MED-1 UI freeze + DB closed under live worker, MED-2 recognizer use-after-free), LOW-1 real S5 in smoke, LOW-3 chiudi on window close
+2026-09-24T01:07:54Z	avvio-composizione	composer	pre-release	cycle=0	-	-	MED testFixtures on app classpath (move Finte to smoke source set/module); LOW R0 guard only import lines; LOW FALLITA close() test
