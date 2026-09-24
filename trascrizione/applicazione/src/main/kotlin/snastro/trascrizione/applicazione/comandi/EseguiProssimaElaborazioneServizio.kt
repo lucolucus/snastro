@@ -13,6 +13,7 @@ import snastro.kernel.poi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
+import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.ALLINEAMENTO
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
@@ -35,8 +36,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * ML/audio ports of [PortePipeline] OUTSIDE any transaction (AC-73), signalling each phase in order
  * (AC-69) with one FIXED, plain-Italian `motivo` per fault point — no raw exception text, path or id
  * ever reaches the user (ADR 0003). On success, `completata` and the [Trascritto] are saved together
- * in one short transaction (INV-5): that transaction re-reads the Elaborazione BY ID first and, if it
- * is no longer `in_corso`, leaves it untouched (e.g. [RecuperaElaborazioniInterrotte] already
+ * in one short transaction (INV-5) — over an existing Trascritto, replacing it whole and publishing
+ * [TrascrittoSostituito] first (ADR 0018, [completa]): that transaction re-reads the Elaborazione BY ID
+ * first and, if it is no longer `in_corso`, leaves it untouched (e.g. [RecuperaElaborazioniInterrotte] already
  * recovered it while this run was mid-flight — the in-memory instance mutated earlier is never
  * reused). If that final transaction itself fails — `Esito.Errore`, or an exception (the store refuses
  * the `completata` row after the Trascritto was already written in the SAME transaction: the whole
@@ -249,10 +251,18 @@ public class EseguiProssimaElaborazioneServizio(
             }
         }
 
+    /**
+     * INV-5 / ADR 0018: `completata` and the Trascritto in ONE transaction. The existing Trascritto is re-read
+     * HERE, inside it: if there is one, [TrascrittoRepository.salva] replaces it whole and [TrascrittoSostituito]
+     * is published BEFORE `ElaborazioneCompletata`, so its synchronous subscriber (the Parlanti purge) runs before
+     * the COMMIT and its refusal rolls the whole completion back (then compensated to `fallita`).
+     */
     private fun completa(elaborazione: Elaborazione, creato: Creato<Trascritto, TrascrittoCreato>): Esito<Unit> =
         elaborazione.completa().poi { evento ->
+            val sostituisce = trascritti.trova(elaborazione.registrazioneId) != null
             trascritti.salva(creato.aggregato) // stessa transazione del salva sotto: INV-5
             elaborazioni.salva(elaborazione).poi {
+                if (sostituisce) eventi.pubblica(TrascrittoSostituito(elaborazione.registrazioneId))
                 eventi.pubblica(evento.pubblicato())
                 Esito.Ok(Unit)
             }
