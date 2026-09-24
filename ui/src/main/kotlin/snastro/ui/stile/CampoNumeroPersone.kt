@@ -48,9 +48,10 @@ public fun CampoNumeroPersone(
     val bordo = if (errore) colori.danger else colori.lineStrong
     val interazione = remember { MutableInteractionSource() }
     val focused by interazione.collectIsFocusedAsState()
-    // mergeDescendants: the caller's modifier (width/testTag) sits on TooltipArea (review MED-7),
-    // so this box must present itself + the BasicTextField as ONE semantics node — otherwise a
-    // testTag placed there could never reach the field's own RequestFocus/click actions.
+    // mergeDescendants: the caller's modifier (width/testTag) sits on TooltipArea (review MED-7) and
+    // this box reads as ONE semantics node. It does NOT make the caller's testTag reach the
+    // BasicTextField's focus/set-text actions (a text field keeps its own node): tests must target
+    // it with `hasSetTextAction() and hasAnyAncestor(hasTestTag(tag))`.
     TooltipArea(tooltip = { Suggerimento() }, modifier = modifier) {
         Box(
             modifier = Modifier

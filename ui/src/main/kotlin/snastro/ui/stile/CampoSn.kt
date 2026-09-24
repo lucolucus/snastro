@@ -46,8 +46,9 @@ public fun CampoSn(
     val interazione = remember { MutableInteractionSource() }
     val focused by interazione.collectIsFocusedAsState()
     // mergeDescendants: the caller's modifier (width/weight/testTag) sits on this outer container
-    // (review MED-7), so it must present the label+input+helper as ONE semantics node — otherwise a
-    // testTag placed here could never reach the BasicTextField's own RequestFocus/click actions.
+    // (review MED-7) and label+input+helper read as ONE semantics node. It does NOT make the caller's
+    // testTag reach the BasicTextField's focus/set-text actions (a text field keeps its own node):
+    // tests must target it with `hasSetTextAction() and hasAnyAncestor(hasTestTag(tag))`.
     Column(modifier = modifier.semantics(mergeDescendants = true) {}) {
         if (etichetta != null) {
             Text(text = etichetta, style = tipografia.caption, color = colori.inkMuted)

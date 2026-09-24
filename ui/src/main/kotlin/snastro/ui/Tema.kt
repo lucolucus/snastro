@@ -5,7 +5,7 @@ import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.unit.Dp
 import snastro.ui.stile.ColoriChiari
 import snastro.ui.stile.ColoriScuri
@@ -13,7 +13,8 @@ import snastro.ui.stile.LocalRiduciMovimento
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroTipografiaDefault
-import snastro.ui.stile.rilevaRiduciMovimentoSistema
+import snastro.ui.stile.riduciMovimentoSistema
+import snastro.ui.stile.riduciMovimentoSistemaNoto
 import snastro.ui.stile.schemaMaterial
 import snastro.ui.stile.tipografiaMaterial
 
@@ -31,10 +32,11 @@ import snastro.ui.stile.tipografiaMaterial
  * exactly to `controlM`/`controlS` (AC-562/563/564) and their [snastro.ui.stile.anelloFocus] ring
  * must hug that real size, not a hidden 48dp box.
  *
- * [riduciMovimento] resolves the OS "reduce motion" signal once per composition ([remember]:
- * shelling out on every recomposition would be a perceptible stutter) unless the caller pins it —
- * tests/render-check always pin it (deterministic, and avoids ever creating a running
- * `rememberInfiniteTransition` inside a headless Compose UI test, AC-565).
+ * [riduciMovimento], unless the caller pins it, is the OS "reduce motion" signal: read ONCE per JVM
+ * off the UI thread ([riduciMovimentoSistema] on `Dispatchers.IO`, cached); until that read lands the
+ * theme provides `true` (a still dot, never an accidental animation — AC-565), later screens get the
+ * cached value immediately. Tests/render-check always pin it (deterministic, no process started, and
+ * no running `rememberInfiniteTransition` inside a headless Compose UI test).
  */
 @Composable
 fun SnastroTema(
@@ -43,7 +45,8 @@ fun SnastroTema(
     content: @Composable () -> Unit,
 ) {
     val colori = if (scuro) ColoriScuri else ColoriChiari
-    val riduciMovimentoRisolto = riduciMovimento ?: remember { rilevaRiduciMovimentoSistema() }
+    val riduciMovimentoRisolto = riduciMovimento
+        ?: produceState(initialValue = riduciMovimentoSistemaNoto() ?: true) { value = riduciMovimentoSistema() }.value
     CompositionLocalProvider(
         LocalSnastroColori provides colori,
         LocalSnastroTipografia provides SnastroTipografiaDefault,
