@@ -54,4 +54,24 @@ class FormattazioneTest {
     fun `AC-227 0 byte diventano 0 0 MB`() {
         assertEquals("0.0 MB", formattaByte(0))
     }
+
+    @Test
+    fun `L709 formattaDurata con durata negativa si comporta come zero`() {
+        assertEquals("0:00", formattaDurata(-5_000))
+    }
+
+    @Test
+    fun `L709 forma estesa sotto un minuto diventa meno di 1 min, non 0 min`() {
+        assertEquals("< 1 min", formattaDurataEstesa(30_000))
+    }
+
+    @Test
+    fun `L709 forma estesa a zero millisecondi diventa meno di 1 min`() {
+        assertEquals("< 1 min", formattaDurataEstesa(0))
+    }
+
+    @Test
+    fun `L709 forma estesa con durata negativa si comporta come zero (meno di 1 min)`() {
+        assertEquals("< 1 min", formattaDurataEstesa(-1_000))
+    }
 }

@@ -11,6 +11,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 
 private data class ContenutoBanner(val sfondo: Color, val icona: Icona, val iconaColore: Color)
 
@@ -51,7 +52,7 @@ public fun BannerSn(
             )
             Column(Modifier.weight(1f)) {
                 Text(text = titolo, style = tipografia.heading)
-                Text(text = testo, style = tipografia.body)
+                Text(text = testo, style = tipografia.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             if (azione != null) {
                 BottoneSn(etichetta = azione.etichetta, onClick = azione.onClick, variante = VarianteBottone.Link)

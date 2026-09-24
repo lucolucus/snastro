@@ -13,6 +13,7 @@ import androidx.compose.ui.res.loadSvgPainter
 import androidx.compose.ui.res.useResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * AC-558: renders [icona]'s SVG (`resources/icone/`) tinted with [tinta], sized [dimensione]
@@ -28,9 +29,18 @@ public fun IconaSn(
     dimensione: Dp = SnastroMisure.iconM,
 ) {
     val densita = LocalDensity.current
-    val painter = remember(icona, densita) { caricaIcona(icona, densita) }
+    val painter = remember(icona, densita) { painterIcona(icona, densita) }
     Icon(painter = painter, contentDescription = descrizione, tint = tinta, modifier = Modifier.size(dimensione))
 }
+
+// L704: `remember` only avoids re-parsing across THIS composable instance's own recompositions —
+// every distinct call site (and every recomposition that loses its slot, e.g. inside a LazyColumn
+// item) parsed the SVG again. A process-wide cache keyed by (icona, density) means each SVG is
+// parsed at most once per density actually used, regardless of how many instances render it.
+private val cacheIcone = ConcurrentHashMap<Pair<Icona, Density>, Painter>()
+
+internal fun painterIcona(icona: Icona, densita: Density): Painter =
+    cacheIcone.getOrPut(icona to densita) { caricaIcona(icona, densita) }
 
 // `useResource`/`loadSvgPainter` are deprecated in favor of the Compose Resources library (a
 // `composeResources` source set + generated `Res` accessors) — a module-wide build.gradle.kts

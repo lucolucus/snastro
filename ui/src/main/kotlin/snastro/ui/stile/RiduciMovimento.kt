@@ -4,7 +4,6 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -18,37 +17,53 @@ public val LocalRiduciMovimento: ProvidableCompositionLocal<Boolean> = staticCom
 private const val TIMEOUT_LETTURA_MS = 500L
 
 /**
- * macOS's "Riduci il movimento" (`com.apple.universalaccess reduceMotion`), read ONCE per JVM on
- * first access — a blocking process start (bounded by [TIMEOUT_LETTURA_MS]), so it is only ever
- * forced through [riduciMovimentoSistema] (on [Dispatchers.IO]), never on the composition thread.
+ * macOS's "Riduci il movimento" (`com.apple.universalaccess reduceMotion`), read on first access —
+ * a blocking process start (bounded by [TIMEOUT_LETTURA_MS]), so it is only ever forced through
+ * [riduciMovimentoSistema] (on [Dispatchers.IO]), never on the composition thread. L723: a
+ * DEFINITIVE read (the process actually completed, exit code and all) is cached for the rest of the
+ * JVM; a timeout or a failure to even start the process is NOT cached — a transient hiccup must not
+ * pin "reduce motion" forever, so the next caller gets to try again.
  */
-private val riduciMovimentoSistemaPigro: Lazy<Boolean> = lazy { leggiRiduciMovimentoSistema() }
+@Volatile
+private var cacheRiduciMovimentoSistema: Boolean? = null
 
-/** The already-resolved system value, or `null` if it has not been read yet (never blocks). */
-public fun riduciMovimentoSistemaNoto(): Boolean? =
-    if (riduciMovimentoSistemaPigro.isInitialized()) riduciMovimentoSistemaPigro.value else null
+/** The already-resolved system value, or `null` if it has not been (definitively) read yet. */
+public fun riduciMovimentoSistemaNoto(): Boolean? = cacheRiduciMovimentoSistema
 
-/** Resolves the system value on [Dispatchers.IO] the first time; later calls return the cached value. */
+/** Resolves the system value on [Dispatchers.IO]; a definitive read is cached, a timeout/failure is not. */
 public suspend fun riduciMovimentoSistema(): Boolean =
-    riduciMovimentoSistemaNoto() ?: withContext(Dispatchers.IO) { riduciMovimentoSistemaPigro.value }
+    cacheRiduciMovimentoSistema ?: withContext(Dispatchers.IO) {
+        val esito = leggiRiduciMovimentoSistema()
+        if (esito.definitivo) cacheRiduciMovimentoSistema = esito.valore
+        esito.valore
+    }
 
-private fun leggiRiduciMovimentoSistema(): Boolean {
+private class RisultatoLetturaMovimento(val valore: Boolean, val definitivo: Boolean)
+
+private fun leggiRiduciMovimentoSistema(): RisultatoLetturaMovimento {
     val sistemaOperativo = System.getProperty("os.name").orEmpty()
-    if (!eMacOs(sistemaOperativo)) return interpretaRiduciMovimento(sistemaOperativo, null, "")
-    @Suppress("SwallowedException") // deliberate platform-unavailable fallback (AC-565), see interpretaRiduciMovimento
+    if (!eMacOs(sistemaOperativo)) {
+        return RisultatoLetturaMovimento(interpretaRiduciMovimento(sistemaOperativo, null, ""), definitivo = true)
+    }
+    @Suppress("TooGenericExceptionCaught", "SwallowedException") // deliberate platform-unavailable
+    // fallback (AC-565): ANY failure to run `defaults` (not just IOException — L723 widens the net,
+    // e.g. a SecurityException from a locked-down sandbox) falls back to the constant-dot default
+    // rather than crashing the theme, see interpretaRiduciMovimento.
     return try {
         val processo = ProcessBuilder("defaults", "read", "com.apple.universalaccess", "reduceMotion")
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
         if (processo.waitFor(TIMEOUT_LETTURA_MS, TimeUnit.MILLISECONDS)) {
-            val testo = processo.inputStream.bufferedReader().readText()
-            interpretaRiduciMovimento(sistemaOperativo, processo.exitValue(), testo)
+            // L723: the stream was never closed — `use {}` releases the underlying fd once read.
+            val testo = processo.inputStream.bufferedReader().use { it.readText() }
+            val valore = interpretaRiduciMovimento(sistemaOperativo, processo.exitValue(), testo)
+            RisultatoLetturaMovimento(valore, definitivo = true)
         } else {
             processo.destroyForcibly()
-            interpretaRiduciMovimento(sistemaOperativo, null, "")
+            RisultatoLetturaMovimento(true, definitivo = false) // L723: timeout — retry next time
         }
-    } catch (e: IOException) {
-        interpretaRiduciMovimento(sistemaOperativo, null, "")
+    } catch (e: Exception) {
+        RisultatoLetturaMovimento(true, definitivo = false) // L723: never cache a failed attempt
     }
 }
 

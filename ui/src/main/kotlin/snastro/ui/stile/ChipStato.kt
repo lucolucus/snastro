@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -145,8 +146,15 @@ private fun PallinoInCorso() {
         valoreAnimato
     }
     Box(
-        Modifier.size(DIAMETRO_PALLINO)
+        // testTag (L714b): the only way to sample this exact dot's pixel across two clock ticks and
+        // prove the pulse actually animates when `LocalRiduciMovimento` is off — the presenter-level
+        // tests can't see an `alpha` value, only a render check can (dev-architecture #test).
+        Modifier.testTag(TAG_PALLINO_IN_CORSO)
+            .size(DIAMETRO_PALLINO)
             .alpha(alpha)
             .background(LocalSnastroColori.current.accent, CircleShape),
     )
 }
+
+/** L714b: exposed so the render-check test can locate the animated dot without guessing pixel math. */
+internal const val TAG_PALLINO_IN_CORSO: String = "chip-pallino-in-corso"
