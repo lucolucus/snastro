@@ -777,3 +777,8 @@
 2026-09-24T21:47:01Z	pr-b1	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
 2026-09-24T21:47:01Z	pr-b1	composer	merge	cycle=0	-	-	MERGED 887302e — owed AC-589b closed
 2026-09-24T21:47:01Z	pr-b1	composer	watch	-	-	-	MED RiduciMovimentoSistemaTest runs real `defaults` (500 ms timeout): may flake under load — fix if it trips a gate; LOW tooltip chip duplicated 3× in kit (extract later); InterruptedException flag not restored
+2026-09-24T21:58:44Z	pr-b4	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW dfd4ae2
+2026-09-24T21:58:44Z	pr-b4	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T22:00:57Z	pr-b4	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
+2026-09-24T22:00:57Z	pr-b4	composer	merge	cycle=0	-	-	MERGED 0850776
+2026-09-24T22:00:57Z	pr-b4	composer	residue	-	-	-	MED DecodificaFfmpeg fixed tmp name races when 2 decoders hit the same id (use createTempFile); MED no failure-path test for atomic WAV; LOW FileDialog has no start dir; exit waits up to 3s+3s; tornaAllElenco KDoc stale; L530f copy says newer for v1
