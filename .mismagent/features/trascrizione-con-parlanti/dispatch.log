@@ -604,3 +604,5 @@
 2026-09-24T00:24:17Z	vad-silero	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
 2026-09-24T00:24:17Z	diarizzatore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
 2026-09-24T00:24:17Z	riconoscitore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
+2026-09-24T00:27:19Z	schermata-modelli	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 2e79f98
+2026-09-24T00:27:19Z	schermata-modelli	composer	merge	cycle=0	-	-	MERGED 3d4a335 (light verify)
