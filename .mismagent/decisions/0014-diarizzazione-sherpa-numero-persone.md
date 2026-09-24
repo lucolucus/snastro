@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial: the auto-start policy of ADR 0012 Amendment R2 / ADR 0004 Execution — superseded in place by their dated amendments, pointing here
 closes_spike: scelta-diarizzatore
 enforced_by: null
-amended: 2026-09-24   # 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count" and "Amendment 2026-09-24 (b)" (Ritrascrivi, ADR 0018)
+amended: 2026-09-24   # see also "Amendment 2026-09-24 (c)" → ADR 0019 (config rows, catalogue embedding entry, Embedding reuse superseded). 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count" and "Amendment 2026-09-24 (b)" (Ritrascrivi, ADR 0018)
 ---
 # 0014 — Diarization: sherpa-onnx pyannote-3.0 + WeSpeaker ResNet34-LM, threshold 0.4; optional "Numero di persone" → `num_clusters`
 
@@ -196,3 +196,24 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
   "Numero di persone" field under the rules above (plain field, empty = automatic, 1..10, real count — never an
   upper bound), **prefilled with the latest `Elaborazione`'s value** exactly like "Riprova". ADR 0018 §4 owns
   the confirmation dialog and the S2 states during/after a re-run.
+
+## Amendment 2026-09-24 (c) — diarization config and embedding superseded by [ADR 0019](0019-separazione-semi-automatica.md) (pointer; ADR 0019 is the home)
+- **Superseded rows of the Decision table:**
+  - Segmentation file: now `model.onnx` (fp32). The catalogue entry is unchanged.
+  - Embedding: now **NeMo TitaNet-small** (`embedding-nemo-titanet-small`).
+  - Clustering: **our own average-linkage cosine AHC** on ≤ 3 s pieces, then nearest-centroid
+    assignment (ADR 0019 §1.2). sherpa `FastClustering`'s labels are no longer used, and
+    `threshold = 0.4` is gone.
+
+  `windowShiftRatio`, the durations, the threads and CPU are unchanged.
+- **Superseded catalogue entry:** `embedding-wespeaker-resnet34-lm` leaves the catalogue. The
+  segmentation entry stays, and its file used becomes `model.onnx`.
+- **"Embedding reuse":** decided. TitaNet-small is ALSO the `EstrattoreImpronta` model (ADR 0019 §2).
+- **"Numero di persone"** rules are unchanged (optional, 1..10, the real count, stored on the
+  `Elaborazione`). With the new k-cut, a `k` above the real count tends to **split** one voice
+  instead of merging people (ADR 0019 §1.3).
+- **"Adapter behaviour contract"**, the bullet "the native call holds the Mutex for the whole phase":
+  now only step 1 is one hold, and each piece embedding is one hold (ADR 0019 §1.5).
+- **Why.** The old setup is unstable: a 10 ms shift changes the split, and stability is 0.63
+  (fix-batch-18). The new one scores 0.94. Even the stable setup is not correct on these voices
+  [user listening check], hence the semi-automatic flow of ADR 0019 §3–§6.

@@ -89,6 +89,17 @@ Cross-context events flow `supplier:applicazione` (published events, Published L
 `consumer:adattatori` (subscriber, via the kernel `DispatcherEventi`) → `consumer:applicazione`
 (policy). This keeps the edges table above intact (no consumer depends on a supplier's `dominio`).
 
+**UI actions that span two contexts (2026-09-24, [ADR 0019](decisions/0019-separazione-semi-automatica.md) §4.1, §5).**
+Some user actions need both contexts:
+- "Riassegna per somiglianza": a Parlanti plan, then a Trascrizione batch command;
+- "Dai un nome a una frase": a Trascrizione move or confirmation, then a Parlanti attribution.
+
+For these, the glue is sequenced in **`:avvio`**, which implements a `:ui`-declared action port in
+the per-project scope of ADR 0017 §3. **No context commands another context.** Parlanti still only
+reads Trascrizione (a consumer-owned port) and reacts to its events. The glue holds no domain rule:
+the plan is a Parlanti read-model, and every invariant is checked by the command that writes. The
+edges table is unchanged.
+
 ## Enforcement channels (all inside `./gradlew check`)
 1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).
 2. Konsist in `:architettura-test` (imports/packages/naming — `code-rules.md`).

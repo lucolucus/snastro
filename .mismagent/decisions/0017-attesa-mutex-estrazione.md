@@ -3,6 +3,7 @@ scope: global
 status: accepted
 supersedes: null   # closes the OPEN point left by ADR 0012 Amendment (b), Consequences ("a Conferma/SaltaVoce/Proposta during an Elaborazione waits for the native Mutex")
 closes_spike: attesa-mutex-estrazione
+amended: 2026-09-24   # see "Amendment 2026-09-24 — diarizza split into holds (ADR 0019)"
 enforced_by: null  # discursive + tests: the ACs listed in manifest-deltas/2026-09-24-mutex.md are the guardians
 ---
 # 0017 — Print extraction during an Elaborazione: one shared Mutex, released per native call; a visible, cancellable wait during diarization
@@ -201,3 +202,16 @@ The ACs are listed in `features/trascrizione-con-parlanti/manifest-deltas/2026-0
 - **Discursive (code review):** no adapter holds `conSessione` across two port calls; no loop of
   several prints inside one session; no sherpa or command call on the UI thread; the "Annulla" path
   writes nothing.
+
+## Amendment 2026-09-24 — `diarizza` is no longer one native call (pointer; [ADR 0019](0019-separazione-semi-automatica.md) §1.5, §4.7 is the home)
+- **§1.1's exception is narrowed.** Under ADR 0019 the diarizer makes one native hold for its step 1
+  (sherpa segmentation), then **one hold per piece embedding** (model cached, the ASR pattern). The
+  pure-Kotlin clustering runs with the Mutex **free**. So the longest wait an extraction can meet
+  during `diarizzazione` shrinks from the whole phase to step 1 [hypothesis until
+  `benchmark-elaborazione` prints the split, AC-542]. §2's worst-case bound still holds and is now
+  pessimistic.
+- **A new multi-print job follows §1.2 unchanged.** "Riassegna per somiglianza" extracts one
+  embedding per Segmento (≈ 1 000 per hour of audio), **one `estrai` per hold**, outside any
+  transaction, and can be cancelled (§1.4–1.5). Its S3 wait behaviour reuses §3:
+  `SOGLIA_ATTESA_VISIBILE_MS`, "In attesa dell'elaborazione…" and "Annulla". It adds a determinate
+  "n di N" count, because the total is known.
