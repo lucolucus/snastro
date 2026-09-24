@@ -44,6 +44,13 @@ dependencies {
     // same reason as above, for the Progetto side of the seeding.
     testImplementation(testFixtures(project(":progetto:applicazione")))
 
+    // Parlanti's own commands (ConfermaAttribuzioneServizio, RinominaParlanteServizio,
+    // EliminaParlanteServizio) + its port fakes (ParlanteRepositoryFinta, AttribuzioneRepositoryFinta,
+    // LettoreRegistrazioneFinta, LettoreVociFinta, DecodificatoreAudioFinta, EstrattoreImprontaFinta) —
+    // LettoreNomiDaParlantiTest (D2) seeds the supplier only through ITS OWN commands, never its SQL
+    // repositories (ADR 0002, CR-1). lettore-nomi-da-parlanti
+    testImplementation(testFixtures(project(":parlanti:applicazione")))
+
     // Port Finte are kernel `Ripristinabile` (roll back with UnitaDiLavoroFinta); `atteso()` unwraps
     // an expected `Esito.Ok` in the test.
     testImplementation(testFixtures(project(":kernel")))
