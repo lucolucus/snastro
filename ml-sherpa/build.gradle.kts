@@ -12,6 +12,14 @@ val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
 
 dependencies {
     implementation(files(scaricaJarSherpa.map { it.outputs.files }).builtBy(scaricaJarSherpa))
+
+    // CampioniAudio / IntervalloMs (Published Language, kernel-pl): RiconoscitoreSherpa's input/output
+    // types, so sherpa's own types never cross tec-ml-sherpa's boundary (RC-3).
+    implementation(project(":kernel"))
+
+    // CartellaCacheModelli + the asr-parakeet-tdt-0.6b-v3-int8 catalogue id (ADR 0008/0013): where
+    // RiconoscitoreSherpaModelliTest (@Tag("modelli")) finds the real model by default.
+    implementation(project(":modelli"))
 }
 
 // Opt-in real native load (@Tag("modelli"), ADR 0004/0016): the natives are fetched first and

@@ -1,21 +1,33 @@
 import org.gradle.api.tasks.testing.Test
+import org.gradle.process.CommandLineArgumentProvider
 
 plugins {
     id("snastro.kotlin-jvm")
 }
 
-// Opt-in real-FFmpeg contract (AC-149/AC-150, ADR 0005): the whole `DecodificatoreAudioFfmpegTest`
-// class is `@Tag("modelli")` (every contract case decodes through real FFmpeg first), so the default
-// `test` task (which excludes "modelli", dev-architecture-app.md#test) runs none of it. A dedicated
-// `Test` task configures its OWN `useJUnitPlatform` and does not inherit that exclusion (the comment
-// on `configureTesting()` in build-logic). Never wired into `check`.
+// Opt-in real-native contract (ADR 0004/0005/0013/0015/0016): the whole `DecodificatoreAudioFfmpegTest`
+// (real FFmpeg, AC-149/AC-150), `VadSileroTest` (real Silero VAD, AC-255), `DiarizzatoreSherpaTest` (real
+// sherpa-onnx diarization, AC-249/AC-373) and `RiconoscitoreParlatoSherpaContrattoTest` (real Parakeet,
+// AC-252/AC-388) classes are `@Tag("modelli")`, so the default `test` task (which excludes "modelli",
+// dev-architecture-app.md#test) runs none of them. A dedicated `Test` task configures its OWN
+// `useJUnitPlatform` and does not inherit that exclusion (the comment on `configureTesting()` in
+// build-logic). Never wired into `check`. `scaricaNativiSherpa` + `sherpa_onnx.native.path` mirror
+// `:ml-sherpa`'s own `modelliTest` (AC-243/244, ADR 0016 §4).
+val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
+
 tasks.register<Test>("modelliTest") {
     group = "verification"
-    description = "Opt-in: DecodificatoreAudioFfmpegTest against real FFmpeg (@Tag(\"modelli\"), AC-149/AC-150)."
+    description = "Opt-in: real FFmpeg/sherpa-onnx contracts (@Tag(\"modelli\"), " +
+        "AC-149/AC-150/AC-252/AC-255/AC-249/AC-373/AC-388)."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
         includeTags("modelli")
+    }
+    forkEvery = 1 // one JVM per test class: sherpa's natives load once per JVM (MotoreSherpa).
+    dependsOn(scaricaNativiSherpa)
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}")
     }
 }
 
@@ -35,6 +47,12 @@ dependencies {
     // DecodificatoreAudioFfmpeg delegates to :audio's real FFmpeg decode/probe, never touching
     // org.bytedeco/javax.sound directly (ADR 0005, CR-3 confinement).
     implementation(project(":audio"))
+
+    // VadSilero, DiarizzatoreSherpa and RiconoscitoreParlatoSherpa (real Vad / Diarizzatore /
+    // RiconoscitoreParlato adapters, ADR 0004/0016) delegate to :ml-sherpa's MotoreSherpa /
+    // SessioneSherpa / RiconoscitoreSherpa (native load, Mutex, resource registration) — com.k2fsa
+    // itself never appears here (CR-3 confinement stays inside :ml-sherpa).
+    implementation(project(":ml-sherpa"))
 
     // The generated SnastroDatabase queries + UnitaDiLavoro impl (ADR 0006/0012).
     implementation(project(":persistenza"))
