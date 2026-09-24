@@ -638,3 +638,4 @@
 2026-09-24T07:20:37Z	identificazione-voci	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
 2026-09-24T07:20:37Z	parlanti-attivi	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
 2026-09-24T07:20:37Z	proposta-unione	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:33:23Z	repository-sql-parlanti	composer	merge	cycle=0	-	-	MERGED 9278fe3 (bundle r2-a, light verify, 31 tests)
