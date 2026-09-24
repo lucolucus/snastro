@@ -159,10 +159,13 @@ class ProgettiPresenterTest {
         presenter.crea("/percorso/non/valido", "Riunione")
         advanceUntilIdle()
 
+        // L464e/f: `assertNull(sessione.corrente.value)` era tautologico — `SessioneProgettoFissa.corrente`
+        // e' un MutableStateFlow(null) che nessun codice qui aggiorna mai, quindi restava null a
+        // prescindere dal comportamento del presenter. Le asserzioni utili sono sullo STATO del presenter.
         val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
         assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.erroreCrea)
-        // Nessun progetto aperto: la sessione fissa non ha mai osservato una `corrente` diversa da null.
-        assertNull(sessione.corrente.value)
+        assertEquals(false, stato.inCorso)
+        assertNull(stato.erroreApri)
     }
 
     @Test
@@ -271,9 +274,33 @@ class ProgettiPresenterTest {
             val presenter = presentatore(this, registro = RegistroProgettiCheLanciaSempre())
             advanceUntilIdle()
 
+            // L530d: il fallimento del caricamento INIZIALE atterra su `erroreElenco`, non su
+            // `erroreCrea` (quel campo e' un messaggio per-form di un `crea` fallito, un'altra cosa).
             val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
             assertEquals(emptyList(), stato.progetti)
-            assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.erroreCrea)
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.erroreElenco)
+            assertNull(stato.erroreCrea)
             assertEquals(false, stato.inCorso)
         }
+
+    @Test
+    fun `L530d riprova rimostra Caricamento e poi il nuovo esito`() = runTest {
+        var lanciaSempre = true
+        val registro = object : RegistroProgetti by RegistroProgettiFinta() {
+            override fun elenco(): List<VoceRegistro> =
+                if (lanciaSempre) error("registro rotto") else emptyList()
+        }
+        val presenter = presentatore(this, registro = registro)
+        advanceUntilIdle()
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, assertIs<ProgettiUiStato.Dati>(presenter.stato.value).erroreElenco)
+
+        lanciaSempre = false
+        presenter.azioni.riprova()
+        assertEquals(ProgettiUiStato.Caricamento, presenter.stato.value, "riprova deve rimostrare Caricamento subito")
+        advanceUntilIdle()
+
+        val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
+        assertEquals(emptyList(), stato.progetti)
+        assertNull(stato.erroreElenco)
+    }
 }

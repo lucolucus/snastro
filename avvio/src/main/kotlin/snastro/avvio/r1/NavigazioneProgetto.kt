@@ -28,16 +28,32 @@ internal class NavigazioneProgetto(private val azioni: AzioniShell, iniziale: Sc
     var schermata: SchermataR1 by mutableStateOf(iniziale)
         private set
 
+    // L755e: the place S5 was opened FROM (S2's list, or S3 of one Registrazione) — `null` when S5 is
+    // not showing. Remembered ONLY while `schermata == Modelli`, so a redundant re-click of the
+    // footer while already on S5 never overwrites it with `Modelli` itself.
+    private var primaDiModelli: SchermataR1? = null
+
     fun apriRegistrazione(id: RegistrazioneId) {
         schermata = SchermataR1.Registrazione(id)
     }
 
-    /** The sidebar's reset hook: back to the S2 list (re-click of 'Registrazioni', or leaving S5). */
+    /**
+     * The sidebar's reset hook, fired for TWO distinct reasons (`SchermataShell`'s own wiring):
+     * re-clicking the ALREADY-selected 'Registrazioni' item (always the list's own top, regardless of
+     * S5), or leaving S5 via ANY nav click (L755e: restores [primaDiModelli] — S2 or S3, whichever S5
+     * was opened from — instead of forcing the list every time, which silently dropped a S3 place).
+     */
     fun tornaAllElenco() {
-        schermata = SchermataR1.Registrazioni
+        schermata = if (schermata == SchermataR1.Modelli) {
+            primaDiModelli ?: SchermataR1.Registrazioni
+        } else {
+            SchermataR1.Registrazioni
+        }
+        primaDiModelli = null
     }
 
     fun apriModelli() {
+        if (schermata != SchermataR1.Modelli) primaDiModelli = schermata
         azioni.seleziona(DestinazioneShell.REGISTRAZIONI)
         schermata = SchermataR1.Modelli
     }

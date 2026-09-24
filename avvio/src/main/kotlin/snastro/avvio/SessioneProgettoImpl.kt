@@ -16,7 +16,7 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.ProgettoId
 import snastro.persistenza.DatabaseProgetto
-import snastro.persistenza.SchemaProgettoPiuRecenteException
+import snastro.persistenza.SchemaProgettoRifiutatoException
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
@@ -181,7 +181,10 @@ internal class SessioneProgettoImpl(
 
         val db = try {
             seams.apriDatabase(cartella.toFile())
-        } catch (ignored: SchemaProgettoPiuRecenteException) {
+        } catch (ignored: SchemaProgettoRifiutatoException) {
+            // L530f: BOTH refusals (a schema newer than supported AND `user_version = 1`, never really
+            // shipped, CR-13/ADR 0006 Amendment (a)) show the SAME DatabasePiuRecente message — this
+            // app version cannot open the file's schema, whichever the exact reason.
             rilasciaLock(lockCartella)
             return Esito.Errore(ErroreSessione.DatabasePiuRecente)
         } catch (e: CancellationException) {
@@ -525,3 +528,15 @@ private fun fuoriDalThreadUi(registro: RegistroProgetti, azione: (RegistroProget
 private val eseguitoreRegistro = Executors.newSingleThreadExecutor { runnable ->
     Thread(runnable, "registro-progetti-io").apply { isDaemon = true }
 }
+
+/**
+ * L530e: `:avvio`'s own exit path ([Main.kt]) calls this ONCE, after the last open Progetto's
+ * [SessioneProgettoImpl.chiudi] has already queued its own registry write on [eseguitoreRegistro] —
+ * [spegniEAttendi] gives that queue a bounded chance to actually run before the process exits (a
+ * daemon executor is otherwise simply killed, mid-queue, at JVM shutdown, silently dropping the
+ * final `ultimaAttivita`/`numRegistrazioni` update). Not itself unit-tested — it is a real, one-line
+ * binding of the ALREADY-tested [spegniEAttendi] over the shared singleton, which a test must never
+ * `shutdown()` (it would leak into every other test in this JVM); see [SpegniEAttendiTest].
+ */
+internal fun attendiScritturaRegistro(attesaMassimaMs: Long = ATTESA_CHIUSURA_USCITA_MS): Boolean =
+    spegniEAttendi(eseguitoreRegistro, attesaMassimaMs)

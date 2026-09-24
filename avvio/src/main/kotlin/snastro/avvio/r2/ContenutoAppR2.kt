@@ -20,6 +20,7 @@ import snastro.ui.parlanti.ParlantiPresenter
 import snastro.ui.parlanti.ParlantiRoute
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
+import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazionePresenter
 import snastro.ui.registrazione.RegistrazioneRoute
 import snastro.ui.registrazione.SorgentiParlanti
@@ -37,7 +38,7 @@ import snastro.ui.registrazioni.RegistrazioniRoute
  * nav click leaves it — [ShellProgetto]/[snastro.avvio.r1.NavigazioneProgetto].
  */
 @Composable
-internal fun ContenutoAppR2(grafo: GrafoR2) {
+internal fun ContenutoAppR2(grafo: GrafoR2, sceltaCartella: SceltaCartella) {
     val r0 = grafo.r0
     val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R2) }
     val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
@@ -49,7 +50,7 @@ internal fun ContenutoAppR2(grafo: GrafoR2) {
         iniziale = iniziale,
         contenutoSenzaProgetto = {
             val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
-            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita)
+            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita, sceltaCartella)
         },
         contenuto = { conProgetto, navigazione ->
             val collaboratori = r0.sessione.collaboratoriCorrenti()

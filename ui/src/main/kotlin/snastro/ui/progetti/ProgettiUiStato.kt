@@ -14,12 +14,14 @@ sealed interface ProgettiUiStato {
      * true while a `crea`/`apri` is in flight (double-submit guard, M3). [erroreCrea]/[erroreApri],
      * when set, are dismissible inline messages for the last failed `crea`/`apri` (H1: an error never
      * replaces [progetti] — [AzioniProgetti.chiudiErroreCrea]/[AzioniProgetti.chiudiErroreApri] clear
-     * them).
+     * them). [erroreElenco] (L530d), when set, is the INITIAL elenco load's own failure — a distinct
+     * full-width banner with [AzioniProgetti.riprova], never conflated with `erroreCrea`.
      */
     data class Dati(
         val progetti: List<ProgettoVista>,
         val inCorso: Boolean = false,
         val erroreCrea: String? = null,
         val erroreApri: String? = null,
+        val erroreElenco: String? = null,
     ) : ProgettiUiStato
 }

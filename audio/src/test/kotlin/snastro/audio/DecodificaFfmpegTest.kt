@@ -2,6 +2,7 @@ package snastro.audio
 
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.abs
 import kotlin.test.Test
@@ -105,5 +106,25 @@ class DecodificaFfmpegTest {
         kotlin.test.assertFailsWith<AudioIlleggibile> {
             decodifica.decodificaInWav(inesistente, dir.resolve("derivato.wav"))
         }
+    }
+
+    @Test
+    @Tag("modelli")
+    fun `L502d decodificaInWav non lascia un file tmp e sostituisce atomicamente un derivato preesistente`(
+        @TempDir dir: Path,
+    ) {
+        val sorgente = dir.resolve("sorgente.wav")
+        scriviWavSintetico(sorgente, durataMs = 500)
+        val destinazione = dir.resolve("cache/derivato.wav")
+
+        decodifica.decodificaInWav(sorgente, destinazione) // prima decodifica
+        val primaDurata = SondaFfmpeg().sonda(destinazione).durataMs
+
+        // Ridecodifica sullo STESSO derivato (es. una rigenerazione della cache gia' presente): deve
+        // sostituirlo, mai lasciare un `.tmp` accanto ne' un derivato a meta' scritto.
+        decodifica.decodificaInWav(sorgente, destinazione)
+
+        assertTrue(Files.notExists(dir.resolve("cache/derivato.wav.tmp")), "il file temporaneo non deve restare")
+        assertEquals(primaDurata, SondaFfmpeg().sonda(destinazione).durataMs)
     }
 }

@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.dp
 import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
+import snastro.ui.stile.AzioneBanner
+import snastro.ui.stile.BannerSn
 import snastro.ui.stile.BottoneSn
 import snastro.ui.stile.CampoSn
 import snastro.ui.stile.CardSn
@@ -39,38 +41,44 @@ import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
+import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
 import snastro.ui.testi.ETICHETTA_CAMBIA_CARTELLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CREA
+import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_NOME_PROGETTO
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
 import snastro.ui.testi.ETICHETTA_PROGETTI
+import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.MESSAGGIO_PROGETTI_VUOTO
 import snastro.ui.testi.etichettaRegistrazioni
 import java.time.ZoneId
-import javax.swing.JFileChooser
 
 private val LARGHEZZA_CAMPO_NOME = 240.dp
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 
 /**
- * Thin view of S1 · Progetti (RC-2): only renders [stato] and forwards [azioni]'s events — the
- * folder pickers below are OS integration, not a decision ([sceltaCartella] always hands its result
- * straight to an [azioni] lambda, never branches on it beyond null-cancelled). [cartellaGenitorePredefinita]
- * (ADR 0010: `~/Documents/snastro`) is `:avvio`'s own injected default for the new-project form's
- * initial value — fix-batch-12 #4: never `System.getProperty` inside this composable.
+ * Thin view of S1 · Progetti (RC-2): only renders [stato] and forwards [azioni]'s events — the folder
+ * pickers are [sceltaCartella] (L464d), a consumer-owned port `:avvio` implements over a
+ * window-owned `java.awt.FileDialog`, never a `JFileChooser` built by this composable itself; its
+ * result always goes straight to a plain state update or an [azioni] lambda, never a decision beyond
+ * null-cancelled. [cartellaGenitorePredefinita] (ADR 0010: `~/Documents/snastro`) is `:avvio`'s own
+ * injected default for the new-project form's initial value — fix-batch-12 #4: never
+ * `System.getProperty` inside this composable.
  *
  * AC-573: title + the "Nuovo progetto" `CardSn` form + "Apri progetto…" `Secondario`, then the list
  * (each project as its own `CardSn`) or an `EmptyState`-style placeholder when there are none — the
  * two actions stay reachable in both cases (they sit above the list, never duplicated inside it).
  */
+@Suppress("LongParameterList") // state + actions + the two injected ports + the render/test knobs
 @Composable
 fun SchermataProgetti(
     stato: ProgettiUiStato,
     azioni: AzioniProgetti,
     cartellaGenitorePredefinita: String,
+    sceltaCartella: SceltaCartella,
     scuro: Boolean = isSystemInDarkTheme(),
     riduciMovimento: Boolean? = null,
 ) {
@@ -78,7 +86,8 @@ fun SchermataProgetti(
         Surface(modifier = Modifier.fillMaxSize()) {
             when (stato) {
                 ProgettiUiStato.Caricamento -> IndicatoreCaricamentoProgetti()
-                is ProgettiUiStato.Dati -> ContenutoProgetti(stato, azioni, cartellaGenitorePredefinita)
+                is ProgettiUiStato.Dati ->
+                    ContenutoProgetti(stato, azioni, cartellaGenitorePredefinita, sceltaCartella)
             }
         }
     }
@@ -96,6 +105,7 @@ private fun ContenutoProgetti(
     stato: ProgettiUiStato.Dati,
     azioni: AzioniProgetti,
     cartellaGenitorePredefinita: String,
+    sceltaCartella: SceltaCartella,
 ) {
     val colori = LocalSnastroColori.current
     Column(
@@ -106,14 +116,33 @@ private fun ContenutoProgetti(
     ) {
         Text(text = ETICHETTA_PROGETTI, style = LocalSnastroTipografia.current.display, color = colori.ink)
         Spacer(modifier = Modifier.height(SnastroMisure.space5))
+        // L530d: the INITIAL elenco load's own failure — distinct from erroreCrea/erroreApri (those
+        // are per-form, dismissible inline messages), a full-width banner with a Riprova action, never
+        // buried under the crea form the way the earlier fix-batch-12 #5 landed it.
+        stato.erroreElenco?.let {
+            BannerSn(
+                tipo = TipoBanner.Errore,
+                titolo = ETICHETTA_ERRORE_CARICAMENTO_PROGETTI,
+                testo = it,
+                azione = AzioneBanner(ETICHETTA_RIPROVA, azioni.riprova),
+                modifier = Modifier.testTag("progetti-errore-elenco"),
+            )
+            Spacer(modifier = Modifier.height(SnastroMisure.space4))
+        }
         FormNuovoProgetto(
             inCorso = stato.inCorso,
             erroreCrea = stato.erroreCrea,
             azioni = azioni,
             cartellaGenitorePredefinita = cartellaGenitorePredefinita,
+            sceltaCartella = sceltaCartella,
         )
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
-        AzioneApriProgetto(inCorso = stato.inCorso, erroreApri = stato.erroreApri, azioni = azioni)
+        AzioneApriProgetto(
+            inCorso = stato.inCorso,
+            erroreApri = stato.erroreApri,
+            azioni = azioni,
+            sceltaCartella = sceltaCartella,
+        )
         Spacer(modifier = Modifier.height(SnastroMisure.space5))
         if (stato.progetti.isEmpty()) {
             ProgettiVuoto()
@@ -129,6 +158,7 @@ private fun FormNuovoProgetto(
     erroreCrea: String?,
     azioni: AzioniProgetti,
     cartellaGenitorePredefinita: String,
+    sceltaCartella: SceltaCartella,
 ) {
     val colori = LocalSnastroColori.current
     var cartella by remember { mutableStateOf(cartellaGenitorePredefinita) }
@@ -147,7 +177,7 @@ private fun FormNuovoProgetto(
             )
             BottoneSn(
                 etichetta = ETICHETTA_CAMBIA_CARTELLA,
-                onClick = { sceltaCartella(cartella)?.let { cartella = it } },
+                onClick = { sceltaCartella.scegli(ETICHETTA_CAMBIA_CARTELLA)?.let { cartella = it } },
                 variante = VarianteBottone.Link,
                 abilitato = !inCorso,
                 modifier = Modifier.padding(start = SnastroMisure.space3),
@@ -181,11 +211,16 @@ private fun FormNuovoProgetto(
 }
 
 @Composable
-private fun AzioneApriProgetto(inCorso: Boolean, erroreApri: String?, azioni: AzioniProgetti) {
+private fun AzioneApriProgetto(
+    inCorso: Boolean,
+    erroreApri: String?,
+    azioni: AzioniProgetti,
+    sceltaCartella: SceltaCartella,
+) {
     Column {
         BottoneSn(
             etichetta = ETICHETTA_APRI_PROGETTO,
-            onClick = { sceltaCartella(System.getProperty("user.home").orEmpty())?.let { azioni.apri(it) } },
+            onClick = { sceltaCartella.scegli(ETICHETTA_APRI_PROGETTO)?.let { azioni.apri(it) } },
             variante = VarianteBottone.Secondario,
             abilitato = !inCorso,
             modifier = Modifier.testTag("progetti-apri"),
@@ -263,17 +298,5 @@ private fun RigaProgetto(progetto: ProgettoVista, abilitato: Boolean, apri: (Str
             style = LocalSnastroTipografia.current.caption,
             color = colori.inkMuted,
         )
-    }
-}
-
-/** Native directory picker (frugality rung 3: platform-native over a hand-rolled dialog); `null` = cancelled. */
-private fun sceltaCartella(cartellaIniziale: String): String? {
-    val selettore = JFileChooser(cartellaIniziale.ifBlank { null }).apply {
-        fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-    }
-    return if (selettore.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-        selettore.selectedFile.absolutePath
-    } else {
-        null
     }
 }

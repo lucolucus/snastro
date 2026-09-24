@@ -17,7 +17,10 @@ import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.ui.ErroreSessione
 import snastro.ui.formattaData
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
+import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
+import snastro.ui.testi.ETICHETTA_RIPROVA
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_PROGETTI_VUOTO
 import snastro.ui.testi.etichettaRegistrazioni
 import snastro.ui.testi.messaggioPer
@@ -31,8 +34,15 @@ private const val ALTEZZA_GRANDE_PX = 800
 private const val LARGHEZZA_PICCOLA_PX = 1024
 private const val ALTEZZA_PICCOLA_PX = 640
 
-private val AZIONI_VUOTE = AzioniProgetti(crea = { _, _ -> }, apri = {}, chiudiErroreCrea = {}, chiudiErroreApri = {})
+private val AZIONI_VUOTE = AzioniProgetti(
+    crea = { _, _ -> },
+    apri = {},
+    chiudiErroreCrea = {},
+    chiudiErroreApri = {},
+    riprova = {},
+)
 private const val CARTELLA_GENITORE_DI_PROVA = "/tmp/snastro"
+private val SCELTA_CARTELLA_DI_PROVA = SceltaCartellaFinta()
 private val UN_PROGETTO = ProgettoVista(
     progettoId = ProgettoId("id-1"),
     nome = "Consiglio comunale",
@@ -147,6 +157,22 @@ class ProgettiRenderCheckTest {
     fun `AC-196 197 un errore di apertura e mostrato inline a 1024x640 (scuro)`() =
         verificaErroreApri(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
+    @Test
+    fun `L530d un errore di caricamento dell elenco e mostrato con Riprova a 1280x800`() =
+        verificaErroreElenco(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `L530d un errore di caricamento dell elenco e mostrato con Riprova a 1024x640`() =
+        verificaErroreElenco(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `L530d un errore di caricamento dell elenco e mostrato con Riprova a 1280x800 (scuro)`() =
+        verificaErroreElenco(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `L530d un errore di caricamento dell elenco e mostrato con Riprova a 1024x640 (scuro)`() =
+        verificaErroreElenco(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
     private fun verificaCaricamento(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
             setContent {
@@ -154,6 +180,7 @@ class ProgettiRenderCheckTest {
                     stato = ProgettiUiStato.Caricamento,
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -169,6 +196,7 @@ class ProgettiRenderCheckTest {
                     stato = ProgettiUiStato.Dati(progetti = emptyList()),
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -186,6 +214,7 @@ class ProgettiRenderCheckTest {
                     stato = ProgettiUiStato.Dati(progetti = listOf(UN_PROGETTO)),
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -205,6 +234,7 @@ class ProgettiRenderCheckTest {
                     stato = ProgettiUiStato.Dati(progetti = emptyList(), inCorso = true),
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -225,6 +255,7 @@ class ProgettiRenderCheckTest {
                     stato = ProgettiUiStato.Dati(progetti = emptyList(), erroreCrea = messaggio),
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -242,6 +273,7 @@ class ProgettiRenderCheckTest {
                     stato = ProgettiUiStato.Dati(progetti = listOf(UN_PROGETTO), erroreApri = messaggio),
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -249,6 +281,24 @@ class ProgettiRenderCheckTest {
             onNodeWithTag("progetti-errore-apri").assertIsDisplayed()
             onNodeWithText(messaggio).assertIsDisplayed()
             catturaPng("progetti-errore-apri", width, height, scuro)
+        }
+
+    private fun verificaErroreElenco(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataProgetti(
+                    stato = ProgettiUiStato.Dati(progetti = emptyList(), erroreElenco = MESSAGGIO_ERRORE_GENERICO),
+                    azioni = AZIONI_VUOTE,
+                    cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("progetti-errore-elenco").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_ERRORE_CARICAMENTO_PROGETTI).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_RIPROVA).assertIsDisplayed()
+            catturaPng("progetti-errore-elenco", width, height, scuro)
         }
 
     @OptIn(ExperimentalTestApi::class)

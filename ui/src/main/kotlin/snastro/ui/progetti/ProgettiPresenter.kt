@@ -34,22 +34,34 @@ class ProgettiPresenter(
     val stato: StateFlow<ProgettiUiStato> = _stato.asStateFlow()
 
     init {
-        scope.launch {
-            try {
-                val progetti = withContext(io) { elenco.progetti() }
-                _stato.value = ProgettiUiStato.Dati(progetti)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // fix-batch-12 #5: the initial load itself was unguarded — a throwing `elenco.progetti()`
-                // left `_stato` stuck on Caricamento forever, with crea/apri unreachable (M5's own
-                // rationale for RegistrazioniPresenter, applied here). Lands on the SAME Dati state a
-                // dismissed erroreCrea would, actions usable right away.
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                _stato.value = ProgettiUiStato.Dati(progetti = emptyList(), erroreCrea = MESSAGGIO_ERRORE_GENERICO)
-            }
+        scope.launch { caricaElenco() }
+    }
+
+    private suspend fun caricaElenco() {
+        try {
+            val progetti = withContext(io) { elenco.progetti() }
+            _stato.value = ProgettiUiStato.Dati(progetti)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            // fix-batch-12 #5: the initial load itself was unguarded — a throwing `elenco.progetti()`
+            // left `_stato` stuck on Caricamento forever, with crea/apri unreachable (M5's own
+            // rationale for RegistrazioniPresenter, applied here). L530d: lands the failure on its OWN
+            // `erroreElenco` (a full-width banner + Riprova, [riprova]) — never `erroreCrea`, which is
+            // a dismissible per-form message for a FAILED `crea`, a different thing. crea/apri stay
+            // usable right away either way (empty `progetti`, `inCorso` false).
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            _stato.value = ProgettiUiStato.Dati(progetti = emptyList(), erroreElenco = MESSAGGIO_ERRORE_GENERICO)
         }
+    }
+
+    /** L530d: retries the elenco load after [ProgettiUiStato.Dati.erroreElenco] — shows
+     * [ProgettiUiStato.Caricamento] first: a retry with no loading feedback looks like a dead button
+     * (the same lesson RegistrazioniPresenter's own M5/L485e fix applies to its `riprova`). */
+    fun riprova() {
+        _stato.value = ProgettiUiStato.Caricamento
+        scope.launch { caricaElenco() }
     }
 
     fun crea(cartellaGenitore: String, nome: String) = avvia(
@@ -116,5 +128,6 @@ class ProgettiPresenter(
         apri = ::apri,
         chiudiErroreCrea = ::chiudiErroreCrea,
         chiudiErroreApri = ::chiudiErroreApri,
+        riprova = ::riprova,
     )
 }
