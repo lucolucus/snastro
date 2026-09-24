@@ -3,21 +3,35 @@ package snastro.ui.testi
 /** S3 · Voci panel + Revisione toolbar labels (R2), Italian (dev-architecture `#presenter`). */
 const val TITOLO_PANNELLO_VOCI: String = "Voci"
 
-// AC-559: no '▶' glyph as a UI icon. The full fix pairs this text with `Icona.Listen`
-// (snastro.ui.stile) at its render call site — SchermataPannelloVoci's `IntestazioneCarta`
-// (wave 16, screens are out of this block's scope); this constant only stops carrying the glyph.
+// AC-558/AC-559/AC-589b: `Icona.Listen` renders at the call site (`SchermataPannelloVoci`'s
+// `IntestazioneCarta`) — these constants carry no glyph.
 const val ETICHETTA_ESTRATTO: String = "Estratto"
+
+/** AC-585: "È <Nome>" — label change of 'Conferma', same command ([AzioniRegistrazione.conferma]).
+ * [ETICHETTA_CONFERMA] is the fallback while the Proposta has no known Candidato yet (`Caricamento`/
+ * `InAttesa`/`Errore`) — the button still renders (disabled) so an in-flight state is never a hole. */
+fun testoConferma(nomeCandidato: String): String = "È $nomeCandidato"
 const val ETICHETTA_CONFERMA: String = "Conferma"
-const val ETICHETTA_ALTRI: String = "altri ▾"
-const val ETICHETTA_NUOVO: String = "nuovo…"
-const val ETICHETTA_SALTA: String = "salta"
-const val ETICHETTA_CAMBIA: String = "cambia ▾"
-const val ETICHETTA_UNISCI_CON: String = "Unisci con ▾"
+
+// AC-589b: no '▾' glyph baked into any of these — the menu affordance is `Icona.ChevronDown` at the
+// render call site.
+const val ETICHETTA_ALTRI: String = "Altri"
+
+/** AC-585: label of 'nuovo…' — also the AC-586 menu item's own text. */
+const val ETICHETTA_NUOVA_PERSONA: String = "Nuova persona"
+
+/** AC-585: the first-recording (empty Galleria) Primario — same command as [ETICHETTA_NUOVA_PERSONA]. */
+const val ETICHETTA_DAI_UN_NOME: String = "Dai un nome"
+const val ETICHETTA_SALTA: String = "Salta"
+
+/** AC-585: a named card's compact 'More' menu (cambia + unisci con…) — no standalone dropdown text. */
+const val ETICHETTA_CAMBIA: String = "Cambia"
+const val ETICHETTA_UNISCI_CON: String = "Unisci con…"
 const val ETICHETTA_UNISCI: String = "Unisci"
 const val ETICHETTA_NOME: String = "Nome"
 const val ETICHETTA_OCCASIONALE: String = "occasionale"
 const val ETICHETTA_RICORRENTE: String = "ricorrente"
-const val ETICHETTA_RIASSEGNA_A: String = "Riassegna a ▾"
+const val ETICHETTA_RIASSEGNA_A: String = "Riassegna a"
 const val ETICHETTA_NUOVA_VOCE: String = "nuova voce"
 const val ETICHETTA_DIVIDI_VOCE: String = "Dividi voce"
 const val ETICHETTA_DESELEZIONA: String = "Deseleziona"

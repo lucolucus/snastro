@@ -1,11 +1,20 @@
 package snastro.ui.testi
 
 /** S3 · "Dai un nome a questa frase" and "Riassegna per somiglianza" (ADR 0019 §6 + Amendment (b).2/(b).6). */
-const val ETICHETTA_NOMINA_FRASE: String = "Dai un nome a questa frase ▾"
+// AC-589b: no '▾' glyph baked into the string — the menu affordance is `Icona.ChevronDown` at the
+// render call site (`SchermataRegistrazione.AzioniFrase`).
+const val ETICHETTA_NOMINA_FRASE: String = "Dai un nome a questa frase"
 const val ETICHETTA_TOGLI_CONFERMA: String = "Togli conferma"
-const val SIMBOLO_FRASE_CONFERMATA: String = "📌"
+
+// AC-589b: no '📌' emoji — the pin is `IconaSn(Icona.Pin)` at the render call site
+// (`SchermataRegistrazione.PuntinaConfermata`); this string stays only as its tooltip/description.
 const val TOOLTIP_FRASE_CONFERMATA: String = "Frase confermata: «Riassegna per somiglianza» non la sposta"
+
+/** AC-584: the panel section's own card title (the trigger button is [ETICHETTA_CALCOLA]). */
 const val ETICHETTA_RIASSEGNA_SOMIGLIANZA: String = "Riassegna per somiglianza"
+
+/** AC-584: the card's own Secondario trigger — the card's title already says what it does. */
+const val ETICHETTA_CALCOLA: String = "Calcola"
 const val SUGGERIMENTO_RIFERIMENTI_INSUFFICIENTI: String = "Dai un nome ad almeno due persone"
 const val AVVISO_TUTTA_LA_VOCE: String =
     "Senza una frase confermata uso tutta la voce: il risultato può cambiare se ripeti. " +
