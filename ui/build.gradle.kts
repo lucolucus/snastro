@@ -26,6 +26,8 @@ dependencies {
     testFixturesApi(testFixtures(project(":kernel")))
     // StateFlow in SessioneProgettoFinta/-Contratto (not inherited from main's `implementation`).
     testFixturesImplementation(libs.kotlinx.coroutines.core)
+    // ComandiVoceContratto (runTest/virtual time) — the consumer-driven contract of the ComandiVoce port.
+    testFixturesImplementation(libs.kotlinx.coroutines.test)
     // The Compose compiler plugin runs on every source set of this module; testFixtures needs the
     // runtime on its classpath even though it declares no `@Composable` (build-logic snastro.compose-desktop).
     testFixturesImplementation(compose.desktop.currentOs)

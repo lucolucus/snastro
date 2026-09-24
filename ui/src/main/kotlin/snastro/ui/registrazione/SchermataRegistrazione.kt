@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -28,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
@@ -36,9 +38,14 @@ import snastro.ui.lettore.BarraLettore
 import snastro.ui.palette
 import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
+import snastro.ui.testi.ETICHETTA_DESELEZIONA
+import snastro.ui.testi.ETICHETTA_DIVIDI_VOCE
 import snastro.ui.testi.ETICHETTA_MOSTRA_CARTELLA
+import snastro.ui.testi.ETICHETTA_NUOVA_VOCE
+import snastro.ui.testi.ETICHETTA_RIASSEGNA_A
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.MESSAGGIO_TRASCRITTO_VUOTO
+import snastro.ui.testi.testoSelezione
 
 private val PADDING_SCHERMO = 24.dp
 private val PADDING_SEZIONE = 16.dp
@@ -50,9 +57,10 @@ private const val LARGHEZZA_SCHELETRO_PARI = 0.8f
 private const val LARGHEZZA_SCHELETRO_DISPARI = 0.55f
 
 /**
- * Thin view of S3 · Registrazione, READ-ONLY in R1 (RC-2): only renders [stato] and forwards
- * [azioni]'s events. No Voci panel, no selection, no Revisione UI (AC-402, explicit cut) — those
- * arrive with `schermata-registrazione-identificazione` (R2).
+ * Thin view of S3 · Registrazione (RC-2): only renders [stato] and forwards [azioni]'s events. R1 is
+ * read-only (AC-402): with [RegistrazioneUiStato.Dati.pannello] `null` there is no Voci panel, no
+ * selection, no Revisione UI. R2 (`schermata-registrazione-identificazione`) adds them on the right
+ * ([PannelloVociVista]) and above the transcript ([BarraSelezioneVista]).
  */
 @Composable
 fun SchermataRegistrazione(stato: RegistrazioneUiStato, azioni: AzioniRegistrazione) {
@@ -102,10 +110,68 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
         IntestazioneRegistrazione(stato, azioni)
         stato.errore?.let { MessaggioInlineErrore(it, azioni.chiudiErrore) }
         Spacer(modifier = Modifier.height(PADDING_SEZIONE))
-        if (stato.segmenti.isEmpty()) {
-            Text(text = MESSAGGIO_TRASCRITTO_VUOTO, modifier = Modifier.testTag("registrazione-vuoto"))
-        } else {
-            ElencoSegmenti(stato.segmenti, azioni)
+        Row(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                stato.barraSelezione?.let { BarraSelezioneVista(it, azioni) }
+                if (stato.segmenti.isEmpty()) {
+                    Text(text = MESSAGGIO_TRASCRITTO_VUOTO, modifier = Modifier.testTag("registrazione-vuoto"))
+                } else {
+                    ElencoSegmenti(stato, azioni)
+                }
+            }
+            // R2 only (AC-402: `null` in R1 — the transcript keeps the whole width).
+            stato.pannello?.let { pannello ->
+                Spacer(modifier = Modifier.width(PADDING_SEZIONE))
+                PannelloVociVista(
+                    pannello,
+                    azioni,
+                    Modifier.width(LARGHEZZA_PANNELLO_VOCI).fillMaxHeight(),
+                )
+            }
+        }
+    }
+}
+
+/** AC-209..211: the selection toolbar — 'Riassegna a ▾' (other Voci + 'nuova voce') and 'Dividi voce'
+ * (disabled with its explanation on the whole Voce, INV-10). Every decision is the presenter's. */
+@Composable
+private fun BarraSelezioneVista(barra: BarraSelezione, azioni: AzioniRegistrazione) {
+    Surface(
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.fillMaxWidth().padding(bottom = PADDING_RIGA).testTag("registrazione-barra-selezione"),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = PADDING_RIGA)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = testoSelezione(barra.numeroSegmenti, barra.etichetta),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                MenuVoci(
+                    "registrazione-riassegna",
+                    ETICHETTA_RIASSEGNA_A,
+                    barra.destinazioni,
+                    barra.abilitata,
+                    extra = ETICHETTA_NUOVA_VOCE,
+                    onScelta = azioni.riassegnaA,
+                )
+                TextButton(
+                    onClick = azioni.dividiVoce,
+                    enabled = barra.abilitata && barra.dividiAbilitato,
+                    modifier = Modifier.testTag("registrazione-dividi"),
+                ) { Text(ETICHETTA_DIVIDI_VOCE) }
+                TextButton(onClick = azioni.deseleziona) { Text(ETICHETTA_DESELEZIONA) }
+            }
+            barra.spiegazioneDividi?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    modifier = Modifier.testTag("registrazione-dividi-spiegazione"),
+                )
+            }
         }
     }
 }
@@ -157,17 +223,29 @@ private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit) {
 }
 
 @Composable
-private fun ElencoSegmenti(segmenti: List<SegmentoRiga>, azioni: AzioniRegistrazione) {
+private fun ElencoSegmenti(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione) {
+    // AC-209: the selection toggle exists only with the R2 panel (AC-402: none in R1).
+    val selezionabile = stato.pannello != null
     LazyColumn(modifier = Modifier.fillMaxSize().testTag("registrazione-lista")) {
-        items(segmenti, key = { it.segmentoId.numero }) { segmento -> SegmentoItem(segmento, azioni) }
+        items(stato.segmenti, key = { it.segmentoId.numero }) { segmento ->
+            SegmentoItem(
+                segmento,
+                azioni,
+                selezione = if (selezionabile) segmento.segmentoId in stato.selezione else null,
+            )
+        }
     }
 }
 
 /** AC-208: click/'▶' on the row plays from [SegmentoRiga.inizioMs]; the highlight ([SegmentoRiga.inRiproduzione])
  * is the presenter's own live reflection of the shared player, never decided here. */
 @Composable
-private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione) {
-    val sfondo = if (segmento.inRiproduzione) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione, selezione: Boolean?) {
+    val sfondo = when {
+        segmento.inRiproduzione -> MaterialTheme.colorScheme.primaryContainer
+        selezione == true -> MaterialTheme.colorScheme.secondaryContainer
+        else -> Color.Transparent
+    }
     Row(
         verticalAlignment = Alignment.Top,
         modifier = Modifier
@@ -177,6 +255,14 @@ private fun SegmentoItem(segmento: SegmentoRiga, azioni: AzioniRegistrazione) {
             .padding(vertical = PADDING_RIGA)
             .testTag("registrazione-segmento-${segmento.segmentoId.numero}"),
     ) {
+        selezione?.let { selezionato ->
+            Text(
+                text = if (selezionato) "☑" else "☐",
+                modifier = Modifier.clickable { azioni.selezionaSegmento(segmento.segmentoId) }
+                    .padding(end = PADDING_RIGA)
+                    .testTag("registrazione-seleziona-${segmento.segmentoId.numero}"),
+            )
+        }
         Text(
             text = "▶",
             color = MaterialTheme.colorScheme.primary,
