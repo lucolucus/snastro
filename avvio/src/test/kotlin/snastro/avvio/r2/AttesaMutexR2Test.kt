@@ -15,6 +15,7 @@ import snastro.kernel.atteso
 import snastro.persistenza.DatabaseProgetto
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
+import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.Turno
@@ -76,6 +77,39 @@ class AttesaMutexR2Test {
             diarizzatore.prosegui.countDown()
             assertEquals(1, it.conteggi(a).attribuzioni)
             assertTrue(estrattore.thread.none { t -> t.name == AmbienteR2.THREAD_UI }, "mai sul thread della UI")
+        }
+    }
+
+    /**
+     * AC-236 variant WITHOUT holding the pipeline after the Mutex (fix-batch-17): once released, the
+     * diarization returns at once, so the pipeline's completion commit races the command's read-then-
+     * write transaction. Before every transaction began `BEGIN IMMEDIATE` this could fail with
+     * `SQLITE_BUSY_SNAPSHOT`; now one of the two waits (busy_timeout) and both land.
+     */
+    @Test
+    fun `AC-236 il commit di completamento della pipeline non fa fallire il comando in attesa del Mutex`() {
+        val mutex = ReentrantLock(true)
+        val diarizzatore = DiarizzatoreCheTieneIlMutex(mutex)
+        AmbienteR2(radice, diarizzatore, EstrattoreConMutex(mutex)).use {
+            val a = it.importa()
+            it.trascrivi(a)
+            val b = it.importa()
+            diarizzatore.trattieni.set(true)
+            it.r2.r1.avviaElaborazione(AvviaElaborazione(b)).atteso()
+            diarizzatore.inCorso.await()
+
+            val conferma = CoroutineScope(Dispatchers.Default).async {
+                it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(a, 1), "Anna"))
+            }
+            attendiFinche(messaggio = "estrazione in attesa del Mutex") { mutex.hasQueuedThreads() }
+
+            diarizzatore.prosegui.countDown() // the pipeline is NOT held: its completion races the command
+            diarizzatore.rilascia.countDown()
+            assertEquals(Esito.Ok(Unit), runBlocking { conferma.await() }, "nessun SQLITE_BUSY_SNAPSHOT")
+            attendiFinche(messaggio = "elaborazione di b completata") {
+                it.r2.r1.statiElaborazione(listOf(b)).single().stato == StatoElaborazioneVista.COMPLETATA
+            }
+            assertEquals(1, it.conteggi(a).attribuzioni)
         }
     }
 
@@ -212,7 +246,8 @@ class AttesaMutexR2Test {
      * A pipeline step holding the native Mutex for a whole diarization while [trattieni] is set — like
      * `DiarizzatoreSherpa.diarizza`'s single `conSessione` (ADR 0017 §1.1) — until [rilascia]; it then
      * returns only at [prosegui], so the pipeline's own completion commit never races the command's
-     * transaction in this test (that concurrency is `:persistenza`'s, not the Mutex's).
+     * transaction in the first AC-236 test (that concurrency is `:persistenza`'s, not the Mutex's; the
+     * no-hold variant opens [prosegui] first to race it on purpose).
      */
     private class DiarizzatoreCheTieneIlMutex(private val mutex: ReentrantLock) : Diarizzatore {
         private val delegato = DiarizzatoreFinta(AmbienteR2.DUE_VOCI)

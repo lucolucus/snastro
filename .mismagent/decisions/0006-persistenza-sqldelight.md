@@ -64,3 +64,16 @@ never finishing) and it verifies nothing useful while no version has shipped. Us
   shipped version is migrated to current in the same test.
 - Unchanged: forward-only; a committed `.sqm` is never edited once shipped (before the first
   release `1.sqm` may still change — it derives the baseline `user_version = 2`); no down migrations.
+
+## Amendment (b) — 2026-09-24 — every transaction starts with `BEGIN IMMEDIATE` (fix-batch-17)
+- Connection (line "Connection: WAL …") gains: **every transaction begins `BEGIN IMMEDIATE`** +
+  `busy_timeout` (5 s), so concurrent writers (UI commands, the Elaborazione pipeline,
+  RiallineaImpronte) serialize on the write lock instead of failing.
+- Mechanism: `sqlite-jdbc`'s `SQLiteConfig.TransactionMode.IMMEDIATE` alone is **inert** under
+  SQLDelight 2.1.0 — `JdbcSqliteDriver` begins with a literal `BEGIN TRANSACTION` (DEFERRED), never via
+  JDBC `setAutoCommit(false)`, the only path that applies the mode. In WAL a DEFERRED read-then-write
+  transaction whose snapshot went stale failed with `SQLITE_BUSY_SNAPSHOT` (not absorbable by
+  busy_timeout). `:persistenza`'s `driverSqlite` therefore wraps the driver in
+  `DriverSqliteImmediato` (same `ThreadedConnectionManager`, only BEGIN/END/ROLLBACK replaced).
+  Confined to `:persistenza` (CR-3); no retry-on-BUSY. Proven by `UnitaDiLavoroSqlBeginImmediateTest`
+  and the AC-236 no-hold variant in `AttesaMutexR2Test`.
