@@ -646,3 +646,8 @@
 2026-09-24T07:34:35Z	riallinea-impronte	composer	merge	-	-	-	AC-424 test merged 2a4922b
 2026-09-24T07:34:48Z	proposta	worker	dispatch	cycle=0	tier=standard	model=sonnet	bundle r2-e
 2026-09-24T07:34:48Z	parlanti-del-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	bundle r2-e
+2026-09-24T07:37:26Z	registrazione-da-progetto-pa	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	lettore-voci-da-trascrizione	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	lettore-nomi-da-parlanti	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	decodifica-parlanti	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	lettore-nomi-da-parlanti	composer	pre-release	-	-	-	LOW test references parlanti dominio TipoParlante.OCCASIONALE by FQN to dodge Konsist CR-1 import rule — use a parlanti applicazione-level fixture instead
