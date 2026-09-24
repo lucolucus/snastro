@@ -652,3 +652,4 @@
 2026-09-24T07:37:26Z	decodifica-parlanti	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
 2026-09-24T07:37:26Z	lettore-nomi-da-parlanti	composer	pre-release	-	-	-	LOW test references parlanti dominio TipoParlante.OCCASIONALE by FQN to dodge Konsist CR-1 import rule — use a parlanti applicazione-level fixture instead
 2026-09-24T07:37:44Z	schermata-registrazioni-identificazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 S2 badge
+2026-09-24T07:53:15Z	schermata-registrazioni-identificazione	composer	merge	cycle=0	-	-	MERGED b1e2004 (light verify; avvio edge added)
