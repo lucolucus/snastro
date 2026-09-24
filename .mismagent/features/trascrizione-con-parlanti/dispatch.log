@@ -633,3 +633,8 @@
 2026-09-24T07:10:13Z	identificazione-registrazioni identificazione-voci parlanti-attivi proposta-unione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-b
 2026-09-24T07:10:13Z	registrazione-da-progetto-pa lettore-voci-da-trascrizione lettore-nomi-da-parlanti decodifica-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-c
 2026-09-24T07:10:13Z	estratto-audio confronto-impronte abbonato-revisione-parlanti abbonato-riallineamento-impronte	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-d
+2026-09-24T07:11:08Z	(r2-bundles)	composer	note	-	-	-	bundles: r2-a=repository-sql-parlanti; r2-b=identificazione-registrazioni,identificazione-voci,parlanti-attivi,proposta-unione; r2-c=registrazione-da-progetto-pa,lettore-voci-da-trascrizione,lettore-nomi-da-parlanti,decodifica-parlanti; r2-d=estratto-audio,confronto-impronte,abbonato-revisione-parlanti,abbonato-riallineamento-impronte (+AC-424 riallinea test)
+2026-09-24T07:20:37Z	identificazione-registrazioni	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:20:37Z	identificazione-voci	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:20:37Z	parlanti-attivi	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:20:37Z	proposta-unione	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
