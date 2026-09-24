@@ -17,6 +17,7 @@ import snastro.avvio.GrafoR0
 import snastro.avvio.r1.BarraR1
 import snastro.avvio.r1.SchermataR1
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.mappa
 import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
 import snastro.ui.ShellRoute
@@ -168,7 +169,7 @@ internal fun costruisciRegistrazionePresenterR2(
         comandi = r2.comandi,
         unisci = r2.r1.revisione.unisciVoci::esegui,
         dividi = r2.r1.revisione.dividiVoce::esegui,
-        riassegna = r2.r1.revisione.riassegnaSegmento::esegui,
+        riassegna = { r2.r1.revisione.riassegnaSegmento.esegui(it).mappa { } },
         aggiornamenti = collaboratori.aggiornamentiVista,
         clock = grafo.r0.clock,
     ),
