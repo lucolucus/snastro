@@ -108,6 +108,7 @@ private fun ErroreCaricamentoRegistrazione(messaggio: String, onRiprova: () -> U
 private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione) {
     Column(modifier = Modifier.fillMaxSize().padding(PADDING_SCHERMO)) {
         IntestazioneRegistrazione(stato, azioni)
+        stato.bannerRitrascrizione?.let { BannerRitrascrizione(it, stato.bannerRitrascrizionePannello) }
         stato.errore?.let { MessaggioInlineErrore(it, azioni.chiudiErrore) }
         Spacer(modifier = Modifier.height(PADDING_SEZIONE))
         Row(modifier = Modifier.fillMaxSize()) {
@@ -219,6 +220,30 @@ private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit) {
             modifier = Modifier.padding(start = PADDING_RIGA).clickable(onClick = onChiudi)
                 .testTag("registrazione-errore-chiudi"),
         )
+    }
+}
+
+/**
+ * AC-452: the R1 two-line banner (`\n`-joined, [MESSAGGIO_RITRASCRIZIONE_IN_CORSO]) while a re-run is
+ * queued/running. AC-454: [pannello] is the R2 panel's own third line
+ * ([RegistrazioneUiStato.Dati.bannerRitrascrizionePannello]), `null` without the panel block.
+ */
+@Composable
+private fun BannerRitrascrizione(testo: String, pannello: String?) {
+    Surface(
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        modifier = Modifier.fillMaxWidth().testTag("registrazione-banner-ritrascrizione"),
+    ) {
+        Column(modifier = Modifier.padding(PADDING_RIGA)) {
+            Text(text = testo, color = MaterialTheme.colorScheme.onTertiaryContainer)
+            pannello?.let {
+                Text(
+                    text = it,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.testTag("registrazione-banner-ritrascrizione-pannello"),
+                )
+            }
+        }
     }
 }
 

@@ -492,12 +492,15 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `AC-203 COMPLETATA rende la riga apribile`() = runTest {
+    fun `AC-203 AC-450 COMPLETATA con un Trascritto rende la riga apribile`() = runTest {
         var aperta: RegistrazioneId? = null
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
-            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA) } },
+            // ADR 0018: a row opens S3 iff a Trascritto exists (numVoci non-null here derives
+            // trascrittoDisponibile = true in this file's own `statoVista` helper) — no longer "iff
+            // COMPLETATA" on its own.
+            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
             apriRegistrazione = { aperta = it },
         )
         advanceUntilIdle()

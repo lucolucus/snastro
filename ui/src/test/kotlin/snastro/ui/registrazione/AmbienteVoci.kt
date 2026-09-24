@@ -23,6 +23,7 @@ import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
+import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
 import snastro.ui.AggiornamentiVistaFinta
@@ -106,6 +107,9 @@ internal class AmbienteVoci(
     var esitoRevisione: (Any) -> Esito<Unit> = { Esito.Ok(Unit) }
     var esitoComando: (ComandoVoce) -> Esito<Unit> = { Esito.Ok(Unit) }
     var identificazioneRotta = false
+
+    /** ADR 0018 Amendment (b) §2 (AC-452/454): `null` unless a test opts in via `presenter(conStati = true)`. */
+    var statoElaborazione: StatoRegistrazioneVista? = null
     val aggiornamenti = AggiornamentiVistaFinta()
     val lettore = LettoreAudioFinta()
     val comandi = ComandiVoceFinta(progetto, clock) { c -> esitoComando(c).also { if (it is Esito.Ok) applica(c) } }
@@ -165,7 +169,13 @@ internal class AmbienteVoci(
         }
     }
 
-    fun presenter(scope: CoroutineScope, io: CoroutineDispatcher) = RegistrazionePresenter(
+    /**
+     * [conStati] opts a test into the ADR 0018 Amendment (b) §2 wiring — [statoElaborazione] as the
+     * optional `stati` source, and [aggiornamenti] (the SAME instance [sorgenti] already collects) as
+     * the base presenter's own reload trigger too. `false` by default: every pre-existing test stays
+     * on the untouched R2 wiring (no `stati`, no base-level `aggiornamenti`).
+     */
+    fun presenter(scope: CoroutineScope, io: CoroutineDispatcher, conStati: Boolean = false) = RegistrazionePresenter(
         scope = scope,
         io = io,
         registrazioneId = REG,
@@ -174,5 +184,7 @@ internal class AmbienteVoci(
         lettore = lettore,
         apriEsterno = ApriEsternoFinta(),
         parlanti = sorgenti,
+        stati = if (conStati) ({ statoElaborazione }) else null,
+        aggiornamenti = if (conStati) aggiornamenti else null,
     )
 }

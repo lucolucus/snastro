@@ -1,5 +1,6 @@
 package snastro.ui.registrazioni
 
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
 
@@ -35,14 +36,26 @@ sealed interface RegistrazioniUiStato {
 }
 
 /**
- * One row (AC-199..206, AC-342..344). [elaborazione] is `null` when the Trascrizione sources are not
- * supplied to the presenter (R0 variant, AC-342): no status column, no 'Trascrivi'/'Riprova', a row
- * click does nothing. [operazioneInCorso] guards a second `modificaData`/`avviaElaborazione` on this
- * row while one is in flight (M3); [erroreRiga], when set, is a dismissible inline message for the
- * last failed one (H1, AC-206/AC-344 — "nulla cambia" beyond this). [numeroPersone] is the text of the
- * optional 'Numero di persone' field shown next to 'Trascrivi'/'Riprova' (ADR 0014): presenter state only,
- * prefilled on a failed row from its Elaborazione (AC-376), validated when the action fires (AC-375).
+ * One row (AC-199..206, AC-342..344, AC-448..451/475/476). [elaborazione] is `null` when the
+ * Trascrizione sources are not supplied to the presenter (R0 variant, AC-342): no status column, no
+ * 'Trascrivi'/'Riprova', a row click does nothing. [operazioneInCorso] guards a second
+ * `modificaData`/`avviaElaborazione`/`ritrascrivi`/`annullaElaborazione` on this row while one is in
+ * flight (M3); [erroreRiga], when set, is a dismissible inline message for the last failed one (H1,
+ * AC-206/AC-344 — "nulla cambia" beyond this). [numeroPersone] is the text of the optional 'Numero di
+ * persone' field shown next to 'Trascrivi'/'Riprova'/'Ritrascrivi' (ADR 0014): presenter state only,
+ * prefilled on a failed row from its Elaborazione (AC-376) or, with the `ritrascrivi` source supplied,
+ * on a Completata row (AC-448), validated when the action fires (AC-375/AC-449).
+ *
+ * ADR 0018: [trascrittoDisponibile] backs the "a row opens S3 iff a Trascritto exists" rule (replacing
+ * "iff COMPLETATA"); [elaborazioneId] is the id `annullaElaborazione` cancels (`null` only for
+ * `NonAvviata`, AC-474); [ritrascriviDisponibile] is `true` only on a `Completata` row when the
+ * `ritrascrivi` source is supplied (AC-448); [confermaRitrascrivi] shows the inline confirmation in
+ * place of the field/button (AC-449, same style as S4's delete confirmation — never an AWT dialog);
+ * [ritrascrizioneFallita] is the failed re-run's `motivoFallimento` on a `Completata` row (AC-451,
+ * independent of whether `ritrascrivi` is supplied); [annullabile] is `true` only on an `InAttesa` row
+ * when the `annullaElaborazione` source is supplied (AC-475).
  */
+@Suppress("LongParameterList") // one field per AC-199..206/342..344/448..451/475/476 datum of the row
 data class RigaRegistrazione(
     val registrazioneId: RegistrazioneId,
     val titolo: String,
@@ -54,6 +67,12 @@ data class RigaRegistrazione(
     val erroreRiga: String? = null,
     val numeroPersone: String = "",
     val identificazione: IdentificazioneRiga? = null,
+    val trascrittoDisponibile: Boolean = false,
+    val elaborazioneId: ElaborazioneId? = null,
+    val ritrascriviDisponibile: Boolean = false,
+    val confermaRitrascrivi: Boolean = false,
+    val ritrascrizioneFallita: String? = null,
+    val annullabile: Boolean = false,
 )
 
 /**
@@ -84,15 +103,25 @@ sealed interface StatoElaborazioneRiga {
     /** AC-344: no Elaborazione yet for this Registrazione — shows the 'Numero di persone' field + 'Trascrivi'. */
     data object NonAvviata : StatoElaborazioneRiga
 
-    /** AC-203: "In coda ([posizione])". */
-    data class InAttesa(val posizione: Int) : StatoElaborazioneRiga
+    /** AC-203/AC-450: "In coda ([posizione])", or "Ritrascrizione in coda ([posizione])" when
+     * [ritrascrizione] (a Trascritto already exists — a re-run, ADR 0018). */
+    data class InAttesa(val posizione: Int, val ritrascrizione: Boolean = false) : StatoElaborazioneRiga
 
-    /** AC-203: "In corso · [faseEtichetta] · <mm:ss>" — [trascorsoMs] is measured from `avviataAlle`. */
-    data class InCorso(val faseEtichetta: String, val trascorsoMs: Long) : StatoElaborazioneRiga
+    /** AC-203/AC-450: "In corso · [faseEtichetta] · <mm:ss>" — [trascorsoMs] is measured from
+     * `avviataAlle`; "Ritrascrizione in corso · …" when [ritrascrizione]. */
+    data class InCorso(
+        val faseEtichetta: String,
+        val trascorsoMs: Long,
+        val ritrascrizione: Boolean = false,
+    ) : StatoElaborazioneRiga
 
-    /** AC-203: [motivo] + the 'Numero di persone' field (prefilled, AC-376) + 'Riprova'. */
+    /** AC-203: [motivo] + the 'Numero di persone' field (prefilled, AC-376) + 'Riprova' — only for a
+     * FALLITA row WITHOUT a Trascritto (AC-451: one WITH a Trascritto renders as [Completata] instead). */
     data class Fallita(val motivo: String) : StatoElaborazioneRiga
 
-    /** AC-203: a row click opens S3 (the presenter's injected `apriRegistrazione`, out of this block's scope). */
+    /** AC-203/AC-448/AC-451: a row click opens S3 (the presenter's injected `apriRegistrazione`, out
+     * of this block's scope) — [RigaRegistrazione.ritrascrizioneFallita]/[RigaRegistrazione.ritrascriviDisponibile]
+     * carry the ADR 0018 additions (kept on the row, not here, since they are independent of this
+     * marker state). */
     data object Completata : StatoElaborazioneRiga
 }

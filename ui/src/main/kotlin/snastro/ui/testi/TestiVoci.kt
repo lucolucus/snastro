@@ -40,6 +40,10 @@ const val MESSAGGIO_ESTRATTI_NON_DISPONIBILI: String = "Audio non disponibile: g
 const val SPIEGAZIONE_DIVIDI_INTERA_VOCE: String =
     "Hai selezionato tutta la voce: per dividerla lasciane fuori almeno un segmento."
 
+/** ADR 0018 Amendment (b) §2 (AC-454): the panel's own third line of the read-only banner — appended
+ * to the base presenter's two-line [snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO] (AC-452). */
+const val MESSAGGIO_RITRASCRIZIONE_PERSA: String = "Le correzioni e i nomi assegnati andranno persi."
+
 /** Tooltip-free label of a Fascia bar (AC-214: a bar, never a number). */
 const val DESCRIZIONE_FASCIA_FORTE: String = "somiglianza forte"
 const val DESCRIZIONE_FASCIA_DEBOLE: String = "somiglianza debole"
