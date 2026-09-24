@@ -47,6 +47,20 @@ import kotlin.coroutines.cancellation.CancellationException
  * [PortePipeline.segnalatore]`.terminata` always fires, in a `finally`, whatever the outcome. Never
  * decodes the whole Registrazione as an interval: [PortePipeline.decodificatore]`.tutti` reads the
  * whole audio, `.campioni(intervallo)` is for turn/Segmento-scoped work elsewhere (review finding).
+ *
+ * AC-313 (F-G): [esegui] skips any id in [EseguiProssimaElaborazione.esclusi] when picking the FIFO
+ * head, and ALWAYS reports which id it attempted via [RisultatoAvanzamento] —
+ * [Avviata][RisultatoAvanzamento.Avviata] on success,
+ * [AvvioRifiutato][RisultatoAvanzamento.AvvioRifiutato] when the `in_attesa → in_corso` transaction
+ * itself is refused (e.g. a synchronous subscriber that always refuses `ElaborazioneAvviata`). A
+ * refusal is never `Esito.Errore` here: the dispatcher (`:avvio`) needs the id to grow its own
+ * per-session exclusion set, and reads it off [RisultatoAvanzamento] instead of an error payload.
+ *
+ * AC-312's escape (cancellation/interrupt/Error/unexpected exception out of [eseguiSu]) is left
+ * UNCHANGED — it still propagates raw, exactly as before this rework, so existing callers/tests that
+ * check its exact type keep working. [ultimaTentata] is the side-channel for that one case: the id
+ * can't travel through a thrown exception's return type, so the dispatcher reads this property right
+ * after catching whatever escaped [esegui] to learn which id it was.
  */
 public class EseguiProssimaElaborazioneServizio(
     private val uow: UnitaDiLavoro,
@@ -56,14 +70,36 @@ public class EseguiProssimaElaborazioneServizio(
     private val pipeline: PortePipeline,
     private val eventi: DispatcherEventi,
 ) {
-    public fun esegui(ignored: EseguiProssimaElaborazione): Esito<Unit> =
-        uow.inTransazione { avviaLaPiuVecchia() }.poi { elaborazione ->
-            elaborazione?.let { eseguiSu(it) } ?: Esito.Ok(Unit) // AC-68: nessuna in_attesa
-        }
+    /**
+     * The id of the Elaborazione picked as FIFO head by the MOST RECENT [esegui] call, or `null` if
+     * that call never got to pick one (e.g. the repository read itself faulted). Reset at the START
+     * of every [esegui] call, set the moment a head is picked — before the transactional avvio AND
+     * before the pipeline run, so it is already correct by the time either one refuses or escapes.
+     */
+    public var ultimaTentata: ElaborazioneId? = null
+        private set
 
-    /** Reads the oldest `in_attesa` and marks it `in_corso` in ONE transaction (no read/avvia race). */
-    private fun avviaLaPiuVecchia(): Esito<Elaborazione?> {
-        val prossima = elaborazioni.inAttesa().firstOrNull() ?: return Esito.Ok(null) // AC-68: FIFO
+    @Suppress("ReturnCount") // guard clauses, one per RisultatoAvanzamento branch — clearer than nesting
+    public fun esegui(comando: EseguiProssimaElaborazione): Esito<RisultatoAvanzamento> {
+        ultimaTentata = null
+        val esito = uow.inTransazione { avviaLaPiuVecchia(comando.esclusi) }
+        if (esito is Esito.Errore) {
+            return Esito.Ok(RisultatoAvanzamento.AvvioRifiutato(checkNotNull(ultimaTentata), esito.errore))
+        }
+        val elaborazione = (esito as Esito.Ok).valore ?: return Esito.Ok(RisultatoAvanzamento.NessunElemento) // AC-68
+        eseguiSu(elaborazione) // may still escape raw (AC-312) — ultimaTentata is already set for the caller
+        return Esito.Ok(RisultatoAvanzamento.Avviata(elaborazione.id))
+    }
+
+    /**
+     * Reads the oldest `in_attesa` NOT in [esclusi] and marks it `in_corso` in ONE transaction (no
+     * read/avvia race, AC-314's PINNED REQUIREMENT). Sets [ultimaTentata] the moment a head is
+     * picked, BEFORE the transactional avvio runs, so it is known to [esegui] even when the
+     * transaction below is refused and rolled back (AC-313).
+     */
+    private fun avviaLaPiuVecchia(esclusi: Set<ElaborazioneId>): Esito<Elaborazione?> {
+        val prossima = elaborazioni.inAttesa().firstOrNull { it.id !in esclusi } ?: return Esito.Ok(null) // AC-68: FIFO
+        ultimaTentata = prossima.id
         return prossima.avvia(orologio.instant()).poi { evento ->
             elaborazioni.salva(prossima).poi {
                 eventi.pubblica(evento.pubblicato())

@@ -7,51 +7,50 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
-import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import snastro.kernel.ErroreDiProva
-import snastro.kernel.Esito
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.coroutines.cancellation.CancellationException
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.max
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * [CodaElaborazioni] green-on-its-own: `EseguiProssimaElaborazioneServizio` and
- * `RecuperaElaborazioniInterrotteServizio` (`:trascrizione:applicazione`) are never imported here —
- * only the plain function shapes [CodaElaborazioni] actually consumes, per this block's boundary.
- * Time-based scenarios (AC-233/235/312/313) run on
- * [StandardTestDispatcher] with `advanceTimeBy`, never a real sleep; the concurrency guarantee
- * (AC-314) runs on the REAL dedicated single-thread dispatcher with real threads, proven with
- * latches (also never a sleep).
+ * [CodaElaborazioni] green-on-its-own: its collaborators ([FonteAvanzamento] plus two more plain
+ * functions) are all over primitive ids (`avvio/src/main` never imports `snastro.trascrizione`,
+ * `GrafoR0Test`'s AC-350 guard), so every scenario here is driven by a small scripted lambda — no
+ * fake port/repository needed. Time-based scenarios run on [StandardTestDispatcher] with
+ * `advanceTimeBy`, never a real sleep; the concurrency guarantee (AC-314) and the stop protocol
+ * (rework items 3/4) run on the REAL dedicated single-thread dispatcher with real threads, proven
+ * with latches — also never a sleep.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class CodaElaborazioniTest {
     @Test
-    fun `AC-233 all avvio il recupero gira prima di ogni tentativo di avanzamento`() = runTest {
+    fun `AC-233 il recupero gira prima di ogni tentativo di avanzamento`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
+
         CodaElaborazioni(
             scope = scope,
-            eseguiProssimaElaborazione = {
-                ordine += "esegui"
-                Esito.Ok(Unit)
-            },
-            recuperaElaborazioniInterrotte = {
-                ordine += "recupera"
-                Esito.Ok(Unit)
-            },
+            fonte = FonteAvanzamento(
+                prossima = {
+                    ordine += "esegui"
+                    RisultatoTentativo.Nessuno
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = { ordine += "recupera" },
             modelliPronti = { true },
             dispatcherSingoloThread = dispatcher,
         )
-        runCurrent() // basta far girare cio' che e' gia' in coda: nessun advance di tempo necessario
+        runCurrent()
+
         assertEquals("recupera", ordine.first(), "il recupero precede qualunque tentativo di avanzamento")
         assertTrue(ordine.contains("esegui"))
         scope.cancel()
@@ -63,37 +62,50 @@ class CodaElaborazioniTest {
         val scope = CoroutineScope(dispatcher)
         val rimanenti = ArrayDeque(listOf("uno", "due"))
         val completate = mutableListOf<String>()
+
         CodaElaborazioni(
             scope = scope,
-            eseguiProssimaElaborazione = {
-                rimanenti.removeFirstOrNull()?.let { completate += it }
-                Esito.Ok(Unit)
-            },
-            recuperaElaborazioniInterrotte = { Esito.Ok(Unit) },
+            fonte = FonteAvanzamento(
+                prossima = { esclusi ->
+                    val id = rimanenti.firstOrNull { it !in esclusi }
+                    if (id == null) {
+                        RisultatoTentativo.Nessuno
+                    } else {
+                        rimanenti.remove(id)
+                        completate += id
+                        RisultatoTentativo.Avviata(id)
+                    }
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = {},
             modelliPronti = { true },
             dispatcherSingoloThread = dispatcher,
         )
-        // Un solo avanzamento (quello automatico all'avvio) drena da sola tutta la coda gia'
-        // in_attesa: nessun secondo trigger esterno serve perche' la seconda parta.
         advanceTimeBy(5_000)
         runCurrent()
+
         assertEquals(listOf("uno", "due"), completate, "la seconda parte solo dopo che la prima e' conclusa")
         scope.cancel()
     }
 
     @Test
-    fun `AC-235 con i modelli mancanti le Elaborazioni restano in attesa finche non diventano pronti`() = runTest {
+    fun `AC-235 con i modelli mancanti la coda resta in attesa finche non diventano pronti`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(dispatcher)
         var pronti = false
         val chiamate = AtomicInteger(0)
+
         CodaElaborazioni(
             scope = scope,
-            eseguiProssimaElaborazione = {
-                chiamate.incrementAndGet()
-                Esito.Ok(Unit)
-            },
-            recuperaElaborazioniInterrotte = { Esito.Ok(Unit) },
+            fonte = FonteAvanzamento(
+                prossima = {
+                    chiamate.incrementAndGet()
+                    RisultatoTentativo.Nessuno
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = {},
             modelliPronti = { pronti },
             dispatcherSingoloThread = dispatcher,
         )
@@ -109,96 +121,119 @@ class CodaElaborazioniTest {
     }
 
     @Test
-    fun `AC-312 un escape da esegui fa girare il recupero prima del prossimo elemento e non ferma il worker`() =
-        runTest {
+    fun `AC-312 un escape non ferma il worker che ritenta e riesce`() = runTest {
+        for (guasto in listOf<Throwable>(OutOfMemoryError("di prova"), InterruptedException("di prova"))) {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val scope = CoroutineScope(dispatcher)
             val primaVolta = AtomicBoolean(true)
+            val completate = mutableListOf<String>()
             val recuperi = AtomicInteger(0)
-            val eseguite = AtomicInteger(0)
-            val coda = CodaElaborazioni(
+
+            CodaElaborazioni(
                 scope = scope,
-                eseguiProssimaElaborazione = {
-                    eseguite.incrementAndGet()
-                    if (primaVolta.compareAndSet(true, false)) throw OutOfMemoryError("di prova")
-                    Esito.Ok(Unit)
-                },
-                recuperaElaborazioniInterrotte = {
-                    recuperi.incrementAndGet()
-                    Esito.Ok(Unit)
-                },
+                fonte = FonteAvanzamento(
+                    prossima = {
+                        if (primaVolta.compareAndSet(true, false)) throw guasto
+                        if (completate.isEmpty()) {
+                            completate += "id-1"
+                            RisultatoTentativo.Avviata("id-1")
+                        } else {
+                            RisultatoTentativo.Nessuno
+                        }
+                    },
+                    ultimaTentata = { "id-1" },
+                ),
+                recuperaElaborazioniInterrotte = { recuperi.incrementAndGet() },
                 modelliPronti = { true },
                 dispatcherSingoloThread = dispatcher,
             )
             advanceTimeBy(3_000)
             runCurrent()
+
+            assertEquals(listOf("id-1"), completate, "il ritentativo dopo l'escape riesce")
             assertEquals(2, recuperi.get(), "il recupero dell'avvio (AC-233) piu' quello dopo l'escape (AC-312)")
-            assertTrue(eseguite.get() >= 2, "il worker riprende a chiamare esegui dopo l'escape, non muore")
-            assertTrue(coda.lavoro.isActive, "il worker resta vivo")
             scope.cancel()
+            Thread.interrupted() // pulisce il flag per l'iterazione/test successivo
         }
+    }
 
     @Test
-    fun `AC-312 una CancellationException un InterruptedException e un errore inatteso non fermano il worker`() =
-        runTest {
-            for (fallimentoFabbrica in listOf<() -> Throwable>(
-                { CancellationException("di prova") },
-                { InterruptedException("di prova") },
-                { IllegalStateException("inattesa") },
-            )) {
-                val dispatcher = StandardTestDispatcher(testScheduler)
-                val scope = CoroutineScope(dispatcher)
-                val primaVolta = AtomicBoolean(true)
-                val eseguite = AtomicInteger(0)
-                val coda = CodaElaborazioni(
-                    scope = scope,
-                    eseguiProssimaElaborazione = {
-                        eseguite.incrementAndGet()
-                        if (primaVolta.compareAndSet(true, false)) throw fallimentoFabbrica()
-                        Esito.Ok(Unit)
-                    },
-                    recuperaElaborazioniInterrotte = { Esito.Ok(Unit) },
-                    modelliPronti = { true },
-                    dispatcherSingoloThread = dispatcher,
-                )
-                advanceTimeBy(3_000)
-                runCurrent()
-                val nome = fallimentoFabbrica()::class.simpleName
-                assertTrue(eseguite.get() >= 2, "il worker riprende dopo $nome")
-                assertTrue(coda.lavoro.isActive)
-                scope.cancel()
-                // Il caso InterruptedException fa ripristinare il flag di interruzione sul thread
-                // chiamante (stesso comportamento di eseguiFase/DispatcherEventiInMemoria): lo si
-                // consuma qui perche' non trapeli nell'iterazione successiva o nel resto del test.
-                Thread.interrupted()
-            }
-        }
-
-    @Test
-    fun `AC-313 un avvio sempre rifiutato non gira a vuoto e si blocca per la sessione`() = runTest {
+    fun `AC-313 un avvio sempre rifiutato viene escluso dopo 3 tentativi, la seconda parte`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(dispatcher)
-        val chiamate = AtomicInteger(0)
-        val bloccata = AtomicInteger(0)
-        val coda = CodaElaborazioni(
+        val tentativi = AtomicInteger(0)
+        val completate = mutableListOf<String>()
+        val bloccate = mutableListOf<String>()
+
+        CodaElaborazioni(
             scope = scope,
-            eseguiProssimaElaborazione = {
-                chiamate.incrementAndGet()
-                Esito.Errore(ErroreDiProva.Fallito("un abbonato sincrono rifiuta sempre"))
-            },
-            recuperaElaborazioniInterrotte = { Esito.Ok(Unit) },
+            fonte = FonteAvanzamento(
+                prossima = { esclusi ->
+                    when {
+                        "vecchia" !in esclusi -> {
+                            tentativi.incrementAndGet()
+                            RisultatoTentativo.Rifiutata("vecchia")
+                        }
+                        completate.isEmpty() -> {
+                            completate += "recente"
+                            RisultatoTentativo.Avviata("recente")
+                        }
+                        else -> RisultatoTentativo.Nessuno
+                    }
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = {},
             modelliPronti = { true },
-            segnalaCodaBloccata = { bloccata.incrementAndGet() },
+            segnalaElaborazioneBloccata = { bloccate += it },
             dispatcherSingoloThread = dispatcher,
         )
-        advanceUntilIdle() // dopo il blocco il worker non riprogramma piu' nulla: termina di avanzare
-        val chiamateAlBlocco = chiamate.get()
-        assertEquals(3, chiamateAlBlocco, "tentativi limitati (non gira a vuoto)")
-        assertEquals(1, bloccata.get(), "segnalato esattamente una volta")
+        advanceTimeBy(10_000)
+        runCurrent()
 
-        coda.avanza() // un ulteriore trigger, esterno, dopo il blocco
-        advanceUntilIdle()
-        assertEquals(chiamateAlBlocco, chiamate.get(), "nessun ulteriore tentativo: bloccata per la sessione")
+        assertEquals(3, tentativi.get(), "tentativi limitati, non gira a vuoto")
+        assertEquals(listOf("vecchia"), bloccate, "segnalato esattamente una volta")
+        assertEquals(listOf("recente"), completate, "gli altri elementi proseguono")
+        scope.cancel()
+    }
+
+    @Test
+    fun `AC-313 rework item 2 - gli escape contano come i rifiuti ed escludono dopo 3 tentativi`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val scope = CoroutineScope(dispatcher)
+        val tentativi = AtomicInteger(0)
+        val completate = mutableListOf<String>()
+        val bloccate = mutableListOf<String>()
+
+        CodaElaborazioni(
+            scope = scope,
+            fonte = FonteAvanzamento(
+                prossima = { esclusi ->
+                    when {
+                        "vecchia" !in esclusi -> {
+                            tentativi.incrementAndGet()
+                            throw OutOfMemoryError("di prova")
+                        }
+                        completate.isEmpty() -> {
+                            completate += "recente"
+                            RisultatoTentativo.Avviata("recente")
+                        }
+                        else -> RisultatoTentativo.Nessuno
+                    }
+                },
+                ultimaTentata = { "vecchia" },
+            ),
+            recuperaElaborazioniInterrotte = {},
+            modelliPronti = { true },
+            segnalaElaborazioneBloccata = { bloccate += it },
+            dispatcherSingoloThread = dispatcher,
+        )
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        assertEquals(3, tentativi.get(), "tre escape, poi esclusa")
+        assertEquals(listOf("vecchia"), bloccate)
+        assertEquals(listOf("recente"), completate, "gli altri elementi proseguono")
         scope.cancel()
     }
 
@@ -206,20 +241,30 @@ class CodaElaborazioniTest {
     fun `AC-313 i tentativi sono distanziati da un back off crescente, mai a distanza zero`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(dispatcher)
-        val istantiChiamata = mutableListOf<Long>()
+        val istanti = mutableListOf<Long>()
+
         CodaElaborazioni(
             scope = scope,
-            eseguiProssimaElaborazione = {
-                istantiChiamata += testScheduler.currentTime
-                Esito.Errore(ErroreDiProva.Fallito("rifiutato"))
-            },
-            recuperaElaborazioniInterrotte = { Esito.Ok(Unit) },
+            fonte = FonteAvanzamento(
+                prossima = { esclusi ->
+                    if ("id-1" in esclusi) {
+                        RisultatoTentativo.Nessuno
+                    } else {
+                        istanti += testScheduler.currentTime
+                        RisultatoTentativo.Rifiutata("id-1")
+                    }
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = {},
             modelliPronti = { true },
             dispatcherSingoloThread = dispatcher,
         )
-        advanceUntilIdle()
-        assertEquals(3, istantiChiamata.size)
-        val distanze = istantiChiamata.zipWithNext { a, b -> b - a }
+        advanceTimeBy(10_000)
+        runCurrent()
+
+        assertEquals(3, istanti.size)
+        val distanze = istanti.zipWithNext { a, b -> b - a }
         assertTrue(distanze.all { it > 0 }, "mai un tentativo a distanza zero")
         assertTrue(distanze[1] > distanze[0], "il back-off cresce: ${distanze[0]} poi ${distanze[1]}")
         scope.cancel()
@@ -229,28 +274,29 @@ class CodaElaborazioniTest {
     fun `AC-314 due richieste concorrenti di avanzamento non eseguono mai due Elaborazioni insieme`() {
         val dentro = CountDownLatch(1)
         val procedi = CountDownLatch(1)
-        val primaCompletata = CountDownLatch(1)
         val primaVolta = AtomicBoolean(true)
         val concorrenti = AtomicInteger(0)
         val massimoConcorrenti = AtomicInteger(0)
         val scope = CoroutineScope(Dispatchers.Default + Job())
+
         val coda = CodaElaborazioni(
             scope = scope,
-            eseguiProssimaElaborazione = {
-                val n = concorrenti.incrementAndGet()
-                massimoConcorrenti.updateAndGet { max(it, n) }
-                if (primaVolta.compareAndSet(true, false)) {
-                    dentro.countDown()
-                    assertTrue(procedi.await(10, TimeUnit.SECONDS), "il test avrebbe dovuto sbloccare in tempo")
-                }
-                concorrenti.decrementAndGet()
-                primaCompletata.countDown()
-                Esito.Ok(Unit)
-            },
-            recuperaElaborazioniInterrotte = { Esito.Ok(Unit) },
+            fonte = FonteAvanzamento(
+                prossima = {
+                    val n = concorrenti.incrementAndGet()
+                    massimoConcorrenti.updateAndGet { max(it, n) }
+                    if (primaVolta.compareAndSet(true, false)) {
+                        dentro.countDown()
+                        assertTrue(procedi.await(10, TimeUnit.SECONDS), "il test avrebbe dovuto sbloccare in tempo")
+                    }
+                    concorrenti.decrementAndGet()
+                    RisultatoTentativo.Avviata("id-1")
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = {},
             modelliPronti = { true },
         )
-        coda.avanza()
         assertTrue(dentro.await(10, TimeUnit.SECONDS), "la prima esecuzione avrebbe dovuto partire")
 
         val via = CountDownLatch(1)
@@ -266,9 +312,62 @@ class CodaElaborazioniTest {
         assertTrue(fili.none(Thread::isAlive), "tutti i thread di stimolo devono terminare in tempo")
 
         assertEquals(1, massimoConcorrenti.get(), "mai piu' di un'esecuzione concorrente (AC-314)")
-
         procedi.countDown()
-        assertTrue(primaCompletata.await(10, TimeUnit.SECONDS))
+        scope.cancel() // il worker riprogramma sempre: senza annullare lo scope non terminerebbe mai da solo
+        assertTrue(coda.fermaEAttendi(10_000))
+    }
+
+    @Test
+    fun `rework item 3 - ferma e attendi interrompe una chiamata bloccata e il worker termina`() {
+        val bloccato = CountDownLatch(1)
+        val maiSbloccato = CountDownLatch(1) // mai contato: la chiamata resta bloccata finche' non e' interrotta
+        val scope = CoroutineScope(Dispatchers.Default + Job())
+
+        val coda = CodaElaborazioni(
+            scope = scope,
+            fonte = FonteAvanzamento(
+                prossima = {
+                    bloccato.countDown()
+                    maiSbloccato.await() // interrompibile: runInterruptible deve svegliarlo via Thread.interrupt()
+                    error("mai raggiunto")
+                },
+                ultimaTentata = { null },
+            ),
+            recuperaElaborazioniInterrotte = {},
+            modelliPronti = { true },
+        )
+        assertTrue(bloccato.await(10, TimeUnit.SECONDS), "la chiamata bloccante avrebbe dovuto partire")
+
+        scope.cancel() // passo 1: annulla lo scope
+        val fermato = coda.fermaEAttendi(10_000) // passo 2: attende con un timeout
+
+        assertTrue(fermato, "il worker termina perche' runInterruptible interrompe il thread bloccato")
+    }
+
+    @Test
+    fun `rework item 4 - dopo un InterruptedException il flag viene pulito sul thread reale, non lasciato`() {
+        val primaVolta = AtomicBoolean(true)
+        val flagAllaSeconda = AtomicReference<Boolean>()
+        val seconda = CountDownLatch(1)
+        val scope = CoroutineScope(Dispatchers.Default + Job())
+
+        CodaElaborazioni(
+            scope = scope,
+            fonte = FonteAvanzamento(
+                prossima = {
+                    if (primaVolta.compareAndSet(true, false)) throw InterruptedException("di prova")
+                    flagAllaSeconda.set(Thread.currentThread().isInterrupted)
+                    seconda.countDown()
+                    RisultatoTentativo.Avviata("id-1")
+                },
+                ultimaTentata = { "id-1" },
+            ),
+            recuperaElaborazioniInterrotte = {},
+            modelliPronti = { true },
+        )
+
+        assertTrue(seconda.await(10, TimeUnit.SECONDS), "il ritentativo dopo l'escape avrebbe dovuto partire")
+        assertEquals(false, flagAllaSeconda.get(), "il flag di interruzione deve essere stato ripulito, non lasciato")
         scope.cancel()
     }
 }
