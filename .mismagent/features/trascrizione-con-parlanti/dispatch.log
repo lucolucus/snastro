@@ -644,3 +644,5 @@
 2026-09-24T07:34:35Z	abbonato-revisione-parlanti	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
 2026-09-24T07:34:35Z	abbonato-riallineamento-impronte	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
 2026-09-24T07:34:35Z	riallinea-impronte	composer	merge	-	-	-	AC-424 test merged 2a4922b
+2026-09-24T07:34:48Z	proposta	worker	dispatch	cycle=0	tier=standard	model=sonnet	bundle r2-e
+2026-09-24T07:34:48Z	parlanti-del-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	bundle r2-e
