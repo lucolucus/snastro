@@ -66,6 +66,7 @@ public class TrascrittoRepositorySql(private val db: SnastroDatabase) : Trascrit
                 inizioMs = s.intervallo.inizioMs,
                 fineMs = s.intervallo.fineMs,
                 testo = s.testo,
+                confermato = if (s.confermato) 1L else 0L,
             )
         }
     }
@@ -73,4 +74,10 @@ public class TrascrittoRepositorySql(private val db: SnastroDatabase) : Trascrit
 
 /** [Segmento] is a plain read-copy VO (CR-15 gates only the aggregate's own `ricostituisci`). */
 private fun SegmentoRiga.inDominio(): Segmento =
-    Segmento(SegmentoId(numero.toInt()), VoceId(voce_numero.toInt()), IntervalloMs(inizio_ms, fine_ms), testo)
+    Segmento(
+        SegmentoId(numero.toInt()),
+        VoceId(voce_numero.toInt()),
+        IntervalloMs(inizio_ms, fine_ms),
+        testo,
+        confermato = confermato != 0L,
+    )
