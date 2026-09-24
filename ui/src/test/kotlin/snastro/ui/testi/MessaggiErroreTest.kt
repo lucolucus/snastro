@@ -161,6 +161,7 @@ class MessaggiErroreTest {
                 ErroreParlanti.NomeVuoto,
                 ErroreParlanti.VoceGiaAttribuita(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
                 ErroreParlanti.VoceCambiata(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
+                ErroreParlanti.RiferimentiInsufficienti(RegistrazioneId("id-1")),
             ),
         ) { messaggioPer(it) }
     }
