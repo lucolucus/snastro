@@ -3,19 +3,13 @@ package snastro.avvio.r2
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.runInterruptible
 import snastro.kernel.Esito
+import snastro.kernel.RegistrazioneId
+import snastro.kernel.SegmentoId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzione
 import snastro.parlanti.applicazione.comandi.ObiettivoAttribuzione
@@ -25,9 +19,10 @@ import snastro.parlanti.dominio.TipoParlante
 import snastro.ui.registrazione.ComandiVoce
 import snastro.ui.registrazione.ComandoVoce
 import snastro.ui.registrazione.ErroreComandoVoce
+import snastro.ui.registrazione.FraseRef
+import snastro.ui.registrazione.PassiNominaFrase
 import snastro.ui.registrazione.StatoComando
 import java.time.Clock
-import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -37,8 +32,8 @@ import java.util.logging.Logger
  * project's other workers — never in the S3 screen's scope: leaving S3 does not cancel it (AC-415),
  * closing the project does (the session scope is [progetto]'s parent, `CollaboratoriR2.ferma` joins it).
  *
- * - The job is REGISTERED in [lavori] (and in [stato]) BEFORE it starts ([CoroutineStart.LAZY]): an
- *   [annulla] right after the click is never lost.
+ * - The job is REGISTERED (and in [stato]) BEFORE it starts ([LavoriPerChiave]): an [annulla] right
+ *   after the click is never lost.
  * - [esecutore] is the command body; in the app it is [eseguiConServizi]: the blocking service under
  *   `runInterruptible(bg)`, so [annulla] interrupts a thread waiting on the native Mutex
  *   (`lockInterruptibly`, ADR 0017 §1.4) and nothing is written (the wait happens before any transaction).
@@ -46,66 +41,51 @@ import java.util.logging.Logger
  *   inline message and the port stays usable.
  * - At most one command per [VoceRef]: S3 disables a pending card (AC-411), so a second [esegui] for a
  *   [VoceRef] already running JOINS that one instead of starting a second write.
+ * - ADR 0019 §5: [nominaFrase] is the same machinery keyed by [FraseRef] ([statoFrasi], [annullaFrase]),
+ *   with [esecutoreFrase] as the body — in the app [eseguiFraseConServizi].
  */
 internal class ComandiVoceProgetto(
     progetto: CoroutineScope,
-    private val clock: Clock,
+    clock: Clock,
     private val esecutore: suspend (ComandoVoce) -> Esito<Unit>,
+    private val esecutoreFrase: suspend (FraseRef, PassiNominaFrase) -> Esito<Unit> = { _, _ -> Esito.Ok(Unit) },
 ) : ComandiVoce {
     private val scope = CoroutineScope(progetto.coroutineContext + SupervisorJob(progetto.coroutineContext[Job]))
-    private val lavori = ConcurrentHashMap<VoceRef, Deferred<Esito<Unit>>>()
-    private val _stato = MutableStateFlow<Map<VoceRef, StatoComando>>(emptyMap())
-    override val stato: StateFlow<Map<VoceRef, StatoComando>> = _stato.asStateFlow()
+    private val voci = LavoriPerChiave<VoceRef>(scope, clock)
+    private val frasi = LavoriPerChiave<FraseRef>(scope, clock)
+    override val stato: StateFlow<Map<VoceRef, StatoComando>> = voci.stato
+    override val statoFrasi: StateFlow<Map<FraseRef, StatoComando>> = frasi.stato
 
-    override suspend fun esegui(comando: ComandoVoce): Esito<Unit>? {
-        val ref = comando.voceRef
-        val nuovo = scope.async(start = CoroutineStart.LAZY) { protetto(comando) }
-        val lavoro = registra(ref, nuovo)
-        return try {
-            lavoro.await()
-        } catch (e: CancellationException) {
-            // Cancelled by `annulla` or by the project's close → `null` (not an error, AC-413/AC-419);
-            // the CALLER itself cancelled (leaving S3) → rethrow, the command goes on (AC-415).
-            if (currentCoroutineContext().isActive) null else throw e
+    override suspend fun esegui(comando: ComandoVoce): Esito<Unit>? =
+        voci.esegui(comando.voceRef) {
+            protetto("comando ${comando::class.simpleName} su ${comando.voceRef}") { esecutore(comando) }
+        }
+
+    override fun annulla(voceRef: VoceRef) = voci.annulla(voceRef)
+
+    /** ADR 0019 §5: the naming steps of [segmentoId], same scope/pending state/cancellation as [esegui]. */
+    override suspend fun nominaFrase(
+        registrazioneId: RegistrazioneId,
+        segmentoId: SegmentoId,
+        passi: PassiNominaFrase,
+    ): Esito<Unit>? {
+        val ref = FraseRef(registrazioneId, segmentoId)
+        return frasi.esegui(ref) {
+            protetto("nominaFrase ${passi::class.simpleName} su $ref") { esecutoreFrase(ref, passi) }
         }
     }
 
-    override fun annulla(voceRef: VoceRef) {
-        lavori[voceRef]?.cancel()
-    }
+    override fun annullaFrase(frase: FraseRef) = frasi.annulla(frase)
 
-    /** [nuovo] registered and started, or — a command already running for [ref] — that one ([nuovo] dropped). */
-    private fun registra(ref: VoceRef, nuovo: Deferred<Esito<Unit>>): Deferred<Esito<Unit>> {
-        while (true) {
-            val esistente = lavori.putIfAbsent(ref, nuovo) ?: return avvia(ref, nuovo)
-            if (!esistente.isCompleted) {
-                nuovo.cancel()
-                return esistente
-            }
-            lavori.remove(ref, esistente) // ended, its completion handler not run yet: never join a stale result
-        }
-    }
-
-    private fun avvia(ref: VoceRef, lavoro: Deferred<Esito<Unit>>): Deferred<Esito<Unit>> {
-        val inCorso = StatoComando(clock.instant())
-        _stato.update { it + (ref to inCorso) }
-        lavoro.invokeOnCompletion {
-            _stato.update { attuale -> if (attuale[ref] === inCorso) attuale - ref else attuale }
-            lavori.remove(ref, lavoro)
-        }
-        lavoro.start()
-        return lavoro
-    }
-
-    private suspend fun protetto(comando: ComandoVoce): Esito<Unit> = try {
-        esecutore(comando)
+    private suspend fun protetto(descrizione: String, corpo: suspend () -> Esito<Unit>): Esito<Unit> = try {
+        corpo()
     } catch (e: CancellationException) {
         throw e
     } catch (
         // A decode/extraction/SQL fault (ADR 0003): nothing was committed; the card shows it, the port lives on.
         @Suppress("TooGenericExceptionCaught") e: Exception,
     ) {
-        log.log(Level.WARNING, "comando ${comando::class.simpleName} su ${comando.voceRef} fallito", e)
+        log.log(Level.WARNING, "$descrizione fallito", e)
         Esito.Errore(ErroreComandoVoce.NonRiuscito)
     }
 
@@ -139,6 +119,19 @@ internal class ComandiVoceProgetto(
                     is ComandoVoce.Salta -> salta(SaltaVoce(comando.voceRef))
                 }
             }
+        }
+
+        /**
+         * The app's naming body (ADR 0019 §5): the [PassiNominaFrase] steps as SEPARATE commands, in order,
+         * all inside ONE `runInterruptible(bg)` — a cancellation interrupts the step waiting on the native
+         * Mutex (the `ConfermaAttribuzione` extraction) and skips the ones not yet run; the committed ones stay.
+         * Glue only: which steps is the S3 presenter's decision, every rule is its command's.
+         */
+        fun eseguiFraseConServizi(
+            bg: CoroutineDispatcher,
+            servizi: ServiziFrase,
+        ): suspend (FraseRef, PassiNominaFrase) -> Esito<Unit> = { frase, passi ->
+            runInterruptible(bg) { servizi.esegui(frase, passi) }
         }
 
         private fun TipoParlanteVista.dominio(): TipoParlante = when (this) {

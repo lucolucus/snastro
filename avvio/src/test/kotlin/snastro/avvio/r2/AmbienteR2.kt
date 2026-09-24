@@ -26,6 +26,7 @@ import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
+import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.dominio.Impronta
@@ -67,6 +68,7 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as Decodific
  * [contesto] is the extension context of the open project (its database and dispatcher), captured as
  * `SessioneProgettoImpl` hands it over — what a test needs to observe rows and events.
  */
+@Suppress("LongParameterList") // one parameter per faked edge of the composition
 internal class AmbienteR2(
     radice: Path,
     diarizzatore: Diarizzatore = DiarizzatoreFinta(DUE_VOCI),
@@ -74,6 +76,8 @@ internal class AmbienteR2(
     proposte: Boolean = true,
     chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
     rilasciaMl: () -> Unit = {},
+    decodificatoreParlanti: DecodificatoreAudio = DecodificatoreParlantiFinta(),
+    private val durataMs: Long = DURATA_MS,
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
@@ -104,7 +108,7 @@ internal class AmbienteR2(
         io = Dispatchers.IO,
         clock = orologioApp(),
         generatoreId = GeneratoreIdUuid(),
-        adattatori = { AdattatoriParlanti(estrattore, { DecodificatoreParlantiFinta() }, proposte, rilasciaMl) },
+        adattatori = { AdattatoriParlanti(estrattore, { decodificatoreParlanti }, proposte, rilasciaMl) },
     )
 
     val sessione = SessioneProgettoImpl(
@@ -114,7 +118,7 @@ internal class AmbienteR2(
         scopeGenitore = scope,
         seams = SessioneProgettoSeams(
             sondaAudio = {
-                SondaAudioFinta(mapOf(sorgente.toString() to InfoAudio(DURATA_MS, LocalDate.parse("2026-01-01"))))
+                SondaAudioFinta(mapOf(sorgente.toString() to InfoAudio(durataMs, LocalDate.parse("2026-01-01"))))
             },
             chiudiDatabase = chiudiDatabase,
         ),
@@ -162,7 +166,7 @@ internal class AmbienteR2(
 
     /** Makes [id]'s copied audio decodable by the fake decoder — also a Registrazione imported by another session. */
     fun rendiLeggibile(id: RegistrazioneId) {
-        sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS // minting rule of RiferimentoAudio
+        sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = durataMs // minting rule of RiferimentoAudio
     }
 
     /** 'Trascrivi' through R1's own command, then waits until its Trascritto is there. */

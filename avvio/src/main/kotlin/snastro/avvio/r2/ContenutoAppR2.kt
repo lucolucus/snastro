@@ -116,7 +116,8 @@ private fun SchermataRegistrazioneR2(
  * S2 as R1's (AC-355, 'Annulla' AC-478) plus the identification badge ([LettureParlanti.identificazioni],
  * AC-204/AC-345) and 'Ritrascrivi' (ADR 0018, AC-457): offered only here, by the composition that registers
  * the synchronous Parlanti purge (`EstensioneR2`). It is R1's own `AvviaElaborazione` over
- * `eventi.unitaDiLavoro`, which also nudges the queue.
+ * `eventi.unitaDiLavoro`, which also nudges the queue — through [CollaboratoriR2.avviaElaborazione], which then
+ * drops that Registrazione's similarity computation or preview (AC-537).
  */
 internal fun costruisciRegistrazioniPresenterR2(
     grafo: GrafoR0,
@@ -134,15 +135,17 @@ internal fun costruisciRegistrazioniPresenterR2(
     aggiornamenti = collaboratori.aggiornamentiVista,
     clock = grafo.clock,
     statiElaborazione = r2.r1.statiElaborazione,
-    avviaElaborazione = r2.r1::avviaElaborazione,
+    avviaElaborazione = r2::avviaElaborazione,
     apriRegistrazione = apriRegistrazione,
     identificazioni = r2.letture.identificazioni,
-    ritrascrivi = r2.r1::avviaElaborazione,
+    ritrascrivi = r2::avviaElaborazione,
     annullaElaborazione = r2.r1.annullaElaborazione,
 )
 
 /**
- * S3 with the R2 sources: the Voci panel, the Nome labels, the card commands (AC-418), the Revisione UI; plus
+ * S3 with the R2 sources: the Voci panel, the Nome labels, the card commands (AC-418) and namings (ADR 0019
+ * §5), 'Togli conferma', 'Riassegna per somiglianza' (the per-project [AzioniSomiglianzaProgetto]), the
+ * Revisione UI; plus
  * the latest run's state of [id] and the project's AggiornamentiVista (ADR 0018 Amendment (b) §2): READ-ONLY
  * while a re-run is queued or running, editable again on the Cambiamento that ends it (AC-461).
  */
@@ -172,6 +175,8 @@ internal fun costruisciRegistrazionePresenterR2(
         riassegna = { r2.r1.revisione.riassegnaSegmento.esegui(it).mappa { } },
         aggiornamenti = collaboratori.aggiornamentiVista,
         clock = grafo.r0.clock,
+        confermaSegmento = r2.confermaSegmento,
+        somiglianza = r2.somiglianza,
     ),
     stati = { r2.r1.statiElaborazione(listOf(id)).firstOrNull() },
     aggiornamenti = collaboratori.aggiornamentiVista,

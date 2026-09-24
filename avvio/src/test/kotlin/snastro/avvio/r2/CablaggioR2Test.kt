@@ -78,6 +78,16 @@ class CablaggioR2Test {
         assertEquals(ids.distinct(), ids)
     }
 
+    @Test
+    fun `AC-541 il piano usa il classificatore coseno con SIMILARITA_MINIMA e MARGINE_MINIMO`() {
+        assertEquals(
+            1,
+            righeCon("ClassificatoreSomiglianzaCoseno(SoglieSomiglianza(SIMILARITA_MINIMA, MARGINE_MINIMO))").size,
+        )
+        assertTrue(righeCon("RiassegnaSegmentiServizio(uow,").isNotEmpty(), "RiassegnaSegmenti, eventi.unitaDiLavoro")
+        assertTrue(righeCon("ConfermaSegmentoServizio(uow,").isNotEmpty(), "ConfermaSegmento con eventi.unitaDiLavoro")
+    }
+
     private fun modelli(): ProvisioningModelli =
         ProvisioningModelli(SelezioneAdattatoriMl.catalogo(SceltaMl.REALI), Files.createTempDirectory("modelli"))
 }
