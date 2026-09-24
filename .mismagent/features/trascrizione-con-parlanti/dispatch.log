@@ -639,3 +639,8 @@
 2026-09-24T07:20:37Z	parlanti-attivi	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
 2026-09-24T07:20:37Z	proposta-unione	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
 2026-09-24T07:33:23Z	repository-sql-parlanti	composer	merge	cycle=0	-	-	MERGED 9278fe3 (bundle r2-a, light verify, 31 tests)
+2026-09-24T07:34:35Z	estratto-audio	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	confronto-impronte	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	abbonato-revisione-parlanti	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	abbonato-riallineamento-impronte	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	riallinea-impronte	composer	merge	-	-	-	AC-424 test merged 2a4922b
