@@ -273,6 +273,15 @@ public sealed interface RegistrazioneUiStato {
 - Per screen: `<X>Presenter` (state holder, unit-tested) · sealed immutable `<X>UiStato` ·
   `Azioni<X>` (lambdas, **one per user action** [user K-c]) · stateless `Schermata<X>` · one-line
   `<X>Route`. Presenters call only `applicazione` (RC-2); composables hold no logic and no I/O.
+- *(amended 2026-09-24, pre-release L478c)* **Function-typed collaborators.** A presenter
+  constructor parameter MAY be a plain function type — `() -> List<X>` for a query, `(Cmd) ->
+  Esito<Unit>` for a command — bound to a collaborator's single public method (a `*Servizio`'s
+  `esegui`, CR-16) instead of the whole typed object, when the presenter calls only that one
+  method: `RegistrazioniPresenter`, `ParlantiPresenter`, `RegistrazionePresenter`, `StatoVoci`
+  already do this (e.g. `private val rinominaParlante: (RinominaParlante) -> Esito<Unit>`, wired
+  as `rinominaParlanteServizio::esegui`). Same test/production wiring as the typed form above —
+  a fake presenter test just passes a lambda instead of a fake service instance; it is not a
+  weaker seam, only a leaner one for a single-method dependency (frugality ladder rung 5).
 - `:ui:renderCheck` renders `Schermata<X>` directly from fixture `UiStato` values (every state).
 - UI strings in `snastro.ui.testi` (Italian only, v1). `MessaggiErrore.kt` *(amended 2026-09-23,
   R25)*: one `messaggioPer(e: Errore<Contesto>)` per context hierarchy, each an exhaustive `when`

@@ -290,6 +290,7 @@ class ComposizioneR1Test {
         val ambiente = AmbienteR1(radice, DiarizzatoreConBarriera(barriera, DiarizzatoreFinta()))
         val id = ambiente.importa()
         val r1 = ambiente.r1
+        val percorso = ambiente.progetto.percorso
         r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
         attendiFinche { r1.statiElaborazione(listOf(id)).single().fase == FaseElaborazione.DIARIZZAZIONE }
 
@@ -297,6 +298,18 @@ class ComposizioneR1Test {
 
         assertTrue(r1.coda.lavoro.isCompleted, "la coda deve essere ferma quando chiudi ritorna")
         assertNull(ambiente.sessione.corrente.value)
+
+        // L624c: chiudi() ferma la coda ma non riscrive la riga (resta `in_corso`, interrotta a meta') —
+        // e' la riapertura successiva (RecuperaElaborazioniInterrotte, come carry-over 3) a marcarla FALLITA.
+        val riaperto = AmbienteR1(radice.resolve("dopo-chiudi").also(Files::createDirectories))
+        riaperto.use {
+            it.sessione.chiudi()
+            it.sessione.apri(percorso).atteso()
+            attendiFinche(messaggio = "recupero dell'in_corso lasciato da chiudi") {
+                it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.FALLITA
+            }
+            assertEquals("interrotta", it.r1.statiElaborazione(listOf(id)).single().motivoFallimento)
+        }
     }
 
     private fun rigaDi(stato: RegistrazioniUiStato, id: RegistrazioneId): StatoElaborazioneRiga? =

@@ -6,6 +6,8 @@ import snastro.parlanti.applicazione.porte.ParlanteRepositoryContratto
 import snastro.parlanti.applicazione.porte.PredisposizioneParlanti
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaTrascrittoDiProva
+import snastro.persistenza.seminaVoceDiProva
 
 /** D2 (dev-architecture-app.md#porta-contratto): the contract passes real-on-real (AC-114/115/117/118). */
 class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
@@ -32,14 +34,10 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
                 dataRegistrazione = "2026-09-23",
                 aggiuntaAlle = 0L,
             )
-            db.trascrittoQueries.inserisci(
-                registrazioneId = registrazioneId.valore,
-                prossimaVoce = 1L,
-                prossimoSegmento = 1L,
-            )
+            db.seminaTrascrittoDiProva(registrazioneId = registrazioneId.valore)
         }
         predisposizione.voci.forEach { v ->
-            db.voceQueries.inserisci(registrazioneId = v.registrazioneId.valore, numero = v.voceId.numero.toLong())
+            db.seminaVoceDiProva(registrazioneId = v.registrazioneId.valore, numero = v.voceId.numero.toLong())
         }
     }
 }

@@ -4,6 +4,7 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
 import snastro.progetto.dominio.Registrazione
+import java.time.Instant
 
 /**
  * In-memory [RegistrazioneRepository]; rolls back with `UnitaDiLavoroFinta` ([Ripristinabile]).
@@ -34,7 +35,16 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
 
     // `ricostituisci` is reserved to persistence adapters (CR-15): the public factory rebuilds the
     // same observable state and its event is dropped.
+    // `aggiuntaAlle` is floored to the millisecond (L496a): the real repository stores epoch millis,
+    // so the fake mirrors that round-trip instead of silently keeping a precision no adapter offers.
     private fun Registrazione.copia(): Registrazione =
-        Registrazione.aggiungi(id, progettoId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle)
-            .aggregato
+        Registrazione.aggiungi(
+            id,
+            progettoId,
+            titolo,
+            riferimentoAudio,
+            durataMs,
+            dataRegistrazione,
+            Instant.ofEpochMilli(aggiuntaAlle.toEpochMilli()),
+        ).aggregato
 }

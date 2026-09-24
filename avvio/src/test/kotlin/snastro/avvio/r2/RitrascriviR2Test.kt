@@ -135,8 +135,7 @@ class RitrascriviR2Test {
                 "Ritrascrizione non riuscita: errore nella separazione delle voci",
                 messaggioRitrascrizioneNonRiuscita(checkNotNull(r.ritrascrizioneFallita)),
             )
-            Thread.sleep(ATTESA_NESSUN_EFFETTO_MS) // nothing after commit may touch the Documento either
-            Istantanea.di(it, s.x).confronta(prima)
+            assicuraInvariata(it, s.x, prima) // nothing after commit may touch the Documento either
         }
     }
 
@@ -336,6 +335,26 @@ class RitrascriviR2Test {
     private fun datiS3(s3: RegistrazionePresenter): RegistrazioneUiStato.Dati? =
         s3.stato.value as? RegistrazioneUiStato.Dati
 
+    /**
+     * AC-459 (L713b): a fixed `Thread.sleep` then ONE comparison flaked once under a loaded full
+     * run (a straggler after-commit effect can still be settling past the fixed window). Polls the
+     * post-commit snapshot repeatedly for the whole [entro] deadline instead, failing as soon as one
+     * sample diverges from [prima] — same total wait budget, no weaker assertion, just samples it
+     * throughout the window rather than trusting one read at the very end.
+     */
+    private fun assicuraInvariata(
+        ambiente: AmbienteR2,
+        id: RegistrazioneId,
+        prima: Istantanea,
+        entro: Long = ATTESA_NESSUN_EFFETTO_MS,
+    ) {
+        val scadenza = System.currentTimeMillis() + entro
+        do {
+            Istantanea.di(ambiente, id).confronta(prima)
+            Thread.sleep(PASSO_ATTESA_MS)
+        } while (System.currentTimeMillis() < scadenza)
+    }
+
     /** Collects the project's Cambiamenti from now on (the flows' replayed past ones dropped). */
     private fun raccogli(ambiente: AmbienteR2): MutableList<Cambiamento> {
         val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
@@ -398,6 +417,7 @@ class RitrascriviR2Test {
     private companion object {
         const val ATTESA_NESSUN_EFFETTO_MS = 500L
         const val ATTESA_REPLAY_MS = 200L
+        const val PASSO_ATTESA_MS = 20L
 
         fun documento(ambiente: AmbienteR2, id: RegistrazioneId): String? =
             ambiente.r2.r1.percorsoDocumento(id)?.let { p -> Path.of(p).readText() }
