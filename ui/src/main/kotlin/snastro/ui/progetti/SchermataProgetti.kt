@@ -20,6 +20,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -241,7 +242,7 @@ private fun ElencoProgettiLista(progetti: List<ProgettoVista>, abilitato: Boolea
         modifier = Modifier.fillMaxWidth().testTag("progetti-lista"),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3),
     ) {
-        progetti.forEach { progetto -> RigaProgetto(progetto, abilitato, apri) }
+        progetti.forEach { progetto -> key(progetto.progettoId) { RigaProgetto(progetto, abilitato, apri) } }
     }
 }
 

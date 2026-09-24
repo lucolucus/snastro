@@ -4,8 +4,6 @@
 
 package snastro.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -23,7 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -34,8 +31,6 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +58,8 @@ private val PADDING_PIEDE = 10.dp
  * hosts the screen of the selected section (or S1 when no Progetto is open) — later `ui` blocks plug
  * their real screens into these slots. AC-572: window `ground`, a 232dp sidebar with the project
  * selector + nav + footer, content on `surface` (each plugged-in screen supplies its own padding).
+ * [modelliSelezionati] (rework cycle 2): the composition root's S5 is on screen — the footer is then the
+ * highlighted place, no nav item is, and any nav click leaves S5 (via [onRegistrazioniSelezionata]).
  * [scuro]/[riduciMovimento] are render-check/test knobs (AC-571-style) — every existing call site
  * (production `ShellRoute`, every prior test) keeps the exact previous behaviour via these defaults.
  */
@@ -76,6 +73,7 @@ fun SchermataShell(
     contenuto: @Composable (ShellUiStato.ConProgetto) -> Unit = {},
     onRegistrazioniSelezionata: (() -> Unit)? = null,
     onModelliELicenze: (() -> Unit)? = null,
+    modelliSelezionati: Boolean = false,
     scuro: Boolean = isSystemInDarkTheme(),
     riduciMovimento: Boolean? = null,
 ) {
@@ -99,6 +97,7 @@ fun SchermataShell(
                                 azioni = azioni,
                                 onRegistrazioniSelezionata = onRegistrazioniSelezionata,
                                 onModelliELicenze = onModelliELicenze,
+                                modelliSelezionati = modelliSelezionati,
                                 modifier = Modifier.width(SnastroMisure.sidebar).fillMaxHeight(),
                             )
                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) { contenuto(stato) }
@@ -160,12 +159,14 @@ private fun BannerErroreApertura(messaggio: String, onChiudi: () -> Unit) {
 }
 
 /** AC-572: 232dp sidebar on `ground`, 1dp `line` right border, `space3` padding, `space1` gap. */
+@Suppress("LongParameterList") // state + actions + the composition root's nav hooks + modifier
 @Composable
 private fun NavigazioneShell(
     stato: ShellUiStato.ConProgetto,
     azioni: AzioniShell,
     onRegistrazioniSelezionata: (() -> Unit)?,
     onModelliELicenze: (() -> Unit)?,
+    modelliSelezionati: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val colori = LocalSnastroColori.current
@@ -181,20 +182,21 @@ private fun NavigazioneShell(
             val giaSelezionata = destinazione == stato.destinazioneSelezionata
             VoceNavigazione(
                 destinazione = destinazione,
-                selezionata = giaSelezionata,
+                selezionata = giaSelezionata && !modelliSelezionati,
                 onClick = {
                     azioni.seleziona(destinazione)
-                    // Re-clicking the ALREADY-selected 'Registrazioni' item goes back to its own top
-                    // (e.g. out of the S5 sub-view) — switching INTO it from Parlanti preserves
-                    // whatever place it was left at instead (R2's own "keeps where the user was").
-                    if (destinazione == DestinazioneShell.REGISTRAZIONI && giaSelezionata) {
-                        onRegistrazioniSelezionata?.invoke()
-                    }
+                    // Re-clicking the ALREADY-selected 'Registrazioni' item goes back to its own top, and
+                    // ANY nav click out of S5 leaves S5 for good (no hidden S5 left behind for the next
+                    // 'Registrazioni' click) — switching INTO Registrazioni from Parlanti otherwise
+                    // preserves the place it was left at (R2's own "keeps where the user was").
+                    val tornaAllElenco = modelliSelezionati ||
+                        (destinazione == DestinazioneShell.REGISTRAZIONI && giaSelezionata)
+                    if (tornaAllElenco) onRegistrazioniSelezionata?.invoke()
                 },
             )
         }
         Spacer(modifier = Modifier.weight(1f))
-        PiedeSidebar(onModelliELicenze = onModelliELicenze)
+        PiedeSidebar(onModelliELicenze = onModelliELicenze, selezionato = modelliSelezionati)
     }
 }
 
@@ -268,63 +270,45 @@ private fun VoceNavigazione(destinazione: DestinazioneShell, selezionata: Boolea
 }
 
 /**
- * AC-572/rework cycle 1: 'Tutto in locale' (Cube, caption `inkMuted`) — a neutral privacy line, no
- * readiness claim the shell state cannot back (no models-readiness field, views only, no new query).
- * HIGH #9: when [onModelliELicenze] is supplied, the row IS the S5 navigation entry point (the old
- * top tabs are gone) — clickable, tooltip/accessible name "Modelli e licenze".
+ * AC-572/rework cycle 2 (MED #3): when [onModelliELicenze] is wired the footer IS the S5 entry point and
+ * says so — 'Modelli e licenze' (Cube, caption `inkMuted`) over a 'Tutto in locale' second line (a neutral
+ * privacy line, no readiness claim the shell state cannot back); [selezionato] gives it the nav item's
+ * active style while S5 is shown. Unwired (R0, no S5) it is just the privacy line.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun PiedeSidebar(onModelliELicenze: (() -> Unit)?) {
-    val base = Modifier
-        .fillMaxWidth()
-        .let {
-            if (onModelliELicenze != null) {
-                it.clickable(onClick = onModelliELicenze)
-                    .semantics { contentDescription = ETICHETTA_MODELLI_E_LICENZE }
-            } else {
-                it
-            }
-        }
-        .padding(PADDING_PIEDE)
-        .testTag("shell-piede")
-    if (onModelliELicenze != null) {
-        TooltipArea(tooltip = { EtichettaTooltip(ETICHETTA_MODELLI_E_LICENZE) }) {
-            PiedeContenuto(base)
-        }
-    } else {
-        PiedeContenuto(base)
-    }
-}
-
-@Composable
-private fun PiedeContenuto(modifier: Modifier) {
+private fun PiedeSidebar(onModelliELicenze: (() -> Unit)?, selezionato: Boolean) {
     val colori = LocalSnastroColori.current
+    val tipografia = LocalSnastroTipografia.current
+    val forma = RoundedCornerShape(SnastroMisure.radiusControl)
     Row(
-        modifier = modifier,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(forma)
+            .let { if (selezionato) it.background(colori.raised, forma).border(1.dp, colori.line, forma) else it }
+            .let { if (onModelliELicenze != null) it.clickable(onClick = onModelliELicenze) else it }
+            .padding(PADDING_PIEDE)
+            .testTag("shell-piede"),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
     ) {
-        IconaSn(Icona.Cube, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
-        Text(
-            text = ETICHETTA_TUTTO_IN_LOCALE,
-            style = LocalSnastroTipografia.current.caption,
-            color = colori.inkMuted,
+        IconaSn(
+            Icona.Cube,
+            descrizione = null,
+            tinta = if (selezionato) colori.accentInk else colori.inkMuted,
+            dimensione = SnastroMisure.iconS,
         )
-    }
-}
-
-@Composable
-private fun EtichettaTooltip(testo: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.inverseSurface,
-        shape = RoundedCornerShape(SnastroMisure.radiusControl),
-    ) {
-        Text(
-            text = testo,
-            color = MaterialTheme.colorScheme.inverseOnSurface,
-            modifier = Modifier.padding(SnastroMisure.space2),
-        )
+        Column {
+            if (onModelliELicenze != null) {
+                Text(
+                    text = ETICHETTA_MODELLI_E_LICENZE,
+                    style = tipografia.caption.copy(
+                        fontWeight = if (selezionato) FontWeight.SemiBold else FontWeight.Normal,
+                    ),
+                    color = if (selezionato) colori.ink else colori.inkMuted,
+                )
+            }
+            Text(text = ETICHETTA_TUTTO_IN_LOCALE, style = tipografia.caption, color = colori.inkMuted)
+        }
     }
 }
 

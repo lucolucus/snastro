@@ -15,8 +15,7 @@ const val ETICHETTA_CHIUDI_ERRORE: String = "Chiudi"
  * models were ready even when they were not). */
 const val ETICHETTA_TUTTO_IN_LOCALE: String = "Tutto in locale"
 
-/** Rework cycle 1 (HIGH #9): the footer's tooltip/accessible name once it is wired to the existing S5
- * navigation action. */
+/** Rework cycle 2 (MED #3): the footer's visible label once it is wired to the S5 navigation action. */
 const val ETICHETTA_MODELLI_E_LICENZE: String = "Modelli e licenze"
 
 /** Rework cycle 1 (HIGH #2): the project selector's own "Chiudi progetto" affordance moved from the

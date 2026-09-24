@@ -1,15 +1,8 @@
 package snastro.avvio.r1
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -18,8 +11,6 @@ import snastro.avvio.CollaboratoriProgettoAperto
 import snastro.avvio.GrafoR0
 import snastro.kernel.RegistrazioneId
 import snastro.ui.ShellPresenter
-import snastro.ui.ShellRoute
-import snastro.ui.ShellUiStato
 import snastro.ui.modelli.ModelliPresenter
 import snastro.ui.modelli.ModelliRoute
 import snastro.ui.modelli.StatoModelli
@@ -42,46 +33,35 @@ internal fun ContenutoAppR1(grafo: GrafoR1) {
     val r0 = grafo.r0
     val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R1) }
     val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
-    // Hoisted above `contenuto` (rework cycle 1): the sidebar's own hooks (`onModelliELicenze`,
-    // `onRegistrazioniSelezionata`) need to reach this per-project sub-section state too.
-    val statoShell by shellPresenter.stato.collectAsState()
-    val progettoIdCorrente = (statoShell as? ShellUiStato.ConProgetto)?.progetto?.progettoId
-    var schermata by remember(progettoIdCorrente) {
-        mutableStateOf(
-            if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) {
-                SchermataR1.Registrazioni
-            } else {
-                SchermataR1.Modelli
-            },
-        )
+    val iniziale = {
+        if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) SchermataR1.Registrazioni else SchermataR1.Modelli
     }
-    ShellRoute(
-        presenter = shellPresenter,
+    ShellProgetto(
+        shellPresenter = shellPresenter,
+        iniziale = iniziale,
         contenutoSenzaProgetto = {
             val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
             ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita)
         },
-        contenuto = { conProgetto ->
+        contenuto = { conProgetto, navigazione ->
             val collaboratori = r0.sessione.collaboratoriCorrenti()
             val r1 = collaboratori?.estensione as? CollaboratoriR1
             if (collaboratori != null && r1 != null) {
                 val progettoId = conProgetto.progetto.progettoId
                 val registrazioniPresenter = remember(progettoId) {
                     costruisciRegistrazioniPresenterR1(r0, collaboratori, r1) { id ->
-                        schermata = SchermataR1.Registrazione(id)
+                        navigazione.apriRegistrazione(id)
                     }
                 }
-                Column(modifier = Modifier.fillMaxSize()) {
-                    when (val s = schermata) {
-                        SchermataR1.Registrazioni -> RegistrazioniRoute(registrazioniPresenter)
-                        is SchermataR1.Registrazione -> SchermataRegistrazioneR1(grafo, collaboratori, r1, s.id)
-                        SchermataR1.Modelli -> ModelliRoute(modelliPresenter)
-                    }
-                }
+                ContenutoProgetto(
+                    conProgetto = conProgetto,
+                    navigazione = navigazione,
+                    elenco = { RegistrazioniRoute(registrazioniPresenter) },
+                    registrazione = { id -> SchermataRegistrazioneR1(grafo, collaboratori, r1, id) },
+                    modelli = { ModelliRoute(modelliPresenter) },
+                )
             }
         },
-        onRegistrazioniSelezionata = { schermata = SchermataR1.Registrazioni },
-        onModelliELicenze = { schermata = SchermataR1.Modelli },
     )
 }
 

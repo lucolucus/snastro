@@ -51,10 +51,10 @@ class ShellSelettoreProgettoTest {
         assertEquals(1, chiusure)
     }
 
-    /** Rework cycle 1 (HIGH #1/#9): the footer never claims readiness it cannot back, and — when the
-     * composition root wires it — IS the S5 navigation entry point. */
+    /** Rework cycle 1-2 (HIGH #1/#9, MED #3): the footer never claims readiness it cannot back, and — when
+     * the composition root wires it — IS the S5 navigation entry point and says so in visible text. */
     @Test
-    fun `AC-572 il piede dice Tutto in locale e naviga a Modelli quando cablato`() = runDesktopComposeUiTest {
+    fun `AC-572 il piede dice Modelli e licenze, Tutto in locale e naviga a S5`() = runDesktopComposeUiTest {
         var navigazioni = 0
         setContent {
             SchermataShell(
@@ -68,7 +68,7 @@ class ShellSelettoreProgettoTest {
 
         onNodeWithText(ETICHETTA_TUTTO_IN_LOCALE).assertIsDisplayed()
         onNodeWithText("Modelli pronti", substring = true).assertDoesNotExist()
-        onNodeWithContentDescription(ETICHETTA_MODELLI_E_LICENZE).assertIsDisplayed()
+        onNodeWithText(ETICHETTA_MODELLI_E_LICENZE).assertIsDisplayed()
 
         onNodeWithTag("shell-piede").performClick()
         assertEquals(1, navigazioni)

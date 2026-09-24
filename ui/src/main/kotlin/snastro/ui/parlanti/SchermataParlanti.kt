@@ -31,6 +31,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -173,7 +174,7 @@ private fun ListaParlanti(stato: ParlantiUiStato.Dati, azioni: AzioniParlanti) {
         SezioneAttivi(stato.occasionali, ETICHETTA_SEZIONE_OCCASIONALI, "occasionali", azioni)
         if (stato.eliminati.isNotEmpty()) {
             TitoloSezione(ETICHETTA_SEZIONE_ELIMINATI, "eliminati")
-            stato.eliminati.forEach { riga -> RigaParlanteEliminatoItem(riga) }
+            stato.eliminati.forEach { riga -> key(riga.parlanteId) { RigaParlanteEliminatoItem(riga) } }
         }
     }
 }
@@ -182,7 +183,8 @@ private fun ListaParlanti(stato: ParlantiUiStato.Dati, azioni: AzioniParlanti) {
 private fun SezioneAttivi(righe: List<RigaParlante>, titolo: String, tag: String, azioni: AzioniParlanti) {
     if (righe.isEmpty()) return
     TitoloSezione(titolo, tag)
-    righe.forEach { riga -> RigaParlanteItem(riga, azioni) }
+    // Rework cycle 2 (MED #2): keyed by id — the row-local More menu/rename state follows its Parlante.
+    righe.forEach { riga -> key(riga.parlanteId) { RigaParlanteItem(riga, azioni) } }
 }
 
 /** AC-577: "Ricorrenti"/"Occasionali"/"Eliminati" as `overline` headers — UPPERCASE applied HERE, by

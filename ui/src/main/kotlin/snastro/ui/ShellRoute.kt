@@ -8,7 +8,9 @@ import androidx.compose.runtime.getValue
  * One-line composition entry point (dev-architecture `#presenter`): collects [presenter]'s state.
  * [onRegistrazioniSelezionata]/[onModelliELicenze] (rework cycle 1, HIGH #9): optional hooks the
  * composition root wires to its own S5/sub-section navigation — the shell state has no such section.
+ * [modelliSelezionati] (rework cycle 2): the composition root's S5 is on screen — see [SchermataShell].
  */
+@Suppress("LongParameterList") // content slots + the composition root's nav hooks, as SchermataShell
 @Composable
 fun ShellRoute(
     presenter: ShellPresenter,
@@ -16,6 +18,7 @@ fun ShellRoute(
     contenuto: @Composable (ShellUiStato.ConProgetto) -> Unit = {},
     onRegistrazioniSelezionata: (() -> Unit)? = null,
     onModelliELicenze: (() -> Unit)? = null,
+    modelliSelezionati: Boolean = false,
 ) {
     val stato by presenter.stato.collectAsState()
     SchermataShell(
@@ -25,5 +28,6 @@ fun ShellRoute(
         contenuto = contenuto,
         onRegistrazioniSelezionata = onRegistrazioniSelezionata,
         onModelliELicenze = onModelliELicenze,
+        modelliSelezionati = modelliSelezionati,
     )
 }

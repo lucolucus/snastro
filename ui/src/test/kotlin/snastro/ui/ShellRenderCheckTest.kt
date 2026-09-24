@@ -13,6 +13,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.ProgettoId
+import snastro.ui.testi.ETICHETTA_MODELLI_E_LICENZE
 import java.io.File
 import javax.imageio.ImageIO
 
@@ -131,6 +132,14 @@ class ShellRenderCheckTest {
     fun `AC-572 AC-177 con ogni sezione mostra Registrazioni e Parlanti a 1024x640 (scuro)`() =
         verificaConProgetto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, conParlanti = true, scuro = true)
 
+    @Test
+    fun `AC-572 con S5 mostrato il piede Modelli e licenze e la voce selezionata a 1280x800`() =
+        verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, modelli = true)
+
+    @Test
+    fun `AC-572 con S5 mostrato il piede Modelli e licenze e la voce selezionata a 1280x800 (scuro)`() =
+        verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, modelli = true, scuro = true)
+
     private fun verificaSenzaProgetto(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
             setContent {
@@ -207,7 +216,13 @@ class ShellRenderCheckTest {
             catturaPng("shell-errore-con-progetto", width, height, scuro)
         }
 
-    private fun verificaConProgetto(width: Int, height: Int, conParlanti: Boolean, scuro: Boolean = false) =
+    private fun verificaConProgetto(
+        width: Int,
+        height: Int,
+        conParlanti: Boolean,
+        scuro: Boolean = false,
+        modelli: Boolean = false,
+    ) =
         runDesktopComposeUiTest(width, height) {
             val sezioni = if (conParlanti) {
                 setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
@@ -219,6 +234,8 @@ class ShellRenderCheckTest {
                     stato = ShellUiStato.ConProgetto(PROGETTO_PROVA, sezioni, DestinazioneShell.REGISTRAZIONI),
                     azioni = AZIONI_VUOTE,
                     contenuto = { Text("Contenuto della sezione selezionata") },
+                    onModelliELicenze = {},
+                    modelliSelezionati = modelli,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -226,12 +243,14 @@ class ShellRenderCheckTest {
             onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
             onNodeWithText("Registrazioni").assertIsDisplayed()
             onNodeWithText("Contenuto della sezione selezionata").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_MODELLI_E_LICENZE).assertIsDisplayed()
             if (conParlanti) {
                 onNodeWithText("Parlanti").assertIsDisplayed()
             } else {
                 onNodeWithText("Parlanti").assertDoesNotExist()
             }
-            catturaPng("shell-con-progetto-parlanti-$conParlanti", width, height, scuro)
+            val nome = if (modelli) "shell-modelli-selezionati" else "shell-con-progetto-parlanti-$conParlanti"
+            catturaPng(nome, width, height, scuro)
         }
 
     @OptIn(ExperimentalTestApi::class)

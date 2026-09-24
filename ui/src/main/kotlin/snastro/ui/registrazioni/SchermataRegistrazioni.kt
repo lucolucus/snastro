@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -32,7 +33,9 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -44,6 +47,8 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Color
@@ -56,6 +61,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -109,6 +115,7 @@ import javax.swing.JFileChooser
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 private val LARGHEZZA_CONFERMA_RITRASCRIVI = 320.dp
 private val DIAMETRO_DROPZONE_ICONA = 28.dp
+private val ALTEZZA_MINIMA_DROPZONE = 360.dp
 private val SPESSORE_TRATTEGGIO_NORMALE = 1.dp
 private val SPESSORE_TRATTEGGIO_OVER = 1.5.dp
 private const val TRATTO_LUNGHEZZA = 8f
@@ -135,11 +142,27 @@ fun SchermataRegistrazioni(
     scuro: Boolean = isSystemInDarkTheme(),
     riduciMovimento: Boolean? = null,
 ) {
+    SchermataRegistrazioni(stato, azioni, scuro, riduciMovimento, dragIniziale = false)
+}
+
+/**
+ * Render-check entry point (rework cycle 2, MED #4): [dragIniziale] starts the screen with an OS drag
+ * already over the window, so the `over` fixture is the REAL screen — no native-drag simulation API
+ * exists in the test harness. Production always goes through the public overload (`false`).
+ */
+@Composable
+internal fun SchermataRegistrazioni(
+    stato: RegistrazioniUiStato,
+    azioni: AzioniRegistrazioni,
+    scuro: Boolean,
+    riduciMovimento: Boolean?,
+    dragIniziale: Boolean,
+) {
     SnastroTema(scuro = scuro, riduciMovimento = riduciMovimento) {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (stato) {
                 RegistrazioniUiStato.Caricamento -> IndicatoreCaricamentoRegistrazioni()
-                is RegistrazioniUiStato.Dati -> ContenutoRegistrazioni(stato, azioni)
+                is RegistrazioniUiStato.Dati -> ContenutoRegistrazioni(stato, azioni, dragIniziale)
                 is RegistrazioniUiStato.Errore -> ErroreCaricamentoRegistrazioni(stato.messaggio, azioni.riprova)
             }
         }
@@ -179,8 +202,12 @@ private fun ErroreCaricamentoRegistrazioni(messaggio: String, onRiprova: () -> U
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun ContenutoRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: AzioniRegistrazioni) {
-    var dragAttivo by remember { mutableStateOf(false) }
+private fun ContenutoRegistrazioni(
+    stato: RegistrazioniUiStato.Dati,
+    azioni: AzioniRegistrazioni,
+    dragIniziale: Boolean,
+) {
+    var dragAttivo by remember { mutableStateOf(dragIniziale) }
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -209,7 +236,7 @@ private fun ContenutoRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: Azi
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         if (stato.righe.isEmpty()) {
-            DropZoneVuota(inDrop = dragAttivo, azioni = azioni)
+            DropZoneVuota(inDrop = dragAttivo, importoInCorso = stato.importoInCorso, azioni = azioni)
         } else {
             ElencoRegistrazioni(stato.righe, azioni)
         }
@@ -255,16 +282,16 @@ private fun BarraImportazione(azioni: AzioniRegistrazioni, importoInCorso: Boole
 }
 
 /**
- * AC-576: the empty-state `DropZone` — Import 28dp, the empty message, the supported formats and a
- * `Secondario` "Scegli file…" (same [ETICHETTA_IMPORTA_FILE] command). While an OS drag is over the
- * window (rework cycle 1: `onEntered`/`onExited` on [registrazioneDropTarget], pure view state) it
- * switches to the `over` style — `accentInk` 1.5dp dashed border, `accentSoft` fill, the Import icon
- * in `accentInk`, "Rilascia per importare". `internal` (not `private`): [inDrop] can only be driven by
- * a REAL platform drag in production — `RegistrazioniRenderCheckTest` renders the `over` fixture by
- * calling this directly with `inDrop = true` (no native-drag simulation API exists in the test harness).
+ * AC-576: the empty-state `DropZone`, LARGE ([ALTEZZA_MINIMA_DROPZONE] — rework cycle 2: `fillMaxSize`
+ * inside the screen's `verticalScroll` collapsed to its content) — Import 28dp, the empty message, the
+ * supported formats and a `Secondario` "Scegli file…" (same [ETICHETTA_IMPORTA_FILE] command, disabled
+ * while an import runs, like the header button). While an OS drag is over the window (`onEntered`/
+ * `onExited` on [registrazioneDropTarget], pure view state) it switches to the `over` style —
+ * `accentInk` 1.5dp dashed border, `accentSoft` fill, the Import icon in `accentInk`, "Rilascia per
+ * importare".
  */
 @Composable
-internal fun DropZoneVuota(inDrop: Boolean, azioni: AzioniRegistrazioni) {
+private fun DropZoneVuota(inDrop: Boolean, importoInCorso: Boolean, azioni: AzioniRegistrazioni) {
     val colori = LocalSnastroColori.current
     val bordo = if (inDrop) colori.accentInk else colori.lineStrong
     val fondo = if (inDrop) colori.accentSoft else colori.sunken
@@ -272,7 +299,8 @@ internal fun DropZoneVuota(inDrop: Boolean, azioni: AzioniRegistrazioni) {
     val coloreIcona = if (inDrop) colori.accentInk else colori.inkMuted
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
+            .heightIn(min = ALTEZZA_MINIMA_DROPZONE)
             .background(fondo, RoundedCornerShape(SnastroMisure.radiusCard))
             .bordoTratteggiato(bordo, spessore, SnastroMisure.radiusCard)
             .padding(SnastroMisure.space6)
@@ -302,6 +330,7 @@ internal fun DropZoneVuota(inDrop: Boolean, azioni: AzioniRegistrazioni) {
                 onClick = { sceltaFileAudio()?.let { azioni.importa(listOf(it)) } },
                 variante = VarianteBottone.Secondario,
                 piccolo = true,
+                abilitato = !importoInCorso,
                 modifier = Modifier.testTag("registrazioni-scegli-file"),
             )
         }
@@ -329,9 +358,13 @@ private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRe
         border = BorderStroke(1.dp, colori.line),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
+            // Rework cycle 2 (MED #2): keyed by id — the row-local state (title/date buffers, focus)
+            // follows its Registrazione when a row is inserted/removed above it.
             righe.forEachIndexed { indice, riga ->
-                if (indice > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colori.line))
-                RigaRegistrazioneItem(riga, azioni)
+                key(riga.registrazioneId) {
+                    if (indice > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colori.line))
+                    RigaRegistrazioneItem(riga, azioni)
+                }
             }
         }
     }
@@ -512,45 +545,48 @@ private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
  * AC-206/AC-575: local text buffer, resynced from [RigaRegistrazione.dataRegistrazione] on every
  * real change. M4: submits only on Enter or on losing focus — never on every keystroke, so a partial
  * date while typing never round-trips through the parser — and a value that fails to parse (STRICT:
- * no 31/02 silently rolled to 28/02) is shown as an inline error instead of being dropped. AC-575:
- * "renders as caption text with an Edit icon on hover (no boxed field at rest)" — sized to its own
- * content (rework cycle 1: no fixed width, so the meta line's `·` separators sit right after it).
+ * no 31/02 silently rolled to 28/02) is shown as an inline error instead of being dropped. Esc reverts
+ * without submitting. AC-575 "caption text with an Edit icon on hover (no boxed field at rest)" —
+ * rework cycle 2 (LOW #5): at rest it IS plain `Text` (a `BasicTextField` keeps a minimum width that
+ * left a gap before the `·`); a click swaps in the focused field, leaving it (Enter/blur/Esc) swaps back.
  */
 @Composable
 private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     val colori = LocalSnastroColori.current
     var testo by remember(riga.dataRegistrazione) { mutableStateOf(formattaData(riga.dataRegistrazione)) }
     var nonValido by remember(riga.dataRegistrazione) { mutableStateOf(false) }
-    var eraFocalizzato by remember(riga.dataRegistrazione) { mutableStateOf(false) }
+    var inModifica by remember(riga.dataRegistrazione) { mutableStateOf(false) }
     val interazione = remember { MutableInteractionSource() }
     val hover by interazione.collectIsHoveredAsState()
-    fun sottometti() {
+    val tag = "registrazioni-data-${riga.registrazioneId.valore}"
+    val stile = LocalSnastroTipografia.current.caption.copy(color = if (nonValido) colori.danger else colori.inkMuted)
+    fun termina(sottometti: Boolean) {
+        if (!inModifica) return // Enter then the blur of the removed field: one submit only
+        inModifica = false
+        if (!sottometti) {
+            testo = formattaData(riga.dataRegistrazione)
+            nonValido = false
+            return
+        }
         val data = testo.aData()
         nonValido = data == null
         if (data != null && data != riga.dataRegistrazione) azioni.modificaData(riga.registrazioneId, data)
     }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.hoverable(interazione)) {
-            BasicTextField(
-                value = testo,
-                onValueChange = { testo = it },
-                singleLine = true,
-                enabled = !riga.operazioneInCorso,
-                textStyle = LocalSnastroTipografia.current.caption.copy(
-                    color = if (nonValido) colori.danger else colori.inkMuted,
-                ),
-                cursorBrush = SolidColor(colori.accentInk),
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { sottometti() }),
-                modifier = Modifier
-                    .onFocusChanged { stato ->
-                        if (eraFocalizzato && !stato.isFocused) sottometti()
-                        eraFocalizzato = stato.isFocused
-                    }
-                    .testTag("registrazioni-data-${riga.registrazioneId.valore}"),
-            )
-            if (hover) {
-                IconaSn(Icona.Edit, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
+            if (inModifica) {
+                CampoDataInModifica(testo, { testo = it }, stile, !riga.operazioneInCorso, ::termina, tag)
+            } else {
+                Text(
+                    text = testo,
+                    style = stile,
+                    modifier = Modifier
+                        .clickable(enabled = !riga.operazioneInCorso) { inModifica = true }
+                        .testTag(tag),
+                )
+                if (hover) {
+                    IconaSn(Icona.Edit, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
+                }
             }
         }
         if (nonValido) {
@@ -562,6 +598,47 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
             )
         }
     }
+}
+
+/** [CampoData] while editing: focused on entry; Enter/blur → `termina(true)`, Esc → `termina(false)`. */
+@Suppress("LongParameterList") // one parameter per documented knob of the inline editor
+@Composable
+private fun CampoDataInModifica(
+    testo: String,
+    onTesto: (String) -> Unit,
+    stile: TextStyle,
+    abilitato: Boolean,
+    termina: (sottometti: Boolean) -> Unit,
+    tag: String,
+) {
+    val focus = remember { FocusRequester() }
+    var eraFocalizzato by remember { mutableStateOf(false) }
+    LaunchedEffect(focus) { focus.requestFocus() }
+    BasicTextField(
+        value = testo,
+        onValueChange = onTesto,
+        singleLine = true,
+        enabled = abilitato,
+        textStyle = stile,
+        cursorBrush = SolidColor(LocalSnastroColori.current.accentInk),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        keyboardActions = KeyboardActions(onDone = { termina(true) }),
+        modifier = Modifier
+            .focusRequester(focus)
+            .onFocusChanged { stato ->
+                if (eraFocalizzato && !stato.isFocused) termina(true)
+                eraFocalizzato = stato.isFocused
+            }
+            .onPreviewKeyEvent { evento ->
+                if (evento.type == KeyEventType.KeyDown && evento.key == Key.Escape) {
+                    termina(false)
+                    true
+                } else {
+                    false
+                }
+            }
+            .testTag(tag),
+    )
 }
 
 /** M4: `FORMATO_DATA_MODIFICABILE` (`uuuu` + STRICT) rejects an out-of-range date instead of a SMART

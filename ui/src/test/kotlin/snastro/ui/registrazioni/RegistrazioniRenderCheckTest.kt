@@ -1,8 +1,5 @@
 package snastro.ui.registrazioni
 
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Surface
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -25,8 +22,8 @@ import org.junit.jupiter.api.Test
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.ErroreProgetto
-import snastro.ui.SnastroTema
 import snastro.ui.testi.ETICHETTA_ANNULLA
+import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
@@ -472,16 +469,18 @@ class RegistrazioniRenderCheckTest {
             catturaPng("registrazioni-vuoto", width, height, scuro)
         }
 
-    /** AC-576: the `over` style — `DropZoneVuota` rendered directly with `inDrop = true` (no
-     * native-drag simulation API exists in the test harness; see the composable's own doc). */
+    /** AC-576: the `over` style on the REAL empty screen (rework cycle 2, MED #4) — started with the
+     * drag already over the window (no native-drag simulation API exists in the test harness). */
     private fun verificaVuotoConDrag(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
             setContent {
-                SnastroTema(scuro = scuro, riduciMovimento = true) {
-                    Surface(modifier = Modifier.fillMaxSize()) {
-                        DropZoneVuota(inDrop = true, azioni = AZIONI_VUOTE)
-                    }
-                }
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = emptyList()),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                    dragIniziale = true,
+                )
             }
             onNodeWithText(MESSAGGIO_RILASCIA_PER_IMPORTARE).assertIsDisplayed()
             onAllNodesWithText(MESSAGGIO_REGISTRAZIONI_VUOTO).assertCountEquals(0)
@@ -754,6 +753,7 @@ class RegistrazioniRenderCheckTest {
             }
             onNodeWithTag("registrazioni-identificazione-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
             onNodeWithText(etichettaIdentificazione(3, 1)).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_DA_IDENTIFICARE).assertIsDisplayed() // AC-575: the Avviso chip
             onAllNodesWithTag("registrazioni-identificazione-${REG_2.valore}", useUnmergedTree = true)
                 .assertCountEquals(0)
             catturaPng("registrazioni-badge-mix", width, height, scuro)
