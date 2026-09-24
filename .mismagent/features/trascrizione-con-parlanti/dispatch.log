@@ -668,3 +668,5 @@
 2026-09-24T08:59:42Z	avvio-parlanti	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW bcb9b45
 2026-09-24T08:59:42Z	avvio-parlanti	composer	merge	cycle=0	-	-	MERGED 2616c99 — R2 RUNNABLE (manual naming; extractor pending spike). Accepted new ui ErroreComandoVoce
 2026-09-24T08:59:42Z	fix-batch-17	worker	dispatch	cycle=0	tier=deep	model=opus	SQLITE_BUSY_SNAPSHOT: IMMEDIATE configured but a read-then-write tx collided with another commit — reproduce + fix in :persistenza
+2026-09-24T09:11:00Z	fix-batch-17	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW 0b68ca2 (root cause: SQLDelight literal BEGIN TRANSACTION bypasses sqlite-jdbc IMMEDIATE)
+2026-09-24T09:11:00Z	fix-batch-17	composer	merge	cycle=0	-	-	MERGED 8591924 (red-first test; gate green)
