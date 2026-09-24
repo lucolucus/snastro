@@ -1,14 +1,17 @@
 package snastro.persistenza
 
 import org.junit.jupiter.api.io.TempDir
+import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import java.nio.file.Path
+import java.sql.SQLException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
@@ -72,6 +75,44 @@ class UnitaDiLavoroSqlBeginImmediateTest {
             assertIs<Esito.Ok<Unit>>(esitoB.get())
             assertEquals("b", db.progettoQueries.trova().executeAsOne().nome, "B attende il commit di A, poi scrive")
         } finally {
+            progetto.chiudi()
+        }
+    }
+
+    /**
+     * `BEGIN IMMEDIATE` can fail once busy_timeout expires (a DEFERRED `BEGIN` never did): the failed
+     * transaction must not stay parked in the thread's slot, or the next transaction on that same thread
+     * would run "nested" in autocommit and an `Errore` could no longer roll its writes back.
+     */
+    @Test
+    fun `un BEGIN IMMEDIATE scaduto non lascia il thread in una transazione fantasma`(@TempDir cartella: Path) {
+        val progetto = apriDatabaseProgetto(cartella.toFile())
+        val db = progetto.database
+        val uow = UnitaDiLavoroSql(db)
+        val altro = SnastroDatabase(driverSqlite("jdbc:sqlite:${cartella.resolve("progetto.db")}"))
+        val bloccoPreso = CountDownLatch(1)
+        val rilascia = CountDownLatch(1)
+        val bloccante = thread(name = "scrittore-lungo") {
+            altro.transaction {
+                bloccoPreso.countDown()
+                rilascia.await()
+            }
+        }
+        try {
+            bloccoPreso.await()
+            assertFailsWith<SQLException> { uow.inTransazione<Unit> { Esito.Ok(Unit) } }
+            rilascia.countDown()
+            bloccante.join(15_000)
+
+            val esito = uow.inTransazione<Unit> {
+                db.progettoQueries.inserisci(ID, "da annullare")
+                Esito.Errore(ErroreDiProva.Fallito("rollback"))
+            }
+
+            assertIs<Esito.Errore>(esito)
+            assertNull(db.progettoQueries.trova().executeAsOneOrNull(), "l'Errore deve annullare la scrittura")
+        } finally {
+            rilascia.countDown()
             progetto.chiudi()
         }
     }
