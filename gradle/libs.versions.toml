@@ -16,6 +16,9 @@ bytedeco-javacv = "1.5.14"
 bytedeco-ffmpeg = "8.1.2-1.5.14"
 # Archive extraction (:modelli only, ADR 0008 Amendment (c)) — the JDK has no bzip2/tar reader.
 commons-compress = "1.28.0"
+# sherpa-onnx (:ml-sherpa, ADR 0016 §1): NOT on Maven Central — the root build fetches the pinned k2-fsa
+# GitHub release assets (URL + SHA-256 in build.gradle.kts, tasks scaricaJarSherpa / scaricaNativiSherpa).
+sherpa-onnx = "1.13.8"
 
 [libraries]
 # Gradle-plugin marker artifacts consumed by build-logic/build.gradle.kts to author
