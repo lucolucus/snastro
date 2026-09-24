@@ -18,7 +18,12 @@ class LettoreVociFintaTest : LettoreVociContratto() {
      * both for [LettoreVoci.voci] ([viste]) and [LettoreVoci.segmenti] ([dati]).
      */
     private class AmbienteFinto : AmbienteLettoreVoci {
-        private class Seg(val id: SegmentoId, var voce: VoceId, val intervallo: IntervalloMs, var confermato: Boolean = false)
+        private class Seg(
+            val id: SegmentoId,
+            var voce: VoceId,
+            val intervallo: IntervalloMs,
+            var confermato: Boolean = false,
+        )
 
         private val generatore = GeneratoreIdFinto()
         private val registrazioni = mutableSetOf<RegistrazioneId>()

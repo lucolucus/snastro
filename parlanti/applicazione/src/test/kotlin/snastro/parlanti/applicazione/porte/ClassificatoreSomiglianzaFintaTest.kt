@@ -42,7 +42,9 @@ class ClassificatoreSomiglianzaFintaTest : ClassificatoreSomiglianzaContratto() 
     fun `AC-495 rifiuta meno di due Parlanti di riferimento o un Parlante senza impronte`() {
         val finta = ClassificatoreSomiglianzaFinta()
 
-        assertFailsWith<IllegalArgumentException> { finta.classifica(mapOf(A to listOf(impronta())), listOf(impronta())) }
+        assertFailsWith<IllegalArgumentException> {
+            finta.classifica(mapOf(A to listOf(impronta())), listOf(impronta()))
+        }
         assertFailsWith<IllegalArgumentException> {
             finta.classifica(mapOf(A to listOf(impronta()), B to emptyList()), listOf(impronta()))
         }
