@@ -694,3 +694,4 @@
 2026-09-24T14:37:15Z	sa-c	composer	merge	-	-	-	MERGED b7bb0ab (+ lettore-voci-da-trascrizione rework)
 2026-09-24T14:37:15Z	sa-d	worker	dispatch	-	deep	opus	S3 panel: Dai un nome a questa frase, pin/Togli conferma, Riassegna per somiglianza preview/apply + avvio-parlanti wiring
 2026-09-24T15:12:45Z	sa-d	composer	merge	-	-	-	MERGED 6947dd7 — semi-automatic separation complete and runnable
+2026-09-24T16:27:38Z	stile-snastro	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 15 (ui-kit owner)
