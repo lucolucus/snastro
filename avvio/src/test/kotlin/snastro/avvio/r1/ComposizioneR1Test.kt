@@ -22,6 +22,9 @@ import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.FaseElaborazione
+import snastro.trascrizione.applicazione.porte.Riconoscimento
+import snastro.trascrizione.applicazione.porte.RiconoscitoreParlato
+import snastro.trascrizione.applicazione.porte.RiconoscitoreParlatoFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
@@ -116,6 +119,19 @@ class ComposizioneR1Test {
     }
 
     @Test
+    fun `ADR 0004 la memoria dei modelli e rilasciata una volta per ogni Elaborazione terminata`() {
+        val riconoscitore = RiconoscitoreChiudibile()
+        AmbienteR1(radice, riconoscitore = riconoscitore, rilasciaDopoElaborazione = riconoscitore::close).use {
+            val id = it.importa()
+            it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
+            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+
+            attendiFinche(messaggio = "un rilascio per l'Elaborazione terminata") { riconoscitore.chiusure == 1 }
+            assertTrue(riconoscitore.chiamate > 0, "il riconoscitore deve essere stato usato prima del rilascio")
+        }
+    }
+
+    @Test
     fun `AC-356 senza Parlanti il Documento rende ogni Voce come Voce n e una Revisione committata lo rigenera`() {
         AmbienteR1(radice, dueVoci).use {
             val id = it.importa()
@@ -204,6 +220,21 @@ class ComposizioneR1Test {
         elencoProgetti = ElencoProgetti(RegistroProgettiFinta()),
         cartellaProgettiPredefinita = radice.toString(),
     )
+
+    /** A RiconoscitoreParlato that keeps a (pretend) model loaded across calls, counting its releases. */
+    private class RiconoscitoreChiudibile : RiconoscitoreParlato, AutoCloseable {
+        private val delegato = RiconoscitoreParlatoFinta()
+
+        @Volatile var chiamate = 0
+
+        @Volatile var chiusure = 0
+
+        override fun riconosci(c: CampioniAudio): Riconoscimento = delegato.riconosci(c).also { chiamate++ }
+
+        override fun close() {
+            chiusure++
+        }
+    }
 
     /** A Diarizzatore that holds the pipeline in the DIARIZZAZIONE phase until [barriera] opens (interruptible). */
     private class DiarizzatoreConBarriera(

@@ -53,6 +53,8 @@ import java.util.logging.Logger
  * - No synchronous subscriber at all, in particular none on `RegistrazioneAggiunta`: importing never
  *   starts an Elaborazione (ADR 0014, AC-371). `AbbonatoDocumentoEventi` registers itself after-commit
  *   and runs on [io] (never on the UI thread), in a child of the session scope.
+ * - The ML adapters' per-Elaborazione memory is released when each run terminates
+ *   ([SegnalatoreFaseConRilascio], ADR 0004).
  * - The Documento reads names from [LettoreNomiVuoto] ('Voce n', AC-356): no `:parlanti` class.
  * - The [CodaElaborazioni] is built LAST: its construction runs `RecuperaElaborazioniInterrotte`
  *   strictly before its worker picks any FIFO head (AC-233), and only after every after-commit
@@ -77,25 +79,17 @@ internal class EstensioneR1(
         val fasi = FasiInCorso()
         val aggiornamenti = AggiornamentiVistaTrascrizione(dispatcher)
 
-        val scopeDocumento = CoroutineScope(
-            contesto.scope.coroutineContext + SupervisorJob(contesto.scope.coroutineContext[Job]) + io,
-        )
-        AbbonatoDocumentoEventi(
-            dispatcher,
-            RigenerazioneDocumentoPolitica(
-                LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo),
-                LettoreNomiVuoto,
-                ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
-            ),
-            scopeDocumento,
-        )
+        val lavoroDocumento = avviaRigenerazioneDocumento(contesto, trascritti, catalogo)
 
         val pipeline = PortePipeline(
             registrazioni = lettoreRegistrazione,
             decodificatore = decodificatore(contesto.cartella),
             diarizzatore = ml.diarizzatore,
             allineatore = AllineatorePerTurno(ml.riconoscitore, ml.vad),
-            segnalatore = SegnalatoreFaseConCambiamenti(fasi, aggiornamenti::cambiata),
+            segnalatore = SegnalatoreFaseConRilascio(
+                SegnalatoreFaseConCambiamenti(fasi, aggiornamenti::cambiata),
+                ml.rilasciaDopoElaborazione,
+            ),
         )
         val esegui = EseguiProssimaElaborazioneServizio(uow, clock, elaborazioni, trascritti, pipeline, dispatcher)
         val recupera = RecuperaElaborazioniInterrotteServizio(uow, elaborazioni, dispatcher)
@@ -123,9 +117,31 @@ internal class EstensioneR1(
                 RiassegnaSegmentoServizio(uow, trascritti, dispatcher),
             ),
             coda = coda,
-            lavoroDocumento = checkNotNull(scopeDocumento.coroutineContext[Job]),
+            lavoroDocumento = lavoroDocumento,
             aggiornamenti = aggiornamenti,
         )
+    }
+
+    /**
+     * `AbbonatoDocumentoEventi` (after-commit, startup sweep) on its own child of the session scope, on
+     * [io] — never the UI thread; returns that child's [Job], which [CollaboratoriR1.ferma] joins.
+     */
+    private fun avviaRigenerazioneDocumento(
+        contesto: ContestoEstensione,
+        trascritti: TrascrittoRepositorySql,
+        catalogo: CatalogoRegistrazioni,
+    ): Job {
+        val lavoro = SupervisorJob(contesto.scope.coroutineContext[Job])
+        AbbonatoDocumentoEventi(
+            contesto.dispatcher,
+            RigenerazioneDocumentoPolitica(
+                LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo),
+                LettoreNomiVuoto,
+                ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
+            ),
+            CoroutineScope(contesto.scope.coroutineContext + lavoro + io),
+        )
+        return lavoro
     }
 
     private companion object {

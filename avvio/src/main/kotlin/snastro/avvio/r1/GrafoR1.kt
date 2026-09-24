@@ -18,6 +18,7 @@ import snastro.ui.DestinazioneShell
 import snastro.ui.modelli.ServizioModelli
 import snastro.ui.modelli.StatoModelli
 import java.nio.file.Path
+import java.time.Clock
 
 /** AC-355/AC-341: R1's shell still shows only Registrazioni — the Parlanti section arrives with R2. */
 internal val SEZIONI_SHELL_R1: Set<DestinazioneShell> = setOf(DestinazioneShell.REGISTRAZIONI)
@@ -33,19 +34,21 @@ internal class GrafoR1(
     val apriEsterno: ApriEsterno,
 )
 
+/** The app-wide R1 pieces [costruisciGrafoR1] hands the R0 graph: the per-project extension and S5's port. */
+internal class ComponentiR1(val estensione: EstensioneR1, val servizioModelli: ServizioModelli)
+
 /**
- * Builds the R1 graph. [scelta] picks the ML adapters and the model catalogue
- * ([SelezioneAdattatoriMl], `-Dsnastro.ml`); [cartellaModelli] is the per-user model cache (ADR 0008
- * (c)) — `--smoke` injects a throwaway one. The Elaborazione queue waits while S5 is not
+ * [scelta] picks the ML adapters and the model catalogue ([SelezioneAdattatoriMl], `-Dsnastro.ml`);
+ * [cartellaModelli] is the per-user model cache (ADR 0008 (c)). ONE [MotoreSherpa] for the whole app
+ * (its Mutex is process-wide, ADR 0016 §4). The Elaborazione queue waits while S5 is not
  * [StatoModelli.Pronti] (AC-235) — immediately `Pronti` for an empty catalogue (the Finte).
  */
-internal fun costruisciGrafoR1(
-    cartellaRegistro: Path = cartellaDatiRegistroProgettiReale(),
-    scelta: SceltaMl = SceltaMl.daSistema(),
-    cartellaModelli: Path = CartellaCacheModelli.risolvi(),
-): GrafoR1 {
-    val io: CoroutineDispatcher = Dispatchers.IO
-    val clock = orologioApp()
+internal fun componentiR1(
+    scelta: SceltaMl,
+    cartellaModelli: Path,
+    io: CoroutineDispatcher,
+    clock: Clock,
+): ComponentiR1 {
     val catalogo = SelezioneAdattatoriMl.catalogo(scelta)
     val provisioning = ProvisioningModelli(catalogo, cartellaModelli)
     val servizioModelli = ServizioModelliProvisioning.di(catalogo, provisioning)
@@ -56,9 +59,21 @@ internal fun costruisciGrafoR1(
         ml = SelezioneAdattatoriMl.adattatori(scelta, MotoreSherpa(), provisioning),
         modelliPronti = { servizioModelli.stato.value == StatoModelli.Pronti },
     )
+    return ComponentiR1(estensione, servizioModelli)
+}
+
+/** The R1 graph: R0's own ([costruisciGrafoR0]) extended with [componentiR1]; `--smoke` passes throwaway folders. */
+internal fun costruisciGrafoR1(
+    cartellaRegistro: Path = cartellaDatiRegistroProgettiReale(),
+    scelta: SceltaMl = SceltaMl.daSistema(),
+    cartellaModelli: Path = CartellaCacheModelli.risolvi(),
+): GrafoR1 {
+    val io: CoroutineDispatcher = Dispatchers.IO
+    val clock = orologioApp()
+    val componenti = componentiR1(scelta, cartellaModelli, io, clock)
     return GrafoR1(
-        r0 = costruisciGrafoR0(cartellaRegistro, io, clock, estensione),
-        servizioModelli = servizioModelli,
+        r0 = costruisciGrafoR0(cartellaRegistro, io, clock, componenti.estensione),
+        servizioModelli = componenti.servizioModelli,
         apriEsterno = ApriEsternoDesktop(),
     )
 }

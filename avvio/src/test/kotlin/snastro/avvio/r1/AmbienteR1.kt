@@ -20,6 +20,7 @@ import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
+import snastro.trascrizione.applicazione.porte.RiconoscitoreParlato
 import snastro.trascrizione.applicazione.porte.RiconoscitoreParlatoFinta
 import snastro.trascrizione.applicazione.porte.VadFinta
 import snastro.ui.ProgettoAperto
@@ -35,7 +36,12 @@ import java.util.concurrent.TimeUnit
  * FFmpeg probe ([SondaAudioFinta]) and decoder ([DecodificatoreAudioFinta]) and the ML Finte — so the
  * end-to-end ACs run in the gate, without natives or models.
  */
-internal class AmbienteR1(radice: Path, diarizzatore: Diarizzatore = DiarizzatoreFinta()) : AutoCloseable {
+internal class AmbienteR1(
+    radice: Path,
+    diarizzatore: Diarizzatore = DiarizzatoreFinta(),
+    riconoscitore: RiconoscitoreParlato = RiconoscitoreParlatoFinta(),
+    rilasciaDopoElaborazione: () -> Unit = {},
+) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
     private val esecutoreUi = Executors.newSingleThreadExecutor()
@@ -62,7 +68,7 @@ internal class AmbienteR1(radice: Path, diarizzatore: Diarizzatore = Diarizzator
             io = Dispatchers.IO,
             clock = orologioApp(),
             generatoreId = GeneratoreIdFinto(),
-            ml = AdattatoriMl(diarizzatore, RiconoscitoreParlatoFinta(), VadFinta()),
+            ml = AdattatoriMl(diarizzatore, riconoscitore, VadFinta(), rilasciaDopoElaborazione),
             modelliPronti = { true },
             decodificatore = { DecodificatoreAudioFinta(sorgenti) },
         ),

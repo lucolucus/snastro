@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     id("snastro.compose-desktop")
 }
@@ -65,4 +67,23 @@ compose.desktop {
 // validation also requires this edge for prepareAppResources, which reads appResourcesRootDir.
 tasks.matching { it.name in setOf("run", "createDistributable", "prepareAppResources") }.configureEach {
     dependsOn(":scaricaNativiSherpa")
+}
+
+// Opt-in (@Tag("modelli"), never in `check`): the R1 composition end to end over the REAL sherpa-onnx
+// adapters and real FFmpeg (TrascrizioneRealeR1Test, models from SNASTRO_MODELLI_R1_DIR — never
+// committed) plus the R0 real-FFmpeg tests. Aggregated by the root `modelliTest`. Natives as in
+// :ml-sherpa's modelliTest: fetched first, `sherpa_onnx.native.path` pointing at them (ADR 0016 §4).
+val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
+tasks.register<Test>("modelliTest") {
+    group = "verification"
+    description = "Opt-in: R1 composition over the real ML adapters + real-FFmpeg tests (@Tag(\"modelli\"))."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("modelli")
+    }
+    dependsOn(scaricaNativiSherpa)
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}")
+    }
 }
