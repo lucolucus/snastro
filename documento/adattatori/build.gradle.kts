@@ -10,12 +10,22 @@ dependencies {
 
     // VociDelTrascritto (Trascrizione's public read API) — half of the supplier side of
     // LettoreTrascrittoDaTrascrizione (boundary trascritto-per-documento, ADR 0002:
-    // consumer:adattatori -> supplier:applicazione only, never supplier:adattatori).
+    // consumer:adattatori -> supplier:applicazione only, never supplier:adattatori) — AND
+    // ElaborazioneCompletata/VociUnite/VoceDivisa/SegmentoRiassegnato (eventi-elaborazione,
+    // eventi-revisione), consumed by AbbonatoDocumentoEventi.
     implementation(project(":trascrizione:applicazione"))
 
     // CatalogoRegistrazioni (Progetto's public read API) — the other half (titolo + dataRegistrazione
-    // of the Registrazione), same boundary.
+    // of the Registrazione), same boundary — AND DataRegistrazioneModificata/RegistrazioneRinominata
+    // (eventi-progetto), consumed by AbbonatoDocumentoEventi.
     implementation(project(":progetto:applicazione"))
+
+    // AttribuzioneConfermata/ParlanteRinominato/ParlantePromosso/ParlanteEliminato (eventi-parlanti),
+    // consumed by AbbonatoDocumentoEventi (AC-186; R2 events mapped now per the manifest).
+    implementation(project(":parlanti:applicazione"))
+
+    // AbbonatoDocumentoEventi's background coalescing/retry coroutine (ADR 0012).
+    implementation(libs.kotlinx.coroutines.core)
 
     // ScrittoreDocumentoContratto, LettoreTrascrittoContratto + AmbienteLettoreTrascritto + Seme*/​*Coniato (testFixtures) — D2:
     // this module's adapter test extends the port contract (dev-architecture-app.md#porta-contratto).
@@ -37,4 +47,8 @@ dependencies {
     // Port Finte are kernel `Ripristinabile` (roll back with UnitaDiLavoroFinta); `atteso()` unwraps
     // an expected `Esito.Ok` in the test.
     testImplementation(testFixtures(project(":kernel")))
+
+    // AbbonatoDocumentoEventiTest: virtual time (StandardTestDispatcher/runTest, no real sleeps —
+    // dev-architecture-app.md#test) to drive the coalescing/backoff coroutine deterministically.
+    testImplementation(libs.kotlinx.coroutines.test)
 }
