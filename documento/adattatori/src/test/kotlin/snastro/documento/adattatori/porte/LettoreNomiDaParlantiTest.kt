@@ -22,13 +22,8 @@ import snastro.parlanti.applicazione.comandi.RinominaParlanteServizio
 import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.letture.NomiDelleVoci
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
-import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreAudioFintaParlanti
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
-import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta as LettoreRegistrazioneFintaParlanti
-import snastro.parlanti.applicazione.porte.LettoreVociFinta as LettoreVociFintaParlanti
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
-import snastro.parlanti.applicazione.porte.RegistrazioneVista as RegistrazioneVistaParlanti
-import snastro.parlanti.applicazione.porte.VoceVista as VoceVistaParlanti
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
@@ -46,11 +41,8 @@ import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.PortePipeline
 import snastro.trascrizione.applicazione.porte.AllineatoreFinta
-import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreAudioFintaTrascrizione
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
-import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta as LettoreRegistrazioneFintaTrascrizione
-import snastro.trascrizione.applicazione.porte.RegistrazioneVista as RegistrazioneVistaTrascrizione
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
@@ -58,6 +50,14 @@ import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreAudioFintaParlanti
+import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta as LettoreRegistrazioneFintaParlanti
+import snastro.parlanti.applicazione.porte.LettoreVociFinta as LettoreVociFintaParlanti
+import snastro.parlanti.applicazione.porte.RegistrazioneVista as RegistrazioneVistaParlanti
+import snastro.parlanti.applicazione.porte.VoceVista as VoceVistaParlanti
+import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreAudioFintaTrascrizione
+import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta as LettoreRegistrazioneFintaTrascrizione
+import snastro.trascrizione.applicazione.porte.RegistrazioneVista as RegistrazioneVistaTrascrizione
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): [LettoreNomiDaParlanti] passes [LettoreNomiContratto]
@@ -133,6 +133,11 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
+            return completaElaborazione(aggiungiRegistrazioneProgetto(), voci)
+        }
+
+        /** Progetto: CreaProgetto (già in [init]) + AggiungiRegistrazione, poi le due viste dello stesso dato. */
+        private fun aggiungiRegistrazioneProgetto(): RegistrazioneId {
             val percorso = "/sorgenti/registrazione-${contatore++}.wav"
             archivio.conSorgente(percorso)
             val sonda = SondaAudioFinta(
@@ -168,7 +173,11 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 dataRegistrazione = v.dataRegistrazione,
                 durataMs = v.durataMs,
             )
+            return id
+        }
 
+        /** Trascrizione: AvviaElaborazione + EseguiProssimaElaborazione su `voci` Voci non sovrapposte. */
+        private fun completaElaborazione(id: RegistrazioneId, voci: Int): RegistrazioneConiata {
             AvviaElaborazioneServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 generatoreId,
@@ -177,9 +186,10 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 elaborazioni,
             ).esegui(AvviaElaborazione(id)).atteso()
 
-            // `voci` Voci non sovrapposte, ciascuna prima apparizione crescente -> VoceId 1..voci in ordine.
+            // Ciascuna prima apparizione crescente -> VoceId 1..voci nell'ordine dato.
             val turni = (0 until voci).map { i -> Turno(IntervalloMs(i * 2_000L, i * 2_000L + 1_000L), voceIndice = i) }
-            val decodificatore = DecodificatoreAudioFintaTrascrizione(mapOf(v.riferimentoAudio to v.durataMs))
+            val vista = registrazioniVisteTrascrizione.getValue(id)
+            val decodificatore = DecodificatoreAudioFintaTrascrizione(mapOf(vista.riferimentoAudio to vista.durataMs))
             val pipeline = PortePipeline(
                 LettoreRegistrazioneFintaTrascrizione(registrazioniVisteTrascrizione),
                 decodificatore,
