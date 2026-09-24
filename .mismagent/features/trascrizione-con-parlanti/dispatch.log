@@ -606,3 +606,6 @@
 2026-09-24T00:24:17Z	riconoscitore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
 2026-09-24T00:27:19Z	schermata-modelli	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 2e79f98
 2026-09-24T00:27:19Z	schermata-modelli	composer	merge	cycle=0	-	-	MERGED 3d4a335 (light verify)
+2026-09-24T00:33:48Z	avvio-coda-elaborazioni	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 0219d09
+2026-09-24T00:33:48Z	avvio-coda-elaborazioni	verifier	result	cycle=1	-	composer	PASS (light: HIGH resolved with tests; full gate green after semantic merge fix)
+2026-09-24T00:33:48Z	avvio-coda-elaborazioni	composer	merge	cycle=1	-	-	MERGED 86c6099; carry to avvio-composizione: chiudi = scope.cancel() then coda.fermaEAttendi() BEFORE chiudiDb; translate RisultatoAvanzamento<->RisultatoTentativo; AC-350 guard (no snastro.trascrizione import in avvio/main) must be relaxed for R1
