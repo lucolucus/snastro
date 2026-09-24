@@ -613,7 +613,10 @@ class RegistrazioneSomiglianzaTest {
     }
 
     private companion object {
-        const val TENTATIVI = 200
+        // L713a: AC-536 (this test) failed once on a full run at the old 2 s budget (200 * 10ms) under
+        // load, green on rerun (dispatch.log, "timing-flaky"). 1000 * 10ms = a 10 s deadline — robust
+        // against a loaded machine, still bounded so a genuine regression fails the test, not hangs it.
+        const val TENTATIVI = 1_000
         const val PAUSA_MS = 10L
     }
 }

@@ -3,6 +3,7 @@ package snastro.ui.registrazione
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -72,6 +73,13 @@ class RegistrazionePresenter(
     private val _stato = MutableStateFlow<RegistrazioneUiStato>(RegistrazioneUiStato.Caricamento)
     val stato: StateFlow<RegistrazioneUiStato> = _stato.asStateFlow()
 
+    // L573a: the ONE Job of whichever `lettore` command (segmento/estratto/pausa/header-play) is still
+    // in flight — a later one always cancels an earlier one still running, so two quick clicks resolve
+    // in CLICK order rather than in whatever order their `withContext(io) { … }` happens to finish (the
+    // same supersession `LettorePresenter`'s own HIGH-1 fix already gives its single shared instance;
+    // here `lettore` is reached directly, so the guard is repeated at this call site).
+    private var comandoLettoreInCorso: Job? = null
+
     // R2 (schermata-registrazione-identificazione): the Voci panel, the Nome labels, the selection
     // toolbar and the Revisione commands — absent in R1 (AC-402), so nothing of it runs there.
     private val voci: StatoVoci? = parlanti?.let { sorgenti ->
@@ -102,8 +110,14 @@ class RegistrazionePresenter(
                 _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
                 return
             }
-            val percorso = withContext(io) { documento() }
-            val disponibile = withContext(io) { lettore.disponibile(registrazioneId) }
+            // L573b: `documento()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
+            // to fall into the same catch below as `trascritto()` and take the WHOLE screen to `Errore`,
+            // discarding the vista just read. Neither is essential the way `trascritto()` is: a missing
+            // Documento just keeps 'Apri documento' disabled (same as `documento()` returning `null`), a
+            // failed `disponibile` just reads as "audio missing" (same as it legitimately returning
+            // `false`) — the transcript itself stays readable either way (AC-217/AC-218).
+            val percorso = documentoOSicuro()
+            val disponibile = disponibileOSicuro()
             val statoLettore = lettore.stato.value
             val soloLettura = soloLetturaDi(withContext(io) { stati?.invoke() })
             voci?.vista = vista
@@ -131,8 +145,34 @@ class RegistrazionePresenter(
         if (_stato.value is RegistrazioneUiStato.Dati) voci?.ricaricaParlanti()
     }
 
-    /** Retries the initial load after [RegistrazioneUiStato.Errore]. */
+    // L573b: `documento()` degraded to `null` (same as it legitimately having none) — 'Apri documento'/
+    // 'Mostra nella cartella' just stay disabled (AC-218), the transcript is untouched.
+    private suspend fun documentoOSicuro(): String? = try {
+        withContext(io) { documento() }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+    ) {
+        null
+    }
+
+    // L573b: `lettore.disponibile()` degraded to `false` (same as it legitimately reporting no source) —
+    // the header bar reads "audio non disponibile" instead of taking the whole screen to Errore.
+    private suspend fun disponibileOSicuro(): Boolean = try {
+        withContext(io) { lettore.disponibile(registrazioneId) }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (
+        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+    ) {
+        false
+    }
+
+    /** Retries the initial load after [RegistrazioneUiStato.Errore] — shows [RegistrazioneUiStato.Caricamento]
+     * while the retry itself is in flight (L573f), instead of leaving the stale Errore on screen. */
     fun riprova() {
+        _stato.value = RegistrazioneUiStato.Caricamento
         scope.launch { carica() }
     }
 
@@ -156,11 +196,14 @@ class RegistrazionePresenter(
         }
     }
 
-    // AC-208: a Segmento is highlighted while the shared player plays THIS Registrazione with a position
-    // inside its own [inizioMs, fineMs) — overlapping Segmenti (ux-proposal Q-4) may both highlight at
-    // once, both kept, no warning: the same rule the transcript's own ordering already lives with.
+    // AC-208/L573d: a Segmento is highlighted while the shared player's position for THIS Registrazione
+    // sits inside its own [inizioMs, fineMs) — by POSITION alone, not gated on `s.inRiproduzione`. A
+    // pause leaves the position exactly where it was; requiring `inRiproduzione` too made the highlight
+    // vanish on pause even though the same Segmento is still the one the header bar shows paused on.
+    // Overlapping Segmenti (ux-proposal Q-4) may both highlight at once, both kept, no warning: the same
+    // rule the transcript's own ordering already lives with.
     private fun inRiproduzione(inizioMs: Long, fineMs: Long, s: StatoLettore): Boolean =
-        s.registrazioneId == registrazioneId && s.inRiproduzione && s.posizioneMs in inizioMs until fineMs
+        s.registrazioneId == registrazioneId && s.posizioneMs in inizioMs until fineMs
 
     private fun barraDi(s: StatoLettore, disponibile: Boolean): LettoreUiStato = when {
         !disponibile -> LettoreUiStato.NonDisponibile(MESSAGGIO_AUDIO_NON_DISPONIBILE)
@@ -186,7 +229,7 @@ class RegistrazionePresenter(
         val dati = _stato.value as? RegistrazioneUiStato.Dati ?: return
         if (!dati.audioDisponibile) return
         dati.segmenti.find { it.segmentoId == id }?.let { segmento ->
-            avvia { lettore.riproduciDa(registrazioneId, segmento.inizioMs) }
+            avviaLettore { lettore.riproduciDa(registrazioneId, segmento.inizioMs) }
         }
     }
 
@@ -194,11 +237,11 @@ class RegistrazionePresenter(
     fun riproduciDaInizio() {
         val dati = _stato.value as? RegistrazioneUiStato.Dati ?: return
         if (!dati.audioDisponibile) return
-        avvia { lettore.riproduciDa(registrazioneId, 0) }
+        avviaLettore { lettore.riproduciDa(registrazioneId, 0) }
     }
 
     /** The header audio bar's own pause. */
-    fun pausa() = avvia { lettore.pausa() }
+    fun pausa() = avviaLettore { lettore.pausa() }
 
     /** AC-218: opens the Documento with the OS default app. A no-op while
      * [RegistrazioneUiStato.Dati.documentoPercorso] has not resolved yet. */
@@ -215,32 +258,41 @@ class RegistrazionePresenter(
     // H2: every port call this presenter fires off the main flow runs here, wrapped the same way as
     // every other presenter in this codebase (RegistrazioniPresenter/LettorePresenter) — a fault never
     // escapes `scope.launch` and takes the `stato`/`lettore.stato` collectors down with it.
-    private fun avvia(operazione: () -> Unit) {
-        scope.launch {
-            try {
-                withContext(io) { operazione() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiornaDati { it.copy(errore = MESSAGGIO_ERRORE_GENERICO) }
-            }
+    private fun avvia(operazione: () -> Unit): Job = scope.launch {
+        try {
+            withContext(io) { operazione() }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            aggiornaDati { it.copy(errore = MESSAGGIO_ERRORE_GENERICO) }
         }
+    }
+
+    // L573a: every command that reaches the shared `lettore` (segmento/estratto/pausa/header-play) goes
+    // through this ONE Job — a new one always cancels whatever is still running, so two quick clicks
+    // resolve in click order. Cancelling alone cannot interrupt a port call already in flight (a plain,
+    // non-suspending call has no suspension point to cancel at), but it DOES stop an earlier command
+    // that has not started its own `withContext(io)` block yet, and `avvia`'s own error handling still
+    // runs for whichever command actually reaches the end.
+    private fun avviaLettore(operazione: () -> Unit) {
+        comandoLettoreInCorso?.cancel()
+        comandoLettoreInCorso = avvia(operazione)
     }
 
     /** AC-403: '▶ estratto' of a Voce card — a no-op while the audio source is missing. */
     fun riproduciEstrattoVoce(voceId: VoceId) {
         val sorgenti = parlanti ?: return
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
-        avvia { sorgenti.estratto(VoceRef(registrazioneId, voceId))?.let(lettore::riproduciEstratto) }
+        avviaLettore { sorgenti.estratto(VoceRef(registrazioneId, voceId))?.let(lettore::riproduciEstratto) }
     }
 
     /** AC-403: '▶' of a Candidato (its own past excerpt) — a no-op while the audio source is missing. */
     fun riproduciEstratto(estratto: EstrattoRef) {
         if (parlanti == null) return
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
-        avvia { lettore.riproduciEstratto(estratto) }
+        avviaLettore { lettore.riproduciEstratto(estratto) }
     }
 
     /** H1: dismisses the current inline `errore`, if any. */

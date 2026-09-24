@@ -90,6 +90,13 @@ internal class StatoVoci(
 
     private var dati: DatiParlanti? = null
     private var erroreLettura = false
+
+    // L665a: bumped on every `ricaricaParlanti()` — a call compares its OWN value against this one
+    // before writing, so a superseded read (a newer `ricaricaParlanti()` already started, e.g. two card
+    // commands settling around the same time, or a Cambiamento arriving mid-read) can never overwrite a
+    // fresher one just because it happens to finish LAST (same pattern as `LettorePresenter`'s HIGH-1
+    // `richiestaCorrente`).
+    private var generazioneParlanti = 0L
     private val proposte = mutableMapOf<VoceId, StatoProposta>()
     private var proposteOltreSoglia = false
     private var lavoroProposte: Job? = null
@@ -136,23 +143,31 @@ internal class StatoVoci(
 
     /** AC-405: reads identificazione-voci, parlanti-attivi and proposta-unione, then the Proposte. */
     suspend fun ricaricaParlanti() {
+        val generazione = ++generazioneParlanti
+        var nuovi: DatiParlanti? = null
+        var fallito = false
         try {
-            dati = withContext(io) {
+            nuovi = withContext(io) {
                 DatiParlanti(
                     identificate = sorgenti.identificazione().associateBy { it.voceId },
                     attivi = sorgenti.parlantiAttivi(),
                     unioni = sorgenti.unioni(),
                 )
             }
-            erroreLettura = false
         } catch (e: CancellationException) {
             throw e
         } catch (
             // AC-405: a failed read shows a message in the cards, the transcript (AC-402) stays usable.
             @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
         ) {
-            erroreLettura = true
+            fallito = true
         }
+        // L665a: a call superseded by a NEWER `ricaricaParlanti()` (already started while this one was
+        // still reading) writes nothing at all — not `dati`, not `erroreLettura`, no publish, no Proposta
+        // job — whatever the outcome of its own read.
+        if (generazione != generazioneParlanti) return
+        dati = nuovi
+        erroreLettura = fallito
         pubblica()
         // AC-454: no Proposta job while read-only — it would only wait on the native Mutex held by the
         // running pipeline (ADR 0017); AC-461: the job starts again once soloLettura ends (the same

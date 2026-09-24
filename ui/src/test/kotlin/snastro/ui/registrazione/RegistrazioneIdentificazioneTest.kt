@@ -474,6 +474,38 @@ class RegistrazioneIdentificazioneTest {
     }
 
     @Test
+    fun `L665b un riassegna multi Segmento che fallisce a meta applica il primo spostamento e mostra l errore`() =
+        runTest {
+            val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(3), V2)
+            var chiamate = 0
+            val a = ambiente().apply {
+                esitoRevisione = { c ->
+                    chiamate++
+                    if (chiamate == 1) Esito.Ok(Unit) else Esito.Errore(errore)
+                }
+            }
+            val presenter = avvia(a)
+            advanceUntilIdle()
+            presenter.azioni.selezionaSegmento(SegmentoId(1))
+            presenter.azioni.selezionaSegmento(SegmentoId(3))
+
+            presenter.azioni.riassegnaA(V2)
+            advanceUntilIdle()
+
+            // Both moves were attempted, in selection order, and the SECOND one failed.
+            assertEquals(
+                listOf<Any>(RiassegnaSegmento(REG, SegmentoId(1), V2), RiassegnaSegmento(REG, SegmentoId(3), V2)),
+                a.revisioni,
+            )
+            // The one that succeeded is APPLIED — a partial failure is not treated as "nothing changed".
+            assertEquals(V2, presenter.dati.segmenti.single { it.segmentoId == SegmentoId(1) }.voceId)
+            assertEquals(V1, presenter.dati.segmenti.single { it.segmentoId == SegmentoId(3) }.voceId)
+            // The inline error names the failure, and the selection (now split across two Voci) is cleared.
+            assertEquals(messaggioPer(errore), presenter.dati.errore)
+            assertTrue(presenter.dati.selezione.isEmpty())
+        }
+
+    @Test
     fun `AC-404 un errore di Revisione e un messaggio inline e trascritto e selezione restano invariati`() = runTest {
         val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(2), null)
         val a = ambiente().apply { esitoRevisione = { Esito.Errore(errore) } }
