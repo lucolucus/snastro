@@ -47,6 +47,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import snastro.kernel.RegistrazioneId
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
 import snastro.ui.formattaDurata
@@ -60,6 +61,7 @@ import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.SUGGERIMENTO_NUMERO_PERSONE
+import snastro.ui.testi.etichettaIdentificazione
 import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.etichettaInCorso
 import java.time.LocalDate
@@ -200,6 +202,7 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
                     Spacer(modifier = Modifier.width(PADDING_RIGA))
                     Text(text = formattaDurata(riga.durataMs), style = MaterialTheme.typography.bodySmall)
                 }
+                riga.identificazione?.let { BadgeIdentificazione(it, riga.registrazioneId) }
             }
             riga.elaborazione?.let { ColonnaElaborazione(it, riga, azioni) }
         }
@@ -360,6 +363,26 @@ internal fun String.aData(): LocalDate? =
     ) {
         null
     }
+
+/**
+ * AC-204/AC-345 (R2, fetta Parlanti): the identification badge — "3 voci · 1 da identificare", or
+ * "3 voci" alone once every Voce is identified (AC-345, never "· 0 da identificare"). Absent
+ * entirely when [RigaRegistrazione.identificazione] is `null` (R0/R1, or the source's row not yet
+ * known/failed — [RegistrazioniPresenter] decides, this only renders what it is given).
+ */
+@Composable
+private fun BadgeIdentificazione(identificazione: IdentificazioneRiga, id: RegistrazioneId) {
+    Text(
+        text = etichettaIdentificazione(identificazione.numVoci, identificazione.numVociDaIdentificare),
+        style = MaterialTheme.typography.bodySmall,
+        color = if (identificazione.numVociDaIdentificare > 0) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+        modifier = Modifier.testTag("registrazioni-identificazione-${id.valore}"),
+    )
+}
 
 @Composable
 private fun ColonnaElaborazione(stato: StatoElaborazioneRiga, riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {

@@ -26,6 +26,12 @@ dependencies {
     // `null` in R0, AC-350) are typed over `:trascrizione:applicazione` — `:ui` depends on it only as
     // `implementation` (never `api`), so it is not on `:avvio`'s classpath transitively.
     implementation(project(":trascrizione:applicazione"))
+    // RegistrazioniPresenter's optional `identificazioni` parameter (AC-204/AC-345, left `null` here —
+    // R0/R1 show no badge) is typed over `:parlanti:applicazione`'s `ConteggioIdentificazione`, needed
+    // for this call site to resolve even though the argument itself is omitted (same `implementation`,
+    // not `api`, non-transitive reasoning as above). No `:parlanti` class is instantiated here — the
+    // `avvio-parlanti` block wires the real `identificazioni` argument (AC-356 stays satisfied).
+    implementation(project(":parlanti:applicazione"))
 
     // R1 composition (avvio-composizione, package snastro.avvio.r1): Trascrizione SQL repositories +
     // decoder + AllineatorePerTurno, Documento regeneration, :modelli behind ServizioModelli (AC-329),

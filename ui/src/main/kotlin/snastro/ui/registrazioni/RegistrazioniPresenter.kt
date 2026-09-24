@@ -10,6 +10,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
+import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
@@ -33,7 +34,13 @@ import java.time.LocalDate
 /**
  * State holder of S2 · Registrazioni del Progetto (RC-2, thin UI): joins `registrazioni-del-progetto`
  * with `stati-elaborazione` by [RegistrazioneId] (R1, AC-342 — [statiElaborazione]/[avviaElaborazione]
- * are `null` in R0: no status column, no 'Trascrivi'/'Riprova', row click does nothing), keeps a
+ * are `null` in R0: no status column, no 'Trascrivi'/'Riprova', row click does nothing) and with
+ * `identificazione-registrazioni` (R2, AC-204/AC-345 — [identificazioni] is `null` in R0/R1: no
+ * badge; when supplied, a row's [RigaRegistrazione.identificazione] is built only once BOTH
+ * `numVoci` (from `stati-elaborazione`, only ever known for `COMPLETATA`) and the Parlanti count are
+ * known for that row — a missing entry (no Trascritto yet) or a failed read of the source leaves
+ * just that badge absent, never a provisional or '0' count, without affecting the rest of the row),
+ * keeps a
  * per-row reflection of the shared [LettoreAudio] (AC-343: [LettoreAudio.disponibile] is checked once
  * per refresh, [LettoreAudio.stato] is collected live so the play/pause control never goes stale) and
  * refreshes on [AggiornamentiVista] (R15) or after a successful import/`modificaData`/`rinomina`/
@@ -70,6 +77,7 @@ class RegistrazioniPresenter(
     private val statiElaborazione: ((List<RegistrazioneId>) -> List<StatoRegistrazioneVista>)? = null,
     private val avviaElaborazione: ((AvviaElaborazione) -> Esito<Unit>)? = null,
     private val apriRegistrazione: (RegistrazioneId) -> Unit = {},
+    private val identificazioni: ((List<RegistrazioneId>) -> List<ConteggioIdentificazione>)? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -156,7 +164,9 @@ class RegistrazioniPresenter(
 
     private fun costruisciRighe(): List<RigaRegistrazione> {
         val progetto = registrazioni()
-        val stati = statiElaborazione?.invoke(progetto.map { it.registrazioneId })?.associateBy { it.registrazioneId }
+        val ids = progetto.map { it.registrazioneId }
+        val stati = statiElaborazione?.invoke(ids)?.associateBy { it.registrazioneId }
+        val conteggiIdentificazione = conteggiIdentificazione(ids)
         val statoLettore = lettore.stato.value
         return progetto.map { r ->
             val vista = stati?.get(r.registrazioneId)
@@ -173,9 +183,36 @@ class RegistrazioniPresenter(
                 ),
                 numeroPersone = vista?.takeIf { it.stato == StatoElaborazioneVista.FALLITA }
                     ?.numeroPersone?.toString().orEmpty(), // AC-376: 'Riprova' prefilled
+                identificazione = identificazioneDi(vista, conteggiIdentificazione[r.registrazioneId]),
             )
         }
     }
+
+    /**
+     * AC-345: `null` — never a partial batch — when [identificazioni] is absent (R0/R1) or its read
+     * throws; a throw here is contained to this batch (never the outer [carica] catch of
+     * [costruisciRighe]'s OTHER sources), so a failing Parlanti source only costs every row its
+     * badge, the rest of each row (title, date, status, playback…) stays built from its own source.
+     */
+    private fun conteggiIdentificazione(ids: List<RegistrazioneId>): Map<RegistrazioneId, ConteggioIdentificazione> =
+        try {
+            identificazioni?.invoke(ids)?.associateBy { it.registrazioneId }.orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+        ) {
+            emptyMap()
+        }
+
+    /** AC-204/AC-345: a badge only once BOTH `numVoci` (only known for `COMPLETATA`) and the
+     * Parlanti [conteggio] for this row are known — a missing [vista]/`numVoci`/[conteggio] (source
+     * absent, not yet loaded for this row, or failed) means no badge, never a provisional one. */
+    private fun identificazioneDi(
+        vista: StatoRegistrazioneVista?,
+        conteggio: ConteggioIdentificazione?,
+    ): IdentificazioneRiga? =
+        vista?.numVoci?.let { numVoci -> conteggio?.let { IdentificazioneRiga(numVoci, it.numVociDaIdentificare) } }
 
     private fun elaborazioneDi(v: StatoRegistrazioneVista): StatoElaborazioneRiga = when (v.stato) {
         StatoElaborazioneVista.NON_AVVIATA -> StatoElaborazioneRiga.NonAvviata
