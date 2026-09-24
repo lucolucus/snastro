@@ -33,19 +33,18 @@ class SnastroMisureTest {
 
     /**
      * AC-553 (mechanical half of the review criterion): no `RoundedCornerShape(<literal>)` outside
-     * `snastro.ui.stile`. Scoped by exception to one pre-existing line this block does not own
-     * (`SchermataPannelloVoci.kt`'s `RoundedCornerShape(2.dp)`, wave-16 screen territory — see the
-     * block's report); every other file must use [SnastroMisure]'s named radii.
+     * `snastro.ui.stile`; every file uses [SnastroMisure]'s named radii instead. The wave-16 restyle
+     * (`restyle-registrazione`) removed the last exception — `SchermataPannelloVoci.kt`'s Fascia
+     * notches now reuse the kit's own [snastro.ui.stile.MisuratoreFascia] (frugality rung 2) instead of
+     * hand-rolling `RoundedCornerShape(2.dp)`.
      */
     @Test
     fun `AC-553 nessun RoundedCornerShape con valore letterale fuori da snastro-ui-stile`() {
-        val eccezioni = setOf("src/main/kotlin/snastro/ui/registrazione/SchermataPannelloVoci.kt")
         val pattern = Regex("""RoundedCornerShape\(\s*[0-9]""")
         val radice = File("src/main/kotlin")
         val violazioni = radice.walkTopDown()
             .filter { it.isFile && it.extension == "kt" }
             .filterNot { it.path.replace('\\', '/').contains("/snastro/ui/stile/") }
-            .filterNot { file -> eccezioni.any { file.path.replace('\\', '/').endsWith(it) } }
             .filter { pattern.containsMatchIn(it.readText()) }
             .map { it.path }
             .toList()

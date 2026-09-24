@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import snastro.ui.SnastroTema
 import java.io.File
 import javax.imageio.ImageIO
 
@@ -91,18 +92,35 @@ class LettoreRenderCheckTest {
         catturaPng("lettore-non-disponibile", width, height)
     }
 
-    private fun verificaProntoInRiproduzione(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent {
-            BarraLettore(
-                stato = LettoreUiStato.Pronto(posizioneMs = 65_000, inRiproduzione = true),
-                onRiproduci = {},
-                onPausa = {},
-            )
+    private fun verificaProntoInRiproduzione(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SnastroTema(scuro = scuro, riduciMovimento = true) {
+                    BarraLettore(
+                        stato = LettoreUiStato.Pronto(posizioneMs = 65_000, inRiproduzione = true),
+                        onRiproduci = {},
+                        onPausa = {},
+                        durataMs = 185_000,
+                        corsie = listOf(
+                            snastro.ui.lettore.CorsiaVoce(snastro.kernel.VoceId(1), 0, 40_000),
+                            snastro.ui.lettore.CorsiaVoce(snastro.kernel.VoceId(2), 45_000, 65_000),
+                        ),
+                    )
+                }
+            }
+            onNodeWithTag("lettore-pausa").assertIsDisplayed()
+            onNodeWithText("1:05").assertIsDisplayed() // AC-557: no leading zero on minutes under one hour
+            val suffisso = if (scuro) "-scuro" else ""
+            catturaPng("lettore-pronto-in-riproduzione$suffisso", width, height)
         }
-        onNodeWithTag("lettore-pausa").assertIsDisplayed()
-        onNodeWithText("1:05").assertIsDisplayed() // AC-557: no leading zero on minutes under one hour
-        catturaPng("lettore-pronto-in-riproduzione", width, height)
-    }
+
+    @Test
+    fun `AC-579 in riproduzione con corsie delle voci scuro a 1280x800`() =
+        verificaProntoInRiproduzione(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-579 in riproduzione con corsie delle voci scuro a 1024x640`() =
+        verificaProntoInRiproduzione(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     private fun verificaProntoInPausa(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent {

@@ -3,11 +3,10 @@ package snastro.ui.registrazione
 import androidx.compose.ui.graphics.toAwtImage
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
-import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
-import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -152,11 +151,19 @@ class RegistrazioneRenderCheckTest {
     fun `AC-452 il banner di sola lettura durante una ritrascrizione a 1024x640`() =
         verificaBannerSolaLettura(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
-    private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent { SchermataRegistrazione(stato = RegistrazioneUiStato.Caricamento, azioni = AZIONI_VUOTE) }
-        onNodeWithTag("registrazione-scheletro").assertIsDisplayed()
-        catturaPng("registrazione-caricamento", width, height)
-    }
+    private fun verificaCaricamento(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazione(
+                    stato = RegistrazioneUiStato.Caricamento,
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazione-scheletro").assertIsDisplayed()
+            catturaPng("registrazione-caricamento", width, height, scuro)
+        }
 
     private fun verificaVuoto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent { SchermataRegistrazione(stato = uniStato(segmenti = emptyList()), azioni = AZIONI_VUOTE) }
@@ -195,68 +202,115 @@ class RegistrazioneRenderCheckTest {
         catturaPng("registrazione-trascritto-sovrapposto", width, height)
     }
 
-    private fun verificaSegmentoInRiproduzione(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        val segmenti = listOf(
-            unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 4_000, testo = "Buongiorno a tutti."),
-            unSegmento(
-                2,
-                voceNumero = 2,
-                inizioMs = 4_000,
-                fineMs = 8_000,
-                testo = "Grazie a voi.",
-                inRiproduzione = true,
-            ),
-        )
-        setContent {
-            SchermataRegistrazione(
-                stato = uniStato(segmenti = segmenti, barra = LettoreUiStato.Pronto(5_000, inRiproduzione = true)),
-                azioni = AZIONI_VUOTE,
-            )
-        }
-        onNodeWithTag("registrazione-segmento-2").assertIsDisplayed()
-        catturaPng("registrazione-segmento-in-riproduzione", width, height)
-    }
-
-    private fun verificaAudioNonDisponibile(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent {
-            SchermataRegistrazione(
-                stato = uniStato(
-                    segmenti = listOf(unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 2_000, testo = "Testo.")),
-                    barra = LettoreUiStato.NonDisponibile(MESSAGGIO_AUDIO_NON_DISPONIBILE),
-                    audioDisponibile = false,
+    private fun verificaSegmentoInRiproduzione(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            val segmenti = listOf(
+                unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 4_000, testo = "Buongiorno a tutti."),
+                unSegmento(
+                    2,
+                    voceNumero = 2,
+                    inizioMs = 4_000,
+                    fineMs = 8_000,
+                    testo = "Grazie a voi.",
+                    inRiproduzione = true,
                 ),
-                azioni = AZIONI_VUOTE,
             )
+            setContent {
+                SchermataRegistrazione(
+                    stato = uniStato(segmenti = segmenti, barra = LettoreUiStato.Pronto(5_000, inRiproduzione = true)),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazione-segmento-2").assertIsDisplayed()
+            catturaPng("registrazione-segmento-in-riproduzione", width, height, scuro)
         }
-        onNodeWithText(MESSAGGIO_AUDIO_NON_DISPONIBILE).assertIsDisplayed()
-        // BarraLettore's own NonDisponibile rendering (snastro.ui.lettore, not owned by this block) simply
-        // omits the clickable modifier rather than setting Compose's Disabled semantics — assert that.
-        onNodeWithTag("lettore-riproduci").assert(!hasClickAction())
-        onNodeWithText("Testo.").assertIsDisplayed()
-        catturaPng("registrazione-audio-non-disponibile", width, height)
-    }
 
-    private fun verificaBannerSolaLettura(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
-        setContent {
-            SchermataRegistrazione(
-                stato = uniStato(
-                    segmenti = listOf(unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 2_000, testo = "Testo.")),
-                    soloLettura = true,
-                    bannerRitrascrizione = MESSAGGIO_RITRASCRIZIONE_IN_CORSO,
-                ),
-                azioni = AZIONI_VUOTE,
-            )
+    private fun verificaAudioNonDisponibile(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazione(
+                    stato = uniStato(
+                        segmenti = listOf(
+                            unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 2_000, testo = "Testo."),
+                        ),
+                        barra = LettoreUiStato.NonDisponibile(MESSAGGIO_AUDIO_NON_DISPONIBILE),
+                        audioDisponibile = false,
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText(MESSAGGIO_AUDIO_NON_DISPONIBILE).assertIsDisplayed()
+            // AC-579: BarraLettore's transport is a `BottonePlay` now (snastro.ui.lettore, not owned by
+            // this block) — disabled via Compose's own Disabled semantics, same convention as every
+            // other `Sn` control (`InterazioniStileTest`'s `assertIsNotEnabled` pattern).
+            onNodeWithTag("lettore-riproduci").assertIsNotEnabled()
+            onNodeWithText("Testo.").assertIsDisplayed()
+            catturaPng("registrazione-audio-non-disponibile", width, height, scuro)
         }
-        onNodeWithTag("registrazione-banner-ritrascrizione").assertIsDisplayed()
-        onNodeWithText("Ritrascrizione in corso: modifiche disabilitate fino al termine", substring = true)
-            .assertIsDisplayed()
-        onNodeWithText("Testo.").assertIsDisplayed()
-        catturaPng("registrazione-banner-sola-lettura", width, height)
-    }
+
+    private fun verificaBannerSolaLettura(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazione(
+                    stato = uniStato(
+                        segmenti = listOf(
+                            unSegmento(1, voceNumero = 1, inizioMs = 0, fineMs = 2_000, testo = "Testo."),
+                        ),
+                        soloLettura = true,
+                        bannerRitrascrizione = MESSAGGIO_RITRASCRIZIONE_IN_CORSO,
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazione-banner-ritrascrizione").assertIsDisplayed()
+            onNodeWithText("Ritrascrizione in corso: modifiche disabilitate fino al termine", substring = true)
+                .assertIsDisplayed()
+            onNodeWithText("Testo.").assertIsDisplayed()
+            catturaPng("registrazione-banner-sola-lettura", width, height, scuro)
+        }
+
+    @Test
+    fun `AC-589 caricamento scuro a 1280x800`() =
+        verificaCaricamento(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-589 caricamento scuro a 1024x640`() =
+        verificaCaricamento(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-589 segmento in riproduzione scuro a 1280x800`() =
+        verificaSegmentoInRiproduzione(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-589 segmento in riproduzione scuro a 1024x640`() =
+        verificaSegmentoInRiproduzione(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-589 audio non disponibile scuro a 1280x800`() =
+        verificaAudioNonDisponibile(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-589 audio non disponibile scuro a 1024x640`() =
+        verificaAudioNonDisponibile(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-589 banner sola lettura scuro a 1280x800`() =
+        verificaBannerSolaLettura(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-589 banner sola lettura scuro a 1024x640`() =
+        verificaBannerSolaLettura(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     @OptIn(ExperimentalTestApi::class)
-    private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int) {
-        val png = File(outputDir, "$nome-${width}x$height.png")
+    private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int, scuro: Boolean = false) {
+        val suffisso = if (scuro) "-scuro" else ""
+        val png = File(outputDir, "$nome-${width}x$height$suffisso.png")
         val bitmap = onRoot().captureToImage().toAwtImage()
         ImageIO.write(bitmap, "PNG", png)
         check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }

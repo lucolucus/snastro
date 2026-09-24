@@ -11,8 +11,10 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyDescendant
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
@@ -36,7 +38,8 @@ import snastro.ui.lettore.LettoreUiStato
 import snastro.ui.testi.AVVISO_TUTTA_LA_VOCE
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_DIVIDI_VOCE
-import snastro.ui.testi.ETICHETTA_NUOVO
+import snastro.ui.testi.ETICHETTA_NUOVA_PERSONA
+import snastro.ui.testi.ETICHETTA_RICORRENTE
 import snastro.ui.testi.ETICHETTA_TOGLI_CONFERMA
 import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
@@ -193,14 +196,16 @@ class RegistrazioneVociRenderCheckTest {
         nome: String,
         stato: RegistrazioneUiStato.Dati,
         azioni: AzioniRegistrazione = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}),
+        scuro: Boolean = false,
         verifica: ComposeUiTest.() -> Unit,
     ) = listOf(W_GRANDE to H_GRANDE, W_PICCOLA to H_PICCOLA).forEach { (w, h) ->
         runDesktopComposeUiTest(w, h) {
-            setContent { SchermataRegistrazione(stato, azioni) }
+            setContent { SchermataRegistrazione(stato, azioni, scuro = scuro, riduciMovimento = true) }
             onNodeWithTag("voci-pannello").assertIsDisplayed()
             onNodeWithTag("registrazione-lista").assertIsDisplayed()
             verifica()
-            val png = File(outputDir, "registrazione-voci-$nome-${w}x$h.png")
+            val suffisso = if (scuro) "-scuro" else ""
+            val png = File(outputDir, "registrazione-voci-$nome-${w}x$h$suffisso.png")
             ImageIO.write(immagineDellaScena(w, h), "PNG", png)
             check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }
         }
@@ -221,8 +226,14 @@ class RegistrazioneVociRenderCheckTest {
     @Test
     fun `AC-214 card non identificata con Candidati FORTE e DEBOLE come barre, mai numeri`() =
         scena("candidati", stato(pannello(listOf(CARTA_ATTRIBUITA, CARTA_CANDIDATI, CARTA_NESSUNA)))) {
+            // AC-581 stacks the panel under the transcript below 1100dp — its own list is shorter there,
+            // so each row past the first fold is reached the same way AC-416 already reaches its third
+            // card, one `performScrollToNode` per target (a card taller than the viewport itself).
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-candidato-0-fascia"))
             onNodeWithTag("voce-2-candidato-0-fascia").assertIsDisplayed()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-candidato-1-fascia"))
             onNodeWithTag("voce-2-candidato-1-fascia").assertIsDisplayed()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-conferma"))
             onNodeWithTag("voce-2-conferma").assertIsEnabled()
             // AC-214: nothing inside the Candidato rows reads as a number.
             val cifre = onAllNodes(hasAnyAncestor(hasTestTag("voce-2-candidato-0")) and contieneCifre)
@@ -271,6 +282,7 @@ class RegistrazioneVociRenderCheckTest {
         val inAttesa = CARTA_CANDIDATI.copy(inCorso = AttesaComando.IN_ATTESA)
         val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, annullaComando = { annullata = it })
         scena("comando-in-attesa", stato(pannello(listOf(CARTA_ATTRIBUITA, inAttesa, CARTA_NESSUNA))), azioni) {
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2"))
             onNodeWithText(MESSAGGIO_COMANDO_IN_ATTESA).assertIsDisplayed()
             onNodeWithTag("voce-2-conferma").assertIsNotEnabled()
             onNodeWithTag("voce-2-salta").assertIsNotEnabled()
@@ -313,6 +325,7 @@ class RegistrazioneVociRenderCheckTest {
             onNodeWithTag("voce-1-salta").assertIsEnabled()
             onNodeWithTag("voce-1-altri").assertIsEnabled()
             onNodeWithTag("voce-1-conferma").assertIsNotEnabled()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2"))
             onNodeWithTag("voce-2-proposta-caricamento").assertIsDisplayed()
             onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-3-caricamento"))
             onNodeWithTag("voce-3-caricamento").assertIsDisplayed()
@@ -414,10 +427,14 @@ class RegistrazioneVociRenderCheckTest {
                 errore = "Questo segmento non può essere riassegnato a questa voce.",
             ),
         ) {
-            onNodeWithTag("voce-2-errore").assertIsDisplayed()
+            // The transcript-side assertions never depend on the panel's own scroll position — checked
+            // before scrolling `voci-lista`, so they never race with it.
             onNodeWithTag("registrazione-errore").assertIsDisplayed()
             onNodeWithText(MESSAGGIO_ESTRATTI_NON_DISPONIBILI).assertIsDisplayed()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-errore"))
+            onNodeWithTag("voce-2-errore").assertIsDisplayed()
             onNodeWithTag("voce-2-estratto").assertIsNotEnabled()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-conferma"))
             onNodeWithTag("voce-2-conferma").assertIsEnabled()
         }
 
@@ -444,8 +461,15 @@ class RegistrazioneVociRenderCheckTest {
             azioni,
         ) {
             onNodeWithTag("registrazione-nomina-frase").assertIsEnabled().performClick()
-            onNode(hasText("Marco · ricorrente") and hasClickAction()).assertIsDisplayed()
-            onAllNodesWithText(ETICHETTA_NUOVO).onLast().assertIsDisplayed()
+            // AC-586: the menu item's own row is `EtichettaMenu` — name + type as two Text nodes, not
+            // one merged string; the row itself (their common clickable ancestor) carries the action.
+            onNode(
+                hasAnyDescendant(hasText("Marco")) and
+                    hasAnyDescendant(hasText(ETICHETTA_RICORRENTE)) and
+                    hasClickAction(),
+                useUnmergedTree = true,
+            ).assertIsDisplayed()
+            onAllNodesWithText(ETICHETTA_NUOVA_PERSONA).onLast().assertIsDisplayed()
             assertEquals(0, onAllNodes(hasTestTag("registrazione-togli-conferma")).fetchSemanticsNodes().size)
         }
         assertEquals(null, scelto)
@@ -461,9 +485,12 @@ class RegistrazioneVociRenderCheckTest {
             azioni,
         ) {
             onNodeWithTag("registrazione-nomina-frase").performClick()
-            onAllNodesWithText(ETICHETTA_NUOVO).onLast().performClick()
+            onAllNodesWithText(ETICHETTA_NUOVA_PERSONA).onLast().performClick()
             onNodeWithTag("registrazione-frase-modulo-nuovo").assertIsDisplayed()
-            onNodeWithTag("registrazione-frase-nuovo-nome").performTextInput("Dario")
+            // CampoSn's outer testTag sits on the label+field+helper group; the settable text node is
+            // its own descendant (dev-architecture note on this block's dispatch).
+            onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("registrazione-frase-nuovo-nome")))
+                .performTextInput("Dario")
             onNodeWithTag("registrazione-frase-nuovo-crea").performClick()
         }
         assertEquals(ObiettivoNome.Nuovo("Dario", ricorrente = true), scelto)
@@ -554,12 +581,17 @@ class RegistrazioneVociRenderCheckTest {
             stato(bloccato(somiglianza(calcolo))),
             azioni,
         ) {
+            // AC-581: `somiglianza-annulla` sits in the same scrollable `voci-lista` as the cards now
+            // (a fixed header would starve the list of height in the stacked layout) — click it while
+            // still in view, before scrolling past it to reach the cards below.
             onNodeWithText("Confronto le frasi… 312 di 1024").assertIsDisplayed()
             onNodeWithTag("somiglianza-barra").assertIsDisplayed()
             onNodeWithTag("somiglianza-in-attesa").assertIsDisplayed()
-            onNodeWithTag("voce-2-conferma").assertIsNotEnabled()
-            onNodeWithTag("voce-1-estratto").assertIsEnabled()
             onNodeWithTag("somiglianza-annulla").performClick()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2"))
+            onNodeWithTag("voce-2-conferma").assertIsNotEnabled()
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-1-estratto"))
+            onNodeWithTag("voce-1-estratto").assertIsEnabled()
         }
         assertEquals(true, annullato)
     }
@@ -635,7 +667,8 @@ class RegistrazioneVociRenderCheckTest {
     fun `AC-547 TrascrittoCambiato con Ricalcola`() {
         var ricalcolato = false
         val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, calcolaSomiglianza = { ricalcolato = true })
-        val errore = FaseSomiglianza.Errore("La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima", true)
+        val errore =
+            FaseSomiglianza.Errore("La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima", true)
         val stato = stato(pannello(CARTE_TRE, somiglianza = somiglianza(errore, abilitato = true)))
         scena("somiglianza-trascritto-cambiato", stato, azioni) {
             onNodeWithText("La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima").assertIsDisplayed()
@@ -660,5 +693,76 @@ class RegistrazioneVociRenderCheckTest {
         ) {
             onNodeWithText("12 frasi spostate, 3 incerte (rimaste dov'erano)").assertIsDisplayed()
             onNodeWithTag("somiglianza-messaggio-chiudi").assertIsDisplayed()
+        }
+
+    // --- AC-589: light fixtures already cover every state above; these are their `-scuro` companions
+    // (named + unnamed Voce with a Fascia forte/debole proposal, a confirmed pin, a selection with its
+    // toolbar, the reassign preview open) — same PNG names, `-scuro` suffix, both sizes. ---
+
+    @Test
+    fun `AC-589 card non identificata con proposta scuro`() =
+        scena(
+            "candidati",
+            stato(pannello(listOf(CARTA_ATTRIBUITA, CARTA_CANDIDATI, CARTA_NESSUNA))),
+            scuro = true,
+        ) {
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-candidato-0-fascia"))
+            onNodeWithTag("voce-2-candidato-0-fascia").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-589 card attribuita scuro`() =
+        scena("attribuita", stato(pannello(listOf(CARTA_ATTRIBUITA, CARTA_CANDIDATI))), scuro = true) {
+            onNodeWithTag("voce-1-nome").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-589 selezione scuro`() =
+        scena(
+            "selezione",
+            stato(
+                pannello(listOf(CARTA_ATTRIBUITA, CARTA_CANDIDATI, CARTA_NESSUNA)),
+                selezione = setOf(SegmentoId(2)),
+                barra = BarraSelezione(VoceId(2), "Voce 2", 1, true, null, opzioni(2), abilitata = true),
+            ),
+            scuro = true,
+        ) {
+            onNodeWithTag("registrazione-barra-selezione").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-589 frase confermata scuro`() =
+        scena(
+            "frase-confermata",
+            stato(
+                pannello(CARTE_TRE),
+                selezione = setOf(SegmentoId(2)),
+                barra = barraFrase(confermato = true),
+                confermati = setOf(1, 2),
+            ),
+            scuro = true,
+        ) {
+            onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-589 anteprima riassegnazione scuro`() =
+        scena(
+            "somiglianza-anteprima",
+            stato(
+                bloccato(
+                    somiglianza(
+                        FaseSomiglianza.Anteprima(
+                            "Sposterò 12 frasi, 3 incerte restano dove sono",
+                            listOf("Voce 3 → Marco: 8", "Voce 4 → Marco: 1", "Voce 3 → $NOME_LUNGO: 3"),
+                            applicabile = true,
+                            inApplicazione = false,
+                        ),
+                    ),
+                ),
+            ),
+            scuro = true,
+        ) {
+            onNodeWithText("Sposterò 12 frasi, 3 incerte restano dove sono").assertIsDisplayed()
         }
 }
