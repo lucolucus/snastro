@@ -17,13 +17,16 @@ related_adrs:
   - "0006"
   - "0007"
   - "0012"
+  - "0014"
+  - "0018"
+  - "0019"
 owns_boundaries:
   repo-trascrizione:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      ElaborazioneRepository: "interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta | ElaborazioneGiaCompletata) from the ADR 0007 indexes */ }"
-      TrascrittoRepository: "interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento"
+      ElaborazioneRepository: "interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }"
+      TrascrittoRepository: "interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)"
   tec-decodifica-trascrizione:
     projection: "in-process"
     contract_test: "consumer-driven"
@@ -33,7 +36,8 @@ owns_boundaries:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      Diarizzatore: "interface { fun diarizza(c: CampioniAudio): List<Turno> }"
+      Diarizzatore: "interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014 rules; clustering per ADR 0019 §1.2: with k above the real count it tends to split one voice, never to fail); no sherpa type crosses the port (ADR 0004)"
+      NumeroPersone: "see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)"
       Turno: "data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index"
   tec-riconoscitore:
     projection: "in-process"
@@ -66,8 +70,14 @@ owns_boundaries:
 ## What to do
 Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diarizzatore, RiconoscitoreParlato, Vad, Allineatore, SegnalatoreFase (+ FaseElaborazione) with Finta + Contratto each; the ElaborazioneRepositoryFinta honours INV-4 like the indexes.
 
+REWORK 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: NumeroPersone?; DiarizzatoreFinta records the last numeroPersone received and never returns more than k distinct voceIndice; DiarizzatoreContratto gains the k case (AC-374). Every existing caller/fake of diarizza must be updated.
+
+REWORK 2026-09-24 (ADR 0018): ElaborazioneRepository: salva KDoc = only ElaborazioneGiaAperta (several completata allowed); + trova(id) and rimuoviInAttesa(id) (compare-and-delete); Contratto + Finta updated (AC-29 reworded, AC-433, AC-463).
+
+Note: AMENDED 2026-09-24 (ADR 0014): Diarizzatore.diarizza gains numeroPersone: NumeroPersone?; the DiarizzatoreFinta records the argument it received (used by esegui-elaborazione AC-370) and never returns more than k distinct voceIndice. AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): ElaborazioneRepository: salva KDoc re-pinned (only ElaborazioneGiaAperta; several completata allowed); + trova(id: ElaborazioneId) and rimuoviInAttesa(id) (compare-and-delete) for AnnullaElaborazione; the Finta mirrors both.
+
 ## Tasks
-- AC-29 ElaborazioneRepositoryContratto: una seconda Elaborazione aperta per la stessa Registrazione → ElaborazioneGiaAperta; una seconda completata → ElaborazioneGiaCompletata; inAttesa in ordine FIFO di creazione (passa contro la Finta)
+- AC-29 (REWORDED 2026-09-24, ADR 0018) ElaborazioneRepositoryContratto: una seconda Elaborazione aperta per la stessa Registrazione → ElaborazioneGiaAperta; inAttesa in ordine FIFO di creazione (passa contro la Finta); nessun ramo GiaCompletata
 - AC-30 TrascrittoRepositoryContratto: round-trip completo incluse Voci, Segmenti, prossimaVoce e prossimoSegmento
 - AC-31 DecodificatoreAudioContratto: campioni(intervallo) restituisce (fine - inizio) × 16 campioni
 - AC-32 DiarizzatoreContratto: ogni Turno ha inizio < fine entro la durata e voceIndice >= 0
@@ -75,18 +85,22 @@ Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diari
 - AC-34 VadContratto: intervalli ordinati, non sovrapposti, entro la durata
 - AC-35 AllineatoreContratto: ogni SegmentoGrezzo ha inizio < fine entro la durata, un voceIndice presente nei turni, e le sovrapposizioni tra turni non vengono tagliate né eliminate
 - AC-36 SegnalatoreFaseFinta registra la sequenza di fasi ricevute
+- AC-374 (ex AC-NP7) DiarizzatoreContratto: con numeroPersone = k i Turni hanno al più k voceIndice distinti; con numeroPersone assente vale AC-32 (passa contro la DiarizzatoreFinta, che registra l'ultimo numeroPersone ricevuto)
+- AC-433 ElaborazioneRepositoryContratto (fake, later SQL): two completata Elaborazioni of the same Registrazione are both saved and diRegistrazione returns both; salva of an open Elaborazione while another of the same Registrazione is open → Errore(ElaborazioneGiaAperta), store unchanged; an open one next to one or more completata → Ok. The fake honours exactly this, with no GiaCompletata branch
+- AC-463 ElaborazioneRepositoryContratto: trova(id) returns the saved Elaborazione or null; rimuoviInAttesa(id) on an in_attesa → Ok and it is gone from diRegistrazione/inAttesa/trova; on in_corso/completata/fallita → Errore(ElaborazioneGiaAvviata) and the store is unchanged; on an unknown id → Errore(ElaborazioneNonTrovata)
 
 ## Dependencies
 - **repo-trascrizione** (OWNED here — built before its consumers) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta | ElaborazioneGiaCompletata) from the ADR 0007 indexes */ }
-    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento
+    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }
+    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)
 - **tec-decodifica-trascrizione** (OWNED here — built before its consumers) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `DecodificatoreAudio`: interface { fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio); fun tutti(id: RegistrazioneId): CampioniAudio; fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio } — infra faults throw (ADR 0003); campioni count = (fine-inizio)*16
 - **tec-diarizzatore** (OWNED here — built before its consumers) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio): List<Turno> }
+    - `Diarizzatore`: interface { fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> } — numeroPersone = k → at most k distinct voceIndice (may be fewer); null → automatic clustering (ADR 0014 rules; clustering per ADR 0019 §1.2: with k above the real count it tends to split one voice, never to fail); no sherpa type crosses the port (ADR 0004)
+    - `NumeroPersone`: see agg-elaborazione — :trascrizione:dominio VO, 1..10 (the pipeline passes the Elaborazione's own value)
     - `Turno`: data class(intervallo: IntervalloMs, voceIndice: Int) — voceIndice >= 0, diarizer cluster index
   - keys (minting rules):
     - `voceIndice`: minted by the Diarizzatore adapter per run — transient, NEVER persisted; the trascritto aggregate maps it to VoceId by first appearance
@@ -132,10 +146,10 @@ Declare ElaborazioneRepository, TrascrittoRepository, DecodificatoreAudio, Diari
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0012, 0014, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), ADR 0004, ADR 0014.

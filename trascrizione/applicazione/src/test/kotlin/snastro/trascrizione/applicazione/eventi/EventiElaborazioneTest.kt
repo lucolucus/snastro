@@ -40,8 +40,51 @@ class EventiElaborazioneTest {
     }
 
     @Test
+    fun `AC-442 TrascrittoSostituito ha solo registrazioneId`() {
+        val evento: EventoPubblicato = TrascrittoSostituito(registrazioneId = registrazione)
+        assertEquals(TrascrittoSostituito(RegistrazioneId("id-1")), evento)
+        assertEquals(listOf("registrazioneId: RegistrazioneId"), FormaEventi.di("TrascrittoSostituito"))
+    }
+
+    @Test
+    fun `AC-470 ElaborazioneAnnullata ha solo registrazioneId`() {
+        val evento: EventoPubblicato = ElaborazioneAnnullata(registrazioneId = registrazione)
+        assertEquals(ElaborazioneAnnullata(RegistrazioneId("id-1")), evento)
+        assertEquals(listOf("registrazioneId: RegistrazioneId"), FormaEventi.di("ElaborazioneAnnullata"))
+    }
+
+    @Test
+    fun `AC-442 TrascrittoSostituito arriva al sincrono dentro la transazione e al dopo-commit solo dopo il COMMIT`() {
+        val consegna = Consegna()
+
+        consegna.inTransazione(TrascrittoSostituito(registrazione), conferma = false)
+        assertEquals(listOf<EventoPubblicato>(TrascrittoSostituito(registrazione)), consegna.sincroni)
+        assertEquals(emptyList(), consegna.dopoCommit, "mai dopo un rollback")
+
+        consegna.inTransazione(TrascrittoSostituito(registrazione), conferma = true)
+        assertEquals(listOf(true, true), consegna.sincroniDentroLaTransazione)
+        assertEquals(listOf<EventoPubblicato>(TrascrittoSostituito(registrazione)), consegna.dopoCommit)
+    }
+
+    @Test
+    fun `AC-470 ElaborazioneAnnullata arriva al dopo-commit solo dopo il COMMIT e mai dopo un rollback`() {
+        val consegna = Consegna()
+
+        consegna.inTransazione(ElaborazioneAnnullata(registrazione), conferma = false)
+        assertEquals(emptyList(), consegna.dopoCommit)
+
+        consegna.inTransazione(ElaborazioneAnnullata(registrazione), conferma = true)
+        assertEquals(listOf<EventoPubblicato>(ElaborazioneAnnullata(registrazione)), consegna.dopoCommit)
+    }
+
+    @Test
     fun `AC-15 gli eventi di Elaborazione sono data class di soli val che implementano EventoPubblicato`() {
-        listOf("ElaborazioneAvviata", "ElaborazioneCompletata", "ElaborazioneFallita")
-            .forEach(FormaEventi::verificaEventoPubblicato)
+        listOf(
+            "ElaborazioneAvviata",
+            "ElaborazioneCompletata",
+            "ElaborazioneFallita",
+            "TrascrittoSostituito",
+            "ElaborazioneAnnullata",
+        ).forEach(FormaEventi::verificaEventoPubblicato)
     }
 }

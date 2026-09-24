@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=architettura-test '(com\\.k2fsa|System\\.load)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-23   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test) and "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user])
+amended: 2026-09-24   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
 ---
 # 0004 — ML runtime: sherpa-onnx (JNI) in-process, confined to `:ml-sherpa`, serial pipeline
 
@@ -76,3 +76,29 @@ that policy is **removed**: the user enqueues an `Elaborazione` from S2 with "Tr
 "Riprova" after a failure, optionally stating `NumeroPersone` (1..10). The rest of this ADR is
 unchanged: the in-process execution, the single-thread dispatcher, the serial FIFO over `in_attesa`,
 and the startup recovery. See also ADR 0012 Amendment (c).
+
+## Amendment 2026-09-24 — natives: what the packaging spike answered (ADR 0016)
+**Why.** The Library bullet left three questions to spike `packaging-modelli-desktop`: do Maven
+coordinates exist, how are the natives placed, and how are they loaded. The spike answered them on
+2026-09-24 (macOS arm64; `./gradlew run`, `.app` and `.dmg` all PASS). **ADR 0016** is the single
+home of the answers. The text above is kept as written. Read it with these refinements:
+- *"Whether Maven coordinates exist is verified by the packaging spike"* → **they do not.**
+  sherpa-onnx comes from the k2-fsa **GitHub release v1.13.8** assets. The JVM jar and the
+  per-OS `*-jni.tar.bz2` are pinned with SHA-256 in ADR 0016 §1.
+- *"fetched by a Gradle task … into a build cache"* → there are **two** tasks. `scaricaJarSherpa`
+  fetches the pure-Java jar for compiling, and the gate needs it. `scaricaNativiSherpa` fetches the
+  two dylibs into `:avvio`'s Compose `appResourcesRootDir/<os-arch>/`, and runs only for
+  `:avvio:run`, `createDistributable`, `prepareAppResources` and `modelliTest`, **never** for
+  `check`. Downloads are cached in the gitignored `native-cache/` (ADR 0016 §2–3).
+- *Loading* → **load them explicitly.** sherpa-onnx has no static initializer.
+  `MotoreSherpa.caricaNativi()` sets `sherpa_onnx.native.path` to
+  `compose.application.resources.dir` (or keeps a pre-set value, as in `modelliTest`), then calls
+  `LibraryUtils.load()`. `java.library.path` is not used (ADR 0016 §4). The confinement and the
+  `enforced_by` above are unchanged: this code lives in `:ml-sherpa`.
+- *"macOS arm64/x64, Windows x64, Linux x64"* → only **macOS arm64** is proven and wired.
+  Windows x64 and Linux x64 asset names are documented but untested. macOS x64 was not examined
+  (ADR 0016 §5).
+- *Execution provider* → unchanged: **CPU by default**. The spike shows CoreML is *accepted* by
+  onnxruntime, not that it runs or helps. No CoreML setting is built until `benchmark-elaborazione`
+  measures it against CPU (ADR 0016 §6).
+

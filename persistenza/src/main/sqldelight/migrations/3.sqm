@@ -1,0 +1,4 @@
+-- Schema 3 -> 4 (ADR 0018 "Ritrascrivi", ADR 0006 (a)): forward-only — R1 shipped schema 3 (1.sqm + 2.sqm),
+-- never edited. Several `completata` Elaborazioni per Registrazione are allowed from now on (a re-run is a
+-- NEW Elaborazione); INV-4 keeps only `elaborazione_aperta_unica` (ADR 0007, amended). Existing rows untouched.
+DROP INDEX elaborazione_completata_unica;

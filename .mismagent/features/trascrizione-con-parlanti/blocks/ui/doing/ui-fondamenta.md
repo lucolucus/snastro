@@ -14,6 +14,7 @@ related_adrs:
   - "0003"
   - "0010"
   - "0012"
+  - "0018"
 consumes_rm: []
 triggers: []
 owns_boundaries:
@@ -33,7 +34,9 @@ owns_boundaries:
 ## What to do
 Derived owner (rule 11) of what every screen shares: Material 3 theme, snastro.ui.testi, MessaggiErrore.kt (one exhaustive when per context error hierarchy, R25), palette(voceId) stable by number, mm:ss and dd/MM/yyyy formatting, the app shell (left nav: Progetto selector, Registrazioni, Parlanti; no project open → S1 only), the ports SessioneProgetto, ApriEsterno, AggiornamentiVista (R15), and the render-check harness + fixtures.
 
-Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the shell sections are injected by the composition root (AC-341) so R0 (avvio-r0) and R1 (avvio-composizione) ship without the Parlanti section; AC-177 describes the R2 composition (avvio-parlanti). Added while the block is in doing: the composer must hand AC-341 to the in-flight worker (or land it as a follow-up before avvio-r0).
+REWORK 2026-09-24 (ADR 0018): MessaggiErrore texts for ElaborazioneGiaAvviata / ElaborazioneNonTrovata, no branch for ElaborazioneGiaCompletata (the compile-level edit arrives with the elaborazione sweep; this block owns the texts and the MessaggiErroreTest cases, AC-477).
+
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the shell sections are injected by the composition root (AC-341) so R0 (avvio-r0) and R1 (avvio-composizione) ship without the Parlanti section; AC-177 describes the R2 composition (avvio-parlanti). Added while the block is in doing: the composer must hand AC-341 to the in-flight worker (or land it as a follow-up before avvio-r0). AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): MessaggiErrore follows the ErroreTrascrizione sweep (landed by the elaborazione rework, ADR 0018 Amendment (b) §4); this block owns the texts (AC-477).
 
 ### Consumes read-models: —
 ### Triggers: —
@@ -45,6 +48,7 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the
 - AC-180 MessaggiErrore copre ogni errore di ogni contesto senza ramo else (un nuovo errore rompe la compilazione)
 - AC-181 Stati della shell: caricamento del progetto (indicatore), errore di apertura (messaggio) resi dal render-check
 - AC-341 (R0) La shell riceve dalla composizione l'insieme delle sezioni disponibili: se la sezione Parlanti non è fornita (release R0 e R1) la voce di navigazione 'Parlanti' NON compare e nessuna schermata Parlanti è raggiungibile; se è fornita (R2) la shell si comporta come in AC-177 — test sul presenter della shell con e senza la sezione
+- AC-477 MessaggiErrore: ElaborazioneGiaAvviata → 'La trascrizione è già partita: non si può più annullare'; ElaborazioneNonTrovata → 'Questa trascrizione non è più in coda'; ElaborazioneGiaCompletata has no branch (removed, AC-432) and its MessaggiErroreTest case goes with it; AC-180 still holds
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
@@ -83,10 +87,10 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md App shell, dev-architecture-app.md #presenter, R8/R15.
+Sources: ADRs 0002, 0003, 0010, 0012, 0018 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md App shell, dev-architecture-app.md #presenter, R8/R15.

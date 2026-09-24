@@ -7,7 +7,7 @@ enforced_by:
   kind: presence
   rule: "grep -rniE --include='*.kt' --exclude-dir=build '(secure_delete[[:space:]]*=[[:space:]]*(on|1|true)|setSecureDelete\\(true\\))' persistenza | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
   exigible_from: "persistenza-schema"
-amended: 2026-09-23   # see "Amendment 2026-09-23 (b)" — R12 superseded by ADR 0012 Amendment (b)
+amended: 2026-09-24   # see "Amendment 2026-09-24 (ADR 0019)"; earlier: "Amendment 2026-09-23 (b)" — R12 superseded by ADR 0012 Amendment (b)
 ---
 # 0009 — `ImprontaVocale` (biometric): stored only in the project DB, purged in the tombstone transaction
 
@@ -64,3 +64,16 @@ project folder) may retain purged prints** — outside the app's control.
 - **`unire` inheritance onto an `eliminato` `Parlante`** (ADR 0012 Amendment (b) point 4): only the
   tombstone `Attribuzione` is re-keyed to the surviving `Voce`; **no** `impronta_vocale` row is
   created — [INV-13]'s "zero prints" holds; the exception concerns the `Attribuzione` only.
+
+## Amendment 2026-09-24 — transient per-Segmento and per-piece embeddings (pointer; [ADR 0019](0019-separazione-semi-automatica.md) §4.8)
+- **The in-memory-only rule** that covers the `Proposta` embedding **extends** to:
+  - the per-Segmento embeddings and the reference centroids of "Riassegna per somiglianza";
+  - the diarizer's per-piece embeddings.
+
+  They are dropped when the computation returns. They are never cached, logged or written, and a
+  re-run re-extracts. The only stored prints are still the `impronta_vocale` rows.
+- **No tombstone's voice is re-processed.** A Parlante `eliminato` never has reference sentences. The
+  Voci attributed to it are frozen in "Riassegna per somiglianza" (ADR 0019 §3, §4.2).
+- The print model becomes NeMo TitaNet-small (`embedding-nemo-titanet-small`, ADR 0019 §2). Every
+  existing row is stale for it and is re-derived by `RiallineaTutteLeImpronte`, with no migration
+  (Amendment (b) point 3 unchanged).

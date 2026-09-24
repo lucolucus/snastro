@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.testing.Test
+
 plugins {
     id("snastro.compose-desktop")
 }
@@ -24,6 +26,32 @@ dependencies {
     // `null` in R0, AC-350) are typed over `:trascrizione:applicazione` — `:ui` depends on it only as
     // `implementation` (never `api`), so it is not on `:avvio`'s classpath transitively.
     implementation(project(":trascrizione:applicazione"))
+    // RegistrazioniPresenter's optional `identificazioni` parameter (AC-204/AC-345, left `null` in R0/R1 —
+    // no badge) is typed over `:parlanti:applicazione`'s `ConteggioIdentificazione`. No `:parlanti` class is
+    // instantiated by R0/R1 (AC-356); R2 (snastro.avvio.r2) wires the real `identificazioni` argument.
+    implementation(project(":parlanti:applicazione"))
+
+    // R1 composition (avvio-composizione, package snastro.avvio.r1): Trascrizione SQL repositories +
+    // decoder + AllineatorePerTurno, Documento regeneration, :modelli behind ServizioModelli (AC-329),
+    // MotoreSherpa handed to the real ML adapters once they wire themselves in (SelezioneAdattatoriMl).
+    implementation(project(":trascrizione:adattatori"))
+    implementation(project(":documento:applicazione"))
+    implementation(project(":documento:adattatori"))
+    implementation(project(":modelli"))
+    implementation(project(":ml-sherpa"))
+    // The ML Finte (DiarizzatoreFinta / RiconoscitoreParlatoFinta / VadFinta) are the pipeline's
+    // adapters until diarizzatore-sherpa / riconoscitore-sherpa / vad-silero wire themselves into
+    // SelezioneAdattatoriMl ("Finte until the ML blocks land", manifest) — and stay the forced choice of
+    // `-Dsnastro.ml=finte` (the --smoke run: headless, no natives, no models).
+    implementation(testFixtures(project(":trascrizione:applicazione")))
+
+    // R2 composition (avvio-parlanti, package snastro.avvio.r2): the Parlanti SQL repositories, readers,
+    // subscribers (revisione-policy, riallineamento impronte) and the cosine comparison. The print
+    // extractor + Parlanti decoder Finte (EstrattoreImprontaFinta / DecodificatoreAudioFinta) are the forced
+    // choice of `-Dsnastro.ml=finte` (--smoke), exactly like the pipeline's ML Finte above; the real
+    // extractor (estrattore-impronta-sherpa) is the REALI choice — SelezioneAdattatoriMl.adattatoriParlanti.
+    implementation(project(":parlanti:adattatori"))
+    implementation(testFixtures(project(":parlanti:applicazione")))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
 
@@ -32,10 +60,42 @@ dependencies {
     testImplementation(testFixtures(project(":progetto:applicazione")))
     testImplementation(testFixtures(project(":ui")))
     testImplementation(project(":progetto:dominio"))
+    testImplementation(libs.kotlinx.coroutines.test) // CodaElaborazioniTest: StandardTestDispatcher (dev-architecture #dipendenze-test)
 }
 
 compose.desktop {
     application {
         mainClass = "snastro.avvio.MainKt"
+        nativeDistributions {
+            // ADR 0016 §3: generated under build/ (never src/), filled by the root task
+            // scaricaNativiSherpa (<this dir>/<os-arch>/ = the two sherpa-onnx libs). At runtime Compose
+            // exposes the merged folder as `compose.application.resources.dir` (MotoreSherpa.caricaNativi).
+            appResourcesRootDir.set(layout.buildDirectory.dir("risorse-app"))
+        }
+    }
+}
+
+// ADR 0016 §2: the natives are fetched for run / distribution only — never for `check`. Compose's
+// validation also requires this edge for prepareAppResources, which reads appResourcesRootDir.
+tasks.matching { it.name in setOf("run", "createDistributable", "prepareAppResources") }.configureEach {
+    dependsOn(":scaricaNativiSherpa")
+}
+
+// Opt-in (@Tag("modelli"), never in `check`): the R1 composition end to end over the REAL sherpa-onnx
+// adapters and real FFmpeg (TrascrizioneRealeR1Test, models from SNASTRO_MODELLI_R1_DIR — never
+// committed) plus the R0 real-FFmpeg tests. Aggregated by the root `modelliTest`. Natives as in
+// :ml-sherpa's modelliTest: fetched first, `sherpa_onnx.native.path` pointing at them (ADR 0016 §4).
+val scaricaNativiSherpa = rootProject.tasks.named("scaricaNativiSherpa")
+tasks.register<Test>("modelliTest") {
+    group = "verification"
+    description = "Opt-in: R1 composition over the real ML adapters + real-FFmpeg tests (@Tag(\"modelli\"))."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("modelli")
+    }
+    dependsOn(scaricaNativiSherpa)
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}")
     }
 }

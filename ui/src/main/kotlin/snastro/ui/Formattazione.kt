@@ -6,15 +6,47 @@ import java.util.Locale
 
 private const val MS_PER_SECONDO = 1000L
 private const val SECONDI_PER_MINUTO = 60L
+private const val SECONDI_PER_ORA = 3600L
+private const val BYTE_PER_MB = 1024.0 * 1024.0
 private val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
-/** AC-179: "mm:ss" — minutes are NOT capped at 59 (no hour component), seconds truncate to whole. */
+/**
+ * AC-557 (supersedes AC-179's duration half; AC-203's "3:12" now matches): under one hour `m:ss`
+ * with NO leading zero on minutes ("1:15", "3:12", "59:59"); from one hour on, `h:mm:ss`
+ * ("1:00:00", "1:15:03"). Seconds truncate to whole, as before. L709: a negative [durataMs] (never
+ * a valid duration) is clamped to zero rather than producing a negative/garbage string.
+ */
 fun formattaDurata(durataMs: Long): String {
-    val secondiTotali = durataMs / MS_PER_SECONDO
-    val minuti = secondiTotali / SECONDI_PER_MINUTO
+    val secondiTotali = durataMs.coerceAtLeast(0) / MS_PER_SECONDO
+    val ore = secondiTotali / SECONDI_PER_ORA
+    val minuti = (secondiTotali % SECONDI_PER_ORA) / SECONDI_PER_MINUTO
     val secondi = secondiTotali % SECONDI_PER_MINUTO
-    return String.format(Locale.ROOT, "%02d:%02d", minuti, secondi)
+    return if (ore > 0) {
+        String.format(Locale.ROOT, "%d:%02d:%02d", ore, minuti, secondi)
+    } else {
+        String.format(Locale.ROOT, "%d:%02d", minuti, secondi)
+    }
+}
+
+/**
+ * AC-557: the prose form of a duration ("52 min", "1 h 04 min") — dates stay `formattaData`,
+ * unchanged. L709: under a minute reads "< 1 min" (not the misleading "0 min"); a negative
+ * [durataMs] is clamped to zero first, same as [formattaDurata].
+ */
+fun formattaDurataEstesa(durataMs: Long): String {
+    val secondiTotali = durataMs.coerceAtLeast(0) / MS_PER_SECONDO
+    val ore = secondiTotali / SECONDI_PER_ORA
+    val minuti = (secondiTotali % SECONDI_PER_ORA) / SECONDI_PER_MINUTO
+    return when {
+        ore > 0 -> String.format(Locale.ROOT, "%d h %02d min", ore, minuti)
+        minuti > 0 -> "$minuti min"
+        else -> "< 1 min"
+    }
 }
 
 /** AC-179: "dd/MM/yyyy". */
 fun formattaData(data: LocalDate): String = data.format(FORMATO_DATA)
+
+/** AC-227/228: a byte count as "<n,n> MB" — the whole catalogue (ADR 0008/0013/0014) sits in the
+ * hundreds of MB, so a single unit is enough (frugality rung 6: no GB tier, no thousands separator). */
+fun formattaByte(byte: Long): String = String.format(Locale.ROOT, "%.1f MB", byte / BYTE_PER_MB)

@@ -188,6 +188,8 @@ write lock.
   unresolved (candidates noted in discovery: Mutex timeout with "riprova dopo l'elaborazione",
   per-call Mutex release between pipeline chunks, a separate extractor session). To be decided
   before `avvio-coda-elaborazioni` / `schermata-registrazione` are built.
+  **→ Decided 2026-09-24 by [ADR 0017](0017-attesa-mutex-estrazione.md)** (per-call Mutex hold,
+  fair and interruptible wait; a visible, cancellable wait on the S3 card during diarization).
 
 ## Amendment 2026-09-23 (c): no automatic start on import (supersedes R2) [user]
 **Decision (the user, 2026-09-23; recorded in ADR 0014, which is its single home).** No

@@ -18,6 +18,9 @@ native-cache/
 *.so
 *.dll
 *.jnilib
+# sherpa-onnx release artifacts (ADR 0016 enforced_by: never tracked, even outside native-cache/)
+sherpa-onnx*.jar
+*.tar.bz2
 
 # build
 build/

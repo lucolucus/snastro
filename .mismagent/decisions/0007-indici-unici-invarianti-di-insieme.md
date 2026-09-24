@@ -5,8 +5,9 @@ supersedes: null
 closes_spike: null
 enforced_by:
   kind: presence
-  rule: "grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(registrazione_id\\) WHERE .*in_attesa.*in_corso' persistenza | grep -q . && grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(registrazione_id\\) WHERE .*completata' persistenza | grep -q . && grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(progetto_id, nome_normalizzato\\) WHERE .*attivo' persistenza | grep -q ."
+  rule: "grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(registrazione_id\\) WHERE .*in_attesa.*in_corso' persistenza | grep -q . && grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(progetto_id, nome_normalizzato\\) WHERE .*attivo' persistenza | grep -q ."
   exigible_from: "persistenza-schema"
+amended: 2026-09-24   # ADR 0018 (Ritrascrivi, user decision): elaborazione_completata_unica DROPPED by 3.sqm; its presence clause removed from enforced_by (was: "... WHERE .*completata"). See "Amendment 2026-09-24 (ADR 0018)".
 ---
 # 0007 — Set invariants INV-4 and INV-16 backed by partial unique indexes
 
@@ -50,3 +51,17 @@ lives in the `:persistenza` `.sq` owned by that block, so the presence rule is e
 The round-trip + concurrent-insert proof stays on `repository-sql-trascrizione` and
 `repository-sql-parlanti` (their ACs), and the constraint → `ErroreDominio` mapping also covers
 `ElaborazioneGiaCompletata` for the second index.
+
+## Amendment 2026-09-24 (ADR 0018 — Ritrascrivi) [user]
+- **INV-4 rewritten** (user decision 2026-09-24, [ADR 0018](0018-ritrascrivi.md) is its single home): a new
+  `Elaborazione` may be started whenever none is open — also after a `completata` ("Ritrascrivi"); several
+  `completata` rows per `Registrazione` are history. **`elaborazione_aperta_unica` is unchanged** and remains
+  the only store guard of INV-4.
+- **`elaborazione_completata_unica` is DROPPED** by the forward-only `migrations/3.sqm` (ADR 0006 (a)); its
+  presence clause is removed from this ADR's `enforced_by` (1.sqm/2.sqm still contain its historical
+  `CREATE`, so the old clause would have kept passing vacuously). The drop itself is guarded by ADR 0018's
+  `enforced_by`.
+- `ElaborazioneGiaCompletata` leaves `ErroreTrascrizione`; the constraint → `ErroreDominio` mapping covers
+  `elaborazione_aperta_unica` → `ElaborazioneGiaAperta` only (R19 note above superseded on that point).
+- The Decision bullet "A new `Elaborazione` only if every previous one is `fallita` = both indexes together"
+  is superseded by ADR 0018 §1.

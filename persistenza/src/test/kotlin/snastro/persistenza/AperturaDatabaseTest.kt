@@ -1,6 +1,7 @@
 package snastro.persistenza
 
 import app.cash.sqldelight.db.QueryResult
+import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
@@ -93,7 +94,7 @@ class AperturaDatabaseTest {
         assertFalse(File(cartella.toFile(), "progetto.db-shm").exists(), "nessun file -shm deve comparire")
     }
 
-    private fun pragma(driver: JdbcSqliteDriver, nome: String): String =
+    private fun pragma(driver: SqlDriver, nome: String): String =
         driver.executeQuery(null, "PRAGMA $nome", { cursore ->
             check(cursore.next().value) { "PRAGMA $nome non restituisce righe" }
             QueryResult.Value(checkNotNull(cursore.getString(0)))

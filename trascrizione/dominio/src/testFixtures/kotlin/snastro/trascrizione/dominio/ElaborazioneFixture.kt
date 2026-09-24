@@ -20,8 +20,9 @@ public fun unaElaborazione(
     creataAlle: Instant = CREATA_ALLE,
     avviataAlle: Instant = AVVIATA_ALLE,
     motivo: String = "Il file audio non si puo leggere",
+    numeroPersone: NumeroPersone? = null,
 ): Elaborazione {
-    val elaborazione = Elaborazione.accoda(id, registrazioneId, creataAlle).aggregato
+    val elaborazione = Elaborazione.accoda(id, registrazioneId, creataAlle, numeroPersone).aggregato
     if (stato == StatoElaborazione.IN_ATTESA) return elaborazione
     check(elaborazione.avvia(avviataAlle) is Esito.Ok)
     when (stato) {

@@ -1,0 +1,4 @@
+# Manifest delta — Documento follows a Registrazione rename (fix-batch-11 gap)
+- rigenerazione-documento: NEW AC-155bis — RegistrazioneRinominata behaves like DataRegistrazioneModificata on nomeFile: write nomeFile(data, nuovo) then remove nomeFile(data, precedente); never another Registrazione's file; if the key doesn't change (incl. case-only change on case-insensitive FS) rewrite and remove nothing. Command generalised: RigeneraDocumento(registrazioneId, nomeFilePrecedente: String? = null). (built, merged)
+- eventi-progetto boundary: pin RegistrazioneRinominata(registrazioneId, precedente: String, nuovo: String) — consumers AggiornamentiVista (built) + abbonato-documento.
+- abbonato-documento: NEW AC — RegistrazioneRinominata → perRegistrazioneRinominata after commit (like AC-186 for the date).

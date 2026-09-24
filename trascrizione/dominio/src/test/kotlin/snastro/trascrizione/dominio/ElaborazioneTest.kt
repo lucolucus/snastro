@@ -19,7 +19,7 @@ class ElaborazioneTest {
 
     @Test
     fun `INV-3 accoda crea un Elaborazione in_attesa aperta e restituisce ElaborazioneAccodata`() {
-        val creato = Elaborazione.accoda(id, registrazioneId, CREATA_ALLE)
+        val creato = Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, numeroPersone = null)
 
         val e = creato.aggregato
         assertEquals(ElaborazioneAccodata(id, registrazioneId, CREATA_ALLE), creato.evento)
@@ -122,6 +122,75 @@ class ElaborazioneTest {
 
         assertEquals("Il file audio non si puo leggere", e.motivoFallimento)
         assertEquals(AVVIATA_ALLE, e.avviataAlle)
+    }
+
+    // --- AC-367 ------------------------------------------------------------------------------------
+
+    @Test
+    fun `AC-367 accoda fissa numeroPersone alla creazione`() {
+        val quattro = NumeroPersone.di(4).atteso()
+
+        assertEquals(quattro, Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, quattro).aggregato.numeroPersone)
+        assertNull(Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, numeroPersone = null).aggregato.numeroPersone)
+    }
+
+    @Test
+    fun `AC-367 nessuna transizione cambia numeroPersone`() {
+        listOf(NumeroPersone.di(4).atteso(), null).forEach { numero ->
+            val completata = Elaborazione.accoda(id, registrazioneId, CREATA_ALLE, numero).aggregato
+            completata.avvia(AVVIATA_ALLE).atteso()
+            assertEquals(numero, completata.numeroPersone, "dopo avvia")
+            completata.completa().atteso()
+            assertEquals(numero, completata.numeroPersone, "dopo completa")
+
+            val fallita = unaElaborazione(StatoElaborazione.IN_CORSO, numeroPersone = numero)
+            fallita.fallisci("motivo").atteso()
+            assertEquals(numero, fallita.numeroPersone, "dopo fallisci")
+
+            val rifiutata = unaElaborazione(StatoElaborazione.FALLITA, numeroPersone = numero)
+            rifiutata.avvia(AVVIATA_ALLE).erroreAtteso<ErroreTrascrizione.TransizioneNonAmmessa>()
+            assertEquals(numero, rifiutata.numeroPersone, "dopo una transizione rifiutata")
+        }
+    }
+
+    // --- AC-462 / AC-432 (ADR 0018 Amendment (b)) --------------------------------------------------
+
+    @Test
+    fun `AC-462 annulla da in_attesa restituisce ElaborazioneAnnullata e lo stato non cambia`() {
+        val e = unaElaborazione(StatoElaborazione.IN_ATTESA)
+        val prima = Istantanea(e)
+
+        val evento = e.annulla().atteso()
+
+        assertEquals(ElaborazioneAnnullata(id, registrazioneId), evento)
+        assertEquals(prima, Istantanea(e), "annulla e un controllo, non una transizione")
+        assertTrue(e.inAttesa)
+    }
+
+    @Test
+    fun `AC-462 annulla da in_corso completata o fallita e ElaborazioneGiaAvviata e lo stato non cambia`() {
+        listOf(StatoElaborazione.IN_CORSO, StatoElaborazione.COMPLETATA, StatoElaborazione.FALLITA).forEach { stato ->
+            val e = unaElaborazione(stato)
+            val prima = Istantanea(e)
+
+            val errore = e.annulla().erroreAtteso<ErroreTrascrizione.ElaborazioneGiaAvviata>()
+
+            assertEquals(ErroreTrascrizione.ElaborazioneGiaAvviata(id), errore, "da $stato")
+            assertEquals(prima, Istantanea(e), "da $stato lo stato non deve cambiare")
+            assertFalse(e.inAttesa, "da $stato")
+        }
+    }
+
+    @Test
+    fun `AC-432 gli errori di Elaborazione sono GiaAperta GiaAvviata e NonTrovata e nessun altro`() {
+        val membri = ErroreTrascrizione::class.java.permittedSubclasses.orEmpty()
+            .map { it.simpleName }
+            .filter { it.startsWith("Elaborazione") }
+            .toSet()
+
+        // ADR 0018: the "already completed" refusal is gone — several completata may exist.
+        assertEquals(setOf("ElaborazioneGiaAperta", "ElaborazioneGiaAvviata", "ElaborazioneNonTrovata"), membri)
+        assertEquals(id, ErroreTrascrizione.ElaborazioneNonTrovata(id).elaborazioneId)
     }
 
     // --- helpers -----------------------------------------------------------------------------------

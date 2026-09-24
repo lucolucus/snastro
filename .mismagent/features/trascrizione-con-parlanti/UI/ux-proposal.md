@@ -33,21 +33,30 @@ and **Parlanti**. There is no global menu logic beyond this.
   Each row shows the title (source file name), `DataRegistrazione` (editable inline →
   `ModificaDataRegistrazione`), duration, the processing state and an identification badge
   ("3 voci · 1 da identificare"). There is an "Aggiungi registrazione" action (file picker +
-  drag-and-drop onto the window → `AggiungiRegistrazione`; processing is queued automatically, per Q-6).
+  drag-and-drop onto the window → `AggiungiRegistrazione`; ~~processing is queued automatically, per Q-6~~ —
+  *amended 2026-09-24: no automatic start; see "Amendment 2026-09-24" below*).
 - **Processing state per row** [user]:
   - `in_attesa`: "In coda" (position in queue).
   - `in_corso`: **stage + elapsed time**, e.g. "In corso · separazione voci · 3:12". There is no
     percentage bar.
-  - `completata`: opens S3.
-  - `fallita`: the reason in plain words + a "Riprova" button (→ `AvviaElaborazione`, retry).
+  - `completata`: opens S3. *(amended 2026-09-24, ADR 0018: a row opens S3 iff a `Trascritto` exists; "Ritrascrivi" and "Annulla" — see "Amendment 2026-09-24 (Ritrascrivi, Annulla)" below)*
+  - `fallita`: the reason in plain words + a "Riprova" button (→ `AvviaElaborazione`, retry) — *amended
+    2026-09-24: with the "Numero di persone" field, prefilled*.
+  - *(added 2026-09-24)* `NON_AVVIATA` (no `Elaborazione` yet — every new import): the "Numero di persone"
+    field + a "Trascrivi" button (→ `AvviaElaborazione`).
 - **States:** *empty*: "Nessuna registrazione. Trascina qui un file audio". *Error adding*
   (unreadable file / unsupported format): an inline message and nothing is created.
 - **Data view `RegistrazioniDelProgetto`:** `[{ registrazioneId, titolo, dataRegistrazione,
   durataMs, stato: StatoElaborazione, fase?: FaseElaborazione, avviataAlle?, motivoFallimento?,
   posizioneInCoda?, numVoci?, numVociDaIdentificare? }]`.
-- **Commands:** `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` (retry).
+- **Commands:** `AggiungiRegistrazione`, `ModificaDataRegistrazione`, `AvviaElaborazione` (~~retry~~ "Trascrivi" and
+  "Riprova", with the optional `numeroPersone` — amended 2026-09-24).
 
 ## Screen S3 · Registrazione (the core: identification + Revisione), concept B [user]
+*(amended 2026-09-24: in R1 S3 is READ-ONLY, without the Voci panel and the Revisione UI; see "Amendment 2026-09-24 (S3 read-only in R1)" below)*
+*(amended 2026-09-24, ADR 0018: S3 is READ-ONLY while a re-run is queued or running; see "Amendment 2026-09-24 (Ritrascrivi, Annulla)" below)*
+*(amended 2026-09-24 [user], ADR 0019 + Amendment (b): "Dai un nome a questa frase", the pin marker, "Togli conferma", and "Riassegna per somiglianza" with a preview; see "Amendment 2026-09-24 (Separazione semi-automatica)" below)*
+
 Layout: a header, the transcript in the center, and the **Voci** panel on the right.
 
 - **Header:** title, `DataRegistrazione`, an **audio bar** (play/pause, position) [user], and
@@ -188,3 +197,114 @@ separate spike.
   and play"; AC-342/343); no processing state, no badge, no S3. R1 adds the processing state plus a **"Trascrivi"**
   action for a Registrazione with no Elaborazione yet (e.g. imported in R0; AC-344). R2 adds the identification
   badge (block `schermata-registrazioni-identificazione`, AC-204/345).
+
+## Amendment 2026-09-24 (S2: no automatic start; "Numero di persone" on the row) [user]
+Source: ADR 0014 (single home), ADR 0012 Amendment (c), ADR 0004 Amendment (b), user decisions 2026-09-23 and
+2026-09-24; manifest delta `manifest-deltas/2026-09-23-numero-persone.md`. Supersedes the struck-through
+"queued automatically, per Q-6" above.
+- **No automatic start.** Importing a file (`AggiungiRegistrazione`) creates no `Elaborazione`: the new row is
+  `NON_AVVIATA` and shows "Trascrivi" (manifest AC-344, AC-371/372). The user starts every transcription.
+- **"Numero di persone" is a plain fillable field on the S2 row**, next to "Trascrivi" (`NON_AVVIATA` rows) and
+  "Riprova" (`fallita` rows) — not a dialog. Empty = automatic (no count); otherwise an integer from 1 to 10. Any
+  other input shows the inline message "Da 1 a 10, oppure lascia vuoto" and no command is sent (AC-375).
+- **"Riprova" is prefilled** with the `numeroPersone` of the failed `Elaborazione` (empty if it had none); the user
+  may change or clear it, and the new `Elaborazione` stores what was submitted (AC-376). The value comes from the
+  `stati-elaborazione` view (`numeroPersone: Int?`, AC-162).
+- **No "Trascrivi tutte"** [user 2026-09-24]: transcriptions are started one row at a time only (explicit cut).
+- Rows `in_attesa`, `in_corso`, `completata` show no field. The R0 variant (no Trascrizione sources, AC-342) is
+  unchanged: no field, no "Trascrivi".
+- **Blocks:** `schermata-registrazioni` (field, validation, prefill), `stati-elaborazione` (`numeroPersone` in the
+  view), `avvia-elaborazione` (`AvviaElaborazione(registrazioneId, numeroPersone: Int? = null)`).
+
+## Amendment 2026-09-24 (S3 read-only in R1; Voci panel and Revisione UI in R2) [user]
+Source: user decisions 2026-09-24 recorded in `manifest-deltas/2026-09-24-packaging.md` (variant A), ADR 0016 (context),
+the release pivot of 2026-09-23. The S3 text above stays the target design; this amendment says what each release shows.
+- **R1 (block `schermata-registrazione`, AC-207/208/217/218/402):** header (title, date, audio bar, "Apri documento" /
+  "Mostra nella cartella") and the transcript: `Segmento`s in time order across `Voce`s, each with its colour dot and
+  the label "Voce n" (no `Nome`: no Parlanti in R1), and click/"▶" on a `Segmento` plays from its `inizio`. **No Voci
+  panel, no selection, no "Riassegna a" / "Dividi voce" / "Unisci con", no "▶ estratto".** States: loading skeleton;
+  audio source missing → audio bar disabled with a message, the transcript stays readable.
+- **Explicit cut (rule 9):** the Revisione UI is not in R1. The `revisione` domain block (UnisciVoci, DividiVoce,
+  RiassegnaSegmento) is built in R1 without a UI; its UI arrives in R2.
+- **R2 (block `schermata-registrazione-identificazione` — the S3 panel; not `schermata-registrazioni-identificazione`,
+  which is the S2 badge):** the Voci panel (cards, Proposta, Fascia bar, "Conferma" / "altri" / "nuovo…" / "salta" /
+  "cambia", "Unisci con", merge banner, "▶ estratto"), the selection toolbar ("Riassegna a", "Dividi voce"), the
+  attributed `Nome` in the labels, and the command errors (AC-209..216, 219, 318, 319, 403, 404, 405). It is gated on
+  the spike `attesa-mutex-estrazione`, which decides how the UI shows the wait for the native Mutex.
+
+## Amendment 2026-09-24 (Ritrascrivi, Annulla) [user]
+Source: ADR 0018 and its Amendment 2026-09-24 (b) (user answers); manifest delta `manifest-deltas/2026-09-24-ritrascrivi.md`.
+The S2/S3 text above is kept; this amendment adds to it.
+- **S2 · "Ritrascrivi" (R2 only)** — row with a `Trascritto`, latest run `completata`: "Completata" (opens S3) + the
+  "Numero di persone" field prefilled with the latest run's value + "Ritrascrivi". The field is validated first
+  ("Da 1 a 10, oppure lascia vuoto"), then a confirmation dialog — title "Ritrascrivere «<titolo>»?", text "La
+  trascrizione attuale resta consultabile finché la nuova non è pronta, poi viene sostituita. Le correzioni delle
+  voci e le assegnazioni dei nomi di questa registrazione andranno perse.", buttons "Ritrascrivi" / "Annulla"
+  (AC-448/449). R0/R1 show no "Ritrascrivi".
+- **S2 · re-run states:** "Ritrascrizione in coda (n)" / "Ritrascrizione in corso · <fase> · mm:ss", the row still
+  opens S3 with the old badge (AC-450); after a failure "Completata" + "Ritrascrizione non riuscita: <motivo>" +
+  prefilled field + "Ritrascrivi" (AC-451). A `fallita` row without a `Trascritto` keeps "Riprova" (no dialog).
+  **A row opens S3 iff a `Trascritto` exists** (replaces "iff completata").
+- **S2 · "Annulla" on a queued row (R1 and R2)** — a row "In coda (n)" or "Ritrascrizione in coda (n)" shows
+  "Annulla" (→ `AnnullaElaborazione`, no dialog: nothing is lost). "In corso" rows never do: a running transcription
+  cannot be cancelled. The row returns to its previous state ("Trascrivi", or "Completata" + "Ritrascrivi", or
+  "Riprova"); if the transcription had just started, the row shows "La trascrizione è già partita: non si può più
+  annullare" and becomes "In corso" (AC-475/476).
+- **S3 · READ-ONLY while a re-run is queued or running** [user] (replaces ADR 0018's first proposal "fully usable"):
+  banner "Ritrascrizione in corso: modifiche disabilitate fino al termine" + "Questa trascrizione sarà sostituita
+  quando la nuova sarà pronta."; in R2 also "Le correzioni e i nomi assegnati andranno persi." Reading, playing,
+  "▶ estratto" and "Apri documento" stay; naming ("Conferma", "altri", "nuovo…", "cambia"), "salta", "Unisci con",
+  "Dividi voce", "Riassegna a" are disabled and no Proposta is computed (AC-452/454). If the re-run fails or is
+  annullata, editing comes back with nothing lost (AC-461); after the replacement S3 reloads on the new `Voce`s,
+  all "da identificare" (AC-453/455).
+- **Blocks:** `schermata-registrazioni` (S2), `schermata-registrazione` (S3 banner + read-only flag),
+  `schermata-registrazione-identificazione` (S3 panel disabled), `stati-elaborazione` (`trascrittoDisponibile`,
+  `elaborazioneId`), `annulla-elaborazione`.
+
+## Amendment 2026-09-24 (Separazione semi-automatica) [user]
+Source: ADR 0019 §6 and its Amendment 2026-09-24 (b) (the user's answers); manifest delta
+`manifest-deltas/2026-09-24-semi-automatica.md`. The S3 text above is kept; this amendment adds to it. It applies to R2
+(block `schermata-registrazione-identificazione`, wired by `avvio-parlanti`).
+- **"Dai un nome a questa frase ▾"** is in the selection toolbar, shown iff exactly ONE `Segmento` is selected. The
+  menu lists the `attivo` `Parlanti`, then "nuovo…" (Nome, ricorrente preselected, occasionale toggle).
+  - It confirms or moves the sentence and names its person, following the four cases of ADR 0019 §5.
+  - The row shows the ADR 0017 pending state ("In attesa dell'elaborazione…" + "Annulla" after 2 s).
+  - An error is shown inline. On `NomeGiaInUso`, the new `Voce` stays unnamed.
+- **Pin marker** on a `Segmento confermato`. Its tooltip reads "Frase confermata: «Riassegna per somiglianza» non la
+  sposta". Selected alone, the toolbar offers **"Togli conferma"**.
+- **"Riassegna per somiglianza"** is in the Voci panel header.
+  - **Enabled iff** all of these hold:
+    - ≥ 2 named `attivo` people each have a `Segmento` of ≥ 1 s;
+    - S3 is not read-only;
+    - nothing is pending;
+    - no computation, preview or application is in progress.
+  - **Disabled hint:** "Dai un nome ad almeno due persone".
+  - **Under the button:**
+    - "Riferimenti: Anna, Marco (frasi confermate) · Luca (tutta la voce)";
+    - when someone is in the "tutta la voce" mode: "Senza una frase confermata uso tutta la voce: il risultato può
+      cambiare se ripeti. Conferma una frase per persona per renderlo stabile.";
+    - "Non toccate: <Nomi>" for named people with no `Segmento` of ≥ 1 s.
+  - **Computing:**
+    - "Confronto le frasi… n di N" with a determinate bar;
+    - "In attesa dell'elaborazione…" after 2 s without progress;
+    - "Annulla" throughout;
+    - every editing action disabled, playback and "▶ estratto" still enabled.
+  - **Preview** (nothing written yet):
+    - "Sposterò N frasi, M incerte restano dove sono";
+    - one line per move pair, "Voce 3 → Anna: 8";
+    - **Applica** / **Annulla**;
+    - with no moves, "Nessuna frase da spostare (M incerte restano dove sono)" + **Chiudi**;
+    - editing stays disabled;
+    - leaving S3 keeps the preview;
+    - a queued Ritrascrivi discards it.
+  - **Applica** runs exactly the previewed plan. The result reads "N frasi spostate, M incerte (rimaste dov'erano)".
+  - **If the transcript changed** in between: "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima" +
+    **Ricalcola**.
+  - **Annulla** closes the preview. Nothing changes.
+
+## Amendment 2026-09-24 (Restyle — design system) [user]
+Source: `UI/design-system/` (the approved Snastro design system) and manifest delta
+`manifest-deltas/2026-09-24-restyle-ui.md`. The screen structure above stands; the look of every screen
+follows the design system (part A, AC-551…589). Part B (`momenti.md`: recording page in every state,
+time estimate, Riassunto tab with facts, project home "Da fare" + summary, clickable voice lanes) is
+specified in the delta and waits for the user's confirmation item by item.

@@ -5,16 +5,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.merge
 import snastro.audio.RiproduttoreWav
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.ProgettoId
 import snastro.persistenza.DatabaseProgetto
-import snastro.persistenza.SchemaProgettoPiuRecenteException
+import snastro.persistenza.SchemaProgettoRifiutatoException
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
@@ -30,7 +32,10 @@ import snastro.progetto.applicazione.comandi.RinominaRegistrazioneServizio
 import snastro.progetto.applicazione.letture.RegistrazioniDelProgetto
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgetti
+import snastro.progetto.applicazione.porte.SondaAudio
 import snastro.progetto.applicazione.porte.VoceRegistro
+import snastro.ui.AggiornamentiVista
+import snastro.ui.Cambiamento
 import snastro.ui.ErroreSessione
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
@@ -44,6 +49,7 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -66,6 +72,13 @@ import java.util.logging.Logger
  * lettore and closing the database are each guarded on their own (logged at WARNING, never
  * rethrown) — a checkpoint failure (full disk, a deleted folder, `SQLITE_BUSY`) must never leave
  * the scope un-cancelled, the lock retained, or [chiudi] itself throwing to the UI (AC-347).
+ *
+ * [estensione] (avvio-composizione) is the later release's hook ([EstensioneSessione], `null` in R0):
+ * built in [apriGrafo] over this project's own database/dispatcher/scope, stopped in [chiudi] in the
+ * pinned order — lettore, session scope cancel, [ProgettoEsteso.ferma] (the Elaborazione queue's
+ * `fermaEAttendi` + the Documento worker), and only then the database close and the lock release —
+ * deferred to the end of a worker that outlives [ProgettoEsteso.ferma]'s bound (fix-batch-16 MED-1).
+ * [chiudi] is blocking (up to the extension's bound): the shell presenter calls it off the UI thread.
  */
 internal class SessioneProgettoImpl(
     private val registro: RegistroProgetti,
@@ -73,6 +86,7 @@ internal class SessioneProgettoImpl(
     private val clock: Clock,
     private val scopeGenitore: CoroutineScope,
     private val seams: SessioneProgettoSeams = SessioneProgettoSeams(),
+    private val estensione: EstensioneSessione? = null,
 ) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
     override val corrente: StateFlow<ProgettoAperto?> = _corrente.asStateFlow()
@@ -167,7 +181,10 @@ internal class SessioneProgettoImpl(
 
         val db = try {
             seams.apriDatabase(cartella.toFile())
-        } catch (ignored: SchemaProgettoPiuRecenteException) {
+        } catch (ignored: SchemaProgettoRifiutatoException) {
+            // L530f: BOTH refusals (a schema newer than supported AND `user_version = 1`, never really
+            // shipped, CR-13/ADR 0006 Amendment (a)) show the SAME DatabasePiuRecente message — this
+            // app version cannot open the file's schema, whichever the exact reason.
             rilasciaLock(lockCartella)
             return Esito.Errore(ErroreSessione.DatabasePiuRecente)
         } catch (e: CancellationException) {
@@ -236,15 +253,55 @@ internal class SessioneProgettoImpl(
                 sessione.risorse.lettoreAudio.chiudi()
             }
             sessione.collaboratori.scope.cancel()
-            chiudiSilenziosamente("chiusura del database fallita in chiudi") {
-                sessione.risorse.chiudiDb() // fix-batch-12 #2
+            // avvio-composizione: i lavoratori di sfondo dell'estensione (coda delle Elaborazioni,
+            // rigenerazione del Documento) sono gia' stati cancellati con lo scope qui sopra; si attende
+            // (con un limite) che smettano davvero di toccare il database PRIMA di chiuderlo.
+            // fix-batch-16 MED-1: se un lavoratore sopravvive al limite (una chiamata nativa ignora
+            // l'interruzione), chiusura del database e rilascio del lock sono RINVIATI alla sua fine
+            // (ProgettoEsteso.ferma) — mai un database chiuso sotto un lavoratore vivo; `corrente` si
+            // azzera comunque subito, la UI torna a S1.
+            val rilascia = rilascioUnaVolta(sessione)
+            val estensione = sessione.collaboratori.estensione
+            if (estensione == null) {
+                rilascia()
+            } else {
+                fermaEstensione(estensione, rilascia)
             }
-            rilasciaLock(sessione.lockCartella)
             _corrente.value = null
         }
     }
 
+    /**
+     * The database close (fix-batch-12 #2) + the `.lock` release of [sessione], each guarded on its own
+     * (AC-347), run at most once — now or, fix-batch-16 MED-1, later, on a worker's own thread.
+     */
+    private fun rilascioUnaVolta(sessione: SessioneAperta): () -> Unit {
+        val fatto = AtomicBoolean(false)
+        return {
+            if (fatto.compareAndSet(false, true)) {
+                chiudiSilenziosamente("chiusura del database fallita in chiudi") { sessione.risorse.chiudiDb() }
+                chiudiSilenziosamente("rilascio del lock fallito in chiudi") { rilasciaLock(sessione.lockCartella) }
+            }
+        }
+    }
+
+    /** A failing [ProgettoEsteso.ferma] is logged, never rethrown (AC-347): [rilascia] then runs at once. */
+    private fun fermaEstensione(estensione: ProgettoEsteso, rilascia: () -> Unit) {
+        try {
+            estensione.ferma(rilascia)
+        } catch (e: CancellationException) {
+            rilascia()
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.log(Level.WARNING, "arresto dell'estensione fallito in chiudi", e)
+            rilascia()
+        }
+    }
+
     /** Builds the rest of the R0 graph for a freshly opened/created [progettoId] and sets [corrente]. */
+    @Suppress("LongMethod") // linear wiring, one statement per collaborator — splitting it only scatters it
     private fun apriGrafo(
         cartella: Path,
         lockCartella: LockCartella,
@@ -265,7 +322,7 @@ internal class SessioneProgettoImpl(
             clock,
             progetti,
             registrazioni,
-            SondaAudioFfmpeg(),
+            seams.sondaAudio(),
             ArchivioAudioFile(cartella),
             dispatcher,
         )
@@ -277,20 +334,46 @@ internal class SessioneProgettoImpl(
             riferimentoAudioDi = { id -> registrazioni.trova(id)?.riferimentoAudio },
             riproduttore = seams.riproduttoreFabbrica(),
         )
+        val progettoEsteso = try {
+            estensione?.apri(ContestoEstensione(progettoId, cartella, db, dispatcher, scopeSessione, registrazioni))
+        } catch (e: CancellationException) {
+            scopeSessione.cancel()
+            throw e
+        } catch (
+            // H3 discipline: a failing extension never leaves the lock held, the database open or the
+            // session scope alive.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.log(Level.WARNING, "costruzione dell'estensione fallita", e)
+            scopeSessione.cancel()
+            chiudiSilenziosamente("chiusura del lettore audio fallita dopo un'estensione fallita") {
+                lettoreAudio.chiudi()
+            }
+            chiudiSilenziosamente("chiusura del database fallita dopo un'estensione fallita", chiudiDb)
+            rilasciaLock(lockCartella)
+            return Esito.Errore(ErroreSessione.CartellaNonValida)
+        }
+        val aggiornamentiR0 = AggiornamentiVistaEventi(dispatcher)
         val collaboratori = CollaboratoriProgettoAperto(
             registrazioni = { registrazioniDelProgetto.delProgetto(progettoId) },
             aggiungiRegistrazione = aggiungiServizio::esegui,
             modificaDataRegistrazione = modificaServizio::esegui,
             rinominaRegistrazione = rinominaServizio::esegui,
             lettoreAudio = lettoreAudio,
-            aggiornamentiVista = AggiornamentiVistaEventi(dispatcher),
+            aggiornamentiVista = progettoEsteso?.let { AggiornamentiVistaUnite(aggiornamentiR0, it.aggiornamenti) }
+                ?: aggiornamentiR0,
             scope = scopeSessione,
+            estensione = progettoEsteso,
         )
 
         val percorso = percorsoAssoluto(cartella)
+        // Il conteggio legge il database QUI, sul thread del chiamante (mai sul thread del registro, che
+        // girerebbe dopo il ritorno di crea/apri — anche dopo chiudi — toccando un database gia' chiuso o
+        // una cartella gia' rimossa); solo la chiamata al registro e' spostata fuori dal thread UI (AC-347).
+        val numRegistrazioni = contaRegistrazioni(registrazioni, progettoId)
+        val aggiuntaAlle = clock.instant()
         fuoriDalThreadUi(registro) {
-            val numRegistrazioni = registrazioni.delProgetto(progettoId).size
-            it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, clock.instant()))
+            it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, aggiuntaAlle))
         }
 
         aperta = SessioneAperta(
@@ -327,7 +410,13 @@ internal data class SessioneProgettoSeams(
     val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql,
     val riproduttoreFabbrica: () -> RiproduttoreWav = ::RiproduttoreWav,
     val chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
+    val sondaAudio: () -> SondaAudio = ::SondaAudioFfmpeg,
 )
+
+/** [AggiornamentiVista] of a project with an [ProgettoEsteso]: R0's own changes merged with the extension's. */
+private class AggiornamentiVistaUnite(r0: AggiornamentiVista, estensione: AggiornamentiVista) : AggiornamentiVista {
+    override val cambiamenti: Flow<Cambiamento> = merge(r0.cambiamenti, estensione.cambiamenti)
+}
 
 /** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */
 private class LockCartella(val canale: FileChannel, val lock: FileLock)
@@ -394,6 +483,18 @@ private fun chiudiSilenziosamente(messaggio: String, azione: () -> Unit) {
     }
 }
 
+/** AC-347: only the registry's count is lost on a failing read — `crea`/`apri` never abort for it. */
+private fun contaRegistrazioni(registrazioni: RegistrazioneRepository, progettoId: ProgettoId): Int = try {
+    registrazioni.delProgetto(progettoId).size
+} catch (e: CancellationException) {
+    throw e
+} catch (
+    @Suppress("TooGenericExceptionCaught") e: Exception,
+) {
+    log.log(Level.WARNING, "lettura delle Registrazioni fallita: il registro riceve 0", e)
+    0
+}
+
 private fun percorsoAssoluto(cartella: Path): String = cartella.toAbsolutePath().normalize().toString()
 
 private val log: Logger = Logger.getLogger(SessioneProgettoImpl::class.java.name)
@@ -427,3 +528,15 @@ private fun fuoriDalThreadUi(registro: RegistroProgetti, azione: (RegistroProget
 private val eseguitoreRegistro = Executors.newSingleThreadExecutor { runnable ->
     Thread(runnable, "registro-progetti-io").apply { isDaemon = true }
 }
+
+/**
+ * L530e: `:avvio`'s own exit path ([Main.kt]) calls this ONCE, after the last open Progetto's
+ * [SessioneProgettoImpl.chiudi] has already queued its own registry write on [eseguitoreRegistro] —
+ * [spegniEAttendi] gives that queue a bounded chance to actually run before the process exits (a
+ * daemon executor is otherwise simply killed, mid-queue, at JVM shutdown, silently dropping the
+ * final `ultimaAttivita`/`numRegistrazioni` update). Not itself unit-tested — it is a real, one-line
+ * binding of the ALREADY-tested [spegniEAttendi] over the shared singleton, which a test must never
+ * `shutdown()` (it would leak into every other test in this JVM); see [SpegniEAttendiTest].
+ */
+internal fun attendiScritturaRegistro(attesaMassimaMs: Long = ATTESA_CHIUSURA_USCITA_MS): Boolean =
+    spegniEAttendi(eseguitoreRegistro, attesaMassimaMs)

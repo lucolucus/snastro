@@ -1,5 +1,6 @@
 package snastro.persistenza
 
+import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.sqlite.SQLiteConfig
 import java.sql.SQLException
@@ -9,7 +10,8 @@ import kotlin.test.assertFailsWith
 
 /**
  * AC-9 / AC-13: the schema-level guards exist and actually reject a violating row — the ADR 0007
- * partial unique indexes (INV-4 x2, INV-16), the `attribuzione` primary key (AC-23, structural) and
+ * partial unique indexes still in force (INV-4 open, INV-16; ADR 0018 dropped the completata one), the
+ * `attribuzione` primary key (AC-23, structural) and
  * the `impronta_vocale` unique constraint (INV-14). The repository adapters (wave 4) map the
  * resulting [SQLException] to the matching `ErroreDominio`; here we only prove the store itself
  * refuses the second row.
@@ -19,22 +21,30 @@ class SchemaVincoliTest {
     fun `AC-9 elaborazione_aperta_unica rifiuta una seconda Elaborazione aperta per la stessa Registrazione`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "in_attesa", 0L, null, null)
+        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "in_attesa", 0L, null, null, null)
 
         assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "in_corso", 1L, 1L, null)
+            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "in_corso", 1L, 1L, null, null)
         }
     }
 
     @Test
-    fun `AC-9 elaborazione_completata_unica rifiuta una seconda Elaborazione completata per la stessa Registrazione`() {
-        val db = databaseInMemoria()
-        val registrazioneId = db.seminaProgettoERegistrazione()
-        db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "completata", 0L, 0L, null)
+    fun `AC-9 esistono solo i due indici unici parziali ancora in vigore e non elaborazione_completata_unica`() {
+        val (_, driver) = databaseEDriverInMemoria()
 
-        assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-2", registrazioneId, "completata", 1L, 1L, null)
-        }
+        val indici = driver.executeQuery(
+            null,
+            "SELECT name FROM sqlite_master WHERE type = 'index' AND sql LIKE 'CREATE UNIQUE INDEX%'",
+            { cursore ->
+                val nomi = mutableSetOf<String>()
+                while (cursore.next().value) nomi += checkNotNull(cursore.getString(0))
+                QueryResult.Value(nomi)
+            },
+            0,
+        ).value
+
+        // ADR 0018: elaborazione_completata_unica is dropped by 3.sqm (AC-425).
+        assertEquals(setOf("elaborazione_aperta_unica", "parlante_nome_attivo_unico"), indici)
     }
 
     @Test
@@ -45,8 +55,8 @@ class SchemaVincoliTest {
         val r1 = db.seminaRegistrazione(progettoId, "reg-1")
         val r2 = db.seminaRegistrazione(progettoId, "reg-2")
 
-        db.elaborazioneQueries.inserisci("elab-1", r1, "in_attesa", 0L, null, null)
-        db.elaborazioneQueries.inserisci("elab-2", r2, "in_attesa", 0L, null, null)
+        db.elaborazioneQueries.inserisci("elab-1", r1, "in_attesa", 0L, null, null, null)
+        db.elaborazioneQueries.inserisci("elab-2", r2, "in_attesa", 0L, null, null, null)
     }
 
     @Test
@@ -81,7 +91,7 @@ class SchemaVincoliTest {
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
         db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
-        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao")
+        db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)
 
         // Trascritto's documented salva: DELETE voce ... then re-insert, in ONE transaction that
         // also carries the Parlanti revisione-policy on attribuzione/impronta_vocale (ADR 0012).
@@ -121,8 +131,30 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaProgettoERegistrazione()
 
         assertFailsWith<SQLException> {
-            db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "sconosciuto", 0L, null, null)
+            db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "sconosciuto", 0L, null, null, null)
         }
+    }
+
+    @Test
+    fun `AC-377 numero_persone CHECK rifiuta 0 e 11 e accetta 1, 10 e NULL`() {
+        listOf(0L, 11L).forEach { n ->
+            val db = databaseInMemoria()
+            val registrazioneId = db.seminaProgettoERegistrazione()
+
+            assertFailsWith<SQLException>("numero_persone = $n") {
+                db.elaborazioneQueries.inserisci("elab-1", registrazioneId, "fallita", 0L, 0L, "motivo", n)
+            }
+        }
+        val db = databaseInMemoria()
+        val registrazioneId = db.seminaProgettoERegistrazione()
+        listOf(1L, 10L, null).forEachIndexed { i, n ->
+            db.elaborazioneQueries.inserisci("elab-$i", registrazioneId, "fallita", i.toLong(), 0L, "motivo", n)
+        }
+
+        assertEquals(
+            listOf(1L, 10L, null),
+            db.elaborazioneQueries.trovaDiRegistrazione(registrazioneId).executeAsList().map { it.numero_persone },
+        )
     }
 
     @Test

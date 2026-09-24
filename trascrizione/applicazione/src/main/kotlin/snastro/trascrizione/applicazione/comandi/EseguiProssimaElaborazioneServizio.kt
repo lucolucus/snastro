@@ -13,6 +13,7 @@ import snastro.kernel.poi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
+import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.ALLINEAMENTO
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
@@ -35,8 +36,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * ML/audio ports of [PortePipeline] OUTSIDE any transaction (AC-73), signalling each phase in order
  * (AC-69) with one FIXED, plain-Italian `motivo` per fault point — no raw exception text, path or id
  * ever reaches the user (ADR 0003). On success, `completata` and the [Trascritto] are saved together
- * in one short transaction (INV-5): that transaction re-reads the Elaborazione BY ID first and, if it
- * is no longer `in_corso`, leaves it untouched (e.g. [RecuperaElaborazioniInterrotte] already
+ * in one short transaction (INV-5) — over an existing Trascritto, replacing it whole and publishing
+ * [TrascrittoSostituito] first (ADR 0018, [completa]): that transaction re-reads the Elaborazione BY ID
+ * first and, if it is no longer `in_corso`, leaves it untouched (e.g. [RecuperaElaborazioniInterrotte] already
  * recovered it while this run was mid-flight — the in-memory instance mutated earlier is never
  * reused). If that final transaction itself fails — `Esito.Errore`, or an exception (the store refuses
  * the `completata` row after the Trascritto was already written in the SAME transaction: the whole
@@ -47,6 +49,20 @@ import kotlin.coroutines.cancellation.CancellationException
  * [PortePipeline.segnalatore]`.terminata` always fires, in a `finally`, whatever the outcome. Never
  * decodes the whole Registrazione as an interval: [PortePipeline.decodificatore]`.tutti` reads the
  * whole audio, `.campioni(intervallo)` is for turn/Segmento-scoped work elsewhere (review finding).
+ *
+ * AC-313 (F-G): [esegui] skips any id in [EseguiProssimaElaborazione.esclusi] when picking the FIFO
+ * head, and ALWAYS reports which id it attempted via [RisultatoAvanzamento] —
+ * [Avviata][RisultatoAvanzamento.Avviata] on success,
+ * [AvvioRifiutato][RisultatoAvanzamento.AvvioRifiutato] when the `in_attesa → in_corso` transaction
+ * itself is refused (e.g. a synchronous subscriber that always refuses `ElaborazioneAvviata`). A
+ * refusal is never `Esito.Errore` here: the dispatcher (`:avvio`) needs the id to grow its own
+ * per-session exclusion set, and reads it off [RisultatoAvanzamento] instead of an error payload.
+ *
+ * AC-312's escape (cancellation/interrupt/Error/unexpected exception out of [eseguiSu]) is left
+ * UNCHANGED — it still propagates raw, exactly as before this rework, so existing callers/tests that
+ * check its exact type keep working. [ultimaTentata] is the side-channel for that one case: the id
+ * can't travel through a thrown exception's return type, so the dispatcher reads this property right
+ * after catching whatever escaped [esegui] to learn which id it was.
  */
 public class EseguiProssimaElaborazioneServizio(
     private val uow: UnitaDiLavoro,
@@ -56,14 +72,36 @@ public class EseguiProssimaElaborazioneServizio(
     private val pipeline: PortePipeline,
     private val eventi: DispatcherEventi,
 ) {
-    public fun esegui(ignored: EseguiProssimaElaborazione): Esito<Unit> =
-        uow.inTransazione { avviaLaPiuVecchia() }.poi { elaborazione ->
-            elaborazione?.let { eseguiSu(it) } ?: Esito.Ok(Unit) // AC-68: nessuna in_attesa
-        }
+    /**
+     * The id of the Elaborazione picked as FIFO head by the MOST RECENT [esegui] call, or `null` if
+     * that call never got to pick one (e.g. the repository read itself faulted). Reset at the START
+     * of every [esegui] call, set the moment a head is picked — before the transactional avvio AND
+     * before the pipeline run, so it is already correct by the time either one refuses or escapes.
+     */
+    public var ultimaTentata: ElaborazioneId? = null
+        private set
 
-    /** Reads the oldest `in_attesa` and marks it `in_corso` in ONE transaction (no read/avvia race). */
-    private fun avviaLaPiuVecchia(): Esito<Elaborazione?> {
-        val prossima = elaborazioni.inAttesa().firstOrNull() ?: return Esito.Ok(null) // AC-68: FIFO
+    @Suppress("ReturnCount") // guard clauses, one per RisultatoAvanzamento branch — clearer than nesting
+    public fun esegui(comando: EseguiProssimaElaborazione): Esito<RisultatoAvanzamento> {
+        ultimaTentata = null
+        val esito = uow.inTransazione { avviaLaPiuVecchia(comando.esclusi) }
+        if (esito is Esito.Errore) {
+            return Esito.Ok(RisultatoAvanzamento.AvvioRifiutato(checkNotNull(ultimaTentata), esito.errore))
+        }
+        val elaborazione = (esito as Esito.Ok).valore ?: return Esito.Ok(RisultatoAvanzamento.NessunElemento) // AC-68
+        eseguiSu(elaborazione) // may still escape raw (AC-312) — ultimaTentata is already set for the caller
+        return Esito.Ok(RisultatoAvanzamento.Avviata(elaborazione.id))
+    }
+
+    /**
+     * Reads the oldest `in_attesa` NOT in [esclusi] and marks it `in_corso` in ONE transaction (no
+     * read/avvia race, AC-314's PINNED REQUIREMENT). Sets [ultimaTentata] the moment a head is
+     * picked, BEFORE the transactional avvio runs, so it is known to [esegui] even when the
+     * transaction below is refused and rolled back (AC-313).
+     */
+    private fun avviaLaPiuVecchia(esclusi: Set<ElaborazioneId>): Esito<Elaborazione?> {
+        val prossima = elaborazioni.inAttesa().firstOrNull { it.id !in esclusi } ?: return Esito.Ok(null) // AC-68: FIFO
+        ultimaTentata = prossima.id
         return prossima.avvia(orologio.instant()).poi { evento ->
             elaborazioni.salva(prossima).poi {
                 eventi.pubblica(evento.pubblicato())
@@ -76,7 +114,7 @@ public class EseguiProssimaElaborazioneServizio(
         val registrazioneId = elaborazione.registrazioneId
         val elaborazioneId = elaborazione.id
         try {
-            val risultato = eseguiPipeline(registrazioneId)
+            val risultato = eseguiPipeline(elaborazione)
             val esitoFinale = inTransazioneTentata {
                 concludi(registrazioneId, elaborazioneId) { fresca ->
                     when (risultato) {
@@ -105,7 +143,8 @@ public class EseguiProssimaElaborazioneServizio(
      * clause per step (readable, each mapped to its own fixed `motivo`) — `@Suppress`: deliberate.
      */
     @Suppress("ReturnCount")
-    private fun eseguiPipeline(id: RegistrazioneId): RisultatoPipeline {
+    private fun eseguiPipeline(elaborazione: Elaborazione): RisultatoPipeline {
+        val id = elaborazione.registrazioneId
         val letta = eseguiFase { Lettura(pipeline.registrazioni.registrazione(id)) }
             ?: return RisultatoPipeline.Fallita(MOTIVO_LETTURA_REGISTRAZIONE)
         val vista = letta.vista ?: return RisultatoPipeline.Fallita(MOTIVO_REGISTRAZIONE_MANCANTE)
@@ -118,7 +157,7 @@ public class EseguiProssimaElaborazioneServizio(
 
         val turni = eseguiFase {
             pipeline.segnalatore.fase(id, DIARIZZAZIONE)
-            pipeline.diarizzatore.diarizza(campioni)
+            pipeline.diarizzatore.diarizza(campioni, elaborazione.numeroPersone) // AC-370, ADR 0014
         } ?: return RisultatoPipeline.Fallita(MOTIVO_DIARIZZAZIONE)
 
         val grezzi = eseguiFase {
@@ -212,10 +251,18 @@ public class EseguiProssimaElaborazioneServizio(
             }
         }
 
+    /**
+     * INV-5 / ADR 0018: `completata` and the Trascritto in ONE transaction. The existing Trascritto is re-read
+     * HERE, inside it: if there is one, [TrascrittoRepository.salva] replaces it whole and [TrascrittoSostituito]
+     * is published BEFORE `ElaborazioneCompletata`, so its synchronous subscriber (the Parlanti purge) runs before
+     * the COMMIT and its refusal rolls the whole completion back (then compensated to `fallita`).
+     */
     private fun completa(elaborazione: Elaborazione, creato: Creato<Trascritto, TrascrittoCreato>): Esito<Unit> =
         elaborazione.completa().poi { evento ->
+            val sostituisce = trascritti.trova(elaborazione.registrazioneId) != null
             trascritti.salva(creato.aggregato) // stessa transazione del salva sotto: INV-5
             elaborazioni.salva(elaborazione).poi {
+                if (sostituisce) eventi.pubblica(TrascrittoSostituito(elaborazione.registrazioneId))
                 eventi.pubblica(evento.pubblicato())
                 Esito.Ok(Unit)
             }
@@ -243,13 +290,16 @@ public class EseguiProssimaElaborazioneServizio(
         const val MOTIVO_SEGMENTO_OLTRE_DURATA = "un segmento supera la durata della registrazione"
         const val MOTIVO_TRANSIZIONE_NON_AMMESSA = "transizione di stato non consentita"
         const val MOTIVO_ELABORAZIONE_GIA_APERTA = "un'altra elaborazione è già in corso per questa registrazione"
-        const val MOTIVO_ELABORAZIONE_GIA_COMPLETATA = "questa registrazione ha già un risultato completato"
+        const val MOTIVO_ELABORAZIONE_GIA_AVVIATA = "l'elaborazione è già partita"
+        const val MOTIVO_ELABORAZIONE_NON_TROVATA = "elaborazione non trovata"
         const val MOTIVO_TRASCRITTO_NON_TROVATO = "trascrizione non ancora disponibile"
         const val MOTIVO_VOCE_NON_TROVATA = "voce non trovata"
         const val MOTIVO_SEGMENTO_NON_TROVATO = "segmento non trovato"
         const val MOTIVO_UNIONE_NON_AMMESSA = "unione di voci non consentita"
         const val MOTIVO_DIVISIONE_NON_AMMESSA = "divisione di voce non consentita"
         const val MOTIVO_RIASSEGNAZIONE_NON_AMMESSA = "riassegnazione del segmento non consentita"
+        const val MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO = "numero di persone non valido"
+        const val MOTIVO_TRASCRITTO_CAMBIATO = "la trascrizione è cambiata nel frattempo"
 
         /** 16 kHz mono (`DecodificatoreAudio`, ADR 0005): samples per millisecond. */
         const val CAMPIONI_PER_MS = 16
@@ -260,12 +310,14 @@ public class EseguiProssimaElaborazioneServizio(
          * [ErroreTrascrizione.NessunParlatoRilevato] or [ErroreTrascrizione.SegmentoOltreLaDurata];
          * the other branches exist only so the mapping stays total for any future caller.
          */
+        @Suppress("CyclomaticComplexMethod") // one flat branch per ErroreTrascrizione member, no else (RC-4)
         private fun motivoTrascritto(errore: ErroreTrascrizione): String = when (errore) {
             is ErroreTrascrizione.NessunParlatoRilevato -> MOTIVO_NESSUN_PARLATO
             is ErroreTrascrizione.SegmentoOltreLaDurata -> MOTIVO_SEGMENTO_OLTRE_DURATA
             is ErroreTrascrizione.TransizioneNonAmmessa -> MOTIVO_TRANSIZIONE_NON_AMMESSA
             is ErroreTrascrizione.ElaborazioneGiaAperta -> MOTIVO_ELABORAZIONE_GIA_APERTA
-            is ErroreTrascrizione.ElaborazioneGiaCompletata -> MOTIVO_ELABORAZIONE_GIA_COMPLETATA
+            is ErroreTrascrizione.ElaborazioneGiaAvviata -> MOTIVO_ELABORAZIONE_GIA_AVVIATA
+            is ErroreTrascrizione.ElaborazioneNonTrovata -> MOTIVO_ELABORAZIONE_NON_TROVATA
             is ErroreTrascrizione.RegistrazioneNonTrovata -> MOTIVO_REGISTRAZIONE_MANCANTE
             is ErroreTrascrizione.TrascrittoNonTrovato -> MOTIVO_TRASCRITTO_NON_TROVATO
             is ErroreTrascrizione.VoceNonTrovata -> MOTIVO_VOCE_NON_TROVATA
@@ -273,6 +325,8 @@ public class EseguiProssimaElaborazioneServizio(
             is ErroreTrascrizione.UnioneNonAmmessa -> MOTIVO_UNIONE_NON_AMMESSA
             is ErroreTrascrizione.DivisioneNonAmmessa -> MOTIVO_DIVISIONE_NON_AMMESSA
             is ErroreTrascrizione.RiassegnazioneNonAmmessa -> MOTIVO_RIASSEGNAZIONE_NON_AMMESSA
+            is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO
+            is ErroreTrascrizione.TrascrittoCambiato -> MOTIVO_TRASCRITTO_CAMBIATO
         }
 
         /**

@@ -6,6 +6,8 @@ import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
+import snastro.ui.modelli.ErroreServizioModelli
+import snastro.ui.registrazione.ErroreComandoVoce
 
 /**
  * R25: one exhaustive `messaggioPer` per context error hierarchy (no `else`, AC-180), plus this
@@ -20,6 +22,8 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
     is ErroreProgetto -> messaggioPer(errore)
     is ErroreTrascrizione -> messaggioPer(errore)
     is ErroreParlanti -> messaggioPer(errore)
+    is ErroreServizioModelli -> messaggioPer(errore)
+    is ErroreComandoVoce -> messaggioPer(errore)
     else -> error("ErroreDominio non mappato: $errore")
 }
 
@@ -46,13 +50,15 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
         "Il titolo \"${errore.titolo}\" è già usato da un'altra registrazione di questo progetto."
 }
 
+@Suppress("CyclomaticComplexMethod") // one flat branch per ErroreTrascrizione member, no else (RC-4)
 fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
     // `TransizioneNonAmmessa` is an internal invariant breach, not something the user can act on: its
     // `da`/`verso` (`:trascrizione:dominio` VOs, off-limits to `:ui` per CR-1(b)) are never read here —
     // a generic message that names no state is both the correct UX and the frugal fix.
     is ErroreTrascrizione.TransizioneNonAmmessa -> "Operazione non ammessa nello stato attuale dell'elaborazione."
     is ErroreTrascrizione.ElaborazioneGiaAperta -> "Questa registrazione ha già un'elaborazione in corso."
-    is ErroreTrascrizione.ElaborazioneGiaCompletata -> "Questa registrazione è già stata elaborata."
+    is ErroreTrascrizione.ElaborazioneGiaAvviata -> "La trascrizione è già partita: non si può più annullare"
+    is ErroreTrascrizione.ElaborazioneNonTrovata -> "Questa trascrizione non è più in coda"
     is ErroreTrascrizione.RegistrazioneNonTrovata -> "Registrazione non trovata."
     is ErroreTrascrizione.TrascrittoNonTrovato -> "Questa registrazione non ha ancora una trascrizione."
     ErroreTrascrizione.NessunParlatoRilevato -> "Non è stato rilevato nessun parlato in questo audio."
@@ -62,6 +68,8 @@ fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
     is ErroreTrascrizione.UnioneNonAmmessa -> "Una voce non può essere unita con se stessa."
     is ErroreTrascrizione.DivisioneNonAmmessa -> "La selezione non può essere divisa in una nuova voce."
     is ErroreTrascrizione.RiassegnazioneNonAmmessa -> "Questo segmento non può essere riassegnato a questa voce."
+    is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
+    is ErroreTrascrizione.TrascrittoCambiato -> "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima"
 }
 
 fun messaggioPer(errore: ErroreParlanti): String = when (errore) {
@@ -76,4 +84,22 @@ fun messaggioPer(errore: ErroreParlanti): String = when (errore) {
     ErroreParlanti.NomeVuoto -> "Il nome non può essere vuoto."
     is ErroreParlanti.VoceGiaAttribuita -> "Questa voce è già stata attribuita a un parlante."
     is ErroreParlanti.VoceCambiata -> "La voce è cambiata nel frattempo: riprova."
+    // AC-495: unreachable from the UI (the button is disabled before this can happen); a plain
+    // fallback line only, so the exhaustive `when` (RC-4) stays total.
+    is ErroreParlanti.RiferimentiInsufficienti -> "Servono almeno due parlanti con una frase di riferimento."
+}
+
+/** AC-229/230: nothing is ever installed on any of these (ADR 0008 (c) install protocol). */
+fun messaggioPer(errore: ErroreServizioModelli): String = when (errore) {
+    is ErroreServizioModelli.HashNonValido -> "Il file scaricato non è valido: nessun modello è stato installato."
+    is ErroreServizioModelli.ArchivioNonValido ->
+        "L'archivio scaricato non è valido: nessun modello è stato installato."
+    ErroreServizioModelli.ReteAssente -> "Rete non raggiungibile: impossibile scaricare i modelli."
+    is ErroreServizioModelli.ScritturaFallita -> "Non è stato possibile salvare i modelli sul disco."
+    is ErroreServizioModelli.DownloadFallito -> "Il download dei modelli non è riuscito."
+}
+
+/** AC-418: a card command whose body threw — nothing was written, the user can retry. */
+fun messaggioPer(errore: ErroreComandoVoce): String = when (errore) {
+    ErroreComandoVoce.NonRiuscito -> "Il comando non è riuscito: nulla è stato salvato. Riprova."
 }

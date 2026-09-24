@@ -51,9 +51,9 @@ opens.
 | `SondaAudio` (readability + duration) | Progetto (`AggiungiRegistrazione`) | `:audio` | ADR 0005 |
 | `DecodificatoreAudio` (`decodifica` → derived WAV, `campioni(intervallo)`) | Trascrizione; Parlanti (own port copy, samples for prints/estratti) | `:audio` | ADR 0005 |
 | `Diarizzatore` (`CampioniAudio` + optional `NumeroPersone` → turns `[{inizioMs, fineMs, voceIndice}]`) | Trascrizione | `:ml-sherpa` | ADR 0014 (closes `scelta-diarizzatore`) |
-| `Vad` | Trascrizione | `:ml-sherpa` (Silero) | spike `allineamento-parole-voci` |
+| `Vad` | Trascrizione | `:ml-sherpa` (Silero) | ADR 0015 (closes spike `allineamento-parole-voci`) |
 | `RiconoscitoreParlato` (`CampioniAudio` → text + token timestamps if available) | Trascrizione | `:ml-sherpa` | spike `scelta-asr-code-switching` |
-| `Allineatore` (turns + ASR output → `Segmento`s) | Trascrizione | pure Kotlin in `:trascrizione:adattatori` | spike `allineamento-parole-voci` |
+| `Allineatore` (turns + ASR output → `Segmento`s) | Trascrizione | pure Kotlin in `:trascrizione:adattatori` | ADR 0015: per-turn transcription (strategy A) |
 | `SegnalatoreFase` (`FaseElaborazione` changes) | Trascrizione | `:avvio` → read-model `RegistrazioniDelProgetto` | ADR 0004 |
 | `EstrattoreImpronta` (`CampioniAudio` → `Impronta`) | Parlanti | `:ml-sherpa` | spike `impronta-vocale-affidabilita` |
 | `ConfrontoImpronte` (`Impronta` × `Impronta` → `Fascia` via `SoglieFascia`) | Parlanti | pure Kotlin in `:parlanti:adattatori` | spike `impronta-vocale-affidabilita` |

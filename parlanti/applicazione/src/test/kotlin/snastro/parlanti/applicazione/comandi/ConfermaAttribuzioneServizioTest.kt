@@ -32,6 +32,7 @@ import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.RigaImpronta
+import snastro.parlanti.applicazione.porte.SegmentoDiVoce
 import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
@@ -718,6 +719,8 @@ class ConfermaAttribuzioneServizioTest {
         private var letture = 0
 
         override fun voci(id: RegistrazioneId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
+
+        override fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce> = error("non usato da questo test (AC-494)")
     }
 
     /**

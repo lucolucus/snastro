@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial: the auto-start policy of ADR 0012 Amendment R2 / ADR 0004 Execution — superseded in place by their dated amendments, pointing here
 closes_spike: scelta-diarizzatore
 enforced_by: null
-amended: 2026-09-23   # user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10
+amended: 2026-09-24   # see also "Amendment 2026-09-24 (c)" → ADR 0019 (segmentation file and clustering rows, Embedding reuse superseded; TitaNet-S entry added). 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count" and "Amendment 2026-09-24 (b)" (Ritrascrivi, ADR 0018)
 ---
 # 0014 — Diarization: sherpa-onnx pyannote-3.0 + WeSpeaker ResNet34-LM, threshold 0.4; optional "Numero di persone" → `num_clusters`
 
@@ -175,3 +175,47 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
   - a stated count gives visibly wrong splits.
 - **Discursive.** No grep checks clustering values. The guardians are the `diarizzatore-sherpa`
   block (AC-249 contract test, AC-250 catalogue entry) and the new `numeroPersone` ACs.
+
+## Amendment 2026-09-24 — `numClusters` above the real count
+- **Measured** while building `diarizzatore-sherpa` (dispatch.log 2026-09-24, merge 41b70ff, real
+  `@modelli` run). It closes the "not measured" point of the adapter behaviour contract above.
+- **sherpa never throws** when `numClusters` is larger than the real number of speakers. The
+  fallback to automatic clustering "if sherpa rejects that `k`" is therefore never triggered.
+- **But the result is not monotonic in `k`.** A `k` above the real count can return **fewer**
+  clusters than a smaller `k`. On a clip with 2 voices, `k = 10` returned **1** cluster. An
+  over-stated count can merge distinct people into one `Voce`.
+- **Consequence for the UI.** The "Numero di persone" hint must be the **real** count of people who
+  speak, never an upper bound or a "safe" high number. The S2 field's hint must tell the user so;
+  leaving it empty (automatic clustering) is the right choice when the count is unknown.
+- The 1..10 bound and the absent → automatic rule are unchanged. The re-measure trigger above also
+  covers this: the benchmark on a real recording should check `k` = the real count.
+
+## Amendment 2026-09-24 (b) — "Ritrascrivi" also offers the field (pointer; [ADR 0018](0018-ritrascrivi.md) is its home)
+- User decision 2026-09-24: a `completata` `Registrazione` can be transcribed again ("Ritrascrivi", a new
+  `Elaborazione`, the Trascritto replaced only when it completes). The S2 row then offers the same optional
+  "Numero di persone" field under the rules above (plain field, empty = automatic, 1..10, real count — never an
+  upper bound), **prefilled with the latest `Elaborazione`'s value** exactly like "Riprova". ADR 0018 §4 owns
+  the confirmation dialog and the S2 states during/after a re-run.
+
+## Amendment 2026-09-24 (c) — diarization config and embedding superseded by [ADR 0019](0019-separazione-semi-automatica.md) (pointer; ADR 0019 is the home)
+- **Superseded rows of the Decision table:**
+  - Segmentation file: now `model.onnx` (fp32). The catalogue entry is unchanged.
+  - Clustering: sherpa runs only as step 1, with an over-split `FastClustering` (`numClusters = -1`,
+    `threshold = 0.2`) and **ResNet34-LM kept**. Its labels are discarded.
+  - Voices now come from **TitaNet-small** piece embeddings (`embedding-nemo-titanet-small`, a new
+    entry) and **our own average-linkage cosine AHC**, followed by nearest-centroid assignment
+    (ADR 0019 §1.2). `threshold = 0.4` is gone; the auto cut is AHC distance 0.5.
+
+  `windowShiftRatio`, the durations, the threads and CPU are unchanged.
+- **Catalogue:** add `embedding-nemo-titanet-small`. `embedding-wespeaker-resnet34-lm` stays (step 1
+  only). The segmentation entry stays, and its file used becomes `model.onnx`.
+- **"Embedding reuse":** decided. TitaNet-small, not ResNet34-LM, is the `EstrattoreImpronta` model
+  (ADR 0019 §2).
+- **"Numero di persone"** rules are unchanged (optional, 1..10, the real count, stored on the
+  `Elaborazione`). With the new k-cut, a `k` above the real count tends to **split** one voice
+  instead of merging people (ADR 0019 §1.3).
+- **"Adapter behaviour contract"**, the bullet "the native call holds the Mutex for the whole phase":
+  now only step 1 is one hold, and each piece embedding is one hold (ADR 0019 §1.5).
+- **Why.** The old setup is unstable: a 10 ms shift changes the split, and stability is 0.63
+  (fix-batch-18). The new one scores 0.94. Even the stable setup is not correct on these voices
+  [user listening check], hence the semi-automatic flow of ADR 0019 §3–§6.

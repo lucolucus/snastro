@@ -14,18 +14,25 @@ class LettoreVociFintaTest : LettoreVociContratto() {
      * Plays the supplier: mints ids with the pinned keys (VoceId 1..n by first appearance, tie on
      * voceIndice; SegmentoId by inizio, Voce, fine; a new Voce takes the next number, never a removed
      * one) and hands the Finta a live view with the Voci in REVERSE voceId order and the intervalli by
-     * DESCENDING inizio (ties by segmentoId), so the Finta's own ordering is what the contract checks.
+     * DESCENDING inizio (ties by segmentoId), so the Finta's own ordering is what the contract checks —
+     * both for [LettoreVoci.voci] ([viste]) and [LettoreVoci.segmenti] ([dati]).
      */
     private class AmbienteFinto : AmbienteLettoreVoci {
-        private class Seg(val id: SegmentoId, var voce: VoceId, val intervallo: IntervalloMs)
+        private class Seg(
+            val id: SegmentoId,
+            var voce: VoceId,
+            val intervallo: IntervalloMs,
+            var confermato: Boolean = false,
+        )
 
         private val generatore = GeneratoreIdFinto()
         private val registrazioni = mutableSetOf<RegistrazioneId>()
         private val trascritti = mutableMapOf<RegistrazioneId, List<Seg>>()
         private val prossimaVoce = mutableMapOf<RegistrazioneId, Int>()
         private val viste = mutableMapOf<RegistrazioneId, List<VoceVista>>()
+        private val dati = mutableMapOf<RegistrazioneId, List<SegmentoDiVoce>>()
 
-        override val lettore: LettoreVoci = LettoreVociFinta(viste)
+        override val lettore: LettoreVoci = LettoreVociFinta(viste, dati)
 
         override fun aggiungiRegistrazione(): RegistrazioneId =
             RegistrazioneId(generatore.nuovo()).also { registrazioni += it }
@@ -73,7 +80,11 @@ class LettoreVociFintaTest : LettoreVociContratto() {
             require(segmenti.isNotEmpty() && segmenti.size < diOrigine.size)
             require(diOrigine.map { it.id }.containsAll(segmenti))
             val nuova = nuovaVoce(registrazioneId)
-            diOrigine.filter { it.id in segmenti }.forEach { it.voce = nuova }
+            // [INV-26]: il sottoinsieme spostato diventa confermato; l'origine resta com'era.
+            diOrigine.filter { it.id in segmenti }.forEach {
+                it.voce = nuova
+                it.confermato = true
+            }
             pubblica(registrazioneId)
             return nuova
         }
@@ -89,15 +100,22 @@ class LettoreVociFintaTest : LettoreVociContratto() {
             }
             require(ammessa)
             s.voce = destinazione ?: nuovaVoce(registrazioneId)
+            s.confermato = true // [INV-26]: una RiassegnaSegmento manuale conferma il Segmento spostato.
             pubblica(registrazioneId)
             return s.voce
+        }
+
+        override fun conferma(registrazioneId: RegistrazioneId, segmento: SegmentoId) {
+            trascritti.getValue(registrazioneId).single { it.id == segmento }.confermato = true
+            pubblica(registrazioneId)
         }
 
         private fun nuovaVoce(registrazioneId: RegistrazioneId): VoceId =
             VoceId(prossimaVoce.getValue(registrazioneId)).also { prossimaVoce[registrazioneId] = it.numero + 1 }
 
         private fun pubblica(registrazioneId: RegistrazioneId) {
-            viste[registrazioneId] = trascritti.getValue(registrazioneId)
+            val segmenti = trascritti.getValue(registrazioneId)
+            viste[registrazioneId] = segmenti
                 .groupBy { it.voce }
                 .toSortedMap(compareByDescending { it.numero })
                 .map { (voce, suoi) ->
@@ -107,6 +125,9 @@ class LettoreVociFintaTest : LettoreVociContratto() {
                             .map { it.intervallo },
                     )
                 }
+            dati[registrazioneId] = segmenti
+                .sortedWith(compareByDescending<Seg> { it.intervallo.inizioMs }.thenByDescending { it.id.numero })
+                .map { SegmentoDiVoce(it.id, it.voce, it.intervallo, it.confermato) }
         }
     }
 }

@@ -125,13 +125,26 @@ class TrascrittoQueryTest {
             listOf(
                 SegmentoTrascrittoView(SegmentoId(1), VoceId(1), 0, 1_000, "testo 0@0"),
                 SegmentoTrascrittoView(SegmentoId(2), VoceId(2), 1_000, 2_000, "testo 1@1000"),
-                SegmentoTrascrittoView(SegmentoId(3), VoceId(3), 2_000, 3_000, "testo 0@2000"),
+                SegmentoTrascrittoView(SegmentoId(3), VoceId(3), 2_000, 3_000, "testo 0@2000", confermato = true),
                 SegmentoTrascrittoView(SegmentoId(4), VoceId(2), 3_000, 4_000, "testo 1@3000"),
                 SegmentoTrascrittoView(SegmentoId(5), VoceId(1), 4_000, 5_000, "testo 0@4000"),
                 SegmentoTrascrittoView(SegmentoId(6), VoceId(2), 5_000, 6_000, "testo 1@5000"),
             ),
             vista?.segmenti,
         )
+    }
+
+    @Test
+    fun `AC-523 la vista espone confermato per Segmento come salvato`() {
+        val trascritto = unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE)
+        trascritto.confermaSegmento(SegmentoId(2), true).atteso()
+        trascritto.confermaSegmento(SegmentoId(4), true).atteso()
+        trascritti.salva(trascritto)
+
+        val vista = query.vista(REGISTRAZIONE)
+
+        assertEquals(listOf(false, true, false, true), vista?.segmenti?.map { it.confermato })
+        assertEquals((1..4).map(::SegmentoId), vista?.segmenti?.map { it.segmentoId })
     }
 
     @Test

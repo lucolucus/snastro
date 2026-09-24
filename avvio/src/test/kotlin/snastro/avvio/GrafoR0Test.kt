@@ -3,9 +3,12 @@ package snastro.avvio
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.atteso
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
@@ -14,6 +17,7 @@ import snastro.ui.DestinazioneShell
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.registrazioni.RegistrazioniUiStato
 import java.io.File
+import java.nio.file.Path
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -21,17 +25,24 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * AC-350 (R0's own wiring — no Compose render needed for these two facts): the shell has no Parlanti
- * section, and R0 registers no Trascrizione subscriber/source at all — statically (nothing under
- * `avvio/src/main` even imports `snastro.trascrizione`, the one dependency `:avvio` has on
- * `:trascrizione:applicazione` is only for `RegistrazioniPresenter`'s full constructor signature to
- * resolve, see `avvio/build.gradle.kts`) and behaviorally (`RegistrazioniPresenter` built through R0's
- * own [costruisciRegistrazioniPresenter] never carries an `elaborazione` state). The dynamic half of
- * AC-350 — after a REAL `AggiungiRegistrazione` no `elaborazione` row exists in the database — needs
- * real FFmpeg to probe a source and lives in `AggiungiRegistrazioneR0Test` (`@Tag("modelli")`).
+ * AC-350 (R0's own wiring — no Compose render needed for these facts): the shell has no Parlanti
+ * section, and R0 registers no Trascrizione subscriber/source at all.
+ *
+ * **R1 retargeting (avvio-composizione, carry-over 6).** R1 lives in the same module, so the static
+ * guard is now SCOPED TO THE R0 GRAPH: every R1 file lives in package `snastro.avvio.r1`
+ * (`avvio/src/main/kotlin/snastro/avvio/r1/`), every R2 file in `snastro.avvio.r2` (avvio-parlanti), and
+ * nothing OUTSIDE them may import `snastro.trascrizione`, `snastro.documento`, `snastro.modelli`,
+ * `snastro.ml` or `snastro.parlanti` — the R0 graph reaches R1 only through the
+ * type-neutral `EstensioneSessione` hook. The behavioral half is kept in R0 MODE: [costruisciGrafoR0]
+ * without an extension builds no extension at all, and `RegistrazioniPresenter` built through R0's
+ * own [costruisciRegistrazioniPresenter] never carries an `elaborazione` state. The dynamic half —
+ * after a REAL `AggiungiRegistrazione` no `elaborazione` row exists — needs real FFmpeg and lives in
+ * `AggiungiRegistrazioneR0Test` (`@Tag("modelli")`); its R1 counterpart (AC-371) is gate-level, in
+ * `ComposizioneR1Test`.
  */
 class GrafoR0Test {
     @Test
@@ -41,16 +52,40 @@ class GrafoR0Test {
     }
 
     @Test
-    fun `AC-350 avvio src main non importa mai snastro trascrizione (nessun abbonato di Trascrizione)`() {
+    fun `AC-350 fuori dai pacchetti r1 e r2 avvio src main non importa i contesti delle release successive`() {
         val radice = File("src/main/kotlin")
-        val violazioni = radice.walkTopDown()
-            .filter { it.isFile && it.extension == "kt" }
-            .flatMap { file -> file.readLines().map { riga -> file to riga } }
-            .filter { (_, riga) -> riga.trimStart().startsWith("import snastro.trascrizione") }
-            .map { (file, riga) -> "$file: $riga" }
+        val estensioni = listOf(File(radice, "snastro/avvio/r1"), File(radice, "snastro/avvio/r2"))
+        val proibiti =
+            listOf("snastro.trascrizione", "snastro.documento", "snastro.modelli", "snastro.ml", "snastro.parlanti")
+        val fileR0 = radice.walkTopDown()
+            .filter { file -> file.isFile && file.extension == "kt" && estensioni.none { file.startsWith(it) } }
             .toList()
+        val violazioni = fileR0
+            .flatMap { file -> file.readLines().map { riga -> file to riga } }
+            .filter { (_, riga) -> proibiti.any { riga.trimStart().startsWith("import $it") } }
+            .map { (file, riga) -> "$file: $riga" }
 
-        assertTrue(violazioni.isEmpty(), "avvio/src/main non deve importare snastro.trascrizione: $violazioni")
+        assertTrue(fileR0.any { it.name == "SessioneProgettoImpl.kt" }, "la guardia deve vedere il grafo R0")
+        assertTrue(violazioni.isEmpty(), "il grafo R0 non deve importare i contesti di R1: $violazioni")
+    }
+
+    @Test
+    fun `AC-350 in modo R0 (nessuna estensione) aprire un progetto non costruisce alcuna sorgente di Trascrizione`(
+        @TempDir cartella: Path,
+    ) {
+        val scope = CoroutineScope(SupervisorJob())
+        val sessione = SessioneProgettoImpl(
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = Clock.fixed(Instant.parse("2026-01-01T10:00:00Z"), ZoneOffset.UTC),
+            scopeGenitore = scope,
+        )
+
+        sessione.crea(cartella.toString(), "Prova").atteso()
+
+        assertNull(sessione.collaboratoriCorrenti()?.estensione)
+        sessione.chiudi()
+        scope.cancel()
     }
 
     @Test

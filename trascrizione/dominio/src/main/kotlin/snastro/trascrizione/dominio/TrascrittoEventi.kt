@@ -31,3 +31,10 @@ public data class SegmentoRiassegnato(
     val daRimossa: Boolean,
     val aNuova: Boolean,
 ) : EventoDominio
+
+/** INV-26: the [confermato] flag of [segmentoId] changed (ADR 0019 §3). */
+public data class SegmentoConfermato(
+    val registrazioneId: RegistrazioneId,
+    val segmentoId: SegmentoId,
+    val confermato: Boolean,
+) : EventoDominio

@@ -1,5 +1,6 @@
 package snastro.ui.testi
 
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.ErroreDominio
 import snastro.kernel.IntervalloMs
@@ -13,6 +14,8 @@ import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
+import snastro.ui.modelli.ErroreServizioModelli
+import snastro.ui.registrazione.ErroreComandoVoce
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -107,7 +110,8 @@ class MessaggiErroreTest {
             listOf(
                 transizioneNonAmmessa("id-1", "IN_ATTESA", "IN_CORSO"),
                 ErroreTrascrizione.ElaborazioneGiaAperta(RegistrazioneId("id-1")),
-                ErroreTrascrizione.ElaborazioneGiaCompletata(RegistrazioneId("id-1")),
+                ErroreTrascrizione.ElaborazioneGiaAvviata(ElaborazioneId("id-1")),
+                ErroreTrascrizione.ElaborazioneNonTrovata(ElaborazioneId("id-1")),
                 ErroreTrascrizione.RegistrazioneNonTrovata(RegistrazioneId("id-1")),
                 ErroreTrascrizione.TrascrittoNonTrovato(RegistrazioneId("id-1")),
                 ErroreTrascrizione.NessunParlatoRilevato,
@@ -117,8 +121,30 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.UnioneNonAmmessa(VoceId(1), VoceId(2)),
                 ErroreTrascrizione.DivisioneNonAmmessa(VoceId(1), setOf(SegmentoId(1))),
                 ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
+                ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
+                ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1")),
             ),
         ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `AC-477 i testi di ElaborazioneGiaAvviata e ElaborazioneNonTrovata`() {
+        assertEquals(
+            "La trascrizione è già partita: non si può più annullare",
+            messaggioPer(ErroreTrascrizione.ElaborazioneGiaAvviata(ElaborazioneId("id-1"))),
+        )
+        assertEquals(
+            "Questa trascrizione non è più in coda",
+            messaggioPer(ErroreTrascrizione.ElaborazioneNonTrovata(ElaborazioneId("id-1"))),
+        )
+    }
+
+    @Test
+    fun `AC-515 il testo di TrascrittoCambiato`() {
+        assertEquals(
+            "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima",
+            messaggioPer(ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1"))),
+        )
     }
 
     @Test
@@ -144,8 +170,28 @@ class MessaggiErroreTest {
                 ErroreParlanti.NomeVuoto,
                 ErroreParlanti.VoceGiaAttribuita(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
                 ErroreParlanti.VoceCambiata(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
+                ErroreParlanti.RiferimentiInsufficienti(RegistrazioneId("id-1")),
             ),
         ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `AC-180 ErroreServizioModelli`() {
+        verificaCopertura(
+            ErroreServizioModelli::class.java,
+            listOf(
+                ErroreServizioModelli.HashNonValido("asr-parakeet-tdt-0.6b-v3-int8"),
+                ErroreServizioModelli.ArchivioNonValido("segmentazione-pyannote-3.0"),
+                ErroreServizioModelli.ReteAssente,
+                ErroreServizioModelli.ScritturaFallita("disco pieno"),
+                ErroreServizioModelli.DownloadFallito("connessione interrotta"),
+            ),
+        ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `AC-418 ErroreComandoVoce`() {
+        verificaCopertura(ErroreComandoVoce::class.java, listOf(ErroreComandoVoce.NonRiuscito)) { messaggioPer(it) }
     }
 
     @Test
@@ -156,6 +202,8 @@ class MessaggiErroreTest {
             ErroreProgetto.ProgettoGiaPresente,
             ErroreTrascrizione.NessunParlatoRilevato,
             ErroreParlanti.NomeVuoto,
+            ErroreServizioModelli.ReteAssente,
+            ErroreComandoVoce.NonRiuscito,
         )
         esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank()) }
     }

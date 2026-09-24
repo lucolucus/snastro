@@ -61,6 +61,7 @@
   see `AvviaElaborazione` in Trascrizione.
 
 ## Tactical model — Trascrizione — every row names the consumer, or it is not written
+*(amended 2026-09-24 [user], ADR 0019: [INV-8] reworded, [INV-26], `ConfermaSegmento`, `RiassegnaSegmenti`, `SegmentoConfermato` — see "Amendment 2026-09-24 (ADR 0019)" below)*
 - **Aggregates / entities:**
   - `Elaborazione` (root, one per run) guards `StatoElaborazione`, `registrazioneId`, failure reason,
     and *(amended 2026-09-23 [user], ADR 0014)* the optional `NumeroPersone` (1..10), fixed at
@@ -76,11 +77,11 @@
     `completata` and `fallita` are terminal. → invariant-test on the elaborazione aggregate block
   - [INV-4] per `Registrazione`: at most one `Elaborazione` in `in_attesa | in_corso`, at most one
     `completata`; a new `Elaborazione` can be started only if every previous one is `fallita`
-    (retry only after `fallita`; no re-run after `completata`) [user].
+    (retry only after `fallita`; no re-run after `completata`) [user]. *(REWRITTEN 2026-09-24 [user], ADR 0018 — see "Amendment 2026-09-24 (ADR 0018)" below.)*
     → set rule across `Elaborazione` instances: test on the **avvia-elaborazione application-service
     block** + repository uniqueness (architect), not an aggregate-local test
   - [INV-5] a `Trascritto` exists iff its `Registrazione` has a `completata` `Elaborazione`; it is
-    created atomically with the transition to `completata`. Hence `Revisione` (and every
+    created atomically with the transition to `completata` *(REWORDED 2026-09-24, ADR 0018 — see below)*. Hence `Revisione` (and every
     `Parlanti` operation on its `Voce`s) is possible only on a `completata` `Elaborazione`.
     → test on the avvia-elaborazione application-service block (atomic completion)
   - [INV-6] every `Segmento` belongs to exactly one existing `Voce` of the same `Trascritto`; every
@@ -104,7 +105,7 @@
     `Trascritto` other than the current one, or a NEW `Voce`; the source `Voce` is removed if emptied
     ([INV-6]). → invariant-test on the trascritto aggregate block
   - [INV-12] `voceId` is never reused within a `Trascritto`; the "Voce n" label number is fixed at
-    creation. → invariant-test on the trascritto aggregate block
+    creation. → invariant-test on the trascritto aggregate block *(scoped per Trascritto generation 2026-09-24, ADR 0018 — see below)*
 - **Domain events:**
   - `ElaborazioneAvviata` → `read-model` Registrazioni del Progetto (stato)
   - `ElaborazioneCompletata` → `read-model` Registrazioni del Progetto + `read-model` Trascritto
@@ -133,6 +134,7 @@
   → side-effect at startup in the avvia-elaborazione application-service block
 
 ## Tactical model — Parlanti — every row names the consumer, or it is not written
+*(amended 2026-09-24 [user], ADR 0019 + its Amendment (b): [INV-27], `PianoRiassegnazione`, frase di riferimento — see "Amendment 2026-09-24 (ADR 0019)" below)*
 - **Aggregates / entities:**
   - `Parlante` (root) guards `Nome`, `TipoParlante`, `StatoParlante`, `progettoId` and its
     `ImprontaVocale` entities (≥ 0, one per contributing `VoceRef`, never averaged).
@@ -324,3 +326,86 @@ Pinned in `building-blocks.yaml`; the rows above are otherwise unchanged.
   absent, clustering is automatic. A value outside 1..10 is rejected with
   `NumeroPersoneFuoriIntervallo` → AC-tests on the avvia-elaborazione block, plus a VO table test
   on the elaborazione block. "Riprova" prefills the value of the failed `Elaborazione`.
+
+## Amendment 2026-09-24 (ADR 0018 "Ritrascrivi" + its Amendment 2026-09-24 (b)) [user]
+Source: [ADR 0018](../../decisions/0018-ritrascrivi.md) and the user's answers of 2026-09-24; manifest delta
+`manifest-deltas/2026-09-24-ritrascrivi.md` (AC-425..AC-479). The texts above are kept; these replace them.
+- **[INV-3] unchanged.** `completata` and `fallita` stay terminal; no new state.
+- **[INV-4] (rewritten):** per `Registrazione`, at most one `Elaborazione` is `in_attesa | in_corso`. A new
+  `Elaborazione` can be started iff none is open, whatever the earlier ones ended in (none, `fallita`, or
+  `completata` = "Ritrascrivi"). Several `completata` may exist (history). → avvia-elaborazione block (AC-434..436)
+  + index `elaborazione_aperta_unica` (the `completata` index is dropped by `3.sqm`, persistenza-ritrascrivi).
+- **[INV-5] (reworded):** a `Trascritto` exists iff its `Registrazione` has at least one `completata`
+  `Elaborazione`. It is written (created, or **replaced whole**) atomically with **each** transition to
+  `completata`, and is never touched by any other outcome of a run. → esegui-elaborazione block (AC-437..441).
+- **[INV-12] (scope):** per `Trascritto` **generation**: a replacement is a fresh `Trascritto.crea`, numbered
+  from 1 by first appearance; every `VoceRef`-keyed Parlanti row of the old generation is purged in the same
+  transaction. → esegui-elaborazione (AC-438) + sostituzione-trascritto-policy (AC-428).
+- **Commands:**
+  - `AvviaElaborazione` — actor adds **"Ritrascrivi"** on a `completata` one, prefilled with the latest
+    `numeroPersone`, after a confirmation (R2 only).
+  - **`AnnullaElaborazione` (elaborazioneId)** (actor: utente — S2 "Annulla" on a queued row) → application-service
+    block annulla-elaborazione. Only an `in_attesa` (never started) `Elaborazione`, first transcription or re-run;
+    an `in_corso` one cannot be annullata. The never-started row is **deleted** (the only physical deletion of an
+    `Elaborazione`, like R25: nothing references it); INV-3 unchanged; the `Registrazione` returns to the state of
+    its remaining latest `Elaborazione`. Expected errors `ElaborazioneGiaAvviata` (the dispatcher claimed it first),
+    `ElaborazioneNonTrovata`.
+- **Domain events:**
+  - `TrascrittoSostituito` (registrazioneId) — only in a completion that replaced an existing `Trascritto`,
+    before `ElaborazioneCompletata` → Parlanti sostituzione-policy (**in-transaction**) + `AggiornamentiVista` /
+    `Proposta` cache invalidation (after commit).
+  - `ElaborazioneAnnullata` (registrazioneId) → `AggiornamentiVista` only (after commit): S2/S3 refresh.
+- **Parlanti policy:** on `TrascrittoSostituito` → purge every `Attribuzione` and every `ImprontaVocale` of the
+  `Registrazione`, then [INV-25] (an `occasionale` left without `Attribuzione` ceases; a `ricorrente` always
+  stays — confirmed by the user) → application-service block sostituzione-trascritto-policy, reached through
+  abbonato-revisione-parlanti (synchronous). [INV-21] / [INV-17] untouched.
+- **S3 during a re-run** is read-only (presentation rule, not an invariant): see ux-proposal amendment.
+
+## Amendment 2026-09-24 (ADR 0019 "Separazione semi-automatica" + its Amendment 2026-09-24 (b)) [user]
+Source: [ADR 0019](../../decisions/0019-separazione-semi-automatica.md) and the user's answers of 2026-09-24; manifest
+delta `manifest-deltas/2026-09-24-semi-automatica.md` (AC-480..AC-550). The texts above are kept; these add to them
+or replace them.
+
+**Trascrizione**
+- **[INV-8] (reworded):** the set of `Segmento`s (ids, intervals, text) is identical before and after any `Revisione`;
+  only their `Voce` and their `confermato` flag may change. → trascritto block (INV-8 test updated).
+- **[INV-26] (new):** a `Segmento` is `confermato` iff an explicit user act placed or confirmed it on its current `Voce`
+  (manual `riassegnare`, the moved subset of `dividere`, `ConfermaSegmento(true)`) and no `ConfermaSegmento(false)`
+  has revoked it since. `unire` keeps every flag. `riassegnaInBlocco` never moves a `confermato` `Segmento`, never
+  creates a `Voce` and never changes a flag. `crea` starts every flag at false. → trascritto block (6 INV-26 tests)
+  + `4.sqm` (persistenza-conferma-segmento).
+- **Commands:**
+  - `RiassegnaSegmento` returns the destination `VoceId` and confirms the moved `Segmento` → revisione (AC-516).
+  - **`ConfermaSegmento`** (registrazioneId, segmentoId, confermato) (actor: utente — "Dai un nome a una frase" case (a),
+    "Togli conferma") → revisione (AC-517).
+  - **`RiassegnaSegmenti`** (registrazioneId, spostamenti) (actor: utente, through "Riassegna per somiglianza" →
+    Applica): ONE transaction, all or nothing. Every entry is validated against the pre-batch state, and the `Voce`s
+    that are empty at the END of the batch are removed ([INV-6]). A stale plan → `TrascrittoCambiato`.
+    → riassegna-segmenti (AC-518..520) + trascritto (AC-511..515).
+- **Domain event:** `SegmentoConfermato` (registrazioneId, segmentoId, confermato) → read-model Trascritto (view
+  refresh, after commit) only.
+
+**Parlanti**
+- **Frase di riferimento (derived, never stored).** A frase di riferimento of an `attivo` `Parlante` P in a
+  `Registrazione` is a `confermato` `Segmento` of ≥ 1 s on a `Voce` attributed to P ("frasi confermate"). **If P has
+  none, every `Segmento` of ≥ 1 s of P's `Voce`s** is one instead ("intera Voce"; user 2026-09-24). An `eliminato`
+  never has any.
+- **[INV-27] (new, `piano-riassegnazione` read-model):** a `PianoRiassegnazione` of Registrazione R moves a `Segmento`
+  s to `Voce` T only if all of these hold:
+  - s is not `confermato`, is ≥ 1 000 ms, and lies on a `Voce` that is not frozen (unattributed, or attributed to a
+    reference `Parlante`);
+  - s is classified Sicura(P) for a reference `Parlante` P;
+  - T is P's target `Voce` (the lowest `voceId` attributed to P in R), and s is not already on T;
+  - after the whole plan, every reference `Parlante` still has ≥ 1 `Segmento` in R. Otherwise every move out of that
+    `Parlante`'s `Voce`s is dropped and counted as incerta, repeated until stable.
+
+  A reference `Parlante` is an `attivo` `Parlante` attributed in R with ≥ 1 frase di riferimento. A plan needs ≥ 2.
+  It writes nothing, keeps no embedding, and exposes no similarity number. → piano-riassegnazione (INV-27 table test,
+  AC-501..510, AC-543, AC-544).
+- **Read-model `PianoRiassegnazione`** (computed, never stored). Consumer: S3 via the `:avvio` glue, which shows it as
+  a **preview** ("Sposterò N frasi, M incerte restano dove sono") and, on **Applica**, sends exactly that plan as
+  `RiassegnaSegmenti`. Annulla discards it. → avvio-parlanti (AC-537, AC-549).
+- **Idempotence** holds only when every reference `Parlante` has confirmed sentences. With the "intera Voce" fallback,
+  a second run may move more, and the preview is the user's check.
+- **The `Proposta`** is fed by the real extractor (TitaNet-small, ADR 0019 §2) with **provisional** `SoglieFascia`
+  (user 2026-09-24: show them).

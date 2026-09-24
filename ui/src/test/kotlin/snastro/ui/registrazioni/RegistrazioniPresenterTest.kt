@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
@@ -60,7 +61,19 @@ private fun statoVista(
     motivoFallimento: String? = null,
     posizioneInCoda: Int? = null,
     numVoci: Int? = null,
-) = StatoRegistrazioneVista(id, stato, fase, avviataAlle, motivoFallimento, posizioneInCoda, numVoci)
+    numeroPersone: Int? = null,
+) = StatoRegistrazioneVista(
+    id,
+    stato,
+    fase,
+    avviataAlle,
+    motivoFallimento,
+    posizioneInCoda,
+    numVoci,
+    numeroPersone,
+    trascrittoDisponibile = numVoci != null, // ADR 0018: numVoci is non-null iff a Trascritto exists
+    elaborazioneId = ElaborazioneId("elaborazione-${id.valore}").takeIf { stato != StatoElaborazioneVista.NON_AVVIATA },
+)
 
 /**
  * AC-342: the R0 variant is exercised by simply omitting `stati`/`avvia` from [presentatore] (their
@@ -457,26 +470,37 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `AC-203 FALLITA espone il motivo`() = runTest {
+    fun `AC-203 FALLITA espone il motivo e il campo Numero di persone precompilato`() = runTest {
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
             stati = { ids ->
-                ids.map { statoVista(it, StatoElaborazioneVista.FALLITA, motivoFallimento = "audio illeggibile") }
+                ids.map {
+                    statoVista(
+                        it,
+                        StatoElaborazioneVista.FALLITA,
+                        motivoFallimento = "audio illeggibile",
+                        numeroPersone = 2,
+                    )
+                }
             },
         )
         advanceUntilIdle()
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
         assertEquals(StatoElaborazioneRiga.Fallita("audio illeggibile"), riga.elaborazione)
+        assertEquals("2", riga.numeroPersone)
     }
 
     @Test
-    fun `AC-203 COMPLETATA rende la riga apribile`() = runTest {
+    fun `AC-203 AC-450 COMPLETATA con un Trascritto rende la riga apribile`() = runTest {
         var aperta: RegistrazioneId? = null
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
-            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA) } },
+            // ADR 0018: a row opens S3 iff a Trascritto exists (numVoci non-null here derives
+            // trascrittoDisponibile = true in this file's own `statoVista` helper) — no longer "iff
+            // COMPLETATA" on its own.
+            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
             apriRegistrazione = { aperta = it },
         )
         advanceUntilIdle()
@@ -513,7 +537,7 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `AC-344 Trascrivi invoca AvviaElaborazione e ricarica la lista`() = runTest {
+    fun `AC-344 Trascrivi con il campo vuoto invoca AvviaElaborazione senza numero e ricarica la lista`() = runTest {
         var chiamata: AvviaElaborazione? = null
         var statoCorrente = StatoElaborazioneVista.NON_AVVIATA
         val presenter = presentatore(
@@ -531,7 +555,7 @@ class RegistrazioniPresenterTest {
         presenter.azioni.avviaElaborazione(REG_1)
         advanceUntilIdle()
 
-        assertEquals(AvviaElaborazione(REG_1), chiamata)
+        assertEquals(AvviaElaborazione(REG_1, numeroPersone = null), chiamata)
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
         assertIs<StatoElaborazioneRiga.InAttesa>(riga.elaborazione)
     }

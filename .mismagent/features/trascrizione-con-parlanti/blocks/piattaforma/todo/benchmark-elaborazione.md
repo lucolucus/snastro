@@ -19,8 +19,13 @@ related_adrs:
   - "0003"
   - "0011"
   - "0012"
+  - "0013"
+  - "0014"
+  - "0015"
+  - "0016"
+  - "0019"
 gated_by:
-  - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop)"
+  - "the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016"
   - "diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged"
 ---
 # benchmark-elaborazione — Benchmark NFR dell'Elaborazione (opt-in)
@@ -28,14 +33,15 @@ gated_by:
 ## What to do
 Wire ./gradlew benchmarkElaborazione -Pcampione=<path> to run one real Elaborazione with the real adapters, print per-phase timings and fail above 600 s (ADR 0011, R17). Not part of check.
 
-Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by.
+Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the benchmark measures the Elaborazione pipeline (R1): estrattore-impronta-sherpa (R2, print extraction is not part of the Elaborazione under ADR 0012 Amendment (b)) removed from depends_on/gated_by. AMENDED 2026-09-24 (ADR 0019): runs after the diarizzatore-sherpa rework; prints the diarization split (AC-542).
 
 ## Tasks
 - AC-261 [opt-in, fuori gate] su un campione reale di 60 minuti con modelli scaricati, l'Elaborazione completa va da in_corso a completata in <= 600 s sull'M3 Pro; i tempi per fase sono stampati
 - AC-262 Il task fallisce se il tempo supera 600 s
+- AC-542 [opt-in, fuori gate] Besides the per-phase times (AC-261) the benchmark prints the diarizzazione sub-times: step 1 (the one native hold, i.e. the worst-case Mutex wait, ADR 0019 §1.5), the piece embeddings, and clustering + assignment; pass condition AC-261 (<= 600 s per 60 min; ADR 0019 estimates ≈ 346 s under load)
 
 ## Dependencies
-- **GATED — not ready until:** the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop); diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged
+- **GATED — not ready until:** the four R1 spike ADRs (scelta-asr-code-switching, scelta-diarizzatore, allineamento-parole-voci, packaging-modelli-desktop) — satisfied: ADR 0013, 0014, 0015, 0016; diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, allineatore merged
 - Blocks built first: `diarizzatore-sherpa` (wave 12), `riconoscitore-sherpa` (wave 12), `vad-silero` (wave 12), `allineatore` (wave 11), `avvio-composizione` (wave 10)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -62,10 +68,10 @@ Note: RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): the
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the Trascritto's life (= forever: no re-run after completata)
-    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable forever
+    - `VoceId`: minted by the trascritto aggregate from its persisted counter prossimaVoce — at creation 1..n in order of FIRST APPEARANCE (smallest turn inizioMs, tie: diarizer voceIndice); DividiVoce / riassegna-to-new take prossimaVoce++; never reused, never renumbered, == the n of the label 'Voce n'; stable for the life of one Trascritto GENERATION: a Ritrascrivi replacement (ADR 0018) is a fresh Trascritto.crea numbered from 1 again, and every VoceRef-keyed Parlanti row of the old generation is purged in the same transaction (TrascrittoSostituito)
+    - `SegmentoId`: minted by the trascritto aggregate at creation only, 1..m in order (inizioMs, then voceId); no Segmento is ever created afterwards (INV-8) — stable for the Trascritto generation's life (ADR 0018: a replacement renumbers from 1)
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0011, 0012 (.mismagent/decisions/); ADR 0011 (+ R17).
+Sources: ADRs 0002, 0003, 0011, 0012, 0013, 0014, 0015, 0016, 0019 (.mismagent/decisions/); ADR 0011 (+ R17).

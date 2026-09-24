@@ -533,3 +533,252 @@
 2026-09-23T22:13:29Z	fix-batch-13	verifier	result	cycle=0	-	composer	PASS (diff reviewed; gate --rerun-tasks green; ADR rules green)
 2026-09-23T22:13:29Z	fix-batch-13	composer	merge	cycle=0	-	-	MERGED 60e5ecb
 2026-09-23T22:13:29Z	(release)	composer	release	-	-	-	R0 Archivio released: feature -> main, tag r0 (user yes)
+2026-09-23T22:15:01Z	(r1-plan)	decision	result	-	-	-	USER DECISION: no Trascrivi tutte; Numero di persone = fillable field on the S2 row
+2026-09-23T22:22:29Z	(manifest)	build-manifest	result	-	deep	opus	DELTA folded: -abbonato-registrazione-aggiunta; re-pinned eventi-progetto/agg-elaborazione/tec-diarizzatore; AC-367..378; catalogue AC-250/253/256; ux amendment; REWORK: elaborazione, porte-trascrizione, avvia-elaborazione, esegui-elaborazione, stati-elaborazione, persistenza-schema, schermata-registrazioni (+ comment-only eventi-pubblicati, servizi-registrazione, avvio-r0)
+2026-09-23T22:23:26Z	fix-batch-14	worker	dispatch	cycle=0	tier=deep	model=opus	R1 rework NumeroPersone across 7 built blocks (AC-367..378 minus diarizzatore/repository not yet built)
+2026-09-23T22:23:26Z	spike-packaging-modelli-desktop	experiment	dispatch	-	standard	sonnet	hello-world in scratch
+2026-09-23T22:23:26Z	spike-allineamento-parole-voci	architect	dispatch	-	deep	opus	close with strategy A from R1 experiment evidence
+2026-09-23T22:27:46Z	spike-allineamento-parole-voci	architect	result	-	deep	opus	ADR 0015 per-turn alignment; spike closed; delta saved; open: 500ms min-turn rule (user)
+2026-09-23T22:35:18Z	(r1-plan)	decision	result	-	-	-	USER DECISION: skip merged turns < 500 ms (ADR 0015 rule 2 confirmed)
+2026-09-23T22:36:33Z	spike-packaging-modelli-desktop	experiment	result	-	standard	sonnet	ALL PASS (run, .app, .dmg); sherpa jar+natives v1.13.8 pinned; LibraryUtils.load explicit; JDK vendor gate for jpackage
+2026-09-23T22:37:53Z	fix-batch-14	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW 899e1ab
+2026-09-23T22:37:53Z	fix-batch-14	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-23T22:40:44Z	fix-batch-14	verifier	result	cycle=0	tier=deep	model=opus	PASS (1077 tests; manual R0→v3 upgrade with 4 rows ok)
+2026-09-23T22:40:44Z	fix-batch-14	composer	merge	cycle=0	-	-	MERGED d415a52
+2026-09-23T22:40:44Z	fix-batch-14	composer	pre-release	cycle=0	-	-	LOW ui 1..10 const duplicated (test parity); LOW "+4"/"04" accepted; LOW FALLITA equality on motivo only; NOTE repository-sql-trascrizione must map via NumeroPersone.di
+2026-09-23T22:43:08Z	spike-packaging-modelli-desktop	architect	result	-	deep	opus	ADR 0016 closes spike; ADR 0004/0005 amended; packaging delta saved; user: mutex gate R1->R2, S3 R1 variant A/B, O-1 JDK, O-2 signing
+2026-09-23T22:48:25Z	(r1-plan)	decision	result	-	-	-	USER DECISION: mutex gate -> R2; S3 R1 read-only (Revisione UI -> R2)
+2026-09-23T22:55:16Z	(manifest)	build-manifest	result	-	deep	opus	DELTA folded: ADR 0015 + 0016 + S3 read-only split (new R2 schermata-registrazione-identificazione) + mutex gate to R2; AC-379..405; R1 READY list computed
+2026-09-23T22:55:22Z	repository-sql-trascrizione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T22:55:22Z	decodifica-trascrizione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T22:55:22Z	allineatore	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T22:55:22Z	schermata-registrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:10:28Z	decodifica-trascrizione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW a0b7089
+2026-09-23T23:10:28Z	decodifica-trascrizione	verifier	result	cycle=0	-	composer	PASS (light: gate green, modelliTest 6/6 uncached, ADR rules green, code read)
+2026-09-23T23:10:28Z	decodifica-trascrizione	composer	merge	cycle=0	-	-	MERGED c6450ce
+2026-09-23T23:10:28Z	decodifica-trascrizione	composer	pre-release	cycle=0	-	-	LOW AC-149 text says sample/ (synthetic used, amend wording); LOW rebuilt WAV not atomic (fix-batch-7 item)
+2026-09-23T23:10:35Z	avvio-coda-elaborazioni	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:12:46Z	allineatore	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 318a3df
+2026-09-23T23:12:46Z	allineatore	verifier	result	cycle=0	-	composer	PASS (light: algorithm read vs ADR 0015 rules 1-10; 18 tests + module check green)
+2026-09-23T23:12:46Z	allineatore	composer	merge	cycle=0	-	-	MERGED 89f5509 (build.gradle.kts conflict with decodifica resolved by composer)
+2026-09-23T23:12:53Z	registrazione-da-progetto-tr	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:15:29Z	repository-sql-trascrizione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 5c9157a
+2026-09-23T23:15:29Z	repository-sql-trascrizione	verifier	result	cycle=0	-	composer	PASS (light: contracts pass real-on-real, full gate green after composer conflict resolution)
+2026-09-23T23:15:29Z	repository-sql-trascrizione	composer	merge	cycle=0	-	-	MERGED 0f3f26f
+2026-09-23T23:15:29Z	avvio-composizione	composer	carry	-	-	-	MUST FIX: avvio/src/test/.../AggiungiRegistrazioneR0Test.kt:44 uses elaborazioneQueries (breaks agg-elaborazione §14 confinement gate) → use ElaborazioneRepositorySql
+2026-09-23T23:15:40Z	schermata-registrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW d3d29df
+2026-09-23T23:15:40Z	schermata-registrazione	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review (light budget)
+2026-09-23T23:17:20Z	schermata-registrazione	verifier	result	cycle=0	tier=deep	model=opus	PASS (no HIGH)
+2026-09-23T23:17:20Z	schermata-registrazione	composer	merge	cycle=0	-	-	MERGED c15f136
+2026-09-23T23:17:20Z	schermata-registrazione	composer	pre-release	cycle=0	-	-	MED two quick clicks can play out of order (reuse LettorePresenter supersession); MED disponibile()/documento() failure turns whole S3 into Errore (degrade instead); LOW overlap highlights all containing segments; LOW highlight lost on pause; LOW row ▶ not dimmed when audio unavailable; LOW riprova no Caricamento; LOW pause icon emoji mismatch (BarraLettore)
+2026-09-23T23:17:27Z	scrittore-documento-md	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:17:27Z	lettore-trascritto-da-trascrizione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:25:21Z	registrazione-da-progetto-tr	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW ec867dd
+2026-09-23T23:25:21Z	registrazione-da-progetto-tr	verifier	result	cycle=0	-	composer	PASS (light)
+2026-09-23T23:25:21Z	registrazione-da-progetto-tr	composer	merge	cycle=0	-	-	MERGED 2138577; DECISION: cross-context read-adapter contracts seed suppliers via their applicazione commands + fakes (CR-1), AC wording "databaseInMemoria()" to amend
+2026-09-23T23:25:26Z	fix-batch-15	worker	dispatch	cycle=0	tier=standard	model=sonnet	esegui-elaborazione REWORK ADR 0015 (AC-386, AC-387)
+2026-09-23T23:28:17Z	scrittore-documento-md	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 338fd9d
+2026-09-23T23:28:17Z	scrittore-documento-md	verifier	result	cycle=0	-	composer	PASS (light)
+2026-09-23T23:28:17Z	scrittore-documento-md	composer	merge	cycle=0	-	-	MERGED 360dd7b
+2026-09-23T23:28:22Z	rigenerazione-documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-23T23:30:54Z	fix-batch-15	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 44f99de (tests only)
+2026-09-23T23:30:54Z	fix-batch-15	composer	merge	cycle=0	-	-	MERGED 1b428d9
+2026-09-23T23:34:05Z	lettore-trascritto-da-trascrizione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 99a9040
+2026-09-23T23:34:05Z	lettore-trascritto-da-trascrizione	composer	merge	cycle=0	-	-	MERGED 0fa3879 (light verify; build file conflict resolved)
+2026-09-23T23:34:51Z	avvio-coda-elaborazioni	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW a1eb779
+2026-09-23T23:34:51Z	avvio-coda-elaborazioni	verifier	dispatch	cycle=0	tier=deep	model=opus	focused review (concurrency)
+2026-09-23T23:37:03Z	avvio-coda-elaborazioni	verifier	result	cycle=0	tier=deep	model=opus	FAIL (HIGH AC-313 other items must proceed; queue halts)
+2026-09-23T23:37:03Z	avvio-coda-elaborazioni	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: skip refused/escaping heads (esegui exclusion), per-head escape count, runInterruptible, clear interrupt
+2026-09-23T23:37:03Z	avvio-composizione	composer	carry	-	-	-	chiudi must cancel coda and join lavoro (timeout) BEFORE chiudiDb/lock release
+2026-09-23T23:45:21Z	rigenerazione-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW f1d1f50
+2026-09-23T23:45:21Z	rigenerazione-documento	composer	merge	cycle=0	-	-	MERGED 3333164 (light verify); delta saved for AC-155bis + rename trigger
+2026-09-23T23:45:27Z	abbonato-documento	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 (+ rename trigger)
+2026-09-24T00:09:42Z	abbonato-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 9d0a707 (mutation-tested retry)
+2026-09-24T00:09:42Z	abbonato-documento	composer	merge	cycle=0	-	-	MERGED 3fdd4cb (light verify)
+2026-09-24T00:09:42Z	avvio-composizione	composer	carry	-	-	-	R1 needs a LettoreNomi with no names (lettore-nomi-da-parlanti is R2): Voci stay "Voce n" in the Documento
+2026-09-24T00:10:23Z	ml-sherpa-motore	worker	dispatch	cycle=0	tier=deep	model=opus	owns tec-ml-sherpa + native fetch (ADR 0016)
+2026-09-24T00:10:23Z	schermata-modelli	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-24T00:24:17Z	ml-sherpa-motore	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW 9408424
+2026-09-24T00:24:17Z	ml-sherpa-motore	verifier	result	cycle=0	-	composer	PASS (light: gate green, real natives load on this Mac, no binaries tracked)
+2026-09-24T00:24:17Z	ml-sherpa-motore	composer	merge	cycle=0	-	-	MERGED fbd6e46; NOTE ADR 0016 §4 amend: LibraryLoader.setAutoLoadEnabled(false) before LibraryUtils.load()
+2026-09-24T00:24:17Z	vad-silero	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
+2026-09-24T00:24:17Z	diarizzatore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
+2026-09-24T00:24:17Z	riconoscitore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
+2026-09-24T00:27:19Z	schermata-modelli	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 2e79f98
+2026-09-24T00:27:19Z	schermata-modelli	composer	merge	cycle=0	-	-	MERGED 3d4a335 (light verify)
+2026-09-24T00:33:48Z	avvio-coda-elaborazioni	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 0219d09
+2026-09-24T00:33:48Z	avvio-coda-elaborazioni	verifier	result	cycle=1	-	composer	PASS (light: HIGH resolved with tests; full gate green after semantic merge fix)
+2026-09-24T00:33:48Z	avvio-coda-elaborazioni	composer	merge	cycle=1	-	-	MERGED 86c6099; carry to avvio-composizione: chiudi = scope.cancel() then coda.fermaEAttendi() BEFORE chiudiDb; translate RisultatoAvanzamento<->RisultatoTentativo; AC-350 guard (no snastro.trascrizione import in avvio/main) must be relaxed for R1
+2026-09-24T00:34:01Z	avvio-composizione	worker	dispatch	cycle=0	tier=deep	model=opus	R1 composition (model_hint: composition root folding many boundaries)
+2026-09-24T00:48:47Z	vad-silero	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 256db17 (4/4 real Silero)
+2026-09-24T00:48:47Z	vad-silero	composer	merge	cycle=0	-	-	MERGED 74ab762 (light verify)
+2026-09-24T00:49:38Z	diarizzatore-sherpa	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW ea8c70d
+2026-09-24T00:49:38Z	diarizzatore-sherpa	composer	merge	cycle=0	-	-	MERGED 41b70ff (composer: gate + real modelli 15/15 incl. VAD+diar); FINDING: sherpa never throws on k>speakers but may return FEWER clusters than a smaller k (k=10 -> 1 on 2-voice clip) — ADR 0014 amendment + benchmark on real recording
+2026-09-24T00:57:06Z	riconoscitore-sherpa	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 56a2f99
+2026-09-24T00:57:06Z	riconoscitore-sherpa	composer	merge	cycle=0	-	-	MERGED 0eb5757 (composer: gate + all real ML tests 25/25); carry: composition must close() recognizer per Elaborazione (SegnalatoreFase.terminata decorator) to release ~1-2 GB
+2026-09-24T01:04:18Z	avvio-composizione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW af4026a (real e2e en.wav ok)
+2026-09-24T01:04:18Z	avvio-composizione	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-24T01:07:54Z	avvio-composizione	verifier	result	cycle=0	tier=deep	model=opus	PASS (real e2e green)
+2026-09-24T01:07:54Z	avvio-composizione	composer	merge	cycle=0	-	-	MERGED 003ca8e — R1 RUNNABLE
+2026-09-24T01:07:54Z	fix-batch-16	worker	dispatch	cycle=0	tier=deep	model=opus	close-during-transcription safety (MED-1 UI freeze + DB closed under live worker, MED-2 recognizer use-after-free), LOW-1 real S5 in smoke, LOW-3 chiudi on window close
+2026-09-24T01:07:54Z	avvio-composizione	composer	pre-release	cycle=0	-	-	MED testFixtures on app classpath (move Finte to smoke source set/module); LOW R0 guard only import lines; LOW FALLITA close() test
+2026-09-24T01:36:19Z	fix-batch-16	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW ef78cad (fixes proven red on old code)
+2026-09-24T01:36:19Z	fix-batch-16	composer	merge	cycle=0	-	-	MERGED ceb0a3e (gate + real e2e green)
+2026-09-24T01:36:19Z	fix-batch-16	composer	pre-release	cycle=0	-	-	LOW :ml-sherpa RiconoscitoreSherpaModelliTest reads per-user cache (env issue, fails without installed models); LOW S5 Mancanti shows count not model names; LOW window close may be unresponsive up to 3 s
+2026-09-24T06:55:40Z	(r1)	user	result	-	-	-	USER: R1 processing times "veramente buoni"; asked to log a UI refinement (tasks/app/backlog/refinement-ui.md)
+2026-09-24T06:59:10Z	(release-plan)	decision	result	-	-	-	USER DECISION: resume R2 (Parlanti) now; UI refinement after R2
+2026-09-24T07:04:36Z	spike-attesa-mutex-estrazione	architect	result	-	deep	opus	ADR 0017 (b)+(c): one fair Mutex per native call, lockInterruptibly, pending card + Annulla after 2s; (a) rejected; delta saved
+2026-09-24T07:09:46Z	(manifest)	build-manifest	result	-	deep	opus	DELTA folded: 2026-09-24-mutex (ADR 0017: gate attesa-mutex-estrazione SATISFIED on schermata-registrazione-identificazione/avvio-parlanti/R2; tec-ml-sherpa + tec-estrattore-impronta re-pinned; AC-236 rewritten; AC-406..424) + 2026-09-24-rinomina-documento (AC-155bis/AC-186bis recorded BUILT; eventi-progetto pins RegistrazioneRinominata); rule-19 reality: AC-135..139 CR-1 seeding, AC-149/151 synthetic audio, AC-8/377 CR-13, AC-397 + ADR 0016/0014 amendments. FOLLOW-UP (test-only): riallinea-impronte AC-424
+2026-09-24T07:10:13Z	repository-sql-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-a
+2026-09-24T07:10:13Z	identificazione-registrazioni identificazione-voci parlanti-attivi proposta-unione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-b
+2026-09-24T07:10:13Z	registrazione-da-progetto-pa lettore-voci-da-trascrizione lettore-nomi-da-parlanti decodifica-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-c
+2026-09-24T07:10:13Z	estratto-audio confronto-impronte abbonato-revisione-parlanti abbonato-riallineamento-impronte	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-d
+2026-09-24T07:11:08Z	(r2-bundles)	composer	note	-	-	-	bundles: r2-a=repository-sql-parlanti; r2-b=identificazione-registrazioni,identificazione-voci,parlanti-attivi,proposta-unione; r2-c=registrazione-da-progetto-pa,lettore-voci-da-trascrizione,lettore-nomi-da-parlanti,decodifica-parlanti; r2-d=estratto-audio,confronto-impronte,abbonato-revisione-parlanti,abbonato-riallineamento-impronte (+AC-424 riallinea test)
+2026-09-24T07:20:37Z	identificazione-registrazioni	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:20:37Z	identificazione-voci	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:20:37Z	parlanti-attivi	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:20:37Z	proposta-unione	composer	merge	cycle=0	-	-	MERGED bacc3f1 (bundle r2-b, light verify)
+2026-09-24T07:33:23Z	repository-sql-parlanti	composer	merge	cycle=0	-	-	MERGED 9278fe3 (bundle r2-a, light verify, 31 tests)
+2026-09-24T07:34:35Z	estratto-audio	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	confronto-impronte	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	abbonato-revisione-parlanti	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	abbonato-riallineamento-impronte	composer	merge	cycle=0	-	-	MERGED 2a4922b (bundle r2-d, light verify)
+2026-09-24T07:34:35Z	riallinea-impronte	composer	merge	-	-	-	AC-424 test merged 2a4922b
+2026-09-24T07:34:48Z	proposta	worker	dispatch	cycle=0	tier=standard	model=sonnet	bundle r2-e
+2026-09-24T07:34:48Z	parlanti-del-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet	bundle r2-e
+2026-09-24T07:37:26Z	registrazione-da-progetto-pa	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	lettore-voci-da-trascrizione	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	lettore-nomi-da-parlanti	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	decodifica-parlanti	composer	merge	cycle=0	-	-	MERGED 9eaf293 (bundle r2-c, light verify)
+2026-09-24T07:37:26Z	lettore-nomi-da-parlanti	composer	pre-release	-	-	-	LOW test references parlanti dominio TipoParlante.OCCASIONALE by FQN to dodge Konsist CR-1 import rule — use a parlanti applicazione-level fixture instead
+2026-09-24T07:37:44Z	schermata-registrazioni-identificazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 S2 badge
+2026-09-24T07:53:15Z	schermata-registrazioni-identificazione	composer	merge	cycle=0	-	-	MERGED b1e2004 (light verify; avvio edge added)
+2026-09-24T07:56:24Z	proposta	composer	merge	cycle=0	-	-	MERGED 88afd26 (bundle r2-e, light verify)
+2026-09-24T07:56:24Z	parlanti-del-progetto	composer	merge	cycle=0	-	-	MERGED 88afd26 (bundle r2-e, light verify)
+2026-09-24T07:56:24Z	schermata-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2
+2026-09-24T07:56:24Z	schermata-registrazione-identificazione	worker	dispatch	cycle=0	tier=deep	model=opus	R2 S3 panel (ADR 0017 pending UX)
+2026-09-24T08:15:00Z	schermata-parlanti	composer	merge	cycle=0	-	-	MERGED b885ee7 (light verify, 29 tests)
+2026-09-24T08:22:05Z	schermata-registrazione-identificazione	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW dd38499
+2026-09-24T08:22:05Z	schermata-registrazione-identificazione	verifier	dispatch	cycle=0	tier=deep	model=opus	verify + review
+2026-09-24T08:25:45Z	schermata-registrazione-identificazione	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-24T08:25:45Z	schermata-registrazione-identificazione	composer	merge	cycle=0	-	-	MERGED 133c9af
+2026-09-24T08:25:45Z	schermata-registrazione-identificazione	composer	pre-release	cycle=0	-	-	MED ricaricaParlanti not serialised (stale overwrite); MED multi-segment reassign failure midway w/o reload + no test; LOW null verso opens N voices; LOW L3 earlier-visit error silent
+2026-09-24T08:25:45Z	avvio-parlanti	composer	carry	-	-	-	ComandiVoce adapter: SupervisorJob project scope, register job before start (LAZY), body throw -> Errore and port stays usable (add contract case)
+2026-09-24T08:26:55Z	avvio-parlanti	worker	dispatch	cycle=0	tier=deep	model=opus	R2 composition
+2026-09-24T08:59:42Z	avvio-parlanti	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW bcb9b45
+2026-09-24T08:59:42Z	avvio-parlanti	composer	merge	cycle=0	-	-	MERGED 2616c99 — R2 RUNNABLE (manual naming; extractor pending spike). Accepted new ui ErroreComandoVoce
+2026-09-24T08:59:42Z	fix-batch-17	worker	dispatch	cycle=0	tier=deep	model=opus	SQLITE_BUSY_SNAPSHOT: IMMEDIATE configured but a read-then-write tx collided with another commit — reproduce + fix in :persistenza
+2026-09-24T09:11:00Z	fix-batch-17	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW 0b68ca2 (root cause: SQLDelight literal BEGIN TRANSACTION bypasses sqlite-jdbc IMMEDIATE)
+2026-09-24T09:11:00Z	fix-batch-17	composer	merge	cycle=0	-	-	MERGED 8591924 (red-first test; gate green)
+2026-09-24T09:16:20Z	diarizzatore-sherpa	composer	bug	-	-	-	USER REPORT: Voce 1 contains different people. DB evidence (counts only): Via Roquel nc=4 voices sec [3050,186,11,52] vs spike python nc=4 [1874,737,367,349]; New Recording 4 [604,201,31,0]. Adapter/config divergence suspected -> fix-batch-18 (debug)
+2026-09-24T10:28:03Z	fix-batch-18	worker	result	-	deep	opus	BOUNCED: no app bug (app reproduces spike within 1 s on same WAV); numClusters=k extremely sensitive (10 ms shift changes result); embeddings barely separate voices (centroid cos 0.93-0.99); spike balance was luck. Needs clustering/embedding decision (ADR 0014) + ground truth. Minor: DecodificaFfmpeg keeps AAC priming (+48 ms)
+2026-09-24T10:30:44Z	(r2)	decision	result	-	-	-	USER DECISION: add Ritrascrivi (architect ADR 0018 in progress); diarization: try stronger embedding models directly on Via Roquel, user judges (no public dataset)
+2026-09-24T10:42:22Z	(r2-ritrascrivi)	decision	result	-	-	-	USER: occasional Parlante with no attributions is deleted (INV-25); S3 READ-ONLY while a re-run is queued/running; YES cancel for queued (in_attesa) transcriptions
+2026-09-24T10:59:32Z	rit-a	worker	dispatch	cycle=0	tier=deep	model=opus	Ritrascrivi batch A (core: elaborazione sweep, eventi, persistenza-ritrascrivi, porte, avvia, esegui, annulla, repo-sql, stati)
+2026-09-24T11:34:33Z	rit-a	composer	merge	-	-	-	MERGED ab57149 (9 blocks: elaborazione sweep, eventi-pubblicati, persistenza-ritrascrivi, porte, avvia, esegui, annulla-elaborazione, repo-sql, stati)
+2026-09-24T11:34:33Z	rit-b	worker	dispatch	-	standard	sonnet	parlanti: sostituzione-trascritto-policy + abbonato-revisione-parlanti
+2026-09-24T11:34:33Z	rit-c	worker	dispatch	-	standard	sonnet	ui: S2 Ritrascrivi/Annulla, S3 read-only, panel disabled
+2026-09-24T11:35:08Z	diarizzazione	experiment	result	-	deep	opus	seg fp32 + TitaNet-S + own AHC k (min 60 s): stability 0.94 vs 0.63; awaiting user listening check
+2026-09-24T11:49:05Z	rit-b	composer	merge	-	-	-	MERGED 724a08b (sostituzione-trascritto-policy, abbonato-revisione-parlanti)
+2026-09-24T12:01:42Z	(r2)	decision	result	-	-	-	USER: new clustering still merges/splits (2 groups = same person, 4th speaker missing); NR4 has 2 speakers. USER-APPROVED: semi-automatic separation (name reference sentences, then Riassegna per somiglianza) -> ADR 0019
+2026-09-24T12:21:38Z	rit-c	composer	merge	-	-	-	MERGED ad84760 (S2, S3, S3 panel)
+2026-09-24T12:21:38Z	rit-d	worker	dispatch	-	deep	opus	Ritrascrivi wiring R1 (Annulla) + R2 (Ritrascrivi, purge subscriber, Proposta invalidation, e2e)
+2026-09-24T13:16:52Z	rit-d	composer	merge	-	-	-	MERGED 895ca3a — Ritrascrivi + Annulla complete and runnable
+2026-09-24T13:16:52Z	(adr-0019)	decision	result	-	-	-	USER: references = confirmed sentences AND fallback to the whole named Voce; PREVIEW before apply (Applica/Annulla); uncertain stay in place; show provisional Proposte
+2026-09-24T13:39:24Z	sa-a	worker	dispatch	-	deep	opus	semi-auto A trascrizione: trascritto sweep, eventi, persistenza-conferma-segmento, revisione, riassegna-segmenti, api-trascritto, trascritto-view, repo-sql
+2026-09-24T13:39:24Z	sa-b	worker	dispatch	-	deep	opus	semi-auto B ML: diarizzatore-sherpa rework (seg fp32, TitaNet-S, own AHC, EmbeddingSherpa), estrattore-impronta-sherpa
+2026-09-24T13:39:24Z	sa-c	worker	dispatch	-	standard	sonnet	semi-auto C parlanti: porte-parlanti, porta-lettore-voci, classificatore-somiglianza, piano-riassegnazione
+2026-09-24T13:59:28Z	sa-a	composer	merge	-	-	-	MERGED 4508b55 (8 blocks)
+2026-09-24T13:59:28Z	repository-sql-parlanti	composer	pre-release	-	-	-	LOW agg-trascritto §14 gate red: parlanti adapter tests seed with db.trascrittoQueries/voceQueries — seed via applicazione or relax gate for test sources
+2026-09-24T14:35:18Z	sa-b	composer	merge	-	-	-	MERGED 3c819c1 — new diarization reproduces experiment exactly (Via Roquel k=4 [1136,971,803,584], stability 0.940); real extractor live (1000 extractions 30 s)
+2026-09-24T14:37:15Z	sa-c	composer	merge	-	-	-	MERGED b7bb0ab (+ lettore-voci-da-trascrizione rework)
+2026-09-24T14:37:15Z	sa-d	worker	dispatch	-	deep	opus	S3 panel: Dai un nome a questa frase, pin/Togli conferma, Riassegna per somiglianza preview/apply + avvio-parlanti wiring
+2026-09-24T15:12:45Z	sa-d	composer	merge	-	-	-	MERGED 6947dd7 — semi-automatic separation complete and runnable
+2026-09-24T16:27:38Z	stile-snastro	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 15 (ui-kit owner)
+2026-09-24T17:26:29Z	stile-snastro	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 4bec6a2
+2026-09-24T17:26:29Z	stile-snastro	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T17:26:29Z	stile-snastro	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T17:29:58Z	stile-snastro	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-559/AC-553 manifest scoping — re-homed to wave 16 as AC-578b/AC-589b, build-manifest delta)
+2026-09-24T17:29:58Z	stile-snastro	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: M3 48dp min interactive size inflates buttons + misplaces focus ring; focus fixture never renders focused Primario)
+2026-09-24T17:29:58Z	stile-snastro	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: HIGH 1-2 + MED 3,4,5,6,7 (wave-16 prerequisites)
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	ChipStato.kt §8 LOW: IconaSn per-instance SVG parse — cache per (icona,density)
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	CampoSn label weight 400→500 + disabled visual state
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	IconaSn deprecated useResource/loadSvgPainter → Compose Resources migration
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	SnastroMisureTest regex misses RoundedCornerShape(size = …)
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	BannerSn body not limited to one line
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	formattaDurataEstesa: '0 min' under a minute; negative durations unguarded
+2026-09-24T17:52:25Z	stile-snastro	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 1d24183
+2026-09-24T17:52:25Z	stile-snastro	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T17:52:25Z	stile-snastro	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T17:52:25Z	(flaky)	composer	pre-release	-	-	-	LOW timing-flaky: RegistrazioneSomiglianzaTest AC-536 (UI thread) and avvio RitrascriviR2Test AC-459 failed once on full run, green on rerun
+2026-09-24T17:52:25Z	stile-snastro	composer	pre-release	-	-	-	LOW interpretaRiduciMovimento has no unit test; animated pulse path not exercised under test (needs mainClock control)
+2026-09-24T17:55:23Z	stile-snastro	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-24T17:55:23Z	stile-snastro	code-review	result	cycle=1	tier=deep	model=opus	CHANGES (1 HIGH: macOS unset reduceMotion key exits 1 → pulse never animates; composer instruction error)
+2026-09-24T17:55:23Z	stile-snastro	worker	dispatch	cycle=2	tier=deep	model=opus	LAST cycle: reduce-motion semantics + off-UI-thread detection + comments
+2026-09-24T17:55:23Z	stile-snastro	composer	pre-release	-	-	-	MED Checkbox in SchermataPannelloVoci loses 48dp touch padding (min interactive size off) — recheck in restyle-registrazione
+2026-09-24T17:58:40Z	stile-snastro	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW bea5cd5
+2026-09-24T17:58:40Z	stile-snastro	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T17:58:40Z	stile-snastro	code-review	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T17:59:13Z	stile-snastro	code-review	result	cycle=2	tier=deep	model=opus	APPROVE (0 HIGH)
+2026-09-24T17:59:13Z	stile-snastro	composer	pre-release	-	-	-	LOW RiduciMovimento: catch only IOException (SecurityException/InterruptedException escape the lazy); timeout result cached for the JVM; stdout stream not closed
+2026-09-24T18:01:23Z	stile-snastro	verifier	result	cycle=2	tier=deep	model=opus	PASS
+2026-09-24T18:01:23Z	stile-snastro	composer	merge	cycle=2	-	-	MERGED 2bdc1f5 — ui-kit live (palette(voceId, colori); LICENZE_CARATTERI to wire in :avvio by restyle-shell-elenchi)
+2026-09-24T18:01:32Z	restyle-shell-elenchi	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 16
+2026-09-24T18:01:32Z	restyle-registrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 16
+2026-09-24T19:00:59Z	restyle-shell-elenchi	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW be4921d
+2026-09-24T19:00:59Z	restyle-shell-elenchi	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T19:00:59Z	restyle-shell-elenchi	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T19:01:21Z	restyle-shell-elenchi	composer	note	cycle=0	-	-	composer visual check: list container stretches full height; wide gap date↔duration; queued row duplicates chip + caption; old top tabs (Registrazioni|Modelli e licenze) still above content; completed row chip stacked above controls
+2026-09-24T19:06:14Z	restyle-shell-elenchi	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-576 drag-over/Scegli file; AC-577 Edit+More; AC-575/574 spec conflicts → amended per ADR 0018 [user] / part B4)
+2026-09-24T19:06:14Z	restyle-shell-elenchi	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: footer claims Modelli pronti always; close-project hidden behind chevron row)
+2026-09-24T19:06:14Z	restyle-shell-elenchi	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: 2 HIGH + verifier ACs + composer visual + MED
+2026-09-24T19:06:14Z	restyle-shell-elenchi	composer	pre-release	-	-	-	LOW loading states still CircularProgressIndicator (not sunken rows); S4 empty plain text; GlifiVietatiTest comment stripper blanks https:// in strings; BottonePlay (kit) lacks accessible name/tooltip
+2026-09-24T19:50:37Z	restyle-shell-elenchi	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 3d8b64e
+2026-09-24T19:50:37Z	restyle-shell-elenchi	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T19:50:37Z	restyle-shell-elenchi	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T19:54:05Z	restyle-shell-elenchi	verifier	result	cycle=1	tier=deep	model=opus	FAIL (AC-574 header caption untested)
+2026-09-24T19:54:05Z	restyle-shell-elenchi	code-review	result	cycle=1	tier=deep	model=opus	CHANGES (1 HIGH: R2 footer→S5 from Parlanti does nothing + corrupts next nav)
+2026-09-24T19:54:05Z	restyle-shell-elenchi	worker	dispatch	cycle=2	tier=deep	model=opus	LAST cycle
+2026-09-24T19:54:05Z	restyle-shell-elenchi	composer	pre-release	-	-	-	MED S2/S4 plain Column (no virtualisation) — reintroduce LazyColumn if volumes grow; LOW DropdownMenu focus not returned to More; Edit has no visible edit state; no drop feedback when list non-empty
+2026-09-24T20:00:01Z	restyle-registrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 390de8c
+2026-09-24T20:00:01Z	restyle-registrazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T20:00:01Z	restyle-registrazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T20:00:10Z	restyle-registrazione	composer	note	cycle=0	-	-	composer visual check: good match; two Primario (È Marco, È Giulia) on one screen — only the first unnamed card (or none) should be Primario
+2026-09-24T20:05:45Z	restyle-registrazione	verifier	result	cycle=0	tier=deep	model=opus	FAIL (ac-coverage: AC-580/582/583/584/585/587/588/589b untested; lanes/stacking unasserted)
+2026-09-24T20:05:45Z	restyle-registrazione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (4 HIGH: dead Ritrascrivi menu; Unisci con lost on unnamed cards; AC-213 nuovoEvidenziato ignored; pin hidden on consecutive segments)
+2026-09-24T20:05:45Z	restyle-registrazione	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: 4 HIGH + MED + AC tests
+2026-09-24T20:05:45Z	restyle-registrazione	composer	pre-release	-	-	-	LOW S3: breadcrumb static until a back callback exists; AC-587 preview rows plain presenter strings; stacked 1024 layout gives transcript ~150dp
+2026-09-24T20:08:28Z	restyle-shell-elenchi	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW 46f4669
+2026-09-24T20:08:28Z	restyle-shell-elenchi	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T20:08:28Z	restyle-shell-elenchi	code-review	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T20:10:09Z	restyle-shell-elenchi	code-review	result	cycle=2	tier=deep	model=opus	APPROVE (0 HIGH)
+2026-09-24T20:10:09Z	restyle-shell-elenchi	composer	pre-release	-	-	-	MED CampoData: no tests for Esc / blur-unchanged; LOW AC-574 pixel check light only; focus lost after date edit; same-date different-format text not normalised; S5 from S3 then Registrazioni goes to list (S3 not restored)
+2026-09-24T20:13:08Z	restyle-shell-elenchi	verifier	result	cycle=2	tier=deep	model=opus	PASS — D1 green; merge HELD for user PNG approval
+2026-09-24T20:58:36Z	restyle-registrazione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 0fa7c66
+2026-09-24T20:58:36Z	restyle-registrazione	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T20:58:36Z	restyle-registrazione	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T21:00:39Z	restyle-registrazione	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH)
+2026-09-24T21:00:39Z	restyle-registrazione	composer	pre-release	-	-	-	MED S3: named card More shows Cambia/Nuova persona enabled while a command is pending (dead items, presenter drops them); wrong KDoc + unrealistic fixture soloLettura+unioneAbilitata; selected+confirmed consecutive row loses pin; LOW Applica/Crea can coexist with a disabled Primario; glyph test should assert non-empty file list; un-solo-primario fixture misleading; checked box label says Seleziona
+2026-09-24T21:01:33Z	restyle-registrazione	verifier	result	cycle=1	tier=deep	model=opus	PASS — D1 green; merge HELD for user approval
+2026-09-24T21:05:06Z	(restyle A)	decision	result	-	-	-	USER approved wave-16 render (preview/restyle, gate green on the combination)
+2026-09-24T21:05:06Z	restyle-shell-elenchi	composer	merge	cycle=2	-	-	MERGED
+2026-09-24T21:05:06Z	restyle-registrazione	composer	merge	cycle=1	-	-	MERGED — restyle part A complete
+2026-09-24T21:05:06Z	(restyle A)	composer	pending	-	-	-	follow-up owed by AC-589b: widen the glyph test to all of :ui src/main (comment-stripping) — small, not yet done
+2026-09-24T21:14:28Z	(pre-release)	composer	triage	-	deep	opus	66 OPEN / 27 FIXED / 3 OBSOLETE / 9 DECISION (defaults applied) → pre-release-triage.md, batches pr-b1..b5
+2026-09-24T21:14:28Z	pr-b1	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B1
+2026-09-24T21:14:28Z	pr-b2	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B2
+2026-09-24T21:14:28Z	pr-b3	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B3
+2026-09-24T21:14:28Z	pr-b4	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B4
+2026-09-24T21:45:11Z	pr-b1	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW f11c55d
+2026-09-24T21:45:11Z	pr-b1	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T21:45:11Z	pr-b1	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T21:45:11Z	pr-b5	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B5
+2026-09-24T21:47:01Z	pr-b1	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-24T21:47:01Z	pr-b1	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
+2026-09-24T21:47:01Z	pr-b1	composer	merge	cycle=0	-	-	MERGED 887302e — owed AC-589b closed
+2026-09-24T21:47:01Z	pr-b1	composer	watch	-	-	-	MED RiduciMovimentoSistemaTest runs real `defaults` (500 ms timeout): may flake under load — fix if it trips a gate; LOW tooltip chip duplicated 3× in kit (extract later); InterruptedException flag not restored
+2026-09-24T21:58:44Z	pr-b4	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW dfd4ae2
+2026-09-24T21:58:44Z	pr-b4	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T22:00:57Z	pr-b4	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
+2026-09-24T22:00:57Z	pr-b4	composer	merge	cycle=0	-	-	MERGED 0850776
+2026-09-24T22:00:57Z	pr-b4	composer	residue	-	-	-	MED DecodificaFfmpeg fixed tmp name races when 2 decoders hit the same id (use createTempFile); MED no failure-path test for atomic WAV; LOW FileDialog has no start dir; exit waits up to 3s+3s; tornaAllElenco KDoc stale; L530f copy says newer for v1

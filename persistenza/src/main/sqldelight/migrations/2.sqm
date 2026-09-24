@@ -1,0 +1,35 @@
+-- Schema 2 -> 3 (ADR 0014, ADR 0006 (a)): forward-only — R0 shipped schema 2 (1.sqm), never edited.
+-- Adds the optional "Numero di persone" of an Elaborazione: fixed at creation, immutable; NULL = absent
+-- (automatic clustering). Rows written before this step keep NULL (AC-377).
+-- A table rebuild (SQLite's documented procedure), not `ADD COLUMN … CHECK`: the SQLDelight compiler cannot
+-- resolve a column inside the CHECK of the ALTER that adds it. Nothing references `elaborazione`, so the
+-- DROP cascades to no row; its three indexes are dropped explicitly (the SQLDelight compiler does not drop
+-- them with the table) and recreated unchanged (ADR 0007: one line each).
+CREATE TABLE elaborazione_v3 (
+    id TEXT NOT NULL PRIMARY KEY,
+    registrazione_id TEXT NOT NULL REFERENCES registrazione(id),
+    stato TEXT NOT NULL CHECK (stato IN ('in_attesa', 'in_corso', 'completata', 'fallita')),
+    creata_alle INTEGER NOT NULL,   -- Instant, epoch millis (java.time.Instant.toEpochMilli())
+    avviata_alle INTEGER,           -- Instant, epoch millis; NULL until avviata
+    motivo_fallimento TEXT,
+    numero_persone INTEGER CHECK (numero_persone BETWEEN 1 AND 10)   -- NumeroPersone 1..10; NULL = absent
+);
+
+INSERT INTO elaborazione_v3(id, registrazione_id, stato, creata_alle, avviata_alle, motivo_fallimento)
+SELECT id, registrazione_id, stato, creata_alle, avviata_alle, motivo_fallimento FROM elaborazione;
+
+DROP INDEX elaborazione_registrazione;
+
+DROP INDEX elaborazione_aperta_unica;
+
+DROP INDEX elaborazione_completata_unica;
+
+DROP TABLE elaborazione;
+
+ALTER TABLE elaborazione_v3 RENAME TO elaborazione;
+
+CREATE INDEX elaborazione_registrazione ON elaborazione(registrazione_id);
+
+CREATE UNIQUE INDEX elaborazione_aperta_unica ON elaborazione(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso');
+
+CREATE UNIQUE INDEX elaborazione_completata_unica ON elaborazione(registrazione_id) WHERE stato = 'completata';

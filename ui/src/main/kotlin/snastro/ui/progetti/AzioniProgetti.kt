@@ -6,4 +6,5 @@ data class AzioniProgetti(
     val apri: (percorso: String) -> Unit,
     val chiudiErroreCrea: () -> Unit,
     val chiudiErroreApri: () -> Unit,
+    val riprova: () -> Unit,
 )

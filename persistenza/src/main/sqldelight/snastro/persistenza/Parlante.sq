@@ -21,3 +21,9 @@ UPDATE parlante SET nome = :nome, nome_normalizzato = :nomeNormalizzato, tipo = 
 
 rimuovi:
 DELETE FROM parlante WHERE id = :id;
+
+-- ADR 0009 / R23: merges the WAL into progetto.db and truncates it so the pages an EliminaParlante
+-- just purged do not linger there. Cannot run inside a transaction — ParlanteRepositorySql calls it
+-- only from a SQLDelight `afterCommit` hook, once the enclosing UnitaDiLavoro transaction is closed.
+walCheckpointTruncate:
+PRAGMA wal_checkpoint(TRUNCATE);

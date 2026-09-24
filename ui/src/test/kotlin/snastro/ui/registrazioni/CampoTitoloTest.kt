@@ -39,10 +39,15 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     riproduci = {},
     pausa = {},
     avviaElaborazione = {},
+    modificaNumeroPersone = { _, _ -> },
     apriRiga = {},
     chiudiErrore = {},
     chiudiErroreRiga = {},
     riprova = {},
+    ritrascrivi = {},
+    annullaRitrascrivi = {},
+    confermaRitrascrivi = {},
+    annullaElaborazione = {},
 )
 
 /**
