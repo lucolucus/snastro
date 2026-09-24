@@ -769,3 +769,11 @@
 2026-09-24T21:14:28Z	pr-b2	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B2
 2026-09-24T21:14:28Z	pr-b3	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B3
 2026-09-24T21:14:28Z	pr-b4	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B4
+2026-09-24T21:45:11Z	pr-b1	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW f11c55d
+2026-09-24T21:45:11Z	pr-b1	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T21:45:11Z	pr-b1	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T21:45:11Z	pr-b5	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B5
+2026-09-24T21:47:01Z	pr-b1	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-24T21:47:01Z	pr-b1	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
+2026-09-24T21:47:01Z	pr-b1	composer	merge	cycle=0	-	-	MERGED 887302e — owed AC-589b closed
+2026-09-24T21:47:01Z	pr-b1	composer	watch	-	-	-	MED RiduciMovimentoSistemaTest runs real `defaults` (500 ms timeout): may flake under load — fix if it trips a gate; LOW tooltip chip duplicated 3× in kit (extract later); InterruptedException flag not restored
