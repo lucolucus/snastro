@@ -8,6 +8,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -34,6 +35,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -224,7 +226,11 @@ private fun ContenutoRegistrazioni(
         } else {
             BarraImportazione(azioni, stato.importoInCorso)
         }
-        stato.errore?.let {
+        // L485a: `errore` (import) and `erroreAggiornamento` (background refresh) are two SEPARATE
+        // lifecycles on the presenter (only a success clears the latter; an unrelated refresh never
+        // touches the former, M1) — AC-566 still allows only one banner on screen, so import takes
+        // priority (it is the direct result of the user's own last action here).
+        (stato.errore ?: stato.erroreAggiornamento)?.let {
             Spacer(modifier = Modifier.height(SnastroMisure.space3))
             BannerSn(
                 tipo = TipoBanner.Errore,
@@ -238,7 +244,7 @@ private fun ContenutoRegistrazioni(
         if (stato.righe.isEmpty()) {
             DropZoneVuota(inDrop = dragAttivo, importoInCorso = stato.importoInCorso, azioni = azioni)
         } else {
-            ElencoRegistrazioni(stato.righe, azioni)
+            ElencoRegistrazioni(stato.righe, azioni, inDrop = dragAttivo)
         }
     }
 }
@@ -347,15 +353,21 @@ private fun Modifier.bordoTratteggiato(colore: Color, spessore: Dp, raggio: Dp):
 }
 
 /** AC-575/rework cycle 1 (composer finding #6): the container WRAPS its rows (a plain `Column`, not a
- * `LazyColumn` filling the remaining height) — the screen itself scrolls ([ContenutoRegistrazioni]). */
+ * `LazyColumn` filling the remaining height) — the screen itself scrolls ([ContenutoRegistrazioni]).
+ * L742d: [inDrop] (an OS drag currently over the window, non-empty list) switches the border to the same
+ * `accentInk`/[SPESSORE_TRATTEGGIO_OVER] the empty [DropZoneVuota] uses — otherwise a drop over an
+ * already-populated list gave no visual feedback at all. */
 @Composable
-private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRegistrazioni) {
+private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRegistrazioni, inDrop: Boolean = false) {
     val colori = LocalSnastroColori.current
     Surface(
         modifier = Modifier.fillMaxWidth().testTag("registrazioni-lista"),
-        color = colori.raised,
+        color = if (inDrop) colori.accentSoft else colori.raised,
         shape = RoundedCornerShape(SnastroMisure.radiusCard),
-        border = BorderStroke(1.dp, colori.line),
+        border = BorderStroke(
+            if (inDrop) SPESSORE_TRATTEGGIO_OVER else SPESSORE_TRATTEGGIO_NORMALE,
+            if (inDrop) colori.accentInk else colori.line,
+        ),
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             // Rework cycle 2 (MED #2): keyed by id — the row-local state (title/date buffers, focus)
@@ -492,9 +504,15 @@ private fun ControlloRiproduzione(riga: RigaRegistrazione, azioni: AzioniRegistr
  * [RigaRegistrazione.operazioneInCorso]: a fast refusal can flip it true→false inside the SAME
  * recomposition batch this composable observes, so the `true` value is never actually seen as a
  * distinct frame to key an effect off) — so it resyncs on the very first recomposition that shows the
- * operation settled, whether or not an intermediate `true` frame ever rendered. Esc reverts the same
- * way, without submitting. AC-575: renders as plain `heading` text at rest (borderless field, same
- * pattern as [CampoData]) — "title heading ellipsised" in the visual target.
+ * operation settled, whether or not an intermediate `true` frame ever rendered. L530c: the resync itself
+ * runs in a [SideEffect] (after composition commits), not as a raw statement in the composable body —
+ * a plain `if` there WRITES snapshot state DURING composition. `SideEffect` (unlike `LaunchedEffect`) has
+ * no key/gating of its own and runs after EVERY recomposition unconditionally, so it still observes
+ * exactly the same [riga.operazioneInCorso] value this composition just read — a `LaunchedEffect` keyed
+ * on it would reintroduce the coalescing race above (a key that never "changes" across two separate
+ * composition passes because both values were collapsed into one). Esc reverts the same way, without
+ * submitting. AC-575: renders as plain `heading` text at rest (borderless field, same pattern as
+ * [CampoData]) — "title heading ellipsised" in the visual target.
  */
 @Composable
 private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
@@ -502,9 +520,11 @@ private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     var testo by remember(riga.titolo) { mutableStateOf(riga.titolo) }
     var eraFocalizzato by remember(riga.titolo) { mutableStateOf(false) }
     var inviato by remember(riga.titolo) { mutableStateOf(false) }
-    if (inviato && !riga.operazioneInCorso) {
-        testo = riga.titolo
-        inviato = false
+    SideEffect {
+        if (inviato && !riga.operazioneInCorso) {
+            testo = riga.titolo
+            inviato = false
+        }
     }
     fun sottometti() {
         if (testo != riga.titolo) {
@@ -546,9 +566,14 @@ private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
  * real change. M4: submits only on Enter or on losing focus — never on every keystroke, so a partial
  * date while typing never round-trips through the parser — and a value that fails to parse (STRICT:
  * no 31/02 silently rolled to 28/02) is shown as an inline error instead of being dropped. Esc reverts
- * without submitting. AC-575 "caption text with an Edit icon on hover (no boxed field at rest)" —
- * rework cycle 2 (LOW #5): at rest it IS plain `Text` (a `BasicTextField` keeps a minimum width that
- * left a gap before the `·`); a click swaps in the focused field, leaving it (Enter/blur/Esc) swaps back.
+ * without submitting. L755d: on a successful parse [testo] is always re-set from `formattaData(data)`
+ * (not just when [data] differs from the row's own date) — the field never keeps showing raw user input
+ * once it is known to parse, even when that input's date turns out unchanged. L755c: leaving edit mode
+ * ([termina]) hands focus back to the read-only [Text] ([focusData]) — swapping the focused
+ * `BasicTextField` out of composition would otherwise drop focus on the floor (a keyboard user loses
+ * their place). AC-575 "caption text with an Edit icon on hover (no boxed field at rest)" — rework
+ * cycle 2 (LOW #5): at rest it IS plain `Text` (a `BasicTextField` keeps a minimum width that left a gap
+ * before the `·`); a click swaps in the focused field, leaving it (Enter/blur/Esc) swaps back.
  */
 @Composable
 private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
@@ -560,9 +585,12 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     val hover by interazione.collectIsHoveredAsState()
     val tag = "registrazioni-data-${riga.registrazioneId.valore}"
     val stile = LocalSnastroTipografia.current.caption.copy(color = if (nonValido) colori.danger else colori.inkMuted)
+    val focusTesto = remember { FocusRequester() }
+    var richiediFocusTesto by remember { mutableStateOf(false) }
     fun termina(sottometti: Boolean) {
         if (!inModifica) return // Enter then the blur of the removed field: one submit only
         inModifica = false
+        richiediFocusTesto = true // L755c
         if (!sottometti) {
             testo = formattaData(riga.dataRegistrazione)
             nonValido = false
@@ -570,7 +598,18 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
         }
         val data = testo.aData()
         nonValido = data == null
-        if (data != null && data != riga.dataRegistrazione) azioni.modificaData(riga.registrazioneId, data)
+        if (data != null) {
+            testo = formattaData(data) // L755d
+            if (data != riga.dataRegistrazione) azioni.modificaData(riga.registrazioneId, data)
+        }
+    }
+    // L755c: fires only once the read-only Text (below) is actually back in composition — requesting
+    // focus while the BasicTextField still owns it (or before either is laid out) would throw.
+    LaunchedEffect(richiediFocusTesto, inModifica) {
+        if (richiediFocusTesto && !inModifica) {
+            focusTesto.requestFocus()
+            richiediFocusTesto = false
+        }
     }
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.hoverable(interazione)) {
@@ -581,6 +620,8 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
                     text = testo,
                     style = stile,
                     modifier = Modifier
+                        .focusRequester(focusTesto)
+                        .focusable()
                         .clickable(enabled = !riga.operazioneInCorso) { inModifica = true }
                         .testTag(tag),
                 )

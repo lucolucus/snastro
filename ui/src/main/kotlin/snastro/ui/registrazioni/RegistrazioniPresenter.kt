@@ -96,10 +96,17 @@ class RegistrazioniPresenter(
     private val _stato = MutableStateFlow<RegistrazioniUiStato>(RegistrazioniUiStato.Caricamento)
     val stato: StateFlow<RegistrazioniUiStato> = _stato.asStateFlow()
 
-    // M1: bumped at the START of every `carica()`; a result is applied only if this is still the
-    // latest call when it resolves — drops a stale (superseded) result instead of letting it overwrite
-    // a fresher one on out-of-order completion. Mutated only from `scope`'s own (confined) dispatcher.
+    // M1: bumped at the START of every `carica()`; an ERROR is only ever signalled if this is still the
+    // latest call when it resolves — a stale failure is dropped rather than shown over a newer attempt
+    // that is still pending (whatever that one turns out to do). Mutated only from `scope`'s own
+    // (confined) dispatcher.
     private var generazioneCaricamento = 0
+
+    // L485b: the generation of the last result ACTUALLY APPLIED to `_stato` (success only). A SUCCESS is
+    // applied whenever it is newer than this — not only when it is the absolute latest call STARTED —
+    // so an older call's success is no longer hidden just because a NEWER one already started and then
+    // FAILED (which never produced a result of its own to prefer).
+    private var generazioneApplicata = 0
 
     init {
         scope.launch { carica() }
@@ -111,7 +118,10 @@ class RegistrazioniPresenter(
         val generazione = ++generazioneCaricamento
         try {
             val righe = withContext(io) { costruisciRighe() }
-            if (generazione == generazioneCaricamento) aggiornaConNuoveRighe(righe)
+            if (generazione > generazioneApplicata) { // L485b
+                generazioneApplicata = generazione
+                aggiornaConNuoveRighe(righe)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -127,7 +137,10 @@ class RegistrazioniPresenter(
      * M1: merges freshly-read [nuove] rows into the CURRENT [RegistrazioniUiStato.Dati] instead of
      * rebuilding it — [RegistrazioniUiStato.Dati.importoInCorso]/`errore` and each row's
      * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([importa]/[suRiga]) ever
-     * clears them.
+     * clears them. L478a: [riproduzione] is RE-DERIVED from [lettore]'s CURRENT (merge-time) state —
+     * never trusted from [nuove], which [costruisciRighe] built from a snapshot taken back when this
+     * refresh started on [io]; a play/pause landing on [lettore] while that refresh was still building
+     * rows would otherwise be silently reverted by this merge once it lands.
      */
     private fun aggiornaConNuoveRighe(nuove: List<RigaRegistrazione>) {
         val precedente = _stato.value as? RegistrazioniUiStato.Dati
@@ -149,9 +162,10 @@ class RegistrazioniPresenter(
             }
         }
         _stato.value = RegistrazioniUiStato.Dati(
-            righe = fuse,
+            righe = rifletteRiproduzione(fuse, lettore.stato.value), // L478a
             importoInCorso = precedente?.importoInCorso ?: false,
             errore = precedente?.errore,
+            erroreAggiornamento = null, // L485a: a SUCCESS always clears a previous refresh error
         )
     }
 
@@ -159,18 +173,23 @@ class RegistrazioniPresenter(
      * M5: the INITIAL load (no [RegistrazioniUiStato.Dati] known yet) fails into a distinct
      * [RegistrazioniUiStato.Errore] with a retry action — never the misleading AC-199 empty-list
      * message. A later refresh failure (already showing [RegistrazioniUiStato.Dati]) keeps the known
-     * rows and every in-flight flag on screen (H1), only [RegistrazioniUiStato.Dati.errore] changes.
+     * rows and every in-flight flag on screen (H1), only [RegistrazioniUiStato.Dati.erroreAggiornamento]
+     * changes (L485a: never [RegistrazioniUiStato.Dati.errore] — that one is import's own, and an
+     * unrelated refresh failure must not touch it either, symmetrically with M1).
      */
     private fun segnalaErroreDiCaricamento() {
         when (val attuale = _stato.value) {
-            is RegistrazioniUiStato.Dati -> _stato.value = attuale.copy(errore = MESSAGGIO_ERRORE_GENERICO)
+            is RegistrazioniUiStato.Dati -> _stato.value = attuale.copy(erroreAggiornamento = MESSAGGIO_ERRORE_GENERICO)
             RegistrazioniUiStato.Caricamento, is RegistrazioniUiStato.Errore ->
                 _stato.value = RegistrazioniUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO)
         }
     }
 
-    /** M5: retries the initial load after [RegistrazioniUiStato.Errore]. */
+    /** M5: retries the initial load after [RegistrazioniUiStato.Errore]. L485e: shows
+     * [RegistrazioniUiStato.Caricamento] right away — only ever called from [RegistrazioniUiStato.Errore]
+     * (the `riprova`/'Riprova' button of that screen alone), so this never wipes a known [Dati] list. */
     fun riprova() {
+        _stato.value = RegistrazioniUiStato.Caricamento
         scope.launch { carica() }
     }
 
@@ -263,7 +282,7 @@ class RegistrazioniPresenter(
         StatoElaborazioneVista.FALLITA -> if (v.trascrittoDisponibile) {
             StatoElaborazioneRiga.Completata
         } else {
-            StatoElaborazioneRiga.Fallita(v.motivoFallimento.orEmpty())
+            StatoElaborazioneRiga.Fallita(v.motivoFallimento.orEmpty(), v.elaborazioneId) // L548c
         }
         StatoElaborazioneVista.COMPLETATA -> StatoElaborazioneRiga.Completata
     }
@@ -280,17 +299,19 @@ class RegistrazioniPresenter(
 
     // AC-343: reflects the shared player's live state without re-querying `disponibile` (checked once
     // per `carica`, sticky here — a row already found unavailable stays disabled between refreshes).
-    private fun rifletti(s: StatoLettore) = aggiornaDati { dati ->
-        dati.copy(
-            righe = dati.righe.map { riga ->
-                if (riga.riproduzione == StatoRiproduzioneRiga.NonDisponibile) {
-                    riga
-                } else {
-                    riga.copy(riproduzione = riproduzioneDi(riga.registrazioneId, s, disponibile = true))
-                }
-            },
-        )
-    }
+    private fun rifletti(s: StatoLettore) =
+        aggiornaDati { dati -> dati.copy(righe = rifletteRiproduzione(dati.righe, s)) }
+
+    /** Shared by [rifletti] and [aggiornaConNuoveRighe] (L478a): [righe] with every row's `riproduzione`
+     * re-derived from the CURRENT [s] — never a value baked into [righe] from an earlier snapshot. */
+    private fun rifletteRiproduzione(righe: List<RigaRegistrazione>, s: StatoLettore): List<RigaRegistrazione> =
+        righe.map { riga ->
+            if (riga.riproduzione == StatoRiproduzioneRiga.NonDisponibile) {
+                riga
+            } else {
+                riga.copy(riproduzione = riproduzioneDi(riga.registrazioneId, s, disponibile = true))
+            }
+        }
 
     /**
      * AC-199..201/LOW: drag-and-drop (one or more files) and the file picker (one file, as
@@ -498,8 +519,10 @@ class RegistrazioniPresenter(
         if (riga.trascrittoDisponibile) apriRegistrazione(id)
     }
 
-    /** H1: dismisses the current list-level `errore` (import/refresh), if any. */
-    fun chiudiErrore() = aggiornaDati { it.copy(errore = null) }
+    /** H1: dismisses the current list-level error, if any — import ([RegistrazioniUiStato.Dati.errore])
+     * or refresh ([RegistrazioniUiStato.Dati.erroreAggiornamento], L485a) — whichever [SchermataRegistrazioni]
+     * is showing (AC-566: at most one banner on screen). */
+    fun chiudiErrore() = aggiornaDati { it.copy(errore = null, erroreAggiornamento = null) }
 
     /** H1: dismisses the current `erroreRiga` of [id], if any. */
     fun chiudiErroreRiga(id: RegistrazioneId) = aggiornaRiga(id) { it.copy(erroreRiga = null) }
@@ -537,16 +560,29 @@ private sealed interface NumeroPersoneCampo {
     data object NonValido : NumeroPersoneCampo
 }
 
+// L548b: a strict `^(10|[1-9])$` match — never `String.toIntOrNull()` on the trimmed text, which
+// also accepts a leading sign ("+4".toIntOrNull() == 4) and leading zeros ("04".toIntOrNull() == 4),
+// neither a sane representation of a person count.
+private val REGEX_NUMERO_PERSONE = Regex("^($NUMERO_PERSONE_MAX|[1-9])$")
+
 private fun numeroPersoneCampo(testo: String): NumeroPersoneCampo {
     val t = testo.trim()
-    if (t.isEmpty()) return NumeroPersoneCampo.Valido(null)
-    val n = t.toIntOrNull()?.takeIf { it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX }
-    return if (n != null) NumeroPersoneCampo.Valido(n) else NumeroPersoneCampo.NonValido
+    val numero = t.toIntOrNull()?.takeIf {
+        REGEX_NUMERO_PERSONE.matches(t) && it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX
+    }
+    return when {
+        t.isEmpty() -> NumeroPersoneCampo.Valido(null)
+        numero != null -> NumeroPersoneCampo.Valido(numero)
+        else -> NumeroPersoneCampo.NonValido
+    }
 }
 
 /**
  * ADR 0014: the range the field accepts before sending the command (AC-375, 'no command' on anything else).
  * `:ui` cannot see the `NumeroPersone` VO (CR-1); `AvviaElaborazione` re-validates it (`NumeroPersone.di`).
+ * L548a: `internal` (not `private`) so this boundary is checkable from elsewhere in `:ui`'s own tests; the
+ * cross-module parity with the domain's actual range lives in `:avvio`'s own
+ * `NumeroPersoneRegistrazioniParitaTest` (`:ui` cannot import `NumeroPersone` itself to share it directly).
  */
-private const val NUMERO_PERSONE_MIN = 1
-private const val NUMERO_PERSONE_MAX = 10
+internal const val NUMERO_PERSONE_MIN = 1
+internal const val NUMERO_PERSONE_MAX = 10

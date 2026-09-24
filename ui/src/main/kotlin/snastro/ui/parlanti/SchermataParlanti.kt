@@ -37,9 +37,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -48,6 +51,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.ui.SnastroTema
@@ -56,6 +60,7 @@ import snastro.ui.stile.BottonePlay
 import snastro.ui.stile.BottoneSn
 import snastro.ui.stile.CardSn
 import snastro.ui.stile.Icona
+import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
@@ -79,6 +84,8 @@ import snastro.ui.testi.titoloConfermaEliminazioneParlante
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 private val DIAMETRO_PALLINO_NEUTRO = 10.dp
 private val SPESSORE_ANELLO_NEUTRO = 2.dp
+private val DIAMETRO_VUOTO_ICONA = 28.dp // L735b: same weight as S2's DropZoneVuota icon
+private val SPESSORE_SOTTOLINEATURA = 1.5.dp // L742c
 
 /**
  * Thin view of S4 · Parlanti del Progetto (RC-2): only renders [stato] and forwards [azioni]'s
@@ -148,15 +155,32 @@ private fun ContenutoParlanti(stato: ParlantiUiStato.Dati, azioni: AzioniParlant
     ) {
         stato.errore?.let { MessaggioInlineErrore(it, azioni.chiudiErrore, "parlanti-errore") }
         if (stato.vuoto) {
-            Text(
-                text = MESSAGGIO_PARLANTI_VUOTO,
-                style = LocalSnastroTipografia.current.body,
-                color = colori.inkMuted,
-                modifier = Modifier.testTag("parlanti-vuoto"),
-            )
+            StatoVuotoParlanti()
         } else {
             ListaParlanti(stato, azioni)
         }
+    }
+}
+
+/** L735b: the same empty-state pattern as S2's `DropZoneVuota` (icon + centred title line) instead of a
+ * single left-aligned caption stranded at the top of an otherwise blank screen. */
+@Composable
+private fun StatoVuotoParlanti() {
+    val colori = LocalSnastroColori.current
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(top = SnastroMisure.space6).testTag("parlanti-vuoto"),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(Modifier.testTag("parlanti-vuoto-icona")) {
+            IconaSn(Icona.People, descrizione = null, tinta = colori.inkMuted, dimensione = DIAMETRO_VUOTO_ICONA)
+        }
+        Spacer(modifier = Modifier.height(SnastroMisure.space3))
+        Text(
+            text = MESSAGGIO_PARLANTI_VUOTO,
+            style = LocalSnastroTipografia.current.body,
+            color = colori.inkMuted,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 
@@ -274,20 +298,29 @@ private fun RigaParlanteControlli(riga: RigaParlante, azioni: AzioniParlanti) {
 @Composable
 private fun MenuAltreAzioniParlante(riga: RigaParlante, azioni: AzioniParlanti) {
     var espanso by remember { mutableStateOf(false) }
+    // L742b: focus returns to this same button once the menu closes — by dismissal (click outside/Esc)
+    // or by any item's own action — instead of being dropped on the floor.
+    val richiestaFocus = remember { FocusRequester() }
+    fun chiudi() {
+        espanso = false
+        richiestaFocus.requestFocus()
+    }
     Box {
         BottoneIconaSn(
             icona = Icona.More,
             descrizione = ETICHETTA_ALTRE_AZIONI,
             onClick = { espanso = true },
             abilitato = !riga.operazioneInCorso,
-            modifier = Modifier.testTag("parlanti-altre-azioni-${riga.parlanteId.valore}"),
+            modifier = Modifier
+                .focusRequester(richiestaFocus)
+                .testTag("parlanti-altre-azioni-${riga.parlanteId.valore}"),
         )
-        DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
+        DropdownMenu(expanded = espanso, onDismissRequest = ::chiudi) {
             if (riga.tipoParlante == TipoParlanteVista.OCCASIONALE) {
                 DropdownMenuItem(
                     text = { Text(ETICHETTA_PROMUOVI) },
                     onClick = {
-                        espanso = false
+                        chiudi()
                         azioni.promuovi(riga.parlanteId)
                     },
                     modifier = Modifier.testTag("parlanti-promuovi-${riga.parlanteId.valore}"),
@@ -296,7 +329,7 @@ private fun MenuAltreAzioniParlante(riga: RigaParlante, azioni: AzioniParlanti) 
             DropdownMenuItem(
                 text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
                 onClick = {
-                    espanso = false
+                    chiudi()
                     azioni.chiediConfermaEliminazione(riga.parlanteId)
                 },
                 modifier = Modifier.testTag("parlanti-elimina-${riga.parlanteId.valore}"),
@@ -366,9 +399,27 @@ private fun CampoNomeParlante(riga: RigaParlante, azioni: AzioniParlanti, richie
                     false
                 }
             }
+            // L742c: a `lineStrong` underline while focused — the always-editable field otherwise looks
+            // identical whether it currently has focus or not (unlike S2's own CampoTitolo, which only
+            // ever shows a cursor + IME state, never a persistently focused row with no visible cue).
+            .sottolineaturaSeFocalizzato(colori.lineStrong, eraFocalizzato)
             .testTag("parlanti-nome-${riga.parlanteId.valore}"),
     )
 }
+
+/** L742c: a bottom underline in [colore], drawn only while [mostra] — the visible cue that
+ * [CampoNomeParlante] currently has focus. Inset by half the stroke width: [drawBehind] clips to the
+ * field's own bounds, so a line drawn exactly AT `size.height` would have half its stroke cut off. */
+private fun Modifier.sottolineaturaSeFocalizzato(colore: Color, mostra: Boolean): Modifier =
+    if (!mostra) {
+        this
+    } else {
+        drawBehind {
+            val spessore = SPESSORE_SOTTOLINEATURA.toPx()
+            val y = size.height - spessore / 2
+            drawLine(color = colore, start = Offset(0f, y), end = Offset(size.width, y), strokeWidth = spessore)
+        }
+    }
 
 /**
  * AC-225/AC-577: styled like `anteprime/Dialog.html` (title = the question, body = what is lost,

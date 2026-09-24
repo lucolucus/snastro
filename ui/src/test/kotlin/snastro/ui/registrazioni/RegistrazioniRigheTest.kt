@@ -1,10 +1,13 @@
 package snastro.ui.registrazioni
 
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
@@ -15,11 +18,15 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performImeAction
+import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performTextReplacement
+import androidx.compose.ui.test.pressKey
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import snastro.kernel.RegistrazioneId
+import snastro.ui.formattaData
 import snastro.ui.stile.ColoriChiari
+import snastro.ui.stile.ColoriScuri
 import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
@@ -59,12 +66,19 @@ private fun riga(id: RegistrazioneId, titolo: String) =
 class RegistrazioniRigheTest {
     @Test
     fun `AC-574 l intestazione dice n registrazioni e la durata estesa totale, con Importa Primario`() =
+        verificaIntestazionePrimario(scuro = false, ColoriChiari.accent)
+
+    @Test
+    fun `L755b AC-574 Importa Primario usa il colore accent anche a tema scuro`() =
+        verificaIntestazionePrimario(scuro = true, ColoriScuri.accent)
+
+    private fun verificaIntestazionePrimario(scuro: Boolean, atteso: Color) =
         runDesktopComposeUiTest(width = 1280, height = 800) {
             setContent {
                 SchermataRegistrazioni(
                     stato = RegistrazioniUiStato.Dati(righe = listOf(riga(REG_A, "Uno"), riga(REG_B, "Due"))),
                     azioni = AZIONI_VUOTE,
-                    scuro = false,
+                    scuro = scuro,
                     riduciMovimento = true,
                 )
             }
@@ -72,7 +86,7 @@ class RegistrazioniRigheTest {
             onNodeWithText(ETICHETTA_IMPORTA_FILE).assertIsDisplayed()
             // Primario = the `accent` fill (Secondario is `raised`): sample inside the left padding.
             val immagine = onNodeWithTag("registrazioni-importa").captureToImage().toPixelMap()
-            assertEquals(ColoriChiari.accent.toArgb(), immagine[PIXEL_DENTRO, immagine.height / 2].toArgb())
+            assertEquals(atteso.toArgb(), immagine[PIXEL_DENTRO, immagine.height / 2].toArgb())
         }
 
     @Test
@@ -145,6 +159,108 @@ class RegistrazioniRigheTest {
 
             onNodeWithTag("registrazioni-data-${REG_B.valore}", useUnmergedTree = true).performImeAction()
             assertEquals(listOf(REG_B to LocalDate.of(2026, 2, 1)), modifiche)
+        }
+
+    // --- L485c/L755a: CampoData's blur-submit/Esc/blur-unchanged, no presenter test can prove -------
+
+    @Test
+    fun `L485c una modifica di data si sottomette anche perdendo il focus senza premere Invio`() =
+        runDesktopComposeUiTest(width = 1280, height = 800) {
+            val modifiche = mutableListOf<Pair<RegistrazioneId, LocalDate>>()
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = listOf(riga(REG_A, "Uno"))),
+                    azioni = AZIONI_VUOTE.copy(modificaData = { id, data -> modifiche += id to data }),
+                    riduciMovimento = true,
+                )
+            }
+            val campo = onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true)
+            campo.performClick()
+            campo.performTextReplacement("01/02/2026")
+
+            // blur: focus moves to another control, never an Invio/Done
+            onNodeWithTag("registrazioni-riproduzione-${REG_A.valore}", useUnmergedTree = true).performClick()
+
+            assertEquals(listOf(REG_A to LocalDate.of(2026, 2, 1)), modifiche)
+        }
+
+    @Test
+    fun `L755a Esc durante la modifica della data ripristina il valore salvato senza sottomettere`() =
+        runDesktopComposeUiTest(width = 1280, height = 800) {
+            val modifiche = mutableListOf<Pair<RegistrazioneId, LocalDate>>()
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = listOf(riga(REG_A, "Uno"))),
+                    azioni = AZIONI_VUOTE.copy(modificaData = { id, data -> modifiche += id to data }),
+                    riduciMovimento = true,
+                )
+            }
+            val campo = onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true)
+            campo.performClick()
+            campo.performTextReplacement("01/02/2026")
+
+            campo.performKeyInput { pressKey(Key.Escape) }
+
+            campo.assertTextEquals(formattaData(DATA))
+            assertEquals(emptyList(), modifiche)
+        }
+
+    @Test
+    fun `L755c dopo aver terminato la modifica il focus torna sul testo di sola lettura della data`() =
+        runDesktopComposeUiTest(width = 1280, height = 800) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = listOf(riga(REG_A, "Uno"))),
+                    azioni = AZIONI_VUOTE,
+                    riduciMovimento = true,
+                )
+            }
+            val campo = onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true)
+            campo.performClick()
+            campo.performTextReplacement("01/02/2026")
+
+            campo.performImeAction() // Invio: submits and leaves edit mode
+
+            onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true).assertIsFocused()
+        }
+
+    @Test
+    fun `L755c anche Esc restituisce il focus al testo di sola lettura della data`() =
+        runDesktopComposeUiTest(width = 1280, height = 800) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = listOf(riga(REG_A, "Uno"))),
+                    azioni = AZIONI_VUOTE,
+                    riduciMovimento = true,
+                )
+            }
+            val campo = onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true)
+            campo.performClick()
+            campo.performTextReplacement("01/02/2026")
+
+            campo.performKeyInput { pressKey(Key.Escape) }
+
+            onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true).assertIsFocused()
+        }
+
+    @Test
+    fun `L485c L755d perdere il focus senza aver cambiato la data non sottomette e resta nel formato canonico`() =
+        runDesktopComposeUiTest(width = 1280, height = 800) {
+            val modifiche = mutableListOf<Pair<RegistrazioneId, LocalDate>>()
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(righe = listOf(riga(REG_A, "Uno"))),
+                    azioni = AZIONI_VUOTE.copy(modificaData = { id, data -> modifiche += id to data }),
+                    riduciMovimento = true,
+                )
+            }
+            val campo = onNodeWithTag("registrazioni-data-${REG_A.valore}", useUnmergedTree = true)
+            campo.performClick() // enter edit mode, no text change at all
+
+            onNodeWithTag("registrazioni-riproduzione-${REG_A.valore}", useUnmergedTree = true).performClick()
+
+            assertEquals(emptyList(), modifiche)
+            campo.assertTextEquals(formattaData(DATA))
         }
 
     private companion object {

@@ -393,7 +393,8 @@ class RegistrazioniRitrascriviTest {
         advanceUntilIdle()
 
         val riga = presenter.riga()
-        assertEquals(StatoElaborazioneRiga.Fallita("guasto"), riga.elaborazione)
+        // L548c: Fallita now also carries elaborazioneId (equality includes it).
+        assertEquals(StatoElaborazioneRiga.Fallita("guasto", ELABORAZIONE_1), riga.elaborazione)
         assertNull(riga.ritrascrizioneFallita)
     }
 
