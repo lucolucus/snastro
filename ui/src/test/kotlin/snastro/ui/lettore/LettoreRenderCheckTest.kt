@@ -100,7 +100,7 @@ class LettoreRenderCheckTest {
             )
         }
         onNodeWithTag("lettore-pausa").assertIsDisplayed()
-        onNodeWithText("01:05").assertIsDisplayed()
+        onNodeWithText("1:05").assertIsDisplayed() // AC-557: no leading zero on minutes under one hour
         catturaPng("lettore-pronto-in-riproduzione", width, height)
     }
 
@@ -113,7 +113,7 @@ class LettoreRenderCheckTest {
             )
         }
         onNodeWithTag("lettore-riproduci").assertIsDisplayed()
-        onNodeWithText("01:05").assertIsDisplayed()
+        onNodeWithText("1:05").assertIsDisplayed() // AC-557: no leading zero on minutes under one hour
         catturaPng("lettore-pronto-in-pausa", width, height)
     }
 

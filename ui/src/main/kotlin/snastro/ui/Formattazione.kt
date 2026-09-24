@@ -6,15 +6,33 @@ import java.util.Locale
 
 private const val MS_PER_SECONDO = 1000L
 private const val SECONDI_PER_MINUTO = 60L
+private const val SECONDI_PER_ORA = 3600L
 private const val BYTE_PER_MB = 1024.0 * 1024.0
 private val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
-/** AC-179: "mm:ss" — minutes are NOT capped at 59 (no hour component), seconds truncate to whole. */
+/**
+ * AC-557 (supersedes AC-179's duration half; AC-203's "3:12" now matches): under one hour `m:ss`
+ * with NO leading zero on minutes ("1:15", "3:12", "59:59"); from one hour on, `h:mm:ss`
+ * ("1:00:00", "1:15:03"). Seconds truncate to whole, as before.
+ */
 fun formattaDurata(durataMs: Long): String {
     val secondiTotali = durataMs / MS_PER_SECONDO
-    val minuti = secondiTotali / SECONDI_PER_MINUTO
+    val ore = secondiTotali / SECONDI_PER_ORA
+    val minuti = (secondiTotali % SECONDI_PER_ORA) / SECONDI_PER_MINUTO
     val secondi = secondiTotali % SECONDI_PER_MINUTO
-    return String.format(Locale.ROOT, "%02d:%02d", minuti, secondi)
+    return if (ore > 0) {
+        String.format(Locale.ROOT, "%d:%02d:%02d", ore, minuti, secondi)
+    } else {
+        String.format(Locale.ROOT, "%d:%02d", minuti, secondi)
+    }
+}
+
+/** AC-557: the prose form of a duration ("52 min", "1 h 04 min") — dates stay `formattaData`, unchanged. */
+fun formattaDurataEstesa(durataMs: Long): String {
+    val secondiTotali = durataMs / MS_PER_SECONDO
+    val ore = secondiTotali / SECONDI_PER_ORA
+    val minuti = (secondiTotali % SECONDI_PER_ORA) / SECONDI_PER_MINUTO
+    return if (ore > 0) String.format(Locale.ROOT, "%d h %02d min", ore, minuti) else "$minuti min"
 }
 
 /** AC-179: "dd/MM/yyyy". */

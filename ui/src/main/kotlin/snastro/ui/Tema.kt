@@ -1,15 +1,37 @@
 package snastro.ui
 
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import snastro.ui.stile.ColoriChiari
+import snastro.ui.stile.ColoriScuri
+import snastro.ui.stile.LocalSnastroColori
+import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.SnastroTipografiaDefault
+import snastro.ui.stile.schemaMaterial
+import snastro.ui.stile.tipografiaMaterial
 
 /**
- * The one Material 3 theme every screen wraps itself in (rule 11: what every screen shares).
- * Material 3's own default color scheme and typography (frugality rung 3, ADR 0001): nothing in
- * this feature's ACs asks for a custom palette/type scale yet — later blocks extend this call site,
- * never re-wrap [MaterialTheme] themselves.
+ * The one theme every screen wraps itself in (rule 11: what every screen shares). AC-552: follows
+ * the macOS theme by default ([isSystemInDarkTheme]), provides [LocalSnastroColori] /
+ * [LocalSnastroTipografia] (the Snastro design system, `snastro.ui.stile` — this block's body,
+ * ADR 0001/0002), and maps them onto [MaterialTheme]'s `ColorScheme`/`Typography` (README
+ * §'Implementazione in Compose') so Material components (`Icon`, `Surface`, …) stay legible too.
+ * Call site unchanged for every existing screen: `scuro` defaults, so `SnastroTema { … }` still
+ * compiles verbatim.
  */
 @Composable
-fun SnastroTema(content: @Composable () -> Unit) {
-    MaterialTheme(content = content)
+fun SnastroTema(scuro: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+    val colori = if (scuro) ColoriScuri else ColoriChiari
+    CompositionLocalProvider(
+        LocalSnastroColori provides colori,
+        LocalSnastroTipografia provides SnastroTipografiaDefault,
+    ) {
+        MaterialTheme(
+            colorScheme = schemaMaterial(colori, scuro),
+            typography = tipografiaMaterial(SnastroTipografiaDefault),
+            content = content,
+        )
+    }
 }

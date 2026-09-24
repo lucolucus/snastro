@@ -2,7 +2,11 @@ package snastro.ui.testi
 
 /** S3 · Voci panel + Revisione toolbar labels (R2), Italian (dev-architecture `#presenter`). */
 const val TITOLO_PANNELLO_VOCI: String = "Voci"
-const val ETICHETTA_ESTRATTO: String = "▶ estratto"
+
+// AC-559: no '▶' glyph as a UI icon. The full fix pairs this text with `Icona.Listen`
+// (snastro.ui.stile) at its render call site — SchermataPannelloVoci's `IntestazioneCarta`
+// (wave 16, screens are out of this block's scope); this constant only stops carrying the glyph.
+const val ETICHETTA_ESTRATTO: String = "Estratto"
 const val ETICHETTA_CONFERMA: String = "Conferma"
 const val ETICHETTA_ALTRI: String = "altri ▾"
 const val ETICHETTA_NUOVO: String = "nuovo…"
