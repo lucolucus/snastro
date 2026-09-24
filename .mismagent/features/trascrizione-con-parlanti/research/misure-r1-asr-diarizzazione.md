@@ -255,3 +255,8 @@ Finding: the app reproduces the spike exactly; the instability was the pipeline 
 | own AHC k4 + ERes2Net-vox / ERes2NetV2 | ~balanced | 0.925–0.929 | 105–140 s |
 Four unrelated embedding models agree at 0.95 on the same labeling → the 4 groups are very likely the real speakers. New Recording 4: k=3 stable (0.92) with models agreeing 0.94 → probably 3 speakers.
 Recommendation: pyannote seg-3.0 fp32 + NeMo TitaNet-small (40 MB, CC-BY-4.0) + own agglomerative clustering (average-linkage cosine on 3 s pieces, cut at k ignoring clusters < 60 s, nearest-centroid assignment). Pending user listening check, then ADR 0014 amendment.
+
+## User listening check of the "own AHC + TitaNet-S" setup (2026-09-24) — no names recorded here
+- Via Roquel (4 real speakers): groups 1 and 2 are each one real person; groups 3 and 4 are the SAME person; the 4th real speaker has no group and is mixed into the others. So unsupervised clustering, even the stable setup, does not separate these voices correctly (stable ≠ correct).
+- New Recording 4: 2 real speakers (the analysis' "3" was wrong).
+- Conclusion (user-approved): semi-automatic separation — the user names 1–2 reference sentences per person, then "Riassegna per somiglianza" assigns every segment to the most similar named person (supervised nearest-reference), on top of the better initial diarization.

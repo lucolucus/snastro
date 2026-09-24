@@ -680,3 +680,4 @@
 2026-09-24T11:34:33Z	rit-c	worker	dispatch	-	standard	sonnet	ui: S2 Ritrascrivi/Annulla, S3 read-only, panel disabled
 2026-09-24T11:35:08Z	diarizzazione	experiment	result	-	deep	opus	seg fp32 + TitaNet-S + own AHC k (min 60 s): stability 0.94 vs 0.63; awaiting user listening check
 2026-09-24T11:49:05Z	rit-b	composer	merge	-	-	-	MERGED 724a08b (sostituzione-trascritto-policy, abbonato-revisione-parlanti)
+2026-09-24T12:01:42Z	(r2)	decision	result	-	-	-	USER: new clustering still merges/splits (2 groups = same person, 4th speaker missing); NR4 has 2 speakers. USER-APPROVED: semi-automatic separation (name reference sentences, then Riassegna per somiglianza) -> ADR 0019
