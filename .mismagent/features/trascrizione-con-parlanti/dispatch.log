@@ -695,3 +695,15 @@
 2026-09-24T14:37:15Z	sa-d	worker	dispatch	-	deep	opus	S3 panel: Dai un nome a questa frase, pin/Togli conferma, Riassegna per somiglianza preview/apply + avvio-parlanti wiring
 2026-09-24T15:12:45Z	sa-d	composer	merge	-	-	-	MERGED 6947dd7 — semi-automatic separation complete and runnable
 2026-09-24T16:27:38Z	stile-snastro	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 15 (ui-kit owner)
+2026-09-24T17:26:29Z	stile-snastro	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 4bec6a2
+2026-09-24T17:26:29Z	stile-snastro	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T17:26:29Z	stile-snastro	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T17:29:58Z	stile-snastro	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-559/AC-553 manifest scoping — re-homed to wave 16 as AC-578b/AC-589b, build-manifest delta)
+2026-09-24T17:29:58Z	stile-snastro	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: M3 48dp min interactive size inflates buttons + misplaces focus ring; focus fixture never renders focused Primario)
+2026-09-24T17:29:58Z	stile-snastro	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: HIGH 1-2 + MED 3,4,5,6,7 (wave-16 prerequisites)
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	ChipStato.kt §8 LOW: IconaSn per-instance SVG parse — cache per (icona,density)
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	CampoSn label weight 400→500 + disabled visual state
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	IconaSn deprecated useResource/loadSvgPainter → Compose Resources migration
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	SnastroMisureTest regex misses RoundedCornerShape(size = …)
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	BannerSn body not limited to one line
+2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	formattaDurataEstesa: '0 min' under a minute; negative durations unguarded
