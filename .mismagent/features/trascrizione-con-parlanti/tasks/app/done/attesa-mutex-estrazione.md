@@ -4,6 +4,9 @@ type: spike
 side: app
 repo: .
 depends_on: []
+status: answered
+closed_by: 0017-attesa-mutex-estrazione
+closed: 2026-09-24
 ---
 # Spike / How long may a user command wait for the native Mutex during an Elaborazione?
 
@@ -38,3 +41,21 @@ build-manifest into the `tests_nl` of the blocks below (and of `estrattore-impro
 ## Unblocks
 `avvio-coda-elaborazioni`, `schermata-registrazione` (both carry
 `gated_by: ADR closing spike attesa-mutex-estrazione`).
+
+## Closure (2026-09-24)
+Answered by ADR [0017-attesa-mutex-estrazione](../../../../../decisions/0017-attesa-mutex-estrazione.md).
+**(b) + (c).** One shared native Mutex, held for one native call at a time. The lock is fair, and
+the wait can now be interrupted (`lockInterruptibly`). R1 already works this way for ASR and VAD,
+one hold per call, with the model cached across calls. So during `trascrizione` an extraction waits
+for at most one call: ≤ 25 s of audio, about 0.35 s on average and about 2 s at worst.
+Diarization is one native call over the whole recording, so it is the only long wait. The
+worst-case wait is the rest of the running diarization. That was measured at 67–245 s for 75 min
+under load, and it is bounded by ADR 0011 (< 600 s per hour of audio).
+On the S3 card the command becomes pending at once. After 2 s the card shows "In attesa
+dell'elaborazione…" with "Annulla", which writes nothing. The screen never freezes, and nothing
+runs on the UI thread.
+(a), a separate session, is rejected: there is no evidence that concurrent sessions are safe, and
+it would compete for CPU with the NFR.
+No new measurement was needed. (b) is the existing code, and the wait bounds come from
+`research/misure-r1-asr-diarizzazione.md`. The ACs are in
+`manifest-deltas/2026-09-24-mutex.md`.

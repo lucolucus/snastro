@@ -627,3 +627,4 @@
 2026-09-24T01:36:19Z	fix-batch-16	composer	pre-release	cycle=0	-	-	LOW :ml-sherpa RiconoscitoreSherpaModelliTest reads per-user cache (env issue, fails without installed models); LOW S5 Mancanti shows count not model names; LOW window close may be unresponsive up to 3 s
 2026-09-24T06:55:40Z	(r1)	user	result	-	-	-	USER: R1 processing times "veramente buoni"; asked to log a UI refinement (tasks/app/backlog/refinement-ui.md)
 2026-09-24T06:59:10Z	(release-plan)	decision	result	-	-	-	USER DECISION: resume R2 (Parlanti) now; UI refinement after R2
+2026-09-24T07:04:36Z	spike-attesa-mutex-estrazione	architect	result	-	deep	opus	ADR 0017 (b)+(c): one fair Mutex per native call, lockInterruptibly, pending card + Annulla after 2s; (a) rejected; delta saved
