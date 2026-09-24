@@ -1,5 +1,6 @@
 package snastro.avvio
 
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
@@ -16,9 +17,13 @@ import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.dominio.Registrazione
+import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ErroreSessione
+import java.nio.channels.FileChannel
+import java.nio.channels.OverlappingFileLockException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -169,4 +174,78 @@ class SessioneProgettoImplChiudiTest {
         val secondoErrore = sessione.apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
         assertEquals(ErroreSessione.CartellaNonValida, secondoErrore)
     }
+
+    // --- avvio-composizione, carry-over 1: the extension's stop sits between scope cancel and db close ---
+
+    @Test
+    fun `carry-over 1 chiudi ferma lettore, scope, estensione, poi chiude il database e rilascia il lock`() {
+        val ordine = mutableListOf<String>()
+        val riproduttore = mockk<RiproduttoreWav>(relaxed = true) { every { close() } answers { ordine += "lettore" } }
+        lateinit var contesto: ContestoEstensione
+        val sessione = SessioneProgettoImpl(
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = orologio,
+            scopeGenitore = scopeDiProva(),
+            seams = SessioneProgettoSeams(
+                riproduttoreFabbrica = { riproduttore },
+                chiudiDatabase = { db ->
+                    ordine += "database (lock tenuto: ${lockTenuto(contesto.cartella)})"
+                    db.chiudi()
+                },
+            ),
+            estensione = { c ->
+                contesto = c
+                object : ProgettoEsteso {
+                    override val aggiornamenti = AggiornamentiVistaFinta()
+
+                    override fun ferma() {
+                        ordine += "estensione (scope attivo: ${c.scope.isActive})"
+                    }
+                }
+            },
+        )
+        val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
+
+        sessione.chiudi()
+
+        assertEquals(
+            listOf("lettore", "estensione (scope attivo: false)", "database (lock tenuto: true)"),
+            ordine,
+        )
+        assertFalse(lockTenuto(contesto.cartella), "il lock va rilasciato dopo la chiusura del database")
+        val riaperta = SessioneProgettoImpl(RegistroProgettiFinta(), GeneratoreIdFinto(), orologio, scopeDiProva())
+        riaperta.apri(progetto.percorso).atteso()
+        riaperta.chiudi()
+    }
+
+    @Test
+    fun `un estensione che fallisce in costruzione non trattiene lock, database ne scope`() {
+        val sessione = SessioneProgettoImpl(
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = orologio,
+            scopeGenitore = scopeDiProva(),
+            estensione = { error("estensione rotta") },
+        )
+
+        val errore = sessione.crea(cartella.toString(), "Prova").erroreAtteso<ErroreSessione>()
+
+        assertEquals(ErroreSessione.CartellaNonValida, errore)
+        assertNull(sessione.corrente.value)
+        val riaperta = SessioneProgettoImpl(RegistroProgettiFinta(), GeneratoreIdFinto(), orologio, scopeDiProva())
+        riaperta.apri(cartella.resolve("Prova.snastro").toString()).atteso() // lock rilasciato, db leggibile
+        riaperta.chiudi()
+    }
+
+    /** True while another channel of this JVM holds `.lock` (tryLock then throws OverlappingFileLockException). */
+    private fun lockTenuto(cartellaProgetto: Path): Boolean =
+        FileChannel.open(cartellaProgetto.resolve(".lock"), StandardOpenOption.WRITE).use { canale ->
+            try {
+                canale.tryLock()?.release()
+                false
+            } catch (ignored: OverlappingFileLockException) {
+                true
+            }
+        }
 }

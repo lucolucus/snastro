@@ -19,6 +19,7 @@ import snastro.ui.lettore.LettoreAudio
  * this Progetto's presenters on it (never the app-wide scope directly), and
  * [SessioneProgettoImpl.chiudi] cancels it — a closed Progetto never leaves a presenter's collectors
  * (or the shared [lettoreAudio]) running in the background.
+ * [estensione] is the later release's per-project extension ([EstensioneSessione]) — `null` in R0.
  */
 @Suppress("LongParameterList") // one parameter per collaborator of the open Progetto's presenters
 internal class CollaboratoriProgettoAperto(
@@ -29,4 +30,5 @@ internal class CollaboratoriProgettoAperto(
     val lettoreAudio: LettoreAudio,
     val aggiornamentiVista: AggiornamentiVista,
     val scope: CoroutineScope,
+    val estensione: ProgettoEsteso? = null,
 )

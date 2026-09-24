@@ -1,0 +1,46 @@
+package snastro.avvio
+
+import kotlinx.coroutines.CoroutineScope
+import snastro.kernel.DispatcherEventiInMemoria
+import snastro.persistenza.SnastroDatabase
+import snastro.progetto.applicazione.porte.RegistrazioneRepository
+import snastro.ui.AggiornamentiVista
+import java.nio.file.Path
+
+/**
+ * The single seam through which a later release EXTENDS the R0 per-project graph built by
+ * [SessioneProgettoImpl] (avvio-composizione: "extends avvio-r0's graph, never re-creates
+ * SessioneProgetto, the dispatcher or LettoreAudio"). R0 passes none (`null`): nothing beyond R0 is
+ * built. R1 (`snastro.avvio.r1.EstensioneR1`) builds the Trascrizione/Documento graph of the project
+ * just opened, over the SAME database, dispatcher and session scope R0 already owns.
+ *
+ * Typed over R0-owned values only — this file (like every file outside `snastro.avvio.r1`) never
+ * imports a Trascrizione/Documento/Modelli type (`GrafoR0Test`, AC-350 guard scoped to the R0 graph).
+ */
+internal fun interface EstensioneSessione {
+    /** Builds the extension for the project described by [contesto]; called once per open/create. */
+    fun apri(contesto: ContestoEstensione): ProgettoEsteso
+}
+
+/** What [SessioneProgettoImpl] hands an [EstensioneSessione] for one open project. */
+internal class ContestoEstensione(
+    val cartella: Path,
+    val database: SnastroDatabase,
+    val dispatcher: DispatcherEventiInMemoria,
+    /** The session's own child scope — cancelled by [SessioneProgettoImpl.chiudi] BEFORE [ProgettoEsteso.ferma]. */
+    val scope: CoroutineScope,
+    val registrazioni: RegistrazioneRepository,
+)
+
+/** The extension's per-project state, as far as R0's own lifecycle needs to know it. */
+internal interface ProgettoEsteso {
+    /** Merged into the project's [CollaboratoriProgettoAperto.aggiornamentiVista]. */
+    val aggiornamenti: AggiornamentiVista
+
+    /**
+     * Blocking stop, called by [SessioneProgettoImpl.chiudi] AFTER the session scope was cancelled and
+     * BEFORE the database is closed: waits (bounded) for every background worker still touching the
+     * database to unwind. Never throws on a timeout.
+     */
+    fun ferma()
+}

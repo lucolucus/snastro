@@ -5,9 +5,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.merge
 import snastro.audio.RiproduttoreWav
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
@@ -30,7 +32,10 @@ import snastro.progetto.applicazione.comandi.RinominaRegistrazioneServizio
 import snastro.progetto.applicazione.letture.RegistrazioniDelProgetto
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgetti
+import snastro.progetto.applicazione.porte.SondaAudio
 import snastro.progetto.applicazione.porte.VoceRegistro
+import snastro.ui.AggiornamentiVista
+import snastro.ui.Cambiamento
 import snastro.ui.ErroreSessione
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
@@ -66,6 +71,11 @@ import java.util.logging.Logger
  * lettore and closing the database are each guarded on their own (logged at WARNING, never
  * rethrown) — a checkpoint failure (full disk, a deleted folder, `SQLITE_BUSY`) must never leave
  * the scope un-cancelled, the lock retained, or [chiudi] itself throwing to the UI (AC-347).
+ *
+ * [estensione] (avvio-composizione) is the later release's hook ([EstensioneSessione], `null` in R0):
+ * built in [apriGrafo] over this project's own database/dispatcher/scope, stopped in [chiudi] in the
+ * pinned order — lettore, session scope cancel, [ProgettoEsteso.ferma] (the Elaborazione queue's
+ * `fermaEAttendi` + the Documento worker), and only then the database close and the lock release.
  */
 internal class SessioneProgettoImpl(
     private val registro: RegistroProgetti,
@@ -73,6 +83,7 @@ internal class SessioneProgettoImpl(
     private val clock: Clock,
     private val scopeGenitore: CoroutineScope,
     private val seams: SessioneProgettoSeams = SessioneProgettoSeams(),
+    private val estensione: EstensioneSessione? = null,
 ) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
     override val corrente: StateFlow<ProgettoAperto?> = _corrente.asStateFlow()
@@ -236,6 +247,12 @@ internal class SessioneProgettoImpl(
                 sessione.risorse.lettoreAudio.chiudi()
             }
             sessione.collaboratori.scope.cancel()
+            // avvio-composizione: i lavoratori di sfondo dell'estensione (coda delle Elaborazioni,
+            // rigenerazione del Documento) sono gia' stati cancellati con lo scope qui sopra; si attende
+            // (con un limite) che smettano davvero di toccare il database PRIMA di chiuderlo.
+            sessione.collaboratori.estensione?.let { est ->
+                chiudiSilenziosamente("arresto dell'estensione fallito in chiudi") { est.ferma() }
+            }
             chiudiSilenziosamente("chiusura del database fallita in chiudi") {
                 sessione.risorse.chiudiDb() // fix-batch-12 #2
             }
@@ -245,6 +262,7 @@ internal class SessioneProgettoImpl(
     }
 
     /** Builds the rest of the R0 graph for a freshly opened/created [progettoId] and sets [corrente]. */
+    @Suppress("LongMethod") // linear wiring, one statement per collaborator — splitting it only scatters it
     private fun apriGrafo(
         cartella: Path,
         lockCartella: LockCartella,
@@ -265,7 +283,7 @@ internal class SessioneProgettoImpl(
             clock,
             progetti,
             registrazioni,
-            SondaAudioFfmpeg(),
+            seams.sondaAudio(),
             ArchivioAudioFile(cartella),
             dispatcher,
         )
@@ -277,20 +295,46 @@ internal class SessioneProgettoImpl(
             riferimentoAudioDi = { id -> registrazioni.trova(id)?.riferimentoAudio },
             riproduttore = seams.riproduttoreFabbrica(),
         )
+        val progettoEsteso = try {
+            estensione?.apri(ContestoEstensione(cartella, db, dispatcher, scopeSessione, registrazioni))
+        } catch (e: CancellationException) {
+            scopeSessione.cancel()
+            throw e
+        } catch (
+            // H3 discipline: a failing extension never leaves the lock held, the database open or the
+            // session scope alive.
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.log(Level.WARNING, "costruzione dell'estensione fallita", e)
+            scopeSessione.cancel()
+            chiudiSilenziosamente("chiusura del lettore audio fallita dopo un'estensione fallita") {
+                lettoreAudio.chiudi()
+            }
+            chiudiSilenziosamente("chiusura del database fallita dopo un'estensione fallita", chiudiDb)
+            rilasciaLock(lockCartella)
+            return Esito.Errore(ErroreSessione.CartellaNonValida)
+        }
+        val aggiornamentiR0 = AggiornamentiVistaEventi(dispatcher)
         val collaboratori = CollaboratoriProgettoAperto(
             registrazioni = { registrazioniDelProgetto.delProgetto(progettoId) },
             aggiungiRegistrazione = aggiungiServizio::esegui,
             modificaDataRegistrazione = modificaServizio::esegui,
             rinominaRegistrazione = rinominaServizio::esegui,
             lettoreAudio = lettoreAudio,
-            aggiornamentiVista = AggiornamentiVistaEventi(dispatcher),
+            aggiornamentiVista = progettoEsteso?.let { AggiornamentiVistaUnite(aggiornamentiR0, it.aggiornamenti) }
+                ?: aggiornamentiR0,
             scope = scopeSessione,
+            estensione = progettoEsteso,
         )
 
         val percorso = percorsoAssoluto(cartella)
+        // Il conteggio legge il database QUI, sul thread del chiamante (mai sul thread del registro, che
+        // girerebbe dopo il ritorno di crea/apri — anche dopo chiudi — toccando un database gia' chiuso o
+        // una cartella gia' rimossa); solo la chiamata al registro e' spostata fuori dal thread UI (AC-347).
+        val numRegistrazioni = contaRegistrazioni(registrazioni, progettoId)
+        val aggiuntaAlle = clock.instant()
         fuoriDalThreadUi(registro) {
-            val numRegistrazioni = registrazioni.delProgetto(progettoId).size
-            it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, clock.instant()))
+            it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, aggiuntaAlle))
         }
 
         aperta = SessioneAperta(
@@ -327,7 +371,13 @@ internal data class SessioneProgettoSeams(
     val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql,
     val riproduttoreFabbrica: () -> RiproduttoreWav = ::RiproduttoreWav,
     val chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
+    val sondaAudio: () -> SondaAudio = ::SondaAudioFfmpeg,
 )
+
+/** [AggiornamentiVista] of a project with an [ProgettoEsteso]: R0's own changes merged with the extension's. */
+private class AggiornamentiVistaUnite(r0: AggiornamentiVista, estensione: AggiornamentiVista) : AggiornamentiVista {
+    override val cambiamenti: Flow<Cambiamento> = merge(r0.cambiamenti, estensione.cambiamenti)
+}
 
 /** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */
 private class LockCartella(val canale: FileChannel, val lock: FileLock)
@@ -392,6 +442,18 @@ private fun chiudiSilenziosamente(messaggio: String, azione: () -> Unit) {
     ) {
         log.log(Level.WARNING, messaggio, e)
     }
+}
+
+/** AC-347: only the registry's count is lost on a failing read — `crea`/`apri` never abort for it. */
+private fun contaRegistrazioni(registrazioni: RegistrazioneRepository, progettoId: ProgettoId): Int = try {
+    registrazioni.delProgetto(progettoId).size
+} catch (e: CancellationException) {
+    throw e
+} catch (
+    @Suppress("TooGenericExceptionCaught") e: Exception,
+) {
+    log.log(Level.WARNING, "lettura delle Registrazioni fallita: il registro riceve 0", e)
+    0
 }
 
 private fun percorsoAssoluto(cartella: Path): String = cartella.toAbsolutePath().normalize().toString()
