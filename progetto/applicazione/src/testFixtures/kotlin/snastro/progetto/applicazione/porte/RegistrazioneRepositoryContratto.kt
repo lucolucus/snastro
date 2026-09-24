@@ -76,6 +76,20 @@ public abstract class RegistrazioneRepositoryContratto {
     }
 
     @Test
+    public fun `AC-25 aggiuntaAlle sub-millisecondo e troncato al millisecondo dal round-trip`() {
+        // In produzione l'Instant arriva gia' da un Clock.tick(1 ms) (avvio-r0), mai con nanosecondi
+        // oltre il millisecondo; il repository (epoch millis) tronca comunque chi ne avesse — L496a.
+        val a = ambiente()
+        val conNanosecondi = Instant.parse("2026-09-23T10:15:30.123456789Z")
+        val r = unaRegistrazione(a.progettoId, aggiuntaAlle = conNanosecondi)
+        a.salva(r)
+        assertEquals(
+            Instant.ofEpochMilli(conNanosecondi.toEpochMilli()),
+            assertNotNull(a.registrazioni.trova(r.id)).aggiuntaAlle,
+        )
+    }
+
+    @Test
     public fun `AC-25 delProgetto restituisce tutte e sole le Registrazioni del Progetto`() {
         val a = ambiente()
         val prima = unaRegistrazione(a.progettoId, RegistrazioneId("id-2"), "Seduta di marzo")
@@ -132,6 +146,7 @@ public abstract class RegistrazioneRepositoryContratto {
         progettoId: ProgettoId,
         id: RegistrazioneId = RegistrazioneId("id-2"),
         titolo: String = "Seduta di marzo",
+        aggiuntaAlle: Instant = Instant.parse("2026-09-23T10:15:30.123Z"),
     ): Registrazione =
         Registrazione.aggiungi(
             id = id,
@@ -140,7 +155,7 @@ public abstract class RegistrazioneRepositoryContratto {
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
             durataMs = 3_600_000,
             dataRegistrazione = DATA_DEL_FILE,
-            aggiuntaAlle = Instant.parse("2026-09-23T10:15:30.123Z"),
+            aggiuntaAlle = aggiuntaAlle,
         ).aggregato
 
     /** Every observable field of a Registrazione (the aggregate has no value equality). */

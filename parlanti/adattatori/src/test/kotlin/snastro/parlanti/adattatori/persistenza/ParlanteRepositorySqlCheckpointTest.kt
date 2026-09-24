@@ -12,6 +12,8 @@ import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.persistenza.seminaTrascrittoDiProva
+import snastro.persistenza.seminaVoceDiProva
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,12 +44,8 @@ class ParlanteRepositorySqlCheckpointTest {
                 dataRegistrazione = "2026-09-23",
                 aggiuntaAlle = 0L,
             )
-            db.trascrittoQueries.inserisci(
-                registrazioneId = "registrazione-1",
-                prossimaVoce = 1L,
-                prossimoSegmento = 1L,
-            )
-            db.voceQueries.inserisci(registrazioneId = "registrazione-1", numero = 1L)
+            db.seminaTrascrittoDiProva(registrazioneId = "registrazione-1")
+            db.seminaVoceDiProva(registrazioneId = "registrazione-1", numero = 1L)
 
             val repo = ParlanteRepositorySql(db)
             val progettoId = ProgettoId("progetto-1")

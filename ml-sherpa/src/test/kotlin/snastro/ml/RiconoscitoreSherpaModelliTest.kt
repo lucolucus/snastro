@@ -1,10 +1,12 @@
 package snastro.ml
 
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.CampioniAudio
 import snastro.modelli.CartellaCacheModelli
 import snastro.modelli.ID_ASR_PARAKEET_TDT_0_6B_V3_INT8
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.math.PI
 import kotlin.math.sin
@@ -79,9 +81,14 @@ class RiconoscitoreSherpaModelliTest {
  */
 internal fun percorsoModelloParakeet(): Path {
     val override = System.getenv("SNASTRO_MODELLO_RICONOSCITORE")
-    return if (override != null) {
+    val dir = if (override != null) {
         Path.of(override)
     } else {
         CartellaCacheModelli.risolvi().resolve(ID_ASR_PARAKEET_TDT_0_6B_V3_INT8)
     }
+    // L627a: the per-OS cache exists only after the app's onboarding provisioning has run; on a dev
+    // machine that never ran it (or an unset/stale override) this must be a SKIP, not a native-load
+    // failure with a confusing message.
+    assumeTrue(Files.isDirectory(dir), "$dir non esiste: modello Parakeet non installato (provisioning non eseguito)")
+    return dir
 }

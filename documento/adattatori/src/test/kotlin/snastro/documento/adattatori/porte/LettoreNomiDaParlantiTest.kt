@@ -19,6 +19,7 @@ import snastro.parlanti.applicazione.comandi.EliminaParlanteServizio
 import snastro.parlanti.applicazione.comandi.ObiettivoAttribuzione
 import snastro.parlanti.applicazione.comandi.RinominaParlante
 import snastro.parlanti.applicazione.comandi.RinominaParlanteServizio
+import snastro.parlanti.applicazione.comandi.unObiettivoOccasionale
 import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.letture.NomiDelleVoci
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
@@ -215,12 +216,12 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         override fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean): ParlanteId {
             // `occasionale` stays a plain Boolean at this test fixture's own boundary (AmbienteLettoreNomi,
-            // documento:applicazione testFixtures): Parlanti's ObiettivoAttribuzione.NuovoParlante still
-            // needs its OWN dominio TipoParlante for the occasionale case — referenced by fully-qualified
-            // name (no import) so this documento:adattatori file never imports another context's dominio
-            // (CR-1); the RICORRENTE branch never needs it at all (NuovoParlante's own default).
+            // documento:applicazione testFixtures): the OCCASIONALE case goes through Parlanti's OWN
+            // `unObiettivoOccasionale` applicazione-level fixture (L653), so this documento:adattatori
+            // file never references `parlanti:dominio`'s TipoParlante itself (CR-1); the RICORRENTE
+            // branch never needs it at all (NuovoParlante's own default).
             val obiettivo = if (occasionale) {
-                ObiettivoAttribuzione.NuovoParlante(nome, snastro.parlanti.dominio.TipoParlante.OCCASIONALE)
+                unObiettivoOccasionale(nome)
             } else {
                 ObiettivoAttribuzione.NuovoParlante(nome)
             }
