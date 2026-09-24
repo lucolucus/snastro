@@ -664,3 +664,4 @@
 2026-09-24T08:25:45Z	schermata-registrazione-identificazione	composer	merge	cycle=0	-	-	MERGED 133c9af
 2026-09-24T08:25:45Z	schermata-registrazione-identificazione	composer	pre-release	cycle=0	-	-	MED ricaricaParlanti not serialised (stale overwrite); MED multi-segment reassign failure midway w/o reload + no test; LOW null verso opens N voices; LOW L3 earlier-visit error silent
 2026-09-24T08:25:45Z	avvio-parlanti	composer	carry	-	-	-	ComandiVoce adapter: SupervisorJob project scope, register job before start (LAZY), body throw -> Errore and port stays usable (add contract case)
+2026-09-24T08:26:55Z	avvio-parlanti	worker	dispatch	cycle=0	tier=deep	model=opus	R2 composition
