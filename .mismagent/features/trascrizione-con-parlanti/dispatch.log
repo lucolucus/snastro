@@ -791,3 +791,6 @@
 2026-09-24T22:15:13Z	pr-b3	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework HIGH L573a + MED L665a regression + MED L573b thrown→Errore
 2026-09-24T22:15:13Z	pr-b3	composer	residue	-	-	-	L750b structured preview rows (PannelloSomiglianza unowned); L750c stacked-1024 layout rethink; L761f direction to pin; L573d highlight persists after playback ends (player has no end event); L761d Crea Primario can coexist with a card Primario
 2026-09-24T22:17:52Z	(elimina-registrazione)	architect	result	-	deep	opus	ADR 0020 + delta 2026-09-25 (AC-597..636, 5 new + 12 reworked blocks, waves 17-21); fold AFTER pr-b2/pr-b3 merge (file overlap)
+2026-09-24T22:18:58Z	pr-b5	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
+2026-09-24T22:18:58Z	pr-b5	composer	merge	cycle=0	-	-	MERGED 2a286a6
+2026-09-24T22:18:58Z	pr-b5	composer	residue	-	-	-	MED seminaTrascrittoDiProva usable from any testFixtures(:persistenza) consumer — extend §14 grep with allow-list; MED AC-459 flake root cause: settle Documento before snapshot; LOW dev-arch §7 example wiring name; RegoleArchitetturaliTest KDoc cites verifySqlDelightMigration
