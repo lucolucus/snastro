@@ -625,3 +625,4 @@
 2026-09-24T01:36:19Z	fix-batch-16	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW ef78cad (fixes proven red on old code)
 2026-09-24T01:36:19Z	fix-batch-16	composer	merge	cycle=0	-	-	MERGED ceb0a3e (gate + real e2e green)
 2026-09-24T01:36:19Z	fix-batch-16	composer	pre-release	cycle=0	-	-	LOW :ml-sherpa RiconoscitoreSherpaModelliTest reads per-user cache (env issue, fails without installed models); LOW S5 Mancanti shows count not model names; LOW window close may be unresponsive up to 3 s
+2026-09-24T06:55:40Z	(r1)	user	result	-	-	-	USER: R1 processing times "veramente buoni"; asked to log a UI refinement (tasks/app/backlog/refinement-ui.md)
