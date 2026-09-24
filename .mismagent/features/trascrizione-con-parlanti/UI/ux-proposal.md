@@ -301,3 +301,10 @@ Source: ADR 0019 §6 and its Amendment 2026-09-24 (b) (the user's answers); mani
   - **If the transcript changed** in between: "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima" +
     **Ricalcola**.
   - **Annulla** closes the preview. Nothing changes.
+
+## Amendment 2026-09-24 (Restyle — design system) [user]
+Source: `UI/design-system/` (the approved Snastro design system) and manifest delta
+`manifest-deltas/2026-09-24-restyle-ui.md`. The screen structure above stands; the look of every screen
+follows the design system (part A, AC-551…589). Part B (`momenti.md`: recording page in every state,
+time estimate, Riassunto tab with facts, project home "Da fare" + summary, clickable voice lanes) is
+specified in the delta and waits for the user's confirmation item by item.

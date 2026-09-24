@@ -1,0 +1,32 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>Cover</title>
+<style>
+html,body{margin:0}
+body{background:var(--ground);width:960px;height:288px;position:relative;overflow:hidden;font-family:var(--font-ui)}
+.art{position:absolute;left:0;top:0}
+.blk{rx:var(--radius-card)}
+.acc-f{fill:var(--accent)} .ink-f{fill:var(--ink)} .v1-f{fill:var(--voice-1)} .v2-f{fill:var(--voice-2)}
+.bar{rx:2px} .v1{fill:var(--voice-1)} .v2{fill:var(--voice-2)} .v3{fill:var(--voice-3)} .v4{fill:var(--voice-4)} .acc{fill:var(--accent)}
+.reel{fill:none;stroke:var(--on-accent);stroke-width:8}
+.name{position:absolute;left:40px;bottom:40px;max-width:440px}
+.name h1{margin:0;font-size:100px;line-height:.92;font-weight:600;letter-spacing:-.02em;color:var(--ink)}
+.name p{margin:14px 0 0;font-size:14px;line-height:20px;color:var(--ink-muted)}
+</style></head>
+<body>
+<svg class="art" viewBox="0 0 960 288" width="960" height="288" aria-hidden="true">
+<!-- blocks: accent 192x288 slab, ink 272x128 (bleeds top/right), voice-2 128x144, voice-1 128x144 (bleed bottom); radius-card corners
+     arrangement: one tall slab with satellites, right of x=480, bleeding off top, right and bottom like a tape leaving the frame
+     pattern: literal motif (speech turns on a tape lane) chosen because the player's voice lanes are the system's one signature shape; bars in voice-1..4 + accent on the ink block
+     steps and radii: row pitch space-5 (24), bar height space-2 (8), gaps space-1..space-4, block gutters space-4 (16); radius-card on blocks, 2px on bars as in .sn-scrub lanes -->
+<rect class="blk acc-f" x="480" y="0" width="192" height="288"/>
+<rect class="blk ink-f" x="688" y="-12" width="284" height="140"/>
+<rect class="blk v2-f" x="688" y="144" width="128" height="156"/>
+<rect class="blk v1-f" x="832" y="144" width="140" height="156"/>
+<rect class="bar acc" x="704" y="16" width="48" height="8"/><rect class="bar acc" x="772" y="16" width="48" height="8"/><rect class="bar acc" x="828" y="16" width="24" height="8"/><rect class="bar acc" x="872" y="16" width="40" height="8"/><rect class="bar v4" x="920" y="16" width="16" height="8"/><rect class="bar v1" x="704" y="40" width="24" height="8"/><rect class="bar v4" x="732" y="40" width="12" height="8"/><rect class="bar acc" x="764" y="40" width="40" height="8"/><rect class="bar v1" x="812" y="40" width="12" height="8"/><rect class="bar v1" x="828" y="40" width="16" height="8"/><rect class="bar acc" x="852" y="40" width="24" height="8"/><rect class="bar v3" x="880" y="40" width="48" height="8"/><rect class="bar v2" x="704" y="64" width="12" height="8"/><rect class="bar v3" x="724" y="64" width="40" height="8"/><rect class="bar v1" x="784" y="64" width="16" height="8"/><rect class="bar v3" x="820" y="64" width="40" height="8"/><rect class="bar v1" x="880" y="64" width="12" height="8"/><rect class="bar v2" x="904" y="64" width="32" height="8"/><rect class="bar v1" x="704" y="88" width="16" height="8"/><rect class="bar v1" x="724" y="88" width="48" height="8"/><rect class="bar v1" x="784" y="88" width="48" height="8"/><rect class="bar v1" x="836" y="88" width="40" height="8"/><rect class="bar v1" x="884" y="88" width="24" height="8"/><rect class="bar v4" x="704" y="112" width="40" height="8"/><rect class="bar acc" x="764" y="112" width="16" height="8"/><rect class="bar v3" x="788" y="112" width="40" height="8"/><rect class="bar v3" x="840" y="112" width="16" height="8"/><rect class="bar v4" x="868" y="112" width="16" height="8"/><rect class="bar v2" x="888" y="112" width="24" height="8"/><rect class="bar v1" x="916" y="112" width="16" height="8"/>
+<circle class="reel" cx="576" cy="112" r="48"/><circle class="reel" cx="576" cy="112" r="16"/>
+</svg>
+<div class="name"><h1>Snastro</h1><p>Chi ha detto cosa, riunione dopo riunione. Tutto sul tuo Mac.</p></div>
+</body>
+</html>

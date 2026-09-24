@@ -24,3 +24,9 @@ User feedback on R1: processing times are very good; the UI needs a refinement p
 
 ## Approach
 Load the artifact-design / ux guidance, propose 2–3 visual directions as renderCheck PNG mockups, let the user pick, then one ui fix-batch across S1/S2/S3/S5 + shell.
+
+## Status 2026-09-24 [user]
+Style agreed via the Design System artifact (https://claude.ai/artifact/LJek8gTjpdx6yfUY45XYc6, sources
+copied to `UI/design-system/`). Superseded by `manifest-deltas/2026-09-24-restyle-ui.md`: part A (visual
+restyle, approved, R2) and part B (new behaviour, to confirm). Decisions taken here: duration "m:ss" /
+"h:mm:ss" (AC-557); palette soft amber; S1 default folder still open.
