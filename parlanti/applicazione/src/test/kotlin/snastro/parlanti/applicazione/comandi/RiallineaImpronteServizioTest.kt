@@ -301,6 +301,34 @@ class RiallineaImpronteServizioTest {
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
+    @Test
+    fun `AC-424 (regressione ADR 0017) una sola estrai per riga d impronta obsoleta, mai una per piu righe`() {
+        val conta = EstrattoreImprontaContaChiamate(estrattore)
+        unParlanteConImpronte(
+            "Marco",
+            Triple(1, "0-1000", MODELLO),
+            Triple(2, "0-1000", MODELLO),
+            Triple(3, "0-1000", MODELLO),
+        )
+
+        esegui(servizio(estrattore = conta)).atteso()
+
+        assertEquals(3, conta.chiamate, "N righe obsolete (qui 3, una per Voce) -> N chiamate, mai una in piu")
+    }
+
+    /** Counts calls to [estrai], delegating every one of them to [delegato]. */
+    private class EstrattoreImprontaContaChiamate(
+        private val delegato: EstrattoreImpronta,
+    ) : EstrattoreImpronta by delegato {
+        var chiamate = 0
+            private set
+
+        override fun estrai(c: CampioniAudio): Impronta {
+            chiamate++
+            return delegato.estrai(c)
+        }
+    }
+
     /** Runs [effetto] (the concurrent change under test) right before delegating the extraction to [finta]. */
     private class EstrattoreConEffetto(
         private val finta: EstrattoreImpronta,
