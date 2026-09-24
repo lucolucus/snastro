@@ -7,7 +7,7 @@ enforced_by:
   kind: presence
   rule: "grep -rniE --include='*.kt' --exclude-dir=build '(secure_delete[[:space:]]*=[[:space:]]*(on|1|true)|setSecureDelete\\(true\\))' persistenza | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
   exigible_from: "persistenza-schema"
-amended: 2026-09-24   # see "Amendment 2026-09-24 (ADR 0019)"; earlier: "Amendment 2026-09-23 (b)" — R12 superseded by ADR 0012 Amendment (b)
+amended: 2026-09-25   # see "Amendment 2026-09-25 (ADR 0020)"; see "Amendment 2026-09-24 (ADR 0019)"; earlier: "Amendment 2026-09-23 (b)" — R12 superseded by ADR 0012 Amendment (b)
 ---
 # 0009 — `ImprontaVocale` (biometric): stored only in the project DB, purged in the tombstone transaction
 
@@ -77,3 +77,13 @@ project folder) may retain purged prints** — outside the app's control.
 - The print model becomes NeMo TitaNet-small (`embedding-nemo-titanet-small`, ADR 0019 §2). Every
   existing row is stale for it and is re-derived by `RiallineaTutteLeImpronte`, with no migration
   (Amendment (b) point 3 unchanged).
+
+## Amendment 2026-09-25 — a new removal path, and the WAL checkpoint on every removal (pointer; [ADR 0020](0020-elimina-registrazione.md))
+- **`EliminaRegistrazione` is a new print-removal path.** Every `impronta_vocale` row keyed by a `VoceRef` of the
+  deleted `Registrazione` is deleted in the command transaction. It goes through the same deletion as every other
+  path (the `ApplicaSostituzioneTrascrittoPolitica` purge, then [INV-25]), with no soft-delete.
+- **`PRAGMA wal_checkpoint(TRUNCATE)` now runs after commit on EVERY print removal**, not only on `EliminaParlante`:
+  whenever `salva` of a `Parlante` removed at least one row, or `rimuovi` removed a `Parlante`. This covers [INV-15]
+  moves, [INV-21], [INV-25], ADR 0018 and ADR 0020 (manifest AC-622).
+- The table `eliminazione_in_sospeso` (ADR 0020 §4) holds no biometric data. The caveat above about copies made
+  outside the app is unchanged, and the S2 dialog makes no promise about them.

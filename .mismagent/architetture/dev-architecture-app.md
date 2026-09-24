@@ -141,6 +141,13 @@ public class Parlante private constructor(
   `Esito<List<Evento>>` when one operation emits several). The aggregate keeps no pending-event list.
 - No `data class`, no public `var`, no deletion method (soft state only; biometric rows are the
   documented exception, ADR 0009).
+  *(amended 2026-09-25, [ADR 0020](../decisions/0020-elimina-registrazione.md))* The documented physical deletions
+  are all REPOSITORY `rimuovi`s, reached only through a command or policy, never through an aggregate method:
+  - `Parlante` INV-25 (R25);
+  - an `in_attesa` `Elaborazione` (ADR 0018 (b));
+  - `EliminaRegistrazione`: the `Registrazione`, all of its `Elaborazione`s and its `Trascritto`.
+
+  The aggregate at most returns the domain event (`Registrazione.elimina()`, `Elaborazione.annulla()`).
 - `ricostituisci` is public (repositories live in another module) and gated by the kernel annotation
   `@RequiresOptIn(level = ERROR) annotation class RicostituzioneDaPersistenza`; only
   `..adattatori.persistenza..` may opt in (CR-15). It re-validates nothing — the DB is trusted.

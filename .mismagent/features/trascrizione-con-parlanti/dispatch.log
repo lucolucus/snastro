@@ -782,3 +782,12 @@
 2026-09-24T22:00:57Z	pr-b4	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
 2026-09-24T22:00:57Z	pr-b4	composer	merge	cycle=0	-	-	MERGED 0850776
 2026-09-24T22:00:57Z	pr-b4	composer	residue	-	-	-	MED DecodificaFfmpeg fixed tmp name races when 2 decoders hit the same id (use createTempFile); MED no failure-path test for atomic WAV; LOW FileDialog has no start dir; exit waits up to 3s+3s; tornaAllElenco KDoc stale; L530f copy says newer for v1
+2026-09-24T22:06:16Z	(elimina-registrazione)	decision	result	-	-	-	USER: add delete-recording with defaults — Elimina… in the row menu + confirmation listing what is lost; hard-delete audio copy, Trascritto, Documento .md and ImprontaVocale sourced from it (biometric, ADR 0009); ricorrenti stay (their other prints kept); orphan occasionali vanish (INV-25); refused while in_corso; in_attesa → annul first then delete
+2026-09-24T22:12:25Z	pr-b3	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 17680e9 (skipped L750b cross-boundary, L750c reverted — breaks panel visibility, L761f no fix direction)
+2026-09-24T22:12:25Z	pr-b3	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T22:14:17Z	pr-b5	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 6d008d7
+2026-09-24T22:14:17Z	pr-b5	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T22:15:13Z	pr-b3	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / CHANGES (1 HIGH: L573a supersession ineffective once a command is in flight on multi-thread io)
+2026-09-24T22:15:13Z	pr-b3	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework HIGH L573a + MED L665a regression + MED L573b thrown→Errore
+2026-09-24T22:15:13Z	pr-b3	composer	residue	-	-	-	L750b structured preview rows (PannelloSomiglianza unowned); L750c stacked-1024 layout rethink; L761f direction to pin; L573d highlight persists after playback ends (player has no end event); L761d Crea Primario can coexist with a card Primario
+2026-09-24T22:17:52Z	(elimina-registrazione)	architect	result	-	deep	opus	ADR 0020 + delta 2026-09-25 (AC-597..636, 5 new + 12 reworked blocks, waves 17-21); fold AFTER pr-b2/pr-b3 merge (file overlap)

@@ -11,6 +11,13 @@
   - `Progetto` = a container the user opens and keeps feeding over time; it scopes the recordings AND the gallery of `Parlante`s (identities never cross projects). Not: workspace, cartella, sessione.
   - `Registrazione` = one audio file the user already recorded, added to a `Progetto` (source file + `titolo` + date of the recording + duration). `titolo` = the source file name without extension, fixed at import and **immutable** (user decision 2026-09-23); **unique per `Progetto`** — on a clash (compared on its file-safe, case-insensitive form) `AggiungiRegistrazione` appends " (2)", " (3)"… (user decision 2026-09-23), so the `Documento` file name is unique. It is the unit of processing and of output (one `Documento` per `Registrazione`). Not: audio, file, meeting, riunione, sessione, clip.
   - `DataRegistrazione` = the date the recording took place (defaults to the file's date, user-editable); used to label `Parlante`s of type `occasionale` ("ospite del 12/09"). Not: data import.
+  - `Eliminare una Registrazione` / "Elimina…" (`EliminaRegistrazione` → `RegistrazioneEliminata`) *(added 2026-09-25 [user], [ADR 0020](decisions/0020-elimina-registrazione.md))*. This is the user's **hard** delete of one `Registrazione` from its `Progetto`, and it cannot be undone. It removes:
+    - the audio copied into the project;
+    - every `Elaborazione` and the `Trascritto`;
+    - the `Documento`;
+    - every `Attribuzione` and `ImprontaVocale` of its `Voce`s.
+
+    `ricorrente` `Parlante`s stay, with their prints from other recordings. An `occasionale` seen only there ceases to exist (INV-25). It is refused while an `Elaborazione` is `in_attesa` or `in_corso`: annullare it first, or wait until it ends. It is distinct from `Eliminazione del Parlante`, which leaves a tombstone. The original file outside the project is never touched. Not: cancellare, rimuovere, archiviare, nascondere (as distinct terms); scartare (reserved for the internal compensation of a failed import).
 - **Notes:** audio decoding/normalization (format conversion, resampling) is a technical adapter inside `Trascrizione`, NOT a context and NOT part of `Registrazione`'s language.
 - **Introduced by:** trascrizione-con-parlanti
 
@@ -66,6 +73,7 @@
 ## Relationships
 - `Progetto` → `Trascrizione` : upstream/downstream, Customer/Supplier — `Trascrizione` reads a `Registrazione` (identity + source audio) via a port; never writes the catalogue.
 - `Progetto` → `Parlanti` : upstream/downstream — every `Parlante` and the `Galleria` are scoped by `Progetto` identity (no cross-project matching).
+- *(amended 2026-09-25, [ADR 0020](decisions/0020-elimina-registrazione.md))* `Progetto` publishes `RegistrazioneEliminata`, and `Trascrizione` (veto + purge), `Parlanti` (purge + INV-25) and `Documento` (file removal, after commit) react to it. `Progetto` still never depends on them.
 - `Trascrizione` → `Parlanti` : upstream/downstream, Customer/Supplier — `Parlanti` reads the `Voce`s of a completed `Trascritto` and their `Segmento` intervals (to extract `ImprontaVocale`s / `EstrattoAudio` and build `Proposta`s); it reacts to `Revisione` (voci unite/divise, segmento riassegnato) to keep `Attribuzione`s and `ImprontaVocale`s consistent. `Trascrizione` never knows names.
 - `Trascrizione` → `Documento` : upstream/downstream, conformist — `Documento` renders the `Trascritto` as-is.
 - `Parlanti` → `Documento` : upstream/downstream, conformist — `Documento` resolves each `Voce` to a `Nome` via `Attribuzione` (every `Voce` gets an `Attribuzione` — a skipped one becomes an `occasionale` "Ospite del …"; `Voce n` only while identification is not done yet; an `eliminato` `Parlante` still resolves to its `Nome`). The `Documento` is generated even if the user skips naming.

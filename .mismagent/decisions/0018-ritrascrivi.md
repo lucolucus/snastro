@@ -323,7 +323,7 @@ changes: AC-429 already states this.
   (`completata` and `fallita` stay the only terminal states). An `in_attesa` row has produced
   nothing: no Trascritto, no published event, no reference from any other table. Removing it
   therefore loses no history, like the physical deletion of an unreferenced `occasionale` ([INV-25],
-  tactical R25). This is the only physical deletion of an `Elaborazione`.
+  tactical R25). This is the only physical deletion of an `Elaborazione`. *(Amended 2026-09-25, [ADR 0020](0020-elimina-registrazione.md): `EliminaRegistrazione` also deletes every `Elaborazione` of the deleted `Registrazione`, after its veto on open ones — `Elaborazione.sq eliminaDiRegistrazione`.)*
   - The Registrazione returns to the state derived from its **remaining** latest Elaborazione:
     `NON_AVVIATA` if none is left (a cancelled first "Trascrivi"); `COMPLETATA` with its old
     Trascritto (a cancelled "Ritrascrivi"); `FALLITA` (a cancelled "Riprova", or a cancelled re-run
