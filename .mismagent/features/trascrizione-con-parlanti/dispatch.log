@@ -733,3 +733,34 @@
 2026-09-24T19:06:14Z	restyle-shell-elenchi	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (2 HIGH: footer claims Modelli pronti always; close-project hidden behind chevron row)
 2026-09-24T19:06:14Z	restyle-shell-elenchi	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: 2 HIGH + verifier ACs + composer visual + MED
 2026-09-24T19:06:14Z	restyle-shell-elenchi	composer	pre-release	-	-	-	LOW loading states still CircularProgressIndicator (not sunken rows); S4 empty plain text; GlifiVietatiTest comment stripper blanks https:// in strings; BottonePlay (kit) lacks accessible name/tooltip
+2026-09-24T19:50:37Z	restyle-shell-elenchi	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 3d8b64e
+2026-09-24T19:50:37Z	restyle-shell-elenchi	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T19:50:37Z	restyle-shell-elenchi	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T19:54:05Z	restyle-shell-elenchi	verifier	result	cycle=1	tier=deep	model=opus	FAIL (AC-574 header caption untested)
+2026-09-24T19:54:05Z	restyle-shell-elenchi	code-review	result	cycle=1	tier=deep	model=opus	CHANGES (1 HIGH: R2 footer→S5 from Parlanti does nothing + corrupts next nav)
+2026-09-24T19:54:05Z	restyle-shell-elenchi	worker	dispatch	cycle=2	tier=deep	model=opus	LAST cycle
+2026-09-24T19:54:05Z	restyle-shell-elenchi	composer	pre-release	-	-	-	MED S2/S4 plain Column (no virtualisation) — reintroduce LazyColumn if volumes grow; LOW DropdownMenu focus not returned to More; Edit has no visible edit state; no drop feedback when list non-empty
+2026-09-24T20:00:01Z	restyle-registrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 390de8c
+2026-09-24T20:00:01Z	restyle-registrazione	verifier	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T20:00:01Z	restyle-registrazione	code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-24T20:00:10Z	restyle-registrazione	composer	note	cycle=0	-	-	composer visual check: good match; two Primario (È Marco, È Giulia) on one screen — only the first unnamed card (or none) should be Primario
+2026-09-24T20:05:45Z	restyle-registrazione	verifier	result	cycle=0	tier=deep	model=opus	FAIL (ac-coverage: AC-580/582/583/584/585/587/588/589b untested; lanes/stacking unasserted)
+2026-09-24T20:05:45Z	restyle-registrazione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES (4 HIGH: dead Ritrascrivi menu; Unisci con lost on unnamed cards; AC-213 nuovoEvidenziato ignored; pin hidden on consecutive segments)
+2026-09-24T20:05:45Z	restyle-registrazione	worker	dispatch	cycle=1	tier=standard	model=sonnet	rework: 4 HIGH + MED + AC tests
+2026-09-24T20:05:45Z	restyle-registrazione	composer	pre-release	-	-	-	LOW S3: breadcrumb static until a back callback exists; AC-587 preview rows plain presenter strings; stacked 1024 layout gives transcript ~150dp
+2026-09-24T20:08:28Z	restyle-shell-elenchi	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW 46f4669
+2026-09-24T20:08:28Z	restyle-shell-elenchi	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T20:08:28Z	restyle-shell-elenchi	code-review	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T20:10:09Z	restyle-shell-elenchi	code-review	result	cycle=2	tier=deep	model=opus	APPROVE (0 HIGH)
+2026-09-24T20:10:09Z	restyle-shell-elenchi	composer	pre-release	-	-	-	MED CampoData: no tests for Esc / blur-unchanged; LOW AC-574 pixel check light only; focus lost after date edit; same-date different-format text not normalised; S5 from S3 then Registrazioni goes to list (S3 not restored)
+2026-09-24T20:13:08Z	restyle-shell-elenchi	verifier	result	cycle=2	tier=deep	model=opus	PASS — D1 green; merge HELD for user PNG approval
+2026-09-24T20:58:36Z	restyle-registrazione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 0fa7c66
+2026-09-24T20:58:36Z	restyle-registrazione	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T20:58:36Z	restyle-registrazione	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T21:00:39Z	restyle-registrazione	code-review	result	cycle=1	tier=deep	model=opus	APPROVE (0 HIGH)
+2026-09-24T21:00:39Z	restyle-registrazione	composer	pre-release	-	-	-	MED S3: named card More shows Cambia/Nuova persona enabled while a command is pending (dead items, presenter drops them); wrong KDoc + unrealistic fixture soloLettura+unioneAbilitata; selected+confirmed consecutive row loses pin; LOW Applica/Crea can coexist with a disabled Primario; glyph test should assert non-empty file list; un-solo-primario fixture misleading; checked box label says Seleziona
+2026-09-24T21:01:33Z	restyle-registrazione	verifier	result	cycle=1	tier=deep	model=opus	PASS — D1 green; merge HELD for user approval
+2026-09-24T21:05:06Z	(restyle A)	decision	result	-	-	-	USER approved wave-16 render (preview/restyle, gate green on the combination)
+2026-09-24T21:05:06Z	restyle-shell-elenchi	composer	merge	cycle=2	-	-	MERGED
+2026-09-24T21:05:06Z	restyle-registrazione	composer	merge	cycle=1	-	-	MERGED — restyle part A complete
+2026-09-24T21:05:06Z	(restyle A)	composer	pending	-	-	-	follow-up owed by AC-589b: widen the glyph test to all of :ui src/main (comment-stripping) — small, not yet done
