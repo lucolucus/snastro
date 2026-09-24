@@ -118,6 +118,28 @@ class RegistrazioneIdentificazioneTest {
     }
 
     @Test
+    fun `L665a un ricaricamento fallito mantiene l ultimo nome buono, non lo wipe a Voce n`() = runTest {
+        val a = ambiente().apply {
+            identificate = listOf(VoceIdentificata(V1, MARCO.parlanteId, "Marco", TipoParlanteVista.RICORRENTE))
+        }
+        val presenter = avvia(a)
+        advanceUntilIdle()
+        assertEquals("Marco", presenter.dati.segmenti.first { it.voceId == V1 }.etichettaVoce)
+        assertEquals(listOf(GIULIA, MARCO), presenter.dati.pannello?.parlantiAttivi)
+
+        // AC-319-style: a Cambiamento re-triggers ricaricaParlanti(); this time the read fails.
+        a.identificazioneRotta = true
+        a.aggiornamenti.emetti(Cambiamento(REG))
+        advanceUntilIdle()
+
+        // (rework cycle 1, MED / L665a): the failed reload keeps the LAST GOOD data — the Nome and the
+        // roster survive; only the card-level content (checked elsewhere) shows the read error.
+        assertEquals("Marco", presenter.dati.segmenti.first { it.voceId == V1 }.etichettaVoce)
+        assertEquals(listOf(GIULIA, MARCO), presenter.dati.pannello?.parlantiAttivi)
+        assertEquals(ContenutoCarta.Errore(MESSAGGIO_ERRORE_VOCI), presenter.carta(V1).contenuto)
+    }
+
+    @Test
     fun `AC-405 le etichette mostrano il Nome attribuito al posto di Voce n`() = runTest {
         val a = ambiente().apply {
             identificate = listOf(

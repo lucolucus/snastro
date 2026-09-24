@@ -166,7 +166,11 @@ internal class StatoVoci(
         // still reading) writes nothing at all — not `dati`, not `erroreLettura`, no publish, no Proposta
         // job — whatever the outcome of its own read.
         if (generazione != generazioneParlanti) return
-        dati = nuovi
+        // (rework cycle 1, MED): a FAILED read keeps the last good `dati` — Nomi, `parlantiAttivi` and
+        // the toolbar all read off it (`nomeDi`, `pannelloDi`) — instead of wiping it to `null` and
+        // reverting every label to "Voce n" and every roster-driven control to empty/disabled. The
+        // card-level `Errore` (`contenutoDi`) still shows, since `erroreLettura` is unconditional below.
+        if (!fallito) dati = nuovi
         erroreLettura = fallito
         pubblica()
         // AC-454: no Proposta job while read-only — it would only wait on the native Mutex held by the

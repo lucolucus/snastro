@@ -73,12 +73,27 @@ class RegistrazionePresenter(
     private val _stato = MutableStateFlow<RegistrazioneUiStato>(RegistrazioneUiStato.Caricamento)
     val stato: StateFlow<RegistrazioneUiStato> = _stato.asStateFlow()
 
-    // L573a: the ONE Job of whichever `lettore` command (segmento/estratto/pausa/header-play) is still
-    // in flight — a later one always cancels an earlier one still running, so two quick clicks resolve
-    // in CLICK order rather than in whatever order their `withContext(io) { … }` happens to finish (the
-    // same supersession `LettorePresenter`'s own HIGH-1 fix already gives its single shared instance;
-    // here `lettore` is reached directly, so the guard is repeated at this call site).
+    // L573a (rework cycle 1, HIGH): every `lettore` command runs on this ONE lane, never on the full
+    // (possibly multi-threaded) `io` — a real port implementation can decode with ffmpeg for seconds
+    // (AC-241), so two real calls on plain `io` could run CONCURRENTLY and finish in either order,
+    // exactly the race `LettorePresenter`'s own HIGH-1 fix closed for its single shared instance. Here
+    // `lettore` is reached directly, so the same single-lane guard is repeated at this call site.
+    private val ioLettore: CoroutineDispatcher = io.limitedParallelism(1)
+
+    // The ONE Job of whichever `lettore` command (segmento/estratto/pausa/header-play) is still in
+    // flight — a later one always cancels an earlier one that has NOT yet started (still queued for
+    // the lane above), so a click that hasn't reached the port at all is dropped outright rather than
+    // firing late. Once a command HAS started, the lane alone (not cancellation) is what keeps a later
+    // one from running concurrently with it — cancelling it back cannot interrupt a port call already
+    // in flight (a plain, non-suspending call has no suspension point to cancel at), but the lane makes
+    // the later command simply WAIT its turn instead of racing it.
     private var comandoLettoreInCorso: Job? = null
+
+    // L573b: `true` from a THROWN `lettore.disponibile()` (never from a clean `false`) until a real
+    // `lettore.stato` tick for THIS Registrazione arrives (`rifletti`) settles the question. Read by
+    // [barraDi] — never part of [RegistrazioneUiStato.Dati] itself, since it is a presenter-private
+    // "we don't actually know yet", not a datum the view needs to carry.
+    private var disponibilitaIncerta = false
 
     // R2 (schermata-registrazione-identificazione): the Voci panel, the Nome labels, the selection
     // toolbar and the Revisione commands — absent in R1 (AC-402), so nothing of it runs there.
@@ -112,12 +127,22 @@ class RegistrazionePresenter(
             }
             // L573b: `documento()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
             // to fall into the same catch below as `trascritto()` and take the WHOLE screen to `Errore`,
-            // discarding the vista just read. Neither is essential the way `trascritto()` is: a missing
-            // Documento just keeps 'Apri documento' disabled (same as `documento()` returning `null`), a
-            // failed `disponibile` just reads as "audio missing" (same as it legitimately returning
-            // `false`) — the transcript itself stays readable either way (AC-217/AC-218).
+            // discarding the vista just read. `documento()` is the simpler of the two: `null` is already
+            // its own legitimate "not resolved yet" value (AC-218 disables 'Apri documento'/'Mostra
+            // nella cartella' the same way, no separate signal is worth adding), so a thrown call is
+            // folded into that same `null` by [documentoOSicuro] — never a silent swallow, just no extra
+            // state for a fault that already has a safe, defined UI.
             val percorso = documentoOSicuro()
-            val disponibile = disponibileOSicuro()
+            // `lettore.disponibile()` is NOT folded the same way: a THROWN call says nothing about the
+            // source itself (unlike a clean `false`), so it must not look like "audio non disponibile"
+            // (which disables retry). [disponibileOSicuro] tells the two apart; a throw sets
+            // [disponibilitaIncerta] instead, [barraDi] maps THAT to the lettore's transient `Errore`
+            // state (play stays enabled) and [audioDisponibile] below stays `true` so a retry click is
+            // never blocked. `disponibilitaIncerta` clears itself once a real `lettore.stato` tick for
+            // THIS Registrazione arrives (`rifletti`) and settles the question.
+            val disponibileEsito = disponibileOSicuro()
+            disponibilitaIncerta = disponibileEsito == null
+            val disponibile = disponibileEsito ?: true
             val statoLettore = lettore.stato.value
             val soloLettura = soloLetturaDi(withContext(io) { stati?.invoke() })
             voci?.vista = vista
@@ -157,16 +182,17 @@ class RegistrazionePresenter(
         null
     }
 
-    // L573b: `lettore.disponibile()` degraded to `false` (same as it legitimately reporting no source) —
-    // the header bar reads "audio non disponibile" instead of taking the whole screen to Errore.
-    private suspend fun disponibileOSicuro(): Boolean = try {
+    // L573b: `null` means the call THREW (told apart from a clean `false`, see `carica()`) — the whole
+    // screen never goes to Errore for this, but a thrown call must not read as "confirmed unavailable"
+    // either.
+    private suspend fun disponibileOSicuro(): Boolean? = try {
         withContext(io) { lettore.disponibile(registrazioneId) }
     } catch (e: CancellationException) {
         throw e
     } catch (
         @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
     ) {
-        false
+        null
     }
 
     /** Retries the initial load after [RegistrazioneUiStato.Errore] — shows [RegistrazioneUiStato.Caricamento]
@@ -205,7 +231,11 @@ class RegistrazionePresenter(
     private fun inRiproduzione(inizioMs: Long, fineMs: Long, s: StatoLettore): Boolean =
         s.registrazioneId == registrazioneId && s.posizioneMs in inizioMs until fineMs
 
+    // L573b: `disponibilitaIncerta` wins over `disponibile` — a thrown `lettore.disponibile()` must
+    // read as a retry-enabled `Errore`, never as the retry-disabled `NonDisponibile` a clean `false`
+    // gets.
     private fun barraDi(s: StatoLettore, disponibile: Boolean): LettoreUiStato = when {
+        disponibilitaIncerta -> LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
         !disponibile -> LettoreUiStato.NonDisponibile(MESSAGGIO_AUDIO_NON_DISPONIBILE)
         s.registrazioneId == registrazioneId -> LettoreUiStato.Pronto(s.posizioneMs, s.inRiproduzione)
         else -> LettoreUiStato.Inattivo
@@ -213,8 +243,10 @@ class RegistrazionePresenter(
 
     // AC-217/AC-343-style: `disponibile` is checked once in `carica()` and kept STICKY here
     // (`Dati.audioDisponibile`) — every later tick of `lettore.stato` only reflects position/play-pause,
-    // never re-decides availability.
+    // never re-decides availability. L573b: a tick that actually reports THIS Registrazione settles
+    // `disponibilitaIncerta` — the port just proved it can talk about this source either way.
     private fun rifletti(s: StatoLettore) = aggiornaDati { dati ->
+        if (s.registrazioneId == registrazioneId) disponibilitaIncerta = false
         dati.copy(
             barra = barraDi(s, dati.audioDisponibile),
             segmenti = dati.segmenti.map { seg ->
@@ -258,9 +290,9 @@ class RegistrazionePresenter(
     // H2: every port call this presenter fires off the main flow runs here, wrapped the same way as
     // every other presenter in this codebase (RegistrazioniPresenter/LettorePresenter) — a fault never
     // escapes `scope.launch` and takes the `stato`/`lettore.stato` collectors down with it.
-    private fun avvia(operazione: () -> Unit): Job = scope.launch {
+    private fun eseguiSuLane(dispatcher: CoroutineDispatcher, operazione: () -> Unit): Job = scope.launch {
         try {
-            withContext(io) { operazione() }
+            withContext(dispatcher) { operazione() }
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -270,15 +302,17 @@ class RegistrazionePresenter(
         }
     }
 
-    // L573a: every command that reaches the shared `lettore` (segmento/estratto/pausa/header-play) goes
-    // through this ONE Job — a new one always cancels whatever is still running, so two quick clicks
-    // resolve in click order. Cancelling alone cannot interrupt a port call already in flight (a plain,
-    // non-suspending call has no suspension point to cancel at), but it DOES stop an earlier command
-    // that has not started its own `withContext(io)` block yet, and `avvia`'s own error handling still
-    // runs for whichever command actually reaches the end.
+    private fun avvia(operazione: () -> Unit): Job = eseguiSuLane(io, operazione)
+
+    // L573a: every command that reaches the shared `lettore` (segmento/estratto/pausa/header-play) runs
+    // on [ioLettore] (the single lane), never on the plain, possibly multi-threaded [io] — click order
+    // is enforced by the LANE, not by cancellation. Cancellation only drops a command that is still
+    // queued (not yet started): a new one always cancels whatever Job is recorded here, so a click that
+    // never reached the port at all is skipped outright, exactly the fix `LettorePresenter`'s own
+    // HIGH-1 already applies for its single shared instance.
     private fun avviaLettore(operazione: () -> Unit) {
         comandoLettoreInCorso?.cancel()
-        comandoLettoreInCorso = avvia(operazione)
+        comandoLettoreInCorso = eseguiSuLane(ioLettore, operazione)
     }
 
     /** AC-403: '▶ estratto' of a Voce card — a no-op while the audio source is missing. */

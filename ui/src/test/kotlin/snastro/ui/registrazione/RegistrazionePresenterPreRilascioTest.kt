@@ -2,9 +2,12 @@ package snastro.ui.registrazione
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -20,12 +23,18 @@ import snastro.ui.ApriEsterno
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreAudioFinta
+import snastro.ui.lettore.LettoreUiStato
 import snastro.ui.lettore.StatoLettore
 import java.time.LocalDate
+import java.util.Collections
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private val REG_1 = RegistrazioneId("id-1")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
@@ -118,6 +127,81 @@ class RegistrazionePresenterPreRilascioTest {
     }
 
     @Test
+    fun `L573a HIGH un play lento su un dispatcher reale non perde una pausa arrivata subito dopo`() {
+        val eseguitori = Executors.newFixedThreadPool(4)
+        val ioReale = eseguitori.asCoroutineDispatcher()
+        try {
+            val entrataPlay = CountDownLatch(1)
+            val viaLiberaPlay = CountDownLatch(1)
+            val chiamate = Collections.synchronizedList(mutableListOf<String>())
+            val fake = object : LettoreAudio {
+                private val _stato = MutableStateFlow(StatoLettore(null, 0, false))
+                override val stato: StateFlow<StatoLettore> = _stato.asStateFlow()
+
+                override fun disponibile(id: RegistrazioneId) = true
+
+                override fun riproduciDa(id: RegistrazioneId, daMs: Long) {
+                    chiamate += "play"
+                    entrataPlay.countDown()
+                    // Simulates a real, SLOW port call (ffmpeg-backed decode, AC-241) — on the real,
+                    // multi-threaded `io` this presenter used to be given directly, `pausa`'s own call
+                    // could run CONCURRENTLY with this one, or even finish FIRST. The single lane
+                    // (rework cycle 1, HIGH), not cancellation, is what must keep them in click order.
+                    assertTrue(viaLiberaPlay.await(5, TimeUnit.SECONDS), "timeout in attesa del via libera")
+                    _stato.value = StatoLettore(id, daMs, inRiproduzione = true)
+                }
+
+                override fun riproduciEstratto(e: EstrattoRef): Nothing = error("non usato in questo test")
+
+                override fun pausa() {
+                    chiamate += "pausa"
+                    _stato.update { it.copy(inRiproduzione = false) }
+                }
+            }
+            val scope = CoroutineScope(SupervisorJob() + ioReale)
+            val presenter = RegistrazionePresenter(
+                scope,
+                ioReale,
+                REG_1,
+                trascritto = { unaVista(listOf(unSegmento(SegmentoId(1), 0, 1_000))) },
+                documento = { null },
+                lettore = fake,
+                apriEsterno = ApriEsternoFinta(),
+            )
+            attendi { presenter.stato.value is RegistrazioneUiStato.Dati }
+
+            presenter.azioni.riproduciSegmento(SegmentoId(1))
+            assertTrue(entrataPlay.await(5, TimeUnit.SECONDS), "il play non e entrato in riproduciDa")
+
+            // `pausa` arrives WHILE the play call is still blocked inside `riproduciDa`, on a real
+            // thread pool.
+            presenter.azioni.pausa()
+            viaLiberaPlay.countDown()
+
+            attendi { chiamate == listOf("play", "pausa") }
+            // HIGH: the final state must be paused — a lost pause (play winning late, or the two
+            // racing) would leave `inRiproduzione = true` here.
+            attendi {
+                val barra = (presenter.stato.value as? RegistrazioneUiStato.Dati)?.barra
+                barra is LettoreUiStato.Pronto && !barra.inRiproduzione
+            }
+            assertEquals(listOf("play", "pausa"), chiamate)
+        } finally {
+            eseguitori.shutdownNow()
+        }
+    }
+
+    /** Polls (real wall-clock, no virtual time here — a real dispatcher backs this test). */
+    private fun attendi(timeoutMs: Long = 5_000, condizione: () -> Boolean) {
+        val scadenza = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
+        while (System.nanoTime() < scadenza) {
+            if (condizione()) return
+            Thread.sleep(10)
+        }
+        error("timeout in attesa della condizione")
+    }
+
+    @Test
     fun `L573b un guasto di documento non impedisce il caricamento del trascritto`() = runTest {
         val presenter = presentatore(this, documento = { error("guasto simulato di documento") })
         advanceUntilIdle()
@@ -128,26 +212,41 @@ class RegistrazionePresenterPreRilascioTest {
     }
 
     @Test
-    fun `L573b un guasto di lettore disponibile degrada ad audio non disponibile, non a Errore`() = runTest {
-        val lettore = object : LettoreAudio {
-            private val _stato = MutableStateFlow(StatoLettore(null, 0, false))
-            override val stato: StateFlow<StatoLettore> = _stato.asStateFlow()
+    fun `L573b un guasto di lettore disponibile e Errore transitoria, non NonDisponibile, e resta riprovabile`() =
+        runTest {
+            val lettore = object : LettoreAudio {
+                private val _stato = MutableStateFlow(StatoLettore(null, 0, false))
+                override val stato: StateFlow<StatoLettore> = _stato.asStateFlow()
 
-            override fun disponibile(id: RegistrazioneId): Boolean = error("guasto simulato di disponibile")
+                override fun disponibile(id: RegistrazioneId): Boolean = error("guasto simulato di disponibile")
 
-            override fun riproduciDa(id: RegistrazioneId, daMs: Long) = Unit
+                override fun riproduciDa(id: RegistrazioneId, daMs: Long) {
+                    _stato.value = StatoLettore(id, daMs, inRiproduzione = true)
+                }
 
-            override fun riproduciEstratto(e: EstrattoRef): Nothing = error("non usato in questo test")
+                override fun riproduciEstratto(e: EstrattoRef): Nothing = error("non usato in questo test")
 
-            override fun pausa() = Unit
+                override fun pausa() = Unit
+            }
+            val presenter = presentatore(this, lettore = lettore)
+            advanceUntilIdle()
+
+            // (rework cycle 1, MED): a THROWN disponibile() says nothing about the source itself — it
+            // must not read as "confirmed unavailable" (NonDisponibile disables retry). Errore keeps the
+            // control enabled, and `audioDisponibile` stays `true` so a click actually reaches the port.
+            val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
+            assertEquals(true, dati.audioDisponibile)
+            assertIs<LettoreUiStato.Errore>(dati.barra)
+            assertEquals(1, dati.segmenti.size)
+
+            // The retry: since audioDisponibile is true, the click is not swallowed at the guard.
+            presenter.azioni.riproduciSegmento(SegmentoId(1))
+            advanceUntilIdle()
+            assertEquals(StatoLettore(REG_1, 0, inRiproduzione = true), lettore.stato.value)
+            // A real tick for THIS Registrazione settles the question — the bar now shows it plainly.
+            val dopo = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
+            assertIs<LettoreUiStato.Pronto>(dopo.barra)
         }
-        val presenter = presentatore(this, lettore = lettore)
-        advanceUntilIdle()
-
-        val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
-        assertEquals(false, dati.audioDisponibile)
-        assertEquals(1, dati.segmenti.size)
-    }
 
     @Test
     fun `L573d l evidenziazione resta sulla posizione anche dopo la pausa`() = runTest {
