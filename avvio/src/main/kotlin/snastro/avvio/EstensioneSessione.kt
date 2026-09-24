@@ -38,9 +38,12 @@ internal interface ProgettoEsteso {
     val aggiornamenti: AggiornamentiVista
 
     /**
-     * Blocking stop, called by [SessioneProgettoImpl.chiudi] AFTER the session scope was cancelled and
-     * BEFORE the database is closed: waits (bounded) for every background worker still touching the
-     * database to unwind. Never throws on a timeout.
+     * Blocking stop, called by [SessioneProgettoImpl.chiudi] (off the UI thread) AFTER the session
+     * scope was cancelled: waits (bounded) for every background worker still touching the database to
+     * unwind, then runs [poi] — the database close and the `.lock` release. fix-batch-16 MED-1: [poi]
+     * runs right away only if every worker actually ended in time; otherwise it is DEFERRED to the end
+     * of the last one still alive (a native call ignores the interrupt), never run under a live worker.
+     * [poi] runs exactly once. Never throws on a timeout.
      */
-    fun ferma()
+    fun ferma(poi: () -> Unit)
 }

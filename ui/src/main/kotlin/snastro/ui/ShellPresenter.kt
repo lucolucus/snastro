@@ -99,8 +99,29 @@ class ShellPresenter(
         }
     }
 
+    /**
+     * fix-batch-16 MED-1(a): `sessione.chiudi` blocks (bounded) while the project's background work stops
+     * — never on the UI thread: it runs on [io], [ShellUiStato.Caricamento] shown meanwhile, and the
+     * `finally` never leaves the state stuck there (the collector normally already moved it to S1).
+     * Ignored while another apri/crea/chiudi is in flight (M3).
+     */
     fun chiudi() {
-        sessione.chiudi()
+        if (_stato.value is ShellUiStato.Caricamento || operazioneInCorso?.isActive == true) return
+        operazioneInCorso = scope.launch {
+            _stato.value = ShellUiStato.Caricamento
+            try {
+                withContext(io) { sessione.chiudi() }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                // AC-347 says chiudi never throws; if it ever does, the same fixed message as M1(b).
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                _stato.value = statoConErrore(MESSAGGIO_ERRORE_GENERICO)
+            } finally {
+                if (_stato.value is ShellUiStato.Caricamento) _stato.value = statoDi(sessione.corrente.value)
+            }
+        }
     }
 
     /** H1: dismisses the current state's `erroreApertura` banner, if any. */

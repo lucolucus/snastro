@@ -3,8 +3,12 @@ package snastro.ui
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -12,9 +16,14 @@ import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
+import java.util.concurrent.Callable
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 private val OGNI_SEZIONE = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
 
@@ -41,6 +50,22 @@ private class SessioneProgettoContaChiamate(private val delegato: SessioneProget
     override fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto> {
         chiamateCrea++
         return delegato.crea(cartellaGenitore, nome)
+    }
+}
+
+/**
+ * fix-batch-16 MED-1(a): a [SessioneProgetto] whose `chiudi` blocks (like the real one waiting for a
+ * running Elaborazione to stop) until [sblocca] opens — a hand-written fake by delegation (RC-9).
+ */
+private class SessioneProgettoCheChiudeLentamente(private val delegato: SessioneProgetto = SessioneProgettoFinta()) :
+    SessioneProgetto by delegato {
+    val chiudiIniziato = CountDownLatch(1)
+    val sblocca = CountDownLatch(1)
+
+    override fun chiudi() {
+        chiudiIniziato.countDown()
+        sblocca.await()
+        delegato.chiudi()
     }
 }
 
@@ -213,5 +238,71 @@ class ShellPresenterTest {
 
         val stato = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
         assertEquals(DestinazioneShell.PARLANTI, stato.destinazioneSelezionata)
+    }
+
+    // --- fix-batch-16 MED-1(a): chiudi never blocks the UI dispatcher, never sticks in Caricamento ---
+
+    @Test
+    fun `fix-batch-16 chiudi non blocca il dispatcher della UI, mostra Caricamento e poi torna a S1`() {
+        val esecutoreUi = Executors.newSingleThreadExecutor()
+        val esecutoreIo = Executors.newSingleThreadExecutor()
+        val scope = CoroutineScope(SupervisorJob() + esecutoreUi.asCoroutineDispatcher())
+        val sessione = SessioneProgettoCheChiudeLentamente()
+        try {
+            val presenter = ShellPresenter(scope, esecutoreIo.asCoroutineDispatcher(), sessione, OGNI_SEZIONE)
+            scope.launch { presenter.crea("/tmp", "Riunione") }
+            attendiFinche { presenter.stato.value is ShellUiStato.ConProgetto }
+
+            scope.launch { presenter.chiudi() } // from the UI thread, like the view's click
+            assertTrue(sessione.chiudiIniziato.await(ATTESA_S, TimeUnit.SECONDS))
+
+            // sessione.chiudi is still blocked: the UI thread must be free to run anything else (a timed
+            // get, never a coroutine probe — that would itself wait on a blocked UI thread forever).
+            val statoLettoDallaUi = esecutoreUi.submit(Callable { presenter.stato.value })
+            assertEquals(ShellUiStato.Caricamento, statoLettoDallaUi.get(ATTESA_UI_MS, TimeUnit.MILLISECONDS))
+
+            sessione.sblocca.countDown()
+            attendiFinche { presenter.stato.value == ShellUiStato.SenzaProgetto() }
+        } finally {
+            sessione.sblocca.countDown()
+            scope.cancel()
+            esecutoreUi.shutdownNow()
+            esecutoreIo.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `fix-batch-16 chiudi senza un cambio di corrente non lascia lo stato bloccato in Caricamento`() = runTest {
+        // Nothing open: `corrente` stays null, its collector never re-emits — only the finally frees the state.
+        val presenter = presentatore(this)
+        presenter.chiudi()
+        advanceUntilIdle()
+        assertEquals(ShellUiStato.SenzaProgetto(), presenter.stato.value)
+    }
+
+    @Test
+    fun `fix-batch-16 un chiudi che lancia mostra l errore generico e non resta in Caricamento`() = runTest {
+        val sessione = object : SessioneProgetto by SessioneProgettoFinta() {
+            override fun chiudi() = error("boom")
+        }
+        val presenter = presentatore(this, sessione = sessione)
+        presenter.chiudi()
+        advanceUntilIdle()
+        assertEquals(ShellUiStato.SenzaProgetto(erroreApertura = MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+    }
+
+    private fun attendiFinche(condizione: () -> Boolean) {
+        val scadenza = System.currentTimeMillis() + ATTESA_S * MS_PER_S
+        while (!condizione()) {
+            check(System.currentTimeMillis() < scadenza) { "timeout in attesa dello stato atteso" }
+            Thread.sleep(PASSO_MS)
+        }
+    }
+
+    private companion object {
+        const val ATTESA_S = 5L
+        const val ATTESA_UI_MS = 1_000L
+        const val MS_PER_S = 1_000L
+        const val PASSO_MS = 10L
     }
 }

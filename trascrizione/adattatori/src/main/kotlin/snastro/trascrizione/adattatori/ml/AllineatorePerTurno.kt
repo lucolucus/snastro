@@ -37,6 +37,13 @@ import snastro.trascrizione.applicazione.porte.Vad
  *    dell'sovrapposizione possono comparire in più Segmenti, e sono tutte conservate.
  * 10. L'uscita è ordinata per (`inizio`, `voceIndice`, `fine`) ed è deterministica; l'Allineatore non
  *     numera Voci né Segmenti (compito di `Trascritto.crea`).
+ *
+ * **Arresto cooperativo (fix-batch-16 MED-1).** Prima di ogni turno e di ogni chiamata al
+ * riconoscitore controlla il flag di interruzione del thread: se impostato (il worker della pipeline è
+ * stato cancellato, es. chiudendo il progetto) lancia [InterruptedException] — che la pipeline
+ * rilancia, mai una `fallita` — invece di proseguire con la chiamata nativa successiva. Una pipeline
+ * orfana si ferma così entro un pezzo (al più [DURATA_MASSIMA_CHIAMATA_MS] di audio). La singola
+ * chiamata nativa in corso, e la diarizzazione intera, non sono interrompibili.
  */
 public class AllineatorePerTurno(
     private val riconoscitore: RiconoscitoreParlato,
@@ -73,12 +80,21 @@ public class AllineatorePerTurno(
 
     /** Un [SegmentoGrezzo] per turno unito (regola 8), o `null` se il suo testo risulta vuoto (regola 7). */
     private fun segmentoDi(campioni: CampioniAudio, turno: Turno): SegmentoGrezzo? {
+        fermatiSeInterrotto()
         val testo = pezziDi(campioni, turno)
             .filter { it.durataMs >= DURATA_MINIMA_CHIAMATA_MS } // regola 4
-            .map { riconoscitore.riconosci(taglio(campioni, it)).testo.trim() } // regole 5, 6 (token ignorato)
+            .map { pezzo ->
+                fermatiSeInterrotto()
+                riconoscitore.riconosci(taglio(campioni, pezzo)).testo.trim() // regole 5, 6 (token ignorato)
+            }
             .filter { it.isNotBlank() }
             .joinToString(" ") // regola 6: un solo spazio, ordine di tempo
         return testo.takeIf { it.isNotBlank() }?.let { SegmentoGrezzo(turno.voceIndice, turno.intervallo, it) }
+    }
+
+    /** Arresto cooperativo: la chiamata nativa successiva non parte se il worker e' stato interrotto. */
+    private fun fermatiSeInterrotto() {
+        if (Thread.currentThread().isInterrupted) throw InterruptedException("allineamento interrotto")
     }
 
     /**

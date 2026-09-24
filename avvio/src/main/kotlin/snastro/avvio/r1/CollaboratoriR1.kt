@@ -11,6 +11,7 @@ import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.ui.AggiornamentiVista
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.logging.Logger
 
 /**
@@ -37,16 +38,35 @@ internal class CollaboratoriR1(
 
     /**
      * Carry-over 1: called after the session scope was cancelled (which already cancelled both
-     * workers), before the database closes — waits for each to actually unwind, bounded.
+     * workers, interrupting the pipeline thread) — waits for each to actually unwind, bounded.
+     *
+     * fix-batch-16 MED-1: the interrupt is only a request. The Allineatore honours it between two ASR
+     * chunks (at most ~25 s of audio), but the diarization is ONE long native call that cannot be
+     * interrupted: closing during it lets it finish in the background. So when a worker outlives the
+     * bound, [poi] (the database close + `.lock` release) is deferred to [Job.invokeOnCompletion] of
+     * the last worker still alive — never a database closed under it; until then a reopen of this
+     * project gets 'progetto gia' aperto', which is the honest answer.
      */
-    override fun ferma() {
-        if (!coda.fermaEAttendi(TIMEOUT_ARRESTO_MS)) log.warning("la coda non si e' fermata in tempo")
+    override fun ferma(poi: () -> Unit) {
+        if (!coda.fermaEAttendi(TIMEOUT_ARRESTO_MS)) {
+            log.warning("la coda non si e' fermata in tempo: il database si chiudera' alla sua fine")
+        }
         val fermato = runBlocking { withTimeoutOrNull(TIMEOUT_ARRESTO_MS) { lavoroDocumento.join() } != null }
         if (!fermato) log.warning("la rigenerazione del documento non si e' fermata in tempo")
+        dopoLaFineDi(listOf(coda.lavoro, lavoroDocumento), poi)
     }
 
     private companion object {
         const val TIMEOUT_ARRESTO_MS = 5_000L
         val log: Logger = Logger.getLogger(CollaboratoriR1::class.java.name)
+
+        /**
+         * Runs [azione] once, when EVERY one of [lavori] has completed — synchronously, on this thread,
+         * if they all already have (`invokeOnCompletion` on a completed Job calls its handler at once).
+         */
+        fun dopoLaFineDi(lavori: List<Job>, azione: () -> Unit) {
+            val mancanti = AtomicInteger(lavori.size)
+            lavori.forEach { lavoro -> lavoro.invokeOnCompletion { if (mancanti.decrementAndGet() == 0) azione() } }
+        }
     }
 }

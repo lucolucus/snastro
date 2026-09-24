@@ -12,6 +12,7 @@ import snastro.trascrizione.applicazione.porte.Vad
 import snastro.trascrizione.applicazione.porte.tonoDiProva
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -273,6 +274,38 @@ class AllineatorePerTurnoTest {
         assertEquals(1_500 * CAMPIONI_PER_MS, riconoscitore.chiamate.single().campioni.size)
     }
 
+    // --- fix-batch-16 MED-1(c) — arresto cooperativo tra un pezzo e l'altro -------------------------
+
+    @Test
+    fun `fix-batch-16 interrotto durante un pezzo, l Allineatore si ferma prima del pezzo successivo`() {
+        // Un turno di 60 s che il vad spezza in 3 pezzi da 20 s: la prima chiamata "riceve" l'interruzione.
+        val riconoscitore = RiconoscitoreCheInterrompe()
+        val vad = VadFissa(listOf(IntervalloMs(0, 20_000), IntervalloMs(20_000, 40_000), IntervalloMs(40_000, 60_000)))
+        try {
+            assertFailsWith<InterruptedException> {
+                AllineatorePerTurno(riconoscitore, vad)
+                    .allinea(tonoDiProva(60_000), listOf(Turno(IntervalloMs(0, 60_000), voceIndice = 0)))
+            }
+            assertEquals(1, riconoscitore.chiamate, "nessun pezzo dopo l'interruzione")
+        } finally {
+            Thread.interrupted() // mai lasciare il flag al thread del test
+        }
+    }
+
+    @Test
+    fun `fix-batch-16 interrotto durante un turno, l Allineatore non passa al turno successivo`() {
+        val riconoscitore = RiconoscitoreCheInterrompe()
+        val turni = listOf(Turno(IntervalloMs(0, 2_000), 0), Turno(IntervalloMs(3_000, 5_000), 1))
+        try {
+            assertFailsWith<InterruptedException> {
+                AllineatorePerTurno(riconoscitore, vadCheNonDeveEssereChiamato).allinea(tonoDiProva(5_000), turni)
+            }
+            assertEquals(1, riconoscitore.chiamate)
+        } finally {
+            Thread.interrupted()
+        }
+    }
+
     // --- AC-384 / regola 10 — ordine e determinismo -----------------------------------------------
 
     @Test
@@ -336,4 +369,19 @@ private class VadFissa(private val intervalli: List<IntervalloMs>) : Vad {
 /** Chiamarlo e' un errore del produttore: usato dove il turno e' <= 25000 ms e il Vad non deve intervenire. */
 private class VadCheNonDeveEssereChiamato : Vad {
     override fun parlato(c: CampioniAudio): List<IntervalloMs> = error("il Vad non doveva essere chiamato")
+}
+
+/**
+ * Come un riconoscimento nativo durante il quale il worker viene cancellato: la chiamata finisce
+ * normalmente (JNI ignora l'interruzione) ma lascia il flag di interruzione del thread impostato.
+ */
+private class RiconoscitoreCheInterrompe : RiconoscitoreParlato {
+    var chiamate = 0
+        private set
+
+    override fun riconosci(c: CampioniAudio): Riconoscimento {
+        chiamate++
+        Thread.currentThread().interrupt()
+        return Riconoscimento("parola$chiamate", null)
+    }
 }
