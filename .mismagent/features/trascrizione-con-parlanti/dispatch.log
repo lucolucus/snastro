@@ -723,3 +723,5 @@
 2026-09-24T17:59:13Z	stile-snastro	composer	pre-release	-	-	-	LOW RiduciMovimento: catch only IOException (SecurityException/InterruptedException escape the lazy); timeout result cached for the JVM; stdout stream not closed
 2026-09-24T18:01:23Z	stile-snastro	verifier	result	cycle=2	tier=deep	model=opus	PASS
 2026-09-24T18:01:23Z	stile-snastro	composer	merge	cycle=2	-	-	MERGED 2bdc1f5 — ui-kit live (palette(voceId, colori); LICENZE_CARATTERI to wire in :avvio by restyle-shell-elenchi)
+2026-09-24T18:01:32Z	restyle-shell-elenchi	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 16
+2026-09-24T18:01:32Z	restyle-registrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet	restyle part A wave 16
