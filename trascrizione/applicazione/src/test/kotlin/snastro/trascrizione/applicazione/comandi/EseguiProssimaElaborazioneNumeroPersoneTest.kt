@@ -47,8 +47,8 @@ class EseguiProssimaElaborazioneNumeroPersoneTest {
         val uow = eventi.unitaDiLavoro
         val servizio = EseguiProssimaElaborazioneServizio(uow, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)
 
-        servizio.esegui(EseguiProssimaElaborazione).atteso()
-        servizio.esegui(EseguiProssimaElaborazione).atteso()
+        servizio.esegui(EseguiProssimaElaborazione()).atteso()
+        servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
         assertEquals(listOf(quattro, null), diarizzatore.numeroPersoneRicevuti)
         val eseguita = elaborazioni.diRegistrazione(CON_4).single()
