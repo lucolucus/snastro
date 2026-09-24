@@ -1,8 +1,8 @@
 package snastro.parlanti.adattatori.ml
 
 import snastro.kernel.ParlanteId
-import snastro.parlanti.applicazione.porte.Classificazione
 import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianza
+import snastro.parlanti.applicazione.porte.Classificazione
 import snastro.parlanti.applicazione.porte.SoglieSomiglianza
 import snastro.parlanti.dominio.Impronta
 import kotlin.math.sqrt
@@ -23,7 +23,10 @@ import kotlin.math.sqrt
 public class ClassificatoreSomiglianzaCoseno(
     private val soglie: SoglieSomiglianza = SoglieSomiglianza(SIMILARITA_MINIMA, MARGINE_MINIMO),
 ) : ClassificatoreSomiglianza {
-    override fun classifica(riferimenti: Map<ParlanteId, List<Impronta>>, frasi: List<Impronta>): List<Classificazione> {
+    override fun classifica(
+        riferimenti: Map<ParlanteId, List<Impronta>>,
+        frasi: List<Impronta>,
+    ): List<Classificazione> {
         require(riferimenti.size >= 2) { "servono almeno 2 Parlanti di riferimento: ${riferimenti.size}" }
         require(riferimenti.values.all { it.isNotEmpty() }) { "ogni Parlante di riferimento ha almeno una impronta" }
         val centroidi = riferimenti.mapNotNull { (id, impronte) -> centroide(impronte)?.let { id to it } }
@@ -43,39 +46,47 @@ public class ClassificatoreSomiglianzaCoseno(
     /** L2-normalized mean of the comparable (finite, non-zero-norm) prints of [impronte]; `null` if none is. */
     private fun centroide(impronte: List<Impronta>): Impronta? {
         val normalizzate = impronte.mapNotNull { normalizza(it) }
-        val dimensione = normalizzate.firstOrNull()?.dimensione ?: return null
-        if (normalizzate.any { it.dimensione != dimensione }) return null
-        val somma = DoubleArray(dimensione)
-        for (v in normalizzate) for (i in 0 until dimensione) somma[i] += v[i]
-        return normalizza(Impronta(FloatArray(dimensione) { i -> (somma[i] / normalizzate.size).toFloat() }))
+        val dimensione = normalizzate.firstOrNull()?.dimensione
+        return if (dimensione == null || normalizzate.any { it.dimensione != dimensione }) {
+            null
+        } else {
+            val somma = DoubleArray(dimensione)
+            for (v in normalizzate) for (i in 0 until dimensione) somma[i] += v[i]
+            normalizza(Impronta(FloatArray(dimensione) { i -> (somma[i] / normalizzate.size).toFloat() }))
+        }
     }
 
     /** `null` when [i] is not comparable: empty, holds a non-finite value, or has a zero norm. */
     private fun normalizza(i: Impronta): Impronta? {
         if (i.dimensione == 0) return null
         var normaQuadrata = 0.0
+        var finita = true
         for (k in 0 until i.dimensione) {
             val v = i[k].toDouble()
-            if (!v.isFinite()) return null
+            if (!v.isFinite()) finita = false
             normaQuadrata += v * v
         }
-        if (normaQuadrata == 0.0) return null
-        val norma = sqrt(normaQuadrata)
-        return Impronta(FloatArray(i.dimensione) { k -> (i[k] / norma).toFloat() })
+        return if (!finita || normaQuadrata == 0.0) {
+            null
+        } else {
+            val norma = sqrt(normaQuadrata)
+            Impronta(FloatArray(i.dimensione) { k -> (i[k] / norma).toFloat() })
+        }
     }
 
-    /** Cosine of [a] against the already-unit-norm [centroide]; `null` on a dimension mismatch or a non-finite value. */
+    /** Cosine of [a] against the unit-norm [centroide]; `null` on a dimension mismatch or a non-finite value. */
     private fun coseno(a: Impronta, centroide: Impronta): Double? {
         if (a.dimensione == 0 || a.dimensione != centroide.dimensione) return null
         var prodotto = 0.0
         var normaA = 0.0
+        var finita = true
         for (k in 0 until a.dimensione) {
             val x = a[k].toDouble()
-            if (!x.isFinite()) return null
+            if (!x.isFinite()) finita = false
             prodotto += x * centroide[k]
             normaA += x * x
         }
-        return if (normaA == 0.0) null else prodotto / sqrt(normaA)
+        return if (!finita || normaA == 0.0) null else prodotto / sqrt(normaA)
     }
 
     public companion object {

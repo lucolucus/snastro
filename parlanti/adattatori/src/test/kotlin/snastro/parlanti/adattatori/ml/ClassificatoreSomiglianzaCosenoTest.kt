@@ -1,9 +1,9 @@
 package snastro.parlanti.adattatori.ml
 
 import snastro.kernel.ParlanteId
-import snastro.parlanti.applicazione.porte.Classificazione
 import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianza
 import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianzaContratto
+import snastro.parlanti.applicazione.porte.Classificazione
 import snastro.parlanti.applicazione.porte.SoglieSomiglianza
 import snastro.parlanti.dominio.Impronta
 import kotlin.math.acos
@@ -86,7 +86,7 @@ class ClassificatoreSomiglianzaCosenoTest : ClassificatoreSomiglianzaContratto()
         val aRif1 = Impronta(floatArrayOf(1f, 0f))
         val aRif2 = Impronta(floatArrayOf(0.6f, 0.8f))
         val angoloCentroideA = atan2(0.8, 1.6)
-        val frase = unitario(angoloCentroideA) // esattamente la direzione del centroide di A: cos(frase, centroideA) = 1.0
+        val frase = unitario(angoloCentroideA) // direzione del centroide di A: cos(frase, centroideA) = 1.0
 
         // bRif e a coseno 0.90 dalla frase — piu vicino alla frase di quanto lo sia OGNUNO dei due
         // riferimenti singoli di A (la loro similarita con la frase e ~0.894, provata sotto per costruzione:
