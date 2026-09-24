@@ -685,3 +685,6 @@
 2026-09-24T12:21:38Z	rit-d	worker	dispatch	-	deep	opus	Ritrascrivi wiring R1 (Annulla) + R2 (Ritrascrivi, purge subscriber, Proposta invalidation, e2e)
 2026-09-24T13:16:52Z	rit-d	composer	merge	-	-	-	MERGED 895ca3a — Ritrascrivi + Annulla complete and runnable
 2026-09-24T13:16:52Z	(adr-0019)	decision	result	-	-	-	USER: references = confirmed sentences AND fallback to the whole named Voce; PREVIEW before apply (Applica/Annulla); uncertain stay in place; show provisional Proposte
+2026-09-24T13:39:24Z	sa-a	worker	dispatch	-	deep	opus	semi-auto A trascrizione: trascritto sweep, eventi, persistenza-conferma-segmento, revisione, riassegna-segmenti, api-trascritto, trascritto-view, repo-sql
+2026-09-24T13:39:24Z	sa-b	worker	dispatch	-	deep	opus	semi-auto B ML: diarizzatore-sherpa rework (seg fp32, TitaNet-S, own AHC, EmbeddingSherpa), estrattore-impronta-sherpa
+2026-09-24T13:39:24Z	sa-c	worker	dispatch	-	standard	sonnet	semi-auto C parlanti: porte-parlanti, porta-lettore-voci, classificatore-somiglianza, piano-riassegnazione
