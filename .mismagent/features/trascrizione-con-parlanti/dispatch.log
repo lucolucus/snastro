@@ -657,3 +657,4 @@
 2026-09-24T07:56:24Z	parlanti-del-progetto	composer	merge	cycle=0	-	-	MERGED 88afd26 (bundle r2-e, light verify)
 2026-09-24T07:56:24Z	schermata-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2
 2026-09-24T07:56:24Z	schermata-registrazione-identificazione	worker	dispatch	cycle=0	tier=deep	model=opus	R2 S3 panel (ADR 0017 pending UX)
+2026-09-24T08:15:00Z	schermata-parlanti	composer	merge	cycle=0	-	-	MERGED b885ee7 (light verify, 29 tests)
