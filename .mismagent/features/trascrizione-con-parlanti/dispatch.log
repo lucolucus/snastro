@@ -596,3 +596,5 @@
 2026-09-24T00:09:42Z	abbonato-documento	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 9d0a707 (mutation-tested retry)
 2026-09-24T00:09:42Z	abbonato-documento	composer	merge	cycle=0	-	-	MERGED 3fdd4cb (light verify)
 2026-09-24T00:09:42Z	avvio-composizione	composer	carry	-	-	-	R1 needs a LettoreNomi with no names (lettore-nomi-da-parlanti is R2): Voci stay "Voce n" in the Documento
+2026-09-24T00:10:23Z	ml-sherpa-motore	worker	dispatch	cycle=0	tier=deep	model=opus	owns tec-ml-sherpa + native fetch (ADR 0016)
+2026-09-24T00:10:23Z	schermata-modelli	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
