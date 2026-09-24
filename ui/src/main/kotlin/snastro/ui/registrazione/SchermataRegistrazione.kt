@@ -192,6 +192,12 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
                 ) {
+                    // L750c: SKIPPED (see the worker's report) — an even 1:1 split leaves the transcript
+                    // at only ~150dp at 1024x640, but growing it (weight 2:1, measured) shrinks the Voci
+                    // panel below what several existing render-checks need (AC-411/412/413/454/530/533/
+                    // 545/547, AC-213/215) to show a card's content without scrolling — the two already
+                    // share a very tight ~418dp between them at this size. A real fix needs a broader
+                    // pass on the stacked layout's other chrome, not a one-line weight change here.
                     ColonnaTrascritto(stato, azioni, Modifier.weight(1f).fillMaxWidth())
                     stato.pannello?.let {
                         PannelloVociVista(it, stato.segmenti, azioni, Modifier.weight(1f).fillMaxWidth())
@@ -493,7 +499,17 @@ private fun SegmentoItem(
         ) {
             Box(modifier = Modifier.width(LARGHEZZA_GUTTER), contentAlignment = Alignment.TopEnd) {
                 if (selezione != null && selezionato) {
-                    CasellaSelezionata(segmento.segmentoId, azioni)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // L761c: a confirmed, consecutive row (who line hidden) used to lose its pin the
+                        // moment it was selected — the checkbox replaced the whole gutter content that
+                        // drew it. Same rule as the unselected branch below: draw it next to whatever
+                        // sits in the gutter, here the checkbox.
+                        if (!mostraChi && segmento.confermato) {
+                            PuntinaConfermata(n)
+                            Spacer(modifier = Modifier.width(SnastroMisure.space1))
+                        }
+                        CasellaSelezionata(segmento.segmentoId, azioni)
+                    }
                 } else {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         // AC-528/AC-582: a confirmed Segmento keeps its pin even when the who line is

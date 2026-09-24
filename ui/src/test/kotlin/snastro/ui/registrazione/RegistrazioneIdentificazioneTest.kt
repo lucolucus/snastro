@@ -118,6 +118,28 @@ class RegistrazioneIdentificazioneTest {
     }
 
     @Test
+    fun `L665a un ricaricamento fallito mantiene l ultimo nome buono, non lo wipe a Voce n`() = runTest {
+        val a = ambiente().apply {
+            identificate = listOf(VoceIdentificata(V1, MARCO.parlanteId, "Marco", TipoParlanteVista.RICORRENTE))
+        }
+        val presenter = avvia(a)
+        advanceUntilIdle()
+        assertEquals("Marco", presenter.dati.segmenti.first { it.voceId == V1 }.etichettaVoce)
+        assertEquals(listOf(GIULIA, MARCO), presenter.dati.pannello?.parlantiAttivi)
+
+        // AC-319-style: a Cambiamento re-triggers ricaricaParlanti(); this time the read fails.
+        a.identificazioneRotta = true
+        a.aggiornamenti.emetti(Cambiamento(REG))
+        advanceUntilIdle()
+
+        // (rework cycle 1, MED / L665a): the failed reload keeps the LAST GOOD data — the Nome and the
+        // roster survive; only the card-level content (checked elsewhere) shows the read error.
+        assertEquals("Marco", presenter.dati.segmenti.first { it.voceId == V1 }.etichettaVoce)
+        assertEquals(listOf(GIULIA, MARCO), presenter.dati.pannello?.parlantiAttivi)
+        assertEquals(ContenutoCarta.Errore(MESSAGGIO_ERRORE_VOCI), presenter.carta(V1).contenuto)
+    }
+
+    @Test
     fun `AC-405 le etichette mostrano il Nome attribuito al posto di Voce n`() = runTest {
         val a = ambiente().apply {
             identificate = listOf(
@@ -472,6 +494,38 @@ class RegistrazioneIdentificazioneTest {
             a.revisioni,
         )
     }
+
+    @Test
+    fun `L665b un riassegna multi Segmento che fallisce a meta applica il primo spostamento e mostra l errore`() =
+        runTest {
+            val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(3), V2)
+            var chiamate = 0
+            val a = ambiente().apply {
+                esitoRevisione = { c ->
+                    chiamate++
+                    if (chiamate == 1) Esito.Ok(Unit) else Esito.Errore(errore)
+                }
+            }
+            val presenter = avvia(a)
+            advanceUntilIdle()
+            presenter.azioni.selezionaSegmento(SegmentoId(1))
+            presenter.azioni.selezionaSegmento(SegmentoId(3))
+
+            presenter.azioni.riassegnaA(V2)
+            advanceUntilIdle()
+
+            // Both moves were attempted, in selection order, and the SECOND one failed.
+            assertEquals(
+                listOf<Any>(RiassegnaSegmento(REG, SegmentoId(1), V2), RiassegnaSegmento(REG, SegmentoId(3), V2)),
+                a.revisioni,
+            )
+            // The one that succeeded is APPLIED — a partial failure is not treated as "nothing changed".
+            assertEquals(V2, presenter.dati.segmenti.single { it.segmentoId == SegmentoId(1) }.voceId)
+            assertEquals(V1, presenter.dati.segmenti.single { it.segmentoId == SegmentoId(3) }.voceId)
+            // The inline error names the failure, and the selection (now split across two Voci) is cleared.
+            assertEquals(messaggioPer(errore), presenter.dati.errore)
+            assertTrue(presenter.dati.selezione.isEmpty())
+        }
 
     @Test
     fun `AC-404 un errore di Revisione e un messaggio inline e trascritto e selezione restano invariati`() = runTest {
