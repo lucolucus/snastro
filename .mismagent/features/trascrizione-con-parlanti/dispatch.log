@@ -610,3 +610,5 @@
 2026-09-24T00:33:48Z	avvio-coda-elaborazioni	verifier	result	cycle=1	-	composer	PASS (light: HIGH resolved with tests; full gate green after semantic merge fix)
 2026-09-24T00:33:48Z	avvio-coda-elaborazioni	composer	merge	cycle=1	-	-	MERGED 86c6099; carry to avvio-composizione: chiudi = scope.cancel() then coda.fermaEAttendi() BEFORE chiudiDb; translate RisultatoAvanzamento<->RisultatoTentativo; AC-350 guard (no snastro.trascrizione import in avvio/main) must be relaxed for R1
 2026-09-24T00:34:01Z	avvio-composizione	worker	dispatch	cycle=0	tier=deep	model=opus	R1 composition (model_hint: composition root folding many boundaries)
+2026-09-24T00:48:47Z	vad-silero	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 256db17 (4/4 real Silero)
+2026-09-24T00:48:47Z	vad-silero	composer	merge	cycle=0	-	-	MERGED 74ab762 (light verify)
