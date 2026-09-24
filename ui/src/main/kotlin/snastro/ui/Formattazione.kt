@@ -6,6 +6,7 @@ import java.util.Locale
 
 private const val MS_PER_SECONDO = 1000L
 private const val SECONDI_PER_MINUTO = 60L
+private const val BYTE_PER_MB = 1024.0 * 1024.0
 private val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy")
 
 /** AC-179: "mm:ss" — minutes are NOT capped at 59 (no hour component), seconds truncate to whole. */
@@ -18,3 +19,7 @@ fun formattaDurata(durataMs: Long): String {
 
 /** AC-179: "dd/MM/yyyy". */
 fun formattaData(data: LocalDate): String = data.format(FORMATO_DATA)
+
+/** AC-227/228: a byte count as "<n,n> MB" — the whole catalogue (ADR 0008/0013/0014) sits in the
+ * hundreds of MB, so a single unit is enough (frugality rung 6: no GB tier, no thousands separator). */
+fun formattaByte(byte: Long): String = String.format(Locale.ROOT, "%.1f MB", byte / BYTE_PER_MB)
