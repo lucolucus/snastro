@@ -49,6 +49,7 @@ import java.nio.file.Path
 import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -75,7 +76,9 @@ import java.util.logging.Logger
  * [estensione] (avvio-composizione) is the later release's hook ([EstensioneSessione], `null` in R0):
  * built in [apriGrafo] over this project's own database/dispatcher/scope, stopped in [chiudi] in the
  * pinned order — lettore, session scope cancel, [ProgettoEsteso.ferma] (the Elaborazione queue's
- * `fermaEAttendi` + the Documento worker), and only then the database close and the lock release.
+ * `fermaEAttendi` + the Documento worker), and only then the database close and the lock release —
+ * deferred to the end of a worker that outlives [ProgettoEsteso.ferma]'s bound (fix-batch-16 MED-1).
+ * [chiudi] is blocking (up to the extension's bound): the shell presenter calls it off the UI thread.
  */
 internal class SessioneProgettoImpl(
     private val registro: RegistroProgetti,
@@ -250,14 +253,47 @@ internal class SessioneProgettoImpl(
             // avvio-composizione: i lavoratori di sfondo dell'estensione (coda delle Elaborazioni,
             // rigenerazione del Documento) sono gia' stati cancellati con lo scope qui sopra; si attende
             // (con un limite) che smettano davvero di toccare il database PRIMA di chiuderlo.
-            sessione.collaboratori.estensione?.let { est ->
-                chiudiSilenziosamente("arresto dell'estensione fallito in chiudi") { est.ferma() }
+            // fix-batch-16 MED-1: se un lavoratore sopravvive al limite (una chiamata nativa ignora
+            // l'interruzione), chiusura del database e rilascio del lock sono RINVIATI alla sua fine
+            // (ProgettoEsteso.ferma) — mai un database chiuso sotto un lavoratore vivo; `corrente` si
+            // azzera comunque subito, la UI torna a S1.
+            val rilascia = rilascioUnaVolta(sessione)
+            val estensione = sessione.collaboratori.estensione
+            if (estensione == null) {
+                rilascia()
+            } else {
+                fermaEstensione(estensione, rilascia)
             }
-            chiudiSilenziosamente("chiusura del database fallita in chiudi") {
-                sessione.risorse.chiudiDb() // fix-batch-12 #2
-            }
-            rilasciaLock(sessione.lockCartella)
             _corrente.value = null
+        }
+    }
+
+    /**
+     * The database close (fix-batch-12 #2) + the `.lock` release of [sessione], each guarded on its own
+     * (AC-347), run at most once — now or, fix-batch-16 MED-1, later, on a worker's own thread.
+     */
+    private fun rilascioUnaVolta(sessione: SessioneAperta): () -> Unit {
+        val fatto = AtomicBoolean(false)
+        return {
+            if (fatto.compareAndSet(false, true)) {
+                chiudiSilenziosamente("chiusura del database fallita in chiudi") { sessione.risorse.chiudiDb() }
+                chiudiSilenziosamente("rilascio del lock fallito in chiudi") { rilasciaLock(sessione.lockCartella) }
+            }
+        }
+    }
+
+    /** A failing [ProgettoEsteso.ferma] is logged, never rethrown (AC-347): [rilascia] then runs at once. */
+    private fun fermaEstensione(estensione: ProgettoEsteso, rilascia: () -> Unit) {
+        try {
+            estensione.ferma(rilascia)
+        } catch (e: CancellationException) {
+            rilascia()
+            throw e
+        } catch (
+            @Suppress("TooGenericExceptionCaught") e: Exception,
+        ) {
+            log.log(Level.WARNING, "arresto dell'estensione fallito in chiudi", e)
+            rilascia()
         }
     }
 

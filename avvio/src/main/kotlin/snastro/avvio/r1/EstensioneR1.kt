@@ -54,7 +54,10 @@ import java.util.logging.Logger
  *   starts an Elaborazione (ADR 0014, AC-371). `AbbonatoDocumentoEventi` registers itself after-commit
  *   and runs on [io] (never on the UI thread), in a child of the session scope.
  * - The ML adapters' per-Elaborazione memory is released when each run terminates
- *   ([SegnalatoreFaseConRilascio], ADR 0004).
+ *   ([SegnalatoreFaseConRilascio], ADR 0004). fix-batch-16 MED-2: the adapters themselves are built
+ *   PER OPEN PROJECT ([adattatoriMl], called once per [apri]) over the app's ONE `MotoreSherpa` — a
+ *   worker of a just-closed project still finishing in the background never shares a cached native
+ *   model (nor its release) with the next project's own worker.
  * - The Documento reads names from [LettoreNomiVuoto] ('Voce n', AC-356): no `:parlanti` class.
  * - The [CodaElaborazioni] is built LAST: its construction runs `RecuperaElaborazioniInterrotte`
  *   strictly before its worker picks any FIFO head (AC-233), and only after every after-commit
@@ -65,7 +68,7 @@ internal class EstensioneR1(
     private val io: CoroutineDispatcher,
     private val clock: Clock,
     private val generatoreId: GeneratoreId,
-    private val ml: AdattatoriMl,
+    private val adattatoriMl: () -> AdattatoriMl,
     private val modelliPronti: () -> Boolean,
     private val decodificatore: (Path) -> DecodificatoreAudio = ::DecodificatoreAudioFfmpeg,
 ) : EstensioneSessione {
@@ -78,6 +81,7 @@ internal class EstensioneR1(
         val lettoreRegistrazione = LettoreRegistrazioneDaProgetto(catalogo)
         val fasi = FasiInCorso()
         val aggiornamenti = AggiornamentiVistaTrascrizione(dispatcher)
+        val ml = adattatoriMl()
 
         val lavoroDocumento = avviaRigenerazioneDocumento(contesto, trascritti, catalogo)
 

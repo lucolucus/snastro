@@ -48,11 +48,20 @@ class RiconoscitoreSherpa internal constructor(
         return motore.conSessione(configSessione()) { caricatoOra().decodifica(campioni) }
     }
 
-    /** Releases the cached model, if any (AC-254/388): idempotent, the next [riconosci] reloads it. */
+    /**
+     * Releases the cached model, if any (AC-254/388): idempotent, the next [riconosci] reloads it.
+     * fix-batch-16 MED-2: [caricato] is read, cleared and released all INSIDE the native Mutex — a
+     * handle read outside it could be released twice by two concurrent callers, or decoded by another
+     * thread between its release and the clearing (a use-after-free on the native pointer, a JVM
+     * SIGSEGV). The unlocked read is only a fast path for "never loaded" (no session, no native load).
+     */
     fun chiudi() {
-        val modelloCaricato = caricato ?: return
-        motore.conSessione(configSessione()) { sessione -> sessione.registra(modelloCaricato) { it.rilascia() } }
-        caricato = null
+        if (caricato == null) return
+        motore.conSessione(configSessione()) { sessione ->
+            val modelloCaricato = caricato ?: return@conSessione
+            caricato = null
+            sessione.registra(modelloCaricato) { it.rilascia() } // released as the session closes, Mutex still held
+        }
     }
 
     private fun caricatoOra(): MotoreRiconoscimento =

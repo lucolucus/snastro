@@ -30,9 +30,11 @@ import kotlin.test.assertTrue
  * AC-237 + AC-351: `--smoke <fixture-dir>` opens the fixture project (>=1 Registrazione already
  * imported, one of them with a completed Trascritto) and saves S1, S2, S3 (the completed Trascritto,
  * 'Voce n' labels — the smoke itself waits for 'Voce 1' on screen) and S5 — headless, on the ML Finte:
- * no sherpa natives, no models. The fixture here is built DIRECTLY via the SQL repositories + domain factories
- * (never `AggiungiRegistrazioneServizio`'s real FFmpeg probe/copy pipeline — this proves the smoke
- * MECHANISM, not audio import) so this test needs no native library and stays in the default gate.
+ * no sherpa natives, no models. fix-batch-16 LOW-1: S5 renders the REAL catalogue over an empty cache
+ * (the smoke waits for 'Mancanti' with its 4 entries and 'Scarica'). The fixture here is built
+ * DIRECTLY via the SQL repositories + domain factories (never `AggiungiRegistrazioneServizio`'s real
+ * FFmpeg probe/copy pipeline — this proves the smoke MECHANISM, not audio import) so this test needs
+ * no native library and stays in the default gate.
  */
 class SmokeTest {
     @TempDir

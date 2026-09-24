@@ -41,6 +41,9 @@ internal class AmbienteR1(
     diarizzatore: Diarizzatore = DiarizzatoreFinta(),
     riconoscitore: RiconoscitoreParlato = RiconoscitoreParlatoFinta(),
     rilasciaDopoElaborazione: () -> Unit = {},
+    adattatoriMl: () -> AdattatoriMl = {
+        AdattatoriMl(diarizzatore, riconoscitore, VadFinta(), rilasciaDopoElaborazione)
+    },
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
@@ -68,7 +71,7 @@ internal class AmbienteR1(
             io = Dispatchers.IO,
             clock = orologioApp(),
             generatoreId = GeneratoreIdFinto(),
-            ml = AdattatoriMl(diarizzatore, riconoscitore, VadFinta(), rilasciaDopoElaborazione),
+            adattatoriMl = adattatoriMl,
             modelliPronti = { true },
             decodificatore = { DecodificatoreAudioFinta(sorgenti) },
         ),

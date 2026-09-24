@@ -199,8 +199,9 @@ class SessioneProgettoImplChiudiTest {
                 object : ProgettoEsteso {
                     override val aggiornamenti = AggiornamentiVistaFinta()
 
-                    override fun ferma() {
+                    override fun ferma(poi: () -> Unit) {
                         ordine += "estensione (scope attivo: ${c.scope.isActive})"
+                        poi() // every worker ended in time
                     }
                 }
             },
@@ -217,6 +218,54 @@ class SessioneProgettoImplChiudiTest {
         val riaperta = SessioneProgettoImpl(RegistroProgettiFinta(), GeneratoreIdFinto(), orologio, scopeDiProva())
         riaperta.apri(progetto.percorso).atteso()
         riaperta.chiudi()
+    }
+
+    // --- fix-batch-16 MED-1(b): never close the database / release the lock under a live worker ---
+
+    @Test
+    fun `fix-batch-16 con un lavoratore ancora vivo chiudi azzera corrente ma rinvia database e lock alla sua fine`() {
+        var allaFineDelLavoratore: (() -> Unit)? = null
+        var databaseChiuso = false
+        lateinit var contesto: ContestoEstensione
+        val sessione = SessioneProgettoImpl(
+            registro = RegistroProgettiFinta(),
+            generatoreId = GeneratoreIdFinto(),
+            clock = orologio,
+            scopeGenitore = scopeDiProva(),
+            seams = SessioneProgettoSeams(
+                chiudiDatabase = { db ->
+                    databaseChiuso = true
+                    db.chiudi()
+                },
+            ),
+            estensione = { c ->
+                contesto = c
+                object : ProgettoEsteso {
+                    override val aggiornamenti = AggiornamentiVistaFinta()
+
+                    override fun ferma(poi: () -> Unit) {
+                        allaFineDelLavoratore = poi // the bound elapsed: a worker is still in a native call
+                    }
+                }
+            },
+        )
+        val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
+
+        sessione.chiudi()
+
+        assertNull(sessione.corrente.value, "corrente si azzera subito: la UI torna a S1")
+        assertFalse(databaseChiuso, "mai il database chiuso sotto un lavoratore vivo")
+        assertTrue(lockTenuto(contesto.cartella), "mai il lock rilasciato sotto un lavoratore vivo")
+        val altra = SessioneProgettoImpl(RegistroProgettiFinta(), GeneratoreIdFinto(), orologio, scopeDiProva())
+        assertEquals(ErroreSessione.ProgettoGiaAperto, altra.apri(progetto.percorso).erroreAtteso<ErroreSessione>())
+        assertEquals(ErroreSessione.ProgettoGiaAperto, sessione.apri(progetto.percorso).erroreAtteso<ErroreSessione>())
+
+        checkNotNull(allaFineDelLavoratore).invoke() // the worker finally ends
+
+        assertTrue(databaseChiuso)
+        assertFalse(lockTenuto(contesto.cartella))
+        altra.apri(progetto.percorso).atteso()
+        altra.chiudi()
     }
 
     @Test

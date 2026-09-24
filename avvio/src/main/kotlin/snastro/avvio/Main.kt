@@ -17,9 +17,11 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import snastro.avvio.r1.ContenutoAppR1
+import snastro.avvio.r1.GrafoR1
 import snastro.avvio.r1.SceltaMl
 import snastro.avvio.r1.costruisciGrafoR1
 import snastro.avvio.r1.primaRegistrazioneCompletata
+import snastro.avvio.r1.servizioModelliReali
 import snastro.kernel.Esito
 import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
@@ -28,6 +30,8 @@ import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.registrazioni.RegistrazioniRoute
+import snastro.ui.testi.ETICHETTA_SCARICA
+import snastro.ui.testi.etichettaModelliMancanti
 import java.io.File
 import java.nio.file.Files
 import javax.imageio.ImageIO
@@ -62,7 +66,11 @@ fun main(args: Array<String>) {
 
     val grafo = costruisciGrafoR1()
     application {
-        Window(onCloseRequest = ::exitApplication, title = "snastro") {
+        val esci = {
+            chiudiPrimaDiUscire(grafo.r0.sessione::chiudi) // LOW-3: bounded, never a hung exit
+            exitApplication()
+        }
+        Window(onCloseRequest = esci, title = "snastro") {
             ContenutoAppR1(grafo)
         }
     }
@@ -124,8 +132,10 @@ internal fun costruisciRegistrazioniPresenter(
 
 /**
  * AC-237 + AC-351: S1, S2, then S3 of the fixture's first COMPLETATA Registrazione — reached through
- * S2's own row click, the real wiring — then S5 through the bar. Isolated registry and model cache,
- * ML Finte: nothing of the developer's own machine is read or written, no native is loaded.
+ * S2's own row click, the real wiring — then S5 through the bar, over the REAL model catalogue on the
+ * empty isolated cache (fix-batch-16 LOW-1: the 4 entries missing, 'Scarica'). Isolated registry and
+ * model cache, pipeline on the ML Finte: nothing of the developer's own machine is read or written, no
+ * native is loaded, nothing is downloaded.
  */
 @OptIn(ExperimentalTestApi::class)
 internal fun eseguiSmoke(fixtureDir: String) {
@@ -133,7 +143,11 @@ internal fun eseguiSmoke(fixtureDir: String) {
     // ne' collidere con l'elenco dei progetti recenti dello sviluppatore che lo esegue.
     val cartellaRegistroSmoke = Files.createTempDirectory("snastro-smoke-registro")
     val cartellaModelliSmoke = Files.createTempDirectory("snastro-smoke-modelli")
-    val grafo = costruisciGrafoR1(cartellaRegistroSmoke, SceltaMl.FINTE, cartellaModelliSmoke)
+    val grafoFinte = costruisciGrafoR1(cartellaRegistroSmoke, SceltaMl.FINTE, cartellaModelliSmoke)
+    // fix-batch-16 LOW-1: S5 over the REAL catalogue on the empty throwaway cache (4 entries, 'Mancanti',
+    // 'Scarica') — building it loads and downloads nothing; the pipeline stays on the Finte.
+    val modelliReali = servizioModelliReali(cartellaModelliSmoke)
+    val grafo = GrafoR1(grafoFinte.r0, modelliReali, grafoFinte.apriEsterno)
     val outputDir = File("build/smoke").apply { mkdirs() }
 
     try {
@@ -146,6 +160,10 @@ internal fun eseguiSmoke(fixtureDir: String) {
             val esito = grafo.r0.sessione.apri(fixtureDir)
             check(esito is Esito.Ok) { "smoke: impossibile aprire il progetto fixture '$fixtureDir': $esito" }
 
+            // Models missing (the real catalogue on an empty cache): the project opens on S5 first, the
+            // onboarding path of ContenutoAppR1 — S2 is one click on the bar away.
+            attendi { esisteTag("avvio-nav-registrazioni") }
+            onNodeWithTag("avvio-nav-registrazioni").performClick()
             attendi { esisteTag("registrazioni-lista") }
             salvaSchermata(outputDir, "s2")
 
@@ -158,15 +176,17 @@ internal fun eseguiSmoke(fixtureDir: String) {
             salvaSchermata(outputDir, "s3")
 
             onNodeWithTag("avvio-nav-modelli").performClick()
-            attendi { TAG_S5.any { esisteTag(it) } }
+            attendi {
+                esisteTag("modelli-mancanti") &&
+                    esisteTesto(etichettaModelliMancanti(modelliReali.licenze().size)) &&
+                    esisteTesto(ETICHETTA_SCARICA)
+            }
             salvaSchermata(outputDir, "s5")
         }
     } finally {
         grafo.r0.sessione.chiudi() // ferma la coda e la rigenerazione, rilascia il .lock del fixture
     }
 }
-
-private val TAG_S5 = listOf("modelli-pronti", "modelli-mancanti", "modelli-download", "modelli-errore")
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.esisteTag(tag: String): Boolean = onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()

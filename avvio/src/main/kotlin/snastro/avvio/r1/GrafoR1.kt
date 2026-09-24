@@ -40,7 +40,8 @@ internal class ComponentiR1(val estensione: EstensioneR1, val servizioModelli: S
 /**
  * [scelta] picks the ML adapters and the model catalogue ([SelezioneAdattatoriMl], `-Dsnastro.ml`);
  * [cartellaModelli] is the per-user model cache (ADR 0008 (c)). ONE [MotoreSherpa] for the whole app
- * (its Mutex is process-wide, ADR 0016 §4). The Elaborazione queue waits while S5 is not
+ * (its Mutex is process-wide, ADR 0016 §4); the ML adapters over it are built once per open project
+ * (fix-batch-16 MED-2). The Elaborazione queue waits while S5 is not
  * [StatoModelli.Pronti] (AC-235) — immediately `Pronti` for an empty catalogue (the Finte).
  */
 internal fun componentiR1(
@@ -52,14 +53,24 @@ internal fun componentiR1(
     val catalogo = SelezioneAdattatoriMl.catalogo(scelta)
     val provisioning = ProvisioningModelli(catalogo, cartellaModelli)
     val servizioModelli = ServizioModelliProvisioning.di(catalogo, provisioning)
+    val motore = MotoreSherpa() // ONE per app; the adapters over it are built per open project (MED-2)
     val estensione = EstensioneR1(
         io = io,
         clock = clock,
         generatoreId = GeneratoreIdUuid(),
-        ml = SelezioneAdattatoriMl.adattatori(scelta, MotoreSherpa(), provisioning),
+        adattatoriMl = { SelezioneAdattatoriMl.adattatori(scelta, motore, provisioning) },
         modelliPronti = { servizioModelli.stato.value == StatoModelli.Pronti },
     )
     return ComponentiR1(estensione, servizioModelli)
+}
+
+/**
+ * S5's port over the REAL model catalogue ([SceltaMl.REALI]) on [cartellaModelli] — the `--smoke` S5
+ * (fix-batch-16 LOW-1) over an empty throwaway cache: building it loads and downloads nothing.
+ */
+internal fun servizioModelliReali(cartellaModelli: Path): ServizioModelli {
+    val catalogo = SelezioneAdattatoriMl.catalogo(SceltaMl.REALI)
+    return ServizioModelliProvisioning.di(catalogo, ProvisioningModelli(catalogo, cartellaModelli))
 }
 
 /** The R1 graph: R0's own ([costruisciGrafoR0]) extended with [componentiR1]; `--smoke` passes throwaway folders. */

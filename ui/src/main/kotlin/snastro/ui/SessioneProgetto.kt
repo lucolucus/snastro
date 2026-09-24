@@ -19,6 +19,9 @@ interface SessioneProgetto {
     /** Opens the project folder at [percorso]. */
     fun apri(percorso: String): Esito<ProgettoAperto>
 
-    /** Closes the currently open project, if any ([corrente] becomes `null`). */
+    /**
+     * Closes the currently open project, if any ([corrente] becomes `null`). Blocking too — it may wait
+     * (bounded) for the project's background work to stop — so the presenter runs it on its IO dispatcher.
+     */
     fun chiudi()
 }
