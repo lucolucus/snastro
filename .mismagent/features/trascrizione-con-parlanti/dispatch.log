@@ -707,3 +707,19 @@
 2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	SnastroMisureTest regex misses RoundedCornerShape(size = …)
 2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	BannerSn body not limited to one line
 2026-09-24T17:29:58Z	stile-snastro	composer	pre-release	-	-	-	formattaDurataEstesa: '0 min' under a minute; negative durations unguarded
+2026-09-24T17:52:25Z	stile-snastro	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW 1d24183
+2026-09-24T17:52:25Z	stile-snastro	verifier	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T17:52:25Z	stile-snastro	code-review	dispatch	cycle=1	tier=deep	model=opus
+2026-09-24T17:52:25Z	(flaky)	composer	pre-release	-	-	-	LOW timing-flaky: RegistrazioneSomiglianzaTest AC-536 (UI thread) and avvio RitrascriviR2Test AC-459 failed once on full run, green on rerun
+2026-09-24T17:52:25Z	stile-snastro	composer	pre-release	-	-	-	LOW interpretaRiduciMovimento has no unit test; animated pulse path not exercised under test (needs mainClock control)
+2026-09-24T17:55:23Z	stile-snastro	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-24T17:55:23Z	stile-snastro	code-review	result	cycle=1	tier=deep	model=opus	CHANGES (1 HIGH: macOS unset reduceMotion key exits 1 → pulse never animates; composer instruction error)
+2026-09-24T17:55:23Z	stile-snastro	worker	dispatch	cycle=2	tier=deep	model=opus	LAST cycle: reduce-motion semantics + off-UI-thread detection + comments
+2026-09-24T17:55:23Z	stile-snastro	composer	pre-release	-	-	-	MED Checkbox in SchermataPannelloVoci loses 48dp touch padding (min interactive size off) — recheck in restyle-registrazione
+2026-09-24T17:58:40Z	stile-snastro	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW bea5cd5
+2026-09-24T17:58:40Z	stile-snastro	verifier	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T17:58:40Z	stile-snastro	code-review	dispatch	cycle=2	tier=deep	model=opus
+2026-09-24T17:59:13Z	stile-snastro	code-review	result	cycle=2	tier=deep	model=opus	APPROVE (0 HIGH)
+2026-09-24T17:59:13Z	stile-snastro	composer	pre-release	-	-	-	LOW RiduciMovimento: catch only IOException (SecurityException/InterruptedException escape the lazy); timeout result cached for the JVM; stdout stream not closed
+2026-09-24T18:01:23Z	stile-snastro	verifier	result	cycle=2	tier=deep	model=opus	PASS
+2026-09-24T18:01:23Z	stile-snastro	composer	merge	cycle=2	-	-	MERGED 2bdc1f5 — ui-kit live (palette(voceId, colori); LICENZE_CARATTERI to wire in :avvio by restyle-shell-elenchi)
