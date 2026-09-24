@@ -74,12 +74,14 @@ class EventiRevisioneTest {
     }
 
     @Test
-    fun `AC-15 il pacchetto eventi di Trascrizione contiene solo i sei eventi fissati`() {
+    fun `AC-15 il pacchetto eventi di Trascrizione contiene solo gli otto eventi fissati`() {
         assertEquals(
             setOf(
                 "ElaborazioneAvviata",
                 "ElaborazioneCompletata",
                 "ElaborazioneFallita",
+                "TrascrittoSostituito",
+                "ElaborazioneAnnullata",
                 "VociUnite",
                 "VoceDivisa",
                 "SegmentoRiassegnato",
