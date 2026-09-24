@@ -53,7 +53,19 @@ data class RigaRegistrazione(
     val operazioneInCorso: Boolean = false,
     val erroreRiga: String? = null,
     val numeroPersone: String = "",
+    val identificazione: IdentificazioneRiga? = null,
 )
+
+/**
+ * AC-204/AC-345 (R2, Parlanti fetta): the identification badge, joining `numVoci`
+ * ([StatoElaborazioneRiga] is only ever built from a [snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista]
+ * whose `numVoci` is non-null for `COMPLETATA`) with `numVociDaIdentificare` from
+ * `identificazione-registrazioni`. `null` — never a provisional or '0' count — when the identification
+ * source is not supplied to the presenter (R0/R1), has no entry yet for this row (no Trascritto yet),
+ * or failed to load; `numVociDaIdentificare == 0` still renders (just without the "da identificare"
+ * clause, AC-345).
+ */
+data class IdentificazioneRiga(val numVoci: Int, val numVociDaIdentificare: Int)
 
 /** AC-343: this row's playback over the shared [snastro.ui.lettore.LettoreAudio]. */
 sealed interface StatoRiproduzioneRiga {

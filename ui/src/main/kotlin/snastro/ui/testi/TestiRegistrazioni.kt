@@ -43,3 +43,8 @@ fun etichettaInAttesa(posizione: Int): String = "In coda ($posizione)"
 /** AC-203: "In corso · <fase> · mm:ss" — the elapsed time reuses [formattaDurata] (no hour cap). */
 fun etichettaInCorso(faseEtichetta: String, trascorsoMs: Long): String =
     "In corso · $faseEtichetta · ${formattaDurata(trascorsoMs)}"
+
+/** AC-204/AC-345: "N voci · M da identificare", or just "N voci" when [numVociDaIdentificare] is 0
+ * (never "· 0 da identificare"). */
+fun etichettaIdentificazione(numVoci: Int, numVociDaIdentificare: Int): String =
+    if (numVociDaIdentificare > 0) "$numVoci voci · $numVociDaIdentificare da identificare" else "$numVoci voci"

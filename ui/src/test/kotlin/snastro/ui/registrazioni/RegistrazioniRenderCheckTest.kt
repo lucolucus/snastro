@@ -8,6 +8,7 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -25,6 +26,7 @@ import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
+import snastro.ui.testi.etichettaIdentificazione
 import snastro.ui.testi.etichettaInAttesa
 import snastro.ui.testi.messaggioPer
 import java.io.File
@@ -51,6 +53,7 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
 )
 
 private val REG_1 = RegistrazioneId("id-1")
+private val REG_2 = RegistrazioneId("id-2")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 
 private fun unaRiga(
@@ -58,6 +61,7 @@ private fun unaRiga(
     titolo: String = "Seduta del 12 marzo",
     elaborazione: StatoElaborazioneRiga? = null,
     riproduzione: StatoRiproduzioneRiga = StatoRiproduzioneRiga.Disponibile,
+    identificazione: IdentificazioneRiga? = null,
 ) = RigaRegistrazione(
     registrazioneId = id,
     titolo = titolo,
@@ -65,6 +69,7 @@ private fun unaRiga(
     durataMs = 125_000,
     elaborazione = elaborazione,
     riproduzione = riproduzione,
+    identificazione = identificazione,
 )
 
 /**
@@ -74,7 +79,10 @@ private fun unaRiga(
  * row-level rename error (AC-363). R1 (AC-203/344): the status
  * column, a failed/retry row with its prefilled 'Numero di persone' field, a NON_AVVIATA row with the empty
  * field + 'Trascrivi' (no 'Trascrivi tutte'), an invalid field with its inline message (ADR 0014,
- * AC-372/375/376). [SchermataRegistrazioni] renders
+ * AC-372/375/376). R2 (AC-204/345, fetta Parlanti): a badge with `numVociDaIdentificare > 0`, a fully
+ * identified row (badge reduced to just the total, never "· 0 da identificare"), and a mix of rows
+ * with/without a badge in the same list (source absent for one row, e.g. no Trascritto yet).
+ * [SchermataRegistrazioni] renders
  * directly from fixture `UiStato` values (dev-architecture `#presenter`).
  */
 @OptIn(ExperimentalTestApi::class)
@@ -177,6 +185,30 @@ class RegistrazioniRenderCheckTest {
     @Test
     fun `AC-363 il titolo e un campo modificabile e l errore di rinomina e inline sulla riga a 1024x640`() =
         verificaTitoloModificabileConErrore(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-204 il badge con Voci da identificare a 1280x800`() =
+        verificaBadgeIdentificazione(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-204 il badge con Voci da identificare a 1024x640`() =
+        verificaBadgeIdentificazione(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-345 una riga completamente identificata mostra solo il totale delle voci a 1280x800`() =
+        verificaBadgeCompleto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-345 una riga completamente identificata mostra solo il totale delle voci a 1024x640`() =
+        verificaBadgeCompleto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-204 AC-345 un mix di righe con e senza badge a 1280x800`() =
+        verificaBadgeMix(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-204 AC-345 un mix di righe con e senza badge a 1024x640`() =
+        verificaBadgeMix(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
     private fun verificaCaricamento(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
         setContent { SchermataRegistrazioni(stato = RegistrazioniUiStato.Caricamento, azioni = AZIONI_VUOTE) }
@@ -341,6 +373,73 @@ class RegistrazioniRenderCheckTest {
         onNodeWithText(errore).assertIsDisplayed()
         onNodeWithTag("registrazioni-data-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
         catturaPng("registrazioni-titolo-errore-riga", width, height)
+    }
+
+    private fun verificaBadgeIdentificazione(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            elaborazione = StatoElaborazioneRiga.Completata,
+                            identificazione = IdentificazioneRiga(numVoci = 3, numVociDaIdentificare = 1),
+                        ),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazioni-identificazione-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithText(etichettaIdentificazione(3, 1)).assertIsDisplayed()
+        catturaPng("registrazioni-badge-identificazione", width, height)
+    }
+
+    private fun verificaBadgeCompleto(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            elaborazione = StatoElaborazioneRiga.Completata,
+                            identificazione = IdentificazioneRiga(numVoci = 3, numVociDaIdentificare = 0),
+                        ),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazioni-identificazione-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithText(etichettaIdentificazione(3, 0)).assertIsDisplayed()
+        onAllNodesWithText("da identificare", substring = true).assertCountEquals(0)
+        catturaPng("registrazioni-badge-completamente-identificata", width, height)
+    }
+
+    private fun verificaBadgeMix(width: Int, height: Int) = runDesktopComposeUiTest(width, height) {
+        setContent {
+            SchermataRegistrazioni(
+                stato = RegistrazioniUiStato.Dati(
+                    righe = listOf(
+                        unaRiga(
+                            id = REG_1,
+                            titolo = "Seduta del 12 marzo",
+                            elaborazione = StatoElaborazioneRiga.Completata,
+                            identificazione = IdentificazioneRiga(numVoci = 3, numVociDaIdentificare = 1),
+                        ),
+                        unaRiga(
+                            id = REG_2,
+                            titolo = "Riunione del 20 marzo",
+                            elaborazione = StatoElaborazioneRiga.InAttesa(1),
+                            identificazione = null, // AC-345: nessun Trascritto ancora, nessun badge
+                        ),
+                    ),
+                ),
+                azioni = AZIONI_VUOTE,
+            )
+        }
+        onNodeWithTag("registrazioni-identificazione-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+        onNodeWithText(etichettaIdentificazione(3, 1)).assertIsDisplayed()
+        onAllNodesWithTag("registrazioni-identificazione-${REG_2.valore}", useUnmergedTree = true).assertCountEquals(0)
+        catturaPng("registrazioni-badge-mix", width, height)
     }
 
     @OptIn(ExperimentalTestApi::class)
