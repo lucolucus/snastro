@@ -614,3 +614,5 @@
 2026-09-24T00:48:47Z	vad-silero	composer	merge	cycle=0	-	-	MERGED 74ab762 (light verify)
 2026-09-24T00:49:38Z	diarizzatore-sherpa	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW ea8c70d
 2026-09-24T00:49:38Z	diarizzatore-sherpa	composer	merge	cycle=0	-	-	MERGED 41b70ff (composer: gate + real modelli 15/15 incl. VAD+diar); FINDING: sherpa never throws on k>speakers but may return FEWER clusters than a smaller k (k=10 -> 1 on 2-voice clip) — ADR 0014 amendment + benchmark on real recording
+2026-09-24T00:57:06Z	riconoscitore-sherpa	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW 56a2f99
+2026-09-24T00:57:06Z	riconoscitore-sherpa	composer	merge	cycle=0	-	-	MERGED 0eb5757 (composer: gate + all real ML tests 25/25); carry: composition must close() recognizer per Elaborazione (SegnalatoreFase.terminata decorator) to release ~1-2 GB
