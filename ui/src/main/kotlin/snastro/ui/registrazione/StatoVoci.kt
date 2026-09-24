@@ -28,6 +28,7 @@ import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_PROPOSTA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
+import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_PERSA
 import snastro.ui.testi.SPIEGAZIONE_DIVIDI_INTERA_VOCE
 import snastro.ui.testi.messaggioPer
 import java.time.Duration
@@ -54,6 +55,17 @@ internal class StatoVoci(
 ) {
     /** The trascritto the panel is built on; set by the presenter's own load, refreshed after a Revisione. */
     var vista: TrascrittoView? = null
+
+    /**
+     * ADR 0018 Amendment (b) §2 (AC-454/455/461): read live from the presenter's own published [stato]
+     * (`RegistrazioneUiStato.Dati.soloLettura`, set by [RegistrazionePresenter.carica] from its
+     * optional `stati` source, AC-452) — no separate copy kept here. While `true`, [invia]/
+     * [eseguiRevisione] send no command (the fakes see zero calls) and [ricaricaParlanti] starts no
+     * Proposta job; [pannelloDi]/[barraDi] disable every card/toolbar action. '▶ estratto' and Segmento
+     * playback are untouched (owned by the base presenter, not here).
+     */
+    private val soloLettura: Boolean
+        get() = (stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == true
 
     private class DatiParlanti(
         val identificate: Map<VoceId, VoceIdentificata>,
@@ -113,7 +125,10 @@ internal class StatoVoci(
             erroreLettura = true
         }
         pubblica()
-        if (!erroreLettura) avviaProposte()
+        // AC-454: no Proposta job while read-only — it would only wait on the native Mutex held by the
+        // running pipeline (ADR 0017); AC-461: the job starts again once soloLettura ends (the same
+        // ricaricaParlanti() call the base presenter's Cambiamento-triggered carica() already makes).
+        if (!erroreLettura && !soloLettura) avviaProposte()
     }
 
     /**
@@ -207,8 +222,9 @@ internal class StatoVoci(
      * one (`null`) restores the card with no message. `finally`: never a card stuck in 'in corso'.
      */
     private fun invia(voceId: VoceId, comando: (VoceRef) -> ComandoVoce) {
-        val carta = cartaDi(voceId) ?: return
-        if (!carta.azioniAbilitate) return
+        // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' send no command while read-only —
+        // `azioniAbilitate` already folds in `soloLettura` (CartaVoce, built by pannelloDi below).
+        val carta = cartaDi(voceId)?.takeIf { it.azioniAbilitate } ?: return
         val ref = VoceRef(registrazioneId, voceId)
         val inizio = sorgenti.clock.instant()
         invii[ref] = inizio
@@ -337,7 +353,10 @@ internal class StatoVoci(
      * One at a time (no double submit); never blocked by a pending card command (AC-414).
      */
     private fun eseguiRevisione(blocco: () -> RisultatoRevisione) {
-        if (revisioneInCorso) return
+        // AC-454: dividiVoce/riassegnaA/unisci (the merge banner's action included) send no command
+        // while read-only — the view already disables their controls, this is the presenter's own
+        // backstop (unisci() in particular has no `abilitata` guard of its own to rely on).
+        if (soloLettura || revisioneInCorso) return
         revisioneInCorso = true
         pubblica()
         scope.launch {
@@ -395,6 +414,9 @@ internal class StatoVoci(
                     pannello = pannelloDi(v, d.audioDisponibile),
                     selezione = selezione,
                     barraSelezione = barraDi(v),
+                    // AC-454: the panel's own third banner line — only while the base presenter's
+                    // soloLettura (AC-452) is set; the base presenter never writes this field itself.
+                    bannerRitrascrizionePannello = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_PERSA else null,
                 )
             }
         }
@@ -416,12 +438,16 @@ internal class StatoVoci(
                     inCorso = attesaDi(VoceRef(registrazioneId, voce.voceId)),
                     errore = erroriCarta[voce.voceId],
                     altreVoci = tutte.filter { it.voceId != voce.voceId },
+                    // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' disabled while read-only.
+                    soloLettura = soloLettura,
                 )
             },
             parlantiAttivi = dati?.attivi.orEmpty(),
             unioni = dati?.unioni.orEmpty(),
             estrattiDisponibili = audioDisponibile,
-            unioneAbilitata = !revisioneInCorso,
+            // AC-454: the merge banner's action disabled too — '▶ estratto' stays governed only by
+            // estrattiDisponibili (audio availability), untouched by soloLettura.
+            unioneAbilitata = !revisioneInCorso && !soloLettura,
         )
     }
 
@@ -458,7 +484,8 @@ internal class StatoVoci(
             dividiAbilitato = !interaVoce,
             spiegazioneDividi = if (interaVoce) SPIEGAZIONE_DIVIDI_INTERA_VOCE else null,
             destinazioni = opzioni(v).filter { it.voceId != voceId },
-            abilitata = !revisioneInCorso,
+            // AC-454: 'Riassegna a ▾'/'Dividi voce' disabled while read-only.
+            abilitata = !revisioneInCorso && !soloLettura,
         )
     }
 }

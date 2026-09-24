@@ -29,7 +29,9 @@ enum class AttesaComando { IN_CORSO, IN_ATTESA }
  * One card of the panel, in label order. [titolo] is always "Voce n"; the attributed Nome is in
  * [contenuto]. [inCorso] ≠ `null` disables every card action (AC-411) — [azioniAbilitate] says so once.
  * [errore] is the dismissible inline message of the last failed card command (AC-215/AC-318).
- * [altreVoci] are the 'Unisci con ▾' targets (this card survives).
+ * [altreVoci] are the 'Unisci con ▾' targets (this card survives). [soloLettura] (ADR 0018 Amendment
+ * (b) §2, AC-454) disables every card action while a re-run is queued/running — '▶ estratto' is NOT
+ * one of them (it stays governed by [PannelloVoci.estrattiDisponibili] alone).
  */
 data class CartaVoce(
     val voceId: VoceId,
@@ -38,10 +40,12 @@ data class CartaVoce(
     val inCorso: AttesaComando? = null,
     val errore: String? = null,
     val altreVoci: List<OpzioneVoce> = emptyList(),
+    val soloLettura: Boolean = false,
 ) {
-    /** AC-411: no second command from a card while one runs; nothing to act on while loading/failed. */
+    /** AC-411/AC-454: no second command from a card while one runs, nothing to act on while
+     * loading/failed, and no command at all while read-only. */
     val azioniAbilitate: Boolean
-        get() = inCorso == null &&
+        get() = inCorso == null && !soloLettura &&
             (contenuto is ContenutoCarta.Attribuita || contenuto is ContenutoCarta.DaIdentificare)
 
     /** 'Conferma' needs a top Candidato (AC-416: not while the Proposta is still in attesa). */

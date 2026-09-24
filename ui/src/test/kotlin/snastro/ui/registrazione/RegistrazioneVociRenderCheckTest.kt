@@ -35,6 +35,8 @@ import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
 import snastro.ui.testi.MESSAGGIO_ESTRATTI_NON_DISPONIBILI
 import snastro.ui.testi.MESSAGGIO_PROPOSTA_IN_ATTESA
+import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
+import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_PERSA
 import snastro.ui.testi.SPIEGAZIONE_DIVIDI_INTERA_VOCE
 import snastro.ui.testi.SUGGERIMENTO_PRIMA_REGISTRAZIONE
 import snastro.ui.testi.messaggioPer
@@ -105,11 +107,14 @@ private fun pannello(
     estratti: Boolean = true,
 ) = PannelloVoci(carte, listOf(GIULIA, MARCO), unioni, estrattiDisponibili = estratti, unioneAbilitata = true)
 
+@Suppress("LongParameterList") // one parameter per RegistrazioneUiStato.Dati field these fixtures vary
 private fun stato(
     pannello: PannelloVoci,
     selezione: Set<SegmentoId> = emptySet(),
     barra: BarraSelezione? = null,
     errore: String? = null,
+    soloLettura: Boolean = false,
+    bannerRitrascrizionePannello: String? = null,
 ) = RegistrazioneUiStato.Dati(
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = LocalDate.of(2026, 3, 12),
@@ -128,6 +133,9 @@ private fun stato(
     pannello = pannello,
     selezione = selezione,
     barraSelezione = barra,
+    soloLettura = soloLettura,
+    bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
+    bannerRitrascrizionePannello = bannerRitrascrizionePannello,
 )
 
 /**
@@ -177,6 +185,33 @@ class RegistrazioneVociRenderCheckTest {
             onNodeWithTag("voce-1-cambia").assertIsDisplayed()
             assertEquals(0, onAllNodes(hasTestTag("voce-1-salta")).fetchSemanticsNodes().size)
             onAllNodesWithText("Marco", substring = true)[0].assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-454 pannello in sola lettura disabilita le azioni delle card, estratto resta usabile`() =
+        scena(
+            "sola-lettura",
+            stato(
+                pannello(
+                    listOf(
+                        CARTA_ATTRIBUITA.copy(soloLettura = true),
+                        CARTA_CANDIDATI.copy(soloLettura = true),
+                    ),
+                ).copy(unioneAbilitata = false),
+                soloLettura = true,
+                bannerRitrascrizionePannello = MESSAGGIO_RITRASCRIZIONE_PERSA,
+            ),
+        ) {
+            onNodeWithTag("registrazione-banner-ritrascrizione").assertIsDisplayed()
+            onNodeWithText(
+                MESSAGGIO_RITRASCRIZIONE_IN_CORSO.substringBefore("\n"),
+                substring = true,
+            ).assertIsDisplayed()
+            onNodeWithText(MESSAGGIO_RITRASCRIZIONE_PERSA).assertIsDisplayed()
+            onNodeWithTag("voce-1-cambia").assertIsNotEnabled()
+            onNodeWithTag("voce-2-conferma").assertIsNotEnabled()
+            onNodeWithTag("voce-2-salta").assertIsNotEnabled()
+            onNodeWithTag("voce-1-estratto").assertIsEnabled() // AC-454: '▶ estratto' stays usable
         }
 
     @Test
