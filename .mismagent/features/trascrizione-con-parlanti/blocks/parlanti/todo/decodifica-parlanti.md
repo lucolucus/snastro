@@ -25,7 +25,7 @@ related_adrs:
 Thin adapter implementing DecodificatoreAudio (parlanti) over the :audio API, resolving project-relative paths (audio/<id>.<ext>, cache/audio/<id>.wav — rebuilt from the source if missing).
 
 ## Tasks
-- AC-151 [@modelli] DecodificatoreAudioContratto (parlanti) passano contro l'adattatore reale su un file di sample/
+- AC-151 [@modelli] DecodificatoreAudioContratto (parlanti) passano contro l'adattatore reale su audio sintetico scritto dal test (un WAV generato a runtime; nessun file di sample/ nei test)
 - AC-152 Un WAV derivato mancante viene ricostruito dalla sorgente copiata
 
 ## Dependencies

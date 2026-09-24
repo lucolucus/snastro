@@ -22,7 +22,7 @@ related_adrs:
 Cross-context READ adapter: implements LettoreVoci by calling the supplier's public API VociDelTrascritto, mapping to the consumer's own DTO; delegates, never re-decides.
 
 ## Tasks
-- AC-137 LettoreVociContratto passa real-on-real: il fornitore è popolato tramite i SUOI comandi su databaseInMemoria() (D2)
+- AC-137 LettoreVociContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)
 
 ## Dependencies
 - Blocks built first: `api-trascritto` (wave 4)

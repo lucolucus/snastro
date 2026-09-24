@@ -27,10 +27,13 @@ commands:
 ## What to do
 Policy/service: RigeneraDocumento(registrazioneId, dataPrecedente?) writes the documento projection under nomeFile and, if the date changed, removes the old file after; RigeneraTuttiIDocumenti (startup, R4) regenerates every Registrazione with a Trascritto; maps each event of the event boundaries to the affected Registrazioni.
 
+Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento, fix-batch-11 gap): AC-155bis is already implemented and merged (3333164); RigeneraDocumento carries an optional nomeFilePrecedente: String? = null so date change and rename share one path.
+
 ## Tasks
 - AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto
 - AC-154 RigeneraDocumento su una Registrazione senza Trascritto → nessuna scrittura, Ok
 - AC-155 Con una DataRegistrazioneModificata il nuovo file nomeFile(nuova, titolo) è scritto e poi il vecchio nomeFile(precedente, titolo) è rimosso — entrambi calcolati con la stessa funzione pulita di documento (AC-320)
+- AC-155bis (rename; BUILT, merged 3333164) Una RegistrazioneRinominata si comporta come DataRegistrazioneModificata su nomeFile: scrive nomeFile(data, nuovo) e poi rimuove nomeFile(data, precedente); mai il file di un'altra Registrazione; se la chiave non cambia (anche un cambio di sola maiuscola su filesystem case-insensitive) riscrive e non rimuove nulla. Comando generalizzato: RigeneraDocumento(registrazioneId, nomeFilePrecedente: String? = null)
 - AC-327 Il vecchio file rimosso non appartiene mai a un'altra Registrazione: con 'Riunione' (data 2026-09-12) e 'Riunione (2)' (data 2026-09-13) spostare la data di 'Riunione (2)' al 2026-09-12 scrive '2026-09-12 Riunione (2).md', rimuove '2026-09-13 Riunione (2).md' e non tocca '2026-09-12 Riunione.md'; se precedente = nuova il file è riscritto e nulla è rimosso
 - AC-156 ParlanteRinominato → rigenerate tutte e sole le Registrazioni con un'Attribuzione a P; ParlantePromosso con nomeCambiato = false → nulla; ParlanteEliminato → nulla
 - AC-157 Un errore di scrittura → Esito.Errore (così l'abbonato può riprovare)

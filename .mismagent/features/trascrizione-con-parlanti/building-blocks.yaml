@@ -26,10 +26,15 @@
 # SATISFIED (ADR 0013/0014/0015/0016); the attesa-mutex-estrazione gate MOVED to R2 (AC-236 → avvio-parlanti); S3 in R1 is
 # READ-ONLY (variant A): the identification panel + Revisione UI moved to the new R2 block schermata-registrazione-identificazione
 # (distinct from the S2 badge block schermata-registrazioni-identificazione). New AC-379..AC-405.
+# AMENDED 2026-09-24 (manifest deltas 2026-09-24-mutex (ADR 0017) and 2026-09-24-rinomina-documento): the attesa-mutex-estrazione gate is
+# SATISFIED (schermata-registrazione-identificazione, avvio-parlanti, R2); tec-ml-sherpa and tec-estrattore-impronta re-pinned (fair,
+# interruptible Mutex, one session per port call); AC-236 rewritten; new AC-406..AC-424; AC-155bis/AC-186bis recorded as BUILT;
+# eventi-progetto pins RegistrazioneRinominata. Rule-19 reality fold: read-adapter contracts AC-135..139 seed the supplier via its
+# applicazione commands + testFixtures fakes (CR-1); AC-149/151 synthetic audio; AC-8/AC-377 CR-13 migration test; AC-397 setAutoLoadEnabled(false).
 # `depends_on` = non-boundary build dependencies (read-models a ui consumes, services a subscriber calls, suppliers an adapter wraps).
 feature: trascrizione-con-parlanti
 profile: .mismagent/profile.md
-ac_scheme: "AC-1..AC-405 feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
+ac_scheme: "AC-1..AC-424 (+ AC-155bis, AC-186bis) feature-global (AC-1..AC-262 assigned in manifest order; later amendments take the next free number); INV-1..INV-25 from the tactical model"
 blocks:
   - id: "scaffold-app"
     type: "scaffold"
@@ -100,14 +105,14 @@ blocks:
       - "0012"
       - "0014"
     tests_nl:
-      - "AC-8 verifySqlDelightMigration è verde con lo snapshot 1.db committato"
+      - "AC-8 (REWORDED 2026-09-24, CR-13 replaced verifySqlDelightMigration) il test di migrazione di :persistenza:test è verde: DB vuoto → versione corrente con integrità e ogni query, Schema.migrate da vuoto uguale a Schema.create"
       - "AC-9 I tre indici unici parziali di ADR 0007 esistono, ciascuno su una sola riga (regola di presenza verde)"
       - "AC-10 Il driver apre il DB con journal WAL, foreign_keys=ON e secure_delete=ON (pragma letti nel test)"
       - "AC-11 UnitaDiLavoroSql passa UnitaDiLavoroContratto: rollback su Errore e su eccezione"
       - "AC-12 Un DB con versione di schema più recente dell'app viene rifiutato con un errore chiaro, senza modificarlo"
       - "AC-13 attribuzione ha chiave (registrazione_id, voce_id) e impronta_vocale rifiuta una seconda riga con stessi (parlante_id, registrazione_id, voce_id); impronta_vocale ha le colonne sorgente_impronta TEXT NOT NULL e modello_impronta TEXT NOT NULL (un inserimento senza una delle due è rifiutato)"
       - "AC-267 impronta_vocale.sq espone: l'UPDATE compare-and-set di UNA riga (SET impronta, sorgente_impronta, modello_impronta WHERE parlante_id, registrazione_id, voce_id AND sorgente_impronta = :attesa AND modello_impronta = :atteso — nessun INSERT) e le letture dei metadati (parlante_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta, senza BLOB) per registrazione e per progetto; test SQL: l'UPDATE con valori attesi cambiati tocca 0 righe"
-      - "AC-377 (ex AC-NP10, schema) Migrazione forward-only (nuovo file di migrazione dopo 1.sqm, user_version +1): elaborazione.numero_persone INTEGER NULL CHECK (numero_persone BETWEEN 1 AND 10); le righe esistenti restano con NULL (test: DB alla versione precedente con un'Elaborazione → migrato → numero_persone NULL); un INSERT con 0 o 11 è rifiutato; verifySqlDelightMigration verde con il nuovo snapshot"
+      - "AC-377 (ex AC-NP10, schema) Migrazione forward-only (nuovo file di migrazione dopo 1.sqm, user_version +1): elaborazione.numero_persone INTEGER NULL CHECK (numero_persone BETWEEN 1 AND 10); le righe esistenti restano con NULL (test: DB alla versione precedente con un'Elaborazione → migrato → numero_persone NULL); un INSERT con 0 o 11 è rifiutato; il test di migrazione di :persistenza:test resta verde (CR-13: DB vuoto → versione corrente con integrità e ogni query, Schema.migrate da vuoto uguale a Schema.create)"
     notes: "ADR 0007 and ADR 0009 presence rules become exigible when this block is merged (exigible_from: persistenza-schema). AMENDED 2026-09-23 (ADR 0009/0012 Amendment (b)): schema v1 is UNRELEASED — the two columns go straight into v1, no migration; regenerate the committed 1.db snapshot (AC-8 stays green). AMENDED 2026-09-24 (ADR 0014, ADR 0006): R0 is released, so the new column is a FORWARD-ONLY migration (AC-377), never an edit of the existing schema/1.sqm."
     sources: "ADR 0006/0007/0009/0012, dev-architecture-app.md #repository, features/trascrizione-con-parlanti/tactical-model.md (all aggregates)"
   - id: "eventi-pubblicati"
@@ -888,6 +893,7 @@ blocks:
       - "0003"
       - "0009"
       - "0012"
+      - "0017"
     model_hint: "deep"
     commands:
       - "RiallineaImpronte"
@@ -905,7 +911,8 @@ blocks:
       - "AC-299 Una riga la cui Voce non esiste più (o Registrazione senza Trascritto) è saltata senza errore e senza scritture (la rimozione spetta alla revisione-policy)"
       - "AC-300 RiallineaTutteLeImpronte(progettoId) esegue RiallineaImpronte per ogni Registrazione con almeno una riga d'impronta del Progetto (impronteDelProgetto); un fallimento su una Registrazione non impedisce le altre ed è riportato"
       - "AC-301 Un'eccezione di decodifica o estrazione si propaga (ADR 0003, così l'abbonato riprova) dopo che le Voci già riallineate sono state committate; per la Voce fallita nulla è scritto"
-    notes: "ADR 0012 Amendment (b) point 3: run after commit by abbonato-riallineamento-impronte (coalesced per registrazioneId, retried) and at project open by avvio-composizione (RiallineaTutteLeImpronte, background, after RecuperaElaborazioniInterrotte). Staleness decided with the domain rule ImprontaVocale.obsoleta (never re-coded). An extracted Impronta that is not written is simply dropped (ADR 0009 Amendment (b)). Rows per Voce: at most one per Voce in practice (one Attribuzione per Voce), grouped per Voce anyway."
+      - "AC-424 (regressione ADR 0017 §1.2) Una sola EstrattoreImpronta.estrai per riga d'impronta obsoleta, mai una chiamata per più righe — test con una finta che conta: N righe obsolete → N chiamate"
+    notes: "ADR 0012 Amendment (b) point 3: run after commit by abbonato-riallineamento-impronte (coalesced per registrazioneId, retried) and at project open by avvio-composizione (RiallineaTutteLeImpronte, background, after RecuperaElaborazioniInterrotte). Staleness decided with the domain rule ImprontaVocale.obsoleta (never re-coded). An extracted Impronta that is not written is simply dropped (ADR 0009 Amendment (b)). Rows per Voce: at most one per Voce in practice (one Attribuzione per Voce), grouped per Voce anyway. AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex) FOLLOW-UP (test-only, block already merged): AC-424 is a regression test not yet written; it is owed when the block is next reopened (or by a fix-batch)."
     sources: "ADR 0012 Amendment (b) points 2-3, ADR 0009 Amendment (b), features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-15, INV-21, Commands RiallineaImpronte)"
   - id: "catalogo-registrazioni"
     type: "read-model"
@@ -1230,7 +1237,7 @@ blocks:
     related_adrs:
       - "0002"
     tests_nl:
-      - "AC-135 LettoreRegistrazioneContratto (trascrizione) passa real-on-real: il fornitore è popolato tramite i SUOI comandi su databaseInMemoria() (D2)"
+      - "AC-135 LettoreRegistrazioneContratto (trascrizione) passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)"
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process"
   - id: "registrazione-da-progetto-pa"
     type: "adapter"
@@ -1248,7 +1255,7 @@ blocks:
     related_adrs:
       - "0002"
     tests_nl:
-      - "AC-136 LettoreRegistrazioneContratto (parlanti) passa real-on-real: il fornitore è popolato tramite i SUOI comandi su databaseInMemoria() (D2)"
+      - "AC-136 LettoreRegistrazioneContratto (parlanti) passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)"
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process"
   - id: "lettore-voci-da-trascrizione"
     type: "adapter"
@@ -1266,7 +1273,7 @@ blocks:
     related_adrs:
       - "0002"
     tests_nl:
-      - "AC-137 LettoreVociContratto passa real-on-real: il fornitore è popolato tramite i SUOI comandi su databaseInMemoria() (D2)"
+      - "AC-137 LettoreVociContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)"
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process"
   - id: "lettore-trascritto-da-trascrizione"
     type: "adapter"
@@ -1285,7 +1292,7 @@ blocks:
     related_adrs:
       - "0002"
     tests_nl:
-      - "AC-138 LettoreTrascrittoContratto passa real-on-real: il fornitore è popolato tramite i SUOI comandi su databaseInMemoria() (D2)"
+      - "AC-138 LettoreTrascrittoContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)"
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process"
   - id: "lettore-nomi-da-parlanti"
     type: "adapter"
@@ -1303,7 +1310,7 @@ blocks:
     related_adrs:
       - "0002"
     tests_nl:
-      - "AC-139 LettoreNomiContratto passa real-on-real: il fornitore è popolato tramite i SUOI comandi su databaseInMemoria() (D2)"
+      - "AC-139 LettoreNomiContratto passa real-on-real (D2): il fornitore è popolato tramite i SUOI servizi di comando reali di applicazione, sopra i SUOI fake dei testFixtures di applicazione, e gli id coniati sono letti dai suoi eventi pubblicati — mai tramite i suoi adattatori o la sua persistenza (CR-1; decisione del composer 2026-09-23, dispatch.log registrazione-da-progetto-tr)"
     sources: "features/trascrizione-con-parlanti/architetture/architecture-overview.md (Boundaries), seam-in-process"
   - id: "abbonato-revisione-parlanti"
     type: "adapter"
@@ -1405,7 +1412,7 @@ blocks:
       - "0005"
       - "0010"
     tests_nl:
-      - "AC-149 [@modelli] DecodificatoreAudioContratto (trascrizione) passano contro l'adattatore reale su un file di sample/"
+      - "AC-149 [@modelli] DecodificatoreAudioContratto (trascrizione) passano contro l'adattatore reale su audio sintetico scritto dal test (un WAV generato a runtime; nessun file di sample/ nei test)"
       - "AC-150 Un WAV derivato mancante viene ricostruito dalla sorgente copiata"
     sources: "ADR 0005/0010"
   - id: "decodifica-parlanti"
@@ -1426,7 +1433,7 @@ blocks:
       - "0005"
       - "0010"
     tests_nl:
-      - "AC-151 [@modelli] DecodificatoreAudioContratto (parlanti) passano contro l'adattatore reale su un file di sample/"
+      - "AC-151 [@modelli] DecodificatoreAudioContratto (parlanti) passano contro l'adattatore reale su audio sintetico scritto dal test (un WAV generato a runtime; nessun file di sample/ nei test)"
       - "AC-152 Un WAV derivato mancante viene ricostruito dalla sorgente copiata"
     sources: "ADR 0005/0010"
   - id: "rigenerazione-documento"
@@ -1454,10 +1461,12 @@ blocks:
       - "AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto"
       - "AC-154 RigeneraDocumento su una Registrazione senza Trascritto → nessuna scrittura, Ok"
       - "AC-155 Con una DataRegistrazioneModificata il nuovo file nomeFile(nuova, titolo) è scritto e poi il vecchio nomeFile(precedente, titolo) è rimosso — entrambi calcolati con la stessa funzione pulita di documento (AC-320)"
+      - "AC-155bis (rename; BUILT, merged 3333164) Una RegistrazioneRinominata si comporta come DataRegistrazioneModificata su nomeFile: scrive nomeFile(data, nuovo) e poi rimuove nomeFile(data, precedente); mai il file di un'altra Registrazione; se la chiave non cambia (anche un cambio di sola maiuscola su filesystem case-insensitive) riscrive e non rimuove nulla. Comando generalizzato: RigeneraDocumento(registrazioneId, nomeFilePrecedente: String? = null)"
       - "AC-327 Il vecchio file rimosso non appartiene mai a un'altra Registrazione: con 'Riunione' (data 2026-09-12) e 'Riunione (2)' (data 2026-09-13) spostare la data di 'Riunione (2)' al 2026-09-12 scrive '2026-09-12 Riunione (2).md', rimuove '2026-09-13 Riunione (2).md' e non tocca '2026-09-12 Riunione.md'; se precedente = nuova il file è riscritto e nulla è rimosso"
       - "AC-156 ParlanteRinominato → rigenerate tutte e sole le Registrazioni con un'Attribuzione a P; ParlantePromosso con nomeCambiato = false → nulla; ParlanteEliminato → nulla"
       - "AC-157 Un errore di scrittura → Esito.Errore (così l'abbonato può riprovare)"
       - "AC-158 RigeneraTuttiIDocumenti rigenera ogni Registrazione con Trascritto"
+    notes: "AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento, fix-batch-11 gap): AC-155bis is already implemented and merged (3333164); RigeneraDocumento carries an optional nomeFilePrecedente: String? = null so date change and rename share one path."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Documento Policy (+ R4, R5), ADR 0012"
   - id: "elenco-progetti"
     type: "read-model"
@@ -1639,6 +1648,7 @@ blocks:
       - "0004"
       - "0009"
       - "0012"
+      - "0017"
     view_shape:
       proposta: "{voceId, candidati: List<{parlanteId, nome, tipoParlante, fascia: Fascia, estratto: EstrattoRef}>}"
     view_sources:
@@ -1655,6 +1665,9 @@ blocks:
       - "AC-173 Dopo una Revisione, un'Attribuzione o ImpronteRiallineate(registrazioneId) la Proposta è ricalcolata (cache invalidata)"
       - "AC-308 L'impronta transitoria della Voce è estratta da SorgenteImpronta.di(intervalli della Voce): gli intervalli decodificati sono esattamente SorgenteImpronta.intervalli, e nessuna transazione è aperta durante decodifica ed estrazione"
       - "AC-309 Le impronte con modello diverso da EstrattoreImpronta.modello sono ignorate nel confronto: un Parlante che ha solo impronte di un altro modello non è Candidato finché non sono riallineate"
+      - "AC-422 (ADR 0017 §1.2) Calcolare la Proposta di una Voce chiama EstrattoreImpronta.estrai esattamente una volta, solo per quella Voce (nessun raggruppamento di più Voci in una chiamata o sessione)"
+      - "AC-423 (ADR 0017 §1.5) Un calcolo annullato (InterruptedException da estrai) non lascia alcuna voce in cache e non scrive nulla; la richiesta successiva ricalcola"
+    notes: "AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): AC-422/AC-423."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-20, Read-models), features/trascrizione-con-parlanti/architetture/architecture-overview.md (Arbitration), R24"
   - id: "proposta-unione"
     type: "read-model"
@@ -1779,6 +1792,8 @@ blocks:
       - "AC-184 Un errore di scrittura viene ritentato fino al successo"
       - "AC-185 All'avvio tutti i Documenti vengono rigenerati"
       - "AC-186 ElaborazioneCompletata, VociUnite, VoceDivisa, SegmentoRiassegnato, AttribuzioneConfermata, ParlanteRinominato, ParlantePromosso e DataRegistrazioneModificata attivano la Rigenerazione; ParlanteEliminato no"
+      - "AC-186bis (rename; BUILT, merged 3fdd4cb) RegistrazioneRinominata attiva la Rigenerazione dopo il commit come DataRegistrazioneModificata (AC-186), con il titolo precedente (perRegistrazioneRinominata)"
+    notes: "AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento): AC-186bis already implemented and merged (3fdd4cb); eventi-progetto now pins RegistrazioneRinominata."
     sources: "features/trascrizione-con-parlanti/tactical-model.md § Documento Policy, ADR 0012 (+ R4)"
   - id: "lettore-audio"
     type: "ui"
@@ -2024,6 +2039,7 @@ blocks:
       - "0003"
       - "0005"
       - "0012"
+      - "0017"
     consumes_rm:
       - "identificazione-voci"
       - "proposta"
@@ -2037,7 +2053,7 @@ blocks:
       - "DividiVoce"
       - "RiassegnaSegmento"
     gated_by:
-      - "ADR closing spike attesa-mutex-estrazione"
+      - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
     tests_nl:
       - "AC-209 La selezione è limitata a una Voce"
       - "AC-210 'Dividi voce' disabilitato con spiegazione se la selezione è l'intera Voce"
@@ -2053,7 +2069,14 @@ blocks:
       - "AC-403 (ex metà estratti di AC-217) Audio sorgente mancante → i '▶ estratto' delle Voci e dei Candidati sono disabilitati con messaggio; il pannello resta utilizzabile per conferma/salta/nuovo"
       - "AC-404 (ex metà Revisione di AC-215) Un errore di un comando di Revisione (UnisciVoci, DividiVoce, RiassegnaSegmento → Esito.Errore) è mostrato come messaggio in linguaggio semplice inline nel trascritto; il trascritto e la selezione restano invariati"
       - "AC-405 (stati del pannello) Con le sorgenti Parlanti fornite (R2) ma non ancora caricate il pannello mostra un indicatore di caricamento per card, mai un conteggio provvisorio né una galleria vuota; un errore di lettura di una sorgente mostra un messaggio nella card interessata e lascia il trascritto (AC-402) utilizzabile; le etichette mostrano il Nome attribuito (identificazione-voci) al posto di 'Voce n'"
-    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24)."
+      - "AC-411 (ADR 0017 §3) 'Conferma' / 'altri ▾ → Conferma' / 'nuovo…' / 'salta' / 'cambia' mettono subito la card nello stato in corso: i pulsanti d'azione della card sono disabilitati (nessun secondo comando dalla stessa card), è mostrato un indicatore di avanzamento, le altre card e il trascritto restano utilizzabili"
+      - "AC-412 (ADR 0017 §3) Un comando ancora in corso dopo SOGLIA_ATTESA_VISIBILE_MS (2000 ms, costante definita una sola volta nel presenter di S3) fa mostrare alla card 'In attesa dell'elaborazione…' con un pulsante 'Annulla'; nessuna percentuale, nessun conto alla rovescia — test con un comando finto trattenuto da un latch e tempo virtuale"
+      - "AC-413 'Annulla' annulla il comando in corso: la card torna allo stato precedente (stessa Proposta, pulsanti abilitati), nessun messaggio d'errore, e il comando finto vede l'annullamento (nulla è scritto dalla sua parte)"
+      - "AC-414 L'esito di un comando in corso è mostrato come quello di ogni comando: il Nome attribuito, l'errore inline di AC-215 o VoceCambiata di AC-318; la barra della Revisione non è disabilitata mentre un comando è in corso"
+      - "AC-415 Lo stato in corso viene dalla sorgente per progetto fornita da avvio-parlanti (per VoceRef): un presenter ricreato mentre un comando è ancora in corso (l'utente è uscito da S3 ed è tornato) mostra di nuovo quella card in corso, o in attesa oltre la soglia"
+      - "AC-416 Una Proposta non ancora arrivata dopo SOGLIA_ATTESA_VISIBILE_MS fa mostrare alla card 'Proposta in attesa dell'elaborazione…' al posto dei Candidati, senza 'Annulla'; 'altri ▾', 'nuovo…' e 'salta' restano abilitati durante l'attesa"
+      - "AC-417 Il presenter non esegue mai un comando né una Proposta sul thread UI: il comando finto registra il suo thread e verifica che non sia il dispatcher UI né quello main del test; è eseguito tramite il dispatcher di background iniettato"
+    notes: "NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; the chosen wait behaviour is AC-411..AC-417 (per-card pending state, 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS = 2000 ms, defined once in the S3 presenter). OWNER (rule 10): this block declares, in snastro.ui.registrazione, the per-VoceRef pending-state source with annulla(voceRef) that the presenter reads; avvio-parlanti implements it in a per-project scope (AC-418). 'Annulla' cancels a pending command, it is not a domain command (no new triggers entry)."
     sources: "features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (Part 3 (b), User decisions 2026-09-24)"
   - id: "avvio-coda-elaborazioni"
     type: "adapter"
@@ -2211,8 +2234,9 @@ blocks:
       - "0004"
       - "0009"
       - "0012"
+      - "0017"
     gated_by:
-      - "ADR closing spike attesa-mutex-estrazione"
+      - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
     tests_nl:
       - "AC-357 --smoke (esteso) salva anche lo screenshot di S4 e quello di S2 con il badge di identificazione, uscendo con 0; la shell mostra la sezione Parlanti (AC-341 con sezione fornita, AC-177)"
       - "AC-315 abbonato-riallineamento-impronte è registrato come AbbonatoDopoCommit sul DispatcherEventi: una Revisione committata porta a un RiallineaImpronte della sua Registrazione (test end-to-end su databaseInMemoria con le Finte ML)"
@@ -2220,8 +2244,12 @@ blocks:
       - "AC-317 ImpronteRiallineate(registrazioneId) produce un Cambiamento su AggiornamentiVista per quella Registrazione e invalida la cache della Proposta (nessuna Rigenerazione del Documento)"
       - "AC-358 Un'eccezione di RiallineaTutteLeImpronte (all'apertura) o di RiallineaImpronte (abbonato dopo-commit) è catturata e registrata nel log: non termina lo scope di background né l'app, gli altri abbonati continuano; il job è cancellato alla chiusura del progetto (nessun accesso al DB dopo chiudi) — test con una finta che lancia"
       - "AC-359 La composizione R2 registra revisione-policy come AbbonatoSincrono agli eventi di Revisione (una sua Errore annulla la Revisione) e sostituisce il LettoreNomi vuoto di R1 con lettore-nomi-da-parlanti (il Documento mostra i Nomi attribuiti); i comandi Parlanti e RiallineaImpronte ricevono la STESSA UnitaDiLavoro eventi.unitaDiLavoro"
-      - "AC-236 (MOVED 2026-09-24 from avvio-coda-elaborazioni, Mutex gate scoped to R2) Un'estrazione d'impronta richiesta dalla UI durante un'Elaborazione attende il Mutex nativo senza alcuna transazione aperta (nessuna chiamata nativa concorrente; il write lock di SQLite non è tenuto durante l'attesa) — the ADR closing attesa-mutex-estrazione rewrites this AC with the chosen behaviour (separate session, chunked release, or 'occupato' UI state)"
-    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1)."
+      - "AC-236 (REWRITTEN 2026-09-24, ADR 0017) Un'estrazione d'impronta richiesta durante un'Elaborazione attende il Mutex nativo SENZA transazione aperta (il write lock di SQLite non è tenuto), su un dispatcher di background tramite runInterruptible, mai sul thread UI; attende al più la chiamata nativa in corso al momento della richiesta più le estrazioni accodate prima (Mutex equo, ADR 0017 §1.3). Test end-to-end su databaseInMemoria: un EstrattoreImpronta finto bloccabile condivide un ReentrantLock(true) con un passo finto della pipeline che lo tiene; il flusso di stato della UI continua a emettere e il comando completa dopo il rilascio"
+      - "AC-418 (ADR 0017 §3) ConfermaAttribuzione / SaltaVoce da S3 girano in uno scope per progetto, non in quello della schermata, con uno stato in corso per VoceRef esposto al presenter di S3 e un annulla(voceRef); uscire da S3 non li annulla"
+      - "AC-419 annulla(voceRef) durante l'attesa del Mutex → InterruptedException/cancellazione, nulla scritto (nessuna Attribuzione, nessuna riga d'impronta, nessun Parlante, nessun evento) e nessun errore mostrato come fallimento — test: conteggi delle righe invariati"
+      - "AC-420 Chiudere il progetto annulla ogni comando Parlanti e ogni job di Proposta in corso; la chiusura (ferma) li attende, con un limite come CollaboratoriR1.ferma, prima della chiusura del database; nulla è scritto dopo chiudi — test: una finta trattenuta + chiudi, nessun accesso al DB dopo la chiusura"
+      - "AC-421 Le Proposte della Registrazione aperta sono calcolate una Voce alla volta in UN solo job di background legato alla schermata; uscire da S3 o cambiare Registrazione lo annulla; mai N attese concorrenti sul Mutex per un pannello"
+    notes: "RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): R2 (Parlanti — PAUSED) half of the former monolithic composition root; EXTENDS avvio-composizione's graph. ADR 0012 Amendment (b): wire abbonato-riallineamento-impronte (after commit) and run RiallineaTutteLeImpronte at project open, in background, after RecuperaElaborazioniInterrotte; pass the same UnitaDiLavoro to the Parlanti commands and to RiallineaImpronte. Carry-over owned here: catch/log RiallineaTutteLeImpronte exceptions, never crash the background scope, cancel on project close (riallinea-impronte code-review F2, AC-358). The real EstrattoreImpronta (estrattore-impronta-sherpa) wires itself here. AMENDED 2026-09-24 (delta 2026-09-24-packaging, user decisions 2026-09-24): takes the attesa-mutex-estrazione gate moved from R1 (AC-236 moved here from avvio-coda-elaborazioni); supplies the Parlanti sources and the Revisione/identification commands to the S3 presenter by wiring schermata-registrazione-identificazione (the S3 identification panel + Revisione UI, cut from R1). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; AC-236 rewritten with the chosen behaviour; AC-418..AC-421 (per-project command scope + per-VoceRef pending state and annulla for schermata-registrazione-identificazione AC-415, cancellation writes nothing, close joins pending work before the DB closes, one screen-scoped Proposta job)."
     sources: "architecture.md (:avvio), ADR 0009/0012 Amendment (b), release pivot 2026-09-23 (R2 Parlanti)"
   - id: "ml-sherpa-motore"
     type: "adapter"
@@ -2239,6 +2267,7 @@ blocks:
       - "0004"
       - "0008"
       - "0016"
+      - "0017"
     gated_by:
       - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
     tests_nl:
@@ -2252,12 +2281,12 @@ blocks:
       - "AC-394 Una seconda esecuzione con i file presenti è UP-TO-DATE e non fa chiamate di rete (input e output dichiarati)"
       - "AC-395 :avvio:run, :avvio:createDistributable, :avvio:prepareAppResources e modelliTest dipendono da scaricaNativiSherpa; check NO: ./gradlew check --dry-run non elenca scaricaNativiSherpa, ./gradlew :avvio:run --dry-run lo elenca; il gate resta verde con native-cache/ svuotata delle dylib"
       - "AC-396 Su un host os-arch senza asset fissato (tutto tranne macOS arm64 in v1) scaricaNativiSherpa fallisce con un messaggio che nomina l'asset mancante, mai un salto silenzioso (verificato in code review; i nomi Windows/Linux sono documentati in ADR 0016 §5 e non cablati)"
-      - "AC-397 MotoreSherpa.caricaNativi() risolve la directory in quest'ordine: sherpa_onnx.native.path se già impostata, altrimenti compose.application.resources.dir; poi imposta sherpa_onnx.native.path e chiama LibraryUtils.load(); java.library.path non è mai letta né impostata. Nel gate: senza nessuna delle due proprietà, o con una directory priva delle due librerie, caricaNativi fallisce con un messaggio che nomina entrambe le proprietà e LibraryUtils.load() non è invocata"
+      - "AC-397 MotoreSherpa.caricaNativi() risolve la directory in quest'ordine: sherpa_onnx.native.path se già impostata, altrimenti compose.application.resources.dir; poi imposta sherpa_onnx.native.path, chiama LibraryLoader.setAutoLoadEnabled(false) (nessun caricamento automatico di ripiego dei costruttori sherpa: risorsa nel jar, java.library.path — ADR 0016 Amendment 2026-09-24) e poi LibraryUtils.load(); java.library.path non è mai letta né impostata. Nel gate: senza nessuna delle due proprietà, o con una directory priva delle due librerie, caricaNativi fallisce con un messaggio che nomina entrambe le proprietà e LibraryUtils.load() non è invocata"
       - "AC-398 [@modelli] caricaNativi() è idempotente: due chiamate, o due conSessione, caricano i nativi una sola volta, senza errori"
       - "AC-399 conSessione chiama caricaNativi() in modo pigro, prima della creazione del primo oggetto sherpa; nessun codice di :avvio né alcun adattatore consumatore chiama LibraryUtils o System.load (ADR 0004 enforced_by, AC-245); nessun test del gate carica i nativi"
       - "AC-400 ConfigSessione.provider vale \"cpu\" per default; R1 non espone alcuna impostazione utente per un altro provider (ADR 0016 §6)"
-      - "AC-401 conSessione serializza: due conSessione concorrenti non si sovrappongono mai (la seconda attende il Mutex nativo) e il Mutex è rilasciato anche su eccezione — parte R1 del contratto del Mutex, con un solo detentore (la pipeline), indipendente dalla decisione attesa-mutex-estrazione; testabile nel gate se la factory della sessione è sostituibile, altrimenti [@modelli]"
-    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta."
+      - "AC-401 conSessione serializza: due conSessione concorrenti non si sovrappongono mai (la seconda attende il Mutex nativo) e il Mutex è rilasciato anche su eccezione — parte R1 del contratto del Mutex, con un solo detentore (la pipeline); ADR 0017 mantiene questo contratto e aggiunge un'attesa equa e interrompibile (portata da estrattore-impronta-sherpa, AC-408/409); testabile nel gate se la factory della sessione è sostituibile, altrimenti [@modelli]"
+    notes: "AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta. AMENDED 2026-09-24 (reality, merge fbd6e46; ADR 0016 Amendment 2026-09-24): AC-397 now records LibraryLoader.setAutoLoadEnabled(false) before LibraryUtils.load(), as built. ADR 0017: AC-401 unchanged; the fair, interruptible wait on the same Mutex is carried by estrattore-impronta-sherpa (AC-408/409)."
     sources: "ADR 0004, ADR 0016 (§1 pinned artifacts, §2-§6), spike packaging-modelli-desktop, research/spike-packaging-modelli-desktop.md"
   - id: "allineatore"
     type: "adapter"
@@ -2397,6 +2426,7 @@ blocks:
       - "0004"
       - "0008"
       - "0012"
+      - "0017"
     gated_by:
       - "ADR closing spike impronta-vocale-affidabilita"
     tests_nl:
@@ -2405,7 +2435,12 @@ blocks:
       - "AC-260 Tutte le risorse native sono rilasciate a fine uso (use {})"
       - "AC-310 modello = l'id della voce di catalogo del modello di embedding (ADR 0008), costante per l'istanza e uguale a quello registrato in :modelli"
       - "AC-311 Il Mutex nativo è acquisito DENTRO estrai (mai dal chiamante, mai dentro una transazione) e rilasciato anche in caso di eccezione"
-    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): wires itself into avvio-parlanti (R2), no longer the R1 composition."
+      - "AC-406 (ADR 0017 §1) estrai apre esattamente UNA conSessione per chiamata, per UNA sola impronta, e non la trattiene dopo il ritorno: dopo che estrai ritorna, una conSessione da un altro thread ottiene subito il Mutex"
+      - "AC-407 (ADR 0017 §1.5) Se il thread è interrotto durante l'estrazione nativa, estrai lancia InterruptedException dopo la chiusura della sessione e non restituisce alcuna Impronta — test del gate con un estrattore nativo finto"
+      - "AC-408 (ADR 0017; modifica a MotoreSherpa di :ml-sherpa, portata qui perché vive nel modulo di questo blocco e serve solo a R2) conSessione attende con lockInterruptibly(): A tiene il Mutex, B attende in conSessione, B è interrotto → B riceve InterruptedException, l'uso di B non gira mai e nessun nativo è caricato; A rilascia normalmente; AC-401 (serializzazione, rilascio su eccezione) resta verde"
+      - "AC-409 (ADR 0017 §1.3) Il Mutex è equo: A lo tiene, poi B e C si accodano → lo ottengono nell'ordine B, C; la pipeline che lo richiede di nuovo dopo il suo rilascio si accoda dietro un'estrazione in attesa"
+      - "AC-410 (regressione ADR 0017, portata da riconoscitore-sherpa che non è riaperto) Il Mutex è libero tra due chiamate riconosci: con il MotoreRiconoscimento finto iniettabile e un MotoreSherpa con loader finto, dopo il ritorno di riconosci una conSessione da un altro thread ottiene subito il Mutex e il modello resta in cache (nessun secondo caricamento)"
+    notes: "AMENDED 2026-09-23 (ADR 0012 Amendment (b) points 2, 5): supplies EstrattoreImpronta.modello (catalogue id) and takes the native Mutex inside estrai; callers guarantee no open transaction. RELEASE PIVOT 2026-09-23 (user decision, dispatch.log (release-plan)): wires itself into avvio-parlanti (R2), no longer the R1 composition. AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): AC-406..AC-410; this block also carries the :ml-sherpa MotoreSherpa change (lockInterruptibly on the fair Mutex, AC-408/409) and the riconoscitore-sherpa Mutex regression (AC-410, gate test in :ml-sherpa). Its own gate impronta-vocale-affidabilita stays OPEN."
     sources: "spike impronta-vocale-affidabilita, ADR 0004/0008"
   - id: "benchmark-elaborazione"
     type: "adapter"
@@ -2913,7 +2948,7 @@ boundaries:
       - "0002"
   - id: "eventi-progetto"
     owner: "eventi-pubblicati"
-    supplier: "crea-progetto, servizi-registrazione"
+    supplier: "crea-progetto, servizi-registrazione, RinominaRegistrazione (progetto:applicazione, fix-batch-11)"
     consumers:
       - "crea-progetto"
       - "servizi-registrazione"
@@ -2925,6 +2960,7 @@ boundaries:
       ProgettoCreato: "data class(progettoId: ProgettoId, nome: String) : EventoPubblicato"
       RegistrazioneAggiunta: "data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))"
       DataRegistrazioneModificata: "data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento"
+      RegistrazioneRinominata: "data class(registrazioneId: RegistrazioneId, precedente: String, nuovo: String) : EventoPubblicato — precedente/nuovo = the titolo before/after RinominaRegistrazione (fix-batch-11, AC-360/361 in tasks/app/done/r0-feedback-1.md); AFTER-COMMIT consumers: AggiornamentiVista (avvio-r0, AC-366) and abbonato-documento (AC-186bis)"
     keys:
       ProgettoId: "minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder"
       RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef"
@@ -2932,7 +2968,7 @@ boundaries:
     related_adrs:
       - "0012"
       - "0014"
-    delivery: "All three events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012)"
+    delivery: "All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code)"
   - id: "eventi-elaborazione"
     owner: "eventi-pubblicati"
     supplier: "esegui-elaborazione"
@@ -3145,7 +3181,7 @@ boundaries:
       - "estrattore-impronta-sherpa"
     projection: "in-process"
     pinned_types:
-      EstrattoreImpronta: "interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5)"
+      EstrattoreImpronta: "interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5); ONE conSessione per estrai call, for ONE print, never kept after return; an interrupt (cancellation) while waiting for the Mutex or during the native extraction → InterruptedException after the session closes, and no Impronta (ADR 0017 §1.2, §1.5)"
       EstrattoreImprontaFinta: "testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when estrai is invoked while transazioneAperta; modello configurable (default \"finto\")"
       Impronta: "see agg-parlante (parlanti:dominio)"
     keys: {}
@@ -3154,6 +3190,7 @@ boundaries:
       - "0004"
       - "0009"
       - "0012"
+      - "0017"
   - id: "tec-confronto-impronte"
     owner: "porte-parlanti"
     consumers:
@@ -3224,12 +3261,13 @@ boundaries:
       - "estrattore-impronta-sherpa"
     projection: "in-process"
     pinned_types:
-      "snastro.ml.MotoreSherpa": "fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)"
+      "snastro.ml.MotoreSherpa": "fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; holds ONE process-wide FAIR Mutex for one native session (ONE native call at a time); the wait is INTERRUPTIBLE: an interrupt while waiting → InterruptedException, and no session, no native load and no uso run; not reentrant; the Mutex is released on return or exception; every adapter holds it for ONE port call only (ADR 0017 §1)"
       ConfigSessione: "data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = \"cpu\")"
     keys: {}
     contract_test: "consumer-driven"
     related_adrs:
       - "0004"
+      - "0017"
   - id: "tec-lettore-audio"
     owner: "lettore-audio"
     consumers:
@@ -3299,7 +3337,7 @@ build_order:
   - [schermata-progetti, schermata-registrazioni, schermata-registrazione, schermata-parlanti, schermata-modelli]  # wave 8
   - [avvio-r0, schermata-registrazioni-identificazione, schermata-registrazione-identificazione, avvio-coda-elaborazioni]  # wave 9
   - [avvio-composizione]  # wave 10
-  - [avvio-parlanti, ml-sherpa-motore, allineatore]  # wave 11  # R1 ML spike gates satisfied (ADR 0013-0016); avvio-parlanti gated (R2)
+  - [avvio-parlanti, ml-sherpa-motore, allineatore]  # wave 11  # R1 ML spike gates satisfied (ADR 0013-0016); avvio-parlanti (R2) Mutex gate satisfied by ADR 0017
   - [diarizzatore-sherpa, riconoscitore-sherpa, vad-silero, estrattore-impronta-sherpa]  # wave 12  # R1 gates satisfied; estrattore-impronta-sherpa gated (R2)
   - [benchmark-elaborazione]  # wave 13  # spike gates satisfied; waits on the wave-12 R1 adapters merged
 release_plan:
@@ -3309,4 +3347,4 @@ release_plan:
   # AMENDED 2026-09-24 (user decisions, delta 2026-09-24-packaging): R1 spike gates satisfied by ADR 0013/0014/0015/0016;
   # the attesa-mutex-estrazione gate MOVED to R2; S3 in R1 is READ-ONLY (variant A) with an explicit cut of the Revisione UI.
   R1: {name: "Trascrizione", scope: "start a transcription (S2 'Trascrivi' + optional Numero di persone); pipeline VAD/ASR/diarization/alignment (strategy A per turn, ADR 0015) with real ML adapters on pinned sherpa-onnx 1.13.8 natives (ADR 0016); S3 READ-ONLY: transcript by Voce with 'Voce n' labels, play from each Segmento, open the Documento; Documento .md", composition_root: "avvio-composizione", gated_by: ["ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013", "ADR closing spike scelta-diarizzatore — satisfied: ADR 0014", "ADR closing spike allineamento-parole-voci — satisfied: ADR 0015", "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016"], cut: ["Revisione UI (selection, 'Dividi voce', 'Riassegna a', 'Unisci con'; AC-209/210/211, AC-404): the revisione domain block (UnisciVoci/DividiVoce/RiassegnaSegmento) is built in R1 WITHOUT UI — its commands are reachable only from tests (AC-354/AC-356); the UI arrives in R2 with schermata-registrazione-identificazione (user decision 2026-09-24, rule 9)", "S3 Voci panel / identification (AC-212..216, 219, 318, 319, 403, 405): R2, schermata-registrazione-identificazione", "packaging O-1 (JDK for jpackage) and O-2 (signing/notarization): deferred, R1 runs via ./gradlew :avvio:run (ADR 0016 OPEN)", "benchmark CoreML opt-in AC (packaging delta Part 2, optional): not folded, pending the user"]}
-  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa"]}
+  R2: {name: "Parlanti", scope: "attribution, S3 Voci panel + Revisione UI, S4 speakers screen, voice prints, proposals, re-alignment", composition_root: "avvio-parlanti", status: "PAUSED", gated_by: ["ADR closing spike attesa-mutex-estrazione (moved from R1, user decision 2026-09-24): schermata-registrazione-identificazione, avvio-parlanti (AC-236) — satisfied: ADR 0017 (accepted 2026-09-24)", "ADR closing spike impronta-vocale-affidabilita: estrattore-impronta-sherpa"]}

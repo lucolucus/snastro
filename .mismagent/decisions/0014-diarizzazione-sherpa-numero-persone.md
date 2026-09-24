@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial: the auto-start policy of ADR 0012 Amendment R2 / ADR 0004 Execution — superseded in place by their dated amendments, pointing here
 closes_spike: scelta-diarizzatore
 enforced_by: null
-amended: 2026-09-23   # user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10
+amended: 2026-09-24   # 2026-09-23 user decision: no automatic start on import; Trascrivi/Riprova carry Numero di persone 1..10. 2026-09-24: see "Amendment 2026-09-24 — numClusters above the real count"
 ---
 # 0014 — Diarization: sherpa-onnx pyannote-3.0 + WeSpeaker ResNet34-LM, threshold 0.4; optional "Numero di persone" → `num_clusters`
 
@@ -175,3 +175,17 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
   - a stated count gives visibly wrong splits.
 - **Discursive.** No grep checks clustering values. The guardians are the `diarizzatore-sherpa`
   block (AC-249 contract test, AC-250 catalogue entry) and the new `numeroPersone` ACs.
+
+## Amendment 2026-09-24 — `numClusters` above the real count
+- **Measured** while building `diarizzatore-sherpa` (dispatch.log 2026-09-24, merge 41b70ff, real
+  `@modelli` run). It closes the "not measured" point of the adapter behaviour contract above.
+- **sherpa never throws** when `numClusters` is larger than the real number of speakers. The
+  fallback to automatic clustering "if sherpa rejects that `k`" is therefore never triggered.
+- **But the result is not monotonic in `k`.** A `k` above the real count can return **fewer**
+  clusters than a smaller `k`. On a clip with 2 voices, `k = 10` returned **1** cluster. An
+  over-stated count can merge distinct people into one `Voce`.
+- **Consequence for the UI.** The "Numero di persone" hint must be the **real** count of people who
+  speak, never an upper bound or a "safe" high number. The S2 field's hint must tell the user so;
+  leaving it empty (automatic clustering) is the right choice when the count is unknown.
+- The 1..10 bound and the absent → automatic rule are unchanged. The re-measure trigger above also
+  covers this: the benchmark on a real recording should check `k` = the real count.

@@ -17,6 +17,7 @@ related_adrs:
   - "0008"
   - "0012"
   - "0016"
+  - "0017"
 gated_by:
   - "ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)"
 owns_boundaries:
@@ -24,7 +25,7 @@ owns_boundaries:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
-      "snastro.ml.MotoreSherpa": "fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)"
+      "snastro.ml.MotoreSherpa": "fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; holds ONE process-wide FAIR Mutex for one native session (ONE native call at a time); the wait is INTERRUPTIBLE: an interrupt while waiting → InterruptedException, and no session, no native load and no uso run; not reentrant; the Mutex is released on return or exception; every adapter holds it for ONE port call only (ADR 0017 §1)"
       ConfigSessione: "data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = \"cpu\")"
 ---
 # ml-sherpa-motore — Motore sherpa-onnx: nativi, sessioni, wrapper
@@ -32,7 +33,7 @@ owns_boundaries:
 ## What to do
 Own the pinned sherpa-onnx 1.13.8 fetch (ADR 0016): scaricaJarSherpa (jar, SHA-256, native-cache/) and scaricaNativiSherpa (osx-arm64 JNI tarball, SHA-256, only the two dylibs into :avvio's appResourcesRootDir/macos-arm64/), wired to run/distribution/modelliTest but never to check; MotoreSherpa.caricaNativi() explicit, idempotent native load (sherpa_onnx.native.path, else compose.application.resources.dir); ConfigSessione (CPU default, intra-op = P-cores), AutoCloseable session wrappers, the native Mutex serializing conSessione.
 
-Note: AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta.
+Note: AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(id) returns the installed DIRECTORY <cartella>/<id>/ (archive extracted, single top-level dir stripped); the adapters resolve their file names (encoder/decoder/joiner/tokens, model.onnx) inside it — the file names come from the spike ADR that adds the catalogue entry. AMENDED 2026-09-24 (ADR 0016, manifest delta 2026-09-24-packaging): this block OWNS the pinned sherpa-onnx 1.13.8 fetch (jar + osx-arm64 JNI natives, SHA-256 verified, native-cache/ gitignored, surviving clean) that the wave-0 scaffold-app stub left to it, and the explicit native load in MotoreSherpa.caricaNativi(). The gate needs network access ONCE, for the jar; natives are never downloaded by check. It edits avvio/build.gradle.kts only for appResourcesRootDir and task edges — avvio-composizione (wave 10) is built before it, so no collision. ADR 0016 enforced_by (no native/sherpa artifact tracked by git) is checked by the verifier. NOT folded (pending the user): the optional benchmark CoreML AC of the packaging delta. AMENDED 2026-09-24 (reality, merge fbd6e46; ADR 0016 Amendment 2026-09-24): AC-397 now records LibraryLoader.setAutoLoadEnabled(false) before LibraryUtils.load(), as built. ADR 0017: AC-401 unchanged; the fair, interruptible wait on the same Mutex is carried by estrattore-impronta-sherpa (AC-408/409).
 
 ## Tasks
 - AC-243 (REWRITTEN 2026-09-24, ADR 0016) [@modelli] i nativi si caricano su macOS arm64 da ./gradlew :avvio:run (compose.application.resources.dir) e da ./gradlew modelliTest (sherpa_onnx.native.path impostato dal task di test a <appResourcesRootDir>/macos-arm64/)
@@ -45,17 +46,17 @@ Note: AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(
 - AC-394 Una seconda esecuzione con i file presenti è UP-TO-DATE e non fa chiamate di rete (input e output dichiarati)
 - AC-395 :avvio:run, :avvio:createDistributable, :avvio:prepareAppResources e modelliTest dipendono da scaricaNativiSherpa; check NO: ./gradlew check --dry-run non elenca scaricaNativiSherpa, ./gradlew :avvio:run --dry-run lo elenca; il gate resta verde con native-cache/ svuotata delle dylib
 - AC-396 Su un host os-arch senza asset fissato (tutto tranne macOS arm64 in v1) scaricaNativiSherpa fallisce con un messaggio che nomina l'asset mancante, mai un salto silenzioso (verificato in code review; i nomi Windows/Linux sono documentati in ADR 0016 §5 e non cablati)
-- AC-397 MotoreSherpa.caricaNativi() risolve la directory in quest'ordine: sherpa_onnx.native.path se già impostata, altrimenti compose.application.resources.dir; poi imposta sherpa_onnx.native.path e chiama LibraryUtils.load(); java.library.path non è mai letta né impostata. Nel gate: senza nessuna delle due proprietà, o con una directory priva delle due librerie, caricaNativi fallisce con un messaggio che nomina entrambe le proprietà e LibraryUtils.load() non è invocata
+- AC-397 MotoreSherpa.caricaNativi() risolve la directory in quest'ordine: sherpa_onnx.native.path se già impostata, altrimenti compose.application.resources.dir; poi imposta sherpa_onnx.native.path, chiama LibraryLoader.setAutoLoadEnabled(false) (nessun caricamento automatico di ripiego dei costruttori sherpa: risorsa nel jar, java.library.path — ADR 0016 Amendment 2026-09-24) e poi LibraryUtils.load(); java.library.path non è mai letta né impostata. Nel gate: senza nessuna delle due proprietà, o con una directory priva delle due librerie, caricaNativi fallisce con un messaggio che nomina entrambe le proprietà e LibraryUtils.load() non è invocata
 - AC-398 [@modelli] caricaNativi() è idempotente: due chiamate, o due conSessione, caricano i nativi una sola volta, senza errori
 - AC-399 conSessione chiama caricaNativi() in modo pigro, prima della creazione del primo oggetto sherpa; nessun codice di :avvio né alcun adattatore consumatore chiama LibraryUtils o System.load (ADR 0004 enforced_by, AC-245); nessun test del gate carica i nativi
 - AC-400 ConfigSessione.provider vale "cpu" per default; R1 non espone alcuna impostazione utente per un altro provider (ADR 0016 §6)
-- AC-401 conSessione serializza: due conSessione concorrenti non si sovrappongono mai (la seconda attende il Mutex nativo) e il Mutex è rilasciato anche su eccezione — parte R1 del contratto del Mutex, con un solo detentore (la pipeline), indipendente dalla decisione attesa-mutex-estrazione; testabile nel gate se la factory della sessione è sostituibile, altrimenti [@modelli]
+- AC-401 conSessione serializza: due conSessione concorrenti non si sovrappongono mai (la seconda attende il Mutex nativo) e il Mutex è rilasciato anche su eccezione — parte R1 del contratto del Mutex, con un solo detentore (la pipeline); ADR 0017 mantiene questo contratto e aggiunge un'attesa equa e interrompibile (portata da estrattore-impronta-sherpa, AC-408/409); testabile nel gate se la factory della sessione è sostituibile, altrimenti [@modelli]
 
 ## Dependencies
 - **GATED — not ready until:** ADR closing spike packaging-modelli-desktop — satisfied: ADR 0016 (accepted 2026-09-24)
 - **tec-ml-sherpa** (OWNED here — built before its consumers) — owner `ml-sherpa-motore`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
+    - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; holds ONE process-wide FAIR Mutex for one native session (ONE native call at a time); the wait is INTERRUPTIBLE: an interrupt while waiting → InterruptedException, and no session, no native load and no uso run; not reentrant; the Mutex is released on return or exception; every adapter holds it for ONE port call only (ADR 0017 §1)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -97,4 +98,4 @@ Note: AMENDED 2026-09-23 (ADR 0008 Amendment (c)): ProvisioningModelli.percorso(
   - keys (minting rules):
     - `VoceCatalogo.id`: minted by the spike ADR that chooses the model (e.g. 'segmentazione-pyannote-3.0'); stable across edits of licence/attribution text, but NEVER reused for different bytes: any change of the entry's sha256 MINTS A NEW id (ADR 0008 Amendment (c)) — the embedding model's id is EstrattoreImpronta.modello, and ADR 0012 (b) staleness (modello_impronta ≠ EstrattoreImpronta.modello) relies on it; also the installed directory name <cartella>/<id>/, whose .sha256 marker records the installed asset hash
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0016 (.mismagent/decisions/); ADR 0004, ADR 0016 (§1 pinned artifacts, §2-§6), spike packaging-modelli-desktop, research/spike-packaging-modelli-desktop.md.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0016, 0017 (.mismagent/decisions/); ADR 0004, ADR 0016 (§1 pinned artifacts, §2-§6), spike packaging-modelli-desktop, research/spike-packaging-modelli-desktop.md.

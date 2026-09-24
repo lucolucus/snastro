@@ -21,6 +21,7 @@ related_adrs:
   - "0013"
   - "0015"
   - "0016"
+  - "0017"
 gated_by:
   - "ADR closing spike scelta-asr-code-switching — satisfied: ADR 0013 (accepted)"
 ---
@@ -77,7 +78,7 @@ Note: AMENDED 2026-09-24 (ADR 0015): about 1000 per-turn calls per hour — relo
     - `Token`: data class(testo: String, intervallo: IntervalloMs) — relative to the start of the given samples
 - **tec-ml-sherpa** (consumed/implemented) — owner `ml-sherpa-motore`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; ONE native call at a time (Mutex)
+    - `snastro.ml.MotoreSherpa`: fun caricaNativi(); fun <T> conSessione(config: ConfigSessione, uso: (SessioneSherpa) -> T): T — AutoCloseable released after use; holds ONE process-wide FAIR Mutex for one native session (ONE native call at a time); the wait is INTERRUPTIBLE: an interrupt while waiting → InterruptedException, and no session, no native load and no uso run; not reentrant; the Mutex is released on return or exception; every adapter holds it for ONE port call only (ADR 0017 §1)
     - `ConfigSessione`: data class(percorsiModello: List<Path>, threadIntraOp: Int, provider: String = "cpu")
 
-Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013, 0015, 0016 (.mismagent/decisions/); spike scelta-asr-code-switching, ADR 0004/0008/0013/0015/0016.
+Sources: ADRs 0002, 0003, 0004, 0008, 0012, 0013, 0015, 0016, 0017 (.mismagent/decisions/); spike scelta-asr-code-switching, ADR 0004/0008/0013/0015/0016.

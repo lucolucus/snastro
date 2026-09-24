@@ -3,6 +3,7 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: packaging-modelli-desktop
+amended: 2026-09-24   # see "Amendment 2026-09-24 — auto-load disabled before the explicit load" (§4)
 enforced_by: "! git ls-files | grep -qE '(\\.(dylib|so|dll|jnilib)|sherpa-onnx[^/]*\\.(jar|tar\\.bz2))$'"
 ---
 # 0016 — sherpa-onnx natives: pinned GitHub release assets, a SHA-verified Gradle fetch, Compose app resources, explicit load
@@ -178,3 +179,14 @@ not a discovery.
 - **Blind spot:** a native file renamed to another extension. That case is left to code review.
 - **ADR 0004 and ADR 0005 carry dated amendments** (2026-09-24) pointing here. Their decisions
   stand. The amendments answer the questions they left to the spike.
+
+## Amendment 2026-09-24 — auto-load disabled before the explicit load (§4)
+- Found while building `ml-sherpa-motore` (dispatch.log 2026-09-24, merge fbd6e46). sherpa's
+  constructors auto-load the natives through `com.k2fsa.sherpa.onnx.LibraryLoader`. Its fallbacks
+  (an in-jar resource, then `java.library.path`) are exactly the loads §4 rules out.
+- **So the explicit load in `MotoreSherpa.caricaNativi()` first calls
+  `LibraryLoader.setAutoLoadEnabled(false)`, then `LibraryUtils.load()`.** The resolution order of
+  §4 (`sherpa_onnx.native.path`, then `compose.application.resources.dir`, then a clear failure
+  naming both) is unchanged. The explicit load stays the only load path.
+- The call is confined to `:ml-sherpa`, like `LibraryUtils` (ADR 0004 `enforced_by`). The decision
+  stands; this amendment records the second call of the sequence.

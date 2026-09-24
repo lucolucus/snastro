@@ -28,6 +28,7 @@ related_adrs:
   - "0007"
   - "0009"
   - "0012"
+  - "0017"
 view_shape:
   proposta: "{voceId, candidati: List<{parlanteId, nome, tipoParlante, fascia: Fascia, estratto: EstrattoRef}>}"
 view_sources:
@@ -46,6 +47,8 @@ On-demand Proposta per not-yet-attributed Voce; transient embedding extracted fr
 ### view_shape (field ← source)
 - `proposta`: {voceId, candidati: List<{parlanteId, nome, tipoParlante, fascia: Fascia, estratto: EstrattoRef}>} ← parlanteId, nome, tipoParlante ← Parlante (attivi con impronte, same progettoId via registrazione-per-parlanti); fascia ← ConfrontoImpronte(transient Impronta of the Voce from EstrattoreImpronta over DecodificatoreAudio.campioni(SorgenteImpronta.di(voci-per-parlanti intervals).intervalli), against only the Parlante's prints whose modello == EstrattoreImpronta.modello); estratto ← estratto-audio(the best print's source VoceRef)
 
+Note: AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): AC-422/AC-423.
+
 ## Tasks
 - INV-20 solo Parlanti attivi dello stesso Progetto con almeno un'impronta sono Candidati
 - INV-20 ordine: prima i ricorrenti, poi per Fascia; a parità di tipo e Fascia, per Nome in ordine alfabetico
@@ -56,6 +59,8 @@ On-demand Proposta per not-yet-attributed Voce; transient embedding extracted fr
 - AC-173 Dopo una Revisione, un'Attribuzione o ImpronteRiallineate(registrazioneId) la Proposta è ricalcolata (cache invalidata)
 - AC-308 L'impronta transitoria della Voce è estratta da SorgenteImpronta.di(intervalli della Voce): gli intervalli decodificati sono esattamente SorgenteImpronta.intervalli, e nessuna transazione è aperta durante decodifica ed estrazione
 - AC-309 Le impronte con modello diverso da EstrattoreImpronta.modello sono ignorate nel confronto: un Parlante che ha solo impronte di un altro modello non è Candidato finché non sono riallineate
+- AC-422 (ADR 0017 §1.2) Calcolare la Proposta di una Voce chiama EstrattoreImpronta.estrai esattamente una volta, solo per quella Voce (nessun raggruppamento di più Voci in una chiamata o sessione)
+- AC-423 (ADR 0017 §1.5) Un calcolo annullato (InterruptedException da estrai) non lascia alcuna voce in cache e non scrive nulla; la richiesta successiva ricalcola
 
 ## Dependencies
 - Blocks built first: `estratto-audio` (wave 4)
@@ -134,7 +139,7 @@ On-demand Proposta per not-yet-attributed Voce; transient embedding extracted fr
     - `DecodificatoreAudioFinta`: testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when campioni is invoked while transazioneAperta
 - **tec-estrattore-impronta** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `EstrattoreImpronta`: interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5)
+    - `EstrattoreImpronta`: interface { val modello: String /* catalogue id of the embedding model (ADR 0008), stored as impronta_vocale.modello_impronta */; fun estrai(c: CampioniAudio): Impronta } — NEVER called while a UnitaDiLavoro transaction is open; the adapter serializes native use with the pipeline by taking the native Mutex INSIDE estrai (ADR 0012 Amendment (b) points 2, 5); ONE conSessione per estrai call, for ONE print, never kept after return; an interrupt (cancellation) while waiting for the Mutex or during the native extraction → InterruptedException after the session closes, and no Impronta (ADR 0017 §1.2, §1.5)
     - `EstrattoreImprontaFinta`: testFixtures — takes the UnitaDiLavoroFinta (optional ctor param) and throws IllegalStateException when estrai is invoked while transazioneAperta; modello configurable (default "finto")
     - `Impronta`: see agg-parlante (parlanti:dominio)
 - **tec-confronto-impronte** (consumed/implemented) — owner `porte-parlanti`, projection in-process, contract_test **consumer-driven**
@@ -170,4 +175,4 @@ On-demand Proposta per not-yet-attributed Voce; transient embedding extracted fr
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
   - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 
-Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-20, Read-models), features/trascrizione-con-parlanti/architetture/architecture-overview.md (Arbitration), R24.
+Sources: ADRs 0002, 0003, 0004, 0005, 0006, 0007, 0009, 0012, 0017 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti (INV-20, Read-models), features/trascrizione-con-parlanti/architetture/architecture-overview.md (Arbitration), R24.

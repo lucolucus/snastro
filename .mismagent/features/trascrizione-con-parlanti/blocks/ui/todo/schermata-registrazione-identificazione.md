@@ -27,6 +27,7 @@ related_adrs:
   - "0005"
   - "0010"
   - "0012"
+  - "0017"
 consumes_rm:
   - "identificazione-voci"
   - "proposta"
@@ -40,14 +41,14 @@ triggers:
   - "DividiVoce"
   - "RiassegnaSegmento"
 gated_by:
-  - "ADR closing spike attesa-mutex-estrazione"
+  - "ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)"
 ---
 # schermata-registrazione-identificazione — S3 · pannello Voci e Revisione (fetta Parlanti di S3)
 
 ## What to do
 R2 slice of S3 (the S3 PANEL, not the S2 badge block schermata-registrazioni-identificazione): supplies the S3 presenter's optional Parlanti sources and commands — the Voci panel on the right (one card per Voce: '▶ estratto', Proposta candidates with Fascia bar, 'Conferma', 'altri ▾', 'nuovo…', 'salta' / 'cambia', 'Unisci con ▾', merge banner) and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'); labels show the attributed Nome from identificazione-voci. Gated on the attesa-mutex-estrazione ADR, which decides the user-facing wait on the native Mutex.
 
-Note: NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24).
+Note: NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-09-24 — variant A): the Parlanti + Revisione slice of S3 split out of schermata-registrazione so R1 ships S3 read-only (AC-402), following the S2 precedent (schermata-registrazioni / schermata-registrazioni-identificazione). NAMING: this is the S3 PANEL block (singular 'registrazione'); the S2 BADGE block is schermata-registrazioni-identificazione (plural) — both R2, both wired by avvio-parlanti. It extends the S3 presenter (snastro.ui.registrazione) by supplying the optional sources/commands of AC-402: Voci panel (cards, Proposta, 'Conferma', 'altri ▾', 'nuovo…', 'salta', 'cambia', 'Unisci con ▾', merge banner, '▶ estratto') and the transcript selection toolbar ('Riassegna a ▾', 'Dividi voce'). GATED on attesa-mutex-estrazione: this is where the user-facing wait on the native Mutex lives (ConfermaAttribuzione/SaltaVoce/Proposta extract prints); the ADR closing the spike folds its chosen behaviour into these tests_nl. 'salta' is not offered on an attributed Voce (use 'cambia', R24). AMENDED 2026-09-24 (ADR 0017, manifest delta 2026-09-24-mutex): gate attesa-mutex-estrazione SATISFIED; the chosen wait behaviour is AC-411..AC-417 (per-card pending state, 'In attesa dell'elaborazione…' + 'Annulla' after SOGLIA_ATTESA_VISIBILE_MS = 2000 ms, defined once in the S3 presenter). OWNER (rule 10): this block declares, in snastro.ui.registrazione, the per-VoceRef pending-state source with annulla(voceRef) that the presenter reads; avvio-parlanti implements it in a per-project scope (AC-418). 'Annulla' cancels a pending command, it is not a domain command (no new triggers entry).
 
 ### Consumes read-models: identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio
 ### Triggers: ConfermaAttribuzione, SaltaVoce, UnisciVoci, DividiVoce, RiassegnaSegmento
@@ -67,10 +68,17 @@ Note: NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-0
 - AC-403 (ex metà estratti di AC-217) Audio sorgente mancante → i '▶ estratto' delle Voci e dei Candidati sono disabilitati con messaggio; il pannello resta utilizzabile per conferma/salta/nuovo
 - AC-404 (ex metà Revisione di AC-215) Un errore di un comando di Revisione (UnisciVoci, DividiVoce, RiassegnaSegmento → Esito.Errore) è mostrato come messaggio in linguaggio semplice inline nel trascritto; il trascritto e la selezione restano invariati
 - AC-405 (stati del pannello) Con le sorgenti Parlanti fornite (R2) ma non ancora caricate il pannello mostra un indicatore di caricamento per card, mai un conteggio provvisorio né una galleria vuota; un errore di lettura di una sorgente mostra un messaggio nella card interessata e lascia il trascritto (AC-402) utilizzabile; le etichette mostrano il Nome attribuito (identificazione-voci) al posto di 'Voce n'
+- AC-411 (ADR 0017 §3) 'Conferma' / 'altri ▾ → Conferma' / 'nuovo…' / 'salta' / 'cambia' mettono subito la card nello stato in corso: i pulsanti d'azione della card sono disabilitati (nessun secondo comando dalla stessa card), è mostrato un indicatore di avanzamento, le altre card e il trascritto restano utilizzabili
+- AC-412 (ADR 0017 §3) Un comando ancora in corso dopo SOGLIA_ATTESA_VISIBILE_MS (2000 ms, costante definita una sola volta nel presenter di S3) fa mostrare alla card 'In attesa dell'elaborazione…' con un pulsante 'Annulla'; nessuna percentuale, nessun conto alla rovescia — test con un comando finto trattenuto da un latch e tempo virtuale
+- AC-413 'Annulla' annulla il comando in corso: la card torna allo stato precedente (stessa Proposta, pulsanti abilitati), nessun messaggio d'errore, e il comando finto vede l'annullamento (nulla è scritto dalla sua parte)
+- AC-414 L'esito di un comando in corso è mostrato come quello di ogni comando: il Nome attribuito, l'errore inline di AC-215 o VoceCambiata di AC-318; la barra della Revisione non è disabilitata mentre un comando è in corso
+- AC-415 Lo stato in corso viene dalla sorgente per progetto fornita da avvio-parlanti (per VoceRef): un presenter ricreato mentre un comando è ancora in corso (l'utente è uscito da S3 ed è tornato) mostra di nuovo quella card in corso, o in attesa oltre la soglia
+- AC-416 Una Proposta non ancora arrivata dopo SOGLIA_ATTESA_VISIBILE_MS fa mostrare alla card 'Proposta in attesa dell'elaborazione…' al posto dei Candidati, senza 'Annulla'; 'altri ▾', 'nuovo…' e 'salta' restano abilitati durante l'attesa
+- AC-417 Il presenter non esegue mai un comando né una Proposta sul thread UI: il comando finto registra il suo thread e verifica che non sia il dispatcher UI né quello main del test; è eseguito tramite il dispatcher di background iniettato
 - (rendering — sizing/overflow/contrast/state rendering at 1280x800 and 1024x640 — is owned by realize-ui + `./gradlew :ui:renderCheck`, not a tests_nl item)
 
 ## Dependencies
-- **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione
+- **GATED — not ready until:** ADR closing spike attesa-mutex-estrazione — satisfied: ADR 0017 (accepted 2026-09-24)
 - Blocks built first: `schermata-registrazione` (wave 8), `identificazione-voci` (wave 5), `proposta` (wave 5), `proposta-unione` (wave 5), `parlanti-attivi` (wave 5), `estratto-audio` (wave 4), `conferma-attribuzione` (wave 4), `salta-voce` (wave 4), `revisione` (wave 4), `ui-fondamenta` (wave 6)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
@@ -117,4 +125,4 @@ Note: NEW 2026-09-24 (manifest delta 2026-09-24-packaging, user decisions 2026-0
   - keys (minting rules):
     - `percorso`: see tec-registro-progetti
 
-Sources: ADRs 0002, 0003, 0005, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (Part 3 (b), User decisions 2026-09-24).
+Sources: ADRs 0002, 0003, 0005, 0010, 0012, 0017 (.mismagent/decisions/); features/trascrizione-con-parlanti/UI/ux-proposal.md S3 (+ R1, R8, R24, amendment 2026-09-24 S3 read-only in R1), manifest delta 2026-09-24-packaging (Part 3 (b), User decisions 2026-09-24).
