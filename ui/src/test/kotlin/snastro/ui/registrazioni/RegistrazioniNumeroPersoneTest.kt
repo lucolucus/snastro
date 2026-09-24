@@ -162,24 +162,27 @@ class RegistrazioniNumeroPersoneTest {
     }
 
     @Test
-    fun `AC-375 0, 11, testo o decimale mostrano il messaggio inline e nessun comando e invocato`() = runTest {
-        listOf(StatoElaborazioneVista.NON_AVVIATA, StatoElaborazioneVista.FALLITA).forEach { stato ->
-            val presenter = presentatore(this, stati = { ids -> ids.map { statoVista(it, stato) } })
-            advanceUntilIdle()
-
-            listOf("0", "11", "tre", "2.5", "-1").forEach { testo ->
-                presenter.azioni.chiudiErroreRiga(REG_1)
-                presenter.azioni.modificaNumeroPersone(REG_1, testo)
-                presenter.azioni.avviaElaborazione(REG_1)
+    fun `AC-375 L548b valori invalidi mostrano il messaggio inline e nessun comando e invocato`() =
+        runTest {
+            listOf(StatoElaborazioneVista.NON_AVVIATA, StatoElaborazioneVista.FALLITA).forEach { stato ->
+                val presenter = presentatore(this, stati = { ids -> ids.map { statoVista(it, stato) } })
                 advanceUntilIdle()
 
-                assertEquals(MESSAGGIO_NUMERO_PERSONE_NON_VALIDO, presenter.riga().erroreRiga, "$stato, '$testo'")
-                assertEquals(testo, presenter.riga().numeroPersone, "il campo resta com'era")
-            }
-        }
+                // L548b: "+4"/"04" (leading sign / leading zero) are no more a sane person count than
+                // "0"/"11" — `String.toIntOrNull()` alone would wrongly accept both.
+                listOf("0", "11", "tre", "2.5", "-1", "+4", "04").forEach { testo ->
+                    presenter.azioni.chiudiErroreRiga(REG_1)
+                    presenter.azioni.modificaNumeroPersone(REG_1, testo)
+                    presenter.azioni.avviaElaborazione(REG_1)
+                    advanceUntilIdle()
 
-        assertEquals(emptyList(), comandi)
-    }
+                    assertEquals(MESSAGGIO_NUMERO_PERSONE_NON_VALIDO, presenter.riga().erroreRiga, "$stato, '$testo'")
+                    assertEquals(testo, presenter.riga().numeroPersone, "il campo resta com'era")
+                }
+            }
+
+            assertEquals(emptyList(), comandi)
+        }
 
     @Test
     fun `AC-376 su una riga fallita il campo e precompilato col numeroPersone dell Elaborazione fallita`() = runTest {

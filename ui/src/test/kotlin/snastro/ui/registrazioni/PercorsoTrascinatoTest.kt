@@ -67,4 +67,35 @@ class PercorsoTrascinatoTest {
         // uses a single slash, no "//" authority marker — verified against a real File above too.
         assertEquals("/Users/luca/perche.m4a", percorsoDaUriFile("file:/Users/luca/perche.m4a"))
     }
+
+    // --- L478e: a Windows `file:/C:/...` URI, as `File.toURI().toString()` produces there -----------
+
+    @Test
+    fun `L478e uno slash iniziale prima di una lettera di unita Windows viene rimosso`() {
+        assertEquals("C:/Users/luca/perche.m4a", percorsoDaUriFile("file:/C:/Users/luca/perche.m4a"))
+    }
+
+    @Test
+    fun `L478e un percorso Unix normale non e scambiato per una lettera di unita`() {
+        // "Users" is not a single letter before ':' — the drive-letter form never matches here.
+        assertEquals("/Users/luca/perche.m4a", percorsoDaUriFile("file:/Users/luca/perche.m4a"))
+    }
+
+    // --- L485d: strict escape/UTF-8 decoding ---------------------------------------------------------
+
+    @Test
+    fun `L485d un segno piu al posto di una cifra esadecimale non e accettato`() {
+        assertNull(decodificaPercentoUri("/Users/luca/file%+1.m4a"))
+    }
+
+    @Test
+    fun `L485d un segno meno al posto di una cifra esadecimale non e accettato`() {
+        assertNull(decodificaPercentoUri("/Users/luca/file%-1.m4a"))
+    }
+
+    @Test
+    fun `L485d una sequenza UTF-8 non valida restituisce null invece del carattere di sostituzione`() {
+        // 0xC3 needs a continuation byte in 0x80..0xBF; 0x28 ('(') is not one.
+        assertNull(decodificaPercentoUri("/tmp/invalido%C3%28.m4a"))
+    }
 }

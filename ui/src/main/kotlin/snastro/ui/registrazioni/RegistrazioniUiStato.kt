@@ -17,12 +17,16 @@ sealed interface RegistrazioniUiStato {
      * model's own order, never re-sorted here) — an empty [righe] is rendered as the AC-199 empty
      * message, not a separate state. [importoInCorso] guards a second import while one is in flight
      * (M3) and drives the indicator (AC-200); [errore], when set, is a dismissible inline message for
-     * the last failed import (AC-201) or list refresh (H1: never replaces [righe]).
+     * the last failed import (AC-201, H1: never replaces [righe]). L485a: [erroreAggiornamento] is the
+     * SEPARATE, own lifecycle for a failed background refresh (AggiornamentiVista/riprova) — unlike
+     * [errore] (which an unrelated refresh must never wipe, M1), a refresh error is transient and is
+     * cleared by the very next SUCCESSFUL refresh, never left stuck on screen once fresh data is in.
      */
     data class Dati(
         val righe: List<RigaRegistrazione>,
         val importoInCorso: Boolean = false,
         val errore: String? = null,
+        val erroreAggiornamento: String? = null,
     ) : RegistrazioniUiStato
 
     /**
@@ -30,7 +34,7 @@ sealed interface RegistrazioniUiStato {
      * empty catalog): showing the AC-199 empty message here would falsely claim there are no
      * registrazioni. [messaggio] is paired with a retry action (`AzioniRegistrazioni.riprova`). A
      * refresh failing AFTER rows are already known stays in [Dati] (H1/M1): the known rows and every
-     * in-flight flag survive, only [Dati.errore] changes.
+     * in-flight flag survive, only [Dati.erroreAggiornamento] changes (L485a).
      */
     data class Errore(val messaggio: String) : RegistrazioniUiStato
 }
@@ -116,8 +120,11 @@ sealed interface StatoElaborazioneRiga {
     ) : StatoElaborazioneRiga
 
     /** AC-203: [motivo] + the 'Numero di persone' field (prefilled, AC-376) + 'Riprova' — only for a
-     * FALLITA row WITHOUT a Trascritto (AC-451: one WITH a Trascritto renders as [Completata] instead). */
-    data class Fallita(val motivo: String) : StatoElaborazioneRiga
+     * FALLITA row WITHOUT a Trascritto (AC-451: one WITH a Trascritto renders as [Completata] instead).
+     * L548c: [elaborazioneId] is part of equality too — a re-run failing again with the SAME [motivo]
+     * text is still a DIFFERENT Elaborazione, and [RegistrazioniPresenter]'s merge (`stessoStato`) must
+     * see that, not treat it as no change at all. */
+    data class Fallita(val motivo: String, val elaborazioneId: ElaborazioneId? = null) : StatoElaborazioneRiga
 
     /** AC-203/AC-448/AC-451: a row click opens S3 (the presenter's injected `apriRegistrazione`, out
      * of this block's scope) — [RigaRegistrazione.ritrascrizioneFallita]/[RigaRegistrazione.ritrascriviDisponibile]

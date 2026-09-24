@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 import java.util.concurrent.Callable
@@ -66,6 +67,30 @@ private class SessioneProgettoCheChiudeLentamente(private val delegato: Sessione
         chiudiIniziato.countDown()
         sblocca.await()
         delegato.chiudi()
+    }
+}
+
+/**
+ * L457b: a [SessioneProgetto] whose `crea` advances [corrente] to a NEWER Progetto than the one it
+ * returns — before returning — simulating `corrente` having moved on (e.g. a concurrent reload)
+ * between `sessione.crea` finishing and the presenter reading its result.
+ */
+private class SessioneProgettoConCorrenteChePassaAvanti(
+    private val restituito: ProgettoAperto,
+    private val piuNuovo: ProgettoAperto,
+) : SessioneProgetto {
+    private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
+    override val corrente: StateFlow<ProgettoAperto?> = _corrente
+
+    override fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto> {
+        _corrente.value = piuNuovo
+        return Esito.Ok(restituito)
+    }
+
+    override fun apri(percorso: String): Esito<ProgettoAperto> = crea("", "")
+
+    override fun chiudi() {
+        _corrente.value = null
     }
 }
 
@@ -195,8 +220,34 @@ class ShellPresenterTest {
             presentatore(this, sessione = SessioneProgettoCheEsplode { CancellationException("annullato") })
         presenter.apri("/tmp/qualsiasi")
         advanceUntilIdle()
-        // Rethrown, not swallowed: the operation stays cancelled, it is never turned into a banner.
-        assertEquals(ShellUiStato.Caricamento, presenter.stato.value)
+        // L457a: rethrown, not swallowed — never turned into an error banner — but (unlike before)
+        // no longer stuck at Caricamento either: the `finally` resets it from `sessione.corrente`.
+        assertEquals(ShellUiStato.SenzaProgetto(), presenter.stato.value)
+    }
+
+    @Test
+    fun `L457a una CancellationException durante apri non lascia lo stato bloccato in Caricamento`() = runTest {
+        val presenter =
+            presentatore(this, sessione = SessioneProgettoCheEsplode { CancellationException("annullato") })
+        presenter.apri("/tmp/qualsiasi")
+        advanceUntilIdle()
+        assertEquals(false, presenter.stato.value is ShellUiStato.Caricamento)
+    }
+
+    @Test
+    fun `L457b un successo di crea mostra sessione corrente non il valore restituito se e piu nuovo`() = runTest {
+        val restituito = ProgettoAperto(ProgettoId("id-vecchio"), "Vecchio", "/tmp/vecchio")
+        val piuNuovo = ProgettoAperto(ProgettoId("id-nuovo"), "Nuovo", "/tmp/nuovo")
+        val presenter = presentatore(
+            this,
+            sessione = SessioneProgettoConCorrenteChePassaAvanti(restituito, piuNuovo),
+        )
+
+        presenter.crea("/tmp", "Vecchio")
+        advanceUntilIdle()
+
+        val stato = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
+        assertEquals(piuNuovo, stato.progetto)
     }
 
     @Test
