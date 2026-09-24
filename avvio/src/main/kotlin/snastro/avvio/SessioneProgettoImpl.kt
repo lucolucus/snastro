@@ -332,7 +332,7 @@ internal class SessioneProgettoImpl(
             riproduttore = seams.riproduttoreFabbrica(),
         )
         val progettoEsteso = try {
-            estensione?.apri(ContestoEstensione(cartella, db, dispatcher, scopeSessione, registrazioni))
+            estensione?.apri(ContestoEstensione(progettoId, cartella, db, dispatcher, scopeSessione, registrazioni))
         } catch (e: CancellationException) {
             scopeSessione.cancel()
             throw e

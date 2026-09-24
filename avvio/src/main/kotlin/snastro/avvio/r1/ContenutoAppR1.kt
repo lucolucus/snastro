@@ -107,7 +107,7 @@ private fun SchermataRegistrazioneR1(
 }
 
 @Composable
-private fun BarraR1(onRegistrazioni: () -> Unit, onModelli: () -> Unit) {
+internal fun BarraR1(onRegistrazioni: () -> Unit, onModelli: () -> Unit) {
     Row(modifier = Modifier.fillMaxWidth()) {
         TextButton(onClick = onRegistrazioni, modifier = Modifier.testTag("avvio-nav-registrazioni")) {
             Text(ETICHETTA_NAV_REGISTRAZIONI)

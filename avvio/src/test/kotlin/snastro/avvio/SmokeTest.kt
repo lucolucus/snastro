@@ -1,20 +1,37 @@
 package snastro.avvio
 
 import org.junit.jupiter.api.io.TempDir
+import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ElaborazioneId
+import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.kernel.VoceId
+import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
+import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
+import snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto
+import snastro.parlanti.adattatori.porte.LettoreVociDaTrascrizione
+import snastro.parlanti.applicazione.comandi.ConfermaAttribuzione
+import snastro.parlanti.applicazione.comandi.ConfermaAttribuzioneServizio
+import snastro.parlanti.applicazione.comandi.ObiettivoAttribuzione
+import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
+import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
+import snastro.persistenza.SnastroDatabase
+import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
+import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.dominio.NomeProgetto
 import snastro.progetto.dominio.Progetto
 import snastro.progetto.dominio.Registrazione
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
+import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import snastro.trascrizione.dominio.SegmentoIniziale
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.Trascritto
@@ -27,28 +44,29 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * AC-237 + AC-351: `--smoke <fixture-dir>` opens the fixture project (>=1 Registrazione already
- * imported, one of them with a completed Trascritto) and saves S1, S2, S3 (the completed Trascritto,
- * 'Voce n' labels — the smoke itself waits for 'Voce 1' on screen) and S5 — headless, on the ML Finte:
- * no sherpa natives, no models. fix-batch-16 LOW-1: S5 renders the REAL catalogue over an empty cache
- * (the smoke waits for 'Mancanti' with its 4 entries and 'Scarica'). The fixture here is built
- * DIRECTLY via the SQL repositories + domain factories (never `AggiungiRegistrazioneServizio`'s real
- * FFmpeg probe/copy pipeline — this proves the smoke MECHANISM, not audio import) so this test needs
- * no native library and stays in the default gate.
+ * AC-237 + AC-351 + AC-357: `--smoke <fixture-dir>` opens the fixture project (>=1 Registrazione already
+ * imported, one of them with a completed Trascritto whose Voce 1 is named 'Anna') and saves S1, S2 (the
+ * smoke waits for the identification badge '2 voci · 1 da identificare'), S3 (the Voci panel, Voce 1's
+ * Nome shown), S4 (the shell's Parlanti section) and S5 — headless, on the ML Finte: no sherpa natives,
+ * no models. fix-batch-16 LOW-1: S5 renders the REAL catalogue over an empty cache ('Mancanti',
+ * 'Scarica'). The fixture here is built DIRECTLY via the SQL repositories + domain factories (never
+ * `AggiungiRegistrazioneServizio`'s real FFmpeg probe/copy pipeline — this proves the smoke MECHANISM,
+ * not audio import), and its Parlante through the REAL `ConfermaAttribuzione` over the Finte decoder and
+ * extractor, so this test needs no native library and stays in the default gate.
  */
 class SmokeTest {
     @TempDir
     lateinit var cartella: Path
 
     @Test
-    fun `AC-237 AC-351 smoke apre il progetto fixture e salva gli screenshot di S1, S2, S3 e S5, senza nativi`() {
+    fun `AC-237 AC-351 AC-357 smoke apre il progetto fixture e salva S1, S2, S3, S4 e S5, senza nativi`() {
         val cartellaFixture = cartella.resolve("Fixture.snastro")
         costruisciProgettoFixture(cartellaFixture)
-        listOf("s1", "s2", "s3", "s5").forEach { Files.deleteIfExists(Path.of("build/smoke/$it.png")) }
+        SCHERMATE.forEach { Files.deleteIfExists(Path.of("build/smoke/$it.png")) }
 
         eseguiSmoke(cartellaFixture.toString())
 
-        listOf("s1", "s2", "s3", "s5").forEach { nome ->
+        SCHERMATE.forEach { nome ->
             val png = Path.of("build/smoke/$nome.png")
             assertTrue(Files.exists(png) && Files.size(png) > 0, "screenshot di $nome mancante o vuoto: $png")
         }
@@ -94,6 +112,33 @@ class SmokeTest {
         )
         val trascritto = Trascritto.crea(registrazioneId, durataMs = 60_000, segmenti = segmenti).atteso()
         TrascrittoRepositorySql(db.database).salva(trascritto.aggregato)
+
+        // AC-357: Voce 1 is 'Anna' (S2 badge '2 voci · 1 da identificare', S3 Nome, one S4 row).
+        confermaAttribuzione(db.database, registrazioni).esegui(
+            ConfermaAttribuzione(VoceRef(registrazioneId, VoceId(1)), ObiettivoAttribuzione.NuovoParlante("Anna")),
+        ).atteso()
         db.chiudi()
+    }
+
+    private fun confermaAttribuzione(
+        database: SnastroDatabase,
+        registrazioni: RegistrazioneRepositorySql,
+    ): ConfermaAttribuzioneServizio {
+        val eventi = DispatcherEventiInMemoria(UnitaDiLavoroSql(database))
+        return ConfermaAttribuzioneServizio(
+            eventi.unitaDiLavoro,
+            GeneratoreIdFinto(),
+            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
+            LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database))),
+            ParlanteRepositorySql(database),
+            AttribuzioneRepositorySql(database),
+            DecodificatoreAudioFinta(),
+            EstrattoreImprontaFinta(),
+            eventi,
+        )
+    }
+
+    private companion object {
+        val SCHERMATE = listOf("s1", "s2", "s3", "s4", "s5")
     }
 }

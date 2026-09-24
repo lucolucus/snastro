@@ -9,7 +9,8 @@ import kotlin.test.assertTrue
 
 /**
  * The static half of AC-355/AC-356 over `avvio/src/main` (the behavioral half is `ComposizioneR1Test`):
- * what the R1 composition must never contain, checked on the source itself.
+ * what the R1 composition must never contain, checked on the source itself. R2 (`snastro.avvio.r2`,
+ * avvio-parlanti) is excluded from the Parlanti guard only — it is exactly where they are wired.
  */
 class CablaggioR1Test {
     private val sorgenti: List<File> =
@@ -36,7 +37,10 @@ class CablaggioR1Test {
 
     @Test
     fun `AC-356 nessuna classe di parlanti e referenziata dalla composizione R1`() {
-        assertEquals(emptyList(), righeCon("snastro.parlanti"))
+        // R2 (avvio-parlanti) lives in its own package, `snastro.avvio.r2`: everything else stays free of it.
+        val fuoriDaR2 = sorgenti.filterNot { it.path.contains("snastro/avvio/r2/") }
+        assertTrue(fuoriDaR2.any { it.path.contains("snastro/avvio/r1/") })
+        assertEquals(emptyList(), righeCon("snastro.parlanti", fuoriDaR2))
     }
 
     @Test

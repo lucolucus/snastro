@@ -1,5 +1,6 @@
 package snastro.avvio.r1
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -13,6 +14,7 @@ import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione
 import snastro.documento.adattatori.porte.ScrittoreDocumentoFile
 import snastro.documento.applicazione.letture.Documento
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
+import snastro.documento.applicazione.porte.LettoreNomi
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.RegistrazioneId
@@ -58,10 +60,13 @@ import java.util.logging.Logger
  *   PER OPEN PROJECT ([adattatoriMl], called once per [apri]) over the app's ONE `MotoreSherpa` — a
  *   worker of a just-closed project still finishing in the background never shares a cached native
  *   model (nor its release) with the next project's own worker.
- * - The Documento reads names from [LettoreNomiVuoto] ('Voce n', AC-356): no `:parlanti` class.
+ * - The Documento reads names from [lettoreNomi]: [LettoreNomiVuoto] in R1 ('Voce n', AC-356: no
+ *   `:parlanti` class); R2 (`snastro.avvio.r2.EstensioneR2`) passes `LettoreNomiDaParlanti` (AC-359).
  * - The [CodaElaborazioni] is built LAST: its construction runs `RecuperaElaborazioniInterrotte`
  *   strictly before its worker picks any FIFO head (AC-233), and only after every after-commit
- *   subscriber above is registered (a recovered `fallita` still refreshes S2 and the Documento).
+ *   subscriber above is registered (a recovered `fallita` still refreshes S2 and the Documento). Its
+ *   first recovery completes [CollaboratoriR1.recuperoConcluso] — what R2's `RiallineaTutteLeImpronte`
+ *   waits for (ADR 0012 Amendment (b): "after the Elaborazione queue recovery", AC-316).
  */
 @Suppress("LongParameterList") // one parameter per app-wide collaborator of the per-project graph
 internal class EstensioneR1(
@@ -71,6 +76,7 @@ internal class EstensioneR1(
     private val adattatoriMl: () -> AdattatoriMl,
     private val modelliPronti: () -> Boolean,
     private val decodificatore: (Path) -> DecodificatoreAudio = ::DecodificatoreAudioFfmpeg,
+    private val lettoreNomi: (ContestoEstensione) -> LettoreNomi = { LettoreNomiVuoto },
 ) : EstensioneSessione {
     override fun apri(contesto: ContestoEstensione): ProgettoEsteso {
         val dispatcher = contesto.dispatcher
@@ -97,12 +103,17 @@ internal class EstensioneR1(
         )
         val esegui = EseguiProssimaElaborazioneServizio(uow, clock, elaborazioni, trascritti, pipeline, dispatcher)
         val recupera = RecuperaElaborazioniInterrotteServizio(uow, elaborazioni, dispatcher)
+        val recuperoConcluso = CompletableDeferred<Unit>()
         val coda = CodaElaborazioni(
             scope = contesto.scope,
             fonte = fonteAvanzamento(esegui),
             recuperaElaborazioniInterrotte = {
-                val esito = recupera.esegui(RecuperaElaborazioniInterrotte)
-                if (esito is Esito.Errore) log.warning("recupero delle elaborazioni interrotte fallito: $esito")
+                try {
+                    val esito = recupera.esegui(RecuperaElaborazioniInterrotte)
+                    if (esito is Esito.Errore) log.warning("recupero delle elaborazioni interrotte fallito: $esito")
+                } finally {
+                    recuperoConcluso.complete(Unit) // also when it failed: what follows must not wait forever
+                }
             },
             modelliPronti = modelliPronti,
             segnalaElaborazioneBloccata = { id -> log.warning("elaborazione $id esclusa dalla coda") },
@@ -123,6 +134,7 @@ internal class EstensioneR1(
             coda = coda,
             lavoroDocumento = lavoroDocumento,
             aggiornamenti = aggiornamenti,
+            recuperoConcluso = recuperoConcluso,
         )
     }
 
@@ -140,7 +152,7 @@ internal class EstensioneR1(
             contesto.dispatcher,
             RigenerazioneDocumentoPolitica(
                 LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo),
-                LettoreNomiVuoto,
+                lettoreNomi(contesto),
                 ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
             ),
             CoroutineScope(contesto.scope.coroutineContext + lavoro + io),

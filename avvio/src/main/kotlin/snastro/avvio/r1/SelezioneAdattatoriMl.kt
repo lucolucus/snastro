@@ -33,6 +33,12 @@ import java.nio.file.Path
  * `--smoke` run (headless, no natives, no models, AC-351) and the gate's tests.
  *
  * Swapping a model = its catalogue entry (a new id, ADR 0008 (c)) + the one line of its port below.
+ *
+ * **R2 (Parlanti).** The print extractor's selection is the R2 half of this same point,
+ * `SelezioneAdattatoriMl.adattatoriParlanti` (an extension declared in `snastro.avvio.r2`, so this R1 file
+ * names no `:parlanti` type — AC-356). TODO(estrattore-impronta-sherpa, gated by spike
+ * `impronta-vocale-affidabilita`): when it lands, its model's `VoceCatalogo` joins `catalogo(REALI)` below and
+ * its adapter replaces the REALI branch of `adattatoriParlanti` (over the same [MotoreSherpa]).
  */
 internal object SelezioneAdattatoriMl {
     /** The model catalogue of [scelta]: what S5 provisions and what the Elaborazione queue waits for. */

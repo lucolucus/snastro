@@ -1,5 +1,6 @@
 package snastro.avvio.r1
 
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
@@ -19,7 +20,8 @@ import java.util.logging.Logger
  * sources S2 needs (AC-355: [statiElaborazione], [avviaElaborazione]), the read-only S3 sources
  * ([trascritto], [percorsoDocumento]), the Revisione commands (no UI in R1), and the two background
  * workers [ferma] waits for: the Elaborazione queue ([coda]) and the Documento regeneration
- * ([lavoroDocumento], the job `AbbonatoDocumentoEventi` runs under).
+ * ([lavoroDocumento], the job `AbbonatoDocumentoEventi` runs under). [recuperoConcluso] completes once
+ * the queue's first `RecuperaElaborazioniInterrotte` has run (R2 starts `RiallineaTutteLeImpronte` after it).
  */
 @Suppress("LongParameterList") // one parameter per per-project collaborator
 internal class CollaboratoriR1(
@@ -31,6 +33,7 @@ internal class CollaboratoriR1(
     val coda: CodaElaborazioni,
     private val lavoroDocumento: Job,
     override val aggiornamenti: AggiornamentiVista,
+    val recuperoConcluso: Deferred<Unit>,
 ) : ProgettoEsteso {
     /** 'Trascrivi'/'Riprova' (ADR 0014): enqueues, then nudges the queue so the run starts at once. */
     fun avviaElaborazione(comando: AvviaElaborazione): Esito<Unit> =

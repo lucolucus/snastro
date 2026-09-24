@@ -14,6 +14,7 @@ import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
 import snastro.ui.modelli.ErroreServizioModelli
+import snastro.ui.registrazione.ErroreComandoVoce
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -165,6 +166,11 @@ class MessaggiErroreTest {
     }
 
     @Test
+    fun `AC-418 ErroreComandoVoce`() {
+        verificaCopertura(ErroreComandoVoce::class.java, listOf(ErroreComandoVoce.NonRiuscito)) { messaggioPer(it) }
+    }
+
+    @Test
     fun `il punto di ingresso instrada ogni gerarchia raggiungibile`() {
         val esempi: List<ErroreDominio> = listOf(
             ErroreSessione.CartellaNonValida,
@@ -173,6 +179,7 @@ class MessaggiErroreTest {
             ErroreTrascrizione.NessunParlatoRilevato,
             ErroreParlanti.NomeVuoto,
             ErroreServizioModelli.ReteAssente,
+            ErroreComandoVoce.NonRiuscito,
         )
         esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank()) }
     }

@@ -34,8 +34,9 @@ import kotlin.test.assertTrue
  *
  * **R1 retargeting (avvio-composizione, carry-over 6).** R1 lives in the same module, so the static
  * guard is now SCOPED TO THE R0 GRAPH: every R1 file lives in package `snastro.avvio.r1`
- * (`avvio/src/main/kotlin/snastro/avvio/r1/`), and nothing OUTSIDE it may import `snastro.trascrizione`,
- * `snastro.documento`, `snastro.modelli` or `snastro.ml` — the R0 graph reaches R1 only through the
+ * (`avvio/src/main/kotlin/snastro/avvio/r1/`), every R2 file in `snastro.avvio.r2` (avvio-parlanti), and
+ * nothing OUTSIDE them may import `snastro.trascrizione`, `snastro.documento`, `snastro.modelli`,
+ * `snastro.ml` or `snastro.parlanti` — the R0 graph reaches R1 only through the
  * type-neutral `EstensioneSessione` hook. The behavioral half is kept in R0 MODE: [costruisciGrafoR0]
  * without an extension builds no extension at all, and `RegistrazioniPresenter` built through R0's
  * own [costruisciRegistrazioniPresenter] never carries an `elaborazione` state. The dynamic half —
@@ -51,11 +52,14 @@ class GrafoR0Test {
     }
 
     @Test
-    fun `AC-350 fuori dal pacchetto r1 avvio src main non importa mai Trascrizione, Documento, Modelli o ML`() {
+    fun `AC-350 fuori dai pacchetti r1 e r2 avvio src main non importa i contesti delle release successive`() {
         val radice = File("src/main/kotlin")
-        val r1 = File(radice, "snastro/avvio/r1")
-        val proibiti = listOf("snastro.trascrizione", "snastro.documento", "snastro.modelli", "snastro.ml")
-        val fileR0 = radice.walkTopDown().filter { it.isFile && it.extension == "kt" && !it.startsWith(r1) }.toList()
+        val estensioni = listOf(File(radice, "snastro/avvio/r1"), File(radice, "snastro/avvio/r2"))
+        val proibiti =
+            listOf("snastro.trascrizione", "snastro.documento", "snastro.modelli", "snastro.ml", "snastro.parlanti")
+        val fileR0 = radice.walkTopDown()
+            .filter { file -> file.isFile && file.extension == "kt" && estensioni.none { file.startsWith(it) } }
+            .toList()
         val violazioni = fileR0
             .flatMap { file -> file.readLines().map { riga -> file to riga } }
             .filter { (_, riga) -> proibiti.any { riga.trimStart().startsWith("import $it") } }

@@ -19,8 +19,9 @@ import java.util.Collections
 /**
  * Fake [ComandiVoce] (RC-9). Like the real `avvio-parlanti` adapter it runs every command in ITS OWN
  * [scope] (the project's), so cancelling the caller (leaving S3) never cancels the command (AC-415).
- * [risposta] is the command's result. With [trattieni] set, a command waits — as if on the native Mutex
- * — until [rilascia] (the test's latch) or [annulla].
+ * [risposta] is the command's result (one that throws is `Errore(ErroreComandoVoce.NonRiuscito)`). With
+ * [trattieni] set, a command waits — as if on the native Mutex — until [rilascia] (the test's latch) or
+ * [annulla].
  *
  * Test-only observations: [eseguiti] = the commands that completed with `Ok` ("written"); [annullati] =
  * the commands that saw the cancellation; [thread] = the thread each [esegui] was called on (AC-417).
@@ -54,6 +55,11 @@ class ComandiVoceFinta(
             } catch (e: CancellationException) {
                 annullati += comando
                 throw e
+            } catch (
+                // The contract: a body that throws is an `Errore`, never a dead port (AC-418).
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                Esito.Errore(ErroreComandoVoce.NonRiuscito)
             } finally {
                 _stato.update { it - ref }
                 lavori.remove(ref)

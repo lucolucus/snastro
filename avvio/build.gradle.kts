@@ -26,11 +26,9 @@ dependencies {
     // `null` in R0, AC-350) are typed over `:trascrizione:applicazione` — `:ui` depends on it only as
     // `implementation` (never `api`), so it is not on `:avvio`'s classpath transitively.
     implementation(project(":trascrizione:applicazione"))
-    // RegistrazioniPresenter's optional `identificazioni` parameter (AC-204/AC-345, left `null` here —
-    // R0/R1 show no badge) is typed over `:parlanti:applicazione`'s `ConteggioIdentificazione`, needed
-    // for this call site to resolve even though the argument itself is omitted (same `implementation`,
-    // not `api`, non-transitive reasoning as above). No `:parlanti` class is instantiated here — the
-    // `avvio-parlanti` block wires the real `identificazioni` argument (AC-356 stays satisfied).
+    // RegistrazioniPresenter's optional `identificazioni` parameter (AC-204/AC-345, left `null` in R0/R1 —
+    // no badge) is typed over `:parlanti:applicazione`'s `ConteggioIdentificazione`. No `:parlanti` class is
+    // instantiated by R0/R1 (AC-356); R2 (snastro.avvio.r2) wires the real `identificazioni` argument.
     implementation(project(":parlanti:applicazione"))
 
     // R1 composition (avvio-composizione, package snastro.avvio.r1): Trascrizione SQL repositories +
@@ -46,6 +44,14 @@ dependencies {
     // SelezioneAdattatoriMl ("Finte until the ML blocks land", manifest) — and stay the forced choice of
     // `-Dsnastro.ml=finte` (the --smoke run: headless, no natives, no models).
     implementation(testFixtures(project(":trascrizione:applicazione")))
+
+    // R2 composition (avvio-parlanti, package snastro.avvio.r2): the Parlanti SQL repositories, readers,
+    // subscribers (revisione-policy, riallineamento impronte) and the cosine comparison. The print
+    // extractor + Parlanti decoder Finte (EstrattoreImprontaFinta / DecodificatoreAudioFinta) are the forced
+    // choice of `-Dsnastro.ml=finte` (--smoke), exactly like the pipeline's ML Finte above; the real
+    // extractor (estrattore-impronta-sherpa) is not built yet — SelezioneAdattatoriMl.adattatoriParlanti.
+    implementation(project(":parlanti:adattatori"))
+    implementation(testFixtures(project(":parlanti:applicazione")))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
 

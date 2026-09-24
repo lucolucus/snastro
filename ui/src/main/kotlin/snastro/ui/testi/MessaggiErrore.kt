@@ -7,6 +7,7 @@ import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
 import snastro.ui.modelli.ErroreServizioModelli
+import snastro.ui.registrazione.ErroreComandoVoce
 
 /**
  * R25: one exhaustive `messaggioPer` per context error hierarchy (no `else`, AC-180), plus this
@@ -22,6 +23,7 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
     is ErroreTrascrizione -> messaggioPer(errore)
     is ErroreParlanti -> messaggioPer(errore)
     is ErroreServizioModelli -> messaggioPer(errore)
+    is ErroreComandoVoce -> messaggioPer(errore)
     else -> error("ErroreDominio non mappato: $errore")
 }
 
@@ -89,4 +91,9 @@ fun messaggioPer(errore: ErroreServizioModelli): String = when (errore) {
     ErroreServizioModelli.ReteAssente -> "Rete non raggiungibile: impossibile scaricare i modelli."
     is ErroreServizioModelli.ScritturaFallita -> "Non è stato possibile salvare i modelli sul disco."
     is ErroreServizioModelli.DownloadFallito -> "Il download dei modelli non è riuscito."
+}
+
+/** AC-418: a card command whose body threw — nothing was written, the user can retry. */
+fun messaggioPer(errore: ErroreComandoVoce): String = when (errore) {
+    ErroreComandoVoce.NonRiuscito -> "Il comando non è riuscito: nulla è stato salvato. Riprova."
 }

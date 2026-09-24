@@ -3,10 +3,12 @@ package snastro.avvio.r1
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import snastro.avvio.ApriEsternoDesktop
+import snastro.avvio.ContestoEstensione
 import snastro.avvio.GrafoR0
 import snastro.avvio.cartellaDatiRegistroProgettiReale
 import snastro.avvio.costruisciGrafoR0
 import snastro.avvio.orologioApp
+import snastro.documento.applicazione.porte.LettoreNomi
 import snastro.kernel.GeneratoreIdUuid
 import snastro.kernel.RegistrazioneId
 import snastro.ml.MotoreSherpa
@@ -42,13 +44,15 @@ internal class ComponentiR1(val estensione: EstensioneR1, val servizioModelli: S
  * [cartellaModelli] is the per-user model cache (ADR 0008 (c)). ONE [MotoreSherpa] for the whole app
  * (its Mutex is process-wide, ADR 0016 §4); the ML adapters over it are built once per open project
  * (fix-batch-16 MED-2). The Elaborazione queue waits while S5 is not
- * [StatoModelli.Pronti] (AC-235) — immediately `Pronti` for an empty catalogue (the Finte).
+ * [StatoModelli.Pronti] (AC-235) — immediately `Pronti` for an empty catalogue (the Finte). [lettoreNomi]
+ * is the Documento's names source: 'Voce n' only in R1 ([LettoreNomiVuoto]); R2 passes the Parlanti one.
  */
 internal fun componentiR1(
     scelta: SceltaMl,
     cartellaModelli: Path,
     io: CoroutineDispatcher,
     clock: Clock,
+    lettoreNomi: (ContestoEstensione) -> LettoreNomi = { LettoreNomiVuoto },
 ): ComponentiR1 {
     val catalogo = SelezioneAdattatoriMl.catalogo(scelta)
     val provisioning = ProvisioningModelli(catalogo, cartellaModelli)
@@ -60,6 +64,7 @@ internal fun componentiR1(
         generatoreId = GeneratoreIdUuid(),
         adattatoriMl = { SelezioneAdattatoriMl.adattatori(scelta, motore, provisioning) },
         modelliPronti = { servizioModelli.stato.value == StatoModelli.Pronti },
+        lettoreNomi = lettoreNomi,
     )
     return ComponentiR1(estensione, servizioModelli)
 }

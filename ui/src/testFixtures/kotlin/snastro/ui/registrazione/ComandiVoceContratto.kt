@@ -20,6 +20,7 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -99,5 +100,19 @@ abstract class ComandiVoceContratto {
         advanceUntilIdle()
         assertTrue(completato)
         assertTrue(porta.stato.value.isEmpty())
+    }
+
+    @Test
+    fun `un comando che lancia diventa un Errore, lo stato si svuota e la porta resta utilizzabile`() = runTest {
+        var chiamate = 0
+        val porta = con(progetto(), orologio) {
+            chiamate++
+            if (chiamate == 1) throw IllegalStateException("sorgente audio illeggibile")
+            Esito.Ok(Unit)
+        }
+        assertEquals(ErroreComandoVoce.NonRiuscito, assertIs<Esito.Errore>(porta.esegui(comando)).errore)
+        advanceUntilIdle()
+        assertTrue(porta.stato.value.isEmpty())
+        assertEquals(Esito.Ok(Unit), porta.esegui(comando))
     }
 }
