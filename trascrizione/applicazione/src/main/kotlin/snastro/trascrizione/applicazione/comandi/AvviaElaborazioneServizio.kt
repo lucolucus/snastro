@@ -16,11 +16,13 @@ import java.time.Clock
 
 /**
  * AC-64..AC-67: enqueues a new `Elaborazione` `in_attesa` for [AvviaElaborazione.registrazioneId].
- * INV-4 is owned by [Elaborazione] / [ElaborazioneRepository] (RC-1): this service only PRE-CHECKS it
- * from [ElaborazioneRepository.diRegistrazione] (ADR 0007) — the partial unique indexes are the
- * backstop, surfaced by [ElaborazioneRepository.salva] as the same `ErroreTrascrizione`, returned
- * unchanged (AC-66). [AvviaElaborazione.numeroPersone] is validated by [NumeroPersone.di] before any write
- * and fixed on the new Elaborazione (AC-369, ADR 0014).
+ * INV-4 (rewritten by ADR 0018): a new Elaborazione iff none is open, whatever the earlier ones ended in —
+ * after `completata` this is 'Ritrascrivi' (AC-434..436); several `completata` are history. This service only
+ * PRE-CHECKS it from [ElaborazioneRepository.diRegistrazione] (ADR 0007) — the partial unique index
+ * `elaborazione_aperta_unica` is the backstop, surfaced by [ElaborazioneRepository.salva] as the same
+ * `ElaborazioneGiaAperta`, returned unchanged (AC-66). It never reads or writes the Trascritto.
+ * [AvviaElaborazione.numeroPersone] is validated by [NumeroPersone.di] before any write and fixed on the new
+ * Elaborazione (AC-369, ADR 0014).
  */
 public class AvviaElaborazioneServizio(
     private val uow: UnitaDiLavoro,
