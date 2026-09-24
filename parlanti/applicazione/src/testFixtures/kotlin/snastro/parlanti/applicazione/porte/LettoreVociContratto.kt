@@ -310,7 +310,7 @@ public abstract class LettoreVociContratto {
     }
 
     @Test
-    public fun `AC-494 dopo DividiVoce i segmenti riflettono la Voce corrente`() {
+    public fun `AC-494 dopo DividiVoce i segmenti riflettono la Voce corrente e il sottoinsieme spostato e confermato`() {
         val a = ambiente()
         val lettore = a.lettore
         val id = a.aggiungiRegistrazione()
@@ -323,10 +323,11 @@ public abstract class LettoreVociContratto {
 
         val nuova = a.dividi(id, origine = c[0].voceId, segmenti = setOf(c[1].segmentoId))
 
+        // [INV-26]: DividiVoce conferma il sottoinsieme spostato (c[1]); l'origine e il resto restano com'erano.
         assertEquals(
             listOf(
                 SegmentoDiVoce(c[0].segmentoId, c[0].voceId, turni[0].intervallo, confermato = false),
-                SegmentoDiVoce(c[1].segmentoId, nuova, turni[1].intervallo, confermato = false),
+                SegmentoDiVoce(c[1].segmentoId, nuova, turni[1].intervallo, confermato = true),
                 SegmentoDiVoce(c[2].segmentoId, c[2].voceId, turni[2].intervallo, confermato = false),
             ),
             lettore.segmenti(id),

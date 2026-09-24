@@ -34,6 +34,7 @@ public interface AmbienteLettoreVoci {
 
     /**
      * DividiVoce: [segmenti], a non-empty proper subset of [origine]'s Segmenti, become a new Voce.
+     * [INV-26]: the moved subset becomes `confermato`; [origine]'s remaining Segmenti are untouched.
      * Returns the id minted for it.
      */
     public fun dividi(registrazioneId: RegistrazioneId, origine: VoceId, segmenti: Set<SegmentoId>): VoceId
@@ -41,7 +42,7 @@ public interface AmbienteLettoreVoci {
     /**
      * RiassegnaSegmento: [segmento] moves to the existing other Voce [destinazione] (its Voce ceases to
      * exist if emptied), or to a new Voce when `null` (only if its Voce keeps another Segmento).
-     * Returns the Voce it belongs to now.
+     * [INV-26]: a manual move also becomes `confermato`. Returns the Voce it belongs to now.
      */
     public fun riassegna(registrazioneId: RegistrazioneId, segmento: SegmentoId, destinazione: VoceId?): VoceId
 

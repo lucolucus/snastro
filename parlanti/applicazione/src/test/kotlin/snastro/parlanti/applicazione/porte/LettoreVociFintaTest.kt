@@ -80,7 +80,11 @@ class LettoreVociFintaTest : LettoreVociContratto() {
             require(segmenti.isNotEmpty() && segmenti.size < diOrigine.size)
             require(diOrigine.map { it.id }.containsAll(segmenti))
             val nuova = nuovaVoce(registrazioneId)
-            diOrigine.filter { it.id in segmenti }.forEach { it.voce = nuova }
+            // [INV-26]: il sottoinsieme spostato diventa confermato; l'origine resta com'era.
+            diOrigine.filter { it.id in segmenti }.forEach {
+                it.voce = nuova
+                it.confermato = true
+            }
             pubblica(registrazioneId)
             return nuova
         }
@@ -96,6 +100,7 @@ class LettoreVociFintaTest : LettoreVociContratto() {
             }
             require(ammessa)
             s.voce = destinazione ?: nuovaVoce(registrazioneId)
+            s.confermato = true // [INV-26]: una RiassegnaSegmento manuale conferma il Segmento spostato.
             pubblica(registrazioneId)
             return s.voce
         }
