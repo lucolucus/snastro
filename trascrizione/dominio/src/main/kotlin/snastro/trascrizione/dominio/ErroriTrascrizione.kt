@@ -19,8 +19,14 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
     /** INV-4 (ADR 0007, `elaborazione_aperta_unica`): the Registrazione already has an open Elaborazione. */
     public data class ElaborazioneGiaAperta(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
 
-    /** INV-4 (ADR 0007, `elaborazione_completata_unica`): the Registrazione already has a `completata` one. */
-    public data class ElaborazioneGiaCompletata(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
+    /**
+     * ADR 0018 Amendment (b): the Elaborazione [elaborazioneId] is no longer `in_attesa` (it was started — the
+     * dispatcher may have claimed it first), so it cannot be cancelled.
+     */
+    public data class ElaborazioneGiaAvviata(val elaborazioneId: ElaborazioneId) : ErroreTrascrizione
+
+    /** ADR 0018 Amendment (b): no Elaborazione [elaborazioneId] exists (e.g. already cancelled). */
+    public data class ElaborazioneNonTrovata(val elaborazioneId: ElaborazioneId) : ErroreTrascrizione
 
     /** ADR 0014 (AC-368): a Numero di persone must be an integer from 1 to 10; [valore] was given. */
     public data class NumeroPersoneFuoriIntervallo(val valore: Int) : ErroreTrascrizione

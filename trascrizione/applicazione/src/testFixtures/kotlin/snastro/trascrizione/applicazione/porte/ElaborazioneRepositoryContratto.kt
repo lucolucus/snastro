@@ -9,7 +9,6 @@ import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
-import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
@@ -22,8 +21,8 @@ import kotlin.test.assertEquals
 
 /**
  * Consumer-driven contract of [ElaborazioneRepository] (boundary `repo-trascrizione`, ADR 0006/0007): INV-4
- * refused like the partial unique indexes (a second open → [ElaborazioneGiaAperta], a second completata →
- * [ElaborazioneGiaCompletata], store unchanged), `inAttesa` FIFO by creation (ties by id), `salva` as an
+ * refused like the partial unique index (a second open → [ElaborazioneGiaAperta], store unchanged; several
+ * `completata` are allowed, ADR 0018), `inAttesa` FIFO by creation (ties by id), `salva` as an
  * upsert whose transitions round-trip every field, no aliasing between callers and the store.
  * One subclass per implementation (the Finta here, `ElaborazioneRepositorySql` in `:trascrizione:adattatori`).
  */
@@ -59,24 +58,6 @@ public abstract class ElaborazioneRepositoryContratto {
         repo.salva(una(IN_ATTESA, "elaborazione-2")).erroreAtteso<ElaborazioneGiaAperta>()
 
         assertEquals(listOf(IN_CORSO), repo.diRegistrazione(REGISTRAZIONE).map { it.stato })
-    }
-
-    @Test
-    public fun `AC-29 una seconda completata per la stessa Registrazione e ElaborazioneGiaCompletata`() {
-        repo.salva(una(COMPLETATA, "elaborazione-1")).atteso()
-        val seconda = una(IN_ATTESA, "elaborazione-2", creataAlle = DOPO)
-        repo.salva(seconda).atteso()
-        seconda.avvia(DOPO).atteso()
-        repo.salva(seconda).atteso()
-        seconda.completa().atteso()
-
-        val errore = repo.salva(seconda).erroreAtteso<ElaborazioneGiaCompletata>()
-
-        assertEquals(ElaborazioneGiaCompletata(REGISTRAZIONE), errore)
-        assertEquals(
-            mapOf("elaborazione-1" to COMPLETATA, "elaborazione-2" to IN_CORSO),
-            repo.diRegistrazione(REGISTRAZIONE).associate { it.id.valore to it.stato },
-        )
     }
 
     @Test

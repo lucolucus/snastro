@@ -19,10 +19,10 @@ public interface ElaborazioneRepository {
     public fun inCorso(): List<Elaborazione>
 
     /**
-     * Inserts or updates [e]. INV-4 is refused like the ADR 0007 partial unique indexes, leaving the store
-     * unchanged, with an `ErroreTrascrizione` (`:trascrizione:dominio`): `ElaborazioneGiaAperta` if another
-     * Elaborazione of the same Registrazione is open while [e] is, `ElaborazioneGiaCompletata` if another one
-     * is `completata` while [e] is. Infra faults throw (ADR 0003).
+     * Inserts or updates [e]. INV-4 is refused like the ADR 0007 partial unique index `elaborazione_aperta_unica`,
+     * leaving the store unchanged, with `ErroreTrascrizione.ElaborazioneGiaAperta` (`:trascrizione:dominio`) if
+     * another Elaborazione of the same Registrazione is open while [e] is — its only refusal: several `completata`
+     * are allowed (ADR 0018). Infra faults throw (ADR 0003).
      */
     public fun salva(e: Elaborazione): Esito<Unit>
 }

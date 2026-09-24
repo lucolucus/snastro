@@ -10,7 +10,6 @@ import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
-import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.ErroreTrascrizione.RegistrazioneNonTrovata
 import snastro.trascrizione.dominio.NumeroPersone
 import java.time.Clock
@@ -44,7 +43,6 @@ public class AvviaElaborazioneServizio(
         val esistenti = elaborazioni.diRegistrazione(registrazioneId)
         return when {
             esistenti.any { it.aperta } -> Esito.Errore(ElaborazioneGiaAperta(registrazioneId))
-            esistenti.any { it.completata } -> Esito.Errore(ElaborazioneGiaCompletata(registrazioneId))
             else -> {
                 val id = ElaborazioneId(generatoreId.nuovo())
                 val creata = Elaborazione.accoda(id, registrazioneId, orologio.instant(), numeroPersone)

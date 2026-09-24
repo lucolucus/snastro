@@ -6,7 +6,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
-import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.unaElaborazione
 import java.time.Instant
@@ -31,8 +30,6 @@ public class ElaborazioneRepositoryFinta : ElaborazioneRepository, Ripristinabil
         val altre = righe.values.filter { it.registrazioneId == e.registrazioneId && it.id != e.id }
         return when {
             e.aperta && altre.any { it.aperta } -> Esito.Errore(ElaborazioneGiaAperta(e.registrazioneId))
-            e.completata && altre.any { it.stato == StatoElaborazione.COMPLETATA } ->
-                Esito.Errore(ElaborazioneGiaCompletata(e.registrazioneId))
             else -> {
                 righe[e.id] = Riga(e)
                 Esito.Ok(Unit)

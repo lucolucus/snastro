@@ -50,13 +50,15 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
         "Il titolo \"${errore.titolo}\" è già usato da un'altra registrazione di questo progetto."
 }
 
+@Suppress("CyclomaticComplexMethod") // one flat branch per ErroreTrascrizione member, no else (RC-4)
 fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
     // `TransizioneNonAmmessa` is an internal invariant breach, not something the user can act on: its
     // `da`/`verso` (`:trascrizione:dominio` VOs, off-limits to `:ui` per CR-1(b)) are never read here —
     // a generic message that names no state is both the correct UX and the frugal fix.
     is ErroreTrascrizione.TransizioneNonAmmessa -> "Operazione non ammessa nello stato attuale dell'elaborazione."
     is ErroreTrascrizione.ElaborazioneGiaAperta -> "Questa registrazione ha già un'elaborazione in corso."
-    is ErroreTrascrizione.ElaborazioneGiaCompletata -> "Questa registrazione è già stata elaborata."
+    is ErroreTrascrizione.ElaborazioneGiaAvviata -> "La trascrizione è già partita: non si può più annullare"
+    is ErroreTrascrizione.ElaborazioneNonTrovata -> "Questa trascrizione non è più in coda"
     is ErroreTrascrizione.RegistrazioneNonTrovata -> "Registrazione non trovata."
     is ErroreTrascrizione.TrascrittoNonTrovato -> "Questa registrazione non ha ancora una trascrizione."
     ErroreTrascrizione.NessunParlatoRilevato -> "Non è stato rilevato nessun parlato in questo audio."

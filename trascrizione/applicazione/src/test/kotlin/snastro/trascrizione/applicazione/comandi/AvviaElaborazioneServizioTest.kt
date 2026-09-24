@@ -19,7 +19,6 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
-import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaCompletata
 import snastro.trascrizione.dominio.ErroreTrascrizione.NumeroPersoneFuoriIntervallo
 import snastro.trascrizione.dominio.ErroreTrascrizione.RegistrazioneNonTrovata
 import snastro.trascrizione.dominio.NumeroPersone
@@ -68,19 +67,6 @@ class AvviaElaborazioneServizioTest {
             .erroreAtteso<ElaborazioneGiaAperta>()
 
         assertEquals(ElaborazioneGiaAperta(REGISTRAZIONE), errore)
-        assertEquals(1, elaborazioni.diRegistrazione(REGISTRAZIONE).size)
-    }
-
-    @Test
-    fun `INV-4 dopo una completata rifiuta con ElaborazioneGiaCompletata e non ri-elabora`() {
-        val elaborazioni = ElaborazioneRepositoryFinta()
-        elaborazioni.salva(unaElaborazione(StatoElaborazione.COMPLETATA, registrazioneId = REGISTRAZIONE)).atteso()
-
-        val errore = unServizio(elaborazioni = elaborazioni)
-            .esegui(AvviaElaborazione(REGISTRAZIONE))
-            .erroreAtteso<ElaborazioneGiaCompletata>()
-
-        assertEquals(ElaborazioneGiaCompletata(REGISTRAZIONE), errore)
         assertEquals(1, elaborazioni.diRegistrazione(REGISTRAZIONE).size)
     }
 

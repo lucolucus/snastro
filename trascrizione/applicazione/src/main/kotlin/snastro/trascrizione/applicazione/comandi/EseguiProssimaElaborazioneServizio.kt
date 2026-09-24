@@ -280,7 +280,8 @@ public class EseguiProssimaElaborazioneServizio(
         const val MOTIVO_SEGMENTO_OLTRE_DURATA = "un segmento supera la durata della registrazione"
         const val MOTIVO_TRANSIZIONE_NON_AMMESSA = "transizione di stato non consentita"
         const val MOTIVO_ELABORAZIONE_GIA_APERTA = "un'altra elaborazione è già in corso per questa registrazione"
-        const val MOTIVO_ELABORAZIONE_GIA_COMPLETATA = "questa registrazione ha già un risultato completato"
+        const val MOTIVO_ELABORAZIONE_GIA_AVVIATA = "l'elaborazione è già partita"
+        const val MOTIVO_ELABORAZIONE_NON_TROVATA = "elaborazione non trovata"
         const val MOTIVO_TRASCRITTO_NON_TROVATO = "trascrizione non ancora disponibile"
         const val MOTIVO_VOCE_NON_TROVATA = "voce non trovata"
         const val MOTIVO_SEGMENTO_NON_TROVATO = "segmento non trovato"
@@ -298,12 +299,14 @@ public class EseguiProssimaElaborazioneServizio(
          * [ErroreTrascrizione.NessunParlatoRilevato] or [ErroreTrascrizione.SegmentoOltreLaDurata];
          * the other branches exist only so the mapping stays total for any future caller.
          */
+        @Suppress("CyclomaticComplexMethod") // one flat branch per ErroreTrascrizione member, no else (RC-4)
         private fun motivoTrascritto(errore: ErroreTrascrizione): String = when (errore) {
             is ErroreTrascrizione.NessunParlatoRilevato -> MOTIVO_NESSUN_PARLATO
             is ErroreTrascrizione.SegmentoOltreLaDurata -> MOTIVO_SEGMENTO_OLTRE_DURATA
             is ErroreTrascrizione.TransizioneNonAmmessa -> MOTIVO_TRANSIZIONE_NON_AMMESSA
             is ErroreTrascrizione.ElaborazioneGiaAperta -> MOTIVO_ELABORAZIONE_GIA_APERTA
-            is ErroreTrascrizione.ElaborazioneGiaCompletata -> MOTIVO_ELABORAZIONE_GIA_COMPLETATA
+            is ErroreTrascrizione.ElaborazioneGiaAvviata -> MOTIVO_ELABORAZIONE_GIA_AVVIATA
+            is ErroreTrascrizione.ElaborazioneNonTrovata -> MOTIVO_ELABORAZIONE_NON_TROVATA
             is ErroreTrascrizione.RegistrazioneNonTrovata -> MOTIVO_REGISTRAZIONE_MANCANTE
             is ErroreTrascrizione.TrascrittoNonTrovato -> MOTIVO_TRASCRITTO_NON_TROVATO
             is ErroreTrascrizione.VoceNonTrovata -> MOTIVO_VOCE_NON_TROVATA

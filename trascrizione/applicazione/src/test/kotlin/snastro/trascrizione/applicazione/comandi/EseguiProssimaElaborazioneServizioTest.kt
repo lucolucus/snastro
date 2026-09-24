@@ -616,7 +616,7 @@ class EseguiProssimaElaborazioneServizioTest {
     @Test
     fun `F-B completamento e compensazione entrambi rifiutati il rifiuto propaga col primo soppresso`() {
         val esecuzione = eseguiConConclusioneGuasta { e ->
-            Esito.Errore(ErroreTrascrizione.ElaborazioneGiaCompletata(e.registrazioneId))
+            Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(e.registrazioneId))
         }
 
         val lanciata = esecuzione.lanciata
@@ -903,7 +903,7 @@ private class ElaborazioneRepositoryCheRifiutaIlCompletamento(
     override fun inCorso(): List<Elaborazione> = delegata.inCorso()
 
     override fun salva(e: Elaborazione): Esito<Unit> = if (e.completata) {
-        Esito.Errore(ErroreTrascrizione.ElaborazioneGiaCompletata(e.registrazioneId))
+        Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(e.registrazioneId))
     } else {
         delegata.salva(e)
     }
