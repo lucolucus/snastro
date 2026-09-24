@@ -764,3 +764,8 @@
 2026-09-24T21:05:06Z	restyle-shell-elenchi	composer	merge	cycle=2	-	-	MERGED
 2026-09-24T21:05:06Z	restyle-registrazione	composer	merge	cycle=1	-	-	MERGED — restyle part A complete
 2026-09-24T21:05:06Z	(restyle A)	composer	pending	-	-	-	follow-up owed by AC-589b: widen the glyph test to all of :ui src/main (comment-stripping) — small, not yet done
+2026-09-24T21:14:28Z	(pre-release)	composer	triage	-	deep	opus	66 OPEN / 27 FIXED / 3 OBSOLETE / 9 DECISION (defaults applied) → pre-release-triage.md, batches pr-b1..b5
+2026-09-24T21:14:28Z	pr-b1	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B1
+2026-09-24T21:14:28Z	pr-b2	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B2
+2026-09-24T21:14:28Z	pr-b3	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B3
+2026-09-24T21:14:28Z	pr-b4	worker	dispatch	cycle=0	tier=standard	model=sonnet	pre-release batch B4
