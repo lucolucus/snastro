@@ -629,3 +629,7 @@
 2026-09-24T06:59:10Z	(release-plan)	decision	result	-	-	-	USER DECISION: resume R2 (Parlanti) now; UI refinement after R2
 2026-09-24T07:04:36Z	spike-attesa-mutex-estrazione	architect	result	-	deep	opus	ADR 0017 (b)+(c): one fair Mutex per native call, lockInterruptibly, pending card + Annulla after 2s; (a) rejected; delta saved
 2026-09-24T07:09:46Z	(manifest)	build-manifest	result	-	deep	opus	DELTA folded: 2026-09-24-mutex (ADR 0017: gate attesa-mutex-estrazione SATISFIED on schermata-registrazione-identificazione/avvio-parlanti/R2; tec-ml-sherpa + tec-estrattore-impronta re-pinned; AC-236 rewritten; AC-406..424) + 2026-09-24-rinomina-documento (AC-155bis/AC-186bis recorded BUILT; eventi-progetto pins RegistrazioneRinominata); rule-19 reality: AC-135..139 CR-1 seeding, AC-149/151 synthetic audio, AC-8/377 CR-13, AC-397 + ADR 0016/0014 amendments. FOLLOW-UP (test-only): riallinea-impronte AC-424
+2026-09-24T07:10:13Z	repository-sql-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-a
+2026-09-24T07:10:13Z	identificazione-registrazioni identificazione-voci parlanti-attivi proposta-unione	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-b
+2026-09-24T07:10:13Z	registrazione-da-progetto-pa lettore-voci-da-trascrizione lettore-nomi-da-parlanti decodifica-parlanti	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-c
+2026-09-24T07:10:13Z	estratto-audio confronto-impronte abbonato-revisione-parlanti abbonato-riallineamento-impronte	worker	dispatch	cycle=0	tier=standard	model=sonnet	R2 bundle r2-d
