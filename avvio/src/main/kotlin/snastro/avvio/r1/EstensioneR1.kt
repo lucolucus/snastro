@@ -24,6 +24,7 @@ import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto
+import snastro.trascrizione.applicazione.comandi.AnnullaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.DividiVoceServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazioneServizio
@@ -124,6 +125,8 @@ internal class EstensioneR1(
         return CollaboratoriR1(
             statiElaborazione = stati::stati,
             avvia = AvviaElaborazioneServizio(uow, generatoreId, clock, lettoreRegistrazione, elaborazioni)::esegui,
+            // AC-478: no queue signal — a cancellation never makes work available (ADR 0018 Amendment (b) §3).
+            annullaElaborazione = AnnullaElaborazioneServizio(uow, elaborazioni, dispatcher)::esegui,
             trascritto = trascrittoQuery::vista,
             percorsoDocumento = { id -> percorsoDocumento(contesto.cartella, catalogo, id) },
             revisione = ComandiRevisione(

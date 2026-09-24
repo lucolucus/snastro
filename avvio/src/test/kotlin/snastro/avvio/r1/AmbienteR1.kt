@@ -17,6 +17,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
+import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
@@ -27,6 +28,7 @@ import snastro.ui.ProgettoAperto
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDate
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 
@@ -48,6 +50,9 @@ internal class AmbienteR1(
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
     private val esecutoreUi = Executors.newSingleThreadExecutor()
+
+    /** Every Registrazione the pipeline started decoding, in order — which runs the queue actually executed. */
+    val decodificate: MutableList<RegistrazioneId> = CopyOnWriteArrayList()
 
     /**
      * Stands in for `Dispatchers.Swing` AND for the presenters' `io` in these tests: one confined
@@ -73,7 +78,7 @@ internal class AmbienteR1(
             generatoreId = GeneratoreIdFinto(),
             adattatoriMl = adattatoriMl,
             modelliPronti = { true },
-            decodificatore = { DecodificatoreAudioFinta(sorgenti) },
+            decodificatore = { RegistraDecodifiche(DecodificatoreAudioFinta(sorgenti), decodificate) },
         ),
     )
 
@@ -82,10 +87,11 @@ internal class AmbienteR1(
     val collaboratori: CollaboratoriProgettoAperto get() = checkNotNull(sessione.collaboratoriCorrenti())
     val r1: CollaboratoriR1 get() = collaboratori.estensione as CollaboratoriR1
 
-    /** Imports the test source through the REAL AggiungiRegistrazione of the composition. */
+    /** Imports the test source through the REAL AggiungiRegistrazione of the composition; returns the NEW one. */
     fun importa(): RegistrazioneId {
+        val prima = collaboratori.registrazioni().map { it.registrazioneId }.toSet()
         collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(sorgente.toString())).atteso()
-        val id = collaboratori.registrazioni().single().registrazioneId
+        val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
         sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS // minting rule of RiferimentoAudio
         return id
     }
@@ -103,6 +109,17 @@ internal class AmbienteR1(
         const val DURATA_MS = 3_000L
         private const val DIMENSIONE_SORGENTE = 64
         private const val ATTESA_CHIUSURA_S = 5L
+    }
+}
+
+/** [DecodificatoreAudio] recording in [decodificate] the id of every [decodifica] — the start of a pipeline run. */
+private class RegistraDecodifiche(
+    private val delegato: DecodificatoreAudio,
+    private val decodificate: MutableList<RegistrazioneId>,
+) : DecodificatoreAudio by delegato {
+    override fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio) {
+        decodificate += id
+        delegato.decodifica(id, sorgente)
     }
 }
 

@@ -120,8 +120,10 @@ internal fun BarraR1(onRegistrazioni: () -> Unit, onModelli: () -> Unit) {
 
 /**
  * S2 with the Trascrizione sources (AC-355, AC-342): status column, 'Numero di persone' +
- * 'Trascrivi'/'Riprova' ([CollaboratoriR1.avviaElaborazione]), and a completed row opening S3
- * ([apriRegistrazione]). Launched on the project's own session scope (H2, as R0).
+ * 'Trascrivi'/'Riprova' ([CollaboratoriR1.avviaElaborazione]), 'Annulla' on a queued row
+ * ([CollaboratoriR1.annullaElaborazione], AC-478), and a row with a Trascritto opening S3
+ * ([apriRegistrazione]). No re-run action: R1 registers no Parlanti purge, so it never offers one (AC-460).
+ * Launched on the project's own session scope (H2, as R0).
  */
 internal fun costruisciRegistrazioniPresenterR1(
     grafo: GrafoR0,
@@ -141,9 +143,14 @@ internal fun costruisciRegistrazioniPresenterR1(
     statiElaborazione = r1.statiElaborazione,
     avviaElaborazione = r1::avviaElaborazione,
     apriRegistrazione = apriRegistrazione,
+    annullaElaborazione = r1.annullaElaborazione,
 )
 
-/** S3, read-only in R1: trascritto-view, the Documento's path, the shared LettoreAudio, ApriEsterno — nothing else. */
+/**
+ * S3, read-only in R1: trascritto-view, the Documento's path, the shared LettoreAudio, ApriEsterno, plus
+ * (ADR 0018 Amendment (b)) the latest run's state of [id] and the project's AggiornamentiVista — so S3
+ * reloads on its Registrazione's Cambiamenti and follows the read-only rule. No Parlanti sources.
+ */
 internal fun costruisciRegistrazionePresenterR1(
     grafo: GrafoR1,
     collaboratori: CollaboratoriProgettoAperto,
@@ -158,6 +165,8 @@ internal fun costruisciRegistrazionePresenterR1(
     documento = { r1.percorsoDocumento(id) },
     lettore = collaboratori.lettoreAudio,
     apriEsterno = grafo.apriEsterno,
+    stati = { r1.statiElaborazione(listOf(id)).firstOrNull() },
+    aggiornamenti = collaboratori.aggiornamentiVista,
 )
 
 private const val ETICHETTA_NAV_REGISTRAZIONI = "Registrazioni"
