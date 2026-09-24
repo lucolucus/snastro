@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.Esito
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertTrue
@@ -40,8 +41,8 @@ class AggiungiRegistrazioneR0Test {
 
         grafo.sessione.chiudi() // rilascia il .lock prima di riaprire il db per l'ispezione
         val db = apriDatabaseProgetto(Path.of(progetto.percorso).toFile())
-        val righeElaborazione =
-            db.database.elaborazioneQueries.trovaDiRegistrazione(registrazioneId.valore).executeAsList()
+        // agg-elaborazione §14: read through the repository port's SQL adapter, never the raw queries.
+        val righeElaborazione = ElaborazioneRepositorySql(db.database).diRegistrazione(registrazioneId)
         db.chiudi()
 
         assertTrue(righeElaborazione.isEmpty(), "R0 non deve mai scrivere in elaborazione")

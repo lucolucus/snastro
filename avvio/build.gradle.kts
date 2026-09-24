@@ -24,6 +24,20 @@ dependencies {
     // `null` in R0, AC-350) are typed over `:trascrizione:applicazione` — `:ui` depends on it only as
     // `implementation` (never `api`), so it is not on `:avvio`'s classpath transitively.
     implementation(project(":trascrizione:applicazione"))
+
+    // R1 composition (avvio-composizione, package snastro.avvio.r1): Trascrizione SQL repositories +
+    // decoder + AllineatorePerTurno, Documento regeneration, :modelli behind ServizioModelli (AC-329),
+    // MotoreSherpa handed to the real ML adapters once they wire themselves in (SelezioneAdattatoriMl).
+    implementation(project(":trascrizione:adattatori"))
+    implementation(project(":documento:applicazione"))
+    implementation(project(":documento:adattatori"))
+    implementation(project(":modelli"))
+    implementation(project(":ml-sherpa"))
+    // The ML Finte (DiarizzatoreFinta / RiconoscitoreParlatoFinta / VadFinta) are the pipeline's
+    // adapters until diarizzatore-sherpa / riconoscitore-sherpa / vad-silero wire themselves into
+    // SelezioneAdattatoriMl ("Finte until the ML blocks land", manifest) — and stay the forced choice of
+    // `-Dsnastro.ml=finte` (the --smoke run: headless, no natives, no models).
+    implementation(testFixtures(project(":trascrizione:applicazione")))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
 

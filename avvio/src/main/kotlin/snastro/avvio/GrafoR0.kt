@@ -44,19 +44,27 @@ internal fun cartellaDatiRegistroProgettiReale(): Path = CartellaDatiRegistroPro
 internal fun cartellaProgettiPredefinitaReale(): String =
     "${System.getProperty("user.home").orEmpty()}/Documents/snastro"
 
+/** The app's one clock: millisecond ticks (see [GrafoR0]'s KDoc — the SQL adapters store epoch millis). */
+internal fun orologioApp(): Clock = Clock.tick(Clock.systemUTC(), Duration.ofMillis(1))
+
 /**
  * [cartellaRegistro] defaults to the real per-user app-data folder ([cartellaDatiRegistroProgettiReale])
  * for `main()`'s own run; `--smoke` (and its test) inject an isolated, throwaway one instead — a smoke
  * run must never add entries to (or collide with) the developer's own recent-projects registry.
+ * [estensione] is `null` for R0 alone (AC-350); the R1 composition (`costruisciGrafoR1`) passes its
+ * own, built over the same [io] and [clock].
  */
-internal fun costruisciGrafoR0(cartellaRegistro: Path = cartellaDatiRegistroProgettiReale()): GrafoR0 {
+internal fun costruisciGrafoR0(
+    cartellaRegistro: Path = cartellaDatiRegistroProgettiReale(),
+    io: CoroutineDispatcher = Dispatchers.IO,
+    clock: Clock = orologioApp(),
+    estensione: EstensioneSessione? = null,
+): GrafoR0 {
     val scope = CoroutineScope(Dispatchers.Swing + SupervisorJob())
-    val io: CoroutineDispatcher = Dispatchers.IO
-    val clock: Clock = Clock.tick(Clock.systemUTC(), Duration.ofMillis(1))
     val generatoreId = GeneratoreIdUuid()
 
     val registro = RegistroProgettiFile(cartellaRegistro.resolve("registro-progetti.tsv"))
-    val sessione = SessioneProgettoImpl(registro, generatoreId, clock, scopeGenitore = scope)
+    val sessione = SessioneProgettoImpl(registro, generatoreId, clock, scopeGenitore = scope, estensione = estensione)
     val elencoProgetti = ElencoProgetti(registro)
 
     return GrafoR0(scope, io, clock, sessione, elencoProgetti, cartellaProgettiPredefinitaReale())

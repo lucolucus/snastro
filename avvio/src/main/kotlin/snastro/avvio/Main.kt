@@ -3,14 +3,23 @@ package snastro.avvio
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.toAwtImage
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import snastro.avvio.r1.ContenutoAppR1
+import snastro.avvio.r1.SceltaMl
+import snastro.avvio.r1.costruisciGrafoR1
+import snastro.avvio.r1.primaRegistrazioneCompletata
 import snastro.kernel.Esito
 import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
@@ -33,12 +42,15 @@ private const val ATTESA_SMOKE_PASSO_MS = 20L
 internal val SEZIONI_SHELL_R0: Set<DestinazioneShell> = setOf(DestinazioneShell.REGISTRAZIONI)
 
 /**
- * Composition root R0 (release Archivio): manual wiring of the R0 graph ([costruisciGrafoR0]) — S1 ·
- * Progetti, S2 · Registrazioni del Progetto, shell WITHOUT the Parlanti section (AC-341), no S3/S4/S5
- * (AC-350). `run` binding (profile): opens the real window. `--smoke <fixture-dir>` binding (AC-237):
- * opens the fixture project (already containing >=1 imported Registrazione) offscreen, saves one
- * screenshot of S1 and one of S2 to `avvio/build/smoke/`, exits 0 — headless, no sherpa natives, no
- * ML models (R0 registers no Trascrizione/Parlanti/Documento/Modelli service or subscriber at all).
+ * Composition root R1 (release Trascrizione, avvio-composizione): the R0 graph ([costruisciGrafoR0])
+ * EXTENDED by the R1 one ([costruisciGrafoR1]) — S1, S2 with the Trascrizione sources, S3 read-only,
+ * S5, shell WITHOUT the Parlanti section (AC-341). `run` binding (profile): opens the real window.
+ * `--smoke <fixture-dir>` binding (AC-237, AC-351): opens the fixture project offscreen and saves S1,
+ * S2, S3 (a completed Trascritto, 'Voce n' labels) and S5 to `avvio/build/smoke/`, exits 0 — headless,
+ * on the ML Finte ([SceltaMl.FINTE]): no sherpa natives, no models.
+ *
+ * R0 alone ([ContenutoApp] over [costruisciGrafoR0] without extension) is kept as is: it is what the
+ * R0-mode tests prove still behaves as released (AC-350).
  */
 fun main(args: Array<String>) {
     val smokeIndex = args.indexOf("--smoke")
@@ -48,10 +60,10 @@ fun main(args: Array<String>) {
         exitProcess(0)
     }
 
-    val grafo = costruisciGrafoR0()
+    val grafo = costruisciGrafoR1()
     application {
         Window(onCloseRequest = ::exitApplication, title = "snastro") {
-            ContenutoApp(grafo)
+            ContenutoAppR1(grafo)
         }
     }
 }
@@ -110,30 +122,58 @@ internal fun costruisciRegistrazioniPresenter(
     clock = grafo.clock,
 )
 
+/**
+ * AC-237 + AC-351: S1, S2, then S3 of the fixture's first COMPLETATA Registrazione — reached through
+ * S2's own row click, the real wiring — then S5 through the bar. Isolated registry and model cache,
+ * ML Finte: nothing of the developer's own machine is read or written, no native is loaded.
+ */
 @OptIn(ExperimentalTestApi::class)
 internal fun eseguiSmoke(fixtureDir: String) {
     // Un registro ISOLATO, mai quello reale per-utente (AC-348): uno smoke non deve ne' inquinare
     // ne' collidere con l'elenco dei progetti recenti dello sviluppatore che lo esegue.
     val cartellaRegistroSmoke = Files.createTempDirectory("snastro-smoke-registro")
-    val grafo = costruisciGrafoR0(cartellaRegistroSmoke)
+    val cartellaModelliSmoke = Files.createTempDirectory("snastro-smoke-modelli")
+    val grafo = costruisciGrafoR1(cartellaRegistroSmoke, SceltaMl.FINTE, cartellaModelliSmoke)
     val outputDir = File("build/smoke").apply { mkdirs() }
 
-    runDesktopComposeUiTest(LARGHEZZA_SMOKE_PX, ALTEZZA_SMOKE_PX) {
-        setContent { ContenutoApp(grafo) }
+    try {
+        runDesktopComposeUiTest(LARGHEZZA_SMOKE_PX, ALTEZZA_SMOKE_PX) {
+            setContent { ContenutoAppR1(grafo) }
 
-        attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
-        salvaSchermata(outputDir, "s1")
+            attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
+            salvaSchermata(outputDir, "s1")
 
-        val esito = grafo.sessione.apri(fixtureDir)
-        check(esito is Esito.Ok) { "smoke: impossibile aprire il progetto fixture '$fixtureDir': $esito" }
+            val esito = grafo.r0.sessione.apri(fixtureDir)
+            check(esito is Esito.Ok) { "smoke: impossibile aprire il progetto fixture '$fixtureDir': $esito" }
 
-        attendi { esisteTag("registrazioni-lista") }
-        salvaSchermata(outputDir, "s2")
+            attendi { esisteTag("registrazioni-lista") }
+            salvaSchermata(outputDir, "s2")
+
+            val completata = checkNotNull(grafo.primaRegistrazioneCompletata()) {
+                "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
+            }
+            attendi { esisteTag("registrazioni-riga-${completata.valore}") }
+            onNodeWithTag("registrazioni-riga-${completata.valore}").performSemanticsAction(SemanticsActions.OnClick)
+            attendi { esisteTag("registrazione-lista") && esisteTesto("Voce 1") }
+            salvaSchermata(outputDir, "s3")
+
+            onNodeWithTag("avvio-nav-modelli").performClick()
+            attendi { TAG_S5.any { esisteTag(it) } }
+            salvaSchermata(outputDir, "s5")
+        }
+    } finally {
+        grafo.r0.sessione.chiudi() // ferma la coda e la rigenerazione, rilascia il .lock del fixture
     }
 }
 
+private val TAG_S5 = listOf("modelli-pronti", "modelli-mancanti", "modelli-download", "modelli-errore")
+
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.esisteTag(tag: String): Boolean = onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
+
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.esisteTesto(testo: String): Boolean =
+    onAllNodesWithText(testo).fetchSemanticsNodes().isNotEmpty()
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.attendi(condizione: () -> Boolean) {
