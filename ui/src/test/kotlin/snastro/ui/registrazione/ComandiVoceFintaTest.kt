@@ -9,6 +9,7 @@ class ComandiVoceFintaTest : ComandiVoceContratto() {
     override fun con(
         progetto: CoroutineScope,
         clock: Clock,
+        esecutoreFrase: suspend (FraseRef, PassiNominaFrase) -> Esito<Unit>,
         esecutore: suspend (ComandoVoce) -> Esito<Unit>,
-    ): ComandiVoce = ComandiVoceFinta(progetto, clock, risposta = esecutore)
+    ): ComandiVoce = ComandiVoceFinta(progetto, clock, rispostaFrase = esecutoreFrase, risposta = esecutore)
 }

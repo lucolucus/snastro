@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test
 import snastro.kernel.Esito
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import java.time.Clock
@@ -28,13 +29,16 @@ import kotlin.test.assertTrue
  * Consumer-driven contract of [ComandiVoce] (ADR 0017 §3, AC-411..AC-415): the fake proves it green on
  * its own (D1); `avvio-parlanti`'s per-project adapter subclasses it (D2, AC-418). [con] builds the port
  * running its commands in [progetto] (the project scope) with [esecutore] as the command body — a body
- * that suspends until the test lets it go stands for a command waiting on the native Mutex.
+ * that suspends until the test lets it go stands for a command waiting on the native Mutex. ADR 0019 §5:
+ * `nominaFrase` has the same scope, pending state (keyed by [FraseRef]) and cancellation, with
+ * `esecutoreFrase` as its body.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 abstract class ComandiVoceContratto {
     protected abstract fun con(
         progetto: CoroutineScope,
         clock: Clock,
+        esecutoreFrase: suspend (FraseRef, PassiNominaFrase) -> Esito<Unit> = { _, _ -> Esito.Ok(Unit) },
         esecutore: suspend (ComandoVoce) -> Esito<Unit>,
     ): ComandiVoce
 
@@ -114,5 +118,56 @@ abstract class ComandiVoceContratto {
         advanceUntilIdle()
         assertTrue(porta.stato.value.isEmpty())
         assertEquals(Esito.Ok(Unit), porta.esegui(comando))
+    }
+
+    private val frase = FraseRef(RegistrazioneId("id-1"), SegmentoId(3))
+    private val passi = PassiNominaFrase.SoloConferma
+
+    @Test
+    fun `nominaFrase restituisce l esito dei passi ricevuti e alla fine non resta nulla in corso`() = runTest {
+        var ricevuti: Pair<FraseRef, PassiNominaFrase>? = null
+        val porta = con(progetto(), orologio, esecutoreFrase = { r, p ->
+            ricevuti = r to p
+            Esito.Ok(Unit)
+        }) { Esito.Ok(Unit) }
+        assertEquals(Esito.Ok(Unit), porta.nominaFrase(frase.registrazioneId, frase.segmentoId, passi))
+        advanceUntilIdle()
+        assertEquals(frase to passi, ricevuti)
+        assertTrue(porta.statoFrasi.value.isEmpty())
+    }
+
+    @Test
+    fun `mentre nominaFrase e in corso statoFrasi espone la frase e annullaFrase fa restituire null`() = runTest {
+        var visto = false
+        val porta = con(progetto(), orologio, esecutoreFrase = { _, _ ->
+            try {
+                kotlinx.coroutines.awaitCancellation()
+            } finally {
+                visto = true
+            }
+        }) { Esito.Ok(Unit) }
+        val esito = async { porta.nominaFrase(frase.registrazioneId, frase.segmentoId, passi) }
+        runCurrent()
+        assertEquals(StatoComando(orologio.instant()), porta.statoFrasi.value[frase])
+        assertTrue(porta.stato.value.isEmpty())
+        porta.annullaFrase(frase)
+        assertNull(esito.await())
+        advanceUntilIdle()
+        assertTrue(visto)
+        assertTrue(porta.statoFrasi.value.isEmpty())
+    }
+
+    @Test
+    fun `nominaFrase che lancia diventa un Errore e la porta resta utilizzabile`() = runTest {
+        var chiamate = 0
+        val porta = con(progetto(), orologio, esecutoreFrase = { _, _ ->
+            chiamate++
+            if (chiamate == 1) throw IllegalStateException("sorgente audio illeggibile")
+            Esito.Ok(Unit)
+        }) { Esito.Ok(Unit) }
+        val errore = porta.nominaFrase(frase.registrazioneId, frase.segmentoId, passi)
+        assertEquals(ErroreComandoVoce.NonRiuscito, assertIs<Esito.Errore>(errore).errore)
+        advanceUntilIdle()
+        assertEquals(Esito.Ok(Unit), porta.nominaFrase(frase.registrazioneId, frase.segmentoId, passi))
     }
 }

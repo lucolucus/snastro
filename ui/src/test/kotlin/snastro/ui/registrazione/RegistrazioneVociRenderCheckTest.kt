@@ -11,14 +11,18 @@ import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onLast
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -29,8 +33,11 @@ import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.porte.Fascia
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.ui.lettore.LettoreUiStato
+import snastro.ui.testi.AVVISO_TUTTA_LA_VOCE
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_DIVIDI_VOCE
+import snastro.ui.testi.ETICHETTA_NUOVO
+import snastro.ui.testi.ETICHETTA_TOGLI_CONFERMA
 import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
 import snastro.ui.testi.MESSAGGIO_ESTRATTI_NON_DISPONIBILI
@@ -39,7 +46,10 @@ import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_PERSA
 import snastro.ui.testi.SPIEGAZIONE_DIVIDI_INTERA_VOCE
 import snastro.ui.testi.SUGGERIMENTO_PRIMA_REGISTRAZIONE
+import snastro.ui.testi.SUGGERIMENTO_RIFERIMENTI_INSUFFICIENTI
+import snastro.ui.testi.TOOLTIP_FRASE_CONFERMATA
 import snastro.ui.testi.messaggioPer
+import java.awt.image.BufferedImage
 import java.io.File
 import java.time.LocalDate
 import javax.imageio.ImageIO
@@ -105,7 +115,35 @@ private fun pannello(
     carte: List<CartaVoce>,
     unioni: List<PropostaDiUnione> = emptyList(),
     estratti: Boolean = true,
-) = PannelloVoci(carte, listOf(GIULIA, MARCO), unioni, estrattiDisponibili = estratti, unioneAbilitata = true)
+    somiglianza: PannelloSomiglianza? = null,
+) = PannelloVoci(
+    carte,
+    listOf(GIULIA, MARCO),
+    unioni,
+    estrattiDisponibili = estratti,
+    unioneAbilitata = true,
+    somiglianza = somiglianza,
+)
+
+/** ADR 0019 §6: the 'Riassegna per somiglianza' header area in [fase], with the Amendment (b).6 lines. */
+private fun somiglianza(
+    fase: FaseSomiglianza,
+    abilitato: Boolean = fase == FaseSomiglianza.Inattiva,
+    suggerimento: String? = null,
+) = PannelloSomiglianza(
+    abilitato = abilitato,
+    suggerimento = suggerimento,
+    riferimenti = "Riferimenti: Marco (frasi confermate) · $NOME_LUNGO (tutta la voce)",
+    avvisoTuttaLaVoce = AVVISO_TUTTA_LA_VOCE,
+    nonToccate = null,
+    fase = fase,
+)
+
+private val CARTE_TRE = listOf(CARTA_ATTRIBUITA, CARTA_CANDIDATI, CARTA_NESSUNA)
+
+/** AC-531/AC-545: while computing or previewing every card action and the merge are disabled. */
+private fun bloccato(s: PannelloSomiglianza) =
+    pannello(CARTE_TRE.map { it.copy(soloLettura = true) }, somiglianza = s).copy(unioneAbilitata = false)
 
 @Suppress("LongParameterList") // one parameter per RegistrazioneUiStato.Dati field these fixtures vary
 private fun stato(
@@ -115,6 +153,7 @@ private fun stato(
     errore: String? = null,
     soloLettura: Boolean = false,
     bannerRitrascrizionePannello: String? = null,
+    confermati: Set<Int> = emptySet(),
 ) = RegistrazioneUiStato.Dati(
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = LocalDate.of(2026, 3, 12),
@@ -125,7 +164,7 @@ private fun stato(
         riga(3, 1, "Marco", "Certo, prego."),
         riga(4, 3, "Voce 3", "Va bene, allora prendo nota."),
         riga(5, 2, "Voce 2", "Grazie."),
-    ),
+    ).map { if (it.segmentoId.numero in confermati) it.copy(confermato = true) else it },
     barra = LettoreUiStato.Inattivo,
     audioDisponibile = pannello.estrattiDisponibili,
     documentoPercorso = "/progetti/demo.snastro/documenti/2026-03-12 Seduta.md",
@@ -162,9 +201,21 @@ class RegistrazioneVociRenderCheckTest {
             onNodeWithTag("registrazione-lista").assertIsDisplayed()
             verifica()
             val png = File(outputDir, "registrazione-voci-$nome-${w}x$h.png")
-            ImageIO.write(onRoot().captureToImage().toAwtImage(), "PNG", png)
+            ImageIO.write(immagineDellaScena(w, h), "PNG", png)
             check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }
         }
+    }
+
+    /** Every root of the scene layered in order — an open menu is a second root (its popup layer). */
+    private fun ComposeUiTest.immagineDellaScena(w: Int, h: Int): BufferedImage {
+        val radici = onAllNodes(isRoot())
+        val immagine = BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB)
+        val g = immagine.createGraphics()
+        repeat(radici.fetchSemanticsNodes().size) { i ->
+            g.drawImage(radici[i].captureToImage().toAwtImage(), 0, 0, null)
+        }
+        g.dispose()
+        return immagine
     }
 
     @Test
@@ -368,5 +419,246 @@ class RegistrazioneVociRenderCheckTest {
             onNodeWithText(MESSAGGIO_ESTRATTI_NON_DISPONIBILI).assertIsDisplayed()
             onNodeWithTag("voce-2-estratto").assertIsNotEnabled()
             onNodeWithTag("voce-2-conferma").assertIsEnabled()
+        }
+
+    // --- ADR 0019 §6 + Amendment (b): 'Dai un nome a questa frase', pin, 'Riassegna per somiglianza' ---
+
+    private fun barraFrase(confermato: Boolean) = BarraSelezione(
+        VoceId(2),
+        "Voce 2",
+        1,
+        true,
+        null,
+        opzioni(2),
+        abilitata = true,
+        frase = MenuFrase(SegmentoId(2), listOf(GIULIA.copy(nome = NOME_LUNGO), MARCO), confermato, abilitata = true),
+    )
+
+    @Test
+    fun `AC-526 menu Dai un nome a questa frase con i Parlanti attivi e nuovo`() {
+        var scelto: ObiettivoNome? = null
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, nominaFrase = { scelto = it })
+        scena(
+            "frase-menu",
+            stato(pannello(CARTE_TRE), selezione = setOf(SegmentoId(2)), barra = barraFrase(confermato = false)),
+            azioni,
+        ) {
+            onNodeWithTag("registrazione-nomina-frase").assertIsEnabled().performClick()
+            onNode(hasText("Marco · ricorrente") and hasClickAction()).assertIsDisplayed()
+            onAllNodesWithText(ETICHETTA_NUOVO).onLast().assertIsDisplayed()
+            assertEquals(0, onAllNodes(hasTestTag("registrazione-togli-conferma")).fetchSemanticsNodes().size)
+        }
+        assertEquals(null, scelto)
+    }
+
+    @Test
+    fun `AC-526 nuovo apre il modulo Nome con occasionale sotto la barra`() {
+        var scelto: ObiettivoNome? = null
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, nominaFrase = { scelto = it })
+        scena(
+            "frase-nuovo",
+            stato(pannello(CARTE_TRE), selezione = setOf(SegmentoId(2)), barra = barraFrase(confermato = false)),
+            azioni,
+        ) {
+            onNodeWithTag("registrazione-nomina-frase").performClick()
+            onAllNodesWithText(ETICHETTA_NUOVO).onLast().performClick()
+            onNodeWithTag("registrazione-frase-modulo-nuovo").assertIsDisplayed()
+            onNodeWithTag("registrazione-frase-nuovo-nome").performTextInput("Dario")
+            onNodeWithTag("registrazione-frase-nuovo-crea").performClick()
+        }
+        assertEquals(ObiettivoNome.Nuovo("Dario", ricorrente = true), scelto)
+    }
+
+    @Test
+    fun `AC-528 frase confermata con la puntina e Togli conferma`() {
+        var tolta = false
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, togliConferma = { tolta = true })
+        scena(
+            "frase-confermata",
+            stato(
+                pannello(CARTE_TRE),
+                selezione = setOf(SegmentoId(2)),
+                barra = barraFrase(confermato = true),
+                confermati = setOf(1, 2),
+            ),
+            azioni,
+        ) {
+            onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
+            onNode(
+                hasContentDescription(TOOLTIP_FRASE_CONFERMATA) and hasTestTag("registrazione-confermato-1"),
+                useUnmergedTree = true,
+            )
+                .assertIsDisplayed()
+            onNodeWithText(ETICHETTA_TOGLI_CONFERMA).assertIsEnabled().performClick()
+        }
+        assertEquals(true, tolta)
+    }
+
+    @Test
+    fun `AC-529 frase in attesa dell elaborazione con Annulla sulla riga`() {
+        var annullata: SegmentoId? = null
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, annullaFrase = { annullata = it })
+        val base = stato(pannello(CARTE_TRE))
+        val conAttesa = base.copy(
+            segmenti = base.segmenti.map {
+                if (it.segmentoId.numero == 2) it.copy(attesaFrase = AttesaComando.IN_ATTESA) else it
+            },
+        )
+        scena("frase-in-attesa", conAttesa, azioni) {
+            onNodeWithTag("registrazione-frase-in-attesa-2", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithTag("registrazione-frase-annulla-2", useUnmergedTree = true).performClick()
+        }
+        assertEquals(SegmentoId(2), annullata)
+    }
+
+    @Test
+    fun `AC-530 pulsante abilitato con le righe dei riferimenti`() =
+        scena("somiglianza-pronto", stato(pannello(CARTE_TRE, somiglianza = somiglianza(FaseSomiglianza.Inattiva)))) {
+            onNodeWithTag("somiglianza-avvia").assertIsEnabled()
+            onNodeWithTag("somiglianza-riferimenti").assertIsDisplayed()
+            onNodeWithText(AVVISO_TUTTA_LA_VOCE).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-530 RiferimentiInsufficienti pulsante disabilitato con Dai un nome ad almeno due persone`() =
+        scena(
+            "somiglianza-riferimenti-insufficienti",
+            stato(
+                pannello(
+                    CARTE_TRE,
+                    somiglianza = somiglianza(
+                        FaseSomiglianza.Inattiva,
+                        abilitato = false,
+                        suggerimento = SUGGERIMENTO_RIFERIMENTI_INSUFFICIENTI,
+                    ).copy(
+                        riferimenti = "Riferimenti: Marco (frasi confermate)",
+                        avvisoTuttaLaVoce = null,
+                        nonToccate = "Non toccate: Giulia",
+                    ),
+                ),
+            ),
+        ) {
+            onNodeWithTag("somiglianza-avvia").assertIsNotEnabled()
+            onNodeWithTag("somiglianza-suggerimento").assertIsDisplayed()
+            onNodeWithText(SUGGERIMENTO_RIFERIMENTI_INSUFFICIENTI).assertIsDisplayed()
+            onNodeWithTag("somiglianza-non-toccate").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-531 confronto in corso con barra, attesa e Annulla`() {
+        var annullato = false
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, annullaSomiglianza = { annullato = true })
+        val calcolo = FaseSomiglianza.Calcolo("Confronto le frasi… 312 di 1024", 312, 1024, inAttesa = true)
+        scena(
+            "somiglianza-calcolo",
+            stato(bloccato(somiglianza(calcolo))),
+            azioni,
+        ) {
+            onNodeWithText("Confronto le frasi… 312 di 1024").assertIsDisplayed()
+            onNodeWithTag("somiglianza-barra").assertIsDisplayed()
+            onNodeWithTag("somiglianza-in-attesa").assertIsDisplayed()
+            onNodeWithTag("voce-2-conferma").assertIsNotEnabled()
+            onNodeWithTag("voce-1-estratto").assertIsEnabled()
+            onNodeWithTag("somiglianza-annulla").performClick()
+        }
+        assertEquals(true, annullato)
+    }
+
+    @Test
+    fun `AC-545 anteprima con Applica e Annulla`() {
+        var applicato = false
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, applicaSomiglianza = { applicato = true })
+        val anteprima = FaseSomiglianza.Anteprima(
+            "Sposterò 12 frasi, 3 incerte restano dove sono",
+            listOf("Voce 3 → Marco: 8", "Voce 4 → Marco: 1", "Voce 3 → $NOME_LUNGO: 3"),
+            applicabile = true,
+            inApplicazione = false,
+        )
+        scena(
+            "somiglianza-anteprima",
+            stato(bloccato(somiglianza(anteprima))),
+            azioni,
+        ) {
+            onNodeWithText("Sposterò 12 frasi, 3 incerte restano dove sono").assertIsDisplayed()
+            onNodeWithTag("somiglianza-riga-2").assertIsDisplayed()
+            onNodeWithTag("somiglianza-annulla").assertIsEnabled()
+            onNodeWithTag("somiglianza-applica").assertIsEnabled().performClick()
+        }
+        assertEquals(true, applicato)
+    }
+
+    @Test
+    fun `AC-545 anteprima con N zero ha solo Chiudi`() =
+        scena(
+            "somiglianza-anteprima-vuota",
+            stato(
+                pannello(
+                    CARTE_TRE,
+                    somiglianza = somiglianza(
+                        FaseSomiglianza.Anteprima(
+                            "Nessuna frase da spostare (1 incerta resta dove è)",
+                            emptyList(),
+                            applicabile = false,
+                            inApplicazione = false,
+                        ),
+                    ),
+                ),
+            ),
+        ) {
+            onNodeWithTag("somiglianza-chiudi").assertIsEnabled()
+            assertEquals(0, onAllNodes(hasTestTag("somiglianza-applica")).fetchSemanticsNodes().size)
+        }
+
+    @Test
+    fun `AC-546 durante l applicazione i pulsanti sono disabilitati`() =
+        scena(
+            "somiglianza-applicazione",
+            stato(
+                pannello(
+                    CARTE_TRE,
+                    somiglianza = somiglianza(
+                        FaseSomiglianza.Anteprima(
+                            "Sposterò 2 frasi, 0 incerte restano dove sono",
+                            listOf("Voce 3 → Marco: 2"),
+                            applicabile = true,
+                            inApplicazione = true,
+                        ),
+                    ),
+                ),
+            ),
+        ) {
+            onNodeWithTag("somiglianza-applica").assertIsNotEnabled()
+            onNodeWithTag("somiglianza-annulla").assertIsNotEnabled()
+        }
+
+    @Test
+    fun `AC-547 TrascrittoCambiato con Ricalcola`() {
+        var ricalcolato = false
+        val azioni = AzioniRegistrazione({}, {}, {}, {}, {}, {}, {}, calcolaSomiglianza = { ricalcolato = true })
+        val errore = FaseSomiglianza.Errore("La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima", true)
+        val stato = stato(pannello(CARTE_TRE, somiglianza = somiglianza(errore, abilitato = true)))
+        scena("somiglianza-trascritto-cambiato", stato, azioni) {
+            onNodeWithText("La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima").assertIsDisplayed()
+            onNodeWithTag("somiglianza-ricalcola").assertIsEnabled().performClick()
+        }
+        assertEquals(true, ricalcolato)
+    }
+
+    @Test
+    fun `AC-533 esito dopo Applica`() =
+        scena(
+            "somiglianza-esito",
+            stato(
+                pannello(
+                    CARTE_TRE,
+                    somiglianza = somiglianza(
+                        FaseSomiglianza.Esito("12 frasi spostate, 3 incerte (rimaste dov'erano)"),
+                        abilitato = true,
+                    ),
+                ),
+            ),
+        ) {
+            onNodeWithText("12 frasi spostate, 3 incerte (rimaste dov'erano)").assertIsDisplayed()
+            onNodeWithTag("somiglianza-messaggio-chiudi").assertIsDisplayed()
         }
 }

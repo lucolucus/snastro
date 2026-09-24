@@ -1,5 +1,6 @@
 package snastro.ui.registrazione
 
+import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
@@ -17,6 +18,8 @@ data class PannelloVoci(
     val unioni: List<PropostaDiUnione>,
     val estrattiDisponibili: Boolean,
     val unioneAbilitata: Boolean,
+    /** ADR 0019 §6: 'Riassegna per somiglianza' in the header; `null` without [AzioniSomiglianza]. */
+    val somiglianza: PannelloSomiglianza? = null,
 )
 
 /** A Voce as a target of 'Unisci con ▾' / 'Riassegna a ▾': its number and its label (Nome or "Voce n"). */
@@ -58,7 +61,9 @@ data class CartaVoce(
 /**
  * The transcript selection toolbar (AC-209..211): the selection is always inside ONE Voce ([voceId]).
  * [dividiAbilitato] is `false`, with [spiegazioneDividi], when the selection is the whole Voce
- * (INV-10); [destinazioni] are the OTHER Voci ('Riassegna a ▾', plus 'nuova voce').
+ * (INV-10); [destinazioni] are the OTHER Voci ('Riassegna a ▾', plus 'nuova voce'). [frase] (ADR 0019
+ * §6) is 'Dai un nome a questa frase ▾' / 'Togli conferma', present only with exactly ONE Segmento
+ * selected (AC-526/AC-528).
  */
 data class BarraSelezione(
     val voceId: VoceId,
@@ -68,4 +73,19 @@ data class BarraSelezione(
     val spiegazioneDividi: String?,
     val destinazioni: List<OpzioneVoce>,
     val abilitata: Boolean,
+    val frase: MenuFrase? = null,
+)
+
+/**
+ * AC-526/AC-528: the naming menu of the ONE selected [segmentoId] — the `attivo` [parlanti], then 'nuovo…';
+ * [confermato] offers 'Togli conferma' ([togliConfermaDisponibile]: the command is wired). [abilitata] is
+ * `false` while read-only (AC-454), while a similarity run is open (AC-531/AC-545) or while this
+ * Segmento's own naming is pending (AC-529).
+ */
+data class MenuFrase(
+    val segmentoId: SegmentoId,
+    val parlanti: List<ParlanteAttivo>,
+    val confermato: Boolean,
+    val abilitata: Boolean,
+    val togliConfermaDisponibile: Boolean = true,
 )

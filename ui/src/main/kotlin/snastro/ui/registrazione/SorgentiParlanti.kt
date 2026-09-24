@@ -7,6 +7,7 @@ import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.letture.VoceIdentificata
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
@@ -22,6 +23,10 @@ import java.time.Clock
  * `<Comando>Servizio::esegui`. All BLOCKING: the presenter calls them on its background dispatcher only
  * (AC-417). [aggiornamenti] carries `ImpronteRiallineate` & co. as a [snastro.ui.Cambiamento] (AC-319);
  * [clock] times the pending threshold (AC-412/AC-415) on the same time line as [ComandiVoce.stato].
+ *
+ * ADR 0019 (optional, so every earlier composition stays as it was): [confermaSegmento] =
+ * `ConfermaSegmentoServizio::esegui` ('Togli conferma'; `null` → not offered); [somiglianza] = the
+ * per-project [AzioniSomiglianza] ('Riassegna per somiglianza'; `null` → no button).
  */
 @Suppress("LongParameterList") // one parameter per R2 read-model/command of S3
 class SorgentiParlanti(
@@ -36,4 +41,6 @@ class SorgentiParlanti(
     val riassegna: (RiassegnaSegmento) -> Esito<Unit>,
     val aggiornamenti: AggiornamentiVista,
     val clock: Clock,
+    val confermaSegmento: ((ConfermaSegmento) -> Esito<Unit>)? = null,
+    val somiglianza: AzioniSomiglianza? = null,
 )
