@@ -598,3 +598,9 @@
 2026-09-24T00:09:42Z	avvio-composizione	composer	carry	-	-	-	R1 needs a LettoreNomi with no names (lettore-nomi-da-parlanti is R2): Voci stay "Voce n" in the Documento
 2026-09-24T00:10:23Z	ml-sherpa-motore	worker	dispatch	cycle=0	tier=deep	model=opus	owns tec-ml-sherpa + native fetch (ADR 0016)
 2026-09-24T00:10:23Z	schermata-modelli	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1
+2026-09-24T00:24:17Z	ml-sherpa-motore	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW 9408424
+2026-09-24T00:24:17Z	ml-sherpa-motore	verifier	result	cycle=0	-	composer	PASS (light: gate green, real natives load on this Mac, no binaries tracked)
+2026-09-24T00:24:17Z	ml-sherpa-motore	composer	merge	cycle=0	-	-	MERGED fbd6e46; NOTE ADR 0016 §4 amend: LibraryLoader.setAutoLoadEnabled(false) before LibraryUtils.load()
+2026-09-24T00:24:17Z	vad-silero	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
+2026-09-24T00:24:17Z	diarizzatore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
+2026-09-24T00:24:17Z	riconoscitore-sherpa	worker	dispatch	cycle=0	tier=standard	model=sonnet	R1 ML adapter
