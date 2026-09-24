@@ -11,7 +11,7 @@ import snastro.trascrizione.dominio.SegmentoIniziale
 import snastro.trascrizione.dominio.Trascritto
 
 /**
- * An independent [Trascritto] with the same observable state (Segmenti with their Voce, `prossimaVoce`,
+ * An independent [Trascritto] with the same observable state (Segmenti with their Voce and flag, `prossimaVoce`,
  * `prossimoSegmento`), rebuilt WITHOUT `ricostituisci` (CR-15 reserves it to persistence adapters):
  * 1. `crea` with the same Segmenti, each Segmento's diarizer index chosen so that creation mints the same
  *    `SegmentoId`s (ties on `inizioMs` keep the id order) with as few Voci as possible;
@@ -19,12 +19,14 @@ import snastro.trascrizione.dominio.Trascritto
  *    the creation Voci the copy keeps receive theirs first; the ids above creation are then minted in order
  *    by moving one Segmento to a new Voce (a target Voce) or out and straight back (an id used in the past
  *    and gone since);
- * 3. every other Segmento moves to its target Voce; Voci that are not targets empty out and disappear.
+ * 3. every other Segmento moves to its target Voce; Voci that are not targets empty out and disappear;
+ * 4. every `confermato` flag is set back to the source's (the moves above confirm what they move, INV-26).
  * The result is checked against the source: a state this cannot rebuild fails loudly, never silently.
  */
 internal fun Trascritto.copia(): Trascritto {
     val copia = creaConGliStessiId(this)
     Ricostruzione(copia, bersaglio = segmenti.associate { it.id to it.voceId }, prossimaVoce).esegui()
+    segmenti.forEach { check(copia.confermaSegmento(it.id, it.confermato) is Esito.Ok) }
     check(copia.statoOsservabile() == statoOsservabile()) { "copia del Trascritto $registrazioneId non riuscita" }
     return copia
 }
