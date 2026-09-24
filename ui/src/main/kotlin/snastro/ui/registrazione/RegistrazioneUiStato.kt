@@ -7,8 +7,8 @@ import java.time.LocalDate
 
 /**
  * State of S3 · Registrazione, READ-ONLY in R1 (AC-207/208/217/218/402) — presenter-owned, rendered by
- * [SchermataRegistrazione]. No Voci panel, no selection, no Revisione UI: those belong to the R2 block
- * `schermata-registrazione-identificazione` (AC-402, explicit cut).
+ * [SchermataRegistrazione]. The Voci panel, the selection and the Revisione UI are R2 (block
+ * `schermata-registrazione-identificazione`): [Dati.pannello] is `null` in R1 (AC-402).
  */
 sealed interface RegistrazioneUiStato {
     /** AC-207: the trascritto is still loading — the transcript area renders a skeleton, not a blank screen. */
@@ -32,6 +32,12 @@ sealed interface RegistrazioneUiStato {
         val audioDisponibile: Boolean,
         val documentoPercorso: String?,
         val errore: String? = null,
+        /** R2 only (AC-402: `null` in R1 — no panel at all). */
+        val pannello: PannelloVoci? = null,
+        /** AC-209: the selected Segmenti, always of one Voce (R2 only). */
+        val selezione: Set<SegmentoId> = emptySet(),
+        /** AC-209..211: the selection toolbar, `null` without a selection. */
+        val barraSelezione: BarraSelezione? = null,
     ) : RegistrazioneUiStato
 
     /** M5-style: the INITIAL load failed (a thrown fault, or no Trascritto at all for this Registrazione) —

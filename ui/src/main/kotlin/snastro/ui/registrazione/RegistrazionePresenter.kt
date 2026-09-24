@@ -8,8 +8,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import snastro.kernel.EstrattoRef
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.VoceId
+import snastro.kernel.VoceRef
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.ui.ApriEsterno
 import snastro.ui.lettore.LettoreAudio
@@ -26,14 +29,12 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
  * with a message, when the source is missing — clicking a Segmento then does nothing, the transcript
  * itself stays readable).
  *
- * AC-402: constructed with ONLY these four collaborators (plus [registrazioneId]/[scope]/[io]) — the
- * Parlanti sources (identificazione-voci, proposta, proposta-unione, parlanti-attivi, estratto-audio)
- * and the ConfermaAttribuzione/SaltaVoce/UnisciVoci/DividiVoce/RiassegnaSegmento commands are simply
- * ABSENT in R1: no Voci panel, no card, no merge banner, no 'conferma'/'salta'/'cambia'/'Unisci con', no
- * selection, no '▶ estratto'. The R2 block `schermata-registrazione-identificazione` extends this
- * presenter with those later — not pre-declared here per YAGNI (frugality rung 1): none of their
- * read-models/commands is buildable yet (still `todo`), so a speculative optional parameter today would
- * be dead code with no test to justify it.
+ * AC-402: in R1 it is constructed with ONLY these four collaborators (plus [registrazioneId]/[scope]/[io])
+ * — no Voci panel, no card, no merge banner, no selection, no '▶ estratto'. R2
+ * (`schermata-registrazione-identificazione`) supplies the OPTIONAL [parlanti] ([SorgentiParlanti]):
+ * the Voci panel, the Nome labels, the selection toolbar and the Revisione commands, all handled by
+ * [StatoVoci] into this presenter's own [stato]. [SOGLIA_ATTESA_VISIBILE_MS] (ADR 0017 §3) is defined
+ * here, once.
  *
  * Depends on `applicazione` through PLAIN FUNCTION TYPES ([trascritto]/[documento]) rather than the
  * concrete query classes, mirroring `RegistrazioniPresenter` (dev-architecture `#presenter`): `:avvio`
@@ -51,15 +52,23 @@ class RegistrazionePresenter(
     private val documento: () -> String?,
     private val lettore: LettoreAudio,
     private val apriEsterno: ApriEsterno,
+    private val parlanti: SorgentiParlanti? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
     private val _stato = MutableStateFlow<RegistrazioneUiStato>(RegistrazioneUiStato.Caricamento)
     val stato: StateFlow<RegistrazioneUiStato> = _stato.asStateFlow()
 
+    // R2 (schermata-registrazione-identificazione): the Voci panel, the Nome labels, the selection
+    // toolbar and the Revisione commands — absent in R1 (AC-402), so nothing of it runs there.
+    private val voci: StatoVoci? = parlanti?.let { sorgenti ->
+        StatoVoci(sorgenti, scope, io, registrazioneId, trascritto, _stato) { v -> segmentiDi(v, lettore.stato.value) }
+    }
+
     init {
         scope.launch { carica() }
         scope.launch { lettore.stato.collect { s -> rifletti(s) } }
+        voci?.avvia()
     }
 
     private suspend fun carica() {
@@ -72,6 +81,7 @@ class RegistrazionePresenter(
             val percorso = withContext(io) { documento() }
             val disponibile = withContext(io) { lettore.disponibile(registrazioneId) }
             val statoLettore = lettore.stato.value
+            voci?.vista = vista
             _stato.value = RegistrazioneUiStato.Dati(
                 titolo = vista.titolo,
                 dataRegistrazione = vista.dataRegistrazione,
@@ -81,6 +91,7 @@ class RegistrazionePresenter(
                 audioDisponibile = disponibile,
                 documentoPercorso = percorso,
             )
+            voci?.pubblica()
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -90,6 +101,7 @@ class RegistrazionePresenter(
         ) {
             _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
         }
+        if (_stato.value is RegistrazioneUiStato.Dati) voci?.ricaricaParlanti()
     }
 
     /** Retries the initial load after [RegistrazioneUiStato.Errore]. */
@@ -98,12 +110,11 @@ class RegistrazionePresenter(
     }
 
     private fun segmentiDi(vista: TrascrittoView, statoLettore: StatoLettore): List<SegmentoRiga> {
-        val etichette = vista.voci.associate { it.voceId to it.etichetta }
         return vista.segmenti.map { s ->
             SegmentoRiga(
                 segmentoId = s.segmentoId,
                 voceId = s.voceId,
-                etichettaVoce = etichette[s.voceId] ?: "Voce ${s.voceId.numero}",
+                etichettaVoce = etichettaDiVoce(vista, s.voceId, voci?.nomeDi(s.voceId)),
                 inizioMs = s.inizioMs,
                 fineMs = s.fineMs,
                 testo = s.testo,
@@ -185,6 +196,20 @@ class RegistrazionePresenter(
         }
     }
 
+    /** AC-403: '▶ estratto' of a Voce card — a no-op while the audio source is missing. */
+    fun riproduciEstrattoVoce(voceId: VoceId) {
+        val sorgenti = parlanti ?: return
+        if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
+        avvia { sorgenti.estratto(VoceRef(registrazioneId, voceId))?.let(lettore::riproduciEstratto) }
+    }
+
+    /** AC-403: '▶' of a Candidato (its own past excerpt) — a no-op while the audio source is missing. */
+    fun riproduciEstratto(estratto: EstrattoRef) {
+        if (parlanti == null) return
+        if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
+        avvia { lettore.riproduciEstratto(estratto) }
+    }
+
     /** H1: dismisses the current inline `errore`, if any. */
     fun chiudiErrore() = aggiornaDati { it.copy(errore = null) }
 
@@ -201,5 +226,23 @@ class RegistrazionePresenter(
         mostraDocumentoNellaCartella = ::mostraDocumentoNellaCartella,
         chiudiErrore = ::chiudiErrore,
         riprova = ::riprova,
+        selezionaSegmento = { id -> voci?.selezionaSegmento(id) },
+        deseleziona = { voci?.deseleziona() },
+        dividiVoce = { voci?.dividiVoce() },
+        riassegnaA = { destinazione -> voci?.riassegnaA(destinazione) },
+        unisci = { sopravvive, rimossa -> voci?.unisci(sopravvive, rimossa) },
+        conferma = { voceId -> voci?.conferma(voceId) },
+        confermaParlante = { voceId, parlanteId -> voci?.confermaParlante(voceId, parlanteId) },
+        nuovoParlante = { voceId, nome, tipo -> voci?.nuovoParlante(voceId, nome, tipo) },
+        salta = { voceId -> voci?.salta(voceId) },
+        annullaComando = { voceId -> voci?.annulla(voceId) },
+        chiudiErroreVoce = { voceId -> voci?.chiudiErrore(voceId) },
+        riproduciEstrattoVoce = ::riproduciEstrattoVoce,
+        riproduciEstratto = ::riproduciEstratto,
     )
+
+    companion object {
+        /** ADR 0017 §3 (AC-412/AC-416): the ONLY definition of the visible-wait threshold. */
+        const val SOGLIA_ATTESA_VISIBILE_MS: Long = 2_000
+    }
 }
