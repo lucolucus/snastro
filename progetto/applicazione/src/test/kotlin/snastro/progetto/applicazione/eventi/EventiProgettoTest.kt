@@ -2,9 +2,16 @@ package snastro.progetto.applicazione.eventi
 
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoClassDeclaration
+import snastro.kernel.DispatcherEventiInMemoria
+import snastro.kernel.ErroreDiProva
+import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.RiferimentoAudio
+import snastro.kernel.UnitaDiLavoroFinta
+import snastro.kernel.atteso
+import snastro.kernel.erroreAtteso
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -70,9 +77,76 @@ class EventiProgettoTest {
     }
 
     @Test
+    fun `AC-618 RegistrazioneEliminata ha registrazioneId, progettoId, titolo, dataRegistrazione e riferimentoAudio`() {
+        val evento: EventoPubblicato = eliminata()
+        assertEquals(
+            RegistrazioneEliminata(
+                RegistrazioneId("id-2"),
+                ProgettoId("id-1"),
+                "Seduta",
+                LocalDate.of(2026, 9, 12),
+                RiferimentoAudio("audio/id-2.m4a"),
+            ),
+            evento,
+        )
+        assertEquals(
+            listOf(
+                "registrazioneId: RegistrazioneId",
+                "progettoId: ProgettoId",
+                "titolo: String",
+                "dataRegistrazione: LocalDate",
+                "riferimentoAudio: RiferimentoAudio",
+            ),
+            formaDi("RegistrazioneEliminata"),
+        )
+    }
+
+    @Test
+    fun `AC-618 RegistrazioneEliminata arriva al sincrono dentro la transazione e al dopo-commit solo dopo il COMMIT`() {
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        var dentro = false
+        val sincroni = mutableListOf<Pair<EventoPubblicato, Boolean>>()
+        val dopoCommit = mutableListOf<EventoPubblicato>()
+        dispatcher.registraSincrono { e ->
+            sincroni += e to dentro
+            Esito.Ok(Unit)
+        }
+        dispatcher.registraDopoCommit { e -> dopoCommit += e }
+        fun pubblica(conferma: Boolean): Esito<Unit> = dispatcher.unitaDiLavoro.inTransazione {
+            dentro = true
+            dispatcher.pubblica(eliminata())
+            assertEquals(emptyList(), dopoCommit, "mai prima del COMMIT")
+            dentro = false
+            if (conferma) Esito.Ok(Unit) else Esito.Errore(ErroreDiProva.Fallito("rollback"))
+        }
+
+        pubblica(conferma = false).erroreAtteso<ErroreDiProva.Fallito>()
+        assertEquals(listOf<Pair<EventoPubblicato, Boolean>>(eliminata() to true), sincroni)
+        assertEquals(emptyList(), dopoCommit, "mai dopo un rollback")
+
+        pubblica(conferma = true).atteso()
+        assertEquals(listOf(true, true), sincroni.map { it.second })
+        assertEquals(listOf<EventoPubblicato>(eliminata()), dopoCommit)
+    }
+
+    private fun eliminata() = RegistrazioneEliminata(
+        registrazioneId = RegistrazioneId("id-2"),
+        progettoId = ProgettoId("id-1"),
+        titolo = "Seduta",
+        dataRegistrazione = LocalDate.of(2026, 9, 12),
+        riferimentoAudio = RiferimentoAudio("audio/id-2.m4a"),
+    )
+
+    @Test
     fun `AC-15 gli eventi pubblicati di Progetto sono data class di soli val che implementano EventoPubblicato`() {
         assertEquals(
-            setOf("ProgettoCreato", "RegistrazioneAggiunta", "DataRegistrazioneModificata", "RegistrazioneRinominata"),
+            setOf(
+                "ProgettoCreato",
+                "RegistrazioneAggiunta",
+                "DataRegistrazioneModificata",
+                "RegistrazioneRinominata",
+                "RegistrazioneEliminata",
+            ),
             eventi.map { it.name }.toSet(),
         )
         eventi.forEach { evento ->
