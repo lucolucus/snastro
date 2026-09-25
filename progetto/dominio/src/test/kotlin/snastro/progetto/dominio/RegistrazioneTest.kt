@@ -128,4 +128,30 @@ class RegistrazioneTest {
         assertEquals(RiferimentoAudio("audio/id-1.m4a"), registrazione.riferimentoAudio)
         assertEquals(dataFile, registrazione.dataRegistrazione)
     }
+
+    // --- AC-613: elimina (ADR 0020) -------------------------------------------------------------
+
+    @Test
+    fun `AC-613 elimina restituisce RegistrazioneEliminata con titolo e data correnti e non cambia lo stato`() {
+        val registrazione = unaRegistrazione().aggregato
+        registrazione.rinomina("Seduta di marzo").atteso()
+        registrazione.modificaData(dataScelta).atteso()
+
+        val evento = registrazione.elimina()
+
+        assertEquals(
+            RegistrazioneEliminata(
+                id = id,
+                progettoId = progettoId,
+                titolo = "Seduta di marzo",
+                dataRegistrazione = dataScelta,
+                riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
+            ),
+            evento,
+        )
+        assertEquals(evento, registrazione.elimina(), "puro: ripetibile, stesso evento")
+        assertEquals("Seduta di marzo", registrazione.titolo)
+        assertEquals(dataScelta, registrazione.dataRegistrazione)
+        assertEquals(progettoId, registrazione.progettoId)
+    }
 }

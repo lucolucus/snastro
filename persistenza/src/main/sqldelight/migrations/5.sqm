@@ -1,0 +1,11 @@
+-- Schema 5 -> 6 (ADR 0020 §4 "Elimina registrazione", ADR 0006 (a)): forward-only — schema 5 (4.sqm) is never edited.
+-- Progetto-owned pending-cleanup row of a deleted Registrazione, written in the deleting transaction (so it exists iff
+-- the deletion committed) and removed at the next project open once its files are gone. No FK: the registrazione
+-- row is gone. No biometric data (ADR 0009): the values needed to locate the files, eliminata_alle = epoch millis.
+CREATE TABLE eliminazione_in_sospeso (
+    registrazione_id TEXT NOT NULL PRIMARY KEY,
+    titolo TEXT NOT NULL,
+    data_registrazione TEXT NOT NULL,
+    riferimento_audio TEXT NOT NULL,
+    eliminata_alle INTEGER NOT NULL
+);

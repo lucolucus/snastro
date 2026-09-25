@@ -19,4 +19,11 @@ public interface RegistrazioneRepository {
 
     /** Inserts or updates [r] inside the caller's transaction. */
     public fun salva(r: Registrazione)
+
+    /**
+     * Deletes the Registrazione [id] inside the caller's transaction; an absent id is a no-op. The ONLY physical
+     * deletion of a Registrazione (ADR 0020), called by `EliminaRegistrazione` after the synchronous subscribers
+     * removed every row that references it.
+     */
+    public fun rimuovi(id: RegistrazioneId)
 }

@@ -130,6 +130,30 @@ public abstract class TrascrittoRepositoryContratto {
         assertEquals(atteso, Istantanea.di(assertNotNull(repo.trova(REGISTRAZIONE))))
     }
 
+    @Test
+    public fun `AC-619 rimuovi toglie il Trascritto da trova e conTrascritto e lascia gli altri`() {
+        repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
+        val altro = unTrascritto(voci = 3, segmentiPerVoce = 1, registrazioneId = ALTRA_REGISTRAZIONE)
+        repo.salva(altro)
+
+        repo.rimuovi(REGISTRAZIONE)
+
+        assertNull(repo.trova(REGISTRAZIONE))
+        assertEquals(listOf(ALTRA_REGISTRAZIONE), repo.conTrascritto())
+        assertStessoStato(altro, assertNotNull(repo.trova(ALTRA_REGISTRAZIONE)))
+    }
+
+    @Test
+    public fun `AC-619 rimuovi di una Registrazione senza Trascritto non fa nulla`() {
+        val t = unTrascritto(voci = 1, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE)
+        repo.salva(t)
+
+        repo.rimuovi(SENZA_TRASCRITTO)
+
+        assertEquals(listOf(REGISTRAZIONE), repo.conTrascritto())
+        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE)))
+    }
+
     private fun assertStessoStato(atteso: Trascritto, trovato: Trascritto) {
         assertEquals(Istantanea.di(atteso), Istantanea.di(trovato))
     }

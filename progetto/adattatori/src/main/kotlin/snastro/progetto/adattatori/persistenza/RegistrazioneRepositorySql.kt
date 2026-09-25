@@ -49,6 +49,11 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
             )
         }
     }
+
+    // ADR 0020: the elaborazione / trascritto FKs are immediate — their rows must already be gone.
+    override fun rimuovi(id: RegistrazioneId) {
+        db.registrazioneQueries.elimina(id.valore)
+    }
 }
 
 /** The database is trusted, nothing is re-validated (CR-15). */

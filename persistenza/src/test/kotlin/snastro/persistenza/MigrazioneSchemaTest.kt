@@ -123,6 +123,17 @@ class MigrazioneSchemaTest {
         db.parlanteQueries.rimuovi(parlanteId)
         db.segmentoQueries.eliminaDiRegistrazione(registrazioneId)
         db.voceQueries.eliminaDiRegistrazione(registrazioneId)
+        eseguiQueryEliminaRegistrazione(db)
+    }
+
+    /** ADR 0020: the deletion of a Registrazione, children first, and its pending-cleanup row. */
+    private fun eseguiQueryEliminaRegistrazione(db: SnastroDatabase) {
+        db.trascrittoQueries.elimina(registrazioneId)
+        db.elaborazioneQueries.eliminaDiRegistrazione(registrazioneId)
+        db.registrazioneQueries.elimina(registrazioneId)
+        db.eliminazioneInSospesoQueries.inserisci(registrazioneId, "titolo", "2026-09-23", "audio/reg-1.wav", 0L)
+        db.eliminazioneInSospesoQueries.elenco().executeAsOne()
+        db.eliminazioneInSospesoQueries.elimina(registrazioneId)
     }
 
     private fun eseguiQueryProgettoRegistrazioneParlante(db: SnastroDatabase) {

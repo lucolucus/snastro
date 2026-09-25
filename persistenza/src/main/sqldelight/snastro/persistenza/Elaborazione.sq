@@ -20,7 +20,12 @@ aggiornaStato:
 UPDATE elaborazione SET stato = :stato, avviata_alle = :avviataAlle, motivo_fallimento = :motivoFallimento
     WHERE id = :id;
 
--- ADR 0018 Amendment (b): compare-and-delete of a never-started row (AnnullaElaborazione) — the only DELETE on
--- elaborazione. The `stato` condition lives in the SQL itself: 0 rows = started (or absent), never a stale read.
+-- ADR 0018 Amendment (b): compare-and-delete of a never-started row (AnnullaElaborazione) — one of the two DELETEs
+-- on elaborazione (amended by ADR 0020: plus eliminaDiRegistrazione). The `stato` condition lives in the SQL itself: 0 rows = started (or absent), never a stale read.
 eliminaInAttesa:
 DELETE FROM elaborazione WHERE id = :id AND stato = 'in_attesa';
+
+-- ADR 0020: every Elaborazione of a deleted Registrazione, any state — used only by the elimination policy after
+-- its veto (no in_attesa / in_corso row left to delete, judged in the same transaction).
+eliminaDiRegistrazione:
+DELETE FROM elaborazione WHERE registrazione_id = :registrazioneId;

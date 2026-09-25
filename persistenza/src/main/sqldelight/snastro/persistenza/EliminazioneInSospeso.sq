@@ -1,0 +1,11 @@
+-- Queries for `eliminazione_in_sospeso` — schema in migrations/5.sqm (ADR 0020 §4, ADR 0006 Amendment (a)).
+
+inserisci:
+INSERT INTO eliminazione_in_sospeso(registrazione_id, titolo, data_registrazione, riferimento_audio, eliminata_alle)
+VALUES (:registrazioneId, :titolo, :dataRegistrazione, :riferimentoAudio, :eliminataAlle);
+
+elenco:
+SELECT * FROM eliminazione_in_sospeso ORDER BY eliminata_alle, registrazione_id;
+
+elimina:
+DELETE FROM eliminazione_in_sospeso WHERE registrazione_id = :registrazioneId;

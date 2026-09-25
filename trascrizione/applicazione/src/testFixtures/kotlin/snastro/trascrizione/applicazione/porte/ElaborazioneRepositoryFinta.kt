@@ -38,6 +38,10 @@ public class ElaborazioneRepositoryFinta : ElaborazioneRepository, Ripristinabil
         return Esito.Ok(Unit)
     }
 
+    override fun rimuoviDiRegistrazione(id: RegistrazioneId) {
+        righe.values.removeAll { it.registrazioneId == id }
+    }
+
     override fun salva(e: Elaborazione): Esito<Unit> {
         val altre = righe.values.filter { it.registrazioneId == e.registrazioneId && it.id != e.id }
         return when {

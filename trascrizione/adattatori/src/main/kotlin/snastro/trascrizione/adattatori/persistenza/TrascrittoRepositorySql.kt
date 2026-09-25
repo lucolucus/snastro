@@ -36,6 +36,14 @@ public class TrascrittoRepositorySql(private val db: SnastroDatabase) : Trascrit
     override fun conTrascritto(): List<RegistrazioneId> =
         db.trascrittoQueries.trovaRegistrazioniConTrascritto().executeAsList().map(::RegistrazioneId)
 
+    // ADR 0020: children first (voce -> trascritto is immediate); attribuzione / impronta_vocale rows pointing at
+    // these voci are the Parlanti purge's, checked by the deferred FKs at COMMIT.
+    override fun rimuovi(id: RegistrazioneId) {
+        db.segmentoQueries.eliminaDiRegistrazione(id.valore)
+        db.voceQueries.eliminaDiRegistrazione(id.valore)
+        db.trascrittoQueries.elimina(id.valore)
+    }
+
     override fun salva(t: Trascritto) {
         val registrazioneId = t.registrazioneId.valore
         if (db.trascrittoQueries.trovaPerRegistrazione(registrazioneId).executeAsOneOrNull() == null) {

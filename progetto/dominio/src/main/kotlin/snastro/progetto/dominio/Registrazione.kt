@@ -57,6 +57,14 @@ private constructor(
         return Esito.Ok(DataRegistrazioneModificata(id, precedente, nuova))
     }
 
+    /**
+     * ADR 0020: a pure check returning the event with the CURRENT titolo and date — no state change, no guard
+     * (INV-28's "no open Elaborazione" is Trascrizione's, checked by its synchronous subscriber). The physical
+     * deletion is `RegistrazioneRepository.rimuovi`.
+     */
+    public fun elimina(): RegistrazioneEliminata =
+        RegistrazioneEliminata(id, progettoId, _titolo, _dataRegistrazione, riferimentoAudio)
+
     public companion object {
         /** [dataRegistrazione] defaults, at the caller, to the source file's date (INV-2). */
         @Suppress("LongParameterList") // the pinned signature of agg-registrazione

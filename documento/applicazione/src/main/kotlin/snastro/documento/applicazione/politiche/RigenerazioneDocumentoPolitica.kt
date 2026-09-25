@@ -11,6 +11,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.poi
 import java.io.IOException
 import java.time.LocalDate
+import java.util.Locale
 
 /**
  * Policy `Rigenerazione` (`:documento:applicazione..politiche`, ADR 0012): projects and writes the
@@ -83,6 +84,33 @@ public class RigenerazioneDocumentoPolitica(
      */
     @Suppress("UnusedParameter") // mirrors the ParlanteEliminato event 1:1 for abbonato-documento (AC-156)
     public fun perParlanteEliminato(parlanteId: ParlanteId): Esito<Unit> = Esito.Ok(Unit)
+
+    /**
+     * `RegistrazioneEliminata` (AC-623, ADR 0020 §3-§4), REMOVE-only: removes `Documento.nomeFile(data, titolo)` —
+     * the name at deletion — then each of [nomiPrecedenti] (names still pending from an unflushed rename or date
+     * change) that is a DIFFERENT file (case-insensitively, as in [esegui]). It never writes and never reads the
+     * Trascritto (it is gone). An absent file is Ok (idempotent); an I/O fault → `ScritturaFallita`, so the caller
+     * retries. Called by `abbonato-documento` on the per-key queue and, at project open, by the derived-files cleanup.
+     */
+    @Suppress("UnusedParameter") // mirrors the RegistrazioneEliminata event 1:1 for abbonato-documento (AC-623)
+    public fun perRegistrazioneEliminata(
+        registrazioneId: RegistrazioneId,
+        dataRegistrazione: LocalDate,
+        titolo: String,
+        nomiPrecedenti: Set<String>,
+    ): Esito<Unit> {
+        val nomeFile = Documento.nomeFile(dataRegistrazione, titolo)
+        val daRimuovere = (listOf(nomeFile) + nomiPrecedenti).distinctBy { it.lowercase(Locale.ROOT) }
+        for (nome in daRimuovere) {
+            try {
+                scrittore.rimuovi(nome)
+            } catch (e: IOException) {
+                val messaggio = e.message ?: "errore di I/O in documenti/"
+                return Esito.Errore(ErroreApplicazioneDocumento.ScritturaFallita(nome, messaggio))
+            }
+        }
+        return Esito.Ok(Unit)
+    }
 
     private fun rigeneraOgnuna(registrazioni: List<RegistrazioneId>): Esito<Unit> =
         registrazioni.fold<RegistrazioneId, Esito<Unit>>(Esito.Ok(Unit)) { esito, id ->

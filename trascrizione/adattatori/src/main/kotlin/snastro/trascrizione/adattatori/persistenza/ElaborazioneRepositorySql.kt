@@ -51,6 +51,11 @@ public class ElaborazioneRepositorySql(private val db: SnastroDatabase) : Elabor
         else -> Esito.Errore(ElaborazioneNonTrovata(id))
     }
 
+    // ADR 0020: every row of the Registrazione, any state — the elimination policy vetoed open ones first.
+    override fun rimuoviDiRegistrazione(id: RegistrazioneId) {
+        db.elaborazioneQueries.eliminaDiRegistrazione(id.valore)
+    }
+
     override fun salva(e: Elaborazione): Esito<Unit> = try {
         val esistente = db.elaborazioneQueries.trovaPerId(e.id.valore).executeAsOneOrNull()
         if (esistente == null) {

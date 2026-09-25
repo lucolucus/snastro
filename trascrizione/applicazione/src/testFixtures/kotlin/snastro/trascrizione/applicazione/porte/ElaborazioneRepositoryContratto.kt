@@ -142,6 +142,33 @@ public abstract class ElaborazioneRepositoryContratto {
     }
 
     @Test
+    public fun `AC-619 rimuoviDiRegistrazione toglie ogni Elaborazione della Registrazione e nessuna di un altra`() {
+        val stati = listOf(COMPLETATA, FALLITA, COMPLETATA, IN_ATTESA)
+        stati.forEachIndexed { i, stato ->
+            repo.salva(una(stato, "elaborazione-$i", creataAlle = CREATA.plusSeconds(i.toLong()))).atteso()
+        }
+        val altra = una(IN_CORSO, "elaborazione-altra", registrazioneId = ALTRA_REGISTRAZIONE)
+        repo.salva(altra).atteso()
+
+        repo.rimuoviDiRegistrazione(REGISTRAZIONE)
+
+        assertEquals(emptyList(), repo.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), repo.inAttesa())
+        assertNull(repo.trova(ElaborazioneId("elaborazione-0")))
+        assertEquals(listOf(righe(altra)), repo.diRegistrazione(ALTRA_REGISTRAZIONE).map(::righe))
+        assertEquals(listOf("elaborazione-altra"), repo.inCorso().map { it.id.valore })
+    }
+
+    @Test
+    public fun `AC-619 rimuoviDiRegistrazione di una Registrazione senza Elaborazioni non fa nulla`() {
+        repo.salva(una(IN_ATTESA, "elaborazione-1", registrazioneId = ALTRA_REGISTRAZIONE)).atteso()
+
+        repo.rimuoviDiRegistrazione(REGISTRAZIONE)
+
+        assertEquals(listOf("elaborazione-1"), repo.inAttesa().map { it.id.valore })
+    }
+
+    @Test
     public fun `AC-29 dopo una fallita e accettata una nuova Elaborazione e anche una completata`() {
         repo.salva(una(FALLITA, "elaborazione-1")).atteso()
         repo.salva(una(FALLITA, "elaborazione-2", creataAlle = DOPO)).atteso()

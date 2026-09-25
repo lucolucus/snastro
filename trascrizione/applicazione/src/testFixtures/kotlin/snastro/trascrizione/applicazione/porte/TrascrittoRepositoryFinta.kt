@@ -21,6 +21,10 @@ public class TrascrittoRepositoryFinta : TrascrittoRepository, Ripristinabile {
         righe[t.registrazioneId] = t.copia()
     }
 
+    override fun rimuovi(id: RegistrazioneId) {
+        righe.remove(id)
+    }
+
     override fun istantanea(): () -> Unit {
         val salvate = LinkedHashMap(righe)
         return {
