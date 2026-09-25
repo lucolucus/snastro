@@ -822,3 +822,6 @@
 2026-09-25T18:31:38Z	eli-b	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
 2026-09-25T18:34:42Z	eli-b	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
 2026-09-25T18:34:42Z	eli-b	composer	residue	-	-	-	MED documento queue: failed in-flight rename re-queued keeps only earliest titoloPrecedente → B.md orphan if rename+rename+delete race (carry a set); LOW in-place replaced print → no checkpoint (note in AC-622/ADR 0009); LOW rimuovi checkpoints for unknown id; LOW registrazioneQueries seeding outside progetto (agg-registrazione grep 10→13 test files; add seminaRegistrazioneDiProva fixture); LOW sostituisciImpronte loads BLOBs just to compare VoceRefs
+2026-09-25T18:55:34Z	eli-c	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW c2901ef
+2026-09-25T18:55:34Z	eli-c	verifier	result	cycle=0	tier=standard	model=sonnet	PASS
+2026-09-25T18:55:34Z	eli-c	composer	residue	-	-	-	MED S2+S4 delete dialogs use ghost VarianteBottone.Pericolo, design system wants filled danger-primary: add variant in BottoneSn and sweep both dialogs
