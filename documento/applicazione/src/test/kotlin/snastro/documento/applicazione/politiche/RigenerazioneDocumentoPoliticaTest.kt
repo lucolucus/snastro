@@ -2,6 +2,7 @@ package snastro.documento.applicazione.politiche
 
 import snastro.documento.applicazione.porte.ErroreApplicazioneDocumento
 import snastro.documento.applicazione.porte.LettoreNomiFinta
+import snastro.documento.applicazione.porte.LettoreTrascritto
 import snastro.documento.applicazione.porte.LettoreTrascrittoFinta
 import snastro.documento.applicazione.porte.ScrittoreDocumentoFinta
 import snastro.documento.applicazione.porte.SegmentoVista
@@ -26,6 +27,69 @@ import kotlin.test.assertTrue
  * `RegistrazioneRinominata`, which must behave like a date change on `nomeFile`).
  */
 class RigenerazioneDocumentoPoliticaTest {
+    // --- AC-623: perRegistrazioneEliminata (ADR 0020 §3-§4), remove-only ------------------------
+
+    /** A [LettoreTrascritto] that fails the test if read: the removal never reads the Trascritto. */
+    private val lettoreVietato = object : LettoreTrascritto {
+        override fun trascritto(id: RegistrazioneId): TrascrittoTesto? = error("perRegistrazioneEliminata non legge")
+
+        override fun registrazioniConTrascritto(): List<RegistrazioneId> = error("perRegistrazioneEliminata non legge")
+    }
+
+    @Test
+    fun `AC-623 perRegistrazioneEliminata rimuove il documento corrente e i nomi precedenti diversi senza scrivere`() {
+        val scrittore = ScrittoreDocumentoFinta()
+        listOf("2026-09-12 Riunione.md", "2026-09-10 Riunione.md", "2026-09-12 Vecchio titolo.md", "2026-09-12 Altra.md")
+            .forEach { scrittore.scrivi(it, "testo") }
+        val politica = RigenerazioneDocumentoPolitica(lettoreVietato, LettoreNomiFinta(), scrittore)
+        val prima = scrittore.operazioni.size
+
+        politica.perRegistrazioneEliminata(
+            RegistrazioneId("reg-1"),
+            LocalDate.of(2026, 9, 12),
+            "Riunione",
+            nomiPrecedenti = setOf("2026-09-10 Riunione.md", "2026-09-12 RIUNIONE.md", "2026-09-12 Vecchio titolo.md"),
+        ).atteso()
+
+        assertEquals(
+            listOf(
+                ScrittoreDocumentoFinta.Operazione.Rimosso("2026-09-12 Riunione.md"),
+                ScrittoreDocumentoFinta.Operazione.Rimosso("2026-09-10 Riunione.md"),
+                ScrittoreDocumentoFinta.Operazione.Rimosso("2026-09-12 Vecchio titolo.md"),
+            ),
+            scrittore.operazioni.drop(prima),
+            "mai una scrittura; il nome che differisce solo per maiuscole e lo stesso file",
+        )
+        assertEquals(setOf("2026-09-12 Altra.md"), scrittore.documenti.keys, "mai il file di un altra Registrazione")
+    }
+
+    @Test
+    fun `AC-623 perRegistrazioneEliminata su file gia assenti e Ok - idempotente`() {
+        val scrittore = ScrittoreDocumentoFinta()
+        val politica = RigenerazioneDocumentoPolitica(lettoreVietato, LettoreNomiFinta(), scrittore)
+
+        repeat(2) {
+            politica.perRegistrazioneEliminata(RegistrazioneId("reg-1"), LocalDate.of(2026, 9, 12), "Riunione", emptySet())
+                .atteso()
+        }
+
+        assertTrue(scrittore.documenti.isEmpty())
+    }
+
+    @Test
+    fun `AC-623 perRegistrazioneEliminata con un errore di I-O restituisce ScritturaFallita cosi il chiamante riprova`() {
+        val scrittore = ScrittoreDocumentoFinta()
+        scrittore.scrivi("2026-09-12 Riunione.md", "testo")
+        scrittore.fallisciAllaProssimaRimozione()
+        val politica = RigenerazioneDocumentoPolitica(lettoreVietato, LettoreNomiFinta(), scrittore)
+
+        val errore = politica.perRegistrazioneEliminata(RegistrazioneId("reg-1"), LocalDate.of(2026, 9, 12), "Riunione", emptySet())
+            .erroreAtteso<ErroreApplicazioneDocumento.ScritturaFallita>()
+
+        assertEquals("2026-09-12 Riunione.md", errore.nomeFile)
+        assertEquals(setOf("2026-09-12 Riunione.md"), scrittore.documenti.keys)
+    }
+
 
     @Test
     fun `AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto`() {
