@@ -25,6 +25,10 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
         righe[r.id] = r.copia()
     }
 
+    override fun rimuovi(id: RegistrazioneId) {
+        righe.remove(id)
+    }
+
     override fun istantanea(): () -> Unit {
         val copia = righe.toMap()
         return {

@@ -135,6 +135,53 @@ public abstract class RegistrazioneRepositoryContratto {
         assertEquals(emptyList(), a.registrazioni.titoliDelProgetto(a.progettoId))
     }
 
+    @Test
+    public fun `AC-614 rimuovi toglie la Registrazione da trova delProgetto e titoliDelProgetto e lascia le altre`() {
+        val a = ambiente()
+        val tolta = unaRegistrazione(a.progettoId, RegistrazioneId("id-2"), "Seduta di marzo")
+        val altra = unaRegistrazione(a.progettoId, RegistrazioneId("id-3"), "Seduta di aprile")
+        a.salva(tolta)
+        a.salva(altra)
+
+        a.unitaDiLavoro.inTransazione {
+            a.registrazioni.rimuovi(tolta.id)
+            Esito.Ok(Unit)
+        }.atteso()
+
+        assertNull(a.registrazioni.trova(tolta.id))
+        assertEquals(listOf(altra.stato()), a.registrazioni.delProgetto(a.progettoId).map { it.stato() })
+        assertEquals(listOf("Seduta di aprile"), a.registrazioni.titoliDelProgetto(a.progettoId))
+        assertEquals(altra.stato(), assertNotNull(a.registrazioni.trova(altra.id)).stato())
+    }
+
+    @Test
+    public fun `AC-614 rimuovi di un id sconosciuto non fa nulla`() {
+        val a = ambiente()
+        val r = unaRegistrazione(a.progettoId)
+        a.salva(r)
+
+        a.unitaDiLavoro.inTransazione {
+            a.registrazioni.rimuovi(RegistrazioneId("id-sconosciuto"))
+            Esito.Ok(Unit)
+        }.atteso()
+
+        assertEquals(listOf(r.stato()), a.registrazioni.delProgetto(a.progettoId).map { it.stato() })
+    }
+
+    @Test
+    public fun `AC-614 un rimuovi annullato dalla transazione lascia la Registrazione`() {
+        val a = ambiente()
+        val r = unaRegistrazione(a.progettoId)
+        a.salva(r)
+
+        a.unitaDiLavoro.inTransazione<Unit> {
+            a.registrazioni.rimuovi(r.id)
+            Esito.Errore(ErroreDiProva.Fallito("annullato"))
+        }.erroreAtteso<ErroreDiProva.Fallito>()
+
+        assertEquals(r.stato(), assertNotNull(a.registrazioni.trova(r.id)).stato())
+    }
+
     private fun Ambiente.salva(r: Registrazione) {
         unitaDiLavoro.inTransazione {
             registrazioni.salva(r)
