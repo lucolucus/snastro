@@ -193,8 +193,8 @@ class AbbonatoRevisioneParlantiTest {
     fun `AC-621 RegistrazioneEliminata invoca politicaSostituzione applica dentro la transazione che elimina`() {
         val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
         val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
-        val occasionale = Parlante.crea(ParlanteId("id-occ"), PROGETTO, Nome.di("Ospite").atteso(), TipoParlante.OCCASIONALE)
-            .aggregato
+        val ospite = Nome.di("Ospite").atteso()
+        val occasionale = Parlante.crea(ParlanteId("id-occ"), PROGETTO, ospite, TipoParlante.OCCASIONALE).aggregato
         val ricorrente = unParlante("id-ric")
         attribuisci(VoceRef(REG, VoceId(1)), occasionale)
         attribuisci(VoceRef(REG, VoceId(2)), ricorrente)

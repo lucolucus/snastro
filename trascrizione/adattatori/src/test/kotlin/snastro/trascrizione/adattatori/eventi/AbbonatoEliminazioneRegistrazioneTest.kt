@@ -12,8 +12,8 @@ import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
-import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
+import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.adattatori.persistenza.seminato
@@ -88,7 +88,8 @@ class AbbonatoEliminazioneRegistrazioneTest {
         val elaborazioniSql = ElaborazioneRepositorySql(db)
         val trascrittiSql = TrascrittoRepositorySql(db)
         val sql = DispatcherEventiInMemoria(UnitaDiLavoroSql(db)).also {
-            AbbonatoEliminazioneRegistrazione(it, ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql))
+            val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql)
+            AbbonatoEliminazioneRegistrazione(it, politica)
         }
         elaborazioniSql.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata"), R)).atteso()
         trascrittiSql.salva(unTrascritto(registrazioneId = R))

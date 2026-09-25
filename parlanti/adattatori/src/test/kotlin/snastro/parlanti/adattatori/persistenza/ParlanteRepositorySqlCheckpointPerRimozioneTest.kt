@@ -141,7 +141,15 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
 
     private fun SnastroDatabase.seminato(): SnastroDatabase = apply {
         progettoQueries.inserisci(PROGETTO.valore, "Progetto di prova")
-        registrazioneQueries.inserisci(R.valore, PROGETTO.valore, "Registrazione", "audio/r.wav", 600_000L, "2026-09-25", 0L)
+        registrazioneQueries.inserisci(
+            id = R.valore,
+            progettoId = PROGETTO.valore,
+            titolo = "Registrazione",
+            riferimentoAudio = "audio/r.wav",
+            durataMs = 600_000L,
+            dataRegistrazione = "2026-09-25",
+            aggiuntaAlle = 0L,
+        )
         seminaTrascrittoDiProva(registrazioneId = R.valore)
         seminaVoceDiProva(registrazioneId = R.valore, numero = 1L)
         seminaVoceDiProva(registrazioneId = R.valore, numero = 2L)
