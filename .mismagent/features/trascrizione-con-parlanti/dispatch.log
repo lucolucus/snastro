@@ -816,3 +816,9 @@
 2026-09-25T18:14:51Z	eli-a	worker	result	cycle=1	tier=deep	model=opus	READY-FOR-REVIEW 6f175be (kernel esterna: first doom Errore wins)
 2026-09-25T18:14:51Z	eli-a	verifier+code-review	result	cycle=1	tier=deep	model=opus	PASS / APPROVE
 2026-09-25T18:14:51Z	eli-a	composer	residue	-	-	-	MED kernel esegui drops the post-doom exception silently (log it / keep on Transazione); LOW contract cases for doomed+fatal/Error and nested-veto+outer-throw; LOW no real UnitaDiLavoroSql+FK test of the veto chain (cover in avvio-parlanti e2e)
+2026-09-25T18:15:24Z	eli-b	worker	dispatch	cycle=0	tier=deep	model=opus	E4: repository-sql-progetto/-trascrizione/-parlanti, abbonato-eliminazione-trascrizione, abbonato-revisione-parlanti, abbonato-documento
+2026-09-25T18:15:24Z	eli-c	worker	dispatch	cycle=0	tier=standard	model=sonnet	E5: schermata-registrazioni (More menu Elimina+Ritrascrivi, dialog, notice)
+2026-09-25T18:31:38Z	eli-b	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW ad1960e
+2026-09-25T18:31:38Z	eli-b	verifier+code-review	dispatch	cycle=0	tier=deep	model=opus
+2026-09-25T18:34:42Z	eli-b	verifier+code-review	result	cycle=0	tier=deep	model=opus	PASS / APPROVE
+2026-09-25T18:34:42Z	eli-b	composer	residue	-	-	-	MED documento queue: failed in-flight rename re-queued keeps only earliest titoloPrecedente → B.md orphan if rename+rename+delete race (carry a set); LOW in-place replaced print → no checkpoint (note in AC-622/ADR 0009); LOW rimuovi checkpoints for unknown id; LOW registrazioneQueries seeding outside progetto (agg-registrazione grep 10→13 test files; add seminaRegistrazioneDiProva fixture); LOW sostituisciImpronte loads BLOBs just to compare VoceRefs
