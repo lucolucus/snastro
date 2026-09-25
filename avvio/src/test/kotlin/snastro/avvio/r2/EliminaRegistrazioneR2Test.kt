@@ -18,6 +18,7 @@ import snastro.kernel.erroreAtteso
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.applicazione.comandi.EliminaParlante
+import snastro.persistenza.DatabaseProgettoContato
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql
@@ -55,15 +56,15 @@ import kotlin.test.assertTrue
 /**
  * ADR 0020 end to end on the REAL R2 composition ([AmbienteR2]: a SQLite project FILE opened by the session with
  * the production driver, real queue, real Parlanti/Trascrizione subscribers, real Documento writer; Finte ML):
- * AC-630 (S2 supplied), AC-631, AC-633, AC-634 (INV-28), AC-635. Rows are read through the SQL adapters (CR-3: no
- * SQL driver outside the persistence packages); the per-removal `wal_checkpoint` count of AC-634 is pinned where the
- * driver may be observed, `ParlanteRepositorySqlCheckpointPerRimozioneTest` (AC-622).
+ * AC-630 (S2 supplied), AC-631, AC-633, AC-634 (INV-28), AC-635. Rows are read through the SQL adapters; the project
+ * database is the production one with its driver counting `wal_checkpoint` ([DatabaseProgettoContato], AC-634).
  */
 class EliminaRegistrazioneR2Test {
     @TempDir
     lateinit var radice: Path
 
     private val diarizzatore = DiarizzatoreTrattenuto()
+    private val database = CopyOnWriteArrayList<DatabaseProgettoContato>()
 
     @Test
     fun `AC-634 INV-28 Elimina da S2 cancella righe e file di R, purga l Ospite, tiene Mario e la lapide`() {
@@ -79,6 +80,8 @@ class EliminaRegistrazioneR2Test {
 
             s2.elimina(s.r)
             attendiFinche(messaggio = "conferma") { riga(s2, s.r)?.confermaElimina == true }
+            val contato = database.last()
+            contato.azzeraCheckpoint()
             s2.confermaElimina(s.r)
 
             attendiFinche(messaggio = "S2 elenca solo Q") { righe(s2)?.map { r -> r.registrazioneId } == listOf(s.q) }
@@ -98,6 +101,11 @@ class EliminaRegistrazioneR2Test {
             assertTrue(Files.exists(cartella.resolve(audio(s.q))))
             assertTrue(Files.exists(cartella.resolve(wav(s.q))))
             assertTrue(Files.exists(documentoQ))
+            assertEquals(
+                listOf(false, false, false),
+                contato.checkpoint,
+                "Q-1: uno per rimozione (salva di Mario, salva e rimuovi dell'Ospite), tutti a transazione chiusa",
+            )
 
             it.sessione.chiudi()
             it.sessione.apri(it.progetto.percorso).atteso()
@@ -258,7 +266,9 @@ class EliminaRegistrazioneR2Test {
     /** AC-634/AC-635's R and Q; [terzo] is the eliminato tombstone attributed to R's Voce 3. */
     private class Scenario(val r: RegistrazioneId, val q: RegistrazioneId, val mario: ParlanteId, val terzo: ParlanteId)
 
-    private fun ambiente() = AmbienteR2(radice, diarizzatore)
+    private fun ambiente() = AmbienteR2(radice, diarizzatore, apriDatabase = { cartella ->
+        DatabaseProgettoContato.apri(cartella).also(database::add).database
+    })
 
     private fun prepara(ambiente: AmbienteR2): Scenario {
         val r = ambiente.importa()

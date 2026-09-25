@@ -31,6 +31,7 @@ import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.dominio.Impronta
 import snastro.persistenza.DatabaseProgetto
+import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.InfoAudio
@@ -48,6 +49,7 @@ import snastro.ui.ApriEsternoFinta
 import snastro.ui.ProgettoAperto
 import snastro.ui.modelli.ServizioModelliFinta
 import snastro.ui.modelli.StatoModelli
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.LocalDate
@@ -77,6 +79,7 @@ internal class AmbienteR2(
     chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
     rilasciaMl: () -> Unit = {},
     decodificatoreParlanti: DecodificatoreAudio = DecodificatoreParlantiFinta(),
+    apriDatabase: (File) -> DatabaseProgetto = ::apriDatabaseProgetto,
     private val durataMs: Long = DURATA_MS,
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
@@ -121,6 +124,7 @@ internal class AmbienteR2(
                 SondaAudioFinta(mapOf(sorgente.toString() to InfoAudio(durataMs, LocalDate.parse("2026-01-01"))))
             },
             chiudiDatabase = chiudiDatabase,
+            apriDatabase = apriDatabase,
         ),
         estensione = EstensioneSessione { contesto ->
             contesti += contesto
