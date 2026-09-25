@@ -17,6 +17,7 @@ import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
+import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
@@ -51,6 +52,14 @@ import kotlin.time.Duration.Companion.seconds
  * queued the same way in `init` ([rigeneraTutte] starts `true`), so a startup failure is retried
  * exactly like any other unit of work.
  *
+ * **Deletion** (ADR 0020 §3, AC-624). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
+ * per-[RegistrazioneId] key: merged into a pending entry it replaces the regeneration (a removal, once
+ * queued, is never turned back into a write), and that entry's unflushed precedenti become the
+ * `nomiPrecedenti` removed as well. Because the single [ciclo] drains one pass at a time, a
+ * Rigenerazione of that key already in flight when the event arrives completes FIRST — even when it
+ * fails and is re-queued, it merges behind the removal without resurrecting the write — and the
+ * removal runs on the next pass, retried with the same backoff. Never on rollback (after-commit only).
+ *
  * **Stopping.** This class exposes no `ferma`/`stop`: like every other per-Progetto background
  * worker in this codebase (`:avvio`'s `CollaboratoriProgettoAperto`), it is a plain
  * structured-concurrency child of [scope] — cancelling [scope] (`:avvio`, on closing the Progetto)
@@ -71,7 +80,25 @@ public class AbbonatoDocumentoEventi(
      * still actually on disk until a write finally succeeds. `null`/`null` (both events plain, e.g.
      * `ElaborazioneCompletata`) means "just regenerate, nothing to remove".
      */
-    private data class LavoroPendente(val dataPrecedente: LocalDate? = null, val titoloPrecedente: String? = null)
+    private data class LavoroPendente(
+        val dataPrecedente: LocalDate? = null,
+        val titoloPrecedente: String? = null,
+        val eliminata: Eliminata? = null,
+    )
+
+    /** The Registrazione's name AT deletion ([RegistrazioneEliminata]): the entry removes, never writes. */
+    private data class Eliminata(val data: LocalDate, val titolo: String) {
+        /**
+         * Every name the Documento may still have on disk given [lavoro]'s unflushed precedenti: each combination
+         * of the old/current date with the old/current titolo, minus the current name (removed by the policy anyway).
+         */
+        fun nomiPrecedenti(lavoro: LavoroPendente): Set<String> {
+            val date = setOfNotNull(lavoro.dataPrecedente, data)
+            val titoli = setOfNotNull(lavoro.titoloPrecedente, titolo)
+            val tutti = date.flatMap { d -> titoli.map { Documento.nomeFile(d, it) } }.toSet()
+            return tutti - Documento.nomeFile(data, titolo)
+        }
+    }
 
     private val rigeneraTutte = AtomicBoolean(true) // AC-185: queued once, at construction
     private val pendenti = ConcurrentHashMap<RegistrazioneId, LavoroPendente>()
@@ -94,6 +121,10 @@ public class AbbonatoDocumentoEventi(
                 accoda(evento.registrazioneId, LavoroPendente(dataPrecedente = evento.precedente))
             is RegistrazioneRinominata ->
                 accoda(evento.registrazioneId, LavoroPendente(titoloPrecedente = evento.precedente))
+            is RegistrazioneEliminata -> {
+                val eliminata = Eliminata(evento.dataRegistrazione, evento.titolo)
+                accoda(evento.registrazioneId, LavoroPendente(eliminata = eliminata))
+            }
             is ParlanteRinominato -> accodaParlante(evento.parlanteId)
             is ParlantePromosso -> if (evento.nomeCambiato) accodaParlante(evento.parlanteId)
             // ParlanteEliminato (AC-186: nessun cambio al Documento, INV-24 lo risolve comunque via
@@ -154,6 +185,9 @@ public class AbbonatoDocumentoEventi(
     }
 
     private fun eseguiLavoro(id: RegistrazioneId, lavoro: LavoroPendente): Esito<Unit> = when {
+        lavoro.eliminata != null -> lavoro.eliminata.let {
+            politica.perRegistrazioneEliminata(id, it.data, it.titolo, it.nomiPrecedenti(lavoro))
+        }
         lavoro.dataPrecedente != null && lavoro.titoloPrecedente != null ->
             politica.esegui(RigeneraDocumento(id, Documento.nomeFile(lavoro.dataPrecedente, lavoro.titoloPrecedente)))
         lavoro.dataPrecedente != null -> politica.perDataRegistrazioneModificata(id, lavoro.dataPrecedente)
@@ -177,11 +211,13 @@ public class AbbonatoDocumentoEventi(
      * [prioritaria]'s non-null fields win. Used in both directions: when a NEW event merges into an
      * already-pending entry (the pending one is the earlier one, so it goes first), and when a
      * FAILED attempt is re-queued (the failed unit predates whatever merged in while it was being
-     * attempted, so IT goes first).
+     * attempted, so IT goes first). A removal ([LavoroPendente.eliminata]) on either side always survives
+     * the merge: nothing merged later turns it back into a regeneration (AC-624).
      */
     private fun primaArrivata(prioritaria: LavoroPendente, altra: LavoroPendente) = LavoroPendente(
         dataPrecedente = prioritaria.dataPrecedente ?: altra.dataPrecedente,
         titoloPrecedente = prioritaria.titoloPrecedente ?: altra.titoloPrecedente,
+        eliminata = prioritaria.eliminata ?: altra.eliminata,
     )
 
     private companion object {
