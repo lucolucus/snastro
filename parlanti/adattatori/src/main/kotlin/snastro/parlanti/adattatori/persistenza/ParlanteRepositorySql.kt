@@ -41,9 +41,10 @@ import migrations.Parlante as ParlanteRiga
  * voce_id)` FK to `voce` is deferred, migrations/1.sqm), so the root upsert must precede the print
  * writes even without an enclosing transaction (as in this adapter's own contract test).
  *
- * R23 (ADR 0009 amendment): `PRAGMA wal_checkpoint(TRUNCATE)` cannot run inside a transaction —
- * [salva] of an `eliminato` [Parlante] (its prints just purged) registers the checkpoint on a
- * SQLDelight `afterCommit` hook. Nested inside the caller's [snastro.kernel.UnitaDiLavoro]
+ * R23 (ADR 0009 amendment, widened by ADR 0020 §3, AC-622): `PRAGMA wal_checkpoint(TRUNCATE)` cannot
+ * run inside a transaction — every [salva] that removed at least one stored print (an `eliminato`
+ * [Parlante], [INV-15] moves, [INV-21], [INV-25], ADR 0018 / 0020 purges) and every [rimuovi]
+ * registers ONE checkpoint on a SQLDelight `afterCommit` hook. Nested inside the caller's [snastro.kernel.UnitaDiLavoro]
  * transaction, SQLDelight defers `afterCommit` hooks of a nested transaction to the OUTERMOST one
  * (`Transacter.kt`), so the checkpoint only ever runs once that transaction has actually committed.
  */
@@ -68,14 +69,19 @@ public class ParlanteRepositorySql(private val db: SnastroDatabase) : ParlanteRe
             if (ex.resultCode != SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE) throw ex
             return Esito.Errore(NomeGiaInUso(p.nome.valore))
         }
-        sostituisciImpronte(db, p)
-        if (p.eliminato) db.transaction { afterCommit { db.parlanteQueries.walCheckpointTruncate() } }
+        if (sostituisciImpronte(db, p)) checkpointDopoCommit()
         return Esito.Ok(Unit)
     }
 
     override fun rimuovi(id: ParlanteId) {
         db.improntaVocaleQueries.eliminaDiParlante(id.valore)
         db.parlanteQueries.rimuovi(id.valore)
+        checkpointDopoCommit()
+    }
+
+    /** One checkpoint per removal (user Q-1, 2026-09-25): no per-transaction dedup. Dropped on rollback. */
+    private fun checkpointDopoCommit() {
+        db.transaction { afterCommit { db.parlanteQueries.walCheckpointTruncate() } }
     }
 
     override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> =
@@ -128,7 +134,10 @@ private fun scriviRadice(db: SnastroDatabase, p: Parlante) {
     }
 }
 
-private fun sostituisciImpronte(db: SnastroDatabase, p: Parlante) {
+/** Replaces the prints of [p]; true iff a print that was stored is gone (removed, or moved to another Voce). */
+private fun sostituisciImpronte(db: SnastroDatabase, p: Parlante): Boolean {
+    val primaDi = db.improntaVocaleQueries.trovaDiParlante(p.id.valore).executeAsList()
+        .map { VoceRef(RegistrazioneId(it.registrazione_id), VoceId(it.voce_id.toInt())) }
     db.improntaVocaleQueries.eliminaDiParlante(p.id.valore)
     p.impronte.forEach { imp ->
         db.improntaVocaleQueries.inserisci(
@@ -140,6 +149,7 @@ private fun sostituisciImpronte(db: SnastroDatabase, p: Parlante) {
             modelloImpronta = imp.modello,
         )
     }
+    return !p.impronte.map { it.voceRef }.containsAll(primaDi)
 }
 
 private fun impronteDi(db: SnastroDatabase, id: ParlanteId): List<ImprontaVocale> =
