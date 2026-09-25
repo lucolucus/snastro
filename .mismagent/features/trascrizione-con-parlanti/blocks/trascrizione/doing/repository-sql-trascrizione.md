@@ -3,7 +3,7 @@ id: "repository-sql-trascrizione"
 type: "adapter"
 context: "trascrizione"
 side: "app"
-wave: 5
+wave: 6
 release: "R1"
 module: ":trascrizione:adattatori (..persistenza)"
 consumes:
@@ -14,6 +14,7 @@ consumes:
 depends_on:
   - "persistenza-ritrascrivi"
   - "persistenza-conferma-segmento"
+  - "persistenza-elimina-registrazione"
 related_adrs:
   - "0002"
   - "0003"
@@ -24,17 +25,20 @@ related_adrs:
   - "0014"
   - "0018"
   - "0019"
+  - "0020"
 ---
 # repository-sql-trascrizione — Repository SQL della Trascrizione
 
 ## What to do
 ElaborazioneRepositorySql, TrascrittoRepositorySql (root + voce/segmento children, counters).
 
-Note: AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no completata constraint mapping any more; trova(id) over trovaPerId; rimuoviInAttesa over persistenza-ritrascrivi's eliminaInAttesa (compare-and-delete); TrascrittoRepositorySql.salva already rewrites counters and deletes/re-inserts voce/segmento (proved as a replacement by AC-444). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): persists segmento.confermato; depends_on persistenza-conferma-segmento (4.sqm), hence wave 4 → 5 (no state change).
-
 REWORK 2026-09-24 (ADR 0018): drop the elaborazione_completata_unica mapping (AC-111 rewritten); + trova(id) and rimuoviInAttesa over eliminaInAttesa (needs persistenza-ritrascrivi); tests AC-443..AC-445 (several completata, Trascritto replacement, deferred-FK backstop), AC-472 and AC-473 (claim vs cancel race on a file DB).
 
 REWORK 2026-09-24 (ADR 0019): persist and read segmento.confermato (needs persistenza-conferma-segmento's 4.sqm); a Trascritto created by crea and the ADR 0018 replacement write 0 everywhere. Test AC-522.
+
+REWORK 2026-09-25 (ADR 0020): rimuoviDiRegistrazione over Elaborazione.sq eliminaDiRegistrazione; TrascrittoRepositorySql.rimuovi = segmento, voce, trascritto deletes in this order in the caller's transaction; both contracts (AC-619) pass against SQL (AC-620). Needs persistenza-elimina-registrazione's 5.sqm queries.
+
+Note: AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): no completata constraint mapping any more; trova(id) over trovaPerId; rimuoviInAttesa over persistenza-ritrascrivi's eliminaInAttesa (compare-and-delete); TrascrittoRepositorySql.salva already rewrites counters and deletes/re-inserts voce/segmento (proved as a replacement by AC-444). AMENDED 2026-09-24 (ADR 0019 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-semi-automatica): persists segmento.confermato; depends_on persistenza-conferma-segmento (4.sqm), hence wave 4 → 5 (no state change). AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): rimuoviDiRegistrazione + TrascrittoRepositorySql.rimuovi over persistenza-elimina-registrazione's queries; depends_on it (5.sqm), hence wave 5 → 6 (no state folder moved).
 
 ## Tasks
 - AC-110 Round-trip di Elaborazione e di Trascritto (Voci, Segmenti, contatori)
@@ -48,9 +52,10 @@ REWORK 2026-09-24 (ADR 0019): persist and read segmento.confermato (needs persis
 - AC-472 rimuoviInAttesa over eliminaInAttesa: 1 row → Ok; 0 rows → re-read by id: present → ElaborazioneGiaAvviata, absent → ElaborazioneNonTrovata; ElaborazioneRepositoryContratto (AC-463) passes against SQL
 - AC-473 Claim vs cancel on a real SQLite FILE database with two UnitaDiLavoroSql threads started on a barrier, repeated 200 times: thread A claims the head (inAttesa().first() → avvia → salva in one transaction), thread B runs rimuoviInAttesa on the same id; every run ends in exactly one of (row deleted, A started nothing or the next row) or (row in_corso, B got ElaborazioneGiaAvviata) — never both, never a thrown exception (no SQLITE_BUSY)
 - AC-522 (ADR 0019) Round-trip: a Trascritto with mixed confermato flags is saved (delete + re-insert, as today) and re-read identically; a Trascritto created by crea saves every flag as 0; the ADR 0018 replacement writes 0 everywhere
+- AC-620 rimuoviDiRegistrazione over eliminaDiRegistrazione, and TrascrittoRepositorySql.rimuovi = segmento, voce and trascritto deletes (in this order) in the caller's transaction; both contracts (AC-619) pass against SQL; round-trip: after rimuovi the segmento, voce and trascritto row counts for r are 0
 
 ## Dependencies
-- Blocks built first: `persistenza-ritrascrivi` (wave 3), `persistenza-conferma-segmento` (wave 4)
+- Blocks built first: `persistenza-ritrascrivi` (wave 3), `persistenza-conferma-segmento` (wave 4), `persistenza-elimina-registrazione` (wave 5)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -117,7 +122,7 @@ REWORK 2026-09-24 (ADR 0019): persist and read segmento.confermato (needs persis
     - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(trascrittoQueries|voceQueries|segmentoQueries)\b' . | grep -vE '^\./(persistenza/|trascrizione/adattatori/src/[A-Za-z]+/kotlin/snastro/trascrizione/adattatori/persistenza/)' | grep -q .`
 - **repo-trascrizione** (consumed/implemented) — owner `porte-trascrizione`, projection in-process, contract_test **consumer-driven**
   - pinned types:
-    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione */ }
-    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto) } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)
+    - `ElaborazioneRepository`: interface { diRegistrazione(id: RegistrazioneId): List<Elaborazione>; inAttesa(): List<Elaborazione> /* FIFO by creataAlle, tie id */; inCorso(): List<Elaborazione>; trova(id: ElaborazioneId): Elaborazione?; salva(e: Elaborazione): Esito<Unit> /* Errore(ElaborazioneGiaAperta) only: another open Elaborazione of the same Registrazione while this one is open (index elaborazione_aperta_unica); several completata are allowed (ADR 0018) */; rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> /* compare-and-delete (ADR 0018 Amendment (b)): deletes the row iff it exists and is still in_attesa; started → Errore(ElaborazioneGiaAvviata); absent → Errore(ElaborazioneNonTrovata); the only deletion of an Elaborazione (amended 2026-09-25: plus rimuoviDiRegistrazione, ADR 0020) */; rimuoviDiRegistrazione(id: RegistrazioneId) /* deletes EVERY Elaborazione of the Registrazione, any state; used only by the elimination policy after its veto (ADR 0020) */ }
+    - `TrascrittoRepository`: interface { trova(id: RegistrazioneId): Trascritto?; conTrascritto(): List<RegistrazioneId>; salva(t: Trascritto); rimuovi(id: RegistrazioneId) /* deletes segmento, voce and trascritto rows of the Registrazione in the caller's transaction; absent = no-op (ADR 0020) */ } — persists prossimaVoce / prossimoSegmento; salva over an existing Trascritto REPLACES it whole (Voci, Segmenti, counters: ADR 0018 replacement)
 
-Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014, 0018, 0019 (.mismagent/decisions/); ADR 0006/0007/0014.
+Sources: ADRs 0002, 0003, 0004, 0006, 0007, 0012, 0014, 0018, 0019, 0020 (.mismagent/decisions/); ADR 0006/0007/0014.

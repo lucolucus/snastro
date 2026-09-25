@@ -18,6 +18,7 @@ related_adrs:
   - "0003"
   - "0010"
   - "0012"
+  - "0020"
 commands:
   - "RigeneraDocumento"
   - "RigeneraTuttiIDocumenti"
@@ -27,7 +28,9 @@ commands:
 ## What to do
 Policy/service: RigeneraDocumento(registrazioneId, dataPrecedente?) writes the documento projection under nomeFile and, if the date changed, removes the old file after; RigeneraTuttiIDocumenti (startup, R4) regenerates every Registrazione with a Trascritto; maps each event of the event boundaries to the affected Registrazioni.
 
-Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento, fix-batch-11 gap): AC-155bis is already implemented and merged (3333164); RigeneraDocumento carries an optional nomeFilePrecedente: String? = null so date change and rename share one path.
+REWORK 2026-09-25 (ADR 0020): + perRegistrazioneEliminata(registrazioneId, dataRegistrazione, titolo, nomiPrecedenti: Set<String>) — remove-only: rimuovi(nomeFile(data, titolo)) and each name of nomiPrecedenti that differs case-insensitively; never writes, never reads the Trascritto; IOException → Errore(ScritturaFallita); an absent file is Ok (AC-623).
+
+Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento, fix-batch-11 gap): AC-155bis is already implemented and merged (3333164); RigeneraDocumento carries an optional nomeFilePrecedente: String? = null so date change and rename share one path. AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): new policy method RigenerazioneDocumentoPolitica.perRegistrazioneEliminata (remove-only). Called by abbonato-documento (after commit, per-key queue) and by avvio-parlanti's PuliziaDerivatiRegistrazione at project open (nomiPrecedenti = ∅).
 
 ## Tasks
 - AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto
@@ -38,6 +41,7 @@ Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento, fix-batc
 - AC-156 ParlanteRinominato → rigenerate tutte e sole le Registrazioni con un'Attribuzione a P; ParlantePromosso con nomeCambiato = false → nulla; ParlanteEliminato → nulla
 - AC-157 Un errore di scrittura → Esito.Errore (così l'abbonato può riprovare)
 - AC-158 RigeneraTuttiIDocumenti rigenera ogni Registrazione con Trascritto
+- AC-623 perRegistrazioneEliminata(registrazioneId, dataRegistrazione, titolo, nomiPrecedenti: Set<String>) calls ScrittoreDocumento.rimuovi(Documento.nomeFile(data, titolo)) and rimuovi of each name in nomiPrecedenti that differs (case-insensitively); it never writes and never reads the Trascritto; an IOException → Errore(ScritturaFallita), so the caller retries; removing an absent file is Ok (idempotent)
 
 ## Dependencies
 - Blocks built first: `documento` (wave 4)
@@ -92,4 +96,4 @@ Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento, fix-batc
   - keys (minting rules):
     - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) = '<AAAA-MM-DD> ' + pulisci(titolo) + '.md' under documenti/, with pulisci(t) — the AC-263 rule applied to a Documento titolo: NFC-normalize; every character invalid on Windows/macOS/Linux (< > : " / \ | ? * and the control characters U+0000–U+001F, U+007F) → '_'; leading/trailing spaces and dots removed; truncated to 237 UTF-8 bytes on a code-point boundary (never splitting a surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (CON, PRN, AUX, NUL, COM1–COM9, LPT1–LPT9, case-insensitive) gets a trailing '_' (kept for identity with AC-263 although the date prefix already neutralizes it); empty result → 'registrazione'. 237 = 255 − 11 ('AAAA-MM-DD ') − 3 ('.md') − 4 ('.tmp' of the atomic write), in UTF-8 bytes, which also bounds NTFS's 255 UTF-16 units. UNIQUE per Progetto: titolo is unique per Progetto on the key pulisci(titolo).lowercase(Locale.ROOT) (servizi-registrazione AC-322) — so two Registrazioni never share a nomeFile whatever their dates; changes only when dataRegistrazione changes (titolo immutable). The atomic write's temp file is '<nomeFile>.tmp' in the same folder (AC-340).
 
-Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento Policy (+ R4, R5), ADR 0012.
+Sources: ADRs 0002, 0003, 0010, 0012, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento Policy (+ R4, R5), ADR 0012.

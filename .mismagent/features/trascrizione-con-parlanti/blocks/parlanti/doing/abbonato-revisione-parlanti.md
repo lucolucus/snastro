@@ -10,6 +10,7 @@ consumes:
   - "kernel-pl"
   - "eventi-revisione"
   - "eventi-elaborazione"
+  - "eventi-progetto"
 depends_on:
   - "revisione-policy"
   - "sostituzione-trascritto-policy"
@@ -17,22 +18,27 @@ related_adrs:
   - "0002"
   - "0003"
   - "0012"
+  - "0014"
   - "0018"
   - "0019"
+  - "0020"
 ---
-# abbonato-revisione-parlanti — Abbonato sincrono agli eventi di Revisione e a TrascrittoSostituito → revisione-policy / sostituzione-trascritto-policy
+# abbonato-revisione-parlanti — Abbonato sincrono agli eventi di Revisione, a TrascrittoSostituito e a RegistrazioneEliminata → revisione-policy / sostituzione-trascritto-policy
 
 ## What to do
 AbbonatoSincrono on VociUnite / VoceDivisa / SegmentoRiassegnato invoking ApplicaRevisione in the Revisione's transaction.
 
-Note: AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): gains the translation TrascrittoSostituito → sostituzione-trascritto-policy (synchronous, in the completion transaction); it is already registered by the R2 composition before the first command (AC-457).
-
 REWORK 2026-09-24 (ADR 0018): + TrascrittoSostituito → ApplicaSostituzioneTrascrittoPolitica.applica(r), synchronous inside the completion transaction (its Errore rolls back); needs sostituzione-trascritto-policy. New test AC-446.
+
+REWORK 2026-09-25 (ADR 0020): consumes eventi-progetto; + RegistrazioneEliminata(r) → ApplicaSostituzioneTrascrittoPolitica.applica(r), synchronous inside the deleting transaction (its Errore dooms it); existing mappings unchanged; the policy's KDoc names both triggers — the policy code is NOT changed (AC-621).
+
+Note: AMENDED 2026-09-24 (ADR 0018 + Amendment 2026-09-24 (b), manifest delta 2026-09-24-ritrascrivi): gains the translation TrascrittoSostituito → sostituzione-trascritto-policy (synchronous, in the completion transaction); it is already registered by the R2 composition before the first command (AC-457). AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): gains the translation RegistrazioneEliminata → sostituzione-trascritto-policy (synchronous, in the deleting transaction); consumes eventi-progetto. sostituzione-trascritto-policy itself is NOT reworked (KDoc line only, owned here).
 
 ## Tasks
 - AC-142 Ciascuno dei tre eventi invoca ApplicaRevisione dentro la transazione della Revisione
 - AC-143 Un Errore della policy annulla la Revisione (test end-to-end su databaseInMemoria)
 - AC-446 TrascrittoSostituito(r) → ApplicaSostituzioneTrascrittoPolitica.applica(r) inside the publishing transaction; its Esito.Errore dooms and rolls back the transaction (test on DispatcherEventiInMemoria with a fake UnitaDiLavoro); ElaborazioneCompletata and every other event → no call
+- AC-621 RegistrazioneEliminata(r, …) → ApplicaSostituzioneTrascrittoPolitica.applica(r) inside the publishing transaction, and its Errore dooms it; the existing mappings are unchanged; the policy's KDoc names both triggers. The policy code and its AC-428..431 are unchanged: it is reused, not reworked
 
 ## Dependencies
 - Blocks built first: `revisione-policy` (wave 4), `sostituzione-trascritto-policy` (wave 4)
@@ -87,5 +93,16 @@ REWORK 2026-09-24 (ADR 0018): + TrascrittoSostituito → ApplicaSostituzioneTras
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
   - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. EXCEPTION (ADR 0018/0012): TrascrittoSostituito has one SYNCHRONOUS subscriber (Parlanti purge, abbonato-revisione-parlanti → sostituzione-trascritto-policy) inside the publishing transaction; its other subscribers are after commit
+- **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione, RinominaRegistrazione (progetto:applicazione, fix-batch-11), elimina-registrazione (RegistrazioneEliminata, ADR 0020)`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
+    - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))
+    - `DataRegistrazioneModificata`: data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento
+    - `RegistrazioneRinominata`: data class(registrazioneId: RegistrazioneId, precedente: String, nuovo: String) : EventoPubblicato — precedente/nuovo = the titolo before/after RinominaRegistrazione (fix-batch-11, AC-360/361 in tasks/app/done/r0-feedback-1.md); AFTER-COMMIT consumers: AggiornamentiVista (avvio-r0, AC-366) and abbonato-documento (AC-186bis)
+    - `RegistrazioneEliminata`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio) : EventoPubblicato — published by EliminaRegistrazione INSIDE its transaction, BEFORE the registrazione row is removed; titolo/data/riferimento are the values at deletion (the only way after-commit consumers can locate the files). SYNCHRONOUS consumers: abbonato-eliminazione-trascrizione (veto + purge), abbonato-revisione-parlanti (Parlanti purge + INV-25); AFTER-COMMIT consumers: abbonato-documento (.md removal on the per-key queue), avvio-parlanti (AggiornamentiVistaParlanti, PuliziaRegistrazioneEliminata). ADR 0020
+  - keys (minting rules):
+    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+  - delivery: All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code). EXCEPTION (ADR 0020, 2026-09-25): RegistrazioneEliminata has TWO synchronous subscribers (Trascrizione veto + purge, Parlanti purge) inside the publishing transaction; an Errore from either dooms the command and is returned unchanged by EliminaRegistrazione; its other subscribers are after commit (same at-least-once / idempotent rules; abbonato-documento serializes it on the per-registrazioneId queue behind any in-flight Rigenerazione)
 
-Sources: ADRs 0002, 0003, 0012, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy, ADR 0012.
+Sources: ADRs 0002, 0003, 0012, 0014, 0018, 0019, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Parlanti Policy, ADR 0012.

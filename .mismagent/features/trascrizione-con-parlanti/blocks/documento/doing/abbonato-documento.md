@@ -21,13 +21,17 @@ related_adrs:
   - "0014"
   - "0018"
   - "0019"
+  - "0020"
+model_hint: "deep"
 ---
 # abbonato-documento — Abbonato dopo-commit → Rigenerazione (coalescente, con retry)
 
 ## What to do
 AbbonatoDopoCommit on the event boundaries relevant to Documento; coalesces per registrazioneId, calls rigenerazione-documento, retries on Errore; at startup calls RigeneraTuttiIDocumenti.
 
-Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento): AC-186bis already implemented and merged (3fdd4cb); eventi-progetto now pins RegistrazioneRinominata.
+REWORK 2026-09-25 (ADR 0020): RegistrazioneEliminata after commit → a removal entry on the SAME per-registrazioneId queue as Rigenerazione: it replaces any pending regeneration of that key (whose dataPrecedente / titoloPrecedente become nomiPrecedenti), runs only after an in-flight Rigenerazione of that key completes, is retried with the existing backoff, never on rollback (AC-624).
+
+Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento): AC-186bis already implemented and merged (3fdd4cb); eventi-progetto now pins RegistrazioneRinominata. AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): RegistrazioneEliminata (eventi-progetto, already consumed) → a removal entry on the per-registrazioneId queue (replaces the pending regeneration, keeps the pending old names). model_hint deep: its correctness is an ordering guarantee on the per-key queue (rule 17), the only thing that keeps an in-flight Rigenerazione from resurrecting the .md.
 
 ## Tasks
 - AC-182 La Rigenerazione avviene solo dopo il commit: un comando annullato non tocca nessun file
@@ -36,6 +40,7 @@ Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento): AC-186b
 - AC-185 All'avvio tutti i Documenti vengono rigenerati
 - AC-186 ElaborazioneCompletata, VociUnite, VoceDivisa, SegmentoRiassegnato, AttribuzioneConfermata, ParlanteRinominato, ParlantePromosso e DataRegistrazioneModificata attivano la Rigenerazione; ParlanteEliminato no
 - AC-186bis (rename; BUILT, merged 3fdd4cb) RegistrazioneRinominata attiva la Rigenerazione dopo il commit come DataRegistrazioneModificata (AC-186), con il titolo precedente (perRegistrazioneRinominata)
+- AC-624 RegistrazioneEliminata after commit is queued on the SAME per-registrazioneId key as Rigenerazione: it REPLACES any pending regeneration of that key, and the pending dataPrecedente / titoloPrecedente become the nomiPrecedenti to remove as well; ordering (fake policy): a Rigenerazione of r still running when the event arrives completes FIRST and the removal runs after it; failures are retried with the existing backoff; never on rollback
 
 ## Dependencies
 - Blocks built first: `rigenerazione-documento` (wave 5)
@@ -69,16 +74,17 @@ Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento): AC-186b
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione, RinominaRegistrazione (progetto:applicazione, fix-batch-11)`, projection in-process, contract_test **consumer-driven**
+- **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione, RinominaRegistrazione (progetto:applicazione, fix-batch-11), elimina-registrazione (RegistrazioneEliminata, ADR 0020)`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
     - `RegistrazioneAggiunta`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId) : EventoPubblicato — AFTER-COMMIT consumers only (view refresh); NO synchronous subscriber (no automatic start on import, ADR 0014 / ADR 0012 Amendment (c))
     - `DataRegistrazioneModificata`: data class(registrazioneId: RegistrazioneId, precedente: LocalDate, nuova: LocalDate) : EventoPubblicato — AFTER-COMMIT consumer: abbonato-documento
     - `RegistrazioneRinominata`: data class(registrazioneId: RegistrazioneId, precedente: String, nuovo: String) : EventoPubblicato — precedente/nuovo = the titolo before/after RinominaRegistrazione (fix-batch-11, AC-360/361 in tasks/app/done/r0-feedback-1.md); AFTER-COMMIT consumers: AggiornamentiVista (avvio-r0, AC-366) and abbonato-documento (AC-186bis)
+    - `RegistrazioneEliminata`: data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio) : EventoPubblicato — published by EliminaRegistrazione INSIDE its transaction, BEFORE the registrazione row is removed; titolo/data/riferimento are the values at deletion (the only way after-commit consumers can locate the files). SYNCHRONOUS consumers: abbonato-eliminazione-trascrizione (veto + purge), abbonato-revisione-parlanti (Parlanti purge + INV-25); AFTER-COMMIT consumers: abbonato-documento (.md removal on the per-key queue), avvio-parlanti (AggiornamentiVistaParlanti, PuliziaRegistrazioneEliminata). ADR 0020
   - keys (minting rules):
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-  - delivery: All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code)
+  - delivery: All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code). EXCEPTION (ADR 0020, 2026-09-25): RegistrazioneEliminata has TWO synchronous subscribers (Trascrizione veto + purge, Parlanti purge) inside the publishing transaction; an Errore from either dooms the command and is returned unchanged by EliminaRegistrazione; its other subscribers are after commit (same at-least-once / idempotent rules; abbonato-documento serializes it on the per-registrazioneId queue behind any in-flight Rigenerazione)
 - **eventi-elaborazione** (consumed/implemented) — owner `eventi-pubblicati`, supplier `esegui-elaborazione (Avviata/Completata/Fallita/TrascrittoSostituito), annulla-elaborazione (ElaborazioneAnnullata)`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ElaborazioneAvviata`: data class(registrazioneId: RegistrazioneId, avviataAlle: Instant) : EventoPubblicato
@@ -116,4 +122,4 @@ Note: AMENDED 2026-09-24 (manifest delta 2026-09-24-rinomina-documento): AC-186b
     - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
   - delivery: in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard
 
-Sources: ADRs 0002, 0003, 0012, 0014, 0018, 0019 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento Policy, ADR 0012 (+ R4).
+Sources: ADRs 0002, 0003, 0012, 0014, 0018, 0019, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Documento Policy, ADR 0012 (+ R4).

@@ -3,8 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' 'snastro\\.(parlanti\\.applicazione\\.porte\\.(EstrattoreImpronta|DecodificatoreAudio)|kernel\\.CampioniAudio|parlanti\\.dominio\\.Impronta)([^A-Za-z0-9_]|$)' parlanti/applicazione/src/main | grep '/politiche/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-23   # see "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added. "Amendment 2026-09-23 (c)" — R2 auto-start removed (ADR 0014 [user])
+enforced_by: "! grep -rnE --include='*.kt' 'snastro\\.(parlanti\\.applicazione\\.porte\\.(EstrattoreImpronta|DecodificatoreAudio)|trascrizione\\.applicazione\\.porte\\.DecodificatoreAudio|kernel\\.CampioniAudio|parlanti\\.dominio\\.Impronta)([^A-Za-z0-9_]|$)' parlanti/applicazione/src/main trascrizione/applicazione/src/main | grep '/politiche/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+amended: 2026-09-25   # see "Amendment 2026-09-25 (d)" — enforced_by widened to :trascrizione:applicazione politiche (user Q-3, elimina-registrazione fold). See "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added. "Amendment 2026-09-23 (c)" — R2 auto-start removed (ADR 0014 [user])
 ---
 # 0012 — Unit of work and domain-event dispatch: invariant policies in-transaction, Rigenerazione after commit
 
@@ -211,3 +211,44 @@ is a normal state, shown as `NON_AVVIATA`.
 
 **Consequences.** The `abbonato-registrazione-aggiunta` block and its ACs (AC-140, AC-141) leave the
 manifest. The R1 composition stops registering the subscriber. This is folded by `build-manifest`.
+
+## Amendment 2026-09-25 (d): the `politiche` prohibition also covers `:trascrizione:applicazione` [user]
+**Why.** ADR 0020 adds the first `politiche` package in Trascrizione (`ApplicaEliminazioneRegistrazionePolitica`,
+block `eliminazione-registrazione-policy`) and says that "the ADR 0012 (b) prohibition" covers it. But the
+`enforced_by` of Amendment (b) scanned only `parlanti/applicazione/src/main`, so it could not fail on that file. The
+build-manifest fold of 2026-09-25 raised this as rule-19 question Q-3, and the user chose to **widen the check**
+(checkpoint 2026-09-25).
+
+**Decision.** The prohibition of Amendment (b) point 3 now reads: no source file under a `politiche` package of
+`:parlanti:applicazione` **or of `:trascrizione:applicazione`** may reference a decoder, an extractor, raw samples or
+a print. The forbidden symbols are:
+- `snastro.parlanti.applicazione.porte.EstrattoreImpronta`;
+- `snastro.parlanti.applicazione.porte.DecodificatoreAudio`;
+- **`snastro.trascrizione.applicazione.porte.DecodificatoreAudio`** (new);
+- `snastro.kernel.CampioniAudio`;
+- `snastro.parlanti.dominio.Impronta`.
+
+The match covers an import or a fully-qualified use. Comment lines are stripped. The wildcard-import bypass is still
+caught by detekt's `WildcardImport` in the gate. No other rule of Amendment (b) changes.
+
+**`enforced_by`.** The frontmatter rule is replaced; it is not a second rule. The rule it replaces was:
+`! grep -rnE --include='*.kt' 'snastro\.(parlanti\.applicazione\.porte\.(EstrattoreImpronta|DecodificatoreAudio)|kernel\.CampioniAudio|parlanti\.dominio\.Impronta)([^A-Za-z0-9_]|$)' parlanti/applicazione/src/main | grep '/politiche/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\*|/\*)' | grep -q .`
+
+**Validation (2026-09-25, `bash -c`, exactly as the frontmatter string).**
+- Today's tree (main checkout, `feature/trascrizione-con-parlanti`): **exit 0**. No Trascrizione `politiche` package
+  exists yet, and the Parlanti ones are clean.
+- Fixtures, in scratch trees:
+  - FAIL (exit 1) on `import snastro.trascrizione.applicazione.porte.DecodificatoreAudio` in
+    `trascrizione/applicazione/src/main/.../politiche/`;
+  - FAIL on a fully-qualified `snastro.kernel.CampioniAudio` there;
+  - FAIL on `import snastro.parlanti.applicazione.porte.EstrattoreImpronta` in a Parlanti `politiche` file
+    (unchanged behaviour);
+  - PASS (exit 0) on the same Trascrizione import commented out (`// import …`);
+  - PASS on `import snastro.trascrizione.applicazione.porte.ElaborazioneRepository` in a `politiche` file.
+
+**Form.** The rule keeps the project's current string form (like ADR 0018 and ADR 0020), which `mismagent-verifier`
+runs today. Migrating the project's `enforced_by` strings to versioned check files (the newer write-adr form) is a
+separate, project-wide decision and is not taken here.
+
+**Consequences.** In `eliminazione-registrazione-policy`, the "prohibition grep stays green" half of AC-611 is now
+falsifiable, so it counts as coverage. The manifest is re-folded by `build-manifest`.

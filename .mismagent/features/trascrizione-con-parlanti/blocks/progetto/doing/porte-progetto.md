@@ -16,13 +16,16 @@ related_adrs:
   - "0006"
   - "0010"
   - "0012"
+  - "0020"
 owns_boundaries:
   repo-progetto:
     projection: "in-process"
     contract_test: "consumer-driven"
     pinned_types:
       ProgettoRepository: "interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB"
-      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }"
+      RegistrazioneRepository: "interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione); rimuovi(id: RegistrazioneId) /* deletes the registrazione row inside the caller's transaction; absent id = no-op; the ONLY physical deletion of a Registrazione (ADR 0020) */ }"
+      EliminazioniInSospeso: "interface { registra(e: EliminazioneInSospeso); elenco(): List<EliminazioneInSospeso> /* by eliminataAlle, then id */; concludi(id: RegistrazioneId) /* absent = no-op */ } — Progetto-owned table eliminazione_in_sospeso (5.sqm, ADR 0020 §4); no biometric data"
+      EliminazioneInSospeso: "data class(registrazioneId: RegistrazioneId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio) — the values of the Registrazione AT deletion (the only way to locate its files afterwards)"
   tec-registro-progetti:
     projection: "in-process"
     contract_test: "consumer-driven"
@@ -36,13 +39,21 @@ owns_boundaries:
       SondaAudio: "interface { fun sonda(percorsoSorgente: String): Esito<InfoAudio> } — Errore(AudioNonLeggibile | FormatoNonSupportato)"
       InfoAudio: "data class(durataMs: Long, dataFile: LocalDate)"
       ArchivioAudio: "interface { fun copia(percorsoSorgente: String, id: RegistrazioneId): Esito<RiferimentoAudio>; fun scarta(r: RiferimentoAudio) } — Errore(CopiaFallita) leaves no partial file"
+  tec-pulizia-derivati:
+    projection: "in-process"
+    contract_test: "consumer-driven"
+    pinned_types:
+      PuliziaDerivatiRegistrazione: "interface { fun pulisci(e: EliminazioneInSospeso): Esito<Unit> } — removes every DERIVED file of a deleted Registrazione (cache/audio/<id>.wav, the Documento .md via RigenerazioneDocumentoPolitica.perRegistrazioneEliminata); idempotent (absent files = Ok); implemented in :avvio (avvio-parlanti); an Errore leaves the pending row for the next project open"
+      EliminazioneInSospeso: "see repo-progetto — data class(registrazioneId: RegistrazioneId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio)"
 ---
 # porte-progetto — Porte del Progetto: repository, sonda/archivio audio, registro progetti
 
 ## What to do
 Declare ProgettoRepository, RegistrazioneRepository, SondaAudio, ArchivioAudio, RegistroProgetti (R3) with a Finta and an abstract Contratto each in testFixtures.
 
-Note: AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) — manifest drift fixed, no code change; (ii) new RegistrazioneRepository.titoliDelProgetto(id: ProgettoId): List<String> (repo-progetto) for the titolo uniqueness of AggiungiRegistrazione. FOLLOW-UP REQUIRED for (ii): merged before this amendment — the port, its Finta and RegistrazioneRepositoryContratto must gain titoliDelProgetto (AC-325).
+REWORK 2026-09-25 (ADR 0020): RegistrazioneRepository + rimuovi(id) (absent = no-op), Contratto cases of AC-614 honoured by the Finta; new ports EliminazioniInSospeso (+ EliminazioneInSospeso) and PuliziaDerivatiRegistrazione (boundary tec-pulizia-derivati, OWNED here), with EliminazioniInSospesoContratto / EliminazioniInSospesoFinta and PuliziaDerivatiRegistrazioneFinta (records calls, can be told to fail once) in testFixtures (AC-615).
+
+Note: AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) — manifest drift fixed, no code change; (ii) new RegistrazioneRepository.titoliDelProgetto(id: ProgettoId): List<String> (repo-progetto) for the titolo uniqueness of AggiungiRegistrazione. FOLLOW-UP REQUIRED for (ii): merged before this amendment — the port, its Finta and RegistrazioneRepositoryContratto must gain titoliDelProgetto (AC-325). AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): RegistrazioneRepository + rimuovi(id) (repo-progetto); new ports EliminazioniInSospeso (+ type EliminazioneInSospeso, repo-progetto) and PuliziaDerivatiRegistrazione (new boundary tec-pulizia-derivati, owned here), each with Finta + Contratto in testFixtures. Merged before this amendment: REWORK owed (AC-614/615).
 
 ## Tasks
 - AC-25 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le Finte (round-trip, delProgetto)
@@ -50,12 +61,19 @@ Note: AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port
 - AC-27 ArchivioAudioContratto: copia → RiferimentoAudio 'audio/<registrazioneId>.<ext minuscola>'; copia fallita → CopiaFallita e nessun file residuo
 - AC-28 RegistroProgettiContratto: registra poi elenco lo contiene; registrare due volte lo stesso percorso non duplica; aggiorna(percorso, …) cambia numRegistrazioni e ultimaAttivita; elenco ordinato per ultimaAttivita decrescente
 - AC-325 RegistrazioneRepositoryContratto: titoliDelProgetto(id) restituisce i titoli di tutte e sole le Registrazioni di quel Progetto (lista vuota se nessuna, nessun ordine garantito) — passa contro RegistrazioneRepositoryFinta
+- AC-614 RegistrazioneRepositoryContratto gains, run against the Finta and later against SQL: rimuovi(id) → trova(id) is null and delProgetto / titoliDelProgetto no longer list it; rimuovi of an unknown id is a no-op; the other Registrazioni are unchanged
+- AC-615 New EliminazioniInSospesoContratto + EliminazioniInSospesoFinta: registra then elenco contains the row with the same four values; concludi(id) removes it; concludi of an unknown id is a no-op; elenco is ordered by registration time, then id. New PuliziaDerivatiRegistrazioneFinta (records calls, can be told to fail once)
 
 ## Dependencies
 - **repo-progetto** (OWNED here — built before its consumers) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
-    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione) }
+    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione); rimuovi(id: RegistrazioneId) /* deletes the registrazione row inside the caller's transaction; absent id = no-op; the ONLY physical deletion of a Registrazione (ADR 0020) */ }
+    - `EliminazioniInSospeso`: interface { registra(e: EliminazioneInSospeso); elenco(): List<EliminazioneInSospeso> /* by eliminataAlle, then id */; concludi(id: RegistrazioneId) /* absent = no-op */ } — Progetto-owned table eliminazione_in_sospeso (5.sqm, ADR 0020 §4); no biometric data
+    - `EliminazioneInSospeso`: data class(registrazioneId: RegistrazioneId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio) — the values of the Registrazione AT deletion (the only way to locate its files afterwards)
+  - keys (minting rules):
+    - `EliminazioneInSospeso.registrazioneId`: the deleted Registrazione's id (minted by servizi-registrazione, see kernel-pl keys); PRIMARY KEY of eliminazione_in_sospeso — at most one pending row per id; written in the deleting transaction, so it exists iff the deletion committed; removed by concludi
+    - `eliminataAlle`: NOT part of the pinned type: minted by repository-sql-progetto (EliminazioniInSospesoSql.registra) from an injected java.time.Clock, epoch millis, ordering only (elenco by eliminataAlle, then registrazioneId); the Finta orders by insertion
 - **tec-registro-progetti** (OWNED here — built before its consumers) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `RegistroProgetti`: interface { elenco(): List<VoceRegistro> /* by ultimaAttivita desc */; registra(v: VoceRegistro); aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) /* keyed by percorso like registra/rimuovi; unknown percorso → no-op */; rimuovi(percorso: String) }
@@ -70,6 +88,13 @@ Note: AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port
     - `ArchivioAudio`: interface { fun copia(percorsoSorgente: String, id: RegistrazioneId): Esito<RiferimentoAudio>; fun scarta(r: RiferimentoAudio) } — Errore(CopiaFallita) leaves no partial file
   - keys (minting rules):
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
+- **tec-pulizia-derivati** (OWNED here — built before its consumers) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `PuliziaDerivatiRegistrazione`: interface { fun pulisci(e: EliminazioneInSospeso): Esito<Unit> } — removes every DERIVED file of a deleted Registrazione (cache/audio/<id>.wav, the Documento .md via RigenerazioneDocumentoPolitica.perRegistrazioneEliminata); idempotent (absent files = Ok); implemented in :avvio (avvio-parlanti); an Errore leaves the pending row for the next project open
+    - `EliminazioneInSospeso`: see repo-progetto — data class(registrazioneId: RegistrazioneId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio)
+  - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) (see tec-scrittore-documento) from the EliminazioneInSospeso values — the name at deletion
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -101,4 +126,4 @@ Note: AMENDED 2026-09-23: (i) tec-registro-progetti re-pinned to the MERGED port
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0005, 0006, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), dev-architecture-app.md #porta-contratto.
+Sources: ADRs 0002, 0003, 0005, 0006, 0010, 0012, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/architetture/architecture-overview.md (Technical ports), dev-architecture-app.md #porta-contratto.

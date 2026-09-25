@@ -19,11 +19,16 @@ related_adrs:
   - "0007"
   - "0009"
   - "0012"
+  - "0020"
 ---
 # repository-sql-parlanti — Repository SQL dei Parlanti (+ purge biometrica)
 
 ## What to do
 ParlanteRepositorySql (root + impronta_vocale replace, incl. sorgente_impronta / modello_impronta; compare-and-set aggiornaImpronta — UPDATE only, never INSERT; RigaImpronta reads per registrazione / per progetto without BLOBs), AttribuzioneRepositorySql; wal_checkpoint(TRUNCATE) AFTER commit of an EliminaParlante (R23).
+
+REWORK 2026-09-25 (ADR 0020, ADR 0009 amended): register PRAGMA wal_checkpoint(TRUNCATE) afterCommit whenever salva deleted at least one impronta_vocale row or rimuovi removed a Parlante (today only for an eliminato Parlante); never inside a transaction, never on rollback (AC-622). One checkpoint per removal (user Q-1, 2026-09-25): no per-transaction dedup.
+
+Note: AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): the after-commit wal_checkpoint(TRUNCATE) now covers EVERY print-removal path (INV-15 moves, INV-21, INV-25, ADR 0018, ADR 0020), not only an eliminato Parlante (ADR 0009 amended). RESOLVED 2026-09-25 (user checkpoint 2026-09-25): Q-1 'once per removal': one afterCommit checkpoint per print-removing salva and per rimuovi, as the code registers hooks today (no per-transaction dedup); AC-622 unchanged; avvio-parlanti AC-634 amended to expect one checkpoint per removal.
 
 ## Tasks
 - AC-114 Round-trip di Parlante con impronte (BLOB float32 little-endian, sorgente_impronta e modello_impronta) e di Attribuzione
@@ -33,6 +38,7 @@ ParlanteRepositorySql (root + impronta_vocale replace, incl. sorgente_impronta /
 - AC-118 I Contratti dei due repository passano contro le implementazioni SQL
 - AC-302 aggiornaImpronta è un UPDATE compare-and-set (WHERE chiave della riga AND sorgente_impronta = attesa AND modello_impronta = atteso): con valori cambiati o riga assente → false e nessuna riga toccata; non esegue mai un INSERT (conteggio righe invariato)
 - AC-303 impronteDiRegistrazione / impronteDelProgetto su SQL restituiscono i metadati (parlanteId, voceRef, sorgente, modello) senza leggere i BLOB
+- AC-622 PRAGMA wal_checkpoint(TRUNCATE) is registered afterCommit whenever ParlanteRepositorySql.salva deleted at least one impronta_vocale row, or rimuovi removed a Parlante; it never runs inside a transaction and never on rollback. Tested with a counting query hook: an attivo Parlante losing one print → 1 checkpoint after commit; the same in a rolled-back transaction → 0; a salva with no print removed → 0; EliminaParlante → 1 (unchanged)
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -100,4 +106,4 @@ ParlanteRepositorySql (root + impronta_vocale replace, incl. sorgente_impronta /
     - `RigaImpronta`: data class(parlanteId: ParlanteId, voceRef: VoceRef, sorgente: String, modello: String) in parlanti:applicazione.porte — print row metadata, never the embedding
     - `AttribuzioneRepository`: interface { trova(v: VoceRef): Attribuzione?; diRegistrazione(id: RegistrazioneId): List<Attribuzione>; diParlante(id: ParlanteId): List<Attribuzione>; salva(a: Attribuzione); rimuovi(v: VoceRef) }
 
-Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012 (.mismagent/decisions/); ADR 0006/0007/0009.
+Sources: ADRs 0002, 0003, 0006, 0007, 0009, 0012, 0020 (.mismagent/decisions/); ADR 0006/0007/0009.

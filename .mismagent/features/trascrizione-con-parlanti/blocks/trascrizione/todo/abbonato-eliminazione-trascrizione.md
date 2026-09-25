@@ -1,41 +1,36 @@
 ---
-id: "crea-progetto"
-type: "application-service"
-context: "progetto"
+id: "abbonato-eliminazione-trascrizione"
+type: "adapter"
+context: "trascrizione"
 side: "app"
-wave: 4
-release: "R0"
-module: ":progetto:applicazione (..comandi)"
+wave: 5
+release: "R2"
+module: ":trascrizione:adattatori (..eventi)"
 consumes:
   - "kernel-pl"
-  - "agg-progetto"
-  - "repo-progetto"
   - "eventi-progetto"
-depends_on: []
+depends_on:
+  - "eliminazione-registrazione-policy"
 related_adrs:
   - "0002"
   - "0003"
-  - "0006"
-  - "0010"
   - "0012"
   - "0014"
+  - "0018"
   - "0020"
-commands:
-  - "CreaProgetto"
 ---
-# crea-progetto — CreaProgetto
+# abbonato-eliminazione-trascrizione — Abbonato sincrono a RegistrazioneEliminata → eliminazione-registrazione-policy
 
 ## What to do
-CreaProgettoServizio: on a freshly opened project DB validates NomeProgetto, refuses a second Progetto, saves it and publishes ProgettoCreato. Folder layout + DB opening + registry are done by SessioneProgetto in avvio-composizione (R3).
+AbbonatoEliminazioneRegistrazione(dispatcher, politica): registers ONE synchronous subscriber in init that maps RegistrazioneEliminata(r, …) → politica.applica(r) inside the publishing transaction (its Errore dooms it) and ignores every other event. No Parlanti query (ADR 0018 prohibition).
 
-REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progetto pin changed (RegistrazioneAggiunta after-commit only); ProgettoCreato is untouched.
+Note: NEW 2026-09-25 (ADR 0020 §2 step 4, manifest delta 2026-09-25-elimina-registrazione; wave 5 = after its policy, the delta's 'wave 19' corrected at fold): the Trascrizione synchronous subscriber of RegistrazioneEliminata; registered by avvio-parlanti before the first command (AC-630). R0/R1 compositions do not register it and do not offer the action.
 
 ## Tasks
-- AC-53 CreaProgetto con nome valido salva il Progetto e pubblica ProgettoCreato
-- AC-54 CreaProgetto con nome vuoto o di soli spazi → NomeProgettoVuoto e nulla salvato
-- AC-55 Un secondo CreaProgetto sullo stesso DB → ProgettoGiaPresente
+- AC-612 AbbonatoEliminazioneRegistrazione(dispatcher, politica) registers ONE synchronous subscriber in init: RegistrazioneEliminata(r, …) → politica.applica(r) inside the publishing transaction, and its Errore dooms the transaction (test on DispatcherEventiInMemoria with a fake UoW); every other event → Ok, with no call. The adapter never uses Parlanti queries (ADR 0018 prohibition)
 
 ## Dependencies
+- Blocks built first: `eliminazione-registrazione-policy` (wave 4)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -66,23 +61,6 @@ REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progett
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **agg-progetto** (consumed/implemented) — owner `progetto`, projection in-process, contract_test **invariant-test**
-  - pinned types:
-    - `Progetto.crea`: (id: ProgettoId, nome: NomeProgetto): Creato<Progetto, ProgettoCreato>
-    - `NomeProgetto.di`: (testo: String): Esito<NomeProgetto> — trimmed, non-empty
-  - keys (minting rules):
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
-  - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(progettoQueries)\b' . | grep -vE '^\./(persistenza/|progetto/adattatori/src/[A-Za-z]+/kotlin/snastro/progetto/adattatori/persistenza/)' | grep -q .`
-- **repo-progetto** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
-  - pinned types:
-    - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
-    - `RegistrazioneRepository`: interface { trova(id: RegistrazioneId): Registrazione?; delProgetto(id: ProgettoId): List<Registrazione>; titoliDelProgetto(id: ProgettoId): List<String> /* titles only, no order, for the titolo uniqueness of AggiungiRegistrazione (AC-322) */; salva(r: Registrazione); rimuovi(id: RegistrazioneId) /* deletes the registrazione row inside the caller's transaction; absent id = no-op; the ONLY physical deletion of a Registrazione (ADR 0020) */ }
-    - `EliminazioniInSospeso`: interface { registra(e: EliminazioneInSospeso); elenco(): List<EliminazioneInSospeso> /* by eliminataAlle, then id */; concludi(id: RegistrazioneId) /* absent = no-op */ } — Progetto-owned table eliminazione_in_sospeso (5.sqm, ADR 0020 §4); no biometric data
-    - `EliminazioneInSospeso`: data class(registrazioneId: RegistrazioneId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio) — the values of the Registrazione AT deletion (the only way to locate its files afterwards)
-  - keys (minting rules):
-    - `EliminazioneInSospeso.registrazioneId`: the deleted Registrazione's id (minted by servizi-registrazione, see kernel-pl keys); PRIMARY KEY of eliminazione_in_sospeso — at most one pending row per id; written in the deleting transaction, so it exists iff the deletion committed; removed by concludi
-    - `eliminataAlle`: NOT part of the pinned type: minted by repository-sql-progetto (EliminazioniInSospesoSql.registra) from an injected java.time.Clock, epoch millis, ordering only (elenco by eliminataAlle, then registrazioneId); the Finta orders by insertion
 - **eventi-progetto** (consumed/implemented) — owner `eventi-pubblicati`, supplier `crea-progetto, servizi-registrazione, RinominaRegistrazione (progetto:applicazione, fix-batch-11), elimina-registrazione (RegistrazioneEliminata, ADR 0020)`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoCreato`: data class(progettoId: ProgettoId, nome: String) : EventoPubblicato
@@ -95,4 +73,4 @@ REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progett
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
   - delivery: All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code). EXCEPTION (ADR 0020, 2026-09-25): RegistrazioneEliminata has TWO synchronous subscribers (Trascrizione veto + purge, Parlanti purge) inside the publishing transaction; an Errore from either dooms the command and is returned unchanged by EliminaRegistrazione; its other subscribers are after commit (same at-least-once / idempotent rules; abbonato-documento serializes it on the per-registrazioneId queue behind any in-flight Rigenerazione)
 
-Sources: ADRs 0002, 0003, 0006, 0010, 0012, 0014, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto.
+Sources: ADRs 0002, 0003, 0012, 0014, 0018, 0020 (.mismagent/decisions/); ADR 0012, ADR 0020 §2, manifest delta 2026-09-25-elimina-registrazione.

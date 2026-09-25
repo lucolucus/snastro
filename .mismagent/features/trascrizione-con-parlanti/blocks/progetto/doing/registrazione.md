@@ -14,6 +14,7 @@ related_adrs:
   - "0003"
   - "0010"
   - "0012"
+  - "0020"
 invariants:
   - "INV-1 a Registrazione belongs to exactly one Progetto; its progettoId is set at creation and immutable"
   - "INV-2 DataRegistrazione is always set: defaults to the source file's date, replaceable only by a user-chosen date"
@@ -30,12 +31,17 @@ owns_boundaries:
     pinned_types:
       "Registrazione.aggiungi": "(id, progettoId, titolo: String, riferimentoAudio, durataMs: Long, dataRegistrazione: LocalDate, aggiuntaAlle: Instant): Creato<Registrazione, RegistrazioneAggiunta>"
       "Registrazione.modificaData": "(nuova: LocalDate): Esito<DataRegistrazioneModificata>"
+      "Registrazione.elimina": "(): RegistrazioneEliminata — pure: returns the domain event (id, progettoId, titolo, dataRegistrazione, riferimentoAudio); no state change, no guard (the only precondition, INV-28's 'no open Elaborazione', is Trascrizione's and is checked by its synchronous subscriber) — ADR 0020"
       "invariant_fields exposure": "progettoId (val, immutable), dataRegistrazione (private set)"
 ---
 # registrazione — Aggregato Registrazione
 
 ## What to do
 Registrazione root with titolo (source file name without extension, immutable — R6), riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle; modificaData returns DataRegistrazioneModificata(precedente, nuova). Built after progetto in the same wave (R20).
+
+REWORK 2026-09-25 (ADR 0020): + Registrazione.elimina(): RegistrazioneEliminata — a pure check returning the event with the CURRENT titolo and date (after rinomina / modificaData); no state change, no guard (the INV-28 precondition is Trascrizione's). The physical deletion is RegistrazioneRepository.rimuovi (AC-613).
+
+Note: AMENDED 2026-09-25 (ADR 0020): elimina is a pure check returning the event; the physical deletion is the repository's rimuovi — the only deletion of a Registrazione.
 
 ### Invariants owned here (one test each, name starts with the tag)
 - INV-1 a Registrazione belongs to exactly one Progetto; its progettoId is set at creation and immutable
@@ -45,12 +51,14 @@ Registrazione root with titolo (source file name without extension, immutable �
 - INV-1 progettoId è fissato da aggiungi e nessun metodo lo cambia
 - INV-2 aggiungi richiede una data; modificaData la sostituisce ed emette DataRegistrazioneModificata con precedente e nuova
 - AC-18 Il titolo resta quello dato ad aggiungi dopo qualunque operazione (by-construction: non esiste un metodo che lo modifica)
+- AC-613 Registrazione.elimina() returns RegistrazioneEliminata(id, progettoId, titolo, dataRegistrazione, riferimentoAudio) carrying the CURRENT titolo and date (after rinomina / modificaData), and the aggregate's state is unchanged; the INV-1 / INV-2 tests stay green
 
 ## Dependencies
 - **agg-registrazione** (OWNED here — built before its consumers) — owner `registrazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
     - `Registrazione.aggiungi`: (id, progettoId, titolo: String, riferimentoAudio, durataMs: Long, dataRegistrazione: LocalDate, aggiuntaAlle: Instant): Creato<Registrazione, RegistrazioneAggiunta>
     - `Registrazione.modificaData`: (nuova: LocalDate): Esito<DataRegistrazioneModificata>
+    - `Registrazione.elimina`: (): RegistrazioneEliminata — pure: returns the domain event (id, progettoId, titolo, dataRegistrazione, riferimentoAudio); no state change, no guard (the only precondition, INV-28's 'no open Elaborazione', is Trascrizione's and is checked by its synchronous subscriber) — ADR 0020
     - `invariant_fields exposure`: progettoId (val, immutable), dataRegistrazione (private set)
   - keys (minting rules):
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
@@ -88,4 +96,4 @@ Registrazione root with titolo (source file name without extension, immutable �
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
 
-Sources: ADRs 0002, 0003, 0010, 0012 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto (+ amendment R6).
+Sources: ADRs 0002, 0003, 0010, 0012, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto (+ amendment R6).

@@ -1,44 +1,41 @@
 ---
-id: "repository-sql-progetto"
-type: "adapter"
+id: "completa-eliminazioni"
+type: "application-service"
 context: "progetto"
 side: "app"
-wave: 6
-release: "R0"
-module: ":progetto:adattatori (..persistenza)"
+wave: 4
+release: "R2"
+module: ":progetto:applicazione (..comandi)"
 consumes:
   - "kernel-pl"
-  - "agg-progetto"
-  - "agg-registrazione"
   - "repo-progetto"
-depends_on:
-  - "persistenza-elimina-registrazione"
+  - "tec-sonda-archivio"
+  - "tec-pulizia-derivati"
+depends_on: []
 related_adrs:
   - "0002"
   - "0003"
+  - "0005"
   - "0006"
   - "0010"
   - "0012"
   - "0020"
+commands:
+  - "CompletaEliminazioniRegistrazioni"
 ---
-# repository-sql-progetto — Repository SQL del Progetto
+# completa-eliminazioni — CompletaEliminazioniRegistrazioni (recupero all'apertura del progetto)
 
 ## What to do
-ProgettoRepositorySql, RegistrazioneRepositorySql on the generated queries (dev-architecture #repository).
+CompletaEliminazioniRegistrazioniServizio(uow, inSospeso, archivio, derivati).esegui(): at project open, for every eliminazione_in_sospeso row in order, ArchivioAudio.scarta(riferimentoAudio) then PuliziaDerivatiRegistrazione.pulisci(e); only on Ok concludi(id) in its own short transaction. A failing row stays pending and never blocks opening the project; everything is idempotent.
 
-REWORK 2026-09-25 (ADR 0020): RegistrazioneRepositorySql.rimuovi over Registrazione.sq elimina; new EliminazioniInSospesoSql over EliminazioneInSospeso.sq (eliminata_alle minted from an injected java.time.Clock); both contracts pass against SQL; only registrazioneQueries / eliminazioneInSospesoQueries / progettoQueries (AC-616/617). Needs persistenza-elimina-registrazione's 5.sqm.
-
-Note: AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazione, user decision 2026-09-25, defaults accepted): rimuovi + EliminazioniInSospesoSql (eliminata_alle minted here from an injected java.time.Clock, see repo-progetto keys); depends_on persistenza-elimina-registrazione (5.sqm), hence wave 4 → 6 (no state folder moved).
+Note: NEW 2026-09-25 (ADR 0020 §4, manifest delta 2026-09-25-elimina-registrazione; wave 4, the delta's 'wave 18' corrected at fold): CompletaEliminazioniRegistrazioniServizio(uow, inSospeso: EliminazioniInSospeso, archivio: ArchivioAudio, derivati: PuliziaDerivatiRegistrazione).esegui(): Esito<Unit>, actor sistema, run by avvio-parlanti at project open after RigeneraTuttiIDocumenti is queued (AC-633). The pending row is concluded ONLY after PuliziaDerivatiRegistrazione returns Ok (discursive, code review). No file I/O inside a transaction (the scarta/pulisci calls run outside; only concludi is transactional).
 
 ## Tasks
-- AC-108 Round-trip salva → trova per Progetto e Registrazione (stato osservabile uguale)
-- AC-109 ProgettoRepositoryContratto e RegistrazioneRepositoryContratto passano contro le implementazioni SQL su databaseInMemoria()
-- AC-326 titoliDelProgetto su SQL legge la sola colonna titolo filtrata per progetto_id (nessuna ricostituzione di Registrazione) e passa RegistrazioneRepositoryContratto (AC-325)
-- AC-616 RegistrazioneRepositorySql.rimuovi over Registrazione.sq elimina, and a new EliminazioniInSospesoSql over EliminazioneInSospeso.sq; both contracts (AC-614/615) pass against SQL; data_registrazione round-trips as ISO date and eliminata_alle as epoch millis
-- AC-617 The adapter uses only registrazioneQueries / eliminazioneInSospesoQueries (plus progettoQueries); the ADR 0020 prohibition clause stays green
+- AC-605 For each row of elenco(), in order: (1) archivio.scarta(riferimentoAudio); (2) derivati.pulisci(e); (3) if Ok, concludi(id) in its own short transaction. After the call elenco() is empty (finte)
+- AC-606 derivati.pulisci → Errore for row A and Ok for row B: A stays pending and B is concluded; esegui returns Ok, so a pending row never blocks opening the project; a second esegui after the fault clears concludes A as well
+- AC-607 Idempotent: running esegui twice, or with the files already gone, gives the same result; with no pending row it makes zero calls to archivio / derivati
 
 ## Dependencies
-- Blocks built first: `persistenza-elimina-registrazione` (wave 5)
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoId`: @JvmInline value class(valore: String) — UUID
@@ -69,25 +66,6 @@ Note: AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazi
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **agg-progetto** (consumed/implemented) — owner `progetto`, projection in-process, contract_test **invariant-test**
-  - pinned types:
-    - `Progetto.crea`: (id: ProgettoId, nome: NomeProgetto): Creato<Progetto, ProgettoCreato>
-    - `NomeProgetto.di`: (testo: String): Esito<NomeProgetto> — trimmed, non-empty
-  - keys (minting rules):
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
-  - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(progettoQueries)\b' . | grep -vE '^\./(persistenza/|progetto/adattatori/src/[A-Za-z]+/kotlin/snastro/progetto/adattatori/persistenza/)' | grep -q .`
-- **agg-registrazione** (consumed/implemented) — owner `registrazione`, projection in-process, contract_test **invariant-test**
-  - pinned types:
-    - `Registrazione.aggiungi`: (id, progettoId, titolo: String, riferimentoAudio, durataMs: Long, dataRegistrazione: LocalDate, aggiuntaAlle: Instant): Creato<Registrazione, RegistrazioneAggiunta>
-    - `Registrazione.modificaData`: (nuova: LocalDate): Esito<DataRegistrazioneModificata>
-    - `Registrazione.elimina`: (): RegistrazioneEliminata — pure: returns the domain event (id, progettoId, titolo, dataRegistrazione, riferimentoAudio); no state change, no guard (the only precondition, INV-28's 'no open Elaborazione', is Trascrizione's and is checked by its synchronous subscriber) — ADR 0020
-    - `invariant_fields exposure`: progettoId (val, immutable), dataRegistrazione (private set)
-  - keys (minting rules):
-    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
-    - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-  - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(registrazioneQueries)\b' . | grep -vE '^\./(persistenza/|progetto/adattatori/src/[A-Za-z]+/kotlin/snastro/progetto/adattatori/persistenza/)' | grep -q .`
 - **repo-progetto** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
@@ -97,5 +75,19 @@ Note: AMENDED 2026-09-25 (ADR 0020, manifest delta 2026-09-25-elimina-registrazi
   - keys (minting rules):
     - `EliminazioneInSospeso.registrazioneId`: the deleted Registrazione's id (minted by servizi-registrazione, see kernel-pl keys); PRIMARY KEY of eliminazione_in_sospeso — at most one pending row per id; written in the deleting transaction, so it exists iff the deletion committed; removed by concludi
     - `eliminataAlle`: NOT part of the pinned type: minted by repository-sql-progetto (EliminazioniInSospesoSql.registra) from an injected java.time.Clock, epoch millis, ordering only (elenco by eliminataAlle, then registrazioneId); the Finta orders by insertion
+- **tec-sonda-archivio** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `SondaAudio`: interface { fun sonda(percorsoSorgente: String): Esito<InfoAudio> } — Errore(AudioNonLeggibile | FormatoNonSupportato)
+    - `InfoAudio`: data class(durataMs: Long, dataFile: LocalDate)
+    - `ArchivioAudio`: interface { fun copia(percorsoSorgente: String, id: RegistrazioneId): Esito<RiferimentoAudio>; fun scarta(r: RiferimentoAudio) } — Errore(CopiaFallita) leaves no partial file
+  - keys (minting rules):
+    - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
+- **tec-pulizia-derivati** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
+  - pinned types:
+    - `PuliziaDerivatiRegistrazione`: interface { fun pulisci(e: EliminazioneInSospeso): Esito<Unit> } — removes every DERIVED file of a deleted Registrazione (cache/audio/<id>.wav, the Documento .md via RigenerazioneDocumentoPolitica.perRegistrazioneEliminata); idempotent (absent files = Ok); implemented in :avvio (avvio-parlanti); an Errore leaves the pending row for the next project open
+    - `EliminazioneInSospeso`: see repo-progetto — data class(registrazioneId: RegistrazioneId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio)
+  - keys (minting rules):
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `nomeFile`: minted by documento.nomeFile(dataRegistrazione, titolo) (see tec-scrittore-documento) from the EliminazioneInSospeso values — the name at deletion
 
-Sources: ADRs 0002, 0003, 0006, 0010, 0012, 0020 (.mismagent/decisions/); ADR 0006, dev-architecture-app.md #repository.
+Sources: ADRs 0002, 0003, 0005, 0006, 0010, 0012, 0020 (.mismagent/decisions/); ADR 0010/0012, ADR 0020 §4, features/trascrizione-con-parlanti/tactical-model.md § Amendment 2026-09-25 (ADR 0020), manifest delta 2026-09-25-elimina-registrazione.

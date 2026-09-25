@@ -1,14 +1,14 @@
 ---
-id: "crea-progetto"
+id: "elimina-registrazione"
 type: "application-service"
 context: "progetto"
 side: "app"
 wave: 4
-release: "R0"
+release: "R2"
 module: ":progetto:applicazione (..comandi)"
 consumes:
   - "kernel-pl"
-  - "agg-progetto"
+  - "agg-registrazione"
   - "repo-progetto"
   - "eventi-progetto"
 depends_on: []
@@ -20,20 +20,28 @@ related_adrs:
   - "0012"
   - "0014"
   - "0020"
+model_hint: "deep"
 commands:
-  - "CreaProgetto"
+  - "EliminaRegistrazione"
+invariants:
+  - "INV-28 a Registrazione can be eliminata only if none of its Elaborazioni is in_attesa | in_corso; its elimination removes, in ONE transaction, the Registrazione, every Elaborazione of it, its Trascritto (Voci, Segmenti) and every Attribuzione and ImprontaVocale keyed by one of its VoceRefs (then INV-25); after the COMMIT no row keyed by its registrazioneId survives except its eliminazione_in_sospeso row, removed once its files are gone; a refused or failed elimination changes nothing"
 ---
-# crea-progetto — CreaProgetto
+# elimina-registrazione — EliminaRegistrazione (eliminazione definitiva di una Registrazione, una transazione)
 
 ## What to do
-CreaProgettoServizio: on a freshly opened project DB validates NomeProgetto, refuses a second Progetto, saves it and publishes ProgettoCreato. Folder layout + DB opening + registry are done by SessioneProgetto in avvio-composizione (R3).
+EliminaRegistrazioneServizio(uow, registrazioni, inSospeso, eventi).esegui(EliminaRegistrazione(registrazioneId)): ONE transaction — trova → Registrazione.elimina() → inSospeso.registra(EliminazioneInSospeso) → eventi.pubblica(RegistrazioneEliminata) (the Trascrizione veto + purge and the Parlanti purge run here, synchronously) → registrazioni.rimuovi(id) → COMMIT. A synchronous subscriber's Errore (ElaborazioneGiaAperta) is returned unchanged and nothing changes. Thin: no file I/O, no implicit cancellation, no Trascrizione/Parlanti query.
 
-REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progetto pin changed (RegistrazioneAggiunta after-commit only); ProgettoCreato is untouched.
+Note: NEW 2026-09-25 (ADR 0020 §1-§2, manifest delta 2026-09-25-elimina-registrazione; wave 4 = first wave after its owners registrazione/porte-progetto/eventi-pubblicati and their ADR 0020 reworks, the delta's 'wave 18' corrected at fold): EliminaRegistrazioneServizio(uow, registrazioni: RegistrazioneRepository, inSospeso: EliminazioniInSospeso, eventi: DispatcherEventi).esegui(c: EliminaRegistrazione(registrazioneId)): Esito<Unit>. Thin: trova → Registrazione.elimina() (pure, returns the event) → inSospeso.registra → eventi.pubblica (the two SYNCHRONOUS subscribers run here: Trascrizione veto + purge, Parlanti purge + INV-25) → registrazioni.rimuovi (AFTER pubblica: the elaborazione/trascritto FKs are immediate) → COMMIT. It never cancels an in_attesa Elaborazione implicitly [user default]; the veto error is returned unchanged. Release R2: offered only by avvio-parlanti, which registers both synchronous subscribers (without them the FKs fail the command — safe, useless). ADR 0020 prohibition: no Trascrizione/Parlanti generated query under progetto/. Discursive (code review): rimuovi after pubblica; no file I/O inside inTransazione. model_hint deep: folds 3 boundaries, carries the INV-28 ordering and the sync-subscriber error propagation.
+
+### Invariants owned here (one test each, name starts with the tag)
+- INV-28 a Registrazione can be eliminata only if none of its Elaborazioni is in_attesa | in_corso; its elimination removes, in ONE transaction, the Registrazione, every Elaborazione of it, its Trascritto (Voci, Segmenti) and every Attribuzione and ImprontaVocale keyed by one of its VoceRefs (then INV-25); after the COMMIT no row keyed by its registrazioneId survives except its eliminazione_in_sospeso row, removed once its files are gone; a refused or failed elimination changes nothing
 
 ## Tasks
-- AC-53 CreaProgetto con nome valido salva il Progetto e pubblica ProgettoCreato
-- AC-54 CreaProgetto con nome vuoto o di soli spazi → NomeProgettoVuoto e nulla salvato
-- AC-55 Un secondo CreaProgetto sullo stesso DB → ProgettoGiaPresente
+- AC-600 (INV-28) Happy path, all inside ONE inTransazione (the fake UoW records exactly one), in this order checked by a recording fake: (1) trova; (2) inSospeso.registra(EliminazioneInSospeso(id, titolo, data, riferimento)) with the values of the stored Registrazione; (3) pubblica(RegistrazioneEliminata(id, progettoId, titolo, data, riferimento)) exactly once; (4) registrazioni.rimuovi(id). Result Ok, and trova(id) is then null
+- AC-601 An unknown id → Errore(ErroreProgetto.RegistrazioneNonTrovata(id)); nothing is registered, published or removed
+- AC-602 (INV-28) A synchronous subscriber that answers RegistrazioneEliminata with Errore(ErroreTrascrizione.ElaborazioneGiaAperta(id)) makes esegui return that same error (DispatcherEventiInMemoria with the finte); afterwards the Registrazione still exists, no eliminazione_in_sospeso row exists, and no after-commit subscriber received anything
+- AC-603 The service touches no file: ArchivioAudio is not among its collaborators (constructor test / Konsist); after-commit work belongs to subscribers
+- AC-604 Two deletions of the same id: the first → Ok, the second → RegistrazioneNonTrovata, and nothing is published twice
 
 ## Dependencies
 - **kernel-pl** (consumed/implemented) — owner `kernel`, projection in-process, contract_test **consumer-driven**
@@ -66,14 +74,17 @@ REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progett
     - `VoceRef`: composite (registrazioneId, voceId), typed kernel VO because >=2 contexts use it — correlation key of Attribuzione, ImprontaVocale and the Documento name map; stable as its parts
     - `ParlanteId`: minted by conferma-attribuzione (new Nome) and salta-voce via GeneratoreId (UUID v4) — stable across rinomina, promozione and eliminazione (tombstone keeps it); disappears only via INV-25 (occasionale left without Attribuzioni)
     - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
-- **agg-progetto** (consumed/implemented) — owner `progetto`, projection in-process, contract_test **invariant-test**
+- **agg-registrazione** (consumed/implemented) — owner `registrazione`, projection in-process, contract_test **invariant-test**
   - pinned types:
-    - `Progetto.crea`: (id: ProgettoId, nome: NomeProgetto): Creato<Progetto, ProgettoCreato>
-    - `NomeProgetto.di`: (testo: String): Esito<NomeProgetto> — trimmed, non-empty
+    - `Registrazione.aggiungi`: (id, progettoId, titolo: String, riferimentoAudio, durataMs: Long, dataRegistrazione: LocalDate, aggiuntaAlle: Instant): Creato<Registrazione, RegistrazioneAggiunta>
+    - `Registrazione.modificaData`: (nuova: LocalDate): Esito<DataRegistrazioneModificata>
+    - `Registrazione.elimina`: (): RegistrazioneEliminata — pure: returns the domain event (id, progettoId, titolo, dataRegistrazione, riferimentoAudio); no state change, no guard (the only precondition, INV-28's 'no open Elaborazione', is Trascrizione's and is checked by its synchronous subscriber) — ADR 0020
+    - `invariant_fields exposure`: progettoId (val, immutable), dataRegistrazione (private set)
   - keys (minting rules):
-    - `ProgettoId`: minted by crea-progetto via kernel GeneratoreId (UUID v4 string) — immutable; stored in progetto.db so it survives moving/copying the project folder
+    - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
+    - `RiferimentoAudio`: minted by audio-progetto (ArchivioAudio.copia): 'audio/<registrazioneId>.<source extension lowercased>', relative to the project folder — immutable
   - §14 gates (must stay green):
-    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(progettoQueries)\b' . | grep -vE '^\./(persistenza/|progetto/adattatori/src/[A-Za-z]+/kotlin/snastro/progetto/adattatori/persistenza/)' | grep -q .`
+    - `! grep -rnE --include='*.kt' --exclude-dir=build '\b(registrazioneQueries)\b' . | grep -vE '^\./(persistenza/|progetto/adattatori/src/[A-Za-z]+/kotlin/snastro/progetto/adattatori/persistenza/)' | grep -q .`
 - **repo-progetto** (consumed/implemented) — owner `porte-progetto`, projection in-process, contract_test **consumer-driven**
   - pinned types:
     - `ProgettoRepository`: interface { trova(): Progetto?; salva(p: Progetto) } — one Progetto per project DB
@@ -95,4 +106,4 @@ REWORK 2026-09-24 (ADR 0014): no code change — only the inlined eventi-progett
     - `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; also names audio/<id>.<ext>, cache/audio/<id>.wav and every EstrattoRef
   - delivery: All four events → in-process, AFTER COMMIT only (never on rollback), at-least-once, on a background coroutine, coalesced per registrazioneId; subscribers must be idempotent (INV-23); single writer per key (one process, one DB) so no cross-stream reordering hazard. AMENDED 2026-09-24 (ADR 0014 / ADR 0012 Amendment (c)): the SYNCHRONOUS clause for RegistrazioneAggiunta is dropped — it has no sync subscriber (the dispatcher's sync mechanism itself is unchanged, ADR 0012). AMENDED 2026-09-24 (delta 2026-09-24-rinomina-documento): RegistrazioneRinominata pinned (already published by the merged code). EXCEPTION (ADR 0020, 2026-09-25): RegistrazioneEliminata has TWO synchronous subscribers (Trascrizione veto + purge, Parlanti purge) inside the publishing transaction; an Errore from either dooms the command and is returned unchanged by EliminaRegistrazione; its other subscribers are after commit (same at-least-once / idempotent rules; abbonato-documento serializes it on the per-registrazioneId queue behind any in-flight Rigenerazione)
 
-Sources: ADRs 0002, 0003, 0006, 0010, 0012, 0014, 0020 (.mismagent/decisions/); features/trascrizione-con-parlanti/tactical-model.md § Progetto.
+Sources: ADRs 0002, 0003, 0006, 0010, 0012, 0014, 0020 (.mismagent/decisions/); ADR 0003/0012, ADR 0020 §1/§2/§7, features/trascrizione-con-parlanti/tactical-model.md § Amendment 2026-09-25 (ADR 0020), manifest delta 2026-09-25-elimina-registrazione.
