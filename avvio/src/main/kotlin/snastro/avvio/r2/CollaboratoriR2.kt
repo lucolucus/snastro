@@ -22,6 +22,7 @@ import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.letture.VoceIdentificata
+import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.ui.AggiornamentiVista
@@ -65,6 +66,10 @@ internal class CollaboratoriR2(
     val somiglianza: AzioniSomiglianzaProgetto,
     val confermaSegmento: (ConfermaSegmento) -> Esito<Unit>,
     val comandiParlante: ComandiParlante,
+    /** ADR 0020 (AC-630): S2's 'Elimina…' — offered only by this composition, which registers both purges. */
+    val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
+    /** Its after-commit file cleanup; the UI attaches [PuliziaRegistrazioneEliminata.dimenticaPosto] (AC-632). */
+    val pulizia: PuliziaRegistrazioneEliminata,
     val lavoro: Job,
     aggiornamentiParlanti: AggiornamentiVista,
     private val rilasciaMl: () -> Unit = {},

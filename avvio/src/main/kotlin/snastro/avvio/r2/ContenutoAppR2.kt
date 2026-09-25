@@ -5,6 +5,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import snastro.avvio.CollaboratoriProgettoAperto
 import snastro.avvio.GrafoR0
 import snastro.avvio.r1.ContenutoProgetto
@@ -63,6 +64,11 @@ internal fun ContenutoAppR2(grafo: GrafoR2, sceltaCartella: SceltaCartella) {
                     }
                 }
                 val parlantiPresenter = remember(progettoId) { costruisciParlantiPresenter(r0, collaboratori, r2) }
+                // AC-632 step (4): a deleted Registrazione's S3 place is forgotten, on the UI dispatcher.
+                DisposableEffect(r2, navigazione) {
+                    r2.pulizia.dimenticaPosto = { id -> collaboratori.scope.launch { navigazione.dimentica(id) } }
+                    onDispose { r2.pulizia.dimenticaPosto = {} }
+                }
                 ContenutoProgetto(
                     conProgetto = conProgetto,
                     navigazione = navigazione,
@@ -100,7 +106,8 @@ private fun SchermataRegistrazioneR2(
  * AC-204/AC-345) and 'Ritrascrivi' (ADR 0018, AC-457): offered only here, by the composition that registers
  * the synchronous Parlanti purge (`EstensioneR2`). It is R1's own `AvviaElaborazione` over
  * `eventi.unitaDiLavoro`, which also nudges the queue — through [CollaboratoriR2.avviaElaborazione], which then
- * drops that Registrazione's similarity computation or preview (AC-537).
+ * drops that Registrazione's similarity computation or preview (AC-537). 'Elimina…' (ADR 0020, AC-630) likewise:
+ * offered only here, by the composition that registers both synchronous purges of `RegistrazioneEliminata`.
  */
 internal fun costruisciRegistrazioniPresenterR2(
     grafo: GrafoR0,
@@ -123,6 +130,7 @@ internal fun costruisciRegistrazioniPresenterR2(
     identificazioni = r2.letture.identificazioni,
     ritrascrivi = r2::avviaElaborazione,
     annullaElaborazione = r2.r1.annullaElaborazione,
+    eliminaRegistrazione = r2.eliminaRegistrazione,
 )
 
 /**

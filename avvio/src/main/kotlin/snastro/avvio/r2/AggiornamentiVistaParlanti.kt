@@ -10,6 +10,7 @@ import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
+import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.trascrizione.applicazione.eventi.SegmentoConfermato
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
@@ -32,6 +33,8 @@ import snastro.ui.Cambiamento
  * - `TrascrittoSostituito` (ADR 0018 §5, AC-456) → invalidate, `Cambiamento(null)`: cached Proposte are keyed
  *   by `VoceRef` and now point at the wrong Voci, the Galleria counts of any Parlante may have changed and an
  *   `occasionale` may be gone (the purge itself ran synchronously, inside the completion transaction);
+ * - `RegistrazioneEliminata` (ADR 0020 §5, AC-631) → invalidate, `Cambiamento(null)`: the same reasons — its
+ *   Voci and prints are gone (purged synchronously in the deleting transaction), S2 loses the row, S4 counts drop;
  * - `VociUnite`/`VoceDivisa`/`SegmentoRiassegnato` → invalidate only (R1's `AggiornamentiVistaTrascrizione`
  *   already emits their `Cambiamento`);
  * - `SegmentoConfermato` (ADR 0019 §3, after commit only) → invalidate, `Cambiamento(its Registrazione)`: the
@@ -55,7 +58,7 @@ internal class AggiornamentiVistaParlanti(
             is AttribuzioneConfermata -> Cambiamento(evento.voceRef.registrazioneId)
             is ImpronteRiallineate -> Cambiamento(evento.registrazioneId)
             is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato,
-            is TrascrittoSostituito,
+            is TrascrittoSostituito, is RegistrazioneEliminata,
             -> Cambiamento(null)
             is SegmentoConfermato -> Cambiamento(evento.registrazioneId)
             is VociUnite, is VoceDivisa, is SegmentoRiassegnato -> null

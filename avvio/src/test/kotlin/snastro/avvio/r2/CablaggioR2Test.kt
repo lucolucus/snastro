@@ -47,6 +47,33 @@ class CablaggioR2Test {
     }
 
     @Test
+    fun `AC-630 le due purghe sincrone di RegistrazioneEliminata precedono la coda, e S2 riceve Elimina solo in R2`() {
+        val estensione = File("src/main/kotlin/snastro/avvio/r2/EstensioneR2.kt").readLines()
+        val coda = estensione.indexOfFirst { "r1.apri(" in it }
+        val trascrizione = estensione.indexOfFirst { "AbbonatoEliminazioneRegistrazione(" in it }
+        val parlanti = estensione.indexOfFirst { "AbbonatoRevisioneParlanti(" in it }
+        assertTrue(trascrizione in 0 until coda, "AbbonatoEliminazioneRegistrazione prima di r1.apri (la coda)")
+        assertTrue(parlanti in 0 until coda, "AbbonatoRevisioneParlanti prima di r1.apri (la coda)")
+        assertEquals(1, righeCon("eliminaRegistrazione = r2.eliminaRegistrazione").size, "S2 di R2 riceve Elimina")
+        val r1 = File("src/main/kotlin/snastro/avvio/r1").walkTopDown().filter { it.isFile && it.extension == "kt" }
+        assertEquals(emptyList(), r1.filter { "eliminaRegistrazione" in it.readText() }.map { it.name }.toList())
+        assertEquals(
+            emptyList(),
+            File("src/main/kotlin/snastro/avvio").listFiles().orEmpty()
+                .filter { it.isFile && "eliminaRegistrazione" in it.readText() }.map { it.name },
+            "R0: nessun Elimina",
+        )
+    }
+
+    @Test
+    fun `AC-633 CompletaEliminazioniRegistrazioni parte dopo che R1 ha accodato RigeneraTuttiIDocumenti`() {
+        val estensione = File("src/main/kotlin/snastro/avvio/r2/EstensioneR2.kt").readLines()
+        val r1 = estensione.indexOfFirst { "r1.apri(" in it }
+        val completa = estensione.indexOfFirst { "completaEliminazioni(" in it }
+        assertTrue(completa > r1 && r1 >= 0, "dopo r1.apri: AbbonatoDocumentoEventi accoda RigeneraTuttiIDocumenti")
+    }
+
+    @Test
     fun `AC-341 AC-177 la shell R2 include la sezione Parlanti`() {
         assertEquals(setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI), SEZIONI_SHELL_R2)
     }

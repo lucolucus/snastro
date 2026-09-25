@@ -14,6 +14,9 @@ import snastro.avvio.ProgettoEsteso
 import snastro.avvio.r1.CollaboratoriR1
 import snastro.avvio.r1.EstensioneR1
 import snastro.documento.adattatori.porte.LettoreNomiDaParlanti
+import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione
+import snastro.documento.adattatori.porte.ScrittoreDocumentoFile
+import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.ProgettoId
@@ -49,11 +52,19 @@ import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
 import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
 import snastro.parlanti.applicazione.porte.SoglieSomiglianza
 import snastro.persistenza.SnastroDatabase
+import snastro.progetto.adattatori.audio.ArchivioAudioFile
+import snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql
+import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioni
+import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioniServizio
+import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.trascrizione.adattatori.eventi.AbbonatoEliminazioneRegistrazione
+import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmentiServizio
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
+import snastro.trascrizione.applicazione.politiche.ApplicaEliminazioneRegistrazionePolitica
 import java.time.Clock
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -110,11 +121,20 @@ internal class EstensioneR2(
             ),
         )
         val aggiornamenti = AggiornamentiVistaParlanti(dispatcher, proposte)
+        val trascritti = TrascrittoRepositorySql(contesto.database)
+        AbbonatoEliminazioneRegistrazione(
+            dispatcher,
+            ApplicaEliminazioneRegistrazionePolitica(ElaborazioneRepositorySql(contesto.database), trascritti),
+        )
         AbbonatoRevisioneParlanti(
             dispatcher,
             ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
             ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
         )
+
+        val archivio = ArchivioAudioFile(contesto.cartella)
+        val pulizia = PuliziaRegistrazioneEliminata(dispatcher, contesto.lettoreAudio, archivio, contesto.cartella)
+        val inSospeso = EliminazioniInSospesoSql(contesto.database, clock)
 
         val collaboratoriR1 = r1.apri(contesto) as CollaboratoriR1
 
@@ -134,6 +154,10 @@ internal class EstensioneR2(
             collaboratoriR1,
             RiallineaTutteLeImpronteServizio(uow, porte.parlanti, riallinea),
             contesto.progettoId,
+        )
+        completaEliminazioni(
+            scope,
+            CompletaEliminazioniRegistrazioniServizio(uow, inSospeso, archivio, puliziaDerivati(contesto)),
         )
 
         val conferma = ConfermaAttribuzioneServizio(
@@ -158,7 +182,6 @@ internal class EstensioneR2(
             ml.estrattore,
             dispatcher,
         )
-        val trascritti = TrascrittoRepositorySql(contesto.database)
         val confermaSegmento = ConfermaSegmentoServizio(uow, trascritti, dispatcher)
         val piano = PianoRiassegnazioneQuery(
             porte.voci,
@@ -174,6 +197,7 @@ internal class EstensioneR2(
             confermaAttribuzione = conferma::esegui,
         )
         val progettoId = contesto.progettoId
+        val elimina = EliminaRegistrazioneServizio(uow, contesto.registrazioni, inSospeso, dispatcher)
         val attivi = ParlantiAttivi(porte.parlanti)
         val delProgetto = ParlantiDelProgetto(porte.parlanti, porte.attribuzioni, porte.registrazione, estrattoAudio)
         val galleriaVuota = { voceRef: VoceRef -> PropostaVista(voceRef.voceId, emptyList()) }
@@ -207,6 +231,8 @@ internal class EstensioneR2(
                 promuovi = PromuoviParlanteServizio(uow, porte.parlanti, dispatcher)::esegui,
                 elimina = EliminaParlanteServizio(uow, porte.parlanti, dispatcher)::esegui,
             ),
+            eliminaRegistrazione = elimina::esegui,
+            pulizia = pulizia,
             lavoro = lavoro,
             aggiornamentiParlanti = aggiornamenti,
             rilasciaMl = ml.rilascia,
@@ -241,6 +267,25 @@ internal class EstensioneR2(
         }
     }
 
+    /**
+     * AC-633 (ADR 0020 §4): `CompletaEliminazioniRegistrazioni` of the open project, in the background, launched
+     * once R1 has queued `RigeneraTuttiIDocumenti` (its `AbbonatoDocumentoEventi` does so at construction, inside
+     * `r1.apri`). A failure is logged: the pending rows stay for the next opening; never the scope's end.
+     */
+    private fun completaEliminazioni(scope: CoroutineScope, servizio: CompletaEliminazioniRegistrazioniServizio) {
+        scope.launch {
+            try {
+                runInterruptible { servizio.esegui(CompletaEliminazioniRegistrazioni) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught") e: Exception, // logged, retried at the next opening
+            ) {
+                log.log(Level.WARNING, "completamento delle eliminazioni in sospeso fallito", e)
+            }
+        }
+    }
+
     private companion object {
         val log: Logger = Logger.getLogger(EstensioneR2::class.java.name)
 
@@ -257,6 +302,24 @@ private class PorteParlanti(database: SnastroDatabase, catalogo: CatalogoRegistr
     val attribuzioni = AttribuzioneRepositorySql(database)
     val voci = LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database)))
     val registrazione = LettoreRegistrazionePerParlanti(catalogo)
+}
+
+/**
+ * AC-633: the derived-files cleanup of [contesto]'s folder; its Documento removal is a
+ * [RigenerazioneDocumentoPolitica] over the same `documenti/` R1's Documento worker writes (stateless: only its
+ * `perRegistrazioneEliminata` runs here, which never reads the Trascritto).
+ */
+private fun puliziaDerivati(contesto: ContestoEstensione): PuliziaDerivatiFile {
+    val database = contesto.database
+    val documento = RigenerazioneDocumentoPolitica(
+        LettoreTrascrittoDaTrascrizione(
+            VociDelTrascritto(TrascrittoRepositorySql(database)),
+            CatalogoRegistrazioni(contesto.registrazioni),
+        ),
+        lettoreNomiDaParlanti(contesto),
+        ScrittoreDocumentoFile(contesto.cartella.resolve("documenti")),
+    )
+    return PuliziaDerivatiFile(contesto.cartella, documento)
 }
 
 /** The Documento's Nomi from the Parlanti of [contesto]'s database — what R2 hands R1 in place of 'Voce n'. */

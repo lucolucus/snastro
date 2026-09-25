@@ -6,6 +6,7 @@ import snastro.kernel.ProgettoId
 import snastro.persistenza.SnastroDatabase
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.ui.AggiornamentiVista
+import snastro.ui.lettore.LettoreAudio
 import java.nio.file.Path
 
 /**
@@ -25,6 +26,7 @@ internal fun interface EstensioneSessione {
 }
 
 /** What [SessioneProgettoImpl] hands an [EstensioneSessione] for one open project. */
+@Suppress("LongParameterList") // one parameter per R0-owned value the extension builds over
 internal class ContestoEstensione(
     /** The open Progetto (R2: its Parlanti, `RiallineaTutteLeImpronte`). */
     val progettoId: ProgettoId,
@@ -34,6 +36,8 @@ internal class ContestoEstensione(
     /** The session's own child scope — cancelled by [SessioneProgettoImpl.chiudi] BEFORE [ProgettoEsteso.ferma]. */
     val scope: CoroutineScope,
     val registrazioni: RegistrazioneRepository,
+    /** The project's ONE player (R0's): R2 pauses it when the Registrazione it holds is deleted (ADR 0020 §3). */
+    val lettoreAudio: LettoreAudio,
 )
 
 /** The extension's per-project state, as far as R0's own lifecycle needs to know it. */
