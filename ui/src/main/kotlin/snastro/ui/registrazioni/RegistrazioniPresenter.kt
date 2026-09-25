@@ -12,9 +12,11 @@ import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
+import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
@@ -23,10 +25,14 @@ import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
+import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA
+import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.etichetta
+import snastro.ui.testi.messaggioEliminata
 import snastro.ui.testi.messaggioPer
 import java.io.File
 import java.time.Clock
@@ -72,6 +78,11 @@ import java.time.LocalDate
  * (R1+) backs 'Annulla' on a queued row (AC-475/476), no dialog: nothing is lost. Both default to
  * `null`, so a row shows neither control until `avvio-parlanti`/`avvio-composizione` supplies them —
  * `:avvio`'s own existing calls (named args) keep compiling unchanged.
+ *
+ * ADR 0020 §6 (R2 only, `eliminaRegistrazione` optional collaborator, like [ritrascrivi]): backs the
+ * row's More menu — 'Elimina…' (AC-625/626/627/628) and, on the rows where [ritrascrivi] is also
+ * offered, 'Ritrascrivi' too (AC-625 (b): the row's own button then folds into the menu). Defaults to
+ * `null`, so no row shows a More menu until `avvio-parlanti` supplies it (R0/R1, AC-625).
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazioniPresenter(
@@ -90,6 +101,7 @@ class RegistrazioniPresenter(
     private val identificazioni: ((List<RegistrazioneId>) -> List<ConteggioIdentificazione>)? = null,
     private val ritrascrivi: ((AvviaElaborazione) -> Esito<Unit>)? = null,
     private val annullaElaborazione: ((AnnullaElaborazione) -> Esito<Unit>)? = null,
+    private val eliminaRegistrazione: ((EliminaRegistrazione) -> Esito<Unit>)? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -158,6 +170,10 @@ class RegistrazioniPresenter(
                     erroreRiga = vecchia.erroreRiga,
                     numeroPersone = if (stessoStato) vecchia.numeroPersone else nuova.numeroPersone,
                     confermaRitrascrivi = vecchia.confermaRitrascrivi && stessoStato,
+                    // ADR 0020: a state change while the Elimina confirmation is open (e.g. it just got
+                    // queued elsewhere) closes it too — `eliminazione` is a pure function of `elaborazione`,
+                    // so `stessoStato` covers it exactly like `confermaRitrascrivi` above.
+                    confermaElimina = vecchia.confermaElimina && stessoStato,
                 )
             }
         }
@@ -166,6 +182,7 @@ class RegistrazioniPresenter(
             importoInCorso = precedente?.importoInCorso ?: false,
             errore = precedente?.errore,
             erroreAggiornamento = null, // L485a: a SUCCESS always clears a previous refresh error
+            avviso = precedente?.avviso, // ADR 0020/AC-627: survives an unrelated refresh, H1-style
         )
     }
 
@@ -226,8 +243,21 @@ class RegistrazioniPresenter(
                 ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata && ritrascrivi != null,
                 ritrascrizioneFallita = ritrascrizioneFallita,
                 annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa && annullaElaborazione != null,
+                eliminazione = eliminazioneDi(elaborazioneRiga),
             )
         }
+    }
+
+    /** ADR 0020 §6/AC-625: [StatoEliminazione.Assente] without the optional source (R0/R1); otherwise
+     * disabled with its caption on an open Elaborazione (IN_ATTESA/IN_CORSO, plain or re-run) — every
+     * other state (no Elaborazione yet, FALLITA, Completata) is [StatoEliminazione.Disponibile]. */
+    private fun eliminazioneDi(elaborazione: StatoElaborazioneRiga?): StatoEliminazione = when {
+        eliminaRegistrazione == null -> StatoEliminazione.Assente
+        elaborazione is StatoElaborazioneRiga.InAttesa ->
+            StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA)
+        elaborazione is StatoElaborazioneRiga.InCorso ->
+            StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO)
+        else -> StatoEliminazione.Disponibile
     }
 
     /** AC-376 (FALLITA, unconditional) / AC-448 (Completata, only with the `ritrascrivi` source): the
@@ -323,7 +353,8 @@ class RegistrazioniPresenter(
         if (percorsi.isEmpty()) return
         val attuale = _stato.value
         if (attuale !is RegistrazioniUiStato.Dati || attuale.importoInCorso) return // M3
-        _stato.value = attuale.copy(importoInCorso = true, errore = null)
+        // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too.
+        _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
         scope.launch {
             val errori = mutableListOf<String>()
             for (percorso in percorsi) {
@@ -419,6 +450,7 @@ class RegistrazioniPresenter(
         // this `?.let` instead of a third `?: return`.
         riga.elaborazioneId?.let { elaborazioneId ->
             aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
+            azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
             scope.launch {
                 try {
                     val esito = withContext(io) { comando(AnnullaElaborazione(elaborazioneId)) }
@@ -438,6 +470,98 @@ class RegistrazioniPresenter(
         }
     }
 
+    /**
+     * AC-626: 'Elimina…' opens the row's confirmation — a no-op unless [RigaRegistrazione.eliminazione]
+     * is [StatoEliminazione.Disponibile] (AC-625: "a disabled item sends nothing", checked here too,
+     * not only by the view's own disabled `DropdownMenuItem`).
+     */
+    fun elimina(id: RegistrazioneId) {
+        if (eliminaRegistrazione == null) return
+        val riga = rigaLibera(id) ?: return
+        // ReturnCount (detekt): the third guard (only StatoEliminazione.Disponibile opens the
+        // confirmation) is folded into this `if`, like RegistrazioniPresenter.annullaElaborazione's own.
+        if (riga.eliminazione == StatoEliminazione.Disponibile) {
+            aggiornaRiga(id) { it.copy(confermaElimina = true, erroreRiga = null) }
+        }
+    }
+
+    /** AC-626: 'Annulla' on the confirmation — no command is sent, the row is unchanged. */
+    fun annullaElimina(id: RegistrazioneId) = aggiornaRiga(id) { it.copy(confermaElimina = false) }
+
+    /**
+     * AC-627/628: the confirmed 'Elimina' — exactly ONE `EliminaRegistrazione`. On Ok: pauses the
+     * player first if it is currently playing THIS row (AC-627), then reloads (the row disappears) and
+     * shows the dismissible success notice with the titolo CAPTURED before the reload (the row itself
+     * is gone from the fresh read). On Errore the dialog always closes (AC-628): `RegistrazioneNonTrovata`
+     * just reloads (the row is already gone remotely, nothing to show it on); `ElaborazioneGiaAperta`
+     * (the race backstop) reloads AND shows [MESSAGGIO_ELIMINAZIONE_RIFIUTATA] inline — a dedicated text,
+     * not the generic [messaggioPer] line for the same error type used by `AvviaElaborazione`/`Ritrascrivi`;
+     * any other Errore shows the generic [messaggioPer] text (AC-180), no reload (H1: "nulla cambia"
+     * beyond the inline message, same as every other row command here).
+     */
+    fun confermaElimina(id: RegistrazioneId) {
+        val comando = eliminaRegistrazione ?: return
+        val riga = rigaLibera(id)?.takeIf { it.confermaElimina } ?: return
+        val titolo = riga.titolo
+        aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
+        azzeraAvviso()
+        scope.launch {
+            try {
+                when (val esito = withContext(io) { comando(EliminaRegistrazione(id)) }) {
+                    is Esito.Ok -> {
+                        val statoLettore = lettore.stato.value
+                        if (statoLettore.registrazioneId == id && statoLettore.inRiproduzione) {
+                            withContext(io) { lettore.pausa() }
+                        }
+                        carica()
+                        aggiornaDati { it.copy(avviso = messaggioEliminata(titolo)) }
+                    }
+                    is Esito.Errore -> {
+                        val errore = esito.errore
+                        when {
+                            // AC-628: "the list just reloads" — the row is normally already gone from the
+                            // fresh read too, so this reset is a no-op then; it only matters for the rare
+                            // race where a stale read still shows it, so the dialog still closes and the
+                            // row is not left stuck spinning (AC-628's own "dialog closed" applies here too).
+                            errore is ErroreProgetto.RegistrazioneNonTrovata -> {
+                                carica()
+                                aggiornaRiga(id) { it.copy(operazioneInCorso = false, confermaElimina = false) }
+                            }
+                            errore is ErroreTrascrizione.ElaborazioneGiaAperta -> {
+                                carica()
+                                aggiornaRiga(id) {
+                                    it.copy(
+                                        operazioneInCorso = false,
+                                        confermaElimina = false,
+                                        erroreRiga = MESSAGGIO_ELIMINAZIONE_RIFIUTATA,
+                                    )
+                                }
+                            }
+                            else -> aggiornaRiga(id) {
+                                it.copy(
+                                    operazioneInCorso = false,
+                                    confermaElimina = false,
+                                    erroreRiga = messaggioPer(errore),
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (
+                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+            ) {
+                aggiornaRiga(id) {
+                    it.copy(operazioneInCorso = false, confermaElimina = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO)
+                }
+            }
+        }
+    }
+
+    /** AC-627: dismisses the post-elimination success notice, if any. */
+    fun chiudiAvviso() = azzeraAvviso()
+
     /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only when an action fires). */
     fun modificaNumeroPersone(id: RegistrazioneId, testo: String) = aggiornaRiga(id) { it.copy(numeroPersone = testo) }
 
@@ -450,6 +574,7 @@ class RegistrazioniPresenter(
     private fun suRiga(id: RegistrazioneId, operazione: suspend () -> Esito<Unit>) {
         val riga = rigaLibera(id) ?: return
         aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
+        azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
         scope.launch {
             try {
                 when (val esito = operazione()) {
@@ -532,6 +657,10 @@ class RegistrazioniPresenter(
         if (attuale is RegistrazioniUiStato.Dati) _stato.value = f(attuale)
     }
 
+    /** ADR 0020/AC-627: clears [RegistrazioniUiStato.Dati.avviso] — "fino a chiudiAvviso o al comando
+     * successivo" (called by [chiudiAvviso] and by every other command's own entry point). */
+    private fun azzeraAvviso() = aggiornaDati { it.copy(avviso = null) }
+
     private fun aggiornaRiga(id: RegistrazioneId, f: (RigaRegistrazione) -> RigaRegistrazione) =
         aggiornaDati { dati -> dati.copy(righe = dati.righe.map { if (it.registrazioneId == id) f(it) else it }) }
 
@@ -551,6 +680,10 @@ class RegistrazioniPresenter(
         annullaRitrascrivi = ::annullaRitrascrivi,
         confermaRitrascrivi = ::confermaRitrascrivi,
         annullaElaborazione = ::annullaElaborazione,
+        elimina = ::elimina,
+        annullaElimina = ::annullaElimina,
+        confermaElimina = ::confermaElimina,
+        chiudiAvviso = ::chiudiAvviso,
     )
 }
 

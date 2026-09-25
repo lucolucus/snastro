@@ -21,12 +21,18 @@ sealed interface RegistrazioniUiStato {
      * SEPARATE, own lifecycle for a failed background refresh (AggiornamentiVista/riprova) — unlike
      * [errore] (which an unrelated refresh must never wipe, M1), a refresh error is transient and is
      * cleared by the very next SUCCESSFUL refresh, never left stuck on screen once fresh data is in.
+     * ADR 0020/AC-627: [avviso] is a THIRD, separate lifecycle — the dismissible success notice after
+     * an Elimina ("«titolo» eliminata."), lower priority than [errore]/[erroreAggiornamento] (AC-566:
+     * at most one banner on screen); it survives an unrelated background refresh (H1-style, preserved
+     * by the merge) and is cleared by `AzioniRegistrazioni.chiudiAvviso` or by the presenter's own next
+     * command (ADR 0020 §6 "fino a chiudiAvviso o al comando successivo").
      */
     data class Dati(
         val righe: List<RigaRegistrazione>,
         val importoInCorso: Boolean = false,
         val errore: String? = null,
         val erroreAggiornamento: String? = null,
+        val avviso: String? = null,
     ) : RegistrazioniUiStato
 
     /**
@@ -58,8 +64,16 @@ sealed interface RegistrazioniUiStato {
  * [ritrascrizioneFallita] is the failed re-run's `motivoFallimento` on a `Completata` row (AC-451,
  * independent of whether `ritrascrivi` is supplied); [annullabile] is `true` only on an `InAttesa` row
  * when the `annullaElaborazione` source is supplied (AC-475).
+ *
+ * ADR 0020 §6/AC-625: [eliminazione] drives the row's More menu — [StatoEliminazione.Assente] (the
+ * `eliminaRegistrazione` source not supplied, R0/R1) renders NO menu at all, keeping the row's AC-575
+ * content (including a plain row-level 'Ritrascrivi' button when [ritrascriviDisponibile]); otherwise
+ * the menu holds 'Elimina…' (enabled/disabled per [StatoEliminazione]) and, when [ritrascriviDisponibile],
+ * 'Ritrascrivi' too (AC-625 (b)) — the row's own 'Ritrascrivi' BUTTON is then folded into the menu, the
+ * prefilled field stays on the row. [confermaElimina] replaces the row's own content with the inline
+ * confirmation (AC-626), exactly like [confermaRitrascrivi].
  */
-@Suppress("LongParameterList") // one field per AC-199..206/342..344/448..451/475/476 datum of the row
+@Suppress("LongParameterList") // one field per AC-199..206/342..344/448..451/475/476/625..629 datum of the row
 data class RigaRegistrazione(
     val registrazioneId: RegistrazioneId,
     val titolo: String,
@@ -77,7 +91,25 @@ data class RigaRegistrazione(
     val confermaRitrascrivi: Boolean = false,
     val ritrascrizioneFallita: String? = null,
     val annullabile: Boolean = false,
+    val eliminazione: StatoEliminazione = StatoEliminazione.Assente,
+    val confermaElimina: Boolean = false,
 )
+
+/**
+ * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu. [Assente] — the
+ * `eliminaRegistrazione` presenter source is not supplied (R0/R1) — means no More menu shows at all,
+ * not just a hidden item.
+ */
+sealed interface StatoEliminazione {
+    /** NON_AVVIATA, FALLITA or Completata (with or without a failed re-run) — the item is enabled. */
+    data object Disponibile : StatoEliminazione
+
+    /** An open Elaborazione (IN_ATTESA/IN_CORSO, plain or re-run) — disabled, [motivo] is its caption. */
+    data class NonDisponibile(val motivo: String) : StatoEliminazione
+
+    /** The `eliminaRegistrazione` source is absent (R0/R1): no More menu on this row at all. */
+    data object Assente : StatoEliminazione
+}
 
 /**
  * AC-204/AC-345 (R2, Parlanti fetta): the identification badge, joining `numVoci`

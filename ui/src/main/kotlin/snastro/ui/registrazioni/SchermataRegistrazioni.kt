@@ -31,6 +31,8 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -75,6 +77,7 @@ import snastro.ui.formattaDurata
 import snastro.ui.formattaDurataEstesa
 import snastro.ui.stile.AzioneBanner
 import snastro.ui.stile.BannerSn
+import snastro.ui.stile.BottoneIconaSn
 import snastro.ui.stile.BottonePlay
 import snastro.ui.stile.BottoneSn
 import snastro.ui.stile.CampoNumeroPersone
@@ -87,16 +90,23 @@ import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
+import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
+import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_IMPORTAZIONE_NON_RIUSCITA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
+import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
+import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
+import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO_RESIDUO
+import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_FORMATI_AUDIO_SUPPORTATI
@@ -107,6 +117,7 @@ import snastro.ui.testi.etichettaRegistrazioni
 import snastro.ui.testi.etichettaRitrascrizioneInAttesa
 import snastro.ui.testi.etichettaRitrascrizioneInCorso
 import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
+import snastro.ui.testi.titoloConfermaElimina
 import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -229,16 +240,30 @@ private fun ContenutoRegistrazioni(
         // L485a: `errore` (import) and `erroreAggiornamento` (background refresh) are two SEPARATE
         // lifecycles on the presenter (only a success clears the latter; an unrelated refresh never
         // touches the former, M1) — AC-566 still allows only one banner on screen, so import takes
-        // priority (it is the direct result of the user's own last action here).
-        (stato.errore ?: stato.erroreAggiornamento)?.let {
-            Spacer(modifier = Modifier.height(SnastroMisure.space3))
-            BannerSn(
-                tipo = TipoBanner.Errore,
-                titolo = ETICHETTA_IMPORTAZIONE_NON_RIUSCITA,
-                testo = it,
-                azione = AzioneBanner(ETICHETTA_CHIUDI_ERRORE, azioni.chiudiErrore),
-                modifier = Modifier.testTag("registrazioni-errore"),
-            )
+        // priority (it is the direct result of the user's own last action here). ADR 0020/AC-627:
+        // `avviso` (the Elimina success notice) is a THIRD, lower-priority lifecycle — shown only when
+        // no error banner is pending.
+        when (val messaggio = stato.errore ?: stato.erroreAggiornamento) {
+            null -> stato.avviso?.let {
+                Spacer(modifier = Modifier.height(SnastroMisure.space3))
+                BannerSn(
+                    tipo = TipoBanner.Info,
+                    titolo = ETICHETTA_REGISTRAZIONE_ELIMINATA,
+                    testo = it,
+                    azione = AzioneBanner(ETICHETTA_CHIUDI_ERRORE, azioni.chiudiAvviso),
+                    modifier = Modifier.testTag("registrazioni-avviso"),
+                )
+            }
+            else -> {
+                Spacer(modifier = Modifier.height(SnastroMisure.space3))
+                BannerSn(
+                    tipo = TipoBanner.Errore,
+                    titolo = ETICHETTA_IMPORTAZIONE_NON_RIUSCITA,
+                    testo = messaggio,
+                    azione = AzioneBanner(ETICHETTA_CHIUDI_ERRORE, azioni.chiudiErrore),
+                    modifier = Modifier.testTag("registrazioni-errore"),
+                )
+            }
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         if (stato.righe.isEmpty()) {
@@ -384,6 +409,12 @@ private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRe
 
 @Composable
 private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    // AC-626: the confirmation REPLACES the row's own (clickable) content entirely — same mechanism as
+    // ConfermaRitrascrivi above, never an OS-level modal dialog.
+    if (riga.confermaElimina) {
+        ConfermaElimina(riga, azioni)
+        return
+    }
     val colori = LocalSnastroColori.current
     // AC-450/AC-451 (ADR 0018): a row opens S3 iff a Trascritto exists — not iff COMPLETATA — so a
     // row mid re-run opens on the still-current old transcript too.
@@ -408,6 +439,12 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
                 Spacer(modifier = Modifier.width(SnastroMisure.space3))
                 ColonnaElaborazione(it, riga, azioni)
             }
+            // AC-625: the More menu itself renders only with the `eliminaRegistrazione` source (R2) —
+            // StatoEliminazione.Assente means no menu at all, keeping the row's plain AC-575 content.
+            if (riga.eliminazione != StatoEliminazione.Assente) {
+                Spacer(modifier = Modifier.width(SnastroMisure.space2))
+                MenuAzioniRegistrazione(riga, azioni)
+            }
         }
         riga.erroreRiga?.let {
             MessaggioInlineErrore(
@@ -415,6 +452,140 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
                 { azioni.chiudiErroreRiga(riga.registrazioneId) },
                 "registrazioni-errore-riga-${riga.registrazioneId.valore}",
             )
+        }
+    }
+}
+
+/**
+ * ADR 0020 §6/AC-625: `BottoneIcona More` opening an `anteprime/Menu.html`-style menu — 'Ritrascrivi'
+ * (only when [RigaRegistrazione.ritrascriviDisponibile], same field/flow as before, listed first like
+ * S4's non-destructive-before-destructive order) and 'Elimina…' (always, enabled/disabled per
+ * [RigaRegistrazione.eliminazione]) — same mechanism as S4's `MenuAltreAzioniParlante`.
+ */
+@Composable
+private fun MenuAzioniRegistrazione(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId
+    var espanso by remember { mutableStateOf(false) }
+    // L742b (S4 precedent): focus returns to this same button once the menu closes.
+    val richiestaFocus = remember { FocusRequester() }
+    fun chiudi() {
+        espanso = false
+        richiestaFocus.requestFocus()
+    }
+    Box {
+        BottoneIconaSn(
+            icona = Icona.More,
+            descrizione = ETICHETTA_ALTRE_AZIONI,
+            onClick = { espanso = true },
+            abilitato = !riga.operazioneInCorso,
+            modifier = Modifier
+                .focusRequester(richiestaFocus)
+                .testTag("registrazioni-altre-azioni-${id.valore}"),
+        )
+        DropdownMenu(expanded = espanso, onDismissRequest = ::chiudi) {
+            if (riga.ritrascriviDisponibile) {
+                DropdownMenuItem(
+                    text = { Text(ETICHETTA_RITRASCRIVI) },
+                    onClick = {
+                        chiudi()
+                        azioni.ritrascrivi(id)
+                    },
+                    modifier = Modifier.testTag("registrazioni-menu-ritrascrivi-${id.valore}"),
+                )
+            }
+            VoceMenuElimina(
+                riga.eliminazione,
+                onClick = {
+                    chiudi()
+                    azioni.elimina(id)
+                },
+                tag = "registrazioni-menu-elimina-${id.valore}",
+            )
+        }
+    }
+}
+
+/** AC-625: 'Elimina…' — enabled (danger text) or disabled with its caption as a second line, never
+ * both rendered at once; a disabled item's `onClick` is unreachable (Compose `enabled = false`), the
+ * presenter's own [RegistrazioniPresenter.elimina] guards the same rule independently. */
+@Composable
+private fun VoceMenuElimina(stato: StatoEliminazione, onClick: () -> Unit, tag: String) {
+    if (stato == StatoEliminazione.Assente) return // guarded by the caller too (AC-625)
+    val colori = LocalSnastroColori.current
+    val disabilitato = stato is StatoEliminazione.NonDisponibile
+    DropdownMenuItem(
+        text = {
+            Column {
+                Text(ETICHETTA_ELIMINA, color = if (disabilitato) colori.inkFaint else colori.danger)
+                if (stato is StatoEliminazione.NonDisponibile) {
+                    Text(stato.motivo, style = LocalSnastroTipografia.current.caption, color = colori.inkFaint)
+                }
+            }
+        },
+        onClick = onClick,
+        enabled = !disabilitato,
+        modifier = Modifier.testTag(tag),
+    )
+}
+
+/**
+ * AC-626: replaces the row's own content — title = the question, body = one of two variants per
+ * [RigaRegistrazione.trascrittoDisponibile] (styled like `anteprime/Dialog.html`, `Pericolo` primary,
+ * same pattern as S4's `ConfermaEliminazioneParlante`/S2's own [ConfermaRitrascrivi]) — never an
+ * OS-level modal dialog.
+ */
+@Composable
+private fun ConfermaElimina(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId
+    val colori = LocalSnastroColori.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = SnastroMisure.space4, vertical = SnastroMisure.space3)
+            .testTag("registrazioni-conferma-elimina-${id.valore}"),
+    ) {
+        Text(
+            text = titoloConfermaElimina(riga.titolo),
+            style = LocalSnastroTipografia.current.title,
+            color = colori.ink,
+        )
+        Spacer(modifier = Modifier.height(SnastroMisure.space1))
+        Text(
+            text = if (riga.trascrittoDisponibile) {
+                MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
+            } else {
+                MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
+            },
+            style = LocalSnastroTipografia.current.caption,
+            color = colori.inkMuted,
+        )
+        if (riga.trascrittoDisponibile) {
+            Spacer(modifier = Modifier.height(SnastroMisure.space1))
+            Text(
+                text = MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO_RESIDUO,
+                style = LocalSnastroTipografia.current.caption,
+                color = colori.inkMuted,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = SnastroMisure.space2)) {
+            BottoneSn(
+                etichetta = ETICHETTA_CONFERMA_ELIMINAZIONE,
+                onClick = { azioni.confermaElimina(id) },
+                variante = VarianteBottone.Pericolo,
+                abilitato = !riga.operazioneInCorso,
+                modifier = Modifier.testTag("registrazioni-conferma-elimina-conferma-${id.valore}"),
+            )
+            Spacer(modifier = Modifier.width(SnastroMisure.space2))
+            BottoneSn(
+                etichetta = ETICHETTA_ANNULLA,
+                onClick = { azioni.annullaElimina(id) },
+                variante = VarianteBottone.Secondario,
+                abilitato = !riga.operazioneInCorso,
+                modifier = Modifier.testTag("registrazioni-annulla-elimina-${id.valore}"),
+            )
+        }
+        riga.erroreRiga?.let {
+            MessaggioInlineErrore(it, { azioni.chiudiErroreRiga(id) }, "registrazioni-errore-riga-${id.valore}")
         }
     }
 }
@@ -838,6 +1009,9 @@ private fun ColonnaCompletata(riga: RigaRegistrazione, azioni: AzioniRegistrazio
             VarianteBottone.Secondario,
             azioni.modificaNumeroPersone,
             azioni.ritrascrivi,
+            // ADR 0020 §6/AC-625 (b): once the More menu is present, 'Ritrascrivi' moves into it — only
+            // the prefilled field stays on the row (the button would otherwise duplicate the menu item).
+            mostraBottone = riga.eliminazione == StatoEliminazione.Assente,
         )
     }
 }
@@ -897,7 +1071,9 @@ private fun ConfermaRitrascrivi(riga: RigaRegistrazione, azioni: AzioniRegistraz
  * [etichetta] — shared by 'Trascrivi'/'Riprova'/'Ritrascrivi' ([onAvvia] carries which command). Its
  * text is presenter state ([RigaRegistrazione.numeroPersone]); validation and the inline message
  * (AC-375/449) are the presenter's, shown as the row's `erroreRiga`. Enter in the field starts the
- * same command as the button (rework cycle 1, MED #12 — `CampoNumeroPersone.onInvio`).
+ * same command as the button (rework cycle 1, MED #12 — `CampoNumeroPersone.onInvio`), even when
+ * [mostraBottone] is `false` (ADR 0020 §6: the field stays on the row once 'Ritrascrivi' moves into
+ * the More menu, AC-625 (b) — Enter still runs the SAME validate-then-command flow either way).
  */
 @Suppress("LongParameterList") // one parameter per documented knob shared by Trascrivi/Riprova/Ritrascrivi
 @Composable
@@ -908,6 +1084,7 @@ private fun AvvioConNumeroPersone(
     variante: VarianteBottone,
     onModifica: (RegistrazioneId, String) -> Unit,
     onAvvia: (RegistrazioneId) -> Unit,
+    mostraBottone: Boolean = true,
 ) {
     val id = riga.registrazioneId
     CampoNumeroPersone(
@@ -918,14 +1095,16 @@ private fun AvvioConNumeroPersone(
         onInvio = { onAvvia(id) },
         modifier = Modifier.testTag("registrazioni-numero-persone-${id.valore}"),
     )
-    BottoneSn(
-        etichetta = etichetta,
-        onClick = { onAvvia(id) },
-        variante = variante,
-        piccolo = true,
-        icona = icona,
-        abilitato = !riga.operazioneInCorso,
-    )
+    if (mostraBottone) {
+        BottoneSn(
+            etichetta = etichetta,
+            onClick = { onAvvia(id) },
+            variante = variante,
+            piccolo = true,
+            icona = icona,
+            abilitato = !riga.operazioneInCorso,
+        )
+    }
 }
 
 @Composable

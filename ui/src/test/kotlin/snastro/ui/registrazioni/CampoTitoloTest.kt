@@ -48,6 +48,10 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     annullaRitrascrivi = {},
     confermaRitrascrivi = {},
     annullaElaborazione = {},
+    elimina = {},
+    annullaElimina = {},
+    confermaElimina = {},
+    chiudiAvviso = {},
 )
 
 /**
