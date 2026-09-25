@@ -29,7 +29,7 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
     private val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti)
 
     @Test
-    fun `AC-608 INV-28 con un Elaborazione in attesa o in corso anche accanto a una completata il veto non toglie nulla`() {
+    fun `AC-608 INV-28 con un Elaborazione in attesa o in corso anche accanto a una completata nulla e tolto`() {
         for (aperta in listOf(IN_ATTESA, IN_CORSO)) {
             for (conCompletata in listOf(false, true)) {
                 val r = RegistrazioneId("reg-$aperta-$conCompletata")
@@ -60,7 +60,10 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
 
         assertEquals(emptyList(), elaborazioni.diRegistrazione(R))
         assertNull(trascritti.trova(R))
-        assertEquals(setOf("altra-completata", "altra-in-attesa"), elaborazioni.diRegistrazione(ALTRA).map { it.id.valore }.toSet())
+        assertEquals(
+            setOf("altra-completata", "altra-in-attesa"),
+            elaborazioni.diRegistrazione(ALTRA).map { it.id.valore }.toSet(),
+        )
         assertNotNull(trascritti.trova(ALTRA))
     }
 
@@ -75,7 +78,10 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
     fun `AC-611 i collaboratori sono solo i due repository - nessun decodificatore ne estrattore`() {
         val collaboratori = ApplicaEliminazioneRegistrazionePolitica::class.java.constructors.single().parameterTypes
 
-        assertEquals(listOf(ElaborazioneRepository::class.java, TrascrittoRepository::class.java), collaboratori.toList())
+        assertEquals(
+            listOf(ElaborazioneRepository::class.java, TrascrittoRepository::class.java),
+            collaboratori.toList(),
+        )
     }
 
     private fun salva(stato: StatoElaborazione, id: String, r: RegistrazioneId, creataAlle: Instant) {

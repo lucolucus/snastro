@@ -72,7 +72,13 @@ class EliminaRegistrazioneServizioTest {
             listOf(EliminazioneInSospeso(id, "Seduta rinominata", DATA_SCELTA, RiferimentoAudio("audio/id-1.m4a"))),
             inSospeso.elenco(),
         )
-        val atteso = RegistrazioneEliminata(id, progettoId, "Seduta rinominata", DATA_SCELTA, RiferimentoAudio("audio/id-1.m4a"))
+        val atteso = RegistrazioneEliminata(
+            id,
+            progettoId,
+            "Seduta rinominata",
+            DATA_SCELTA,
+            RiferimentoAudio("audio/id-1.m4a"),
+        )
         assertEquals(listOf<EventoPubblicato>(atteso), sincroni)
         assertEquals(listOf<EventoPubblicato>(atteso), dopoCommit)
         assertNull(registrazioni.trova(id))
@@ -83,7 +89,8 @@ class EliminaRegistrazioneServizioTest {
     fun `AC-601 un id sconosciuto restituisce RegistrazioneNonTrovata e non registra pubblica ne rimuove`() {
         val sconosciuta = RegistrazioneId("id-sconosciuto")
 
-        val errore = servizio.esegui(EliminaRegistrazione(sconosciuta)).erroreAtteso<ErroreProgetto.RegistrazioneNonTrovata>()
+        val errore = servizio.esegui(EliminaRegistrazione(sconosciuta))
+            .erroreAtteso<ErroreProgetto.RegistrazioneNonTrovata>()
 
         assertEquals(ErroreProgetto.RegistrazioneNonTrovata(sconosciuta), errore)
         assertEquals(listOf("trova"), passi)
@@ -106,7 +113,7 @@ class EliminaRegistrazioneServizioTest {
     }
 
     @Test
-    fun `AC-603 il servizio non tocca file - i suoi collaboratori sono solo transazione repository sospese ed eventi`() {
+    fun `AC-603 il servizio non tocca file - collaboratori solo transazione repository sospese ed eventi`() {
         val collaboratori = EliminaRegistrazioneServizio::class.java.constructors.single().parameterTypes.toList()
 
         assertEquals(
@@ -121,7 +128,7 @@ class EliminaRegistrazioneServizioTest {
     }
 
     @Test
-    fun `AC-604 due eliminazioni dello stesso id - la seconda e RegistrazioneNonTrovata e nulla e pubblicato due volte`() {
+    fun `AC-604 la seconda eliminazione dello stesso id e RegistrazioneNonTrovata e non ripubblica`() {
         servizio.esegui(EliminaRegistrazione(id)).atteso()
 
         servizio.esegui(EliminaRegistrazione(id)).erroreAtteso<ErroreProgetto.RegistrazioneNonTrovata>()

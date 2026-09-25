@@ -102,7 +102,7 @@ class EventiProgettoTest {
     }
 
     @Test
-    fun `AC-618 RegistrazioneEliminata arriva al sincrono dentro la transazione e al dopo-commit solo dopo il COMMIT`() {
+    fun `AC-618 RegistrazioneEliminata al sincrono nella transazione e al dopo-commit solo dopo il COMMIT`() {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         var dentro = false
         val sincroni = mutableListOf<Pair<EventoPubblicato, Boolean>>()

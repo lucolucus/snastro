@@ -128,7 +128,13 @@ class MigrazioneEliminaRegistrazioneTest {
     private fun SnastroDatabase.seminaRegistrazioneConTrascritto(registrazioneId: String = "reg-1") {
         if (progettoQueries.trova().executeAsOneOrNull() == null) progettoQueries.inserisci("progetto-1", "Progetto")
         registrazioneQueries.inserisci(
-            registrazioneId, "progetto-1", registrazioneId, "audio/$registrazioneId.wav", 1000L, "2026-09-25", 0L,
+            id = registrazioneId,
+            progettoId = "progetto-1",
+            titolo = registrazioneId,
+            riferimentoAudio = "audio/$registrazioneId.wav",
+            durataMs = 1000L,
+            dataRegistrazione = "2026-09-25",
+            aggiuntaAlle = 0L,
         )
         elaborazioneQueries.inserisci("$registrazioneId-e1", registrazioneId, "fallita", 0L, 0L, "interrotta", null)
         elaborazioneQueries.inserisci("$registrazioneId-e2", registrazioneId, "completata", 1L, 1L, null, null)

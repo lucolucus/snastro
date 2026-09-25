@@ -46,8 +46,12 @@ class CompletaEliminazioniRegistrazioniServizioTest {
 
         assertEquals(
             listOf(
-                "scarta reg-a", "pulisci reg-a", "concludi reg-a in transazione",
-                "scarta reg-b", "pulisci reg-b", "concludi reg-b in transazione",
+                "scarta reg-a",
+                "pulisci reg-a",
+                "concludi reg-a in transazione",
+                "scarta reg-b",
+                "pulisci reg-b",
+                "concludi reg-b in transazione",
             ),
             passi,
         )
@@ -63,7 +67,10 @@ class CompletaEliminazioniRegistrazioniServizioTest {
         servizio.esegui(CompletaEliminazioniRegistrazioni).atteso()
 
         assertEquals(listOf(a), inSospeso.elenco(), "A resta, B e conclusa")
-        assertEquals(listOf("pulisci reg-a", "pulisci reg-b", "concludi reg-b in transazione"), passi.filterNot { it.startsWith("scarta") })
+        assertEquals(
+            listOf("pulisci reg-a", "pulisci reg-b", "concludi reg-b in transazione"),
+            passi.filterNot { it.startsWith("scarta") },
+        )
 
         servizio.esegui(CompletaEliminazioniRegistrazioni).atteso()
 
@@ -71,7 +78,7 @@ class CompletaEliminazioniRegistrazioniServizioTest {
     }
 
     @Test
-    fun `AC-607 idempotente - due esecuzioni o file gia spariti danno lo stesso esito e senza righe nessuna chiamata`() {
+    fun `AC-607 idempotente anche con file gia spariti e senza righe nessuna chiamata`() {
         file.scarta(a.riferimentoAudio)
 
         servizio.esegui(CompletaEliminazioniRegistrazioni).atteso()
@@ -86,7 +93,12 @@ class CompletaEliminazioniRegistrazioniServizioTest {
     }
 
     private fun unaEliminazione(id: String) =
-        EliminazioneInSospeso(RegistrazioneId(id), "Seduta $id", LocalDate.of(2026, 9, 25), RiferimentoAudio("audio/$id.m4a"))
+        EliminazioneInSospeso(
+            RegistrazioneId(id),
+            "Seduta $id",
+            LocalDate.of(2026, 9, 25),
+            RiferimentoAudio("audio/$id.m4a"),
+        )
 
     private class ArchivioRegistrato(private val delegata: ArchivioAudio, private val passi: MutableList<String>) :
         ArchivioAudio by delegata {

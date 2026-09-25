@@ -23,13 +23,15 @@ public class ApplicaEliminazioneRegistrazionePolitica(
 ) {
     public fun applica(registrazioneId: RegistrazioneId): Esito<Unit> {
         val diRegistrazione = elaborazioni.diRegistrazione(registrazioneId)
-        if (diRegistrazione.any { it.aperta }) {
-            return Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(registrazioneId))
+        return when {
+            diRegistrazione.any { it.aperta } -> Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(registrazioneId))
+            // INV-5: a Trascritto exists only with a completata Elaborazione — none at all, nothing to remove.
+            diRegistrazione.isEmpty() -> Esito.Ok(Unit)
+            else -> {
+                trascritti.rimuovi(registrazioneId)
+                elaborazioni.rimuoviDiRegistrazione(registrazioneId)
+                Esito.Ok(Unit)
+            }
         }
-        // INV-5: a Trascritto exists only with a completata Elaborazione — none at all, nothing to remove.
-        if (diRegistrazione.isEmpty()) return Esito.Ok(Unit)
-        trascritti.rimuovi(registrazioneId)
-        elaborazioni.rimuoviDiRegistrazione(registrazioneId)
-        return Esito.Ok(Unit)
     }
 }

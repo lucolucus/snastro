@@ -39,8 +39,12 @@ class RigenerazioneDocumentoPoliticaTest {
     @Test
     fun `AC-623 perRegistrazioneEliminata rimuove il documento corrente e i nomi precedenti diversi senza scrivere`() {
         val scrittore = ScrittoreDocumentoFinta()
-        listOf("2026-09-12 Riunione.md", "2026-09-10 Riunione.md", "2026-09-12 Vecchio titolo.md", "2026-09-12 Altra.md")
-            .forEach { scrittore.scrivi(it, "testo") }
+        listOf(
+            "2026-09-12 Riunione.md",
+            "2026-09-10 Riunione.md",
+            "2026-09-12 Vecchio titolo.md",
+            "2026-09-12 Altra.md",
+        ).forEach { scrittore.scrivi(it, "testo") }
         val politica = RigenerazioneDocumentoPolitica(lettoreVietato, LettoreNomiFinta(), scrittore)
         val prima = scrittore.operazioni.size
 
@@ -69,27 +73,25 @@ class RigenerazioneDocumentoPoliticaTest {
         val politica = RigenerazioneDocumentoPolitica(lettoreVietato, LettoreNomiFinta(), scrittore)
 
         repeat(2) {
-            politica.perRegistrazioneEliminata(RegistrazioneId("reg-1"), LocalDate.of(2026, 9, 12), "Riunione", emptySet())
-                .atteso()
+            politica.perRegistrazioneEliminata(REG_ELIMINATA, DATA_ELIMINATA, "Riunione", emptySet()).atteso()
         }
 
         assertTrue(scrittore.documenti.isEmpty())
     }
 
     @Test
-    fun `AC-623 perRegistrazioneEliminata con un errore di I-O restituisce ScritturaFallita cosi il chiamante riprova`() {
+    fun `AC-623 perRegistrazioneEliminata con un errore di I-O e ScritturaFallita cosi il chiamante riprova`() {
         val scrittore = ScrittoreDocumentoFinta()
         scrittore.scrivi("2026-09-12 Riunione.md", "testo")
         scrittore.fallisciAllaProssimaRimozione()
         val politica = RigenerazioneDocumentoPolitica(lettoreVietato, LettoreNomiFinta(), scrittore)
 
-        val errore = politica.perRegistrazioneEliminata(RegistrazioneId("reg-1"), LocalDate.of(2026, 9, 12), "Riunione", emptySet())
+        val errore = politica.perRegistrazioneEliminata(REG_ELIMINATA, DATA_ELIMINATA, "Riunione", emptySet())
             .erroreAtteso<ErroreApplicazioneDocumento.ScritturaFallita>()
 
         assertEquals("2026-09-12 Riunione.md", errore.nomeFile)
         assertEquals(setOf("2026-09-12 Riunione.md"), scrittore.documenti.keys)
     }
-
 
     @Test
     fun `AC-153 RigeneraDocumento scrive il markdown della proiezione con il nomeFile corretto`() {
@@ -374,6 +376,8 @@ class RigenerazioneDocumentoPoliticaTest {
 
     private companion object {
         val PARLANTE = ParlanteId("parlante-1")
+        val REG_ELIMINATA = RegistrazioneId("reg-1")
+        val DATA_ELIMINATA: LocalDate = LocalDate.of(2026, 9, 12)
 
         fun unTrascritto(
             id: RegistrazioneId,
