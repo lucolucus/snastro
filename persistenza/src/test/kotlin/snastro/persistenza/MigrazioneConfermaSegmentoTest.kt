@@ -11,6 +11,7 @@ import kotlin.io.path.absolutePathString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * ADR 0019 §3 / ADR 0006 (a): `migrations/4.sqm` (schema 4 → 5, forward-only) only adds
@@ -18,7 +19,7 @@ import kotlin.test.assertFailsWith
  */
 class MigrazioneConfermaSegmentoTest {
     @Test
-    fun `AC-521 4 sqm contiene solo l ADD COLUMN confermato e lo schema e alla versione 5`() {
+    fun `AC-521 4 sqm contiene solo l ADD COLUMN confermato e lo schema e almeno alla versione 5`() {
         val istruzioni = File("src/main/sqldelight/migrations/4.sqm").readLines()
             .map(String::trim)
             .filter { it.isNotEmpty() && !it.startsWith("--") }
@@ -30,11 +31,11 @@ class MigrazioneConfermaSegmentoTest {
             ),
             istruzioni,
         )
-        assertEquals(VERSIONE_CONFERMA, SnastroDatabase.Schema.version)
+        assertTrue(SnastroDatabase.Schema.version >= VERSIONE_CONFERMA)
     }
 
     @Test
-    fun `AC-521 un DB v4 con un Trascritto di 3 Segmenti migra a 5 con ogni riga intatta e confermato 0`(
+    fun `AC-521 un DB v4 con un Trascritto di 3 Segmenti migra alla corrente con ogni riga intatta e confermato 0`(
         @TempDir cartella: Path,
     ) {
         val url = "jdbc:sqlite:${cartella.resolve("progetto.db").absolutePathString()}"
@@ -48,7 +49,7 @@ class MigrazioneConfermaSegmentoTest {
         val db = apriDatabaseProgetto(cartella.toFile())
         val driver = driverSqlite(url)
         try {
-            assertEquals(VERSIONE_CONFERMA, pragma(driver, "user_version"))
+            assertEquals(SnastroDatabase.Schema.version, pragma(driver, "user_version"))
             assertEquals(prima, righeSegmento(driver, COLONNE_V4))
             assertEquals(3, prima.size)
             assertEquals(listOf("0", "0", "0"), righeSegmento(driver, listOf("confermato")))

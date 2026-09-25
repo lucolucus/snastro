@@ -13,3 +13,7 @@ VALUES (:registrazioneId, :prossimaVoce, :prossimoSegmento);
 aggiornaContatori:
 UPDATE trascritto SET prossima_voce = :prossimaVoce, prossimo_segmento = :prossimoSegmento
     WHERE registrazione_id = :registrazioneId;
+
+-- ADR 0020: the trascritto row of a deleted Registrazione; its segmento and voce rows go first (voce FK is immediate).
+elimina:
+DELETE FROM trascritto WHERE registrazione_id = :registrazioneId;

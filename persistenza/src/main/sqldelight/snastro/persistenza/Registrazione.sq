@@ -18,3 +18,8 @@ UPDATE registrazione SET titolo = :titolo, data_registrazione = :dataRegistrazio
 -- AC-326: single-column select — the repository never reconstitutes a Registrazione from this row.
 titoliDelProgetto:
 SELECT titolo FROM registrazione WHERE progetto_id = :progettoId;
+
+-- ADR 0020: the only physical deletion of a Registrazione (EliminaRegistrazione). The elaborazione / trascritto FKs
+-- are immediate: their rows must be gone first (the synchronous Trascrizione policy, before this DELETE).
+elimina:
+DELETE FROM registrazione WHERE id = :id;
