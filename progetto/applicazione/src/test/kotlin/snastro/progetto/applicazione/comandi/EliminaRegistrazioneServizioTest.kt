@@ -44,9 +44,12 @@ class EliminaRegistrazioneServizioTest {
     private val sincroni = mutableListOf<EventoPubblicato>()
     private val dopoCommit = mutableListOf<EventoPubblicato>()
     private var veto: Esito<Unit> = Esito.Ok(Unit)
+
+    /** Trascrizione rows still referencing the Registrazione (an open Elaborazione survives a veto). */
+    private var elaborazioneAperta = false
     private val servizio = EliminaRegistrazioneServizio(
         dispatcher.unitaDiLavoro,
-        RegistrazioniRegistrate(registrazioni, passi),
+        RegistrazioniRegistrate(registrazioni, passi) { elaborazioneAperta },
         InSospesoRegistrate(inSospeso, passi),
         dispatcher,
     )
@@ -103,6 +106,8 @@ class EliminaRegistrazioneServizioTest {
     fun `AC-602 INV-28 il veto di un abbonato sincrono e restituito invariato e non cambia nulla`() {
         val vetoTrascrizione = ErroreDiProva.Fallito("ElaborazioneGiaAperta(id-1)")
         veto = Esito.Errore(vetoTrascrizione)
+        // Like SQLite: the open Elaborazione is still there, so the immediate FK makes rimuovi THROW (ADR 0020 §2).
+        elaborazioneAperta = true
 
         val errore = servizio.esegui(EliminaRegistrazione(id)).erroreAtteso<ErroreDiProva.Fallito>()
 
@@ -165,14 +170,17 @@ class EliminaRegistrazioneServizioTest {
         }
     }
 
+    /** Records the calls; [rimuovi] throws like the immediate `elaborazione` FK while [elaborazioneAperta]. */
     private class RegistrazioniRegistrate(
         private val delegata: RegistrazioneRepository,
         private val passi: MutableList<String>,
+        private val elaborazioneAperta: () -> Boolean,
     ) : RegistrazioneRepository by delegata {
         override fun trova(id: RegistrazioneId): Registrazione? = delegata.trova(id).also { passi += "trova" }
 
         override fun rimuovi(id: RegistrazioneId) {
             passi += "rimuovi"
+            check(!elaborazioneAperta()) { "FOREIGN KEY constraint failed (elaborazione.registrazione_id)" }
             delegata.rimuovi(id)
         }
     }

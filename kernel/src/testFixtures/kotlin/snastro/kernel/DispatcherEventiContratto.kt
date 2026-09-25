@@ -232,6 +232,38 @@ public abstract class DispatcherEventiContratto {
     }
 
     @Test
+    public fun `AC-602 un eccezione del comando dopo il veto Errore di un abbonato sincrono restituisce quell Errore`() {
+        val a = ambiente()
+        val dopoCommit = mutableListOf<EventoPubblicato>()
+        a.registraSincrono { Esito.Errore(ERRORE) }
+        a.registraDopoCommit { dopoCommit += it }
+        val esito = a.unitaDiLavoro.inTransazione<Unit> {
+            a.scrivi("comando")
+            a.dispatcher.pubblica(EventoDiProva(1))
+            throw GuastoDiProva() // e.g. the immediate FK the vetoed rows still hold (ADR 0020 §2)
+        }
+        assertEquals(ERRORE, esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertEquals(emptySet(), a.effetti(), "rollback")
+        assertEquals(emptyList(), dopoCommit)
+    }
+
+    @Test
+    public fun `AC-602 un eccezione del comando senza alcun veto si propaga ancora`() {
+        val a = ambiente()
+        a.registraSincrono { Esito.Ok(Unit) }
+        val guasto = GuastoDiProva()
+        val lanciata = assertFailsWith<GuastoDiProva> {
+            a.unitaDiLavoro.inTransazione<Unit> {
+                a.scrivi("comando")
+                a.dispatcher.pubblica(EventoDiProva(1))
+                throw guasto
+            }
+        }
+        assertSame(guasto, lanciata)
+        assertEquals(emptySet(), a.effetti())
+    }
+
+    @Test
     public fun `AC-3 un VirtualMachineError di un abbonato dopo-commit si propaga subito e ferma la consegna`() {
         fataleFermaLaConsegna(StackOverflowError("di prova"))
     }

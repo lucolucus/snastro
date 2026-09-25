@@ -14,7 +14,10 @@ import kotlin.coroutines.cancellation.CancellationException
  *   synchronous deliveries are skipped and [delegata] rolls the whole command back (the
  *   [UnitaDiLavoro] rule): the outermost block's own [Esito.Errore] wins; if it returns [Esito.Ok],
  *   the first doom's Errore is returned, or, for a swallowed exception, an `IllegalStateException`
- *   is thrown with that exception as its cause.
+ *   is thrown with that exception as its cause. If the block THROWS after a doom by an Errore (e.g. a
+ *   write the vetoing subscriber's rows still forbid, like an immediate FK), that first Errore is
+ *   returned and the transaction rolls back: the exception is only the doom's consequence (ADR 0020
+ *   §2). A fatal throwable, or an exception with no Errore doom, still propagates.
  * - [AbbonatoDopoCommit]s receive the transaction's events, in publication order, only after
  *   [delegata] committed. They never run after a rollback or an exception. Every after-commit
  *   subscriber receives every event even if one throws. The first exception is then rethrown
@@ -40,6 +43,13 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
 
         fun condanna(eccezione: Throwable) {
             if (!condannata) this.eccezione = eccezione
+        }
+
+        /** Runs [blocco]; once doomed by an Errore, a non-fatal exception of it yields that Errore. */
+        fun <T> esegui(blocco: () -> Esito<T>): Esito<T> = runCatching(blocco).getOrElse { e ->
+            val primo = errore
+            if (primo == null || e !is Exception || e.fatale()) throw e
+            primo
         }
 
         fun <T> esito(esito: Esito<T>): Esito<T> {
@@ -84,7 +94,7 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
         val transazione = Transazione()
         corrente.set(transazione)
         val esito = try {
-            delegata.inTransazione { transazione.esito(blocco()) }
+            delegata.inTransazione { transazione.esito(transazione.esegui(blocco)) }
         } finally {
             corrente.remove()
         }
@@ -117,7 +127,7 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
         unici.drop(1).forEach(primo::addSuppressed)
         throw primo
     }
-
-    private fun Throwable.fatale(): Boolean =
-        this is VirtualMachineError || this is CancellationException || this is InterruptedException
 }
+
+private fun Throwable.fatale(): Boolean =
+    this is VirtualMachineError || this is CancellationException || this is InterruptedException
