@@ -8,6 +8,7 @@ import snastro.kernel.EventoPubblicato
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.RiferimentoAudio
 import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
@@ -24,11 +25,13 @@ import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
+import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
+import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -186,6 +189,48 @@ class AbbonatoRevisioneParlantiTest {
         verify(exactly = 0) { politicaSostituzione.applica(any()) }
     }
 
+    @Test
+    fun `AC-621 RegistrazioneEliminata invoca politicaSostituzione applica dentro la transazione che elimina`() {
+        val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
+        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
+        val occasionale = Parlante.crea(ParlanteId("id-occ"), PROGETTO, Nome.di("Ospite").atteso(), TipoParlante.OCCASIONALE)
+            .aggregato
+        val ricorrente = unParlante("id-ric")
+        attribuisci(VoceRef(REG, VoceId(1)), occasionale)
+        attribuisci(VoceRef(REG, VoceId(2)), ricorrente)
+        attribuisci(VoceRef(ALTRA, VoceId(1)), ricorrente)
+
+        commit(dispatcher, eliminata(REG)).atteso()
+
+        verify(exactly = 1) { politicaSostituzione.applica(REG) }
+        assertEquals(emptyList(), attribuzioni.diRegistrazione(REG), "ogni Attribuzione di r e purgata")
+        assertNull(parlanti.trova(occasionale.id), "INV-25: l'occasionale rimasto senza Attribuzioni sparisce")
+        val restante = assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta")
+        assertEquals(listOf(VoceRef(ALTRA, VoceId(1))), restante.impronte.map { it.voceRef }, "con le altre impronte")
+    }
+
+    @Test
+    fun `AC-621 un Errore della politicaSostituzione su RegistrazioneEliminata condanna e ripristina la transazione`() {
+        val pa = unParlante("id-pa")
+        attribuisci(VoceRef(REG, VoceId(1)), pa)
+        val guasto = ApplicaSostituzioneTrascrittoPolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
+        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), guasto)
+
+        val esito = commit(dispatcher, eliminata(REG))
+
+        assertTrue(esito is Esito.Errore, "l'eliminazione deve essere annullata")
+        assertEquals(pa.id, assertNotNull(attribuzioni.trova(VoceRef(REG, VoceId(1)))).parlanteId)
+        assertEquals(1, assertNotNull(parlanti.trova(pa.id)).impronte.size, "la riga d'impronta di A e ripristinata")
+    }
+
+    private fun eliminata(r: RegistrazioneId) = RegistrazioneEliminata(
+        r,
+        PROGETTO,
+        "Seduta",
+        LocalDate.of(2026, 9, 25),
+        RiferimentoAudio("audio/${r.valore}.m4a"),
+    )
+
     /** [ParlanteRepository] whose [salva] always fails, like ADR 0007's unique index (mirrors AC-96). */
     private class ParlanteRepositorySalvaFallisce(
         private val delegato: ParlanteRepository,
@@ -196,5 +241,6 @@ class AbbonatoRevisioneParlantiTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val REG = RegistrazioneId("registrazione-1")
+        val ALTRA = RegistrazioneId("registrazione-2")
     }
 }

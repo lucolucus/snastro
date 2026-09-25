@@ -15,9 +15,11 @@ import snastro.parlanti.dominio.Parlante
 /**
  * Policy `ApplicaSostituzioneTrascritto` ([INV-15], [INV-25], ADR 0018 §3 + Amendment 2026-09-24 (b)
  * §1): reacts to `TrascrittoSostituito`, run INSIDE the completion transaction that replaced the
- * Trascritto. It never imports that published event (`:parlanti:applicazione` may not depend on
- * `:trascrizione:applicazione`, `architecture.md` edges table): `abbonato-revisione-parlanti`
- * (`:parlanti:adattatori`) subscribes to it and translates it into the call below.
+ * Trascritto — and (ADR 0020 §2 step 4, [INV-28]) to `RegistrazioneEliminata`, run INSIDE the deleting
+ * transaction of `EliminaRegistrazione`, reused unchanged. It never imports either published event
+ * (`:parlanti:applicazione` may not depend on `:trascrizione:applicazione` nor `:progetto:applicazione`'s
+ * events, `architecture.md` edges table): `abbonato-revisione-parlanti` (`:parlanti:adattatori`)
+ * subscribes to both and translates each into the call below.
  *
  * STRUCTURAL part only (ADR 0012 Amendment (b) points 3-4): it never decodes nor extracts, and
  * attempts NO old→new Voce mapping (ADR 0018 §3 — a heuristic carry-over would pin a biometric print
