@@ -87,6 +87,10 @@ dependencies {
     // Mutex and sessions with no native library and no model loaded (AC-406/407/492).
     testImplementation(testFixtures(project(":ml-sherpa")))
 
+    // AC-622 (ADR 0020): the checkpoint test counts `wal_checkpoint` statements through a delegating SqlDriver over
+    // its own in-memory JdbcSqliteDriver. repository-sql-parlanti
+    testImplementation(libs.sqldelight.driver)
+
     // Ripristinabile / UnitaDiLavoroFinta / ErroreDiProva / Esito test helpers.
     testImplementation(testFixtures(project(":kernel")))
 
