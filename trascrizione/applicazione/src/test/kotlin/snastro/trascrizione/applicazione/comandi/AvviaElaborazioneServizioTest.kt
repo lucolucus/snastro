@@ -261,6 +261,8 @@ class AvviaElaborazioneServizioTest {
         override fun salva(e: Elaborazione): Esito<Unit> = Esito.Errore(ElaborazioneGiaAperta(e.registrazioneId))
 
         override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = error("non usato da AvviaElaborazione")
+
+        override fun rimuoviDiRegistrazione(id: RegistrazioneId): Unit = error("non usato da AvviaElaborazione")
     }
 
     private companion object {

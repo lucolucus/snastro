@@ -17,4 +17,10 @@ public interface TrascrittoRepository {
 
     /** Inserts or replaces the Trascritto of `t.registrazioneId` with the whole state of [t]. */
     public fun salva(t: Trascritto)
+
+    /**
+     * Deletes the Trascritto of the Registrazione [id] (its Voci and Segmenti) inside the caller's transaction; an
+     * absent one is a no-op (ADR 0020).
+     */
+    public fun rimuovi(id: RegistrazioneId)
 }

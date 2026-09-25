@@ -868,6 +868,8 @@ private class ElaborazioneRepositoryCheRifiutaLaConclusione(
 
     override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = delegata.rimuoviInAttesa(id)
 
+    override fun rimuoviDiRegistrazione(id: RegistrazioneId): Unit = delegata.rimuoviDiRegistrazione(id)
+
     override fun salva(e: Elaborazione): Esito<Unit> = if (e.terminale) conclusione(e) else delegata.salva(e)
 
     override fun istantanea(): () -> Unit = delegata.istantanea()
@@ -885,6 +887,8 @@ private class TrascrittoRepositoryGuasta : TrascrittoRepository, Ripristinabile 
     override fun conTrascritto(): List<RegistrazioneId> = emptyList()
 
     override fun salva(t: Trascritto): Unit = throw GuastoDiProva()
+
+    override fun rimuovi(id: RegistrazioneId): Unit = error("non usato dalla pipeline")
 
     override fun istantanea(): () -> Unit = {}
 }
@@ -909,6 +913,8 @@ private class ElaborazioneRepositoryCheRifiutaIlCompletamento(
     override fun trova(id: ElaborazioneId): Elaborazione? = delegata.trova(id)
 
     override fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit> = delegata.rimuoviInAttesa(id)
+
+    override fun rimuoviDiRegistrazione(id: RegistrazioneId): Unit = delegata.rimuoviDiRegistrazione(id)
 
     override fun salva(e: Elaborazione): Esito<Unit> = if (e.completata) {
         Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(e.registrazioneId))

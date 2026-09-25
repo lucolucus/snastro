@@ -31,10 +31,17 @@ public interface ElaborazioneRepository {
     public fun salva(e: Elaborazione): Esito<Unit>
 
     /**
-     * Compare-and-delete (ADR 0018 Amendment (b)), the only deletion of an Elaborazione: deletes [id] iff it
+     * Compare-and-delete (ADR 0018 Amendment (b)), the only deletion of an Elaborazione (amended by ADR 0020: plus
+     * [rimuoviDiRegistrazione]): deletes [id] iff it
      * exists and is still `in_attesa`, judged by the store at delete time (never by an earlier read). A started
      * one → `ErroreTrascrizione.ElaborazioneGiaAvviata`, an absent one → `ErroreTrascrizione.ElaborazioneNonTrovata`,
      * the store unchanged either way. Infra faults throw (ADR 0003).
      */
     public fun rimuoviInAttesa(id: ElaborazioneId): Esito<Unit>
+
+    /**
+     * Deletes EVERY Elaborazione of the Registrazione [id], any state, and none of another — inside the caller's
+     * transaction. Used only by the elimination policy after its veto (ADR 0020). Infra faults throw (ADR 0003).
+     */
+    public fun rimuoviDiRegistrazione(id: RegistrazioneId)
 }
