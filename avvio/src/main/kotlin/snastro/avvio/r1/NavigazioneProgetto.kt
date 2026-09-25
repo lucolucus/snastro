@@ -58,6 +58,17 @@ internal class NavigazioneProgetto(private val azioni: AzioniShell, iniziale: Sc
         schermata = SchermataR1.Modelli
     }
 
+    /**
+     * ADR 0020 §5 (AC-632): [id] was deleted — a current place S3 of [id], or S3 of [id] remembered for
+     * leaving S5, becomes the S2 list; every other place is untouched. The app never lands on, nor returns
+     * to, S3 of a deleted Registrazione.
+     */
+    fun dimentica(id: RegistrazioneId) {
+        val posto = SchermataR1.Registrazione(id)
+        if (schermata == posto) schermata = SchermataR1.Registrazioni
+        if (primaDiModelli == posto) primaDiModelli = SchermataR1.Registrazioni
+    }
+
     /** True while S5 is on screen — the sidebar then highlights its footer, no nav item. */
     fun modelliMostrati(stato: ShellUiStato): Boolean =
         stato is ShellUiStato.ConProgetto &&
