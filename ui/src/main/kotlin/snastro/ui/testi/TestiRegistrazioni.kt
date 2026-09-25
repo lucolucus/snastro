@@ -85,3 +85,32 @@ fun etichettaRitrascrizioneInCorso(faseEtichetta: String, trascorsoMs: Long): St
 /** AC-451: a failed re-run over an existing Trascritto — the row stays 'Completata', this notice sits
  * next to it. */
 fun messaggioRitrascrizioneNonRiuscita(motivo: String): String = "Ritrascrizione non riuscita: $motivo"
+
+/** ADR 0020 §6/AC-625: the row's More menu caption when 'Elimina…' is disabled. */
+const val MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA: String = "Annulla prima la trascrizione in coda."
+const val MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO: String = "Non puoi eliminarla durante la trascrizione."
+
+/** AC-626: the confirmation's title — same `Dialog.html` pattern as
+ * [snastro.ui.testi.titoloConfermaRitrascrivi]/[snastro.ui.testi.titoloConfermaEliminazioneParlante]
+ * ("il titolo è la domanda"). Two body variants, with/without an existing Trascritto. */
+fun titoloConfermaElimina(titolo: String): String = "Eliminare «$titolo»?"
+const val MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO: String =
+    "Verranno cancellati il file audio copiato nel progetto, la trascrizione con le correzioni delle voci, " +
+        "i nomi dati alle voci, il documento e le impronte vocali ricavate da questa registrazione. " +
+        "Non si può annullare."
+const val MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO_RESIDUO: String =
+    "Le persone ricorrenti restano, con le impronte delle altre registrazioni. Le persone occasionali " +
+        "che compaiono solo qui spariscono. Il file originale fuori dal progetto non viene toccato."
+const val MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO: String =
+    "Verrà cancellato il file audio copiato nel progetto. Il file originale fuori dal progetto non " +
+        "viene toccato. Non si può annullare."
+
+/** AC-628: the race backstop's own inline text — deliberately distinct from
+ * [snastro.ui.testi.messaggioPer]'s generic `ErroreTrascrizione.ElaborazioneGiaAperta` line (shown for
+ * `AvviaElaborazione`/`Ritrascrivi`), since here the actor tried to DELETE, not start, a transcription. */
+const val MESSAGGIO_ELIMINAZIONE_RIFIUTATA: String =
+    "La trascrizione è partita: non puoi eliminarla finché non è finita."
+
+/** AC-627: the dismissible success notice shown above the list after an Elimina. */
+const val ETICHETTA_REGISTRAZIONE_ELIMINATA: String = "Registrazione eliminata"
+fun messaggioEliminata(titolo: String): String = "«$titolo» eliminata."

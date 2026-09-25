@@ -6,16 +6,19 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertTextEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isRoot
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -23,22 +26,30 @@ import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.ui.testi.ETICHETTA_ANNULLA
+import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
+import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
+import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
+import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
+import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
+import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.MESSAGGIO_RILASCIA_PER_IMPORTARE
 import snastro.ui.testi.etichettaIdentificazione
 import snastro.ui.testi.etichettaRitrascrizioneInCorso
+import snastro.ui.testi.messaggioEliminata
 import snastro.ui.testi.messaggioPer
 import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
+import snastro.ui.testi.titoloConfermaElimina
 import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.io.File
 import java.time.LocalDate
@@ -65,6 +76,10 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     annullaRitrascrivi = {},
     confermaRitrascrivi = {},
     annullaElaborazione = {},
+    elimina = {},
+    annullaElimina = {},
+    confermaElimina = {},
+    chiudiAvviso = {},
 )
 
 private val REG_1 = RegistrazioneId("id-1")
@@ -84,6 +99,8 @@ private fun unaRiga(
     confermaRitrascrivi: Boolean = false,
     ritrascrizioneFallita: String? = null,
     annullabile: Boolean = false,
+    eliminazione: StatoEliminazione = StatoEliminazione.Assente,
+    confermaElimina: Boolean = false,
 ) = RigaRegistrazione(
     registrazioneId = id,
     titolo = titolo,
@@ -98,6 +115,8 @@ private fun unaRiga(
     confermaRitrascrivi = confermaRitrascrivi,
     ritrascrizioneFallita = ritrascrizioneFallita,
     annullabile = annullabile,
+    eliminazione = eliminazione,
+    confermaElimina = confermaElimina,
 )
 
 /**
@@ -446,6 +465,102 @@ class RegistrazioniRenderCheckTest {
     @Test
     fun `AC-475 una riga In coda con Annulla a 1024x640 (scuro)`() =
         verificaInCodaConAnnulla(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-629 il menu More aperto mostra Elimina abilitato a 1280x800`() =
+        verificaMenuElimina(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-629 il menu More aperto mostra Elimina abilitato a 1280x800 (scuro)`() =
+        verificaMenuElimina(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-629 il menu More aperto mostra Elimina abilitato a 1024x640`() =
+        verificaMenuElimina(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-629 il menu More aperto mostra Elimina abilitato a 1024x640 (scuro)`() =
+        verificaMenuElimina(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga Completata mostra Ritrascrivi ed Elimina a 1280x800`() =
+        verificaMenuCompletataRitrascriviElimina(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga Completata mostra Ritrascrivi ed Elimina a 1280x800 (scuro)`() =
+        verificaMenuCompletataRitrascriviElimina(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga Completata mostra Ritrascrivi ed Elimina a 1024x640`() =
+        verificaMenuCompletataRitrascriviElimina(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga Completata mostra Ritrascrivi ed Elimina a 1024x640 (scuro)`() =
+        verificaMenuCompletataRitrascriviElimina(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga In corso mostra Elimina disabilitato con la didascalia a 1280x800`() =
+        verificaMenuInCorsoDisabilitato(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga In corso mostra Elimina disabilitato con la didascalia a 1280x800 scuro`() =
+        verificaMenuInCorsoDisabilitato(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga In corso mostra Elimina disabilitato con la didascalia a 1024x640`() =
+        verificaMenuInCorsoDisabilitato(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-625 AC-629 il menu di una riga In corso mostra Elimina disabilitato con la didascalia a 1024x640 scuro`() =
+        verificaMenuInCorsoDisabilitato(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina con Trascritto a 1280x800`() =
+        verificaConfermaEliminaConTrascritto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina con Trascritto a 1280x800 (scuro)`() =
+        verificaConfermaEliminaConTrascritto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina con Trascritto a 1024x640`() =
+        verificaConfermaEliminaConTrascritto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina con Trascritto a 1024x640 (scuro)`() =
+        verificaConfermaEliminaConTrascritto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina senza Trascritto a 1280x800`() =
+        verificaConfermaEliminaSenzaTrascritto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina senza Trascritto a 1280x800 (scuro)`() =
+        verificaConfermaEliminaSenzaTrascritto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina senza Trascritto a 1024x640`() =
+        verificaConfermaEliminaSenzaTrascritto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-626 AC-629 la conferma di Elimina senza Trascritto a 1024x640 (scuro)`() =
+        verificaConfermaEliminaSenzaTrascritto(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `AC-627 AC-629 l avviso di eliminazione avvenuta a 1280x800`() =
+        verificaAvviso(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `AC-627 AC-629 l avviso di eliminazione avvenuta a 1280x800 (scuro)`() =
+        verificaAvviso(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `AC-627 AC-629 l avviso di eliminazione avvenuta a 1024x640`() =
+        verificaAvviso(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `AC-627 AC-629 l avviso di eliminazione avvenuta a 1024x640 (scuro)`() =
+        verificaAvviso(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
     private fun verificaCaricamento(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
@@ -895,6 +1010,174 @@ class RegistrazioniRenderCheckTest {
             onNodeWithText(ETICHETTA_ANNULLA).assertIsDisplayed()
             catturaPng("registrazioni-in-coda-annulla", width, height, scuro)
         }
+
+    /** AC-625/AC-629: the More menu open on a NON_AVVIATA row (no open Elaborazione) — 'Elimina…'
+     * enabled. `DropdownMenu` opens its own Popup layer, a second semantics root distinct from the
+     * window's own (same mechanism as `ParlantiRenderCheckTest.verificaMenuAltreAzioni`): the LAST
+     * root is the freshly-opened menu. */
+    private fun verificaMenuElimina(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(
+                        righe = listOf(
+                            unaRiga(
+                                elaborazione = StatoElaborazioneRiga.NonAvviata,
+                                eliminazione = StatoEliminazione.Disponibile,
+                            ),
+                        ),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazioni-altre-azioni-${REG_1.valore}", useUnmergedTree = true).performClick()
+            onNodeWithTag("registrazioni-menu-elimina-${REG_1.valore}").assertIsDisplayed().assertIsEnabled()
+            onNodeWithText(ETICHETTA_ELIMINA).assertIsDisplayed()
+            catturaPngUltimaRadice("registrazioni-menu-elimina", width, height, scuro)
+        }
+
+    /** AC-625 (b)/AC-629: a Completata row with BOTH sources supplied — the menu holds 'Ritrascrivi'
+     * AND 'Elimina…', the row's own 'Ritrascrivi' button is gone but the prefilled field stays. */
+    private fun verificaMenuCompletataRitrascriviElimina(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(
+                        righe = listOf(
+                            unaRiga(
+                                elaborazione = StatoElaborazioneRiga.Completata,
+                                trascrittoDisponibile = true,
+                                ritrascriviDisponibile = true,
+                                eliminazione = StatoEliminazione.Disponibile,
+                            ).copy(numeroPersone = "4"),
+                        ),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazioni-numero-persone-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithTag("registrazioni-altre-azioni-${REG_1.valore}", useUnmergedTree = true).performClick()
+            onNodeWithTag("registrazioni-menu-ritrascrivi-${REG_1.valore}").assertIsDisplayed()
+            onNodeWithTag("registrazioni-menu-elimina-${REG_1.valore}").assertIsDisplayed().assertIsEnabled()
+            onNodeWithText(ETICHETTA_RITRASCRIVI).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_ELIMINA).assertIsDisplayed()
+            catturaPngUltimaRadice("registrazioni-menu-completata-ritrascrivi-elimina", width, height, scuro)
+        }
+
+    /** AC-625/AC-629: the menu on an IN_CORSO row — 'Elimina…' disabled with its caption. */
+    private fun verificaMenuInCorsoDisabilitato(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(
+                        righe = listOf(
+                            unaRiga(
+                                elaborazione = StatoElaborazioneRiga.InCorso("separazione voci", 30_000),
+                                eliminazione = StatoEliminazione.NonDisponibile(
+                                    MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO,
+                                ),
+                            ),
+                        ),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazioni-altre-azioni-${REG_1.valore}", useUnmergedTree = true).performClick()
+            onNodeWithTag("registrazioni-menu-elimina-${REG_1.valore}").assertIsDisplayed().assertIsNotEnabled()
+            onNodeWithText(ETICHETTA_ELIMINA).assertIsDisplayed()
+            onNodeWithText(MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO).assertIsDisplayed()
+            catturaPngUltimaRadice("registrazioni-menu-in-corso-disabilitato", width, height, scuro)
+        }
+
+    /** AC-626/AC-629: the confirmation WITH an existing Trascritto — both body paragraphs. */
+    private fun verificaConfermaEliminaConTrascritto(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(
+                        righe = listOf(
+                            unaRiga(
+                                elaborazione = StatoElaborazioneRiga.Completata,
+                                trascrittoDisponibile = true,
+                                eliminazione = StatoEliminazione.Disponibile,
+                                confermaElimina = true,
+                            ),
+                        ),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazioni-conferma-elimina-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithText(titoloConfermaElimina("Seduta del 12 marzo")).assertIsDisplayed()
+            onNodeWithText(MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_CONFERMA_ELIMINAZIONE).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_ANNULLA).assertIsDisplayed()
+            catturaPng("registrazioni-conferma-elimina-con-trascritto", width, height, scuro)
+        }
+
+    /** AC-626/AC-629: the confirmation WITHOUT a Trascritto — the shorter body text. */
+    private fun verificaConfermaEliminaSenzaTrascritto(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(
+                        righe = listOf(
+                            unaRiga(
+                                elaborazione = StatoElaborazioneRiga.NonAvviata,
+                                trascrittoDisponibile = false,
+                                eliminazione = StatoEliminazione.Disponibile,
+                                confermaElimina = true,
+                            ),
+                        ),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazioni-conferma-elimina-${REG_1.valore}", useUnmergedTree = true).assertIsDisplayed()
+            onNodeWithText(MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO).assertIsDisplayed()
+            catturaPng("registrazioni-conferma-elimina-senza-trascritto", width, height, scuro)
+        }
+
+    /** AC-627/AC-629: the dismissible success notice above the list. */
+    private fun verificaAvviso(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = RegistrazioniUiStato.Dati(
+                        righe = emptyList(),
+                        avviso = messaggioEliminata("Seduta del 12 marzo"),
+                    ),
+                    azioni = AZIONI_VUOTE,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("registrazioni-avviso").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_REGISTRAZIONE_ELIMINATA).assertIsDisplayed()
+            onNodeWithText(messaggioEliminata("Seduta del 12 marzo")).assertIsDisplayed()
+            catturaPng("registrazioni-avviso", width, height, scuro)
+        }
+
+    /** Same mechanism as [catturaPng], but of the LAST semantics root — a `DropdownMenu` opens its
+     * own Popup layer, so `onRoot()` (which requires exactly one root) cannot be used once it is open. */
+    private fun ComposeUiTest.catturaPngUltimaRadice(nome: String, width: Int, height: Int, scuro: Boolean = false) {
+        val suffisso = if (scuro) "-scuro" else ""
+        val radici = onAllNodes(isRoot()).fetchSemanticsNodes()
+        val png = File(outputDir, "$nome$suffisso-${width}x$height.png")
+        val bitmap = onAllNodes(isRoot())[radici.size - 1].captureToImage().toAwtImage()
+        ImageIO.write(bitmap, "PNG", png)
+        check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }
+    }
 
     @OptIn(ExperimentalTestApi::class)
     private fun ComposeUiTest.catturaPng(nome: String, width: Int, height: Int, scuro: Boolean = false) {

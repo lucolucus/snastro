@@ -13,6 +13,12 @@ import java.time.LocalDate
  * confirmation (AC-449); `annullaRitrascrivi` closes it with no command; `confermaRitrascrivi` sends
  * the ONE validated `AvviaElaborazione`. `annullaElaborazione` is 'Annulla' on a queued row (AC-475),
  * no dialog. All four are no-ops when their optional presenter source is absent (R0/R1).
+ *
+ * ADR 0020 §6: `elimina` opens the row's confirmation (AC-626, a no-op on a disabled/absent
+ * `StatoEliminazione`); `annullaElimina` closes it with no command; `confermaElimina` sends the ONE
+ * `EliminaRegistrazione` (AC-626/627/628). `chiudiAvviso` dismisses the post-elimination success
+ * notice (AC-627). All four are no-ops when the optional `eliminaRegistrazione` presenter source is
+ * absent (R0/R1) — same pattern as the ADR 0018 quartet above.
  */
 data class AzioniRegistrazioni(
     val importa: (percorsi: List<String>) -> Unit,
@@ -30,4 +36,8 @@ data class AzioniRegistrazioni(
     val annullaRitrascrivi: (RegistrazioneId) -> Unit,
     val confermaRitrascrivi: (RegistrazioneId) -> Unit,
     val annullaElaborazione: (RegistrazioneId) -> Unit,
+    val elimina: (RegistrazioneId) -> Unit,
+    val annullaElimina: (RegistrazioneId) -> Unit,
+    val confermaElimina: (RegistrazioneId) -> Unit,
+    val chiudiAvviso: () -> Unit,
 )
