@@ -102,3 +102,16 @@
 - By: decided: user (Luca Parsani); recorded: worker-composer
 - Docs: [rework 2](rework/modello-facoltativo-avvio-2.md), [pre-release](pre-release.md)
 - Revisit: the Documento fix lands — then the drain in the footer tests can go.
+
+### D-0009 · llama-jni: thread interrupt is not a cancel
+- Meta: 2026-09-27; scope: block:llama-jni-libreria; status: accepted
+- Question: should LlamaModel.generate treat a caller-thread interrupt as a cancel signal (ADR 0026 §4 bounds Annullato within 10 s of an interrupt)?
+- Options: library maps interrupt to Cancelled vs cancel only via the cancel lambda, adapter captures the caller thread (kept).
+- Hypothesis: n/a — decided by ADR 0027 §7, [rework 1](rework/llama-jni-libreria-1.md)
+- Check: n/a — decided by ADR 0027 §7, [rework 1](rework/llama-jni-libreria-1.md)
+- Result: n/a — decided by ADR 0027 §7, [rework 1](rework/llama-jni-libreria-1.md)
+- Debate: code-review confirmed the pinned library contract names only the cancel lambda; ADR 0026 §4 binds the snastro port, ADR 0027 §7 gives the mapping to the adapter.
+- Decision: the library joins its watcher uninterruptibly and restores the flag; modello-linguistico-llama passes { annullato() || caller.isInterrupted } with the caller captured, and tests the interrupt path.
+- By: decided: worker; recorded: worker-composer
+- Docs: [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md), [pre-release](pre-release.md)
+- Revisit: another consumer of llama-jni needs interrupt-driven cancel.
