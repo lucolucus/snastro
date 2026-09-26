@@ -189,6 +189,9 @@ What makes it more than lifting a guard:
   - The payload is the id only, because the subscriber reads what it purges from its own repositories.
   - Consumers:
     - Parlanti **synchronous** policy (point 3);
+    - *(added 2026-09-25, [ADR 0021](0021-sintesi-moduli-confini-porte.md) §6)* Sintesi **synchronous** policy: it removes every `Riassunto` of the
+      `Registrazione` and, if one existed, queues a new one with the same `Argomento` (it reads the new Trascritto,
+      so it relies on point 2's order: `salva` before `pubblica`).
     - `AggiornamentiVistaParlanti` **after commit**. It calls `ProposteSerializzate.invalidaTutte()`
       (cached Proposte are keyed by `VoceRef` and now point at the wrong Voci) and emits
       `Cambiamento(null)`. The Galleria counts of any `Parlante` may have changed, and an

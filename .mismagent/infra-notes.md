@@ -12,6 +12,11 @@
 - **ML (ADR 0004):** sherpa-onnx Java/JNI **in-process**, single-thread pipeline dispatcher, serial
   `Elaborazione` queue, `AutoCloseable` native wrappers, CPU execution provider by default (CoreML
   opt-in only if a spike measures a gain). Child JVM = documented escape hatch only.
+- *(2026-09-25, [ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md)/[0023](decisions/0023-coda-condivisa-elaborazioni-riassunti.md))* **Local LLM (Sintesi):** runtime in the technical module `:llm`, llama.cpp JNI or a
+  `llama-server` sidecar, **OPEN**: spike `runtime-llm-in-app`, whose ADR pins its natives per ADR 0016 (build-time
+  fetch, SHA-256, never downloaded by the app) and the Metal use. It runs on the SHARED serial queue, one item at
+  a time with the `Elaborazione`s, is unloaded after each `Riassunto` by default, and never takes the sherpa Mutex.
+  NFR: ≤ 300 s for a 60-min `Registrazione` on the M3 Pro (opt-in, outside the gate).
 - **Native libs:** sherpa-onnx JNI + onnxruntime per OS, fetched by a Gradle task from a pinned
   release with SHA-256, cached outside the repo, never committed.
   → pinned by **ADR 0016** (2026-09-24): v1.13.8 GitHub release assets (not Maven Central);
@@ -35,6 +40,12 @@
 - After download the app works fully offline; network I/O exists only in `:modelli` (enforced_by).
   v2 (`Sintesi` via Ollama) will need a loopback-only amendment.
 - In-app "Licenze dei modelli e librerie" screen (MIT/Apache-2.0/CC-BY models, LGPL FFmpeg).
+- *(amended 2026-09-25, [ADR 0025](decisions/0025-modello-facoltativo-su-richiesta.md))* **Optional model, downloaded on demand:** Sintesi's LLM (Qwen3.5 9B
+  q4_K_M GGUF, Apache-2.0, 6.6 GB) is a catalogue entry with `obbligatoria = false`. It is not part of onboarding, and
+  only the user downloads it, from the Riassunto tab. The host is an ungated, immutable HTTPS URL (Hugging Face
+  `resolve/<commit>`), with SHA-256 pinned. A single-file asset is **moved**, not copied, into place (peak disk use =
+  1× its size), and free space is checked first. The "v2 Ollama loopback" note above is superseded: no user-installed
+  Ollama. Whether a loopback client exists at all is spike `runtime-llm-in-app`.
 
 ## Local persistence (ADR 0006, 0007, 0010)
 - One **SQLDelight + sqlite-jdbc** database per Progetto (`progetto.db`): source of truth for
@@ -45,6 +56,9 @@
   migrations.
 - Set invariants INV-4 / INV-16 backed by partial unique indexes (ADR 0007).
 - Documenti `.md` are derived: written atomically, never read back (enforced_by, ADR 0010).
+- *(2026-09-25, [ADR 0022](decisions/0022-persistenza-sintesi-6sqm.md))* `Riassunto`s live only in `progetto.db` (`6.sqm`): plain TEXT, one row per element and
+  per `Fonte` (FTS5-ready), no `Nome`/`ParlanteId` stored. They are included in the folder backup and deleted with their
+  `Registrazione` (ADR 0024).
 
 ## Privacy (biometric data) (ADR 0009)
 - `ImprontaVocale` stored only as BLOB rows in the project DB; no other copy (no file, cache, log).

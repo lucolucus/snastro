@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(java\\.net\\.|io\\.ktor|okhttp3|HttpClient|HttpURLConnection)' . | grep -vE '^(\\./)?(modelli|architettura-test)/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-23   # see "Amendment 2026-09-23 (b)" (enforced_by scope) + "Amendment 2026-09-23 (c)" (Windows LOCALAPPDATA, archive entries, enforced_by module-path scoping)
+amended: 2026-09-25   # "Amendment 2026-09-25 (ADR 0025)" (optional on-demand model, host, FILE move); earlier: see "Amendment 2026-09-23 (b)" (enforced_by scope) + "Amendment 2026-09-23 (c)" (Windows LOCALAPPDATA, archive entries, enforced_by module-path scoping)
 ---
 # 0008 — Model provisioning: first-run download from k2-fsa releases, pinned SHA-256, offline after; network only in `:modelli`
 
@@ -120,3 +120,18 @@ Kotlin packages named `build` are not used in this codebase.
 - Block `modelli-provisioning` (rework queued) gains the archive/extraction/marker, LOCALAPPDATA,
   blank/relative-env criteria; `ml-sherpa-*` adapters take a directory from `percorso(id)`.
 - `:modelli` gains one runtime dependency (Commons Compress); no other module may depend on it.
+
+## Amendment 2026-09-25 — optional model downloaded on demand ([ADR 0025](0025-modello-facoltativo-su-richiesta.md))
+[ADR 0025](0025-modello-facoltativo-su-richiesta.md) amends this ADR for Sintesi's LLM:
+- catalogue entries gain `obbligatoria` (the LLM is `false`). `pronti()`/`mancanti()` count
+  required entries only, and there are new `installata(id)` / `scarica(id, …)` operations;
+- a catalogue URL may be any ungated, **immutable** HTTPS asset (Hugging Face `resolve/<commit>`),
+  not only k2-fsa releases;
+- a `FILE` asset is **moved**, not copied, into its temp directory, and a free-space pre-check comes
+  before any download;
+- the optional model is downloaded only by the user from the Riassunto tab (RC-8 amended).
+
+The "**Amendment reserved for v2: a loopback-only client (Ollama for Sintesi)**" bullet is **not**
+consumed: the user rejected Ollama. Whether a loopback client is needed at all (sidecar) or not
+(JNI) is decided by spike `runtime-llm-in-app`'s ADR. This rule's `enforced_by` is unchanged
+until then.

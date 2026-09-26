@@ -31,9 +31,13 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:parlanti:adattatori` | `snastro.parlanti.adattatori` | repositories, port adapters (→ Trascrizione / Progetto API, → `:ml-sherpa`), pure `ConfrontoImpronte` |
 | `:documento:applicazione` | `snastro.documento.applicazione` | `Documento` projection (pure: inputs → markdown string), `Rigenerazione` policy, ports (`LettoreTrascritto`, `LettoreNomi`, `ScrittoreDocumento`) |
 | `:documento:adattatori` | `snastro.documento.adattatori` | port adapters (→ Trascrizione / Parlanti API), atomic `.md` writer |
+| `:sintesi:dominio` | `snastro.sintesi.dominio` | *(2026-09-25, [ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md))* `Riassunto` (+ `Fonte`, elements, `StrutturaTrascritto`, `Verifica delle fonti`), `LunghezzaMassimaRiassunto`, pure guard `Riassumibilita`, input builder `IngressoRiassunto`, events, `ErroreSintesi` |
+| `:sintesi:applicazione` | `snastro.sintesi.applicazione` | commands (`Riassumi`, `EseguiProssimoRiassunto`, `RecuperaRiassuntiInterrotti`, `ModificaLunghezzaMassimaRiassunto`), policies (on `TrascrittoSostituito` / `RegistrazioneEliminata`), read-models (`riassunto-vista`, `impostazioni-sintesi`, `RiassuntiInAttesa`), ports (repositories; `LettoreTrascritto` → Trascrizione; `LettoreNomi` → Parlanti; `ModelloLinguistico`; `DisponibilitaModelloLinguistico`) |
+| `:sintesi:adattatori` | `snastro.sintesi.adattatori` | SQLDelight repositories (`6.sqm`, [ADR 0022](decisions/0022-persistenza-sintesi-6sqm.md)), port adapters (→ Trascrizione / Parlanti API), synchronous subscribers, `ModelloLinguistico` adapter (→ `:llm`) |
 | `:persistenza` | `snastro.persistenza` | SQLDelight schema `.sq`, migrations `.sqm` (source of the schema, ADR 0006 (a)), driver factory (WAL, FK, `secure_delete`), `UnitaDiLavoro` impl |
 | `:audio` | `snastro.audio` | bytedeco FFmpeg `sonda`/`decodifica` → derived WAV; javax.sound player `RiproduttoreWav` (adapted to `:ui`'s `LettoreAudio` by `:avvio`) |
 | `:ml-sherpa` | `snastro.ml` | native-lib loading, sherpa session config, `AutoCloseable` wrappers, diarization/ASR/VAD/embedding engines |
+| `:llm` | `snastro.llm` | *(2026-09-25, ADR 0021)* local LLM runtime (technical, like `:ml-sherpa`); content decided by spike `runtime-llm-in-app`'s ADR |
 | `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |
 | `:ui` | `snastro.ui` | Compose screens S1–S4 + shared `lettore-audio`: presenters (state holders, unit-tested) + thin composables; declares `LettoreAudio` |
 | `:avvio` | `snastro.avvio` | `main()`, composition root, adapter selection (config), serial `Elaborazione` queue + pipeline dispatcher, startup policies, `--smoke` mode |
@@ -52,6 +56,8 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 | `:parlanti:adattatori` | `:parlanti:applicazione`, `:parlanti:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:audio`, `:ml-sherpa` |
 | `:documento:applicazione` | `:kernel` |
 | `:documento:adattatori` | `:documento:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione` |
+| `:sintesi:adattatori` | `:sintesi:applicazione`, `:sintesi:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:llm` *(ADR 0021)* |
+| `:llm` | `:kernel`, `:modelli` *(ADR 0021)* |
 | `:persistenza` | `:kernel` |
 | `:audio` | `:kernel` |
 | `:ml-sherpa` | `:kernel`, `:modelli` |
@@ -62,15 +68,27 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 
 Direction summary: `adattatori → applicazione → dominio → kernel`; cross-context only
 `consumer:adattatori → supplier:applicazione`; `Progetto` is upstream of all; `Trascrizione` is
-upstream of `Parlanti` and `Documento`; `Parlanti` is upstream of `Documento`. `ui` sees only
+upstream of `Parlanti`, `Documento` and `Sintesi`; `Parlanti` is upstream of `Documento` and `Sintesi`; no context depends on `Sintesi` (ADR 0021). `ui` sees only
 `applicazione`. Technical modules (`persistenza`, `audio`, `ml-sherpa`, `modelli`) are reached only
 from adapters (and `avvio`).
+
+## Boundaries (feature `sintesi`, 2026-09-25)
+Detailed in `features/sintesi/architetture/architecture-overview.md` ([ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md) §3): `LettoreTrascritto`
+and `LettoreNomi` (Sintesi's own ports), `ModelloLinguistico` (runtime-neutral, the runtime is spike `runtime-llm-in-app`),
+`DisponibilitaModelloLinguistico` (implemented in `:avvio`, [ADR 0025](decisions/0025-modello-facoltativo-su-richiesta.md)), synchronous subscribers to
+`TrascrittoSostituito` and `RegistrazioneEliminata`.
 
 ## Boundaries (feature `trascrizione-con-parlanti`)
 Detailed in `features/trascrizione-con-parlanti/architetture/architecture-overview.md` (ports,
 Published Language, authorship, contract tests).
 
 ## Pipeline and progress
+*(2026-09-25, [ADR 0023](decisions/0023-coda-condivisa-elaborazioni-riassunti.md))* The serial queue is **shared**: `Elaborazione`s and `Riassunto`s
+run one at a time in ONE FIFO ordered by request instant, owned by `:avvio` (`CodaCondivisa`). Each context claims its
+own head inside its own transaction. The queue position shown by S2 and the Riassunto tab is computed by the owner
+(`:ui` port `PosizioniNellaCoda`), never by a context. The LLM never runs inside a transaction and never takes the
+sherpa Mutex.
+
 `AvviaElaborazione` (serial queue, single-thread pipeline dispatcher, ADR 0004) runs the stages in
 order, reporting each through `SegnalatoreFase`:
 `decodifica` (`:audio`) → `diarizzazione` → `trascrizione` → `allineamento`, then commits
@@ -110,6 +128,8 @@ allowed because it carries ids and intervals only, never an embedding.)*
 - A Progetto-owned `eliminazione_in_sospeso` row, written in the same transaction, drives crash recovery at the next
   project open.
 - The edges table is unchanged.
+- *(2026-09-25, [ADR 0024](decisions/0024-elimina-registrazione-riassunto.md))* A third synchronous subscriber (Sintesi) removes every `Riassunto` of
+  the `Registrazione` in any state, and never vetoes. Its IMMEDIATE FK makes a missing subscriber fail the delete.
 
 ## Enforcement channels (all inside `./gradlew check`)
 1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).
@@ -140,3 +160,17 @@ allowed because it carries ids and intervals only, never an embedding.)*
 - **R25 (resolved 2026-09-23, ADR 0003 amendment):** `ErroreDominio` is a plain (non-sealed)
   interface — Kotlin forbids sealed subtypes across modules; each context owns one sealed hierarchy
   `Errore<Contesto>` in `Errori<Contesto>.kt`.
+
+## Amendment 2026-09-25 (feature `sintesi`, ADRs 0021–0025)
+- **Modules:** `:sintesi:dominio|applicazione|adattatori` and the technical `:llm` (rows above). The path-holder
+  `:sintesi` gets an empty edge row in `verificaDipendenzeModuli`. The rows follow the `<ctx>` pattern of the edges
+  table for `dominio`/`applicazione`.
+- **Edges:** see the rows marked ADR 0021. `:ui` gains `:sintesi:applicazione` (covered by "every `:<ctx>:applicazione`").
+  `:sintesi:*` has **no** edge to `:modelli`.
+- **`:ui` declares ports implemented by `:avvio`** (the existing list gains): `PosizioniNellaCoda` (ADR 0023 §4), and
+  `ServizioModelli` gains the optional-model entry and `scaricaFacoltativo(id)` (ADR 0025 §4).
+- **R1 read-models per owning context** applies: `riassunto-vista` carries no queue position, and `stati-elaborazione`
+  loses `posizioneInCoda`. The presenters join `PosizioniNellaCoda` (ADR 0023 §4).
+- **Composition R3** (`snastro.avvio.r3`, block `avvio-sintesi`) wires Sintesi on top of R2 (ADR 0021 §10).
+- **Schema:** `6.sqm` (6 → 7), Sintesi-owned tables `riassunto`, `riassunto_elemento`, `riassunto_fonte`,
+  `impostazioni_sintesi` (ADR 0022).

@@ -3,6 +3,7 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0009 (a new print-removal path + WAL checkpoint on every removal), ADR 0018 Amendment (b) §3 ("the only physical deletion of an Elaborazione"), dev-architecture-app.md ("no deletion method"), tactical R25 note
 closes_spike: null
+amended: 2026-09-25   # "Amendment 2026-09-25 (ADR 0024)": [INV-28] + dialog text gain the Riassunto; third synchronous subscriber (Sintesi)
 enforced_by:
   kind: presence+prohibition
   rule: "grep -qE '^CREATE TABLE eliminazione_in_sospeso[[:space:]]*[(]' persistenza/src/main/sqldelight/migrations/5.sqm && ! grep -rnE --include='*.kt' --exclude-dir=build '(elaborazioneQueries|trascrittoQueries|voceQueries|segmentoQueries|attribuzioneQueries|improntaVocaleQueries|parlanteQueries)' progetto | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
@@ -279,3 +280,14 @@ the `avvio-parlanti` e2e (real SQLite, row counts per table).
     - the Trascrizione veto re-reads inside the transaction;
     - the Documento removal goes through `abbonato-documento`'s per-key queue;
     - the pending row is concluded only after `PuliziaDerivatiRegistrazione` returns Ok.
+
+## Amendment 2026-09-25 — the `Riassunto` is deleted too ([ADR 0024](0024-elimina-registrazione-riassunto.md))
+[ADR 0024](0024-elimina-registrazione-riassunto.md) (feature `sintesi`) amends:
+- §2 step 4: a **third synchronous subscriber** (Sintesi) removes every `Riassunto` of the
+  `Registrazione`, in any state, and never vetoes;
+- §6: the "with a `Trascritto`" dialog text gains "il riassunto";
+- §7: the [INV-28] list gains "every `Riassunto` of it, in any state".
+
+The `riassunto → registrazione` FK is IMMEDIATE, so a missing subscriber fails the delete (fails
+closed), just as the `elaborazione`/`trascritto` FKs do here. Release: R3 (`avvio-sintesi`). The rest
+of this ADR, and its `enforced_by`, are unchanged.

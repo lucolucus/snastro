@@ -7,7 +7,7 @@
 > Style and module map: `architecture.md`. Stack: Kotlin/JVM, Compose Desktop (ADR 0001).
 > Codebase conventions (style memory): `architetture/dev-architecture-app.md`.
 > **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9 · 2026-09-23 (R25 amendment) — CR-8, RC-4 ·
-> 2026-09-23 (fix-batch-10) — CR-1.
+> 2026-09-23 (fix-batch-10) — CR-1 · 2026-09-25 (feature `sintesi`, ADRs 0021/0023/0025) — CR-3, CR-10, RC-7, RC-8.
 
 Channels:
 - **gate lint** — runs inside `./gradlew check` (the worker's own loop, verifier step 2, CI). Tools and
@@ -47,8 +47,9 @@ I/O, persistence, UI, ML, audio or network API — incl. JDK `java.sql`, `java.n
 
 **CR-3 · Technical confinement.** `com.k2fsa` / `System.load*` only in `:ml-sherpa` (ADR 0004);
 `org.bytedeco` / `javax.sound` only in `:audio`, never an FFmpeg `-gpl` artifact (ADR 0005);
-JDBC / SQLDelight / `org.sqlite` only in `:persistenza` and `:progetto|:trascrizione|:parlanti:adattatori`
-(ADR 0006); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `documento`
+JDBC / SQLDelight / `org.sqlite` only in `:persistenza` and `:progetto|:trascrizione|:parlanti|:sintesi:adattatori`
+(ADR 0006; `:sintesi` added 2026-09-25, ADR 0021/0022); the LLM runtime only in `:llm` (ADR 0021; its
+native-load or loopback exception is fixed by spike `runtime-llm-in-app`'s ADR); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `documento`
 (ADR 0010). → gate lint: Konsist (+ each ADR's `enforced_by`).
 
 **CR-4 · Aggregates are encapsulated, never `data class`.** Aggregate roots are plain classes: state
@@ -86,7 +87,8 @@ of `*:applicazione` command handlers return `Esito`) + ADR 0003 `enforced_by`.
 canonical terms of `context-map.md` exactly, **ASCII only** (`UltimaAttivita`, not `UltimaAttività`);
 technical scaffolding may be English. The context-map's "Not:" synonyms (e.g. `Speaker`, `Cluster`,
 `Transcript`, `Job`, `Utterance`, `Chunk`, `Embedding`, `Voiceprint`, `Score`, `Confidenza`,
-`Merge`, `Mapping`, `Workspace`, `Meeting`) must not name a declaration in `*:dominio`,
+`Merge`, `Mapping`, `Workspace`, `Meeting`; *(2026-09-25, ADR 0021)* Sintesi's `Summary`, `Verbale`, `Report`, `Resoconto`,
+`Minuta`, and the other "Not:" terms of the `Sintesi` section) must not name a declaration in `*:dominio`,
 `*:applicazione`, `:ui`. → gate lint: Konsist (declaration names vs the synonym list, kept in
 `architettura-test` next to the rule; non-ASCII identifiers rejected).
 
@@ -150,11 +152,13 @@ cache, log of embedding values; every removal path deletes rows in the command's
 
 **RC-7 · Transaction placement.** Invariant-carrying policies run inside the command's transaction;
 `Documento` `Rigenerazione` runs after commit, idempotent; the ML pipeline never holds a transaction
-(ADR 0012).
+(ADR 0012). *(2026-09-25, ADR 0023)* The LLM (`ModelloLinguistico`) is never called inside a transaction, and the
+Sintesi policies (`..politiche`) never call it. The test half: `ModelloLinguisticoFinto` throws if a transaction is open.
 
 **RC-8 · Offline inference.** No inference/adapter path triggers a download or a network call
 (ADR 0008) — beyond CR-3's mechanical part, review that `:modelli` download is invoked only from the
-onboarding/startup flow.
+onboarding/startup flow *(amended 2026-09-25, ADR 0025)* and from the user's explicit download of an optional model
+(the Riassunto tab, via `ServizioModelli`); never from an inference, queue or domain path.
 
 **RC-9 · Fakes first.** Every port has a hand-written `<Porta>Finta` passing its `Contratto`; a
 test stubbing such a port with MockK is a finding. MockK is acceptable only to verify an interaction

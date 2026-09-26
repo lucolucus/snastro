@@ -146,6 +146,9 @@ public class Parlante private constructor(
   - `Parlante` INV-25 (R25);
   - an `in_attesa` `Elaborazione` (ADR 0018 (b));
   - `EliminaRegistrazione`: the `Registrazione`, all of its `Elaborazione`s and its `Trascritto`.
+  - *(2026-09-25, [ADR 0021](../decisions/0021-sintesi-moduli-confini-porte.md) §9)* the `Riassunto`: a previous `pronto` replaced on completion, a
+    previous `fallito` removed by `Riassumi`, and every `Riassunto` of a `Registrazione` on `TrascrittoSostituito` /
+    `RegistrazioneEliminata`.
 
   The aggregate at most returns the domain event (`Registrazione.elimina()`, `Elaborazione.annulla()`).
 - `ricostituisci` is public (repositories live in another module) and gated by the kernel annotation

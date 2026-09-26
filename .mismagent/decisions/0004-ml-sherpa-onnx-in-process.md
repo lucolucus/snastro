@@ -4,7 +4,7 @@ status: accepted
 supersedes: null
 closes_spike: null
 enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=architettura-test '(com\\.k2fsa|System\\.load)' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-amended: 2026-09-24   # see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
+amended: 2026-09-25   # "Amendment 2026-09-25 (ADR 0023)" (the serial queue is SHARED with Riassunti); earlier: see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
 ---
 # 0004 — ML runtime: sherpa-onnx (JNI) in-process, confined to `:ml-sherpa`, serial pipeline
 
@@ -102,3 +102,11 @@ home of the answers. The text above is kept as written. Read it with these refin
   onnxruntime, not that it runs or helps. No CoreML setting is built until `benchmark-elaborazione`
   measures it against CPU (ADR 0016 §6).
 
+
+## Amendment 2026-09-25 — the serial queue is shared with Sintesi ([ADR 0023](0023-coda-condivisa-elaborazioni-riassunti.md))
+"One `Elaborazione` at a time from a serial FIFO queue" becomes "one item at a time, `Elaborazione` or
+`Riassunto`, from ONE shared FIFO queue ordered by request instant", owned by `:avvio`
+([ADR 0023](0023-coda-condivisa-elaborazioni-riassunti.md)). The pipeline itself, its dedicated
+thread, the native wrappers and this ADR's `enforced_by` are unchanged. If the LLM runtime is JNI,
+spike `runtime-llm-in-app`'s ADR amends this rule's `System.load` clause to admit `./llm/`
+([ADR 0021](0021-sintesi-moduli-confini-porte.md) §5). Nothing else in this ADR changes.

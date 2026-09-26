@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(java\\.sql\\.|javax\\.sql\\.|app\\.cash\\.sqldelight|org\\.sqlite)' ui audio ml-sherpa modelli avvio documento | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+amended: 2026-09-25   # see "Amendment 2026-09-25 (ADR 0021)" (enforced_by deny-list gains `llm`)
+enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(java\\.sql\\.|javax\\.sql\\.|app\\.cash\\.sqldelight|org\\.sqlite)' ui audio ml-sherpa modelli avvio documento llm 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
 ---
 # 0006 — Persistence: SQLDelight + sqlite-jdbc, one DB per Progetto, forward-only verified migrations
 
@@ -76,3 +77,11 @@ never finishing) and it verifies nothing useful while no version has shipped. Us
   `DriverSqliteImmediato` (same `ThreadedConnectionManager`, only BEGIN/END/ROLLBACK replaced).
   Confined to `:persistenza` (CR-3); no retry-on-BUSY. Proven by `UnitaDiLavoroSqlBeginImmediateTest`
   and the AC-236 no-hold variant in `AttesaMutexR2Test`.
+
+## Amendment 2026-09-25 (ADR 0021 — Sintesi)
+- `enforced_by`: the deny-list gains **`llm`** (the new technical LLM runtime module, [ADR 0021](0021-sintesi-moduli-confini-porte.md) §1).
+  `2>/dev/null` was added because `llm/` does not exist until the runtime adapter block. A missing
+  directory must not print noise, and it cannot make the rule pass wrongly, since the grep only
+  looks for forbidden matches. Validated via `bash -c` on 2026-09-25: exit 0 on the tree.
+- JDBC/SQLDelight are also allowed in **`:sintesi:adattatori`** (its SQLDelight repositories,
+  [ADR 0022](0022-persistenza-sintesi-6sqm.md)). The rule is a deny-list, so this needs no change to it. CR-3 is amended accordingly.
