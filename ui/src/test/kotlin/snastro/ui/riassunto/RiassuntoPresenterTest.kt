@@ -29,6 +29,7 @@ import snastro.sintesi.dominio.ErroreSintesi
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
 import snastro.ui.coda.PosizioniCoda
+import snastro.ui.modelli.ServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta
 import java.time.Clock
 import java.time.Instant
@@ -105,6 +106,24 @@ private fun unMostrato(
 private fun unaImpostazioni(parole: Int = 2_000, minimo: Int = 300, massimo: Int = 2_500) =
     ImpostazioniSintesiVista(parole, minimo, massimo)
 
+/** ADR 0026 §8, mirrors [RiassuntoPresenter]'s own private constant — the ONE optional catalogue entry. */
+private const val ID_MODELLO_LINGUISTICO = "llm-qwen3.5-9b-q4_k_m"
+
+/**
+ * Records [scaricaFacoltativo] calls (AC-S125/S127: "called once with the exact id") without touching
+ * `ServizioModelliFinta` (owned by block `servizio-modelli-facoltativo`, already integrated) — an
+ * interface-delegating spy, same technique as a decorator, confined to this block's own test file.
+ */
+private class ServizioModelliSpia(private val delegato: ServizioModelliFinta = ServizioModelliFinta()) :
+    ServizioModelli by delegato {
+    val chiamateScaricaFacoltativo = mutableListOf<String>()
+
+    override fun scaricaFacoltativo(id: String) {
+        chiamateScaricaFacoltativo.add(id)
+        delegato.scaricaFacoltativo(id)
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiassuntoPresenterTest {
     private class Ambiente(scope: TestScope) {
@@ -117,7 +136,7 @@ class RiassuntoPresenterTest {
         var risultatoRiassumi: Esito<Unit> = Esito.Ok(Unit)
         val chiamateLunghezza = mutableListOf<Int>()
         var risultatoLunghezza: Esito<Unit> = Esito.Ok(Unit)
-        val servizioModelli = ServizioModelliFinta()
+        val servizioModelli = ServizioModelliSpia()
         val aggiornamenti = AggiornamentiVistaFinta()
         val orologio = OrologioFinto(ISTANTE_0)
 
@@ -195,11 +214,12 @@ class RiassuntoPresenterTest {
     }
 
     @Test
-    fun `AC-S125 Scarica il modello chiama scaricaFacoltativo e la ricarica riflette il download`() = eseguiTest { a ->
+    fun `AC-S125 Scarica il modello chiama scaricaFacoltativo una sola volta con l id esatto`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(modello = StatoModelloVista.NonInstallato(6_169_341_984))
         runCurrent()
         a.presenter.azioni.scaricaModello()
         runCurrent()
+        assertEquals(listOf(ID_MODELLO_LINGUISTICO), a.servizioModelli.chiamateScaricaFacoltativo)
         assertTrue(a.servizioModelli.statoFacoltativi.value.isNotEmpty())
     }
 
@@ -217,6 +237,10 @@ class RiassuntoPresenterTest {
         runCurrent()
         val area = assertIs<AreaAzione.DownloadFallito>(dati(a.presenter).areaAzione)
         assertEquals("La connessione si è interrotta.", area.messaggio)
+
+        a.presenter.azioni.scaricaModello()
+        runCurrent()
+        assertEquals(listOf(ID_MODELLO_LINGUISTICO), a.servizioModelli.chiamateScaricaFacoltativo)
     }
 
     @Test
@@ -324,6 +348,63 @@ class RiassuntoPresenterTest {
         val dati = dati(a.presenter)
         assertNull(dati.contenuto)
         assertIs<AreaAzione.InCoda>(dati.areaAzione)
+    }
+
+    @Test
+    fun `AC-S135 dopo Ritrascrivi senza nuovo Riassunto per limite superato mostra stato 5`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            mostrato = unMostrato(),
+        )
+        runCurrent()
+        assertTrue(dati(a.presenter).contenuto != null)
+
+        // §6: the re-run's Trascritto fails Riassumibilita (over the limit) — no new Riassunto created.
+        a.vistaCorrente = unaVista(disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.TroppoLunga))
+        a.aggiornamenti.emetti(Cambiamento(REG_1))
+        runCurrent()
+        val dati = dati(a.presenter)
+        assertNull(dati.contenuto)
+        assertEquals(
+            AreaAzione.NonDisponibile("La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa)."),
+            dati.areaAzione,
+        )
+    }
+
+    @Test
+    fun `AC-S135 dopo Ritrascrivi senza nuovo Riassunto e modello installato mostra stato 4`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            mostrato = unMostrato(),
+        )
+        runCurrent()
+        assertTrue(dati(a.presenter).contenuto != null)
+
+        // §6: nothing was previously removed's Argomento to carry, and the new Trascritto is available.
+        a.vistaCorrente = unaVista()
+        a.aggiornamenti.emetti(Cambiamento(REG_1))
+        runCurrent()
+        val dati = dati(a.presenter)
+        assertNull(dati.contenuto)
+        assertEquals(AreaAzione.Azionabile(nuovo = false), dati.areaAzione)
+    }
+
+    @Test
+    fun `AC-S135 dopo Ritrascrivi senza nuovo Riassunto e modello mancante mostra stato 1`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            mostrato = unMostrato(),
+        )
+        runCurrent()
+        assertTrue(dati(a.presenter).contenuto != null)
+
+        // §6's Riassumibilita guard also needs the model Installato — removed after the re-run started.
+        a.vistaCorrente = unaVista(modello = StatoModelloVista.NonInstallato(6_169_341_984))
+        a.aggiornamenti.emetti(Cambiamento(REG_1))
+        runCurrent()
+        val dati = dati(a.presenter)
+        assertNull(dati.contenuto)
+        assertIs<AreaAzione.ScaricaModello>(dati.areaAzione)
     }
 
     @Test

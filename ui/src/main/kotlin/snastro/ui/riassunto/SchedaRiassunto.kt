@@ -89,16 +89,27 @@ private const val TAG_LUNGHEZZA_MASSIMA_SALVA = "riassunto-lunghezza-massima-sal
 private const val TAG_LUNGHEZZA_MASSIMA_ANNULLA = "riassunto-lunghezza-massima-annulla"
 private const val TAG_LUNGHEZZA_MASSIMA_SALVATO = "riassunto-lunghezza-massima-salvato"
 private const val TAG_PRIVACY = "riassunto-privacy"
+private const val TAG_MESSAGGIO_ERRORE = "riassunto-messaggio-errore"
 
 /**
  * Thin view of S3's Riassunto tab (RC-2): only renders [stato] and forwards [azioni]'s events — no
  * decision the presenter did not already make. Layout (dev-architecture `#presenter`,
- * `:ui:renderCheck` per-state, AC-S140): the shown Riassunto ([RiassuntoUiStato.Dati.contenuto], when
- * present) above the ONE bottom action area ([RiassuntoUiStato.Dati.areaAzione]) — a single, ALWAYS
- * scrollable [Column] with a bounded width (the S3 host already gives this composable a weighted,
- * width-capped container), never a `LazyRow`/`horizontalScroll` ancestor of [GruppoFonti]/[FonteChip]
- * (lesson `FonteChip.kt:54`, pre-release finding #113: `weight(1f, fill = false)` needs a bounded
- * parent). The privacy line is the tab's own last line, always present once loaded (AC-S139).
+ * `:ui:renderCheck` per-state, AC-S140), a single, ALWAYS scrollable [Column] with a bounded width
+ * (the S3 host already gives this composable a weighted, width-capped container), never a
+ * `LazyRow`/`horizontalScroll` ancestor of [GruppoFonti]/[FonteChip] (lesson `FonteChip.kt:54`,
+ * pre-release finding #113: `weight(1f, fill = false)` needs a bounded parent):
+ * - **states 1/2/3/4/5/8/9** (the model's own state, or the Argomento+Riassumi form): the shown
+ *   Riassunto ([RiassuntoUiStato.Dati.contenuto], when present) comes FIRST, the ONE action area
+ *   ([RiassuntoUiStato.Dati.areaAzione]) at the BOTTOM (ux row 1: "this block replaces only the
+ *   action area"; AC-S129: "a shown Riassunto stays visible above").
+ * - **states 6/7/10** (`in_attesa`/`in_corso`/`fallito` — THIS Riassunto's own open-request status,
+ *   AC-S130/S131/S134): the status/message comes FIRST, the shown Riassunto (if any) stays BELOW it
+ *   (ux rows 6/7/10: "the shown Riassunto stays below").
+ *
+ * The privacy line is the tab's own last line, always present once loaded (AC-S139), with the
+ * [RiassuntoUiStato.Dati.messaggioErrore] inline notice (a race's `ErroreSintesi`, e.g.
+ * `RiassuntoGiaAperto`) right above it — decoupled from [areaAzione] because a race can land on a
+ * DIFFERENT area variant than the one the user clicked from.
  */
 @Composable
 fun SchedaRiassunto(stato: RiassuntoUiStato, azioni: AzioniRiassunto, modifier: Modifier = Modifier) {
@@ -128,6 +139,8 @@ private fun Scheletro(modifier: Modifier) {
 
 @Composable
 private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, modifier: Modifier) {
+    val area = stato.areaAzione
+    val inAlto = area.inAlto()
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -136,11 +149,15 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
             .testTag(TAG_RADICE),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
     ) {
+        if (inAlto) AreaAzioneVista(area, stato, azioni)
         stato.contenuto?.let { contenuto ->
             if (contenuto.superato) AvvisoSuperato()
             SezioniContenuto(contenuto)
         }
-        AreaAzioneVista(stato, azioni)
+        if (!inAlto) AreaAzioneVista(area, stato, azioni)
+        stato.messaggioErrore?.let {
+            MessaggioTonale(it, LocalSnastroColori.current.danger, Icona.Alert, Modifier.testTag(TAG_MESSAGGIO_ERRORE))
+        }
         Text(
             text = PRIVACY_RIASSUNTO,
             style = LocalSnastroTipografia.current.caption,
@@ -149,6 +166,11 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
         )
     }
 }
+
+/** AC-S130/S131/S134 (states 6, 7, 10): THIS Riassunto's own open-request status/failure comes BEFORE
+ * any previously shown Riassunto — see [ContenutoTab]'s own KDoc for the full precedence. */
+private fun AreaAzione.inAlto(): Boolean =
+    this is AreaAzione.InCoda || this is AreaAzione.InCorso || this is AreaAzione.Fallito
 
 /** AC-S133: a warning notice INSIDE the tab — never [snastro.ui.stile.BannerSn] (ux: "not a screen Banner"). */
 @Composable
@@ -266,8 +288,8 @@ private fun PuntoChiaveRiga(punto: PuntoChiaveUi) {
 private fun Voce(voce: VoceVista) = EtichettaVoce(voceId = VoceId(voce.voceId), nome = voce.nome)
 
 @Composable
-private fun AreaAzioneVista(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto) {
-    when (val area = stato.areaAzione) {
+private fun AreaAzioneVista(area: AreaAzione, stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto) {
+    when (area) {
         is AreaAzione.ScaricaModello -> AreaScaricaModello(area, azioni)
         is AreaAzione.Scaricando -> AreaScaricando(area)
         is AreaAzione.DownloadFallito -> AreaDownloadFallito(area, azioni)
@@ -497,10 +519,11 @@ private fun LunghezzaMassimaSalvato(stato: LunghezzaMassimaUiStato.Salvato) {
 }
 
 @Composable
-private fun MessaggioTonale(testo: String, colore: Color, icona: Icona) {
+private fun MessaggioTonale(testo: String, colore: Color, icona: Icona, modifier: Modifier = Modifier) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
+        modifier = modifier,
     ) {
         IconaSn(icona, descrizione = null, tinta = colore, dimensione = SnastroMisure.iconS)
         Text(testo, style = LocalSnastroTipografia.current.body, color = colore)
