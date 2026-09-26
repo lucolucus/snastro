@@ -24,13 +24,13 @@ tests_nl_status: "draft"
 # repository-sql-sintesi — RiassuntoRepositorySql + LunghezzaMassimaRiassuntoRepositorySql
 
 ## What to do
-SQLDelight repositories over the 6.sqm queries only (riassunto*/impostazioniSintesi): upsert + child replace, explicit child deletes, index violation → Esito mapping, the in-transaction compare-and-set completion; both contracts pass on SQL.
+SQLDelight repositories over the 6.sqm queries only (riassunto*/impostazioniSintesi): upsert + child replace, explicit child deletes, index violation → Esito mapping (BOTH riassunto_non_pronto_unico and riassunto_pronto_unico → Errore(RiassuntoGiaAperto(registrazioneId)); any other constraint → infra fault), the in-transaction compare-and-set completion — `concludi` of a pronto removes the previous pronto of the same Registrazione ITSELF, after the in_corso re-read and before the UPDATE, in the same call (ADR 0022 §4 steps 1–3; D-0003); both contracts pass on SQL.
 
 **ready_when:** SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it.
 
 ## Tasks
 - AC-S111 RiassuntoRepositoryContratto and LunghezzaMassimaRiassuntoRepositoryContratto pass against the SQL implementations on databaseInMemoria()
-- AC-S112 riassunto_non_pronto_unico violation → Errore(ErroreSintesi.RiassuntoGiaAperto(registrazioneId)); any other constraint failure → infra fault per ADR 0003
+- AC-S112 salva: a riassunto_non_pronto_unico violation AND a riassunto_pronto_unico violation (second pronto of the same Registrazione) → Errore(ErroreSintesi.RiassuntoGiaAperto(registrazioneId)), nothing written; any OTHER constraint failure → infra fault per ADR 0003 (D-0003)
 - AC-S113 CAS race on a real SQLite FILE with two UnitaDiLavoroSql threads on a barrier (completion vs rimuoviDiRegistrazione), repeated 50 times: never a resurrected row, never two pronto, never a pronto without its children
 - AC-S114 Uses only riassunto*Queries / impostazioniSintesiQueries (ADR 0021 enforced_by clauses 2–3 green)
 
@@ -60,7 +60,7 @@ SQLDelight repositories over the 6.sqm queries only (riassunto*/impostazioniSint
   - `LunghezzaMassimaRiassunto`: root(progettoId: ProgettoId, parole: LunghezzaMassimaParole /* pinned in agg-riassunto */); LunghezzaMassimaRiassunto.predefinita(progettoId); modifica(parole: Int): Esito<LunghezzaMassimaRiassuntoModificataDominio>
   - key `progettoId`: ProgettoId (kernel) minted by crea-progetto — one setting per Progetto; no row ⇒ PREDEFINITA
 - **repo-sintesi** (consumed; owner porte-sintesi; projection in-process; contract_test `consumer-driven`)
-  - `RiassuntoRepository`: interface { fun trova(id: RiassuntoId): Riassunto?; fun diRegistrazione(r: RegistrazioneId): List<Riassunto>; fun inAttesa(): List<Riassunto> /* FIFO (richiestoAlle, id) */; fun inCorso(): List<Riassunto>; fun salva(r: Riassunto): Esito<Unit> /* upsert root + replace children, caller's transaction; open-index violation → Errore(RiassuntoGiaAperto) */; fun concludi(r: Riassunto): Esito<Boolean> /* CAS: UPDATE … WHERE id AND stato='in_corso' + children; false = no effect */; fun rimuovi(id: RiassuntoId): Esito<Unit>; fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> }
+  - `RiassuntoRepository`: interface { fun trova(id: RiassuntoId): Riassunto?; fun diRegistrazione(r: RegistrazioneId): List<Riassunto>; fun inAttesa(): List<Riassunto> /* FIFO (richiestoAlle, id) */; fun inCorso(): List<Riassunto>; fun salva(r: Riassunto): Esito<Unit> /* upsert root + replace children, caller's transaction; riassunto_non_pronto_unico OR riassunto_pronto_unico violation → Errore(ErroreSintesi.RiassuntoGiaAperto(registrazioneId)), nothing written; any other constraint failure → infra fault (ADR 0003) — D-0003 */; fun concludi(r: Riassunto): Esito<Boolean> /* CAS in ONE call (ADR 0022 §4 steps 1–3): re-read the row; absent or not in_corso → Ok(false), nothing written; only when r is pronto, concludi ITSELF removes the previous pronto of the same Registrazione (after the in_corso check, same call — callers never remove it first); then UPDATE … WHERE id AND stato='in_corso' + children → Ok(true) — D-0003 */; fun rimuovi(id: RiassuntoId): Esito<Unit>; fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> }
   - `LunghezzaMassimaRiassuntoRepository`: interface { fun trova(p: ProgettoId): LunghezzaMassimaRiassunto /* predefinita when no row */; fun salva(l: LunghezzaMassimaRiassunto): Esito<Unit> }
   - key `RiassuntoId`: see agg-riassunto
 - **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)

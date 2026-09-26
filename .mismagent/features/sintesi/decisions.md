@@ -23,3 +23,16 @@
 - By: decided: architect (delegated by user Luca Parsani); recorded: architect
 - Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0003](../../decisions/0003-politica-errori-esito.md)
 - Revisit: Another caller needs to report why a text failed to decode, or the UI must show it.
+
+### D-0003 · repo-sintesi: second pronto errore, concludi replaces
+- Meta: 2026-09-26; scope: boundary:repo-sintesi; status: accepted
+- Question: A second pronto on salva hits riassunto_pronto_unico: domain Errore (AC-S66) or infra fault (AC-S112)? Who removes the previous pronto on completion?
+- Options: index: Errore(RiassuntoGiaAperto) (kept) vs infra fault, weakening AC-S66. Removal: inside concludi after the CAS (kept) vs esegui-riassunto before concludi.
+- Hypothesis: n/a — decided by the user on the porte-sintesi open question, [building-blocks.yaml](building-blocks.yaml)
+- Check: n/a — decided by the user on the porte-sintesi open question, [building-blocks.yaml](building-blocks.yaml)
+- Result: n/a — decided by the user on the porte-sintesi open question, [building-blocks.yaml](building-blocks.yaml)
+- Debate: worker/porte-sintesi parked the block proposing D-porte-sintesi-1 (amend AC-S112) and D-porte-sintesi-2 (concludi removes it, ADR 0022 §4 steps 1–3); the user accepted both.
+- Decision: salva maps both unique indexes to Errore(RiassuntoGiaAperto(registrazioneId)), nothing written; other constraints are infra faults. concludi of a pronto removes the previous pronto itself, after the in_corso CAS, same call; esegui-riassunto never does.
+- By: decided: user (Luca Parsani); recorded: build-manifest
+- Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0022](../../decisions/0022-persistenza-sintesi-6sqm.md), [ADR 0003](../../decisions/0003-politica-errori-esito.md)
+- Revisit: A second pronto must be reported differently from an open request, or completion leaves the repository.
