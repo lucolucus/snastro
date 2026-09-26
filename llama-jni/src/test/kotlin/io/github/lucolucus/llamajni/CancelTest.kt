@@ -6,6 +6,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 @Timeout(10)
@@ -101,6 +102,47 @@ class CancelTest {
         var calls = 0
         CancelWatcher(cancel = { false }, pollMillis = 1) { calls++ }.close()
         assertEquals(0, calls)
+    }
+
+    @Test
+    fun `AC-S167 a caller interrupt mid-call returns a result, joins the watcher, keeps the flag`() {
+        val abortEntered = CountDownLatch(1)
+        val blocking = AtomicBoolean(false)
+        val bridge = FakeNativeBridge().apply {
+            onAbort = {
+                abortEntered.countDown()
+                spinFor(millis = 200) // an abort still in progress, deaf to interrupts, when the caller closes
+                calls += "abort-end"
+            }
+            decodeCode = {
+                blocking.set(true)
+                // a native call that ignores interrupts: returns once the caller has been interrupted
+                while (!Thread.currentThread().isInterrupted) Thread.onSpinWait()
+                NativeBridge.DECODE_OK
+            }
+        }
+        var outcome: Any? = null
+        var flagRestored = false
+        val caller = Thread {
+            anOpenModel(bridge).use { model ->
+                outcome = runCatching { model.generate("hi", GenerateOptions(8, null)) { blocking.get() } }
+                    .getOrElse { it }
+                flagRestored = Thread.interrupted()
+            }
+        }
+        caller.start()
+        assertTrue(abortEntered.await(5, TimeUnit.SECONDS))
+        caller.interrupt()
+        caller.join()
+
+        assertIs<LlamaResult<*>>(outcome)
+        assertTrue(flagRestored)
+        assertTrue(bridge.calls.indexOf("abort-end") < bridge.calls.indexOf("freeContext"), "${bridge.calls}")
+    }
+
+    private fun spinFor(millis: Long) {
+        val until = System.nanoTime() + millis * NANOS_PER_MILLI
+        while (System.nanoTime() < until) Thread.onSpinWait()
     }
 
     private val steps = setOf("beginGeneration", "decode", "generate")

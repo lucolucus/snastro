@@ -31,10 +31,22 @@ internal class CancelWatcher(
         }
     }
 
+    /**
+     * Joins uninterruptibly: an interrupted caller still waits for a [onCancel] in progress (it may touch the
+     * native context the caller frees next), then gets its interrupt flag back.
+     */
     override fun close() {
         running = false
         thread.interrupt()
-        thread.join()
+        var interrupted = false
+        while (thread.isAlive) {
+            try {
+                thread.join()
+            } catch (_: InterruptedException) {
+                interrupted = true
+            }
+        }
+        if (interrupted) Thread.currentThread().interrupt()
     }
 
     companion object {
