@@ -62,7 +62,7 @@ blocks:
     wave: 1
     release: "R3"
     module: ":sintesi:dominio"
-    title: "Aggregato Riassunto + Verifica delle fonti + guardie pure (Riassumibilita, IngressoRiassunto, LimiteIngresso)"
+    title: "Aggregato Riassunto + VO LunghezzaMassimaParole + Verifica delle fonti + guardie pure (Riassumibilita, IngressoRiassunto, LimiteIngresso)"
     consumes: []
     reuses:
       - "trascrizione-con-parlanti/kernel-pl"
@@ -77,6 +77,7 @@ blocks:
       - "INV-S6 (pure guard Riassumibilita) Riassumi is accepted only if: model installed; a Trascritto exists; no Elaborazione open; no Riassunto open (INV-S2); input within the limit — evaluated in this order"
       - "INV-S7 superato is derived, never stored: a pronto Riassunto is superato iff StrutturaTrascritto.di(current).chiave != its stored struttura"
       - "INV-S10 the lunghezza massima is fixed at request, immutable, passed to the run; a pronto answer longer than the cap is kept whole (never truncated, never fallito for length)"
+      - "INV-S9 (VO LunghezzaMassimaParole, owned here since D-0001) the lunghezza massima del Riassunto is an integer number of words within [300, 2500], default 2000; out of range → LunghezzaMassimaFuoriIntervallo, nothing changed"
     invariant_fields:
       - "stato"
       - "motivoFallimento"
@@ -106,13 +107,14 @@ blocks:
       - "INV-S5 TestoConVoci codec: decodifica/codifica round-trip is lossless for texts with {V1}, adjacent tokens '{V1}{V2}', and literal braces written '{{' / '}}'; a lone '{' or '}', '{V}', '{V0}', '{Vx}' is a malformed token → the element carrying it is dropped and counted (same rule as an invalid token)"
       - "INV-S5 (by-construction for the API) the root, its VOs and BozzaRiassunto expose no String 'nome' field and no ParlanteId — covered mechanically by ADR 0021 enforced_by clause 1, not counted as coverage"
       - "INV-S7 StrutturaTrascritto.chiave is '<segmentoId>:<voceId>' pairs ordered by segmentoId joined by ',' whatever the input order ([(3,1),(1,1),(2,2)] → '1:1,2:2,3:1'); superato(corrente) is false for the same assignment, true after segmento 2 moves V2 → V1, false again when it moves back"
+      - "INV-S9 LunghezzaMassimaParole.di: 300, 2000 and 2500 → Ok; 299, 2501, 0 and -1 → Errore(LunghezzaMassimaFuoriIntervallo(valore, 300, 2500)) (table test); the constants MINIMO 300 / MASSIMO 2500 / PREDEFINITA 2000 exist only in this VO"
       - "INV-S10 the cap given to richiedi is readable in every state and no method changes it; completa on an answer of 3 000 words with a 2 000 cap still gives pronto with the full text (no truncation, no fallito)"
       - "AC-S1 Argomento.di: '  budget 2027  ' → 'budget 2027'; '', '   ' and null → absent (no Argomento); 200 characters → Ok; 201 → Errore(ArgomentoTroppoLungo(201, 200)); the bound is the single constant Argomento.MASSIMO_CARATTERI (provisional, spike filtro-fuori-tema)"
       - "INV-S6 Riassumibilita table test: each precondition failing alone gives its own error (ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RiassuntoGiaAperto, RegistrazioneTroppoLunga); several failing together give the FIRST in the pinned order; all satisfied → Ok. Pure: no port, no clock"
       - "AC-S2 LimiteIngresso: stimaToken = ceil(characters / 3); an input of 84 000 characters (28 000 tokens) is within the limit, 84 001 characters (28 001) is not; the constants 3 and 28 000 exist only in LimiteIngresso"
       - "AC-S3 IngressoRiassunto: each Segmento becomes one line '[s<segmentoId> V<voceId> m:ss] <testo>' (h:mm:ss from one hour; 65 000 ms → '1:05', 3 725 000 → '1:02:05') in the given order, followed by a legend 'V<n> = <Nome>' for named Voci and 'V<n> = Voce <n>' for unattributed ones, one line per Voce appearing in the input, ascending by n"
-    notes: "Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt, rule 11): RiassuntoGiaAperto, ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RegistrazioneTroppoLunga, ArgomentoTroppoLungo, LunghezzaMassimaFuoriIntervallo, TransizioneNonAmmessa, RiassuntoNonTrovato. LimiteIngresso and the Argomento bound are provisional (spikes runtime-llm-in-app, filtro-fuori-tema): their constants have one home each."
-    sources: "tactical-model.md § Sintesi (aggregates, INV-S1/S4/S5/S6/S7/S10), ADR 0021 §1/§4/§5/§7/§9, ADR 0022 §2"
+    notes: "Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt, rule 11): RiassuntoGiaAperto, ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RegistrazioneTroppoLunga, ArgomentoTroppoLungo, LunghezzaMassimaFuoriIntervallo (raised by LunghezzaMassimaParole.di, also declared here), TransizioneNonAmmessa, RiassuntoNonTrovato. The VO LunghezzaMassimaParole lives here (not in lunghezza-massima-riassunto) because Riassunto.richiedi takes it — D-0001 (user, 2026-09-26) breaks the riassunto ↔ lunghezza-massima-riassunto cycle. LimiteIngresso and the Argomento bound are provisional (spikes runtime-llm-in-app, filtro-fuori-tema): their constants have one home each."
+    sources: "tactical-model.md § Sintesi (aggregates, INV-S1/S4/S5/S6/S7/S9/S10), decisions.md D-0001, ADR 0021 §1/§4/§5/§7/§9, ADR 0022 §2"
   - id: "lettore-trascritto-sintesi"
     type: "port"
     context: "sintesi"
@@ -370,7 +372,7 @@ blocks:
     wave: 2
     release: "R3"
     module: ":sintesi:dominio"
-    title: "Aggregato LunghezzaMassimaRiassunto (impostazione per Progetto) + VO LunghezzaMassimaParole"
+    title: "Aggregato LunghezzaMassimaRiassunto (impostazione per Progetto)"
     consumes:
       - "agg-riassunto"
     reuses:
@@ -378,8 +380,7 @@ blocks:
     related_adrs:
       - "0021"
       - "0022"
-    invariants:
-      - "INV-S9 the lunghezza massima del Riassunto is an integer number of words within [300, 2500], default 2000; out of range → LunghezzaMassimaFuoriIntervallo, nothing changed"
+    invariants: []
     invariant_fields:
       - "parole"
     identity: "progettoId (ProgettoId, kernel) — one per Progetto"
@@ -387,10 +388,10 @@ blocks:
       - "impostazioni_sintesi"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "INV-S9 LunghezzaMassimaParole.di: 300, 2000 and 2500 → Ok; 299, 2501, 0 and -1 → Errore(LunghezzaMassimaFuoriIntervallo(valore, 300, 2500)) (table test); the constants MINIMO 300 / MASSIMO 2500 / PREDEFINITA 2000 exist only in this VO"
       - "AC-S48 LunghezzaMassimaRiassunto.predefinita(progettoId) holds 2000 — the value read for a Progetto created before this feature (no row)"
       - "AC-S49 modifica(1500) → the root holds 1500 and returns LunghezzaMassimaRiassuntoModificata(progettoId); modifica(2600) → Errore(LunghezzaMassimaFuoriIntervallo), value unchanged, no event"
-    sources: "tactical-model § Lunghezza massima del Riassunto, INV-S9; ADR 0022 §2"
+    notes: "The VO LunghezzaMassimaParole (INV-S9, its di table test, MINIMO/MASSIMO/PREDEFINITA) is owned by riassunto and consumed here from agg-riassunto (D-0001); this block only wraps it in the per-Progetto root — modifica(parole: Int) delegates to LunghezzaMassimaParole.di, never re-checks the range."
+    sources: "tactical-model § Lunghezza massima del Riassunto, INV-S9; decisions.md D-0001; ADR 0022 §2"
   - id: "lettore-trascritto-da-trascrizione-sintesi"
     type: "adapter"
     context: "sintesi"
@@ -622,6 +623,7 @@ blocks:
     module: ":sintesi:applicazione (..comandi)"
     title: "Comando ModificaLunghezzaMassimaRiassunto"
     consumes:
+      - "agg-riassunto"
       - "agg-lunghezza-massima-riassunto"
       - "repo-sintesi"
       - "eventi-sintesi"
@@ -767,6 +769,7 @@ blocks:
     module: ":sintesi:applicazione (..letture)"
     title: "Read-model ImpostazioniSintesiVista (per Progetto)"
     consumes:
+      - "agg-riassunto"
       - "agg-lunghezza-massima-riassunto"
       - "repo-sintesi"
     reuses:
@@ -777,7 +780,7 @@ blocks:
       ImpostazioniSintesiVista: "{ lunghezzaMassimaParole: Int /* 2000 if unset */, minimo: Int /* 300 */, massimo: Int /* 2500 */ }"
     view_sources:
       lunghezzaMassimaParole: "LunghezzaMassimaRiassuntoRepository.trova(progettoId) (default 2000 when no row)"
-      "minimo / massimo": "LunghezzaMassimaParole.MINIMO / MASSIMO (agg-lunghezza-massima-riassunto)"
+      "minimo / massimo": "LunghezzaMassimaParole.MINIMO / MASSIMO (agg-riassunto)"
     tests_nl_status: "draft"
     tests_nl:
       - "AC-S109 No row → {2000, 300, 2500}; after ModificaLunghezzaMassimaRiassunto(p, 1500) → {1500, 300, 2500}; another Progetto still reads 2000"
@@ -1085,8 +1088,10 @@ boundaries:
       - "porte-sintesi"
       - "riassumi"
       - "esegui-riassunto"
+      - "modifica-lunghezza-massima-riassunto"
       - "sostituzione-trascritto-sintesi-policy"
       - "riassunto-vista"
+      - "impostazioni-sintesi"
       - "repository-sql-sintesi"
     projection: "in-process"
     pinned_types:
@@ -1105,6 +1110,7 @@ boundaries:
       MotivoFallimento: "enum { MODELLO_NON_DISPONIBILE('modello_non_disponibile'), ERRORE_MODELLO('errore_modello'), TROPPO_LUNGA('troppo_lunga'), NESSUN_CONTENUTO_VERIFICABILE('nessun_contenuto_verificabile'), INTERROTTO('interrotto') } — canonical codes stored in motivo_fallimento"
       Riassumibilita: "object { fun valuta(modelloInstallato: Boolean, trascrittoPresente: Boolean, elaborazioneAperta: Boolean, riassuntoAperto: Boolean, stimaToken: Int?): Esito<Unit> } — errors in this order: ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RiassuntoGiaAperto, RegistrazioneTroppoLunga"
       "IngressoRiassunto / LimiteIngresso": "IngressoRiassunto.costruisci(segmenti: List<SegmentoIngresso>, nomi: Map<VoceId, String>): String; SegmentoIngresso(segmentoId: SegmentoId, voceId: VoceId, inizioMs: Long, testo: String); LimiteIngresso.stimaToken(ingresso: String): Int = ceil(chars/3); LimiteIngresso.LIMITE_TOKEN = 28_000 (provisional)"
+      LunghezzaMassimaParole: "@JvmInline value class(valore: Int) in :sintesi:dominio; LunghezzaMassimaParole.di(n: Int): Esito<LunghezzaMassimaParole> (the only factory); MINIMO = 300, MASSIMO = 2500, PREDEFINITA = 2000 — owned by riassunto since D-0001 (provisional, spikes runtime-llm-in-app / qualita-riassunto)"
       "ErroreSintesi (ErroriSintesi.kt, : ErroreDominio)": "RiassuntoGiaAperto(registrazioneId); ModelloNonInstallato; TrascrittoNonDisponibile(registrazioneId); ElaborazioneGiaAperta(registrazioneId); RegistrazioneTroppoLunga(stimaToken: Int, limite: Int); ArgomentoTroppoLungo(lunghezza: Int, massimo: Int); LunghezzaMassimaFuoriIntervallo(valore: Int, minimo: Int, massimo: Int); TransizioneNonAmmessa(da: String, verso: String); RiassuntoNonTrovato(id: String)"
     keys:
       RiassuntoId: "minted by riassumi and by sostituzione-trascritto-sintesi-policy via GeneratoreId (UUID v4) — never reused, stable for the row's life; crosses to :avvio only as its String value (ElementoInCoda.id, esclusi)"
@@ -1131,8 +1137,7 @@ boundaries:
       - "repository-sql-sintesi"
     projection: "in-process"
     pinned_types:
-      LunghezzaMassimaParole: "@JvmInline value class(valore: Int) in :sintesi:dominio; LunghezzaMassimaParole.di(n: Int): Esito<LunghezzaMassimaParole> (the only factory); MINIMO = 300, MASSIMO = 2500, PREDEFINITA = 2000 (provisional, spikes runtime-llm-in-app / qualita-riassunto)"
-      LunghezzaMassimaRiassunto: "root(progettoId: ProgettoId, parole: LunghezzaMassimaParole); LunghezzaMassimaRiassunto.predefinita(progettoId); modifica(parole: Int): Esito<LunghezzaMassimaRiassuntoModificataDominio>"
+      LunghezzaMassimaRiassunto: "root(progettoId: ProgettoId, parole: LunghezzaMassimaParole /* pinned in agg-riassunto */); LunghezzaMassimaRiassunto.predefinita(progettoId); modifica(parole: Int): Esito<LunghezzaMassimaRiassuntoModificataDominio>"
     keys:
       progettoId: "ProgettoId (kernel) minted by crea-progetto — one setting per Progetto; no row ⇒ PREDEFINITA"
     contract_test: "invariant-test"

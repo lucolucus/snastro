@@ -1,0 +1,12 @@
+### D-0001 · LunghezzaMassimaParole owned by riassunto
+- Meta: 2026-09-26; scope: block:riassunto; status: accepted
+- Question: Riassunto.richiedi takes LunghezzaMassimaParole, pinned in agg-lunghezza-massima-riassunto (wave 2) which consumes agg-riassunto: a manifest cycle blocking riassunto.
+- Options: 1 move the VO into riassunto, no signature change; 2 separate VO block, one more block and wave for one class; 3 richiedi takes a plain Int, contract change via the architect.
+- Hypothesis: n/a — decided by the user (option 1 of the riassunto open question), [building-blocks.yaml](building-blocks.yaml)
+- Check: n/a — decided by the user (option 1 of the riassunto open question), [building-blocks.yaml](building-blocks.yaml)
+- Result: n/a — decided by the user (option 1 of the riassunto open question), [building-blocks.yaml](building-blocks.yaml)
+- Debate: worker/riassunto bounced the block with the three options; the user chose option 1.
+- Decision: The VO, its INV-S9 di table test and constants move to riassunto (boundary agg-riassunto), same pinned shape; lunghezza-massima-riassunto keeps only its root. Cost: riassunto grows by one VO.
+- By: decided: user (Luca Parsani); recorded: build-manifest
+- Docs: [building-blocks.yaml](building-blocks.yaml)
+- Revisit: The cap becomes a richer setting than a word count, or another context needs the VO.
