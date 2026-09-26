@@ -110,6 +110,20 @@ class ServizioModelliProvisioningTest {
     }
 
     @Test
+    fun `AC-S32 pronti che lancia conta solo le voci obbligatorie, mai una facoltativa`() {
+        val facoltativa = voce.copy(id = "llm-facoltativo", dimensioneByte = 6_200_000_000, obbligatoria = false)
+        val catalogoConFacoltativa = CatalogoModelli(listOf(voce, facoltativa))
+        val servizio = ServizioModelliProvisioning(
+            catalogoConFacoltativa,
+            { throw IOException("cartella illeggibile") },
+            { throw IOException("cartella illeggibile") },
+            { Esito.Ok(Unit) },
+        )
+
+        assertEquals(StatoModelli.Mancanti(1, voce.dimensioneByte), servizio.stato.value)
+    }
+
+    @Test
     fun `AC-228 durante scarica lo stato passa per InDownload con i byte del modello`() {
         val visti = mutableListOf<StatoModelli>()
         lateinit var servizio: ServizioModelliProvisioning

@@ -30,7 +30,8 @@ import java.util.logging.Logger
  * [InvalidPathException]) is caught here — [scarica] ends in [StatoModelli.Errore]
  * (`ScritturaFallita(motivo)`), never a crash and never a [StatoModelli] stuck in `InDownload`, and a
  * new [scarica] ('Riprova') simply runs again; `pronti()`/`mancanti()` throwing at startup gives
- * [StatoModelli.Mancanti] over the whole catalogue (the app starts anyway).
+ * [StatoModelli.Mancanti] over the catalogue's REQUIRED (`obbligatoria`) entries only (AC-S32 — an
+ * optional entry never counts here either), the app starts anyway.
  *
  * The provisioning is reached through three functions (not the final class itself) so a test can make
  * each of them throw; [di] binds the real [ProvisioningModelli].
@@ -94,7 +95,7 @@ internal class ServizioModelliProvisioning(
 
     private fun tuttiMancanti(e: Exception): StatoModelli {
         log.log(Level.WARNING, "verifica dei modelli installati fallita: li considero mancanti", e)
-        return mancantiDi(catalogo.voci)
+        return mancantiDi(catalogo.voci.filter { it.obbligatoria })
     }
 
     private fun erroreDiScrittura(e: Exception): StatoModelli {
