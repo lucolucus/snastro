@@ -39,6 +39,7 @@ starts it, and no `Riassunto` is created until the model is installed.
 
 ## Unblocks
 - modello-linguistico-llama
+- llama-jni-libreria
 
 (block ids pinned by build-manifest 2026-09-26; `central: true` by user decision 2026-09-26 — it runs at wave 0
 beside scaffold-sintesi.) `modello-linguistico-llama` holds everything the closure protocol decides: the

@@ -5,7 +5,7 @@ supersedes: null   # partial, amended in place with dated pointers here: ADR 002
 decided: 2026-09-26 · user (JNI stays; the binding is an external, separately shareable library with zero snastro dependencies; developed fully, Windows included) · architect (name, API outline, per-OS toolchain and GPU defaults, test layout — the items marked [architect] are open to the user's veto, see "Open questions")
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0027-libreria-llama-indipendente.sh
-    from: modello-linguistico-llama   # the block that creates ./llama-jni/; build-manifest repoints this to the library block when it splits the block
+    from: llama-jni-libreria   # the block that creates ./llama-jni/ (repointed 2026-09-26 by build-manifest when it split modello-linguistico-llama)
   # the System.load admission of ./llama-jni/ is ADR 0004's own check (amended again 2026-09-26 (b), cited there)
 ---
 # 0027 — The llama.cpp binding is a separate library, `:llama-jni`, with no snastro dependency

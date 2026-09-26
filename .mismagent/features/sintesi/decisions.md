@@ -75,3 +75,17 @@
 - By: decided: user (Luca Parsani); recorded: build-manifest
 - Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0023](../../decisions/0023-coda-condivisa-elaborazioni-riassunti.md)
 - Revisit: A source needs stop semantics other than cancelling its running item, or shutdown moves out of CodaCondivisa.
+
+### D-0007 · llama-jni: Mac-only build, MIT, Vulkan
+- Meta: 2026-09-26; scope: feature; status: accepted
+- Question: ADR 0027 left four questions open: the Windows/Linux build host, the library licence, its name and namespace, and the Windows/Linux GPU default and time budget.
+- Options: Q-1 GitHub Actions matrix or physical Windows PC vs Mac only for now (kept); Q-2 MIT (kept) vs other; Q-4 Vulkan + CPU fallback (kept) vs CUDA or a pinned target machine and budget.
+- Hypothesis: n/a — decided by the user on ADR-0027's open questions, [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md)
+- Check: n/a — decided by the user on ADR-0027's open questions, [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md)
+- Result: n/a — decided by the user on ADR-0027's open questions, [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md)
+- Debate: the architect recommended a CI matrix for Q-1; the user deferred the Windows/Linux host and kept the other recommendations.
+- Decision: macOS arm64 only now; llama-jni-windows/linux wait for the build host (R4, not ready). LICENSE MIT; name llama-jni / io.github.lucolucus.llamajni; Vulkan with CPU fallback; 600 s NFR Mac only. Cost: no cross-platform proof yet.
+- By: decided: user (Luca Parsani); recorded: build-manifest
+- Docs: [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md), [building-blocks.yaml](building-blocks.yaml)
+- Revisit: The user picks a Windows/Linux build host, or snastro targets Windows/Linux.
+- ADR: [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md)
