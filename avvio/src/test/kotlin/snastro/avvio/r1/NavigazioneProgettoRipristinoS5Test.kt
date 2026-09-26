@@ -13,6 +13,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import snastro.avvio.r2.SEZIONI_SHELL_R2
@@ -62,6 +63,7 @@ class NavigazioneProgettoRipristinoS5Test {
                         parlanti = { Text(S4) },
                     )
                 },
+                etichettaModelloLinguisticoPiede = MutableStateFlow<String?>(null),
             )
         }
 

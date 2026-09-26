@@ -10,6 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.flow.StateFlow
 import snastro.kernel.RegistrazioneId
 import snastro.ui.AzioniShell
 import snastro.ui.DestinazioneShell
@@ -108,6 +109,12 @@ internal fun ContenutoProgetto(
  * The shell wired to the project's [NavigazioneProgetto] (one per open project, [iniziale] read when it
  * opens): the footer opens S5 from any section, the sidebar's reset hook returns to the S2 list, and
  * while S5 is shown the footer — not a nav item — is the highlighted place.
+ *
+ * [etichettaModelloLinguisticoPiede] (AC-S163, ADR 0025 §4): the composition root's OWN
+ * `snastro.ui.modelli.ModelliPresenter.etichettaModelloLinguisticoPiede` — the SAME presenter instance
+ * `ModelliRoute` renders on S5 (`ContenutoAppR1`/`ContenutoAppR2` build ONE `ModelliPresenter` per
+ * project and pass its flow here) — collected and handed to [ShellRoute] so the footer's third line
+ * (`ShellRoute`'s own KDoc) reflects it from every section, not only while S5 itself is on screen.
  */
 @Composable
 internal fun ShellProgetto(
@@ -115,10 +122,12 @@ internal fun ShellProgetto(
     iniziale: () -> SchermataR1,
     contenutoSenzaProgetto: @Composable () -> Unit,
     contenuto: @Composable (ShellUiStato.ConProgetto, NavigazioneProgetto) -> Unit,
+    etichettaModelloLinguisticoPiede: StateFlow<String?>,
 ) {
     val stato by shellPresenter.stato.collectAsState()
     val progettoId = (stato as? ShellUiStato.ConProgetto)?.progetto?.progettoId
     val navigazione = remember(progettoId) { NavigazioneProgetto(shellPresenter.azioni, iniziale()) }
+    val etichettaModello by etichettaModelloLinguisticoPiede.collectAsState()
     ShellRoute(
         presenter = shellPresenter,
         contenutoSenzaProgetto = contenutoSenzaProgetto,
@@ -126,5 +135,6 @@ internal fun ShellProgetto(
         onRegistrazioniSelezionata = navigazione::tornaAllElenco,
         onModelliELicenze = navigazione::apriModelli,
         modelliSelezionati = navigazione.modelliMostrati(stato),
+        statoModelloLinguisticoPiede = etichettaModello,
     )
 }

@@ -12,9 +12,21 @@ import kotlin.test.assertEquals
  * "un servizio gia pronti non lancia su scarica"). The real-time, per-entry progress of an actual
  * download (AC-S33) is TIMED/NETWORKED: exercised at the presenter level against the fake's own
  * test-only `emettiFacoltativo` ([snastro.ui.modelli.ModelliPresenterTest]), not here.
+ *
+ * [con] is seeded by CATALOGUE + FILESYSTEM shape (a declared size per id, which of them are already
+ * installed), never by directly poking a [StatoModelloFacoltativo] value: a `ProvisioningModelli`-backed
+ * D2 has no such setter (`modello-facoltativo-avvio`, code-review finding on the previous shape —
+ * `con(facoltativi)` wasn't reproducible without one).
  */
 abstract class ServizioModelliFacoltativoContratto {
-    protected abstract fun con(facoltativi: Map<String, StatoModelloFacoltativo> = emptyMap()): ServizioModelli
+    /**
+     * A supplier with one optional catalogue entry per [dimensioniByte] (id → declared size),
+     * pre-installed iff its id is in [installati].
+     */
+    protected abstract fun con(
+        dimensioniByte: Map<String, Long> = emptyMap(),
+        installati: Set<String> = emptySet(),
+    ): ServizioModelli
 
     @Test
     fun `AC-S32 scaricaFacoltativo non altera StatoModelli, che resta un flow separato`() {
@@ -28,7 +40,7 @@ abstract class ServizioModelliFacoltativoContratto {
 
     @Test
     fun `un id gia Installato non e riscaricato`() {
-        val servizio = con(mapOf("id-facoltativo" to StatoModelloFacoltativo.Installato))
+        val servizio = con(dimensioniByte = mapOf("id-facoltativo" to 2_000), installati = setOf("id-facoltativo"))
 
         servizio.scaricaFacoltativo("id-facoltativo")
 
@@ -37,11 +49,21 @@ abstract class ServizioModelliFacoltativoContratto {
 
     @Test
     fun `scaricaFacoltativo di un id non altera lo stato tracciato di un altro id`() {
-        val altro = StatoModelloFacoltativo.NonInstallato(dimensioneByte = 1_000)
-        val servizio = con(mapOf("altro-id" to altro))
+        val servizio = con(dimensioniByte = mapOf("altro-id" to 1_000, "id-facoltativo" to 2_000))
 
         servizio.scaricaFacoltativo("id-facoltativo")
 
-        assertEquals(altro, servizio.statoFacoltativi.value["altro-id"])
+        assertEquals(StatoModelloFacoltativo.NonInstallato(1_000), servizio.statoFacoltativi.value["altro-id"])
+    }
+
+    @Test
+    fun `dopo un download riuscito lo stato resta Installato, un secondo scaricaFacoltativo e un no-op`() {
+        val servizio = con(dimensioniByte = mapOf("id-facoltativo" to 2_000))
+
+        servizio.scaricaFacoltativo("id-facoltativo")
+        assertEquals(StatoModelloFacoltativo.Installato, servizio.statoFacoltativi.value["id-facoltativo"])
+
+        servizio.scaricaFacoltativo("id-facoltativo") // terminal state: a repeat call changes nothing
+        assertEquals(StatoModelloFacoltativo.Installato, servizio.statoFacoltativi.value["id-facoltativo"])
     }
 }

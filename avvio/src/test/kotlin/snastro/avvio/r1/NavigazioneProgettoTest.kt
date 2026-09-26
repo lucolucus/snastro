@@ -11,12 +11,16 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import snastro.avvio.r2.SEZIONI_SHELL_R2
 import snastro.ui.DestinazioneShell
 import snastro.ui.SessioneProgettoFinta
 import snastro.ui.ShellPresenter
+import snastro.ui.modelli.ModelliPresenter
+import snastro.ui.modelli.ServizioModelliFinta
+import snastro.ui.modelli.StatoModelloFacoltativo
 
 private const val S2 = "contenuto S2 elenco"
 private const val S4 = "contenuto S4 parlanti"
@@ -91,7 +95,46 @@ class NavigazioneProgettoTest {
                         parlanti = if (conParlanti) ({ Text(S4) }) else null,
                     )
                 },
+                etichettaModelloLinguisticoPiede = MutableStateFlow<String?>(null),
             )
         }
+    }
+
+    /**
+     * AC-S163: `ShellRoute` receives THIS SAME `ModelliPresenter`'s flow — never a copy or a re-derived
+     * one — proven by driving the underlying `ServizioModelliFinta` (the way `:avvio`'s real
+     * `ServizioModelliProvisioning` would) and observing the shell's footer line follow it, on the
+     * built [ShellProgetto] + [ContenutoProgetto] graph `ContenutoAppR1`/`ContenutoAppR2` themselves use.
+     */
+    @Test
+    fun `AC-S163 il piede mostra l etichetta della STESSA ModelliPresenter, e la segue`() = runDesktopComposeUiTest {
+        val servizio = ServizioModelliFinta()
+        val modelliPresenter = ModelliPresenter(scope, Dispatchers.Unconfined, servizio)
+        val sessione = SessioneProgettoFinta().also { it.crea("/tmp", "Prova") }
+        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL_R1)
+        setContent {
+            ShellProgetto(
+                shellPresenter = shell,
+                iniziale = { SchermataR1.Registrazioni },
+                contenutoSenzaProgetto = {},
+                contenuto = { conProgetto, navigazione ->
+                    ContenutoProgetto(
+                        conProgetto = conProgetto,
+                        navigazione = navigazione,
+                        elenco = { Text(S2) },
+                        registrazione = { Text("S3") },
+                        modelli = { Text(S5) },
+                    )
+                },
+                etichettaModelloLinguisticoPiede = modelliPresenter.etichettaModelloLinguisticoPiede,
+            )
+        }
+
+        onNodeWithTag("shell-piede-modello-linguistico", useUnmergedTree = true).assertDoesNotExist()
+
+        servizio.emettiFacoltativo("llm-prova", StatoModelloFacoltativo.InDownload(2_100_000_000, 6_200_000_000))
+        waitForIdle()
+
+        onNodeWithText("Modello di linguaggio: 2,1 di 6,2 GB").assertIsDisplayed()
     }
 }

@@ -39,6 +39,9 @@ dependencies {
     implementation(project(":documento:adattatori"))
     implementation(project(":modelli"))
     implementation(project(":ml-sherpa"))
+    // R3 (modello-facoltativo-avvio): DisponibilitaModelloLinguisticoAvvio implements Sintesi's
+    // consumer-owned port (snastro.avvio.r3) — ADR 0021 §2 already allows `:avvio` -> every module.
+    implementation(project(":sintesi:applicazione"))
     // The ML Finte (DiarizzatoreFinta / RiconoscitoreParlatoFinta / VadFinta) are the pipeline's
     // adapters until diarizzatore-sherpa / riconoscitore-sherpa / vad-silero wire themselves into
     // SelezioneAdattatoriMl ("Finte until the ML blocks land", manifest) — and stay the forced choice of
@@ -59,6 +62,8 @@ dependencies {
     testImplementation(testFixtures(project(":persistenza")))
     testImplementation(testFixtures(project(":progetto:applicazione")))
     testImplementation(testFixtures(project(":ui")))
+    // DisponibilitaModelloLinguisticoContratto + AmbienteDisponibilitaModello (D2, modello-facoltativo-avvio).
+    testImplementation(testFixtures(project(":sintesi:applicazione")))
     testImplementation(project(":progetto:dominio"))
     testImplementation(libs.kotlinx.coroutines.test) // CodaElaborazioniTest: StandardTestDispatcher (dev-architecture #dipendenze-test)
 }
