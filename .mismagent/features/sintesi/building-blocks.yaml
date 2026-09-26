@@ -3,7 +3,7 @@
 # Banner precedence), architetture/architecture-overview.md (D-1..D-12), ADRs 0021-0025 (+ 0008, 0018, 0020, 0023 amendments),
 # architecture.md, code-rules.md, context-map.md, profile.md. Worktree: snastro-wt/sintesi (branch feature/sintesi).
 # Side `app` only → every boundary is in-process (port + in-process consumer-driven contract test); no OpenAPI, no operationId.
-# AC NUMBERING: Sintesi-local prefix AC-S1..AC-S157 (never collides with trascrizione-con-parlanti's AC-1..AC-636); invariants
+# AC NUMBERING: Sintesi-local prefix AC-S1..AC-S160 (never collides with trascrizione-con-parlanti's AC-1..AC-636); invariants
 # INV-S1..INV-S10 from features/sintesi/tactical-model.md. Test names start with the tag followed by a space (`AC-S12 `, `INV-S4 `),
 # JVM-safe, greppable per block (rule 18). New items take the next free number; never renumber.
 # `(by-construction)` items cannot fail — listed for completeness, NOT counted as coverage.
@@ -14,7 +14,7 @@
 # facoltativo, servizio-modelli-facoltativo, schede-registrazione, dialogo-elimina-riassunto) are Sintesi blocks here; the sibling
 # manifest is NOT edited (its superseded ACs are named in each block's notes).
 # ready_when: blocks needing "Elimina registrazione" code (RegistrazioneEliminata, 5.sqm, the S2 dialog, the design-system files)
-# waited for: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased" (SATISFIED 2026-09-26, main 6daba4e); the real LLM adapter waits for the runtime-llm-in-app spike ADR. Everything else builds against the Finte.
+# waited for: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased" (SATISFIED 2026-09-26, main 6daba4e); the real LLM adapter waited for the runtime-llm-in-app spike ADR (SATISFIED 2026-09-26: ADR 0026). Everything else builds against the Finte.
 # AMENDED 2026-09-25 (user checkpoint answers): high-value tests_nl CONFIRMED; R19-2 'In coda · n' everywhere; R19-8 design-system
 # delta SPLIT into stile-sintesi (code, ungated, owner of ui-kit-sintesi) + design-system-sintesi (docs only, gated) — schede-registrazione
 # and scheda-riassunto lose their rebase gate (they need no 5.sqm / RegistrazioneEliminata); R19-1/3/4/5/6/7 defaults accepted.
@@ -70,6 +70,7 @@ blocks:
       - "0003"
       - "0021"
       - "0022"
+      - "0026"
     invariants:
       - "INV-S1 StatoRiassunto moves only in_attesa → in_corso → pronto | fallito; pronto and fallito are terminal. Content (Sommario, elements, struttura, omessi) exists iff pronto; a failure reason exists iff fallito"
       - "INV-S4 Verifica delle fonti — pronto only through the check: invalid Fonte dropped, duplicates collapsed; an element left with no valid Fonte dropped and counted; an invalid Responsabile / PuntoChiave speaker binding removed (element kept); an element with an invalid speaker token dropped and counted, a Sommario with one dropped (shown empty) and counted; no Sommario AND no element ⇒ fallito nessun_contenuto_verificabile; nothing dropped is stored, only the count"
@@ -111,10 +112,10 @@ blocks:
       - "INV-S10 the cap given to richiedi is readable in every state and no method changes it; completa on an answer of 3 000 words with a 2 000 cap still gives pronto with the full text (no truncation, no fallito)"
       - "AC-S1 Argomento.di: '  budget 2027  ' → 'budget 2027'; '', '   ' and null → absent (no Argomento); 200 characters → Ok; 201 → Errore(ArgomentoTroppoLungo(201, 200)); the bound is the single constant Argomento.MASSIMO_CARATTERI (provisional, spike filtro-fuori-tema)"
       - "INV-S6 Riassumibilita table test: each precondition failing alone gives its own error (ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RiassuntoGiaAperto, RegistrazioneTroppoLunga); several failing together give the FIRST in the pinned order; all satisfied → Ok. Pure: no port, no clock"
-      - "AC-S2 LimiteIngresso: stimaToken = ceil(characters / 3); an input of 84 000 characters (28 000 tokens) is within the limit, 84 001 characters (28 001) is not; the constants 3 and 28 000 exist only in LimiteIngresso"
-      - "AC-S3 IngressoRiassunto: each Segmento becomes one line '[s<segmentoId> V<voceId> m:ss] <testo>' (h:mm:ss from one hour; 65 000 ms → '1:05', 3 725 000 → '1:02:05') in the given order, followed by a legend 'V<n> = <Nome>' for named Voci and 'V<n> = Voce <n>' for unattributed ones, one line per Voce appearing in the input, ascending by n"
-    notes: "Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt, rule 11): RiassuntoGiaAperto, ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RegistrazioneTroppoLunga, ArgomentoTroppoLungo, LunghezzaMassimaFuoriIntervallo (raised by LunghezzaMassimaParole.di, also declared here), TransizioneNonAmmessa, RiassuntoNonTrovato. The VO LunghezzaMassimaParole lives here (not in lunghezza-massima-riassunto) because Riassunto.richiedi takes it — D-0001 (user, 2026-09-26) breaks the riassunto ↔ lunghezza-massima-riassunto cycle. LimiteIngresso and the Argomento bound are provisional (spikes runtime-llm-in-app, filtro-fuori-tema): their constants have one home each. CR-4: this block adds \"Riassunto\" to radiciAggregato in architettura-test/src/test/kotlin/snastro/architettura/RegoleArchitetturaliTest.kt (the list's own rule: the block adding a root amends it; the one file it edits outside :sintesi:dominio) — D-0002."
-    sources: "tactical-model.md § Sintesi (aggregates, INV-S1/S4/S5/S6/S7/S9/S10), decisions.md D-0001, ADR 0021 §1/§4/§5/§7/§9, ADR 0022 §2"
+      - "AC-S2 LimiteIngresso: stimaToken = ⌈5 × characters ÷ 12⌉ (≡ ⌈characters ÷ 2.4⌉, integer arithmetic; ADR 0021 amendment 2026-09-26, ADR 0026 §5); an input of 67 200 characters (28 000 tokens) is within the limit, 67 201 characters (28 001) is not; the ratio constants and 28 000 exist only in LimiteIngresso"
+      - "AC-S3 IngressoRiassunto: each Segmento becomes one line '[s<segmentoId> V<voceId>] <testo>' with NO timestamp (ADR 0021 amendment 2026-09-26: inizioMs is not written) in the given order, followed by a legend 'V<n> = <Nome>' for named Voci and 'V<n> = Voce <n>' for unattributed ones, one line per Voce appearing in the input, ascending by n"
+    notes: "Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt, rule 11): RiassuntoGiaAperto, ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RegistrazioneTroppoLunga, ArgomentoTroppoLungo, LunghezzaMassimaFuoriIntervallo (raised by LunghezzaMassimaParole.di, also declared here), TransizioneNonAmmessa, RiassuntoNonTrovato. The VO LunghezzaMassimaParole lives here (not in lunghezza-massima-riassunto) because Riassunto.richiedi takes it — D-0001 (user, 2026-09-26) breaks the riassunto ↔ lunghezza-massima-riassunto cycle. LimiteIngresso is calibrated by ADR 0026 §5 (⌈characters ÷ 2.4⌉ vs 28 000; no longer provisional); the Argomento bound stays provisional (spike filtro-fuori-tema): their constants have one home each. REWORK 2026-09-26 (ADR 0026 fold): AC-S2 (÷ 3 → ÷ 2.4) and AC-S3 (no m:ss) change code already built; SegmentoIngresso keeps inizioMs (unused) so its consumers stay untouched. CR-4: this block adds \"Riassunto\" to radiciAggregato in architettura-test/src/test/kotlin/snastro/architettura/RegoleArchitetturaliTest.kt (the list's own rule: the block adding a root amends it; the one file it edits outside :sintesi:dominio) — D-0002."
+    sources: "tactical-model.md § Sintesi (aggregates, INV-S1/S4/S5/S6/S7/S9/S10), decisions.md D-0001, ADR 0021 §1/§4/§5/§7/§9 (+ amendment 2026-09-26), ADR 0022 §2, ADR 0026 §5"
   - id: "lettore-trascritto-sintesi"
     type: "port"
     context: "sintesi"
@@ -289,8 +290,8 @@ blocks:
     tests_nl_status: "draft"
     tests_nl:
       - "AC-S32 The existing S5 / shell presenter tests stay green unmodified; StatoModelli.Mancanti(numero, totaleByte) never counts an optional entry"
-      - "AC-S33 Sidebar foot: while statoFacoltativi[llm] is InDownload(2 100 000 000, 6 600 000 000) the line reads 'Modello di linguaggio: 2,1 di 6,6 GB' (decimal GB, one decimal, comma); no line for NonInstallato or Installato; the required-models line is unchanged"
-      - "AC-S34 MessaggiErrore maps ErroreServizioModelli.SpazioInsufficiente(6 600 000 000) to 'Non c'è abbastanza spazio sul disco (servono 6,6 GB).'"
+      - "AC-S33 Sidebar foot: while statoFacoltativi[llm] is InDownload(2 100 000 000, 6 169 341 984) the line reads 'Modello di linguaggio: 2,1 di 6,2 GB' (decimal GB, one decimal, comma); no line for NonInstallato or Installato; the required-models line is unchanged"
+      - "AC-S34 MessaggiErrore maps ErroreServizioModelli.SpazioInsufficiente(6 169 341 984) to 'Non c'è abbastanza spazio sul disco (servono 6,2 GB).'"
       - "AC-S35 STATES: sidebar with and without the download line render at the minimum window width and 1280×800, light and dark, no clipped text"
     notes: "REWORK of trascrizione-con-parlanti's schermata-modelli / tec-modelli-ui (merged). R19-6 DECIDED 2026-09-25 (user): separate statoFacoltativi StateFlow; ADR 0025 amended (Amendment 2026-09-25 (a))."
     sources: "ADR 0025 §4, ux-proposal § Sidebar / S5 Modelli"
@@ -951,11 +952,11 @@ blocks:
       - "ServizioModelli.scaricaFacoltativo(id)"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "AC-S125 State 1 model not installed: EmptyState 'Per riassumere serve il modello di linguaggio (6,6 GB), da scaricare una volta sola.' + 'Scarica il modello (6,6 GB)' → scaricaFacoltativo(id) called once; no Argomento field, no Riassumi; if a Riassunto is shown it stays and this block replaces only the action area"
-      - "AC-S126 State 2 downloading: 'Scarico il modello… 2,1 di 6,6 GB' (bytes, not %), nothing actionable"
-      - "AC-S127 State 3 download failed: danger text per motivo ('La connessione si è interrotta.', 'Il file scaricato non è integro.', 'Non c'è abbastanza spazio sul disco (servono 6,6 GB).', a text for ScritturaFallita) + 'Riprova' → scaricaFacoltativo again"
+      - "AC-S125 State 1 model not installed: EmptyState 'Per riassumere serve il modello di linguaggio (6,2 GB), da scaricare una volta sola.' + 'Scarica il modello (6,2 GB)' → scaricaFacoltativo(id) called once; no Argomento field, no Riassumi; if a Riassunto is shown it stays and this block replaces only the action area"
+      - "AC-S126 State 2 downloading: 'Scarico il modello… 2,1 di 6,2 GB' (bytes, not %), nothing actionable"
+      - "AC-S127 State 3 download failed: danger text per motivo ('La connessione si è interrotta.', 'Il file scaricato non è integro.', 'Non c'è abbastanza spazio sul disco (servono 6,2 GB).', a text for ScritturaFallita) + 'Riprova' → scaricaFacoltativo again"
       - "AC-S128 State 4 installed, no Riassunto: 'Nessun riassunto ancora.' + Argomento field + lunghezza massima line + 'Riassumi' → Riassumi(r, argomento) once; a second click while pending is ignored"
-      - "AC-S129 State 5 not available: button disabled with caption 'La registrazione è troppo lunga per il riassunto (oltre 1 h 15 circa).' or 'Aspetta la fine della trascrizione.'; a shown Riassunto stays visible above"
+      - "AC-S129 State 5 not available: button disabled with caption 'La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa).' or 'Aspetta la fine della trascrizione.'; a shown Riassunto stays visible above"
       - "AC-S130 State 6 in_attesa: queued chip 'In coda · n' with n = PosizioniNellaCoda.istantanea().riassunti[r] ('In coda' without a number when absent); Argomento and Riassumi hidden; the shown Riassunto stays below; no 'Annulla'"
       - "AC-S131 State 7 in_corso: 'Sto riassumendo… m:ss' elapsed from avviatoIl (ticking with an injected clock: 72 s → '1:12') + 'Di solito ci vogliono circa 3 minuti per un'ora di registrazione.'"
       - "AC-S132 State 8 pronto: sections in order Sommario, Decisioni, Azioni ('→ ' + Responsabile when bound, nothing otherwise), Questioni aperte, Punti chiave (speaker before the text when bound); empty sections omitted; Fonti chips sorted by time; '3 elementi omessi perché non trovavo le frasi citate.' only when omessi > 0; metadata 'Argomento: …' when given · 'Lunghezza massima: 2000 parole' (the cap requested with); button 'Riassumi di nuovo' with no confirmation dialog"
@@ -1053,8 +1054,8 @@ blocks:
     side: "app"
     wave: 7
     release: "R3"
-    module: ":llm (new) + :sintesi:adattatori (..ml) + catalogue entry in :modelli + avvio-sintesi binding + packaging"
-    title: "Adattatore reale ModelloLinguistico su runtime llama (JNI o sidecar, deciso dallo spike)"
+    module: ":llm (new: JNI shim + external declarations, ADR 0026) + :sintesi:adattatori (..ml) + catalogue entry in :modelli + avvio-sintesi binding + build-time natives/packaging"
+    title: "Adattatore reale ModelloLinguistico su llama.cpp in-process via JNI (ADR 0026)"
     consumes:
       - "tec-modello-linguistico"
       - "tec-modelli-facoltativo"
@@ -1068,18 +1069,21 @@ blocks:
       - "0021"
       - "0023"
       - "0025"
-    ready_when: "ADR closing spike runtime-llm-in-app accepted (JNI vs llama-server sidecar, :llm content, natives per ADR 0016, cancellation bound, keep-warm vs unload, LimiteIngresso / INV-S9 calibration, ADR 0025 §5 catalogue entry values)"
+      - "0026"
+    ready_when: "SATISFIED 2026-09-26 — ADR 0026 accepted (closes spike runtime-llm-in-app [user]: llama.cpp b11195 in-process via JNI, natives, cancel bound 10 s, unload after every run, LimiteIngresso ÷ 2.4 / INV-S9 2500, catalogue values)"
     model_hint: "deep"
     tests_nl_status: "draft"
     tests_nl:
-      - "AC-S152 [@modelli] ModelloLinguisticoContratto passes against the real adapter: complete structure, speakers only as {V<n>}, Errore(Annullato) within the spike's measured bound"
-      - "AC-S153 [@modelli] NFR: a 60-minute Registrazione (≈ 25 k input tokens) completes RiassuntoAvviato → RiassuntoPronto in ≤ 300 s on the Apple M3 Pro reference machine; `./gradlew benchmarkRiassunto -Pcampione=<fixture>` records it (opt-in, outside the gate)"
+      - "AC-S152 [@modelli] ModelloLinguisticoContratto passes against the real adapter: complete structure, speakers only as {V<n>}, Errore(Annullato) within 10 s of annullato() becoming true or the thread being interrupted, native release included (ADR 0026 §4: 512-token prefill chunks)"
+      - "AC-S153 [@modelli] NFR: on the Apple M3 Pro 36 GB (model installed, app otherwise idle) a real 60-minute Registrazione (Via Roquel) at the default 2000-word cap completes RiassuntoAvviato → RiassuntoPronto, model load and unload included, in ≤ 600 s; `./gradlew benchmarkRiassunto -Pcampione=<fixture>` records it (opt-in, outside the gate; fails above 600 s; prints load / prefill / generation / release times and tokens) (ADR 0026 §6)"
       - "AC-S154 The exact runtime token count over the limit → Errore(IngressoTroppoLungo(token)); a runtime failure → ErroreRuntime; an answer not matching schema v1 → RispostaNonValida (unit tests on the adapter's parsing with recorded answers, inside the gate)"
-      - "AC-S155 The catalogue gains the optional entry (obbligatoria = false) with the spike's immutable Hugging Face URL at a commit, sha256, dimensioneByte, id, Apache-2.0 licence and attribution; pronti() unaffected"
-      - "AC-S156 Natives are fetched at BUILD time into native-cache/ with pinned coordinates + SHA-256 (ADR 0016); the running app downloads weights only; the trunk enforced_by amended by the spike ADR (ADR 0004 System.load or ADR 0008 loopback-only 127.0.0.1) exits 0"
-      - "AC-S157 allowedModuleEdges gains :llm → :kernel, :modelli and :sintesi:adattatori → :llm; avvio-sintesi binds the real adapter instead of the placeholder; the model is unloaded after each run unless the spike ADR decides keep-warm (peak RSS reported, no ceiling pinned yet)"
-    notes: "GATED by the open spike runtime-llm-in-app; spikes qualita-riassunto (schema v1/prompt, cap adherence, [300, 2500]) and filtro-fuori-tema (Argomento wording/bound) refine its prompt and may recalibrate LimiteIngresso / INV-S9 / Argomento bound — through their ADRs, never silently."
-    sources: "ADR 0021 §4–5, ADR 0023 §5–6, ADR 0025 §5, tasks/app/todo/runtime-llm-in-app.md"
+      - "AC-S155 The catalogue gains the optional entry (ADR 0026 §8): id 'llm-qwen3.5-9b-q4_k_m', obbligatoria = false, formato FILE, URL 'https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF/resolve/182be2fd6c7bc44887d88a91cb03ff009cc9f549/Qwen_Qwen3.5-9B-Q4_K_M.gguf', dimensioneByte 6 169 341 984, sha256 'd784ce9eda1a5a7b51e8f705a9e6310844bf4f173654d115823c775fdea56d43', licence Apache-2.0, attribution 'Qwen3.5 9B, Qwen team; quant bartowski'; the UI size text derived from dimensioneByte reads '6,2 GB'; pronti() unaffected"
+      - "AC-S156 Natives (ADR 0026 §2, ADR 0004 amendment 2026-09-26): scaricaNativiLlama fetches the host's llama.cpp b11195 asset at BUILD time into native-cache/llama-b11195/ with pinned URL + SHA-256 (mismatch: fail, delete) and compilaShimLlama builds libsnastro-llama-jni; both feed :avvio:run, createDistributable, prepareAppResources, modelliTest and benchmarkRiassunto and are NOT dependencies of check (the gate runs no native code and no C compiler); the running app downloads weights only; ADR 0004's amended check (native loading only in ml-sherpa and ./llm/) and ADR 0026's check (no GGUF / llama.cpp archive tracked) exit 0"
+      - "AC-S157 allowedModuleEdges gains :llm → :kernel, :modelli and :sintesi:adattatori → :llm; avvio-sintesi binds the real adapter instead of the placeholder; every riassumi call loads model + context and frees both (libera + llama_backend_free) before returning, on success, error and cancel alike — no keep-warm (ADR 0026 §3); peak RSS reported, no ceiling pinned yet"
+      - "AC-S159 Output bound (ADR 0026 §5): every generation runs with the bounded answer grammar (GBNF of schema v1: every list ≤ 6 items, every fonti ≤ 6 ids, ids [1-9][0-9]{0,5}) and max_tokens = ⌈3.5 × lunghezzaMassimaParole⌉ + 512 (2000 → 7 512; 2500 → 9 262); a run that reaches max_tokens → Errore(RispostaNonValida) (→ errore_modello), never a truncated answer (inside the gate: the max_tokens arithmetic, the grammar file's bounds, the parsing of a recorded max_tokens-reached answer)"
+      - "AC-S160 Exact backstop (ADR 0026 §5): before any decode, the exact token count of the full formatted prompt (contaToken) + max_tokens > n_ctx 40 960 → Errore(IngressoTroppoLungo(token)) (→ troppo_lunga) with no decode; a sum of exactly 40 960 proceeds (inside the gate: the backstop arithmetic with injected counts)"
+    notes: "Runtime per ADR 0026 [user 2026-09-26]: llama.cpp b11195 used as released + our C shim (carica / contaToken / genera / annulla / libera) with vendored b11195 headers; the shim, the external declarations and the single System.load live only in ./llm/ (ADR 0004 amended); no socket/HTTP in :llm (ADR 0008 unchanged). Execution: Metal all layers, n_ubatch 2048, n_ctx 40 960, prefill in 512-token chunks, lazy grammar sampling, ChatML with an empty <think></think>; natives loaded lazily from snastro.llm.native.path or compose.application.resources.dir (neither → clear failure naming both). Only macOS arm64 is wired and verified; Windows/Linux stay OPEN (ADR 0026 §7). Spikes qualita-riassunto (schema v1/prompt, cap adherence, [300, 2500]) and filtro-fuori-tema (Argomento wording/bound) refine its prompt and may recalibrate LimiteIngresso / INV-S9 / Argomento bound — through their ADRs, never silently."
+    sources: "ADR 0026 §1–§8, ADR 0021 §4–5 (+ amendment 2026-09-26), ADR 0004 amendment 2026-09-26, ADR 0023 §5–6, ADR 0025 §5 (+ amendment 2026-09-26), tasks/app/done/runtime-llm-in-app.md"
 boundaries:
   - id: "agg-riassunto"
     owner: "riassunto"
@@ -1109,8 +1113,8 @@ boundaries:
       Argomento: "Argomento.di(testo: String?): Esito<Argomento?> — trimmed, blank → null, > MASSIMO_CARATTERI (200, provisional) → ArgomentoTroppoLungo"
       MotivoFallimento: "enum { MODELLO_NON_DISPONIBILE('modello_non_disponibile'), ERRORE_MODELLO('errore_modello'), TROPPO_LUNGA('troppo_lunga'), NESSUN_CONTENUTO_VERIFICABILE('nessun_contenuto_verificabile'), INTERROTTO('interrotto') } — canonical codes stored in motivo_fallimento"
       Riassumibilita: "object { fun valuta(registrazioneId: RegistrazioneId, modelloInstallato: Boolean, trascrittoPresente: Boolean, elaborazioneAperta: Boolean, riassuntoAperto: Boolean, stimaToken: Int?): Esito<Unit> } (registrazioneId only feeds the errors that carry it — D-0002) — errors in this order: ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RiassuntoGiaAperto, RegistrazioneTroppoLunga"
-      "IngressoRiassunto / LimiteIngresso": "IngressoRiassunto.costruisci(segmenti: List<SegmentoIngresso>, nomi: Map<VoceId, String>): String; SegmentoIngresso(segmentoId: SegmentoId, voceId: VoceId, inizioMs: Long, testo: String); LimiteIngresso.stimaToken(ingresso: String): Int = ceil(chars/3); LimiteIngresso.LIMITE_TOKEN = 28_000 (provisional)"
-      LunghezzaMassimaParole: "@JvmInline value class(valore: Int) in :sintesi:dominio; LunghezzaMassimaParole.di(n: Int): Esito<LunghezzaMassimaParole> (the only factory); MINIMO = 300, MASSIMO = 2500, PREDEFINITA = 2000 — owned by riassunto since D-0001 (provisional, spikes runtime-llm-in-app / qualita-riassunto)"
+      "IngressoRiassunto / LimiteIngresso": "IngressoRiassunto.costruisci(segmenti: List<SegmentoIngresso>, nomi: Map<VoceId, String>): String (lines '[s<segmentoId> V<voceId>] <testo>', no m:ss, + legend — ADR 0021 amendment 2026-09-26); SegmentoIngresso(segmentoId: SegmentoId, voceId: VoceId, inizioMs: Long, testo: String) (inizioMs kept in the shape, unused by the line for now); LimiteIngresso.stimaToken(ingresso: String): Int = ceil(5*chars/12) (≡ ceil(chars/2.4), integer arithmetic); LimiteIngresso.LIMITE_TOKEN = 28_000 (calibrated, ADR 0026 §5)"
+      LunghezzaMassimaParole: "@JvmInline value class(valore: Int) in :sintesi:dominio; LunghezzaMassimaParole.di(n: Int): Esito<LunghezzaMassimaParole> (the only factory); MINIMO = 300, MASSIMO = 2500, PREDEFINITA = 2000 — owned by riassunto since D-0001 (MASSIMO 2500 confirmed by ADR 0026 §5; still refinable by spike qualita-riassunto)"
       "ErroreSintesi (ErroriSintesi.kt, : ErroreDominio)": "RiassuntoGiaAperto(registrazioneId); ModelloNonInstallato; TrascrittoNonDisponibile(registrazioneId); ElaborazioneGiaAperta(registrazioneId); RegistrazioneTroppoLunga(stimaToken: Int, limite: Int); ArgomentoTroppoLungo(lunghezza: Int, massimo: Int); LunghezzaMassimaFuoriIntervallo(valore: Int, minimo: Int, massimo: Int); TransizioneNonAmmessa(da: String, verso: String); RiassuntoNonTrovato(id: String) — closed list: no variant for a malformed {V<n>} token (TestoConVoci.decodifica returns null, D-0002)"
     keys:
       RiassuntoId: "minted by riassumi and by sostituzione-trascritto-sintesi-policy via GeneratoreId (UUID v4) — never reused, stable for the row's life; crosses to :avvio only as its String value (ElementoInCoda.id, esclusi)"
@@ -1435,7 +1439,7 @@ ready_when_summary:
   "abbonato-progetto-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
   "dialogo-elimina-riassunto": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
   "avvio-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
-  "modello-linguistico-llama": "ADR closing spike runtime-llm-in-app accepted (JNI vs llama-server sidecar, :llm content, natives per ADR 0016, cancellation bound, keep-warm vs unload, LimiteIngresso / INV-S9 calibration, ADR 0025 §5 catalogue entry values)"
+  "modello-linguistico-llama": "SATISFIED 2026-09-26 — ADR 0026 accepted (closes spike runtime-llm-in-app [user]: llama.cpp b11195 in-process via JNI, natives, cancel bound 10 s, unload after every run, LimiteIngresso ÷ 2.4 / INV-S9 2500, catalogue values)"
 post_rebase_tasks:
   - "After the rebase onto main (Elimina merged): add a dated 'SUPERSEDED by sintesi AC-S64 (avvio-coda-condivisa, ADR 0023 §4)' pointer to trascrizione-con-parlanti's stati-elaborazione AC-163 and to the posizioneInCoda half of AC-162 / AC-474 (R19-5, user 2026-09-25) — the sibling manifest is not edited before that"
 release_plan:
@@ -1443,14 +1447,14 @@ release_plan:
     name: "Sintesi"
     builds_on: "R2 (avvio-parlanti)"
     composition_root: "avvio-sintesi"
-    scope: "Riassunto of a Registrazione by a local LLM: Riassunto tab (S3 centre column) with Sommario, Decisioni, Azioni, Questioni aperte, Punti chiave and verified Fonti; optional 6.6 GB model downloaded on demand; ONE shared FIFO queue for Elaborazioni and Riassunti; per-Progetto lunghezza massima; automatic re-summary after Ritrascrivi; Elimina registrazione also deletes the Riassunto"
+    scope: "Riassunto of a Registrazione by a local LLM: Riassunto tab (S3 centre column) with Sommario, Decisioni, Azioni, Questioni aperte, Punti chiave and verified Fonti; optional 6.2 GB model downloaded on demand; ONE shared FIFO queue for Elaborazioni and Riassunti; per-Progetto lunghezza massima; automatic re-summary after Ritrascrivi; Elimina registrazione also deletes the Riassunto"
     gated_by:
       - "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it — persistenza-sintesi, repository-sql-sintesi, abbonato-progetto-sintesi, design-system-sintesi (docs only), dialogo-elimina-riassunto, avvio-sintesi"
-      - "ADR closing spike runtime-llm-in-app accepted (JNI vs llama-server sidecar, :llm content, natives per ADR 0016, cancellation bound, keep-warm vs unload, LimiteIngresso / INV-S9 calibration, ADR 0025 §5 catalogue entry values) — modello-linguistico-llama (R3 is demonstrable with the placeholder model before it, shippable only after it)"
+      - "SATISFIED 2026-09-26 — ADR 0026 accepted (closes spike runtime-llm-in-app [user]: llama.cpp b11195 in-process via JNI, natives, cancel bound 10 s, unload after every run, LimiteIngresso ÷ 2.4 / INV-S9 2500, catalogue values) — modello-linguistico-llama (R3 is demonstrable with the placeholder model before it, shippable only after it)"
     cut:
       - "Clickable Fonti (seek to the Segmento) — brief: out of scope v1"
       - "Annulla of a queued Riassunto — not in scope (tactical model: no AnnullaRiassunto)"
       - "Riassunto marker on S2 rows — candidate for the project-home work"
       - "RecordingSummary facts part (durata, parlato, quota) — sibling part B"
-      - "recordings > ≈ 1 h 15 — spike contesto-lungo"
+      - "recordings > ≈ 1 h 10 — spike contesto-lungo"
       - "full-text search over Riassunti — later feature (schema FTS-ready)"

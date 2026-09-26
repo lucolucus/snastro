@@ -38,11 +38,11 @@ Note: Every ux-prescribed surface of the Riassunto tab lands here (rule 9); the 
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
-- AC-S125 State 1 model not installed: EmptyState 'Per riassumere serve il modello di linguaggio (6,6 GB), da scaricare una volta sola.' + 'Scarica il modello (6,6 GB)' → scaricaFacoltativo(id) called once; no Argomento field, no Riassumi; if a Riassunto is shown it stays and this block replaces only the action area
-- AC-S126 State 2 downloading: 'Scarico il modello… 2,1 di 6,6 GB' (bytes, not %), nothing actionable
-- AC-S127 State 3 download failed: danger text per motivo ('La connessione si è interrotta.', 'Il file scaricato non è integro.', 'Non c'è abbastanza spazio sul disco (servono 6,6 GB).', a text for ScritturaFallita) + 'Riprova' → scaricaFacoltativo again
+- AC-S125 State 1 model not installed: EmptyState 'Per riassumere serve il modello di linguaggio (6,2 GB), da scaricare una volta sola.' + 'Scarica il modello (6,2 GB)' → scaricaFacoltativo(id) called once; no Argomento field, no Riassumi; if a Riassunto is shown it stays and this block replaces only the action area
+- AC-S126 State 2 downloading: 'Scarico il modello… 2,1 di 6,2 GB' (bytes, not %), nothing actionable
+- AC-S127 State 3 download failed: danger text per motivo ('La connessione si è interrotta.', 'Il file scaricato non è integro.', 'Non c'è abbastanza spazio sul disco (servono 6,2 GB).', a text for ScritturaFallita) + 'Riprova' → scaricaFacoltativo again
 - AC-S128 State 4 installed, no Riassunto: 'Nessun riassunto ancora.' + Argomento field + lunghezza massima line + 'Riassumi' → Riassumi(r, argomento) once; a second click while pending is ignored
-- AC-S129 State 5 not available: button disabled with caption 'La registrazione è troppo lunga per il riassunto (oltre 1 h 15 circa).' or 'Aspetta la fine della trascrizione.'; a shown Riassunto stays visible above
+- AC-S129 State 5 not available: button disabled with caption 'La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa).' or 'Aspetta la fine della trascrizione.'; a shown Riassunto stays visible above
 - AC-S130 State 6 in_attesa: queued chip 'In coda · n' with n = PosizioniNellaCoda.istantanea().riassunti[r] ('In coda' without a number when absent); Argomento and Riassumi hidden; the shown Riassunto stays below; no 'Annulla'
 - AC-S131 State 7 in_corso: 'Sto riassumendo… m:ss' elapsed from avviatoIl (ticking with an injected clock: 72 s → '1:12') + 'Di solito ci vogliono circa 3 minuti per un'ora di registrazione.'
 - AC-S132 State 8 pronto: sections in order Sommario, Decisioni, Azioni ('→ ' + Responsabile when bound, nothing otherwise), Questioni aperte, Punti chiave (speaker before the text when bound); empty sections omitted; Fonti chips sorted by time; '3 elementi omessi perché non trovavo le frasi citate.' only when omessi > 0; metadata 'Argomento: …' when given · 'Lunghezza massima: 2000 parole' (the cap requested with); button 'Riassumi di nuovo' with no confirmation dialog

@@ -27,8 +27,8 @@ Note: REWORK of trascrizione-con-parlanti's schermata-modelli / tec-modelli-ui (
 
 ## Tasks
 - AC-S32 The existing S5 / shell presenter tests stay green unmodified; StatoModelli.Mancanti(numero, totaleByte) never counts an optional entry
-- AC-S33 Sidebar foot: while statoFacoltativi[llm] is InDownload(2 100 000 000, 6 600 000 000) the line reads 'Modello di linguaggio: 2,1 di 6,6 GB' (decimal GB, one decimal, comma); no line for NonInstallato or Installato; the required-models line is unchanged
-- AC-S34 MessaggiErrore maps ErroreServizioModelli.SpazioInsufficiente(6 600 000 000) to 'Non c'è abbastanza spazio sul disco (servono 6,6 GB).'
+- AC-S33 Sidebar foot: while statoFacoltativi[llm] is InDownload(2 100 000 000, 6 169 341 984) the line reads 'Modello di linguaggio: 2,1 di 6,2 GB' (decimal GB, one decimal, comma); no line for NonInstallato or Installato; the required-models line is unchanged
+- AC-S34 MessaggiErrore maps ErroreServizioModelli.SpazioInsufficiente(6 169 341 984) to 'Non c'è abbastanza spazio sul disco (servono 6,2 GB).'
 - AC-S35 STATES: sidebar with and without the download line render at the minimum window width and 1280×800, light and dark, no clipped text
 
 ## Dependencies

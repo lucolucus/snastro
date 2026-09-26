@@ -3,26 +3,23 @@ plugins {
 }
 
 dependencies {
-    // LettoreTrascritto (the port this module implements) + kernel Published Language types reached
+    // The ports this module implements (LettoreTrascritto, LettoreNomi) + kernel Published Language types reached
     // transitively (applicazione exposes :kernel as `api`).
     implementation(project(":sintesi:applicazione"))
 
-    // VociDelTrascritto + StatiElaborazione (Trascrizione's public read API) — the whole supplier side
-    // of LettoreTrascrittoDaTrascrizione (boundary trascritto-per-sintesi, ADR 0021 §3: consumer:adattatori
-    // -> supplier:applicazione only, never supplier:adattatori or a generated *Queries type, AC-S52).
+    // Supplier read APIs, consumer:adattatori -> supplier:applicazione only (ADR 0002/0021 §2-3, AC-S52):
+    // VociDelTrascritto + StatiElaborazione (boundary trascritto-per-sintesi) and NomiDelleVoci (nomi-per-sintesi).
     implementation(project(":trascrizione:applicazione"))
+    implementation(project(":parlanti:applicazione"))
 
-    // LettoreTrascrittoContratto + AmbienteLettoreTrascritto + SemeTurno/SegmentoConiato (testFixtures) —
-    // D2: this module's adapter test extends the port contract (dev-architecture-app.md#porta-contratto).
+    // Port contracts + Ambienti (testFixtures) — D2: the adapter tests extend the port contracts
+    // (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":sintesi:applicazione")))
 
-    // Trascrizione's own commands (AvviaElaborazioneServizio, EseguiProssimaElaborazioneServizio,
-    // AnnullaElaborazioneServizio, RiassegnaSegmentoServizio) + its port fakes (ElaborazioneRepositoryFinta,
-    // TrascrittoRepositoryFinta, DecodificatoreAudioFinta, DiarizzatoreFinta, AllineatoreFinta,
-    // SegnalatoreFaseFinta, LettoreRegistrazioneFinta) — D2 seeds the supplier only through ITS OWN
-    // commands over its own in-memory fakes, never Trascrizione's SQL repositories (ADR 0002, CR-1:
-    // consumer:adattatori reaches only supplier:applicazione, never supplier:adattatori).
+    // The suppliers' own commands + their in-memory port fakes: D2 seeds each supplier only through ITS OWN
+    // commands, never its SQL repositories (:sintesi:adattatori has no edge to supplier:adattatori).
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
+    testImplementation(testFixtures(project(":parlanti:applicazione")))
 
     // Port Finte are kernel `Ripristinabile` (roll back with UnitaDiLavoroFinta); `atteso()` unwraps an
     // expected `Esito.Ok` in the test; GeneratoreIdFinto mints deterministic ids.
