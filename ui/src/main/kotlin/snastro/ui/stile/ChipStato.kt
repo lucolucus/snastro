@@ -1,28 +1,16 @@
 package snastro.ui.stile
 
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -36,8 +24,6 @@ private val PADDING_INIZIALE_TRASCRITTA: Dp = 6.dp
 private val SCARTO_CHIP: Dp = 6.dp
 private val DIAMETRO_PALLINO: Dp = 8.dp
 private val ICONA_CHIP: Dp = 14.dp
-private const val DURATA_MEZZA_PULSAZIONE_MS = 800
-private const val ALPHA_MINIMA_PULSAZIONE = 0.35f
 
 private data class ContenutoChip(
     val sfondo: Color,
@@ -117,7 +103,7 @@ private fun ContenutoChipStato(tipo: TipoChipStato, testo: Color) {
         }
         is TipoChipStato.NonRiuscita -> {
             IconaSn(Icona.Alert, descrizione = null, tinta = testo, dimensione = ICONA_CHIP)
-            Text("Non riuscita", style = stileEtichetta)
+            Text(tipo.testo, style = stileEtichetta)
         }
         is TipoChipStato.Avviso -> {
             IconaSn(tipo.icona, descrizione = null, tinta = testo, dimensione = ICONA_CHIP)
@@ -126,33 +112,19 @@ private fun ContenutoChipStato(tipo: TipoChipStato, testo: Color) {
     }
 }
 
-/** AC-565: 1.6s round-trip pulse (0.8s each leg); a constant dot when [LocalRiduciMovimento] is on. */
+/**
+ * AC-565: the shared [PallinoPulsante] (1.6s round-trip pulse, a constant dot when
+ * [LocalRiduciMovimento] is on) at this chip's own colour/size.
+ */
 @Composable
 private fun PallinoInCorso() {
-    val riduciMovimento = LocalRiduciMovimento.current
-    val alpha = if (riduciMovimento) {
-        1f
-    } else {
-        val transizione = rememberInfiniteTransition(label = "pallino-in-corso")
-        val valoreAnimato by transizione.animateFloat(
-            initialValue = 1f,
-            targetValue = ALPHA_MINIMA_PULSAZIONE,
-            animationSpec = infiniteRepeatable(
-                animation = tween(DURATA_MEZZA_PULSAZIONE_MS, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse,
-            ),
-            label = "alpha-pallino-in-corso",
-        )
-        valoreAnimato
-    }
-    Box(
+    PallinoPulsante(
+        colore = LocalSnastroColori.current.accent,
+        diametro = DIAMETRO_PALLINO,
         // testTag (L714b): the only way to sample this exact dot's pixel across two clock ticks and
         // prove the pulse actually animates when `LocalRiduciMovimento` is off — the presenter-level
         // tests can't see an `alpha` value, only a render check can (dev-architecture #test).
-        Modifier.testTag(TAG_PALLINO_IN_CORSO)
-            .size(DIAMETRO_PALLINO)
-            .alpha(alpha)
-            .background(LocalSnastroColori.current.accent, CircleShape),
+        modifier = Modifier.testTag(TAG_PALLINO_IN_CORSO),
     )
 }
 
