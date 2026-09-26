@@ -189,6 +189,7 @@ class RegoleArchitetturaliTest {
         "Parlante",
         "Attribuzione",
         "Riassunto",
+        "LunghezzaMassimaRiassunto",
     )
 
     @Test
