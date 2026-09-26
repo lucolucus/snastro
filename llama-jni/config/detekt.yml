@@ -1,0 +1,31 @@
+# llama-jni — the library's own detekt config (it reads nothing outside llama-jni/). No baseline.
+# buildUponDefaultConfig = true: everything not overridden here keeps detekt's default state.
+
+build:
+  maxIssues: 0
+  excludeCorrectable: false
+
+config:
+  validation: true
+  warningsAsErrors: false # the Kotlin compiler has allWarningsAsErrors; detekt fails through maxIssues: 0.
+
+potential-bugs:
+  UnsafeCallOnNullableType: # no `!!`.
+    active: true
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: true
+  TooGenericExceptionThrown:
+    active: true
+  SwallowedException:
+    active: true
+
+empty-blocks:
+  EmptyCatchBlock:
+    active: true
+
+formatting: # official Kotlin style (ktlint rules via detekt-formatting).
+  active: true
+  android: false
+  autoCorrect: false

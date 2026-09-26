@@ -10,6 +10,10 @@ import javax.inject.Inject
 
 plugins {
     base // root-level `check`/`build`/`clean` lifecycle so `verificaDipendenzeModuli` has a home.
+    // :llama-jni applies these public plugins by id, without the snastro convention plugins (ADR 0027 §1):
+    // declared here (not applied) so the whole build shares one Kotlin/detekt plugin classloader.
+    alias(libs.plugins.kotlin.jvm) apply false
+    alias(libs.plugins.detekt) apply false
 }
 
 // Root build: no domain code (wave-0 scaffold). Owns the project-wide gates that don't belong to
@@ -65,6 +69,8 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":audio" to setOf(":kernel"),
     ":ml-sherpa" to setOf(":kernel", ":modelli"),
     ":modelli" to setOf(":kernel"),
+    // (2026-09-26, ADR 0027 §1) the standalone llama.cpp JNI library depends on nothing of snastro.
+    ":llama-jni" to emptySet(),
     ":ui" to setOf(
         ":kernel", ":progetto:applicazione", ":trascrizione:applicazione",
         ":parlanti:applicazione", ":documento:applicazione", ":sintesi:applicazione",
