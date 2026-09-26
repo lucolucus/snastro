@@ -44,6 +44,8 @@ include(
     ":audio",
     ":ml-sherpa",
     ":modelli",
+    // (2026-09-26, ADR 0027) the standalone llama.cpp JNI library: no snastro dependency.
+    ":llama-jni",
     ":ui",
     ":avvio",
     ":architettura-test",

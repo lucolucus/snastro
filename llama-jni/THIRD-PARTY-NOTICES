@@ -1,0 +1,37 @@
+llama-jni — third-party notices
+===============================
+
+llama-jni binds llama.cpp and ggml. It vendors the llama.cpp / ggml C headers of release b11195
+(src/main/c/include/) and its build downloads the unmodified b11195 release libraries (libllama,
+libggml*). Both are distributed under the MIT License:
+
+-------------------------------------------------------------------------------
+llama.cpp / ggml — https://github.com/ggml-org/llama.cpp (release b11195)
+
+MIT License
+
+Copyright (c) 2023-2026 The ggml authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+-------------------------------------------------------------------------------
+
+Test model (downloaded by the opt-in nativeTest only, never distributed):
+stories260K.gguf — Andrej Karpathy's tinyllamas (llama2.c), MIT License,
+https://huggingface.co/karpathy/tinyllamas; GGUF conversion by ggml-org
+(https://huggingface.co/ggml-org/models).
