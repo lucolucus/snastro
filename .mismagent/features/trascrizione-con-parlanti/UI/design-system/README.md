@@ -52,7 +52,7 @@ Snastro trascrive le riunioni e ricorda chi parla. Il prodotto è **il testo di 
 
 - La finestra ha due colonne: barra laterale (progetto + Registrazioni + Parlanti; stato dei modelli in fondo) e contenuto.
 - La **home del progetto** (`ScreenProject`) mostra titolo e azione Importa, poi due card affiancate («Da fare» e il riassunto del progetto), poi l'elenco delle registrazioni.
-- La **pagina della registrazione** esiste in ogni stato (`ScreenImported`, `ScreenProcessing`, `ScreenRecording`, `ScreenIdentify`). Contiene intestazione, barra audio a tutta larghezza, poi il corpo a sinistra e il pannello destro (`panel-width`) con le schede Riassunto / Voci.
+- La **pagina della registrazione** esiste in ogni stato (`ScreenImported`, `ScreenProcessing`, `ScreenRecording`, `ScreenIdentify`). Contiene intestazione, barra audio a tutta larghezza, poi il corpo a sinistra con le schede Trascrizione / Riassunto, e il pannello destro (`panel-width`) con Voci.
 
 ## Movimento
 

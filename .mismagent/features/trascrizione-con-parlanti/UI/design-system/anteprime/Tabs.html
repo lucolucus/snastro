@@ -1,10 +1,23 @@
-<!-- @dsCard group="Panels" height=70 width=360 -->
+<!-- @dsCard group="Panels" height=220 subtitle="Centre column (Trascrizione/Riassunto, with a queued/running mark) and right panel (Voci alone)" width=360 -->
 <!doctype html>
 <html>
 <head><meta charset="utf-8"><title>Tabs</title></head>
 <body style="margin:0;background:var(--surface)">
 <div class="sn" style="padding:16px">
-<div class="sn-tabs" style="max-width:320px"><span class="tab on">Riassunto</span><span class="tab">Voci · 1 da identificare</span></div>
+<div class="sn-col" style="gap:14px">
+<div class="sn-col" style="gap:6px">
+<span class="sn-over">Corpo centrale — Riassunto in coda</span>
+<div class="sn-tabs" style="max-width:320px"><span class="tab on">Trascrizione</span><span class="tab">Riassunto <span class="sn-icon i-clock s"></span></span></div>
+</div>
+<div class="sn-col" style="gap:6px">
+<span class="sn-over">Corpo centrale — Riassunto in corso</span>
+<div class="sn-tabs" style="max-width:320px"><span class="tab">Trascrizione</span><span class="tab on">Riassunto <span class="sn-pulse-dot"></span></span></div>
+</div>
+<div class="sn-col" style="gap:6px">
+<span class="sn-over">Pannello destro</span>
+<div class="sn-tabs" style="max-width:320px"><span class="tab on">Voci · 1 da identificare</span></div>
+</div>
+</div>
 </div>
 </body>
 </html>
