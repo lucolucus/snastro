@@ -15,3 +15,11 @@
 - [ ] R3 · modello-linguistico · LOW · ModelloLinguisticoFinto.kt:16 · esito/ultimaRichiesta not @Volatile though called cross-thread · code-review · 2026-09-26
 - [ ] R3 · modello-linguistico · LOW · ModelloLinguisticoContratto.kt:39 · AC-S11 assertNotNull on non-null Kotlin types is near-trivial · code-review · 2026-09-26
 - [ ] R3 · modello-linguistico · LOW · ModelloLinguisticoFinto.kt:15 · name ModelloLinguisticoFinto (pinned, ADR 0021/0023) vs RC-9/dev-architecture `<Porta>Finta` — align the rule wording or note the exception · code-review · 2026-09-26
+- [ ] R3 · lettore-trascritto-sintesi · LOW · LettoreTrascrittoFintaTest.kt:71-77 · D1 Finta env riassegna skips the supplier's checks (same Voce, unknown Voce, new Voce for the only Segmento) — mirror Trascritto.riassegna · code-review · 2026-09-26
+- [ ] R3 · lettore-trascritto-sintesi · LOW · sintesi/applicazione/build.gradle.kts:7 · api(:kernel) comment lists only (RegistrazioneId, VoceRef); LettoreTrascritto also exposes SegmentoId, VoceId, IntervalloMs · code-review · 2026-09-26
+- [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:30-41 · progress case accepts a supplier stuck at InDownload(0,T); assert scaricati strictly increases at least once · code-review · 2026-09-26
+- [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:54-64 · no case DownloadFallito → riavvia() reads NonInstallato (ADR 0025 §4: download state doesn't survive restart) · code-review · 2026-09-26
+- [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:54-64 · no retry-after-failure case (fallisci then avviaDownload → InDownload), the "Riprova" path · code-review · 2026-09-26
+- [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:24-41 · InDownload.totaliByte never tied to NonInstallato.dimensioneByte · code-review · 2026-09-26
+- [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:43-51 · no case: 100% bytes but not verified/installed is still not Installato · code-review · 2026-09-26
+- [ ] R3 · disponibilita-modello-linguistico · LOW · StatoModelloLinguistico.kt:9-12 · range invariants only in KDoc (no init-require), enforced by contract only · code-review · 2026-09-26

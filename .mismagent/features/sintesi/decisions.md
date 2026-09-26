@@ -10,3 +10,16 @@
 - By: decided: user (Luca Parsani); recorded: build-manifest
 - Docs: [building-blocks.yaml](building-blocks.yaml)
 - Revisit: The cap becomes a richer setting than a word count, or another context needs the VO.
+
+### D-0002 · agg-riassunto pins: valuta id, nullable decodifica
+- Meta: 2026-09-26; scope: boundary:agg-riassunto; status: accepted; sha: 4edbfb1
+- Question: Pinned Riassumibilita.valuta has no RegistrazioneId yet returns errors carrying one; pinned TestoConVoci.decodifica returns Esito but no ErroreSintesi fits a malformed token.
+- Options: valuta: add registrazioneId (kept) vs drop ids from errors or return a reason enum (double mapping). decodifica: nullable (kept) vs new public ErroreSintesi variant (dead exhaustive UI branch) vs internal error type (extra type).
+- Hypothesis: n/a — decided by the architect on the riassunto open question (user delegated), [building-blocks.yaml](building-blocks.yaml)
+- Check: n/a — decided by the architect on the riassunto open question (user delegated), [building-blocks.yaml](building-blocks.yaml)
+- Result: n/a — decided by the architect on the riassunto open question (user delegated), [building-blocks.yaml](building-blocks.yaml)
+- Debate: worker/riassunto added registrazioneId and ErroreSintesi.TokenVoceMalformato; the architect kept the first, replaced the second: a malformed token never reaches a user, ADR 0003 keeps Esito for user-trippable violations.
+- Decision: valuta(registrazioneId, …) first parameter; decodifica(s): TestoConVoci? (stored-text readers checkNotNull); no TokenVoceMalformato. Riassunto and LunghezzaMassimaRiassunto blocks add their root to CR-4 radiciAggregato. Cost: riassunto rework.
+- By: decided: architect (delegated by user Luca Parsani); recorded: architect
+- Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0003](../../decisions/0003-politica-errori-esito.md)
+- Revisit: Another caller needs to report why a text failed to decode, or the UI must show it.
