@@ -62,3 +62,16 @@
 - By: decided: user (Luca Parsani); recorded: build-manifest
 - Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0023](../../decisions/0023-coda-condivisa-elaborazioni-riassunti.md)
 - Revisit: Cancellation needs more than the Registrazione id, or moves out of the per-source composition.
+
+### D-0006 · FonteCoda gains interrompi stop channel
+- Meta: 2026-09-26; scope: boundary:coda-condivisa; status: accepted
+- Question: AC-S63 needs fermaEAttendi to flip annullato, not only interrupt the worker; the 7-field FonteCoda cannot flip a source's per-run flag.
+- Options: 8th field interrompi: () -> Unit = {}, unconditional flip (kept) vs reuse annulla (row-gone guard, AC-S161: would not stop a live Riassunto) vs thread interrupt only (an LLM run may ignore it).
+- Hypothesis: n/a — decided by the user on the verifier FAIL of avvio-coda-condivisa, [building-blocks.yaml](building-blocks.yaml)
+- Check: n/a — decided by the user on the verifier FAIL of avvio-coda-condivisa, [building-blocks.yaml](building-blocks.yaml)
+- Result: n/a — decided by the user on the verifier FAIL of avvio-coda-condivisa, [building-blocks.yaml](building-blocks.yaml)
+- Debate: verifier FAIL on avvio-coda-condivisa AC-S63: fermaEAttendi interrupted the worker but flipped no annullato; the user chose a dedicated stop channel on FonteCoda.
+- Decision: FonteCoda gains interrompi: () -> Unit = {}; fermaEAttendi calls it on the running item's source before/while interrupting the worker. Elaborazione: no-op; avvio-sintesi's Riassunto source flips the current run's flag unconditionally (AC-S162).
+- By: decided: user (Luca Parsani); recorded: build-manifest
+- Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0023](../../decisions/0023-coda-condivisa-elaborazioni-riassunti.md)
+- Revisit: A source needs stop semantics other than cancelling its running item, or shutdown moves out of CodaCondivisa.
