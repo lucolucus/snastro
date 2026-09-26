@@ -4,9 +4,9 @@ plugins {
 }
 
 dependencies {
-    // Ports (applicazione.porte) expose kernel Published Language types: `api`.
+    // Ports (applicazione.porte) expose kernel Published Language types (RegistrazioneId, VoceRef): `api`.
     api(project(":kernel"))
 
-    // LettoreTrascrittoFintaTest mints Registrazione ids like the supplier, with the kernel's GeneratoreIdFinto.
+    // Port Finte mint ids like the supplier, with the kernel's GeneratoreIdFinto.
     testImplementation(testFixtures(project(":kernel")))
 }

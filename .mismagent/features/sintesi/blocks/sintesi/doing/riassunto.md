@@ -21,6 +21,7 @@ invariants:
   - "INV-S6 (pure guard Riassumibilita) Riassumi is accepted only if: model installed; a Trascritto exists; no Elaborazione open; no Riassunto open (INV-S2); input within the limit — evaluated in this order"
   - "INV-S7 superato is derived, never stored: a pronto Riassunto is superato iff StrutturaTrascritto.di(current).chiave != its stored struttura"
   - "INV-S10 the lunghezza massima is fixed at request, immutable, passed to the run; a pronto answer longer than the cap is kept whole (never truncated, never fallito for length)"
+  - "INV-S9 (VO LunghezzaMassimaParole, owned here since D-0001) the lunghezza massima del Riassunto is an integer number of words within [300, 2500], default 2000; out of range → LunghezzaMassimaFuoriIntervallo, nothing changed"
 invariant_fields:
   - "stato"
   - "motivoFallimento"
@@ -38,12 +39,12 @@ tables:
   - "riassunto_fonte"
 identity: "RiassuntoId — @JvmInline value class in :sintesi:dominio (NOT :kernel), UUID v4 from GeneratoreId"
 ---
-# riassunto — Aggregato Riassunto + Verifica delle fonti + guardie pure (Riassumibilita, IngressoRiassunto, LimiteIngresso)
+# riassunto — Aggregato Riassunto + VO LunghezzaMassimaParole + Verifica delle fonti + guardie pure (Riassumibilita, IngressoRiassunto, LimiteIngresso)
 
 ## What to do
-The Riassunto root with its VOs (RiassuntoId, StatoRiassunto, MotivoFallimento, Argomento, Sommario, TestoConVoci with the lossless {V<n>} codec, Decisione, QuestioneAperta, Azione, PuntoChiave, Fonte, StrutturaTrascritto with its canonical chiave) and the state machine; the Verifica delle fonti applied by the root to the raw answer (BozzaRiassunto) against the structure read for the run; the derived superato predicate; the pure guard Riassumibilita (shared by riassumi and riassunto-vista), the pure input builder IngressoRiassunto and the provisional LimiteIngresso; the domain events; the whole ErroreSintesi hierarchy (ErroriSintesi.kt, all variants incl. LunghezzaMassimaFuoriIntervallo, so no later block edits the file). No deletion method (physical removals are repository operations, ADR 0021 §9).
+The Riassunto root with its VOs (RiassuntoId, StatoRiassunto, MotivoFallimento, Argomento, Sommario, TestoConVoci with the lossless {V<n>} codec, Decisione, QuestioneAperta, Azione, PuntoChiave, Fonte, StrutturaTrascritto with its canonical chiave, LunghezzaMassimaParole — words in [300, 2500], default 2000, the only factory di, constants with one home; moved here from lunghezza-massima-riassunto by D-0001 because richiedi takes it) and the state machine; the Verifica delle fonti applied by the root to the raw answer (BozzaRiassunto) against the structure read for the run; the derived superato predicate; the pure guard Riassumibilita (shared by riassumi and riassunto-vista), the pure input builder IngressoRiassunto and the provisional LimiteIngresso; the domain events; the whole ErroreSintesi hierarchy (ErroriSintesi.kt, all variants incl. LunghezzaMassimaFuoriIntervallo, so no later block edits the file). No deletion method (physical removals are repository operations, ADR 0021 §9).
 
-Note: Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt, rule 11): RiassuntoGiaAperto, ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RegistrazioneTroppoLunga, ArgomentoTroppoLungo, LunghezzaMassimaFuoriIntervallo, TransizioneNonAmmessa, RiassuntoNonTrovato. LimiteIngresso and the Argomento bound are provisional (spikes runtime-llm-in-app, filtro-fuori-tema): their constants have one home each.
+Note: Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt, rule 11): RiassuntoGiaAperto, ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RegistrazioneTroppoLunga, ArgomentoTroppoLungo, LunghezzaMassimaFuoriIntervallo (raised by LunghezzaMassimaParole.di, also declared here), TransizioneNonAmmessa, RiassuntoNonTrovato. The VO LunghezzaMassimaParole lives here (not in lunghezza-massima-riassunto) because Riassunto.richiedi takes it — D-0001 (user, 2026-09-26) breaks the riassunto ↔ lunghezza-massima-riassunto cycle. LimiteIngresso and the Argomento bound are provisional (spikes runtime-llm-in-app, filtro-fuori-tema): their constants have one home each.
 
 ### Invariants owned / enforced here (one test each, name starts with the tag)
 - INV-S1 StatoRiassunto moves only in_attesa → in_corso → pronto | fallito; pronto and fallito are terminal. Content (Sommario, elements, struttura, omessi) exists iff pronto; a failure reason exists iff fallito
@@ -52,6 +53,7 @@ Note: Every ErroreSintesi variant is declared HERE (single file ErroriSintesi.kt
 - INV-S6 (pure guard Riassumibilita) Riassumi is accepted only if: model installed; a Trascritto exists; no Elaborazione open; no Riassunto open (INV-S2); input within the limit — evaluated in this order
 - INV-S7 superato is derived, never stored: a pronto Riassunto is superato iff StrutturaTrascritto.di(current).chiave != its stored struttura
 - INV-S10 the lunghezza massima is fixed at request, immutable, passed to the run; a pronto answer longer than the cap is kept whole (never truncated, never fallito for length)
+- INV-S9 (VO LunghezzaMassimaParole, owned here since D-0001) the lunghezza massima del Riassunto is an integer number of words within [300, 2500], default 2000; out of range → LunghezzaMassimaFuoriIntervallo, nothing changed
 
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
@@ -67,6 +69,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 - INV-S5 TestoConVoci codec: decodifica/codifica round-trip is lossless for texts with {V1}, adjacent tokens '{V1}{V2}', and literal braces written '{{' / '}}'; a lone '{' or '}', '{V}', '{V0}', '{Vx}' is a malformed token → the element carrying it is dropped and counted (same rule as an invalid token)
 - INV-S5 (by-construction for the API) the root, its VOs and BozzaRiassunto expose no String 'nome' field and no ParlanteId — covered mechanically by ADR 0021 enforced_by clause 1, not counted as coverage
 - INV-S7 StrutturaTrascritto.chiave is '<segmentoId>:<voceId>' pairs ordered by segmentoId joined by ',' whatever the input order ([(3,1),(1,1),(2,2)] → '1:1,2:2,3:1'); superato(corrente) is false for the same assignment, true after segmento 2 moves V2 → V1, false again when it moves back
+- INV-S9 LunghezzaMassimaParole.di: 300, 2000 and 2500 → Ok; 299, 2501, 0 and -1 → Errore(LunghezzaMassimaFuoriIntervallo(valore, 300, 2500)) (table test); the constants MINIMO 300 / MASSIMO 2500 / PREDEFINITA 2000 exist only in this VO
 - INV-S10 the cap given to richiedi is readable in every state and no method changes it; completa on an answer of 3 000 words with a 2 000 cap still gives pronto with the full text (no truncation, no fallito)
 - AC-S1 Argomento.di: '  budget 2027  ' → 'budget 2027'; '', '   ' and null → absent (no Argomento); 200 characters → Ok; 201 → Errore(ArgomentoTroppoLungo(201, 200)); the bound is the single constant Argomento.MASSIMO_CARATTERI (provisional, spike filtro-fuori-tema)
 - INV-S6 Riassumibilita table test: each precondition failing alone gives its own error (ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RiassuntoGiaAperto, RegistrazioneTroppoLunga); several failing together give the FIRST in the pinned order; all satisfied → Ok. Pure: no port, no clock
@@ -90,6 +93,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
   - `MotivoFallimento`: enum { MODELLO_NON_DISPONIBILE('modello_non_disponibile'), ERRORE_MODELLO('errore_modello'), TROPPO_LUNGA('troppo_lunga'), NESSUN_CONTENUTO_VERIFICABILE('nessun_contenuto_verificabile'), INTERROTTO('interrotto') } — canonical codes stored in motivo_fallimento
   - `Riassumibilita`: object { fun valuta(modelloInstallato: Boolean, trascrittoPresente: Boolean, elaborazioneAperta: Boolean, riassuntoAperto: Boolean, stimaToken: Int?): Esito<Unit> } — errors in this order: ModelloNonInstallato, TrascrittoNonDisponibile, ElaborazioneGiaAperta, RiassuntoGiaAperto, RegistrazioneTroppoLunga
   - `IngressoRiassunto / LimiteIngresso`: IngressoRiassunto.costruisci(segmenti: List<SegmentoIngresso>, nomi: Map<VoceId, String>): String; SegmentoIngresso(segmentoId: SegmentoId, voceId: VoceId, inizioMs: Long, testo: String); LimiteIngresso.stimaToken(ingresso: String): Int = ceil(chars/3); LimiteIngresso.LIMITE_TOKEN = 28_000 (provisional)
+  - `LunghezzaMassimaParole`: @JvmInline value class(valore: Int) in :sintesi:dominio; LunghezzaMassimaParole.di(n: Int): Esito<LunghezzaMassimaParole> (the only factory); MINIMO = 300, MASSIMO = 2500, PREDEFINITA = 2000 — owned by riassunto since D-0001 (provisional, spikes runtime-llm-in-app / qualita-riassunto)
   - `ErroreSintesi (ErroriSintesi.kt, : ErroreDominio)`: RiassuntoGiaAperto(registrazioneId); ModelloNonInstallato; TrascrittoNonDisponibile(registrazioneId); ElaborazioneGiaAperta(registrazioneId); RegistrazioneTroppoLunga(stimaToken: Int, limite: Int); ArgomentoTroppoLungo(lunghezza: Int, massimo: Int); LunghezzaMassimaFuoriIntervallo(valore: Int, minimo: Int, massimo: Int); TransizioneNonAmmessa(da: String, verso: String); RiassuntoNonTrovato(id: String)
   - key `RiassuntoId`: minted by riassumi and by sostituzione-trascritto-sintesi-policy via GeneratoreId (UUID v4) — never reused, stable for the row's life; crosses to :avvio only as its String value (ElementoInCoda.id, esclusi)
   - key `richiestoAlle`: minted by the requesting command from the injected Clock, stored as epoch millis — the FIFO key of the shared queue; orderable (Instant at ms precision), ties broken by (tipo, id) (rule 17)
@@ -108,4 +112,4 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
   - `RiassuntoVista`: ≡ riassunto-vista.view_shape (one Published Language written once; rule 16) — RiassuntoVista.di(r): RiassuntoVista? via class RiassuntoVisteLettura (..letture)
   - key `voceId / segmentoId in the view`: Int values of the CURRENT Trascritto generation
 
-Sources: tactical-model.md § Sintesi (aggregates, INV-S1/S4/S5/S6/S7/S10), ADR 0021 §1/§4/§5/§7/§9, ADR 0022 §2; related_adrs 0002, 0003, 0012, 0021, 0022; tactical-model: features/sintesi/tactical-model.md
+Sources: tactical-model.md § Sintesi (aggregates, INV-S1/S4/S5/S6/S7/S9/S10), decisions.md D-0001, ADR 0021 §1/§4/§5/§7/§9, ADR 0022 §2; related_adrs 0002, 0003, 0012, 0021, 0022; tactical-model: features/sintesi/tactical-model.md
