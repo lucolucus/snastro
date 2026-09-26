@@ -22,4 +22,11 @@ public sealed interface ErroreModelli : ErroreDominio {
 
     /** The source was reachable but the download failed (bad status, redirect loop, a stalled/short transfer). */
     public data class DownloadFallito(public val motivo: String) : ErroreModelli
+
+    /**
+     * The models directory's file store has less usable space than this download needs (ADR 0025
+     * §3): checked BEFORE any network request. [richiestiByte] is the asset's total declared size
+     * ([VoceCatalogo.dimensioneByte]), the number shown to the user ("servono 6,6 GB").
+     */
+    public data class SpazioInsufficiente(public val richiestiByte: Long) : ErroreModelli
 }

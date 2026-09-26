@@ -110,6 +110,13 @@ internal fun mappaErrore(errore: ErroreDominio): ErroreServizioModelli = when (e
         ErroreModelli.ReteAssente -> ErroreServizioModelli.ReteAssente
         is ErroreModelli.ScritturaFallita -> ErroreServizioModelli.ScritturaFallita(errore.motivo)
         is ErroreModelli.DownloadFallito -> ErroreServizioModelli.DownloadFallito(errore.motivo)
+        // Stopgap (block modelli-provisioning-facoltativo, ADR 0025 §3): RC-4 forces this branch
+        // the moment `:modelli` gains the case, but the dedicated UI surface (its own
+        // ErroreServizioModelli variant + sidebar/S5 message) is ADR 0025 §5's "`:avvio`
+        // ServizioModelliProvisioning + `:ui` ... the optional entry" block, not this one — reuse
+        // the closest existing case so `:ui` keeps compiling without a not-yet-designed message.
+        is ErroreModelli.SpazioInsufficiente ->
+            ErroreServizioModelli.ScritturaFallita("spazio insufficiente: servono ${errore.richiestiByte} byte")
     }
     else -> ErroreServizioModelli.DownloadFallito(errore.toString())
 }

@@ -2,6 +2,7 @@ package snastro.modelli
 
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -133,6 +134,56 @@ class InstallatoreAssetTest {
         Files.newDirectoryStream(cartella).use { flusso ->
             val resta = flusso.any { it.fileName.toString().contains(".old-") }
             assertFalse(resta, "la vecchia directory rinominata da parte e' stata eliminata")
+        }
+    }
+
+    @Test
+    fun `AC-S30 formato FILE usa il seam di spostamento atomico, mai una copia`() {
+        val contenuto = "pesi del modello llm".toByteArray()
+        val voce = unaVoceFile("llm", contenuto, "pesi.gguf")
+        scriviParziale(voce, contenuto)
+        val operazioni = OperazioniFileRegistrante()
+
+        val esito = InstallatoreAsset(voce, cartella, operazioni).installa()
+
+        esito.atteso()
+        assertContentEquals(contenuto, Files.readAllBytes(cartella.resolve("llm/pesi.gguf")))
+        assertFalse(Files.exists(cartella.resolve("llm.part")))
+        assertEquals(listOf("atomico"), operazioni.chiamate, "solo lo spostamento atomico, mai una copia")
+    }
+
+    @Test
+    fun `AC-S30 AtomicMoveNotSupportedException ripiega su uno spostamento semplice sullo stesso filesystem`() {
+        val contenuto = "pesi del modello llm".toByteArray()
+        val voce = unaVoceFile("llm", contenuto, "pesi.gguf")
+        scriviParziale(voce, contenuto)
+        val operazioni = OperazioniFileRegistrante(forzaAtomicMoveNonSupportato = true)
+
+        val esito = InstallatoreAsset(voce, cartella, operazioni).installa()
+
+        esito.atteso()
+        assertContentEquals(contenuto, Files.readAllBytes(cartella.resolve("llm/pesi.gguf")))
+        assertFalse(Files.exists(cartella.resolve("llm.part")))
+        assertEquals(listOf("sposta"), operazioni.chiamate, "il ripiego e' uno spostamento, mai una copia")
+    }
+
+    /** Records which [OperazioniFile] method ran; both delegate to a REAL move, so the outcome stays provable. */
+    private class OperazioniFileRegistrante(
+        private val forzaAtomicMoveNonSupportato: Boolean = false,
+    ) : OperazioniFile {
+        val chiamate = mutableListOf<String>()
+
+        override fun spostaAtomico(sorgente: Path, destinazione: Path) {
+            if (forzaAtomicMoveNonSupportato) {
+                throw AtomicMoveNotSupportedException(sorgente.toString(), destinazione.toString(), "forzato dal test")
+            }
+            chiamate += "atomico"
+            OperazioniFileReali.spostaAtomico(sorgente, destinazione)
+        }
+
+        override fun sposta(sorgente: Path, destinazione: Path) {
+            chiamate += "sposta"
+            OperazioniFileReali.sposta(sorgente, destinazione)
         }
     }
 
