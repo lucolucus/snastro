@@ -3,7 +3,7 @@
 # Banner precedence), architetture/architecture-overview.md (D-1..D-12), ADRs 0021-0025 (+ 0008, 0018, 0020, 0023 amendments),
 # architecture.md, code-rules.md, context-map.md, profile.md. Worktree: snastro-wt/sintesi (branch feature/sintesi).
 # Side `app` only → every boundary is in-process (port + in-process consumer-driven contract test); no OpenAPI, no operationId.
-# AC NUMBERING: Sintesi-local prefix AC-S1..AC-S161 (never collides with trascrizione-con-parlanti's AC-1..AC-636); invariants
+# AC NUMBERING: Sintesi-local prefix AC-S1..AC-S163 (never collides with trascrizione-con-parlanti's AC-1..AC-636); invariants
 # INV-S1..INV-S10 from features/sintesi/tactical-model.md. Test names start with the tag followed by a space (`AC-S12 `, `INV-S4 `),
 # JVM-safe, greppable per block (rule 18). New items take the next free number; never renumber.
 # `(by-construction)` items cannot fail — listed for completeness, NOT counted as coverage.
@@ -528,7 +528,9 @@ blocks:
       - "AC-S74 ErroreModelli → MotivoDownload: ReteAssente / DownloadFallito → ConnessioneInterrotta; HashNonValido / ArchivioNonValido → FileNonIntegro; SpazioInsufficiente → SpazioInsufficiente; ScritturaFallita → ScritturaFallita (table test)"
       - "AC-S75 After a restart with a partial .part the state reads NonInstallato; scaricaFacoltativo resumes it"
       - "AC-S76 licenze() lists the optional entry (nome, ruolo, licenza, attribuzione) only when installata(id)"
-    sources: "ADR 0025 §4, ADR 0008 R10"
+      - "AC-S163 The shell footer shows ModelliPresenter.etichettaModelloLinguisticoPiede: ShellRoute receives the SAME presenter's flow (statoModelloLinguisticoPiede = that ModelliPresenter's etichettaModelloLinguisticoPiede, wired in NavigazioneProgetto / Main where ContenutoAppR1 / ContenutoAppR2 build the ModelliPresenter); while the optional model downloads the line 'Modello di linguaggio: x di y GB' is visible, and absent otherwise (NonInstallato, Installato, Errore) — tested on the built graph"
+    notes: "Gap fix 2026-09-26 (verifier of servizio-modelli-facoltativo): AC-S33's footer line was delivered by servizio-modelli-facoltativo (ModelliPresenter.etichettaModelloLinguisticoPiede: StateFlow<String?> + optional ShellRoute(statoModelloLinguisticoPiede = …)) but never wired into the app — this block wires it (AC-S163). This block REPLACES the two INERT stubs servizio-modelli-facoltativo left in r1/ServizioModelliProvisioning (`statoFacoltativi = emptyMap()` and `scaricaFacoltativo` throwing 'not wired yet') with the real one-holder implementation, and ServizioModelliProvisioning must subclass ServizioModelliFacoltativoContratto so the consumer-driven contract (D2) runs against the real :avvio implementation in the gate."
+    sources: "ADR 0025 §4, ADR 0008 R10, ux-proposal § Sidebar (AC-S33)"
   - id: "riassumi"
     type: "application-service"
     context: "sintesi"

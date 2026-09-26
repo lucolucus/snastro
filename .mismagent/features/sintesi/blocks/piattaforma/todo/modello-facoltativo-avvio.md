@@ -22,12 +22,15 @@ tests_nl_status: "draft"
 ## What to do
 Implement ServizioModelli.scaricaFacoltativo / statoFacoltativi on a background dispatcher and Sintesi's DisponibilitaModelloLinguistico over ONE state holder (+ ProvisioningModelli.installata(id)); map ErroreModelli → MotivoDownload / ErroreServizioModelli; the licences list includes an optional entry only once installed.
 
+Note: Gap fix 2026-09-26 (verifier of servizio-modelli-facoltativo): AC-S33's footer line was delivered by servizio-modelli-facoltativo (ModelliPresenter.etichettaModelloLinguisticoPiede: StateFlow<String?> + optional ShellRoute(statoModelloLinguisticoPiede = …)) but never wired into the app — this block wires it (AC-S163). This block REPLACES the two INERT stubs servizio-modelli-facoltativo left in r1/ServizioModelliProvisioning (`statoFacoltativi = emptyMap()` and `scaricaFacoltativo` throwing 'not wired yet') with the real one-holder implementation, and ServizioModelliProvisioning must subclass ServizioModelliFacoltativoContratto so the consumer-driven contract (D2) runs against the real :avvio implementation in the gate.
+
 ## Tasks
 - AC-S72 DisponibilitaModelloLinguisticoContratto passes against the :avvio implementation with a fake ProvisioningModelli and a test catalogue holding one optional entry
 - AC-S73 scaricaFacoltativo(id) runs off the caller thread; during it both statoFacoltativi[id] and DisponibilitaModelloLinguistico.stato() read InDownload with the SAME byte counts (one holder)
 - AC-S74 ErroreModelli → MotivoDownload: ReteAssente / DownloadFallito → ConnessioneInterrotta; HashNonValido / ArchivioNonValido → FileNonIntegro; SpazioInsufficiente → SpazioInsufficiente; ScritturaFallita → ScritturaFallita (table test)
 - AC-S75 After a restart with a partial .part the state reads NonInstallato; scaricaFacoltativo resumes it
 - AC-S76 licenze() lists the optional entry (nome, ruolo, licenza, attribuzione) only when installata(id)
+- AC-S163 The shell footer shows ModelliPresenter.etichettaModelloLinguisticoPiede: ShellRoute receives the SAME presenter's flow (statoModelloLinguisticoPiede = that ModelliPresenter's etichettaModelloLinguisticoPiede, wired in NavigazioneProgetto / Main where ContenutoAppR1 / ContenutoAppR2 build the ModelliPresenter); while the optional model downloads the line 'Modello di linguaggio: x di y GB' is visible, and absent otherwise (NonInstallato, Installato, Errore) — tested on the built graph
 
 ## Dependencies
 - **tec-modelli-facoltativo** (consumed; owner modelli-provisioning-facoltativo; projection in-process; contract_test `consumer-driven`)
@@ -52,4 +55,4 @@ Implement ServizioModelli.scaricaFacoltativo / statoFacoltativi on a background 
 - servizio-modelli-facoltativo — build dependency (merged before this block)
 - disponibilita-modello-linguistico — build dependency (merged before this block)
 
-Sources: ADR 0025 §4, ADR 0008 R10; related_adrs 0002, 0008, 0012, 0021, 0025; tactical-model: features/sintesi/tactical-model.md
+Sources: ADR 0025 §4, ADR 0008 R10, ux-proposal § Sidebar (AC-S33); related_adrs 0002, 0008, 0012, 0021, 0025; tactical-model: features/sintesi/tactical-model.md
