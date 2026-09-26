@@ -106,3 +106,4 @@
 - [ ] R3 · eliminazione-registrazione-sintesi-policy · LOW · ApplicaEliminazioneRegistrazioneSintesiPoliticaTest.kt:92 · AC-S101 fakes the infra fault with a domain Errore; real SQL throws (rollback via dispatcher condanna) · code-review · 2026-09-26
 - [ ] R3 · eliminazione-registrazione-sintesi-policy · LOW · ApplicaEliminazioneRegistrazioneSintesiPoliticaTest.kt:51 · no test that removing several rows publishes exactly ONE RiassuntoEliminato · code-review · 2026-09-26
 - [ ] R3 · (gate) · LOW · architettura-test/controlli-adr/adr-0012-politiche-senza-ml.sh · scans only parlanti/trascrizione politiche, not sintesi/.../politiche (ADR 0021 §6 enforced by review only) · verifier+code-review · 2026-09-26
+- [ ] R3 · abbonato-trascrizione-sintesi · LOW · AbbonatoTrascrizioneSintesiTest.kt (ScenarioRitrascrizione KDoc) · claims to mirror LettoreTrascrittoDaTrascrizioneTest's seeding, but this harness drives the real services (stronger) — reword · verifier · 2026-09-26
