@@ -115,3 +115,16 @@
 - By: decided: worker; recorded: worker-composer
 - Docs: [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md), [pre-release](pre-release.md)
 - Revisit: another consumer of llama-jni needs interrupt-driven cancel.
+
+### D-0010 · pre-R3-1: atomic trova, subscriber retries throws
+- Meta: 2026-09-27; scope: block:pre-R3-1; status: accepted
+- Question: how to stop the Documento subscriber reading a half-written Trascritto and dying on the exception?
+- Options: transaction in TrascrittoRepositorySql.trova (kept) vs JOIN query in persistenza vs DEFERRED read transaction (needs a :persistenza API); retry thrown units (kept) vs drop them.
+- Hypothesis: n/a — decided by D-0008, [pre-R3-1 task](rework/pre-R3-1-1.md)
+- Check: n/a — decided by D-0008, [pre-R3-1 task](rework/pre-R3-1-1.md)
+- Result: n/a — decided by D-0008, [pre-R3-1 task](rework/pre-R3-1-1.md)
+- Debate: code-review: IMMEDIATE takes the write lock on reads; DEFERRED is the right primitive; retry-forever needs a log. Both MED in pre-release.
+- Decision: trova runs in one transaction (IMMEDIATE via DriverSqliteImmediato); AbbonatoDocumentoEventi re-queues a thrown unit with the capped backoff. Cost: reads serialize with writers; permanent errors retry silently.
+- By: decided: worker; recorded: worker-composer
+- Docs: [pre-release](pre-release.md), [pre-R3-1 task](rework/pre-R3-1-1.md)
+- Revisit: read contention or SQLITE_BUSY in read-models, or a :persistenza read-transaction API exists.
