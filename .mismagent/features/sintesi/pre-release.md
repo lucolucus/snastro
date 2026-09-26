@@ -23,3 +23,9 @@
 - [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:24-41 · InDownload.totaliByte never tied to NonInstallato.dimensioneByte · code-review · 2026-09-26
 - [ ] R3 · disponibilita-modello-linguistico · LOW · DisponibilitaModelloLinguisticoContratto.kt:43-51 · no case: 100% bytes but not verified/installed is still not Installato · code-review · 2026-09-26
 - [ ] R3 · disponibilita-modello-linguistico · LOW · StatoModelloLinguistico.kt:9-12 · range invariants only in KDoc (no init-require), enforced by contract only · code-review · 2026-09-26
+- [ ] R3 · riassunto · MED · sintesi/dominio/.../Riassunto.kt:156 (+ :55-58) · ricostituisci keeps caller lists by reference and accessors return the backing lists — no defensive copy (dev-architecture "state captive, collections as copies") · code-review · 2026-09-26
+- [ ] R3 · riassunto · LOW · RiassuntoTest.kt:133-162 · ricostituisci's own guard (content with omessi=null) and elements→EsitoVerifica mapping untested · code-review · 2026-09-26
+- [ ] R3 · riassunto · LOW · TestoConVoci.kt:9,17 · codec asymmetric for VoceId <=0 or >=1e9 (codifica writes, decodifica rejects); public constructor accepts non-canonical parti · code-review · 2026-09-26
+- [ ] R3 · riassunto · LOW · VerificaDelleFonti.kt:49 vs :29 · element with valid Fonti but blank testo is kept (blank Sommario is absent) — inconsistent · code-review · 2026-09-26
+- [ ] R3 · riassunto · LOW · StrutturaTrascritto.kt:15 · `voci` rebuilds the Set on every call (O(elements×segments)); compute once like chiave · code-review · 2026-09-26
+- [ ] R3 · riassunto · LOW · Argomento.kt:17 · 200-char bound counts UTF-16 units (emoji = 2) · code-review · 2026-09-26
