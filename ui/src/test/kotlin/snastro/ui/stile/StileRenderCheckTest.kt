@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.requestFocus
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import androidx.compose.ui.unit.dp
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.VoceId
@@ -31,6 +33,10 @@ import javax.imageio.ImageIO
 
 private const val LARGHEZZA_PX = 640
 private const val ALTEZZA_PX = 480
+private const val LARGHEZZA_GRUPPO_FONTI_PX = 1024
+private const val ALTEZZA_GRUPPO_FONTI_PX = 640
+private const val NOME_LUNGO_GRUPPO_FONTI =
+    "Un nome molto lungo di piu' di quaranta caratteri per forzare l andata a capo"
 
 /**
  * `:ui:renderCheck` (profile `ui_render_check`, AC-571): every shared `stile` component fixture in
@@ -119,7 +125,9 @@ class StileRenderCheckTest {
             ChipStato(TipoChipStato.InCoda(2))
             ChipStato(TipoChipStato.InCorso("Separazione voci", 192_000))
             ChipStato(TipoChipStato.Trascritta)
-            ChipStato(TipoChipStato.NonRiuscita)
+            ChipStato(TipoChipStato.NonRiuscita())
+            // AC-S46: the Riassunto tab's own override — "Non riuscito", not S2's "Non riuscita".
+            ChipStato(TipoChipStato.NonRiuscita(testo = "Non riuscito"))
             ChipStato(TipoChipStato.Avviso("Da identificare", Icona.Alert))
         }
     }
@@ -286,6 +294,99 @@ class StileRenderCheckTest {
         // OWN merge boundary node underneath, not on that outer node. Reach it directly.
         onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("focus-campo"))).requestFocus()
         catturaPng("focus-campo", scuro)
+    }
+
+    @Test
+    fun `AC-S47 fonte chip chiaro`() = verificaFonteChip(scuro = false)
+
+    @Test
+    fun `AC-S47 fonte chip scuro`() = verificaFonteChip(scuro = true)
+
+    // AC-S43: named, unnamed (ring dot, "Voce n"), and an h:mm:ss timecode in the same fixture.
+    private fun verificaFonteChip(scuro: Boolean) = fissaggio("fonte-chip", scuro) {
+        Row(horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2)) {
+            FonteChip(voceId = 1, nome = "Marco", inizioMs = 65_000)
+            FonteChip(voceId = 4, nome = null, inizioMs = 30_000)
+            FonteChip(voceId = 2, nome = "Ada", inizioMs = 3_725_000)
+        }
+    }
+
+    @Test
+    fun `AC-S47 gruppo fonti a capo chiaro`() = verificaGruppoFontiACapo(scuro = false)
+
+    @Test
+    fun `AC-S47 gruppo fonti a capo scuro`() = verificaGruppoFontiACapo(scuro = true)
+
+    // AC-S44: 5 chips, one with a 40+ character name, in a narrow column — proves the wrap
+    // visually (the programmatic proof is GruppoFontiTest). Window per the AC: 1024x640.
+    private fun verificaGruppoFontiACapo(scuro: Boolean) =
+        runDesktopComposeUiTest(LARGHEZZA_GRUPPO_FONTI_PX, ALTEZZA_GRUPPO_FONTI_PX) {
+            setContent {
+                SnastroTema(scuro = scuro, riduciMovimento = true) {
+                    Surface(color = sfondo(scuro)) {
+                        Column(Modifier.padding(SnastroMisure.space4).width(320.dp)) {
+                            GruppoFonti(
+                                fonti = listOf(
+                                    FonteChipDati(1, NOME_LUNGO_GRUPPO_FONTI, 0),
+                                    FonteChipDati(2, "Bea", 60_000),
+                                    FonteChipDati(3, null, 120_000),
+                                    FonteChipDati(4, "Cesare", 180_000),
+                                    FonteChipDati(5, "Dora", 240_000),
+                                ),
+                            )
+                        }
+                    }
+                }
+            }
+            catturaPng("gruppo-fonti", scuro)
+        }
+
+    @Test
+    fun `AC-S47 schede sn chiaro`() = verificaSchedeSn(scuro = false)
+
+    @Test
+    fun `AC-S47 schede sn scuro`() = verificaSchedeSn(scuro = true)
+
+    // AC-S45: both states (selected/unselected) with each SegnoScheda mark.
+    private fun verificaSchedeSn(scuro: Boolean) = fissaggio("schede-sn", scuro) {
+        Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3)) {
+            SchedeSn(schede = listOf("Trascrizione", "Riassunto"), selezionata = 0, onSeleziona = {})
+            SchedeSn(
+                schede = listOf("Trascrizione", "Riassunto"),
+                selezionata = 1,
+                onSeleziona = {},
+                segni = mapOf(1 to SegnoScheda.InAttesa),
+            )
+            SchedeSn(
+                schede = listOf("Trascrizione", "Riassunto"),
+                selezionata = 1,
+                onSeleziona = {},
+                segni = mapOf(1 to SegnoScheda.InCorso),
+            )
+        }
+    }
+
+    @Test
+    fun `AC-S46 NonRiuscita usa il testo predefinito Non riuscita`() = runDesktopComposeUiTest {
+        setContent { SnastroTema(riduciMovimento = true) { ChipStato(TipoChipStato.NonRiuscita()) } }
+        onNodeWithText("Non riuscita").assertIsDisplayed()
+    }
+
+    @Test
+    fun `AC-S46 NonRiuscita accetta un testo alternativo per la scheda Riassunto`() = runDesktopComposeUiTest {
+        setContent {
+            SnastroTema(riduciMovimento = true) { ChipStato(TipoChipStato.NonRiuscita(testo = "Non riuscito")) }
+        }
+        onNodeWithText("Non riuscito").assertIsDisplayed()
+    }
+
+    @Test
+    fun `AC-S46 InCorso riusa il tipo esistente per Sto riassumendo, nessun nuovo tipo`() = runDesktopComposeUiTest {
+        setContent {
+            SnastroTema(riduciMovimento = true) { ChipStato(TipoChipStato.InCorso("Sto riassumendo", 72_000)) }
+        }
+        onNodeWithText("Sto riassumendo").assertIsDisplayed()
+        onNodeWithText("1:12").assertIsDisplayed()
     }
 
     @OptIn(ExperimentalTestApi::class)

@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -59,6 +58,7 @@ import snastro.ui.stile.Icona
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.MisuratoreFascia
+import snastro.ui.stile.SchedeSn
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
@@ -109,9 +109,10 @@ internal fun MenuSn(expanded: Boolean, onDismissRequest: () -> Unit, content: @C
  * Thin view of S3's Voci panel (R2, RC-2): renders [pannello] — every enabled/disabled decision is the
  * presenter's ([CartaVoce.azioniAbilitate], [CartaVoce.confermaAbilitata], [PannelloVoci.estrattiDisponibili],
  * [PannelloVoci.unioneAbilitata]) — and forwards [azioni]. Only open/closed menus and the 'nuovo…' text
- * being typed are view-local. AC-584: the Riassunto tab is part B — [SchedaVoci] shows the single 'Voci'
- * tab of part A. [segmenti] is the transcript's own row list (already in `RegistrazioneUiStato`, no new
- * source) — AC-585's speaking-time caption sums each Voce's own durations from it (view arithmetic).
+ * being typed are view-local. AC-584: the Riassunto tab is part B — [snastro.ui.stile.SchedeSn]
+ * (moved there, AC-S45) shows the single 'Voci' tab of part A. [segmenti] is the transcript's own
+ * row list (already in `RegistrazioneUiStato`, no new source) — AC-585's speaking-time caption sums
+ * each Voce's own durations from it (view arithmetic).
  */
 @Composable
 internal fun PannelloVociVista(
@@ -155,7 +156,12 @@ internal fun PannelloVociVista(
                 } else {
                     TITOLO_PANNELLO_VOCI
                 }
-                SchedaVoci(titoloScheda)
+                SchedeSn(
+                    schede = listOf(titoloScheda),
+                    selezionata = 0,
+                    onSeleziona = {},
+                    modifier = Modifier.testTag("voci-schede"),
+                )
             }
             pannello.somiglianza?.let { s -> item { SezioneSomiglianza(s, azioni) } }
             if (!pannello.estrattiDisponibili) {
@@ -179,31 +185,6 @@ internal fun PannelloVociVista(
                     primario = carta.voceId == primaCartaAzione,
                     azioni,
                 )
-            }
-        }
-    }
-}
-
-/** AC-584: the right panel's segmented-control chrome — part A shows the single 'Voci' tab active
- * (the 'Riassunto' tab is part B, B3). */
-@Composable
-private fun SchedaVoci(testo: String) {
-    val colori = LocalSnastroColori.current
-    Surface(
-        color = colori.sunken,
-        shape = RoundedCornerShape(SnastroMisure.radiusControl),
-        modifier = Modifier.fillMaxWidth().testTag("voci-schede"),
-    ) {
-        Box(modifier = Modifier.padding(3.dp).fillMaxWidth()) {
-            Surface(
-                color = colori.raised,
-                shape = RoundedCornerShape(SnastroMisure.radiusControl),
-                shadowElevation = 1.dp,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Box(modifier = Modifier.height(28.dp).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(text = testo, style = LocalSnastroTipografia.current.label, color = colori.ink)
-                }
             }
         }
     }
