@@ -1,0 +1,42 @@
+package snastro.sintesi.applicazione.porte
+
+import snastro.kernel.Esito
+import snastro.kernel.RegistrazioneId
+import snastro.sintesi.dominio.Riassunto
+import snastro.sintesi.dominio.RiassuntoId
+
+/**
+ * Persistence port of the [Riassunto] aggregate (boundary `repo-sintesi`, ADR 0022). Every write runs inside the
+ * caller's `UnitaDiLavoro` transaction, never opens one. Contract: `RiassuntoRepositoryContratto`.
+ */
+public interface RiassuntoRepository {
+    public fun trova(id: RiassuntoId): Riassunto?
+
+    /** Every Riassunto of [r], any state. */
+    public fun diRegistrazione(r: RegistrazioneId): List<Riassunto>
+
+    /** The `in_attesa` ones, FIFO by (richiestoAlle, id). */
+    public fun inAttesa(): List<Riassunto>
+
+    public fun inCorso(): List<Riassunto>
+
+    /**
+     * Upsert of the root + replace of its elements and Fonti. A second `in_attesa | in_corso | fallito` of the same
+     * Registrazione (index `riassunto_non_pronto_unico`) → `Errore(RiassuntoGiaAperto)`; a second `pronto` (index
+     * `riassunto_pronto_unico`) → `Errore`. Nothing is written on an `Errore`.
+     */
+    public fun salva(r: Riassunto): Esito<Unit>
+
+    /**
+     * The completion compare-and-set (INV-S8, ADR 0022 §4) of [r], now `pronto` or `fallito`: only if the stored row
+     * still exists and is still `in_corso` it writes [r]'s state and children — for a `pronto`, after removing the
+     * previous `pronto` of the Registrazione (INV-S3) — and answers `Ok(true)`; otherwise `Ok(false)`, no effect.
+     */
+    public fun concludi(r: Riassunto): Esito<Boolean>
+
+    /** Removes the Riassunto with its elements and Fonti; an absent id is a no-op. */
+    public fun rimuovi(id: RiassuntoId): Esito<Unit>
+
+    /** Removes every Riassunto of [r] (elements and Fonti included); the number removed, 0 on none. */
+    public fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int>
+}
