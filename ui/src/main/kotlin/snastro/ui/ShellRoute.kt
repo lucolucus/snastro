@@ -9,6 +9,9 @@ import androidx.compose.runtime.getValue
  * [onRegistrazioniSelezionata]/[onModelliELicenze] (rework cycle 1, HIGH #9): optional hooks the
  * composition root wires to its own S5/sub-section navigation — the shell state has no such section.
  * [modelliSelezionati] (rework cycle 2): the composition root's S5 is on screen — see [SchermataShell].
+ * [statoModelloLinguisticoPiede] (AC-S33, ADR 0025): the composition root passes
+ * `snastro.ui.modelli.ModelliPresenter.etichettaModelloLinguisticoPiede`'s collected value here — this
+ * route has no `ServizioModelli` of its own (RC-1: the shell state has no such section either).
  */
 @Suppress("LongParameterList") // content slots + the composition root's nav hooks, as SchermataShell
 @Composable
@@ -19,6 +22,7 @@ fun ShellRoute(
     onRegistrazioniSelezionata: (() -> Unit)? = null,
     onModelliELicenze: (() -> Unit)? = null,
     modelliSelezionati: Boolean = false,
+    statoModelloLinguisticoPiede: String? = null,
 ) {
     val stato by presenter.stato.collectAsState()
     SchermataShell(
@@ -29,5 +33,6 @@ fun ShellRoute(
         onRegistrazioniSelezionata = onRegistrazioniSelezionata,
         onModelliELicenze = onModelliELicenze,
         modelliSelezionati = modelliSelezionati,
+        statoModelloLinguisticoPiede = statoModelloLinguisticoPiede,
     )
 }

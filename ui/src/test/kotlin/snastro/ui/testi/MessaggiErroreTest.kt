@@ -185,8 +185,17 @@ class MessaggiErroreTest {
                 ErroreServizioModelli.ReteAssente,
                 ErroreServizioModelli.ScritturaFallita("disco pieno"),
                 ErroreServizioModelli.DownloadFallito("connessione interrotta"),
+                ErroreServizioModelli.SpazioInsufficiente(6_169_341_984),
             ),
         ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `AC-S34 il testo di SpazioInsufficiente arrotonda in GB decimali con la virgola`() {
+        assertEquals(
+            "Non c'è abbastanza spazio sul disco (servono 6,2 GB).",
+            messaggioPer(ErroreServizioModelli.SpazioInsufficiente(6_169_341_984)),
+        )
     }
 
     @Test

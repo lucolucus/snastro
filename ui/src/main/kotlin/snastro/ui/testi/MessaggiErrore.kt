@@ -97,6 +97,8 @@ fun messaggioPer(errore: ErroreServizioModelli): String = when (errore) {
     ErroreServizioModelli.ReteAssente -> "Rete non raggiungibile: impossibile scaricare i modelli."
     is ErroreServizioModelli.ScritturaFallita -> "Non è stato possibile salvare i modelli sul disco."
     is ErroreServizioModelli.DownloadFallito -> "Il download dei modelli non è riuscito."
+    is ErroreServizioModelli.SpazioInsufficiente ->
+        "Non c'è abbastanza spazio sul disco (servono ${formattaGigabyte(errore.richiestiByte)} GB)."
 }
 
 /** AC-418: a card command whose body threw — nothing was written, the user can retry. */

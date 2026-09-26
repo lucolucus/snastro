@@ -43,18 +43,13 @@ class ServizioModelliProvisioningTest {
             ErroreModelli.ReteAssente to ErroreServizioModelli.ReteAssente,
             ErroreModelli.ScritturaFallita("disco pieno") to ErroreServizioModelli.ScritturaFallita("disco pieno"),
             ErroreModelli.DownloadFallito("HTTP 500") to ErroreServizioModelli.DownloadFallito("HTTP 500"),
+            // ADR 0025 §3/tec-modelli-ui-facoltativo: no longer a ScritturaFallita stopgap (:ui now
+            // has its own dedicated variant, AC-S34).
+            ErroreModelli.SpazioInsufficiente(6_600_000_000) to
+                ErroreServizioModelli.SpazioInsufficiente(6_600_000_000),
         )
 
         tabella.forEach { (modelli, ui) -> assertEquals(ui, mappaErrore(modelli), "mappatura di $modelli") }
-    }
-
-    @Test
-    fun `SpazioInsufficiente e uno stopgap su ScritturaFallita finche il blocco della voce facoltativa non arriva`() {
-        // ADR 0025 §3/§5: nessuna variante omonima dedicata in :ui finche' il blocco che disegna la
-        // UI della voce facoltativa non la aggiunge — vedi il commento su mappaErrore.
-        val mappato = mappaErrore(ErroreModelli.SpazioInsufficiente(6_600_000_000))
-
-        assertEquals(ErroreServizioModelli.ScritturaFallita("spazio insufficiente: servono 6600000000 byte"), mappato)
     }
 
     @Test
@@ -112,6 +107,20 @@ class ServizioModelliProvisioningTest {
         val servizio = servizio(pronti = { throw IOException("cartella illeggibile") })
 
         assertEquals(StatoModelli.Mancanti(1, 1_000), servizio.stato.value)
+    }
+
+    @Test
+    fun `AC-S32 pronti che lancia conta solo le voci obbligatorie, mai una facoltativa`() {
+        val facoltativa = voce.copy(id = "llm-facoltativo", dimensioneByte = 6_200_000_000, obbligatoria = false)
+        val catalogoConFacoltativa = CatalogoModelli(listOf(voce, facoltativa))
+        val servizio = ServizioModelliProvisioning(
+            catalogoConFacoltativa,
+            { throw IOException("cartella illeggibile") },
+            { throw IOException("cartella illeggibile") },
+            { Esito.Ok(Unit) },
+        )
+
+        assertEquals(StatoModelli.Mancanti(1, voce.dimensioneByte), servizio.stato.value)
     }
 
     @Test

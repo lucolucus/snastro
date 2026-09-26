@@ -22,4 +22,10 @@ sealed interface ErroreServizioModelli : ErroreDominio {
 
     /** The source was reachable but the download failed (bad status, redirect loop, a stalled/short transfer). */
     data class DownloadFallito(val motivo: String) : ErroreServizioModelli
+
+    /**
+     * ADR 0025 §3: the free-space pre-check refused an optional entry's download before any network
+     * call — [richiestiByte] is the catalogue entry's declared size, shown verbatim (AC-S34).
+     */
+    data class SpazioInsufficiente(val richiestiByte: Long) : ErroreServizioModelli
 }
