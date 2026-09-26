@@ -12,6 +12,7 @@ import snastro.kernel.VoceRef
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.sintesi.dominio.ErroreSintesi
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
 import snastro.ui.modelli.ErroreServizioModelli
@@ -204,6 +205,33 @@ class MessaggiErroreTest {
     }
 
     @Test
+    fun `AC-S139 ErroreSintesi`() {
+        verificaCopertura(
+            ErroreSintesi::class.java,
+            listOf(
+                ErroreSintesi.RiassuntoGiaAperto(RegistrazioneId("id-1")),
+                ErroreSintesi.ModelloNonInstallato,
+                ErroreSintesi.TrascrittoNonDisponibile(RegistrazioneId("id-1")),
+                ErroreSintesi.ElaborazioneGiaAperta(RegistrazioneId("id-1")),
+                ErroreSintesi.RegistrazioneTroppoLunga(30_000, 28_000),
+                ErroreSintesi.ArgomentoTroppoLungo(210, 200),
+                ErroreSintesi.LunghezzaMassimaFuoriIntervallo(299, 300, 2500),
+                ErroreSintesi.TransizioneNonAmmessa("in_attesa", "in_corso"),
+                ErroreSintesi.RiassuntoNonTrovato("id-1"),
+            ),
+        ) { messaggioPer(it) }
+    }
+
+    @Test
+    fun `AC-S139 i testi di ArgomentoTroppoLungo e LunghezzaMassimaFuoriIntervallo usano i limiti dell errore`() {
+        assertEquals("Al massimo 200 caratteri.", messaggioPer(ErroreSintesi.ArgomentoTroppoLungo(210, 200)))
+        assertEquals(
+            "Scegli fra 300 e 2500 parole.",
+            messaggioPer(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(299, 300, 2500)),
+        )
+    }
+
+    @Test
     fun `il punto di ingresso instrada ogni gerarchia raggiungibile`() {
         val esempi: List<ErroreDominio> = listOf(
             ErroreSessione.CartellaNonValida,
@@ -213,6 +241,7 @@ class MessaggiErroreTest {
             ErroreParlanti.NomeVuoto,
             ErroreServizioModelli.ReteAssente,
             ErroreComandoVoce.NonRiuscito,
+            ErroreSintesi.ModelloNonInstallato,
         )
         esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank()) }
     }

@@ -4,6 +4,7 @@ import snastro.kernel.ErroreDominio
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.sintesi.dominio.ErroreSintesi
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
 import snastro.ui.modelli.ErroreServizioModelli
@@ -24,6 +25,7 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
     is ErroreParlanti -> messaggioPer(errore)
     is ErroreServizioModelli -> messaggioPer(errore)
     is ErroreComandoVoce -> messaggioPer(errore)
+    is ErroreSintesi -> messaggioPer(errore)
     else -> error("ErroreDominio non mappato: $errore")
 }
 
@@ -104,4 +106,25 @@ fun messaggioPer(errore: ErroreServizioModelli): String = when (errore) {
 /** AC-418: a card command whose body threw — nothing was written, the user can retry. */
 fun messaggioPer(errore: ErroreComandoVoce): String = when (errore) {
     ErroreComandoVoce.NonRiuscito -> "Il comando non è riuscito: nulla è stato salvato. Riprova."
+}
+
+/**
+ * AC-S139: `Riassumi`/`ModificaLunghezzaMassimaRiassunto`'s own error hierarchy (9 members, D-0002) —
+ * mostly races the tab's own guards already avoid in the common case ([ErroreSintesi.RiassuntoGiaAperto]
+ * being the one AC-S139 names), so a plain, honest sentence is enough; the field-level errors
+ * ([ErroreSintesi.ArgomentoTroppoLungo], [ErroreSintesi.LunghezzaMassimaFuoriIntervallo]) reuse the SAME
+ * wording the inline field validation already shows (`erroreLunghezzaMassima`).
+ */
+fun messaggioPer(errore: ErroreSintesi): String = when (errore) {
+    is ErroreSintesi.RiassuntoGiaAperto -> "C'è già un riassunto in coda o in corso per questa registrazione."
+    ErroreSintesi.ModelloNonInstallato -> "Il modello di linguaggio non è installato."
+    is ErroreSintesi.TrascrittoNonDisponibile -> "Questa registrazione non ha ancora una trascrizione."
+    is ErroreSintesi.ElaborazioneGiaAperta -> "Aspetta la fine della trascrizione."
+    is ErroreSintesi.RegistrazioneTroppoLunga -> "La registrazione è troppo lunga per il riassunto."
+    is ErroreSintesi.ArgomentoTroppoLungo -> "Al massimo ${errore.massimo} caratteri."
+    is ErroreSintesi.LunghezzaMassimaFuoriIntervallo -> erroreLunghezzaMassima(errore.minimo, errore.massimo)
+    // Internal invariant breach (ADR 0003), not something the user can act on: a generic message that
+    // names no state, same rationale as `ErroreTrascrizione.TransizioneNonAmmessa`'s own mapping.
+    is ErroreSintesi.TransizioneNonAmmessa -> "Operazione non ammessa nello stato attuale del riassunto."
+    is ErroreSintesi.RiassuntoNonTrovato -> "Riassunto non trovato."
 }
