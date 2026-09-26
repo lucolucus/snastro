@@ -63,6 +63,7 @@ internal fun ContenutoAppR1(grafo: GrafoR1, sceltaCartella: SceltaCartella) {
                 )
             }
         },
+        etichettaModelloLinguisticoPiede = modelliPresenter.etichettaModelloLinguisticoPiede,
     )
 }
 
