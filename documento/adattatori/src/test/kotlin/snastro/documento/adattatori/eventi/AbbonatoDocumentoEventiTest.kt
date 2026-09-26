@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.documento.applicazione.porte.LettoreNomiFinta
+import snastro.documento.applicazione.porte.LettoreTrascritto
 import snastro.documento.applicazione.porte.LettoreTrascrittoFinta
 import snastro.documento.applicazione.porte.ScrittoreDocumento
 import snastro.documento.applicazione.porte.ScrittoreDocumentoFinta
@@ -175,6 +176,26 @@ class AbbonatoDocumentoEventiTest {
 
         assertEquals(tentativiDopoAvvio + 3, scrittore.tentativi) // 2 fallimenti + 1 successo, in piu'
         assertTrue(testScheduler.currentTime > inizio) // il backoff e' passato per davvero: no busy loop
+    }
+
+    @Test
+    fun `D-0008 un eccezione nella lettura del Trascritto viene ritentata e non esce dal ciclo`() = runTest {
+        val lettore = LettoreCheLancia(LettoreTrascrittoFinta(mapOf(REG_1 to unTrascritto(REG_1))))
+        val scrittore = ScrittoreDocumentoFinta()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
+        AbbonatoDocumentoEventi(dispatcher, politica, CoroutineScope(StandardTestDispatcher(testScheduler)))
+        advanceUntilIdle() // startup sweep settles (no fault armed yet)
+        val prima = scrittore.operazioni.size
+
+        lettore.lanciaProssimeLetture(2)
+        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(REG_1))) }
+        advanceUntilIdle()
+
+        assertEquals(prima + 1, scrittore.operazioni.size, "riletto dopo 2 eccezioni, scritto una volta")
+        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(REG_1))) }
+        advanceUntilIdle()
+        assertEquals(prima + 2, scrittore.operazioni.size, "il ciclo e ancora vivo")
     }
 
     // --- AC-185 (startup sweep) ------------------------------------------------------------------
@@ -368,6 +389,26 @@ class AbbonatoDocumentoEventiTest {
         advanceUntilIdle()
 
         assertEquals(prima + 1, ambiente.operazioni().size)
+    }
+
+    /**
+     * [LettoreTrascritto] whose next `n` [trascritto] calls throw like a half-written read (D-0008: the
+     * `ricostituisci` `require` escaping `TrascrittoRepositorySql.trova`), then delegates.
+     */
+    private class LettoreCheLancia(private val delegato: LettoreTrascritto) : LettoreTrascritto by delegato {
+        private var lanciRimanenti = 0
+
+        fun lanciaProssimeLetture(n: Int) {
+            lanciRimanenti = n
+        }
+
+        override fun trascritto(id: RegistrazioneId): TrascrittoTesto? {
+            if (lanciRimanenti > 0) {
+                lanciRimanenti--
+                throw IllegalArgumentException("prossimaVoce 3 non oltre le Voci")
+            }
+            return delegato.trascritto(id)
+        }
     }
 
     /**

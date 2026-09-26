@@ -14,7 +14,8 @@ import migrations.Segmento as SegmentoRiga
 /**
  * [TrascrittoRepository] on the generated [SnastroDatabase] queries (dev-architecture-app.md#repository,
  * INV-12): [salva] replaces the owned `voce`/`segmento` rows of its Registrazione (delete then re-insert),
- * never opening its own transaction — the caller's [snastro.kernel.UnitaDiLavoro] does (ADR 0012).
+ * never opening its own transaction — the caller's [snastro.kernel.UnitaDiLavoro] does (ADR 0012); only [trova] wraps
+ * its two SELECTs in one, so they see a single snapshot (D-0008).
  *
  * Delete order is CHILD (`segmento`) then PARENT (`voce`); insert order is PARENT then CHILD: the three
  * FKs to `voce` (from `segmento`, and from Parlanti's `attribuzione`/`impronta_vocale`) are DEFERRABLE
@@ -26,11 +27,18 @@ import migrations.Segmento as SegmentoRiga
  * with none does not exist), so [trova] never reads `voce`, only `trascritto` + `segmento`.
  */
 public class TrascrittoRepositorySql(private val db: SnastroDatabase) : TrascrittoRepository {
+    /**
+     * The counters (`trascritto`) and the Segmenti are read in ONE transaction (D-0008): outside one, each SELECT
+     * runs on its own autocommit connection, so a Revisione committing between them paired the OLD `prossimaVoce`
+     * with the NEW Segmenti and `ricostituisci` refused it. Inside the caller's [snastro.kernel.UnitaDiLavoro] this
+     * is a plain nested SQLDelight transaction (no BEGIN): the reads join the caller's.
+     */
     @OptIn(RicostituzioneDaPersistenza::class)
-    override fun trova(id: RegistrazioneId): Trascritto? {
-        val riga = db.trascrittoQueries.trovaPerRegistrazione(id.valore).executeAsOneOrNull() ?: return null
+    override fun trova(id: RegistrazioneId): Trascritto? = db.transactionWithResult {
+        val riga = db.trascrittoQueries.trovaPerRegistrazione(id.valore).executeAsOneOrNull()
+            ?: return@transactionWithResult null
         val segmenti = db.segmentoQueries.trovaDiTrascritto(id.valore).executeAsList().map { it.inDominio() }
-        return Trascritto.ricostituisci(id, segmenti, riga.prossima_voce.toInt(), riga.prossimo_segmento.toInt())
+        Trascritto.ricostituisci(id, segmenti, riga.prossima_voce.toInt(), riga.prossimo_segmento.toInt())
     }
 
     override fun conTrascritto(): List<RegistrazioneId> =
