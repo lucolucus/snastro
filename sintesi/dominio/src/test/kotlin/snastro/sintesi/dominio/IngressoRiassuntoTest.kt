@@ -10,7 +10,7 @@ class IngressoRiassuntoTest {
         SegmentoIngresso(SegmentoId(s), VoceId(v), ms, testo)
 
     @Test
-    fun `AC-S3 una riga per Segmento nell ordine dato poi la legenda delle Voci per n crescente`() {
+    fun `AC-S3 una riga per Segmento nell ordine dato senza tempo poi la legenda delle Voci per n crescente`() {
         val ingresso = IngressoRiassunto.costruisci(
             listOf(
                 segmento(2, 3, 5_000, "ciao"),
@@ -22,9 +22,9 @@ class IngressoRiassuntoTest {
 
         assertEquals(
             listOf(
-                "[s2 V3 0:05] ciao",
-                "[s1 V1 1:05] budget",
-                "[s7 V3 1:02:05] chiudiamo",
+                "[s2 V3] ciao",
+                "[s1 V1] budget",
+                "[s7 V3] chiudiamo",
                 "V1 = Voce 1",
                 "V3 = Marco",
             ).joinToString("\n"),
