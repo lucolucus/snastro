@@ -49,3 +49,16 @@
 - By: decided: user (Luca Parsani); recorded: build-manifest
 - Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0023](../../decisions/0023-coda-condivisa-elaborazioni-riassunti.md)
 - Revisit: Riassunto ids are reused across sostituzione, or cancellation moves out of the composition root.
+
+### D-0005 · FonteCoda gains annulla hook
+- Meta: 2026-09-26; scope: boundary:coda-condivisa; status: accepted
+- Question: annullaInCorso(tipo, registrazioneId) (AC-S63) must cancel the in-flight item per source; the pinned 6-field FonteCoda has no such hook.
+- Options: 7th FonteCoda field annulla: (registrazioneId: String) -> Unit = {} (kept) vs a CodaCondivisa-level hook (rework of avvio-coda-condivisa).
+- Hypothesis: n/a — decided by the user on the avvio-coda-condivisa open question, [building-blocks.yaml](building-blocks.yaml)
+- Check: n/a — decided by the user on the avvio-coda-condivisa open question, [building-blocks.yaml](building-blocks.yaml)
+- Result: n/a — decided by the user on the avvio-coda-condivisa open question, [building-blocks.yaml](building-blocks.yaml)
+- Debate: worker/avvio-coda-condivisa parked at head 9e51176 (gate green) with the additive, defaulted field as a deviation from the pin; the user accepted it.
+- Decision: FonteCoda gains annulla: (registrazioneId: String) -> Unit = {}; annullaInCorso delegates to it. Elaborazione: no-op; avvio-sintesi's Riassunto source flips its per-run flag only if the row is gone (AC-S161).
+- By: decided: user (Luca Parsani); recorded: build-manifest
+- Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0023](../../decisions/0023-coda-condivisa-elaborazioni-riassunti.md)
+- Revisit: Cancellation needs more than the Registrazione id, or moves out of the per-source composition.

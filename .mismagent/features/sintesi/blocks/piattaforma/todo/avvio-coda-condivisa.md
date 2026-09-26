@@ -43,7 +43,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
 ## Dependencies
 - **coda-condivisa** (OWNED here; owner avvio-coda-condivisa; projection in-process; contract_test `consumer-driven`)
-  - `FonteCoda (internal, snastro.avvio)`: class(tipo: TipoElementoCoda, teste: (esclusi: Set<String>) -> ElementoInCoda?, prossima: (esclusi: Set<String>, limite: Instant?) -> RisultatoTentativo, ultimaTentata: () -> String?, recupera: () -> Unit, trattenuta: () -> Boolean /* true = hold the whole queue while this source's head waits (sherpa models not pronti) */)
+  - `FonteCoda (internal, snastro.avvio)`: class(tipo: TipoElementoCoda, teste: (esclusi: Set<String>) -> ElementoInCoda?, prossima: (esclusi: Set<String>, limite: Instant?) -> RisultatoTentativo, ultimaTentata: () -> String?, recupera: () -> Unit, trattenuta: () -> Boolean /* true = hold the whole queue while this source's head waits (sherpa models not pronti) */, annulla: (registrazioneId: String) -> Unit = {} /* D-0005: hook annullaInCorso(tipo, registrazioneId) delegates to for the item whose claim is in flight (AC-S63); Elaborazione source: no-op; avvio-sintesi's Riassunto source supplies it (AC-S161) */)
   - `ElementoInCoda`: data class(id: String, registrazioneId: String, istante: Instant)
   - `TipoElementoCoda`: enum { ELABORAZIONE /* 0 */, RIASSUNTO /* 1 */ } — ordinal is the tie-breaker
   - `CodaCondivisa`: class(scope, fonti: List<FonteCoda>, segnalaBloccato: (String) -> Unit, …) { fun avanza(); fun annullaInCorso(tipo: TipoElementoCoda, registrazioneId: String); fun fermaEAttendi(timeoutMs): Boolean; : PosizioniNellaCoda }
