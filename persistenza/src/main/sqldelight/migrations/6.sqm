@@ -1,0 +1,59 @@
+-- Schema 6 -> 7 (ADR 0022 "persistenza-sintesi", ADR 0006 (a)): forward-only — schema 6 (5.sqm) is
+-- never edited. Sintesi's aggregate: Riassunto, one row per Registrazione at most in each of the two
+-- states below (INV-S2/INV-S3, ADR 0007 pattern). No FK to segmento/voce: TrascrittoRepository.salva
+-- replaces those rows on every Revisione (ADR 0018), and Sintesi must not couple to Trascrizione's
+-- tables — segmento_id/voce_id are Published-Language integers, checked by the Verifica at run time
+-- (ADR 0022 §2). Child rows (riassunto_elemento, riassunto_fonte) are deleted explicitly by the
+-- repository, never by a cascade (fonte -> elemento -> riassunto, ADR 0022 §2).
+
+-- Aggregate: Riassunto (Sintesi, ADR 0022). Content columns are non-NULL iff stato = 'pronto' (INV-S1).
+-- Speakers only as {V<n>} tokens inside TEXT and as voce_id integers (INV-S5).
+CREATE TABLE riassunto (
+    id TEXT NOT NULL PRIMARY KEY,
+    registrazione_id TEXT NOT NULL REFERENCES registrazione(id),
+    stato TEXT NOT NULL CHECK (stato IN ('in_attesa', 'in_corso', 'pronto', 'fallito')),
+    argomento TEXT,                                  -- NULL = no Argomento
+    lunghezza_massima_parole INTEGER NOT NULL CHECK (lunghezza_massima_parole > 0),  -- the cap requested with (INV-S10); range lives in the VO
+    richiesto_alle INTEGER NOT NULL,                 -- Instant, epoch millis — FIFO key of the shared queue (ADR 0023)
+    avviato_alle INTEGER,                            -- NULL until in_corso
+    motivo_fallimento TEXT,                          -- canonical code, NOT NULL iff fallito
+    sommario TEXT,                                   -- NULL when absent or dropped by the Verifica
+    omessi INTEGER,                                  -- NOT NULL iff pronto
+    struttura TEXT,                                  -- canonical segmentoId:voceId encoding, NOT NULL iff pronto
+    CHECK ((stato = 'fallito') = (motivo_fallimento IS NOT NULL)),
+    CHECK ((stato = 'pronto') = (struttura IS NOT NULL AND omessi IS NOT NULL)),
+    CHECK (stato = 'pronto' OR sommario IS NULL)
+);
+
+CREATE INDEX riassunto_registrazione ON riassunto(registrazione_id);
+
+CREATE UNIQUE INDEX riassunto_non_pronto_unico ON riassunto(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso', 'fallito');
+
+CREATE UNIQUE INDEX riassunto_pronto_unico ON riassunto(registrazione_id) WHERE stato = 'pronto';
+
+-- Elements of a pronto Riassunto, one row each; posizione = order inside its tipo list.
+CREATE TABLE riassunto_elemento (
+    riassunto_id TEXT NOT NULL REFERENCES riassunto(id),
+    tipo TEXT NOT NULL CHECK (tipo IN ('decisione', 'questione_aperta', 'azione', 'punto_chiave')),
+    posizione INTEGER NOT NULL,
+    testo TEXT NOT NULL,                             -- plain text with {V<n>} tokens (FTS-ready)
+    voce_id INTEGER,                                 -- Responsabile (azione) / speaker (punto_chiave); NULL otherwise or unbound
+    PRIMARY KEY (riassunto_id, tipo, posizione),
+    CHECK (voce_id IS NULL OR tipo IN ('azione', 'punto_chiave'))
+);
+
+-- One row per Fonte (a SET per element: the PK forbids duplicates).
+CREATE TABLE riassunto_fonte (
+    riassunto_id TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    posizione INTEGER NOT NULL,
+    segmento_id INTEGER NOT NULL,
+    PRIMARY KEY (riassunto_id, tipo, posizione, segmento_id),
+    FOREIGN KEY (riassunto_id, tipo, posizione) REFERENCES riassunto_elemento(riassunto_id, tipo, posizione)
+);
+
+-- Per-Progetto setting owned by Sintesi (INV-S9). No row = the default (2000 parole).
+CREATE TABLE impostazioni_sintesi (
+    progetto_id TEXT NOT NULL PRIMARY KEY REFERENCES progetto(id),
+    lunghezza_massima_riassunto_parole INTEGER NOT NULL CHECK (lunghezza_massima_riassunto_parole > 0)
+);

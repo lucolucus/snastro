@@ -44,7 +44,16 @@ class SchemaVincoliTest {
         ).value
 
         // ADR 0018: elaborazione_completata_unica is dropped by 3.sqm (AC-425).
-        assertEquals(setOf("elaborazione_aperta_unica", "parlante_nome_attivo_unico"), indici)
+        // ADR 0022 (6.sqm): riassunto_non_pronto_unico / riassunto_pronto_unico (INV-S2/INV-S3).
+        assertEquals(
+            setOf(
+                "elaborazione_aperta_unica",
+                "parlante_nome_attivo_unico",
+                "riassunto_non_pronto_unico",
+                "riassunto_pronto_unico",
+            ),
+            indici,
+        )
     }
 
     @Test

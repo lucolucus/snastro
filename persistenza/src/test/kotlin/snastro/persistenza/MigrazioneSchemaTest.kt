@@ -117,6 +117,7 @@ class MigrazioneSchemaTest {
         eseguiQueryProgettoRegistrazioneParlante(db)
         eseguiQueryTrascrittoVoceSegmentoElaborazione(db)
         eseguiQueryAttribuzioneEImpronta(db)
+        eseguiQuerySintesi(db)
 
         // Cleanup in FK-safe (children-first) order — exercises every DELETE query too.
         db.attribuzioneQueries.rimuovi(registrazioneId, 1L)
@@ -205,6 +206,39 @@ class MigrazioneSchemaTest {
         )
         db.improntaVocaleQueries.eliminaPerVoceRef(parlanteId, registrazioneId, 1L)
         db.improntaVocaleQueries.eliminaDiParlante(parlanteId)
+    }
+
+    /** ADR 0022 / AC-S37: the four Sintesi queries too, root then children, no-cascade cleanup. */
+    private fun eseguiQuerySintesi(db: SnastroDatabase) {
+        val riassuntoId = "riassunto-1"
+        db.riassuntoQueries.inserisci(
+            riassuntoId, registrazioneId, "in_attesa", "argomento", 2000L, 0L, null, null, null, null, null,
+        )
+        db.riassuntoQueries.trovaPerId(riassuntoId).executeAsOne()
+        db.riassuntoQueries.trovaDiRegistrazione(registrazioneId).executeAsList()
+        db.riassuntoQueries.trovaInAttesa().executeAsList()
+        db.riassuntoQueries.trovaInCorso().executeAsList()
+        db.riassuntoQueries.avvia(1L, riassuntoId)
+        db.riassuntoQueries.concludi("pronto", null, "sommario", 0L, "1:1", riassuntoId)
+
+        db.riassuntoElementoQueries.inserisci(riassuntoId, "decisione", 0L, "testo", null)
+        db.riassuntoElementoQueries.trovaDiRiassunto(riassuntoId).executeAsList()
+
+        db.riassuntoFonteQueries.inserisci(riassuntoId, "decisione", 0L, 1L)
+        db.riassuntoFonteQueries.trovaDiRiassunto(riassuntoId).executeAsList()
+
+        db.impostazioniSintesiQueries.sostituisci(progettoId, 2000L)
+        db.impostazioniSintesiQueries.trova(progettoId).executeAsOneOrNull()
+
+        // Single-row removal, no cascade (fonte -> elemento -> riassunto, ADR 0022 §2).
+        db.riassuntoFonteQueries.eliminaDiRiassunto(riassuntoId)
+        db.riassuntoElementoQueries.eliminaDiRiassunto(riassuntoId)
+        db.riassuntoQueries.elimina(riassuntoId)
+
+        // Bulk-by-Registrazione removal (ADR 0020/0022) — nothing left, exercised for the smoke pass.
+        db.riassuntoFonteQueries.eliminaDiRegistrazione(registrazioneId)
+        db.riassuntoElementoQueries.eliminaDiRegistrazione(registrazioneId)
+        db.riassuntoQueries.eliminaDiRegistrazione(registrazioneId)
     }
 
     private fun pragmaLong(driver: SqlDriver, nome: String): Long =

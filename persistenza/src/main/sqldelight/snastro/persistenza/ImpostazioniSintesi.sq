@@ -1,0 +1,11 @@
+-- Queries for `impostazioni_sintesi` — schema in migrations/6.sqm (ADR 0022 §2, ADR 0006 Amendment (a)).
+-- No row = the default (2000 parole, INV-S9); the domain root reconstitutes it, nothing to backfill.
+
+trova:
+SELECT * FROM impostazioni_sintesi WHERE progetto_id = :progettoId;
+
+-- Upsert: one row per Progetto, replaced wholesale (like ImprontaVocale.sq's `sostituisci`) — there
+-- are no owned children to replace separately.
+sostituisci:
+INSERT OR REPLACE INTO impostazioni_sintesi(progetto_id, lunghezza_massima_riassunto_parole)
+VALUES (:progettoId, :lunghezzaMassimaRiassuntoParole);
