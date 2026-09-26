@@ -22,6 +22,7 @@ import snastro.ui.ApriEsterno
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreUiStato
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.stile.SegnoScheda
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
@@ -54,6 +55,12 @@ import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
  * reloads on the Cambiamento the replacement/cancellation publishes, so the read-only flag, the banner
  * and (on a replacement) the transcript itself stay current (AC-453). Both default to `null`: R1
  * (`avvio-composizione`) supplies neither, so a row is never read-only there.
+ *
+ * ADR 0021 (AC-S119..S123, optional [riassunto]/[selezioneSchedaS3]): `null` in R0/R1/R2 — no
+ * Riassunto tab exists then, S3 stays exactly as before (`bannerSchermata` folds to the Ritrascrizione
+ * case alone). `avvio-sintesi` (R3) supplies both: [riassunto] the tab content + its status mark,
+ * [selezioneSchedaS3] the ONE per-window holder shared by every [RegistrazionePresenter] it builds, so
+ * the selected tab survives navigating to another recording (AC-S121).
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazionePresenter(
@@ -67,6 +74,8 @@ class RegistrazionePresenter(
     private val parlanti: SorgentiParlanti? = null,
     private val stati: (() -> StatoRegistrazioneVista?)? = null,
     private val aggiornamenti: AggiornamentiVista? = null,
+    private val riassunto: SorgenteRiassuntoS3? = null,
+    private val selezioneSchedaS3: SelezioneSchedaS3? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -101,6 +110,12 @@ class RegistrazionePresenter(
         StatoVoci(sorgenti, scope, io, registrazioneId, trascritto, _stato) { v -> segmentiDi(v, lettore.stato.value) }
     }
 
+    // AC-S122: the Riassunto tab's own status mark — collected independently of `carica()` (it can tick
+    // while a reload is not otherwise due) and kept here so a reload (`carica()`) never loses the latest
+    // value: `Dati` is REPLACED whole there, so anything not re-read from a live source would reset to
+    // `null` on every reload.
+    private var segnoRiassuntoAttuale: SegnoScheda? = null
+
     init {
         scope.launch { carica() }
         scope.launch { lettore.stato.collect { s -> rifletti(s) } }
@@ -110,6 +125,14 @@ class RegistrazionePresenter(
             scope.launch {
                 a.cambiamenti.collect { c ->
                     if (c.registrazioneId == null || c.registrazioneId == registrazioneId) carica()
+                }
+            }
+        }
+        riassunto?.let { r ->
+            scope.launch {
+                r.segno(registrazioneId).collect { segno ->
+                    segnoRiassuntoAttuale = segno
+                    aggiornaDati { it.copy(segnoRiassunto = segno) }
                 }
             }
         }
@@ -156,6 +179,9 @@ class RegistrazionePresenter(
                 documentoPercorso = percorso,
                 soloLettura = soloLettura,
                 bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
+                contenutoRiassunto = riassunto?.let { r -> { r.contenuto(registrazioneId) } },
+                schedaSelezionata = selezioneSchedaS3?.scheda ?: SchedaS3.TRASCRIZIONE,
+                segnoRiassunto = segnoRiassuntoAttuale,
             )
             voci?.pubblica()
         } catch (e: CancellationException) {
@@ -332,6 +358,15 @@ class RegistrazionePresenter(
     /** H1: dismisses the current inline `errore`, if any. */
     fun chiudiErrore() = aggiornaDati { it.copy(errore = null) }
 
+    /** AC-S120/S121: switches the centre-column tab, kept per window in [selezioneSchedaS3] (a no-op
+     * while [riassunto] is `null` — the whole action is a no-op then, since [AzioniRegistrazione]
+     * defaults it that way, but this guard keeps the presenter itself honest too). */
+    fun selezionaScheda(scheda: SchedaS3) {
+        if (riassunto == null) return
+        selezioneSchedaS3?.seleziona(scheda)
+        aggiornaDati { it.copy(schedaSelezionata = scheda) }
+    }
+
     private fun aggiornaDati(f: (RegistrazioneUiStato.Dati) -> RegistrazioneUiStato.Dati) {
         val attuale = _stato.value
         if (attuale is RegistrazioneUiStato.Dati) _stato.value = f(attuale)
@@ -364,6 +399,7 @@ class RegistrazionePresenter(
         calcolaSomiglianza = { voci?.calcolaSomiglianza() },
         applicaSomiglianza = { voci?.applicaSomiglianza() },
         annullaSomiglianza = { voci?.annullaSomiglianza() },
+        selezionaScheda = ::selezionaScheda,
     )
 
     companion object {

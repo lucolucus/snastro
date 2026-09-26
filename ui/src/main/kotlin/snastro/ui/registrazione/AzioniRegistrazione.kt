@@ -48,4 +48,7 @@ data class AzioniRegistrazione(
     val applicaSomiglianza: () -> Unit = {},
     /** 'Annulla' (computation or preview), 'Chiudi' (N = 0) and the result message's dismissal. */
     val annullaSomiglianza: () -> Unit = {},
+    /** AC-S120/S121: switches the centre-column tab — a no-op while [RegistrazioneUiStato.Dati.contenutoRiassunto]
+     * is `null` (the presenter ignores it, same guard as every R2-only action above). */
+    val selezionaScheda: (SchedaS3) -> Unit = {},
 )
