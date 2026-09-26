@@ -12,6 +12,11 @@ dependencies {
     implementation(project(":trascrizione:applicazione"))
     implementation(project(":parlanti:applicazione"))
 
+    // Progetto's published event RegistrazioneEliminata (boundary eventi-progetto, ADR 0002/0021 §2-3:
+    // consumer:adattatori -> supplier:applicazione only, never supplier:adattatori) — abbonato-progetto-sintesi
+    // translates it into ApplicaEliminazioneRegistrazioneSintesiPolitica.applica (ADR 0020 §2 step 4 / ADR 0024 §1).
+    implementation(project(":progetto:applicazione"))
+
     // Port contracts + Ambienti (testFixtures) — D2: the adapter tests extend the port contracts
     // (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":sintesi:applicazione")))
