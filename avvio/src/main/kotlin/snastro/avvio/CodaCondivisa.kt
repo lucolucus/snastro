@@ -48,7 +48,8 @@ import kotlin.coroutines.coroutineContext
  * after a NON-EMPTY peek is NOT "the queue is drained" — carry-over 1: the coordinator re-evaluates
  * IMMEDIATELY ([riavvia], no delay), re-peeking every head fresh, rather than waiting
  * [INTERVALLO_CONTROLLO] as an ordinary empty-queue poll does. No item of the other source is
- * overtaken: the next tick runs the SAME total-order comparison from scratch.
+ * overtaken: the next tick runs the SAME total-order comparison from scratch. This immediate re-tick is
+ * bounded to ONE (below, MED user-approved): a second consecutive `Nessuno` falls back to the poll.
  *
  * **Holding never starves the queue** (AC-S60): when [FonteCoda.trattenuta] is true, this tick only
  * reschedules — no other source's item is even attempted until the head resolves.
@@ -69,13 +70,30 @@ import kotlin.coroutines.coroutineContext
  * stuck item is still `in_attesa` and still counted, matching the pre-ADR-0023 `StatiElaborazione`
  * behaviour). The resulting items, of both kinds, are ranked by the SAME total order and numbered from 1.
  *
- * **[annullaInCorso] (ADR 0023 §5, best effort).** [FonteCoda] gains one extra collaborator beyond the
- * boundary's own 6 fields — [FonteCoda.annulla] (DEVIATION, additive/backward-compatible: defaults to a
- * no-op, so the Elaborazione wiring in THIS block never needs to supply it). This dispatcher tracks which
+ * **[annullaInCorso] (ADR 0023 §5, best effort, D-0005).** [FonteCoda.annulla] is part of the pin
+ * (accepted extension of the original 6 fields, additive/backward-compatible: defaults to a no-op, so
+ * the Elaborazione wiring in THIS block never needs to supply it). This dispatcher tracks which
  * `(tipo, registrazioneId)` is the CURRENTLY claimed/running item; [annullaInCorso] calls that source's
- * [FonteCoda.annulla] only when both match — otherwise no effect (AC-S63). [fermaEAttendi] keeps the
- * existing two-step contract (the caller cancels [scope] first): [runInterruptible] then interrupts
- * whatever call is mid-flight, exactly as before.
+ * [FonteCoda.annulla] only when both match — otherwise no effect (AC-S63).
+ *
+ * **[fermaEAttendi] (D-0006, AC-S63 stop half).** Keeps the existing two-step contract (the caller
+ * cancels [scope] first): it calls the CURRENTLY running item's source [FonteCoda.interrompi]
+ * (unconditional — unlike [annulla][FonteCoda.annulla], no `(tipo, registrazioneId)` match is needed,
+ * because only one item can ever be running) before/while [runInterruptible] interrupts whatever call
+ * is mid-flight. With nothing running, no source's `interrompi` is called.
+ *
+ * **A throwing peek is handled like an escape (MED, user-approved 2026-09-26).** [FonteCoda.teste] and
+ * [FonteCoda.trattenuta] are read inside [eseguiProtetto] too (not just [FonteCoda.prossima]): a source
+ * whose peek throws is treated exactly like an ordinary escape — every source's [FonteCoda.recupera]
+ * runs, and the queue reschedules normally instead of dying.
+ *
+ * **The AC-S59 immediate re-tick is bounded to ONE (MED, user-approved 2026-09-26).** A source whose
+ * [FonteCoda.teste] and [FonteCoda.prossima] permanently disagree (a persistently "eligible" head that
+ * never actually claims) would otherwise spin the immediate re-tick forever, with no delay between
+ * attempts. After one immediate re-tick answers [RisultatoTentativo.Nessuno] again, the coordinator
+ * falls back to the ordinary [INTERVALLO_CONTROLLO] poll — [rivalutazioneUsata] tracks this, and is
+ * cleared by [riprogramma] (every OTHER path reschedules through it, so it is armed again on the very
+ * next distinct event).
  */
 internal class CodaCondivisa(
     scope: CoroutineScope,
@@ -88,6 +106,10 @@ internal class CodaCondivisa(
     private val tentativi: Map<FonteCoda, MutableMap<String, Int>> = fonti.associateWith { mutableMapOf() }
 
     @Volatile private var corrente: Corrente? = null
+
+    // Solo il thread dedicato la legge/scrive (dentro provaAvanzare/riavvia/riprogramma): niente @Volatile,
+    // come esclusi/tentativi. AC-S59, MED user-approved: al piu' UNA rivalutazione immediata di fila.
+    private var rivalutazioneUsata = false
 
     val lavoro: Job = scope.launch(dispatcherSingoloThread) {
         fonti.forEach { fonte -> eseguiProtetto { fonte.recupera() } } // AC-S61: ogni fonte, prima di tutto
@@ -119,11 +141,17 @@ internal class CodaCondivisa(
     }
 
     /**
-     * Blocking stop: call AFTER cancelling [scope] and BEFORE closing the database. Waits for [lavoro]
-     * to finish unwinding up to [timeoutMs]. Returns `true` if it finished in time.
+     * Blocking stop: call AFTER cancelling [scope] and BEFORE closing the database. D-0006/AC-S63: calls
+     * the CURRENTLY running item's source [FonteCoda.interrompi] (unconditional flip) before/while
+     * [runInterruptible] interrupts whatever call is mid-flight; with nothing running, no source's
+     * `interrompi` is called. Waits for [lavoro] to finish unwinding up to [timeoutMs]. Returns `true` if
+     * it finished in time.
      */
-    fun fermaEAttendi(timeoutMs: Long = TIMEOUT_STOP_MS): Boolean = runBlocking {
-        withTimeoutOrNull(timeoutMs) { lavoro.join() } != null
+    fun fermaEAttendi(timeoutMs: Long = TIMEOUT_STOP_MS): Boolean {
+        corrente?.let { attivo -> fonti.firstOrNull { it.tipo == attivo.tipo }?.interrompi() }
+        return runBlocking {
+            withTimeoutOrNull(timeoutMs) { lavoro.join() } != null
+        }
     }
 
     /**
@@ -154,21 +182,20 @@ internal class CodaCondivisa(
     }
 
     private suspend fun provaAvanzare() {
-        val teste: Map<FonteCoda, ElementoInCoda> = fonti
-            .mapNotNull { fonte -> fonte.teste(esclusi.getValue(fonte))?.let { fonte to it } }
-            .toMap()
-        if (teste.isEmpty()) {
-            riprogramma(INTERVALLO_CONTROLLO) // coda vuota su ogni fonte: poll ordinario
+        val picco = when (val esito = eseguiProtetto { raccogliPicco() }) {
+            is RisultatoProtetto.Concluso -> esito.valore
+            RisultatoProtetto.Sfuggito -> {
+                // il picco stesso e' sfuggito (MED user-approved): trattato come una fuga qualunque, su ogni fonte
+                fonti.forEach { fonte -> eseguiProtetto { fonte.recupera() } }
+                riprogramma(INTERVALLO_CONTROLLO)
+                return
+            }
+        }
+        if (picco == null) {
+            riprogramma(INTERVALLO_CONTROLLO) // coda vuota, o la fonte scelta e' trattenuta (AC-S56/AC-S60)
             return
         }
-        val (fonteScelta, testaScelta) = teste.entries
-            .minWith(compareBy({ it.value.istante }, { it.key.tipo.ordinal }, { it.value.id }))
-            .toPair()
-        if (fonteScelta.trattenuta()) { // AC-S60: tutta la coda resta ferma, anche l'altra fonte
-            riprogramma(INTERVALLO_CONTROLLO)
-            return
-        }
-        val limite = teste.entries.filter { it.key !== fonteScelta }.minOfOrNull { it.value.istante }
+        val (fonteScelta, testaScelta, limite) = picco
         corrente = Corrente(fonteScelta.tipo, testaScelta.registrazioneId)
         val risultato = try {
             eseguiProtetto { fonteScelta.prossima(esclusi.getValue(fonteScelta).toSet(), limite) }
@@ -183,7 +210,13 @@ internal class CodaCondivisa(
             }
 
             is RisultatoProtetto.Concluso -> when (val esito = risultato.valore) {
-                RisultatoTentativo.Nessuno -> riavvia() // AC-S59: rivaluta subito, mai "coda esaurita"
+                RisultatoTentativo.Nessuno -> if (rivalutazioneUsata) {
+                    riprogramma(INTERVALLO_CONTROLLO) // gia' rivalutato una volta: niente spin (MED user-approved)
+                } else {
+                    rivalutazioneUsata = true
+                    riavvia() // AC-S59: rivaluta subito, mai "coda esaurita"
+                }
+
                 is RisultatoTentativo.Avviata -> {
                     tentativi.getValue(fonteScelta).remove(esito.id) // un avvio riuscito pulisce lo storico dell'id
                     riprogramma(INTERVALLO_CONTROLLO)
@@ -192,6 +225,26 @@ internal class CodaCondivisa(
                 is RisultatoTentativo.Rifiutata -> gestisciFallimento(fonteScelta, esito.id)
             }
         }
+    }
+
+    /**
+     * Il picco GLOBALE di questo giro (AC-S56..S61): `null` se nessuna fonte e' idonea, O se la fonte
+     * scelta e' [FonteCoda.trattenuta] (AC-S60) — in ENTRAMBI i casi il chiamante si limita a
+     * riprogrammare, quindi qui non c'e' bisogno di distinguerli. Altrimenti la fonte scelta, la sua
+     * testa, e [limite] (`nonDopo`/`primaDi`): la piu' piccola istante tra le teste di OGNI ALTRA fonte.
+     */
+    private fun raccogliPicco(): Triple<FonteCoda, ElementoInCoda, Instant?>? {
+        val teste: Map<FonteCoda, ElementoInCoda> = fonti
+            .mapNotNull { fonte -> fonte.teste(esclusi.getValue(fonte))?.let { fonte to it } }
+            .toMap()
+        // AC-S60: la fonte scelta trattenuta -> tutta la coda resta ferma, come "nessun picco" per il chiamante
+        return teste.entries
+            .minWithOrNull(compareBy({ it.value.istante }, { it.key.tipo.ordinal }, { it.value.id }))
+            ?.takeUnless { it.key.trattenuta() }
+            ?.let { (fonteScelta, testaScelta) ->
+                val limite = teste.entries.filter { it.key !== fonteScelta }.minOfOrNull { it.value.istante }
+                Triple(fonteScelta, testaScelta, limite)
+            }
     }
 
     /**
@@ -219,7 +272,12 @@ internal class CodaCondivisa(
         segnali.trySend(Unit)
     }
 
+    /**
+     * Ogni riprogrammazione REALE riarma [rivalutazioneUsata]: la prossima [RisultatoTentativo.Nessuno]
+     * ha di nuovo diritto a UNA rivalutazione immediata.
+     */
     private suspend fun riprogramma(attesa: Duration) {
+        rivalutazioneUsata = false
         delay(attesa.toMillis())
         segnali.trySend(Unit)
     }
@@ -257,9 +315,14 @@ internal data class ElementoInCoda(val id: String, val registrazioneId: String, 
  * Elaborazione while the sherpa models are not ready — a Riassunto source always answers `false`,
  * ADR 0023 §2).
  *
- * [annulla] (DEVIATION beyond the pack's 6-field pin, additive/backward-compatible, default no-op):
- * ADR 0023 §5's "best effort" targeted cancellation — [CodaCondivisa.annullaInCorso] calls it only when
- * this source's currently-running item matches the requested `(tipo, registrazioneId)`.
+ * [annulla] (D-0005, accepted pin extension, additive/backward-compatible, default no-op): ADR 0023
+ * §5's "best effort" targeted cancellation — [CodaCondivisa.annullaInCorso] calls it only when this
+ * source's currently-running item matches the requested `(tipo, registrazioneId)`.
+ *
+ * [interrompi] (D-0006, accepted pin extension, additive/backward-compatible, default no-op): the STOP
+ * channel — [CodaCondivisa.fermaEAttendi] calls it, UNCONDITIONALLY, on whichever source's item is
+ * currently running, before/while it interrupts the worker. Unlike [annulla] it takes no
+ * `registrazioneId`: only one item can ever be running, so there is nothing to match.
  */
 @Suppress("LongParameterList") // one parameter per collaborator (mirrors CodaCondivisa's own constructor)
 internal class FonteCoda(
@@ -270,6 +333,7 @@ internal class FonteCoda(
     val recupera: () -> Unit,
     val trattenuta: () -> Boolean,
     val annulla: (registrazioneId: String) -> Unit = {},
+    val interrompi: () -> Unit = {},
 )
 
 /**

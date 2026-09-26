@@ -9,6 +9,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.Timeout
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -414,6 +415,66 @@ class CodaCondivisaTest {
     }
 
     @Test
+    fun `rework 2 FAIL 1 - fermaEAttendi chiama l interrompi della fonte in corso prima dell interruzione`() {
+        val bloccato = CountDownLatch(1)
+        val maiSbloccato = CountDownLatch(1) // mai contato: la chiamata resta bloccata finche' non e' interrotta
+        val interrotte = AtomicInteger(0)
+        val scope = CoroutineScope(Dispatchers.Default + Job())
+
+        val coda = CodaCondivisa(
+            scope = scope,
+            fonti = listOf(
+                FonteCoda(
+                    tipo = TipoElementoCoda.ELABORAZIONE,
+                    teste = { ElementoInCoda("id-1", "reg-1", Instant.EPOCH) },
+                    prossima = { _, _ ->
+                        bloccato.countDown()
+                        maiSbloccato.await() // interrompibile: runInterruptible + interrompi devono liberarlo
+                        error("mai raggiunto")
+                    },
+                    ultimaTentata = { null },
+                    recupera = {},
+                    trattenuta = { false },
+                    interrompi = { interrotte.incrementAndGet() },
+                ),
+            ),
+        )
+        assertTrue(bloccato.await(10, TimeUnit.SECONDS), "la chiamata bloccante avrebbe dovuto partire")
+
+        scope.cancel() // passo 1: annulla lo scope
+        val fermato = coda.fermaEAttendi(10_000) // passo 2: attende con un timeout
+
+        assertTrue(fermato, "il worker termina perche' runInterruptible interrompe il thread bloccato")
+        assertEquals(1, interrotte.get(), "l'interrompi della fonte IN CORSO e' chiamato esattamente una volta")
+    }
+
+    @Test
+    fun `rework 2 FAIL 1 - fermaEAttendi non chiama nessun interrompi quando la coda e inattiva`() {
+        val interrotte = AtomicInteger(0)
+        val scope = CoroutineScope(Dispatchers.Default + Job())
+
+        val coda = CodaCondivisa(
+            scope = scope,
+            fonti = listOf(
+                FonteCoda(
+                    tipo = TipoElementoCoda.ELABORAZIONE,
+                    teste = { null }, // coda sempre vuota: mai nulla in corso
+                    prossima = { _, _ -> RisultatoTentativo.Nessuno },
+                    ultimaTentata = { null },
+                    recupera = {},
+                    trattenuta = { false },
+                    interrompi = { interrotte.incrementAndGet() },
+                ),
+            ),
+        )
+
+        scope.cancel()
+        coda.fermaEAttendi(10_000)
+
+        assertEquals(0, interrotte.get(), "con nessun elemento in corso, nessuna fonte riceve interrompi")
+    }
+
+    @Test
     fun `rework item 4 - dopo un InterruptedException il flag viene pulito sul thread reale, non lasciato`() {
         val primaVolta = AtomicBoolean(true)
         val flagAllaSeconda = AtomicReference<Boolean>()
@@ -441,6 +502,74 @@ class CodaCondivisaTest {
 
         assertTrue(seconda.await(10, TimeUnit.SECONDS), "il ritentativo dopo l'escape avrebbe dovuto partire")
         assertEquals(false, flagAllaSeconda.get(), "il flag di interruzione deve essere stato ripulito, non lasciato")
+        scope.cancel()
+    }
+
+    @Test
+    @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD) // senza il limite non finirebbe mai (spin)
+    fun `rework 2 MED - la rivalutazione immediata e limitata a una, poi la coda torna al poll`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val scope = CoroutineScope(dispatcher)
+        val chiamateProssima = AtomicInteger(0)
+
+        CodaCondivisa(
+            scope = scope,
+            fonti = listOf(
+                FonteCoda(
+                    tipo = TipoElementoCoda.ELABORAZIONE,
+                    // teste offre SEMPRE una testa, ma prossima non la trova mai: teste e prossima
+                    // permanentemente disallineate, il caso limite che rischierebbe di girare a vuoto.
+                    teste = { ElementoInCoda("id-1", "reg-1", Instant.EPOCH) },
+                    prossima = { _, _ ->
+                        chiamateProssima.incrementAndGet()
+                        RisultatoTentativo.Nessuno
+                    },
+                    ultimaTentata = { null },
+                    recupera = {},
+                    trattenuta = { false },
+                ),
+            ),
+            dispatcherSingoloThread = dispatcher,
+        )
+        runCurrent() // NESSUN advanceTimeBy: se la rivalutazione immediata non fosse limitata, questo non finirebbe mai
+
+        assertEquals(2, chiamateProssima.get(), "un tentativo iniziale + UNA sola rivalutazione, poi il poll")
+        scope.cancel()
+    }
+
+    @Test
+    fun `rework 2 MED - una lettura di picco che lancia una volta e trattata come una fuga`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val scope = CoroutineScope(dispatcher)
+        val recuperi = AtomicInteger(0)
+        val completate = mutableListOf<String>()
+        val primaVolta = AtomicBoolean(true)
+
+        CodaCondivisa(
+            scope = scope,
+            fonti = listOf(
+                FonteCoda(
+                    tipo = TipoElementoCoda.ELABORAZIONE,
+                    teste = { _ ->
+                        if (primaVolta.compareAndSet(true, false)) error("lettura di prova")
+                        if (completate.isEmpty()) ElementoInCoda("id-1", "reg-1", Instant.EPOCH) else null
+                    },
+                    prossima = { _, _ ->
+                        completate += "id-1"
+                        RisultatoTentativo.Avviata("id-1")
+                    },
+                    ultimaTentata = { null },
+                    recupera = { recuperi.incrementAndGet() },
+                    trattenuta = { false },
+                ),
+            ),
+            dispatcherSingoloThread = dispatcher,
+        )
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        assertEquals(listOf("id-1"), completate, "dopo la lettura sfuggita la coda riprende e drena l'elemento")
+        assertEquals(2, recuperi.get(), "il recupero dell'avvio (AC-233) piu' quello dopo la lettura sfuggita")
         scope.cancel()
     }
 }
