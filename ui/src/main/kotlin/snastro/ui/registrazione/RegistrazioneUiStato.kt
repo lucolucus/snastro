@@ -1,8 +1,10 @@
 package snastro.ui.registrazione
 
+import androidx.compose.runtime.Composable
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.ui.lettore.LettoreUiStato
+import snastro.ui.stile.SegnoScheda
 import java.time.LocalDate
 
 /**
@@ -49,7 +51,40 @@ sealed interface RegistrazioneUiStato {
         val soloLettura: Boolean = false,
         val bannerRitrascrizione: String? = null,
         val bannerRitrascrizionePannello: String? = null,
-    ) : RegistrazioneUiStato
+        /** AC-S119/S120: the Riassunto tab's own content, bound to this Registrazione by the presenter
+         * ([SorgenteRiassuntoS3.contenuto] partially applied) — `null` iff the composition supplied no
+         * [SorgenteRiassuntoS3] (R0/R1/R2), in which case no tabs render at all. */
+        val contenutoRiassunto: (@Composable () -> Unit)? = null,
+        /** AC-S121: which tab is shown, kept per window ([SelezioneSchedaS3]) — irrelevant while
+         * [contenutoRiassunto] is `null` (no tabs to select between). */
+        val schedaSelezionata: SchedaS3 = SchedaS3.TRASCRIZIONE,
+        /** AC-S122: the small mark after the 'Riassunto' label, fed by [SorgenteRiassuntoS3.segno]. */
+        val segnoRiassunto: SegnoScheda? = null,
+    ) : RegistrazioneUiStato {
+        /**
+         * AC-S123 (ux-proposal "Banner precedence on S3"): the ONE screen [BannerSchermata], by
+         * precedence — read-only during a Ritrascrivi ([bannerRitrascrizione]) > the audio source
+         * missing ([audioDisponibile]) > 'n voci da identificare' ([pannello]). A PURE, computed
+         * predicate (dev-architecture named-predicate pattern) — never stored, so it can never drift
+         * from the fields above, and is table-testable on plain [Dati] fixtures.
+         *
+         * AC-S119: [contenutoRiassunto] `null` (R0/R1/R2, no Riassunto slot) short-circuits to
+         * [bannerRitrascrizione] alone — S3 stays byte-for-byte unchanged where the Riassunto tab does
+         * not exist yet, exactly as every pre-Sintesi render/presenter test already pins.
+         */
+        val bannerSchermata: BannerSchermata?
+            get() = when {
+                bannerRitrascrizione != null ->
+                    BannerSchermata.Ritrascrizione(bannerRitrascrizione, bannerRitrascrizionePannello)
+                contenutoRiassunto == null -> null
+                !audioDisponibile -> BannerSchermata.AudioMancante
+                else ->
+                    pannello?.carte
+                        ?.count { it.contenuto is ContenutoCarta.DaIdentificare }
+                        ?.takeIf { it > 0 }
+                        ?.let { BannerSchermata.VociDaIdentificare(it) }
+            }
+    }
 
     /** M5-style: the INITIAL load failed (a thrown fault, or no Trascritto at all for this Registrazione) —
      * a distinct state with a retry action, never the misleading "nessun parlato" empty message. */

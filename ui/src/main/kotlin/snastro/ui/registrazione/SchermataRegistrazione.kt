@@ -67,6 +67,7 @@ import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.PallinoVoce
+import snastro.ui.stile.SchedeSn
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
@@ -81,10 +82,15 @@ import snastro.ui.testi.ETICHETTA_NOMINA_FRASE
 import snastro.ui.testi.ETICHETTA_NUOVA_VOCE
 import snastro.ui.testi.ETICHETTA_RIASSEGNA_A
 import snastro.ui.testi.ETICHETTA_RIPROVA
+import snastro.ui.testi.ETICHETTA_SCHEDA_RIASSUNTO
+import snastro.ui.testi.ETICHETTA_SCHEDA_TRASCRIZIONE
 import snastro.ui.testi.ETICHETTA_TOGLI_CONFERMA
+import snastro.ui.testi.MESSAGGIO_BANNER_AUDIO_MANCANTE
 import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_TRASCRITTO_VUOTO
+import snastro.ui.testi.TITOLO_BANNER_AUDIO_MANCANTE
 import snastro.ui.testi.TOOLTIP_FRASE_CONFERMATA
+import snastro.ui.testi.testoBannerVociDaIdentificare
 import snastro.ui.testi.testoPersone
 import snastro.ui.testi.testoSelezione
 
@@ -171,9 +177,9 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
             durataMs = stato.durataMs,
             corsie = stato.segmenti.map { CorsiaVoce(it.voceId, it.inizioMs, it.fineMs) },
         )
-        stato.bannerRitrascrizione?.let {
+        stato.bannerSchermata?.let {
             Spacer(modifier = Modifier.height(SnastroMisure.space3))
-            BannerRitrascrizione(it, stato.bannerRitrascrizionePannello)
+            BannerDiSchermata(it)
         }
         stato.errore?.let {
             Spacer(modifier = Modifier.height(SnastroMisure.space3))
@@ -230,17 +236,57 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
 @Composable
 private fun ColonnaTrascritto(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione, modifier: Modifier) {
     Column(modifier = modifier) {
-        stato.barraSelezione?.let { BarraSelezioneVista(it, stato.pannello?.carte.orEmpty(), azioni) }
-        if (stato.segmenti.isEmpty()) {
-            Text(
-                text = MESSAGGIO_TRASCRITTO_VUOTO,
-                style = LocalSnastroTipografia.current.body,
-                color = LocalSnastroColori.current.inkMuted,
-                modifier = Modifier.testTag("registrazione-vuoto"),
+        val contenutoRiassunto = stato.contenutoRiassunto
+        // AC-S119: `contenutoRiassunto == null` (R0/R1/R2, no Riassunto slot) renders NEITHER SchedeSn
+        // NOR takes the `RIASSUNTO` branch below — the transcript body is reached exactly as before,
+        // byte-for-byte, whatever `stato.schedaSelezionata`'s default happens to be.
+        if (contenutoRiassunto != null) {
+            SchedeSn(
+                schede = listOf(ETICHETTA_SCHEDA_TRASCRIZIONE, ETICHETTA_SCHEDA_RIASSUNTO),
+                selezionata = stato.schedaSelezionata.ordinal,
+                onSeleziona = { indice -> azioni.selezionaScheda(SchedaS3.entries[indice]) },
+                segni = stato.segnoRiassunto?.let { mapOf(SchedaS3.RIASSUNTO.ordinal to it) }.orEmpty(),
+                modifier = Modifier.testTag("registrazione-schede"),
             )
-        } else {
-            ElencoSegmenti(stato, azioni)
+            Spacer(modifier = Modifier.height(SnastroMisure.space3))
         }
+        if (contenutoRiassunto != null && stato.schedaSelezionata == SchedaS3.RIASSUNTO) {
+            contenutoRiassunto()
+        } else {
+            stato.barraSelezione?.let { BarraSelezioneVista(it, stato.pannello?.carte.orEmpty(), azioni) }
+            if (stato.segmenti.isEmpty()) {
+                Text(
+                    text = MESSAGGIO_TRASCRITTO_VUOTO,
+                    style = LocalSnastroTipografia.current.body,
+                    color = LocalSnastroColori.current.inkMuted,
+                    modifier = Modifier.testTag("registrazione-vuoto"),
+                )
+            } else {
+                ElencoSegmenti(stato, azioni)
+            }
+        }
+    }
+}
+
+/** AC-S123: dispatches the ONE screen banner the precedence table picked
+ * ([RegistrazioneUiStato.Dati.bannerSchermata]) — [BannerSchermata.Ritrascrizione] keeps
+ * [BannerRitrascrizione]'s pre-existing tag/wording untouched. */
+@Composable
+private fun BannerDiSchermata(banner: BannerSchermata) {
+    when (banner) {
+        is BannerSchermata.Ritrascrizione -> BannerRitrascrizione(banner.testo, banner.pannello)
+        BannerSchermata.AudioMancante -> BannerSn(
+            tipo = TipoBanner.Avviso,
+            titolo = TITOLO_BANNER_AUDIO_MANCANTE,
+            testo = MESSAGGIO_BANNER_AUDIO_MANCANTE,
+            modifier = Modifier.fillMaxWidth().testTag("registrazione-banner-audio-mancante"),
+        )
+        is BannerSchermata.VociDaIdentificare -> BannerSn(
+            tipo = TipoBanner.Info,
+            titolo = testoBannerVociDaIdentificare(banner.numero),
+            testo = "",
+            modifier = Modifier.fillMaxWidth().testTag("registrazione-banner-voci-da-identificare"),
+        )
     }
 }
 

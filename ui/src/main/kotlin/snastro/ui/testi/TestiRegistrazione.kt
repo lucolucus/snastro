@@ -35,3 +35,17 @@ const val MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO: String = "Non è stato possib
 const val MESSAGGIO_RITRASCRIZIONE_IN_CORSO: String =
     "Ritrascrizione in corso: modifiche disabilitate fino al termine\n" +
         "Questa trascrizione sarà sostituita quando la nuova sarà pronta."
+
+/** AC-S120: the centre-column tab labels (ux-proposal "Screen S3", [SchedaS3]). */
+const val ETICHETTA_SCHEDA_TRASCRIZIONE: String = "Trascrizione"
+const val ETICHETTA_SCHEDA_RIASSUNTO: String = "Riassunto"
+
+/** AC-S123: the screen `Banner` of [snastro.ui.registrazione.BannerSchermata.AudioMancante] — second
+ * in the precedence, below the read-only-Ritrascrizione one ([MESSAGGIO_RITRASCRIZIONE_IN_CORSO]). */
+const val TITOLO_BANNER_AUDIO_MANCANTE: String = "Sorgente audio non disponibile"
+const val MESSAGGIO_BANNER_AUDIO_MANCANTE: String = "Il trascritto resta consultabile."
+
+/** AC-S123: the screen `Banner` of [snastro.ui.registrazione.BannerSchermata.VociDaIdentificare] —
+ * third and last in the precedence, singular-safe like [testoPersone]. */
+fun testoBannerVociDaIdentificare(numero: Int): String =
+    if (numero == 1) "1 voce da identificare" else "$numero voci da identificare"
