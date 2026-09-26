@@ -24,6 +24,7 @@ import snastro.trascrizione.applicazione.porte.FaseElaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.lettore.StatoLettore
@@ -59,7 +60,6 @@ private fun statoVista(
     fase: FaseElaborazione? = null,
     avviataAlle: Instant? = null,
     motivoFallimento: String? = null,
-    posizioneInCoda: Int? = null,
     numVoci: Int? = null,
     numeroPersone: Int? = null,
 ) = StatoRegistrazioneVista(
@@ -68,7 +68,6 @@ private fun statoVista(
     fase,
     avviataAlle,
     motivoFallimento,
-    posizioneInCoda,
     numVoci,
     numeroPersone,
     trascrittoDisponibile = numVoci != null, // ADR 0018: numVoci is non-null iff a Trascritto exists
@@ -95,21 +94,23 @@ class RegistrazioniPresenterTest {
         stati: ((List<RegistrazioneId>) -> List<StatoRegistrazioneVista>)? = null,
         avvia: ((AvviaElaborazione) -> Esito<Unit>)? = null,
         apriRegistrazione: (RegistrazioneId) -> Unit = {},
+        posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         return RegistrazioniPresenter(
-            CoroutineScope(dispatcher),
-            dispatcher,
-            registrazioni,
-            aggiungi,
-            modificaData,
-            rinomina,
-            lettore,
-            aggiornamenti,
-            clock,
-            stati,
-            avvia,
-            apriRegistrazione,
+            scope = CoroutineScope(dispatcher),
+            io = dispatcher,
+            registrazioni = registrazioni,
+            aggiungiRegistrazione = aggiungi,
+            modificaDataRegistrazione = modificaData,
+            rinominaRegistrazione = rinomina,
+            lettore = lettore,
+            aggiornamenti = aggiornamenti,
+            clock = clock,
+            statiElaborazione = stati,
+            avviaElaborazione = avvia,
+            apriRegistrazione = apriRegistrazione,
+            posizioniNellaCoda = { posizioni },
         )
     }
 
@@ -434,11 +435,12 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `AC-203 IN_ATTESA espone la posizione in coda`() = runTest {
+    fun `AC-203 IN_ATTESA espone la posizione in coda letta da PosizioniNellaCoda`() = runTest {
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
-            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.IN_ATTESA, posizioneInCoda = 3) } },
+            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.IN_ATTESA) } },
+            posizioni = PosizioniCoda(elaborazioni = mapOf(REG_1 to 3), riassunti = emptyMap()),
         )
         advanceUntilIdle()
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
@@ -519,8 +521,9 @@ class RegistrazioniPresenterTest {
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
-            stati = { ids -> ids.map { statoVista(it, statoCorrente, posizioneInCoda = 1) } },
+            stati = { ids -> ids.map { statoVista(it, statoCorrente) } },
             aggiornamenti = aggiornamenti,
+            posizioni = PosizioniCoda(elaborazioni = mapOf(REG_1 to 1), riassunti = emptyMap()),
         )
         advanceUntilIdle()
         assertEquals(

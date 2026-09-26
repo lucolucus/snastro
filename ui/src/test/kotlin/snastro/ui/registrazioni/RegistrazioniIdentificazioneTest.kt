@@ -37,7 +37,6 @@ private fun statoVista(
     fase: FaseElaborazione? = null,
     avviataAlle: Instant? = null,
     motivoFallimento: String? = null,
-    posizioneInCoda: Int? = null,
     numVoci: Int? = null,
     numeroPersone: Int? = null,
 ) = StatoRegistrazioneVista(
@@ -46,7 +45,6 @@ private fun statoVista(
     fase,
     avviataAlle,
     motivoFallimento,
-    posizioneInCoda,
     numVoci,
     numeroPersone,
     trascrittoDisponibile = numVoci != null, // ADR 0018: numVoci is non-null iff a Trascritto exists

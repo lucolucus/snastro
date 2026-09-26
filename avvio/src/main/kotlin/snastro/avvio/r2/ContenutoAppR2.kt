@@ -131,6 +131,7 @@ internal fun costruisciRegistrazioniPresenterR2(
     ritrascrivi = r2::avviaElaborazione,
     annullaElaborazione = r2.r1.annullaElaborazione,
     eliminaRegistrazione = r2.eliminaRegistrazione,
+    posizioniNellaCoda = r2.r1.coda::istantanea,
 )
 
 /**

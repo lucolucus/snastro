@@ -36,7 +36,6 @@ class StatiElaborazioneTest {
                 fase = null,
                 avviataAlle = null,
                 motivoFallimento = null,
-                posizioneInCoda = null,
                 numVoci = null,
                 numeroPersone = null,
                 trascrittoDisponibile = false,
@@ -81,22 +80,9 @@ class StatiElaborazioneTest {
         assertEquals(listOf(altra, REGISTRAZIONE), righe.map { it.registrazioneId })
     }
 
-    @Test
-    fun `AC-163 posizioneInCoda segue l ordine FIFO delle in_attesa, 1 e la prossima`() {
-        val prima = RegistrazioneId("registrazione-1")
-        val seconda = RegistrazioneId("registrazione-2")
-        val terza = RegistrazioneId("registrazione-3")
-        elaborazioni.salva(unaElaborazione(IN_ATTESA, id = idDi("el-1"), registrazioneId = prima, creataAlle = t(0)))
-        elaborazioni.salva(unaElaborazione(IN_ATTESA, id = idDi("el-2"), registrazioneId = seconda, creataAlle = t(1)))
-        elaborazioni.salva(unaElaborazione(IN_ATTESA, id = idDi("el-3"), registrazioneId = terza, creataAlle = t(2)))
-
-        val righe = stati.stati(listOf(terza, prima, seconda)).associateBy { it.registrazioneId }
-
-        assertEquals(1, righe.getValue(prima).posizioneInCoda)
-        assertEquals(2, righe.getValue(seconda).posizioneInCoda)
-        assertEquals(3, righe.getValue(terza).posizioneInCoda)
-        righe.values.forEach { assertEquals(StatoElaborazioneVista.IN_ATTESA, it.stato) }
-    }
+    // AC-163 (posizioneInCoda's own FIFO-order test) is SUPERSEDED by ADR 0023 §4 (block
+    // avvio-coda-condivisa): the position no longer lives on this read-model — see
+    // PosizioniNellaCodaContratto / avvio-coda-condivisa's own queue-order tests.
 
     @Test
     fun `AC-164 fase e presente solo per in_corso e riflette l ultima fase segnalata`() {
@@ -155,7 +141,6 @@ class StatiElaborazioneTest {
         assertEquals(StatoElaborazioneVista.FALLITA, riga.stato)
         assertEquals(motivo, riga.motivoFallimento)
         assertNull(riga.fase)
-        assertNull(riga.posizioneInCoda)
     }
 
     @Test
@@ -213,16 +198,16 @@ class StatiElaborazioneTest {
         val righe = stati.stati(CASI.map(::r) + r("nessuna")).associateBy { it.registrazioneId.valore }
 
         fun atteso(caso: String) = righe.getValue("registrazione-$caso").let {
-            listOf(it.stato, it.trascrittoDisponibile, it.numVoci, it.posizioneInCoda, it.fase, it.motivoFallimento)
+            listOf(it.stato, it.trascrittoDisponibile, it.numVoci, it.fase, it.motivoFallimento)
         }
         val v = StatoElaborazioneVista.entries.associateBy { it.name }
-        assertEquals(listOf(v["COMPLETATA"], true, 3, null, null, null), atteso("completata"))
-        assertEquals(listOf(v["IN_ATTESA"], true, 3, 1, null, null), atteso("completata-in-attesa"))
-        assertEquals(listOf(v["IN_CORSO"], true, 3, null, DIARIZZAZIONE, null), atteso("completata-in-corso"))
-        assertEquals(listOf(v["FALLITA"], true, 3, null, null, MOTIVO), atteso("completata-fallita"))
-        assertEquals(listOf(v["FALLITA"], false, null, null, null, MOTIVO), atteso("fallita"))
-        assertEquals(listOf(v["COMPLETATA"], true, 2, null, null, null), atteso("completata-completata"))
-        assertEquals(listOf(v["NON_AVVIATA"], false, null, null, null, null), atteso("nessuna"))
+        assertEquals(listOf(v["COMPLETATA"], true, 3, null, null), atteso("completata"))
+        assertEquals(listOf(v["IN_ATTESA"], true, 3, null, null), atteso("completata-in-attesa"))
+        assertEquals(listOf(v["IN_CORSO"], true, 3, DIARIZZAZIONE, null), atteso("completata-in-corso"))
+        assertEquals(listOf(v["FALLITA"], true, 3, null, MOTIVO), atteso("completata-fallita"))
+        assertEquals(listOf(v["FALLITA"], false, null, null, MOTIVO), atteso("fallita"))
+        assertEquals(listOf(v["COMPLETATA"], true, 2, null, null), atteso("completata-completata"))
+        assertEquals(listOf(v["NON_AVVIATA"], false, null, null, null), atteso("nessuna"))
     }
 
     @Test
@@ -240,7 +225,6 @@ class StatiElaborazioneTest {
         storia("ritrascrizione", COMPLETATA, IN_ATTESA, trascritto = 4)
         storia("riprova", FALLITA, IN_ATTESA)
         elaborazioni.salva(unaElaborazione(IN_ATTESA, idDi("in-coda-0"), r("in-coda"), creataAlle = t(5))).atteso()
-        assertEquals(4, stati.stati(listOf(r("in-coda"))).single().posizioneInCoda, "prima: dietro tre in coda")
         listOf("prima-0", "ritrascrizione-1", "riprova-1").forEach { elaborazioni.rimuoviInAttesa(idDi(it)).atteso() }
 
         val righe = stati.stati(listOf("prima", "ritrascrizione", "riprova", "in-coda").map(::r))
@@ -253,7 +237,7 @@ class StatiElaborazioneTest {
         val ritrascrizione = listOf(v["COMPLETATA"], true, 4, idDi("ritrascrizione-0"), null)
         assertEquals(ritrascrizione, campi[1], "Ritrascrivi annullato")
         assertEquals(listOf(v["FALLITA"], false, null, idDi("riprova-0"), MOTIVO), campi[2], "Riprova annullata")
-        assertEquals(1, righe[3].posizioneInCoda, "la coda rimasta e rinumerata da 1")
+        assertEquals(StatoElaborazioneVista.IN_ATTESA, righe[3].stato, "la coda rimasta resta in attesa")
     }
 
     /**

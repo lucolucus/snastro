@@ -111,6 +111,7 @@ internal fun costruisciRegistrazioniPresenterR1(
     avviaElaborazione = r1::avviaElaborazione,
     apriRegistrazione = apriRegistrazione,
     annullaElaborazione = r1.annullaElaborazione,
+    posizioniNellaCoda = r1.coda::istantanea,
 )
 
 /**

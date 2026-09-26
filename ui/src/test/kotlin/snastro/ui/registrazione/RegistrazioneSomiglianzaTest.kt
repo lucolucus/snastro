@@ -91,7 +91,6 @@ private fun statoVista(stato: StatoElaborazioneVista) = StatoRegistrazioneVista(
     fase = null,
     avviataAlle = null,
     motivoFallimento = null,
-    posizioneInCoda = null,
     numVoci = 3,
     numeroPersone = null,
     trascrittoDisponibile = true,

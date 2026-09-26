@@ -46,7 +46,6 @@ private fun statoVista(
     trascrittoDisponibile: Boolean = false,
     fase: FaseElaborazione? = null,
     avviataAlle: Instant? = null,
-    posizioneInCoda: Int? = null,
     elaborazioneId: ElaborazioneId? = ELABORAZIONE_1,
 ) = StatoRegistrazioneVista(
     registrazioneId = id,
@@ -54,7 +53,6 @@ private fun statoVista(
     fase = fase,
     avviataAlle = avviataAlle,
     motivoFallimento = null,
-    posizioneInCoda = posizioneInCoda,
     numVoci = if (trascrittoDisponibile) 3 else null,
     numeroPersone = null,
     trascrittoDisponibile = trascrittoDisponibile,

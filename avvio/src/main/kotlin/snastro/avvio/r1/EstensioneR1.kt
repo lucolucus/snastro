@@ -5,7 +5,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import snastro.avvio.CodaElaborazioni
+import snastro.avvio.CodaCondivisa
 import snastro.avvio.ContestoEstensione
 import snastro.avvio.EstensioneSessione
 import snastro.avvio.ProgettoEsteso
@@ -33,6 +33,7 @@ import snastro.trascrizione.applicazione.comandi.RecuperaElaborazioniInterrotte
 import snastro.trascrizione.applicazione.comandi.RecuperaElaborazioniInterrotteServizio
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.UnisciVociServizio
+import snastro.trascrizione.applicazione.letture.ElaborazioniInAttesa
 import snastro.trascrizione.applicazione.letture.FasiInCorso
 import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.TrascrittoQuery
@@ -63,7 +64,8 @@ import java.util.logging.Logger
  *   model (nor its release) with the next project's own worker.
  * - The Documento reads names from [lettoreNomi]: [LettoreNomiVuoto] in R1 ('Voce n', AC-356: no
  *   `:parlanti` class); R2 (`snastro.avvio.r2.EstensioneR2`) passes `LettoreNomiDaParlanti` (AC-359).
- * - The [CodaElaborazioni] is built LAST: its construction runs `RecuperaElaborazioniInterrotte`
+ * - The [CodaCondivisa] is built LAST, with only the Elaborazione source bound (ADR 0023, R0–R2
+ *   behaviour unchanged): its construction runs `RecuperaElaborazioniInterrotte`
  *   strictly before its worker picks any FIFO head (AC-233), and only after every after-commit
  *   subscriber above is registered (a recovered `fallita` still refreshes S2 and the Documento). Its
  *   first recovery completes [CollaboratoriR1.recuperoConcluso] — what R2's `RiallineaTutteLeImpronte`
@@ -105,19 +107,17 @@ internal class EstensioneR1(
         val esegui = EseguiProssimaElaborazioneServizio(uow, clock, elaborazioni, trascritti, pipeline, dispatcher)
         val recupera = RecuperaElaborazioniInterrotteServizio(uow, elaborazioni, dispatcher)
         val recuperoConcluso = CompletableDeferred<Unit>()
-        val coda = CodaElaborazioni(
+        val coda = CodaCondivisa(
             scope = contesto.scope,
-            fonte = fonteAvanzamento(esegui),
-            recuperaElaborazioniInterrotte = {
-                try {
-                    val esito = recupera.esegui(RecuperaElaborazioniInterrotte)
-                    if (esito is Esito.Errore) log.warning("recupero delle elaborazioni interrotte fallito: $esito")
-                } finally {
-                    recuperoConcluso.complete(Unit) // also when it failed: what follows must not wait forever
-                }
-            },
-            modelliPronti = modelliPronti,
-            segnalaElaborazioneBloccata = { id -> log.warning("elaborazione $id esclusa dalla coda") },
+            fonti = listOf(
+                fonteCodaElaborazione(
+                    servizio = esegui,
+                    elenco = ElaborazioniInAttesa(elaborazioni),
+                    recupera = recuperoElaborazioni(recupera, recuperoConcluso),
+                    modelliPronti = modelliPronti,
+                ),
+            ),
+            segnalaBloccato = { id -> log.warning("elaborazione $id esclusa dalla coda") },
         )
 
         val stati = StatiElaborazione(elaborazioni, trascritti, fasi)
@@ -161,6 +161,23 @@ internal class EstensioneR1(
             CoroutineScope(contesto.scope.coroutineContext + lavoro + io),
         )
         return lavoro
+    }
+
+    /**
+     * The Elaborazione source's [snastro.avvio.FonteCoda.recupera] (AC-233): runs
+     * `RecuperaElaborazioniInterrotte`, then completes [recuperoConcluso] in a `finally` — ALSO on
+     * failure, so [CollaboratoriR1.recuperoConcluso]'s waiters never hang.
+     */
+    private fun recuperoElaborazioni(
+        recupera: RecuperaElaborazioniInterrotteServizio,
+        recuperoConcluso: CompletableDeferred<Unit>,
+    ): () -> Unit = {
+        try {
+            val esito = recupera.esegui(RecuperaElaborazioniInterrotte)
+            if (esito is Esito.Errore) log.warning("recupero delle elaborazioni interrotte fallito: $esito")
+        } finally {
+            recuperoConcluso.complete(Unit)
+        }
     }
 
     private companion object {

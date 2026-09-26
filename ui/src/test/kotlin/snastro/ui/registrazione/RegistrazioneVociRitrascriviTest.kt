@@ -31,7 +31,6 @@ private fun statoVista(stato: StatoElaborazioneVista, trascrittoDisponibile: Boo
     fase = null,
     avviataAlle = null,
     motivoFallimento = null,
-    posizioneInCoda = null,
     numVoci = if (trascrittoDisponibile) 3 else null,
     numeroPersone = null,
     trascrittoDisponibile = trascrittoDisponibile,

@@ -44,7 +44,6 @@ private fun statoVista(id: RegistrazioneId, stato: StatoElaborazioneVista, numer
         fase = null,
         avviataAlle = null,
         motivoFallimento = if (stato == StatoElaborazioneVista.FALLITA) "audio illeggibile" else null,
-        posizioneInCoda = if (stato == StatoElaborazioneVista.IN_ATTESA) 1 else null,
         numVoci = null,
         numeroPersone = numeroPersone,
         trascrittoDisponibile = false,
