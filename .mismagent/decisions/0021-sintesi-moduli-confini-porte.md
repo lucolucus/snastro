@@ -246,3 +246,13 @@ and §5 fixed provisional values:
 - **§5, [INV-S9]:** the upper bound stays **2500 words** (default 2000); the context is sized for it (ADR 0026 §5).
 - **§5, the other deferred items:** JNI (ADR 0004 amended, ADR 0008 untouched), natives, Metal, unload after each
   run, the catalogue values: ADR 0026 §1–§8.
+
+## Amendment 2026-09-26 (b) — `:llm` is replaced by the separate library `:llama-jni` ([ADR 0027](0027-libreria-llama-jni-separata.md)) [user]
+- **§1 and §2:** the `:llm` row (`snastro.llm`, edges `:kernel`, `:modelli`) is withdrawn and never created. The
+  runtime is `:llama-jni` (`./llama-jni/`, package `io.github.lucolucus.llamajni`), with **no** project
+  dependency.
+- **Edges:** `:sintesi:adattatori` → `:llama-jni` replaces → `:llm`.
+- **The installed model's path** (the reason for the old `:llm → :modelli` edge) is resolved by `:avvio` from
+  `:modelli` and handed to the `..ml` adapter. `:sintesi:*` still has no edge to `:modelli`.
+- **Unchanged:** §4's port, its contract and everything else here.
+

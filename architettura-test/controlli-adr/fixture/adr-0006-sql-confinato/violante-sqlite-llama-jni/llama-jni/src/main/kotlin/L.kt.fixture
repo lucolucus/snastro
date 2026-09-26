@@ -1,0 +1,3 @@
+package io.github.lucolucus.llamajni
+
+import org.sqlite.SQLiteConfig

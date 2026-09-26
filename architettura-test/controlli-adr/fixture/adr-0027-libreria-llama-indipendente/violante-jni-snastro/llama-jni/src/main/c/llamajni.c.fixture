@@ -1,0 +1,6 @@
+#include <jni.h>
+/* formerly Java_snastro_llm_LlamaNativo_abort */
+// Java_snastro_ is never defined here
+JNIEXPORT void JNICALL Java_io_github_lucolucus_llamajni_LlamaJni_abort(JNIEnv *env, jobject self, jlong h) {}
+
+JNIEXPORT void JNICALL Java_snastro_llm_LlamaNativo_abort(JNIEnv *env, jobject self, jlong h) {}

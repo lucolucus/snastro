@@ -5,7 +5,7 @@ supersedes: null
 closes_spike: null
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0004-sherpa-confinato.sh
-amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0026)" (System.load also admitted in the top-level ./llm/ module; check + fixtures amended); earlier: "Amendment 2026-09-25 (ADR 0023)" (the serial queue is SHARED with Riassunti); earlier: see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
+amended: 2026-09-26   # "Amendment 2026-09-26 (b) (ADR 0027)" (the admitted path becomes the library ./llama-jni/; ./llm/ withdrawn; fixtures reworked); earlier: "Amendment 2026-09-26 (ADR 0026)" (System.load also admitted in the top-level ./llm/ module; check + fixtures amended); earlier: "Amendment 2026-09-25 (ADR 0023)" (the serial queue is SHARED with Riassunti); earlier: see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
 ---
 # 0004 — ML runtime: sherpa-onnx (JNI) in-process, confined to `:ml-sherpa`, serial pipeline
 
@@ -126,3 +126,22 @@ New fixtures: `conforme/llm/…/LlamaNativo.kt` (a `System.load` + an `external 
 `violante-k2fsa-in-llm`, `violante-llm-annidato`, `violante-runtime-load` (FAIL). Everything else in this ADR
 (sherpa in-process, the serial queue, CPU provider, recovery) is unchanged; the LLM's own load/unload and
 cancellation rules are ADR 0026's.
+
+## Amendment 2026-09-26 (b) — the admitted path is the library `./llama-jni/` ([ADR 0027](0027-libreria-llama-jni-separata.md)) [user]
+**Why.** The user decided that the llama.cpp binding is a separate library with no snastro dependencies
+(ADR 0027). Its module is `:llama-jni` (`./llama-jni/`, package `io.github.lucolucus.llamajni`), and `:llm` is never
+created.
+
+**Amended rule** (same check, same name and path):
+- native loading is admitted only in `ml-sherpa` and **the top-level `./llama-jni/`**. On Windows this means the
+  library's ordered `System.load`s of llama's DLLs, then the shim (ADR 0027 §4);
+- **`./llm/` is no longer admitted**, and neither is a `llama-jni` directory nested elsewhere;
+- `com.k2fsa` stays `ml-sherpa`-only, and is not admitted in `./llama-jni/` either.
+
+**Fixtures:**
+- reworked: `conforme/llama-jni/…/LlamaJni.kt` (a `System.load` + `Runtime.getRuntime().load` + an `external fun`:
+  PASS), `violante-k2fsa-in-llama-jni`, `violante-llama-jni-annidato`;
+- new: `violante-llm-dismesso` (a `System.load` in `./llm/`: FAIL).
+
+The library's independence from snastro is ADR 0027's own check.
+

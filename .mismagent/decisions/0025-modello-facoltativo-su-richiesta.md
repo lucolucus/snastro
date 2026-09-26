@@ -162,4 +162,4 @@ The values §5 deferred, fixed by the closure of spike `runtime-llm-in-app`:
 **The size is 6,2 GB, not 6,6.** The 6.6 GB of the Context and of the UI texts was the Ollama blob, which the app
 cannot use (ADR 0026 §1). Every user-facing size text reads **"6,2 GB"**, derived from `dimensioneByte`
 ("Scarica il modello (6,2 GB)", "servono 6,2 GB", "2,1 di 6,2 GB"). The runtime (§5 second bullet) is JNI: ADR
-0004's `System.load` rule admits `./llm/`; ADR 0008's network rule is untouched. Runtime natives: ADR 0026 §2.
+0004's `System.load` rule admits `./llm/` *(since 2026-09-26 (b), [ADR 0027](0027-libreria-llama-jni-separata.md): `./llama-jni/`, the separate library)*; ADR 0008's network rule is untouched. Runtime natives: ADR 0026 §2 (as amended by ADR 0027 §3).

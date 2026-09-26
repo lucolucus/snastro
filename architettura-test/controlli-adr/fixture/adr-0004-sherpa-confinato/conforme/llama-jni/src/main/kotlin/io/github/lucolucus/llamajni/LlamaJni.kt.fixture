@@ -1,0 +1,12 @@
+package io.github.lucolucus.llamajni
+
+import java.nio.file.Path
+
+public object LlamaJni {
+    // Windows: ordered preload of llama's DLLs, then the shim (ADR 0027 §4)
+    public fun load(dir: Path) {
+        System.load(dir.resolve("ggml-base.dll").toString())
+        Runtime.getRuntime().load(dir.resolve("llamajni.dll").toString())
+    }
+    private external fun abort(handle: Long)
+}

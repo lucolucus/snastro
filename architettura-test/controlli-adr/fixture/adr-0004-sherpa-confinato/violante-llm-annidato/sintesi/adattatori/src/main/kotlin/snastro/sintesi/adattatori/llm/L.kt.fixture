@@ -1,3 +1,0 @@
-package snastro.sintesi.adattatori.llm
-
-fun carica() = System.load("/x/libsnastro-llama-jni.dylib")

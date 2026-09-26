@@ -1,0 +1,9 @@
+plugins {
+    id("org.jetbrains.kotlin.jvm")
+    id("io.gitlab.arturbosch.detekt")
+}
+
+// Consumed by snastro through project(":llama-jni") in ../sintesi/adattatori: never the reverse.
+kotlin { explicitApi() }
+
+val cache = file("${rootDir}/native-cache/llama-b11195")

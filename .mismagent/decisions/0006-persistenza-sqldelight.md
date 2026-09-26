@@ -3,7 +3,7 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-amended: 2026-09-25   # see "Amendment 2026-09-25 (ADR 0021)" (enforced_by deny-list gains `llm`)
+amended: 2026-09-26   # see "Amendment 2026-09-26 (ADR 0027)" (deny-list: `llm` → `llama-jni`); earlier: "Amendment 2026-09-25 (ADR 0021)" (enforced_by deny-list gains `llm`)
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0006-sql-confinato.sh
 ---
@@ -86,3 +86,12 @@ never finishing) and it verifies nothing useful while no version has shipped. Us
   looks for forbidden matches. Validated via `bash -c` on 2026-09-25: exit 0 on the tree.
 - JDBC/SQLDelight are also allowed in **`:sintesi:adattatori`** (its SQLDelight repositories,
   [ADR 0022](0022-persistenza-sintesi-6sqm.md)). The rule is a deny-list, so this needs no change to it. CR-3 is amended accordingly.
+
+## Amendment 2026-09-26 (ADR 0027) — the deny-list names `llama-jni`, not `llm`
+The LLM runtime is the separate library `:llama-jni` ([ADR 0027](0027-libreria-llama-jni-separata.md)). `:llm` is
+never created.
+- **Check:** `adr-0006-sql-confinato.sh` scans `llama-jni` in place of `llm`. The directory may not exist yet, and a
+  missing library directory does not fail this check. Its fixture `violante-sqlite-llm` became
+  `violante-sqlite-llama-jni`.
+- **Unchanged:** nothing else in this ADR.
+

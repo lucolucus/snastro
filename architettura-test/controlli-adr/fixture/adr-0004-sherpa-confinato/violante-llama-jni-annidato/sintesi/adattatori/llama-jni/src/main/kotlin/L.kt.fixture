@@ -1,0 +1,3 @@
+package snastro.sintesi.adattatori.ml
+
+fun carica() = System.load("/x/libllamajni.dylib")

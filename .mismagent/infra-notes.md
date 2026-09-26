@@ -24,6 +24,19 @@
   run. **NFR amended:** a 60-min `Registrazione` at the default 2000-word cap in **≤ 600 s** (`benchmarkRiassunto`,
   opt-in); typical ≈ 3–4 min, up to ≈ 8–10 min near the 2500-word cap. Windows/Linux (dynamic ggml backends, Vulkan,
   per-OS shim build) open and untested; Developer ID signing (ADR 0016 O-2) must cover the llama/ggml dylibs and the shim.
+  → *(amended 2026-09-26, [ADR 0027](decisions/0027-libreria-llama-jni-separata.md) [user])* The binding is the **separate
+  library `:llama-jni`**, with no snastro dependency. It is not `:llm`.
+  - **Tasks** (the library's own): `downloadLlamaNatives`, `compileJniShim`, `assembleNatives`. The download cache is in
+    the Gradle user home. The shim is `libllamajni`.
+  - **Windows x64 and Linux x64 are in scope** for the library:
+    - Vulkan assets with CPU fallback, and `ggml_backend_load_all_from_path`;
+    - the shim is built with MSVC Build Tools 2022 (import libs from vendored `.def` files) on Windows, and with gcc on
+      Ubuntu 22.04 (glibc ≥ 2.35) on Linux;
+    - each OS builds on its own host.
+  - **Build and verification host for Windows/Linux:** OPEN, a user question (ADR 0027 Q-1). The recommendation is a
+    GitHub Actions matrix; a physical Windows PC is needed for the Vulkan GPU run.
+  - **snastro on Windows/Linux** stays blocked by ADR 0016 §5. Authenticode signing and the Linux package format are not
+    decided, and are never defaulted.
 - **Native libs:** sherpa-onnx JNI + onnxruntime per OS, fetched by a Gradle task from a pinned
   release with SHA-256, cached outside the repo, never committed.
   → pinned by **ADR 0016** (2026-09-24): v1.13.8 GitHub release assets (not Maven Central);
@@ -115,3 +128,8 @@
 - Voice-print purge → invariant test + adapter round-trip test (ADR 0009).
 - `.gitignore` (done at bootstrap, 2026-09-23).
 - macOS `.dmg` packaging → later infra block.
+- *(2026-09-26, ADR 0027)* The `:llama-jni` library on macOS arm64 → library block (gate: its unit tests; opt-in
+  `:llama-jni:nativeTest` on a pinned tiny GGUF); ADR 0027's `enforced_by` check.
+- *(2026-09-26, ADR 0027)* The library on Windows x64 / Linux x64 (asset verification, shim build, native tests on the
+  host) → one library block per OS, `ready_when` ADR 0027 Q-1 is answered (build host / CI job).
+

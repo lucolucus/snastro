@@ -33,11 +33,11 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:documento:adattatori` | `snastro.documento.adattatori` | port adapters (→ Trascrizione / Parlanti API), atomic `.md` writer |
 | `:sintesi:dominio` | `snastro.sintesi.dominio` | *(2026-09-25, [ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md))* `Riassunto` (+ `Fonte`, elements, `StrutturaTrascritto`, `Verifica delle fonti`), `LunghezzaMassimaRiassunto`, pure guard `Riassumibilita`, input builder `IngressoRiassunto`, events, `ErroreSintesi` |
 | `:sintesi:applicazione` | `snastro.sintesi.applicazione` | commands (`Riassumi`, `EseguiProssimoRiassunto`, `RecuperaRiassuntiInterrotti`, `ModificaLunghezzaMassimaRiassunto`), policies (on `TrascrittoSostituito` / `RegistrazioneEliminata`), read-models (`riassunto-vista`, `impostazioni-sintesi`, `RiassuntiInAttesa`), ports (repositories; `LettoreTrascritto` → Trascrizione; `LettoreNomi` → Parlanti; `ModelloLinguistico`; `DisponibilitaModelloLinguistico`) |
-| `:sintesi:adattatori` | `snastro.sintesi.adattatori` | SQLDelight repositories (`6.sqm`, [ADR 0022](decisions/0022-persistenza-sintesi-6sqm.md)), port adapters (→ Trascrizione / Parlanti API), synchronous subscribers, `ModelloLinguistico` adapter (→ `:llm`) |
+| `:sintesi:adattatori` | `snastro.sintesi.adattatori` | SQLDelight repositories (`6.sqm`, [ADR 0022](decisions/0022-persistenza-sintesi-6sqm.md)), port adapters (→ Trascrizione / Parlanti API), synchronous subscribers, `ModelloLinguistico` adapter (→ `:llama-jni`, *2026-09-26, [ADR 0027](decisions/0027-libreria-llama-jni-separata.md)*) |
 | `:persistenza` | `snastro.persistenza` | SQLDelight schema `.sq`, migrations `.sqm` (source of the schema, ADR 0006 (a)), driver factory (WAL, FK, `secure_delete`), `UnitaDiLavoro` impl |
 | `:audio` | `snastro.audio` | bytedeco FFmpeg `sonda`/`decodifica` → derived WAV; javax.sound player `RiproduttoreWav` (adapted to `:ui`'s `LettoreAudio` by `:avvio`) |
 | `:ml-sherpa` | `snastro.ml` | native-lib loading, sherpa session config, `AutoCloseable` wrappers, diarization/ASR/VAD/embedding engines |
-| `:llm` | `snastro.llm` | *(2026-09-25, ADR 0021; content 2026-09-26, [ADR 0026](decisions/0026-runtime-llm-jni-llama.md))* local LLM runtime (technical, like `:ml-sherpa`): llama.cpp b11195 via our JNI shim (`src/main/c/`, compiled outside the gate), the one `System.load`, load / exact token count / bounded generation / cancel / release |
+| `:llama-jni` | `io.github.lucolucus.llamajni` | *(2026-09-26, [ADR 0027](decisions/0027-libreria-llama-jni-separata.md) [user]; replaces `:llm` of ADR 0021/0026, never created)* **separate, shareable library, no snastro dependency** (no project edge, no `snastro.*` in code or build — ADR 0027's check): llama.cpp b11195 via our JNI shim (`src/main/c/`, compiled outside the gate, per OS: macOS arm64 Metal, Windows x64 / Linux x64 Vulkan + CPU), every native load, neutral English API (load / devices / open model / exact token count / bounded, cancellable generation / close), its own native tasks, README, notices, tests |
 | `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |
 | `:ui` | `snastro.ui` | Compose screens S1–S4 + shared `lettore-audio`: presenters (state holders, unit-tested) + thin composables; declares `LettoreAudio` |
 | `:avvio` | `snastro.avvio` | `main()`, composition root, adapter selection (config), serial `Elaborazione` queue + pipeline dispatcher, startup policies, `--smoke` mode |
@@ -56,8 +56,8 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 | `:parlanti:adattatori` | `:parlanti:applicazione`, `:parlanti:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:audio`, `:ml-sherpa` |
 | `:documento:applicazione` | `:kernel` |
 | `:documento:adattatori` | `:documento:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione` |
-| `:sintesi:adattatori` | `:sintesi:applicazione`, `:sintesi:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:llm` *(ADR 0021)* |
-| `:llm` | `:kernel`, `:modelli` *(ADR 0021)* |
+| `:sintesi:adattatori` | `:sintesi:applicazione`, `:sintesi:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:llama-jni` *(ADR 0021; library per ADR 0027)* |
+| `:llama-jni` | — *(no project dependency, ADR 0027; `:llm → :kernel, :modelli` of ADR 0021 withdrawn)* |
 | `:persistenza` | `:kernel` |
 | `:audio` | `:kernel` |
 | `:ml-sherpa` | `:kernel`, `:modelli` |
@@ -69,8 +69,8 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 Direction summary: `adattatori → applicazione → dominio → kernel`; cross-context only
 `consumer:adattatori → supplier:applicazione`; `Progetto` is upstream of all; `Trascrizione` is
 upstream of `Parlanti`, `Documento` and `Sintesi`; `Parlanti` is upstream of `Documento` and `Sintesi`; no context depends on `Sintesi` (ADR 0021). `ui` sees only
-`applicazione`. Technical modules (`persistenza`, `audio`, `ml-sherpa`, `modelli`) are reached only
-from adapters (and `avvio`).
+`applicazione`. Technical modules (`persistenza`, `audio`, `ml-sherpa`, `modelli`, and the separate library
+`llama-jni`) are reached only from adapters (and `avvio`). The library depends on nothing of snastro (ADR 0027).
 
 ## Boundaries (feature `sintesi`, 2026-09-25)
 Detailed in `features/sintesi/architetture/architecture-overview.md` ([ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md) §3): `LettoreTrascritto`
@@ -164,7 +164,7 @@ allowed because it carries ids and intervals only, never an embedding.)*
   `Errore<Contesto>` in `Errori<Contesto>.kt`.
 
 ## Amendment 2026-09-25 (feature `sintesi`, ADRs 0021–0025)
-- **Modules:** `:sintesi:dominio|applicazione|adattatori` and the technical `:llm` (rows above). The path-holder
+- **Modules:** `:sintesi:dominio|applicazione|adattatori` and the technical `:llm` (rows above) *(→ the separate library `:llama-jni`, amendment 2026-09-26 below)*. The path-holder
   `:sintesi` gets an empty edge row in `verificaDipendenzeModuli`. The rows follow the `<ctx>` pattern of the edges
   table for `dominio`/`applicazione`.
 - **Edges:** see the rows marked ADR 0021. `:ui` gains `:sintesi:applicazione` (covered by "every `:<ctx>:applicazione`").
@@ -176,3 +176,20 @@ allowed because it carries ids and intervals only, never an embedding.)*
 - **Composition R3** (`snastro.avvio.r3`, block `avvio-sintesi`) wires Sintesi on top of R2 (ADR 0021 §10).
 - **Schema:** `6.sqm` (6 → 7), Sintesi-owned tables `riassunto`, `riassunto_elemento`, `riassunto_fonte`,
   `impostazioni_sintesi` (ADR 0022).
+
+## Amendment 2026-09-26 (feature `sintesi`, [ADR 0027](decisions/0027-libreria-llama-jni-separata.md)) [user]
+- **The LLM runtime is the separate library `:llama-jni`**, directory `./llama-jni/`, package `io.github.lucolucus.llamajni`.
+  - It replaces the technical `:llm` of ADR 0021/0026, which is never created.
+  - It is a normal subproject of this build, so the gate covers it. Its layout lets it become an included build or its own
+    repository with no edits inside it.
+  - **Edges:** it has none. `:sintesi:adattatori → :llama-jni`. `:avvio` reaches it for packaging (the copy of
+    `assembleNatives`' output into `appResourcesRootDir/<os-arch>/`).
+  - **Its build script** applies no `snastro.*` convention plugin and uses no `project(...)`, `rootProject`, `rootDir` or
+    `../`.
+- **The snastro adapter** (`:sintesi:adattatori ..ml`) keeps the prompt, the schema/GBNF, the parsing, the error mapping, the
+  per-run unload and the GPU→CPU retry.
+- **Locations come from `:avvio`:** the installed model's path (from `:modelli`) and the native directory
+  (`snastro.llm.native.path` / `compose.application.resources.dir`).
+- **`verificaDipendenzeModuli`** gains `":llama-jni" to emptySet()` and `:llama-jni` in `:sintesi:adattatori`'s set. It never
+  gains an `:llm` row. The library block edits the build files.
+

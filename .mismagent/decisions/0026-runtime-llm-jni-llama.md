@@ -4,10 +4,11 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0004 (System.load admits ./llm/), ADR 0021 §4 (input line) and §5 (LimiteIngresso, deferred items), ADR 0025 §5 (catalogue values); infra-notes (Local LLM, Riassunto NFR); context-map (spike closed, budget line)
 closes_spike: runtime-llm-in-app
 decided: 2026-09-26 · user (runtime, INV-S9 bound, calibrations), from spike evidence features/sintesi/spikes/runtime-llm-in-app.md
+amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0026-llm-non-versionato.sh
-  # the System.load admission of ./llm/ is enforced by ADR 0004's own check (amended 2026-09-26, fixtures
-  # conforme/llm, violante-k2fsa-in-llm, violante-llm-annidato, violante-runtime-load), cited there, not here
+  # the System.load admission (now ./llama-jni/, ADR 0027) is enforced by ADR 0004's own check (amended
+  # 2026-09-26 and 2026-09-26 (b)), cited there, not here; the library's independence is ADR 0027's check
 ---
 # 0026 — The local LLM runs in-process: llama.cpp b11195 through our own JNI shim, in `:llm`
 
@@ -34,6 +35,9 @@ The spike also measured what the provisional constants of ADR 0021 §5 guessed:
 ## Decision
 
 ### 1. Runtime: llama.cpp in-process via JNI [user]
+> *(Amended 2026-09-26, [ADR 0027](0027-libreria-llama-jni-separata.md) [user]: the module is the separate library
+> `:llama-jni` (`./llama-jni/`, package `io.github.lucolucus.llamajni`, no snastro dependency); `:llm` / `snastro.llm`
+> below are never created. The runtime choice, the release and "used as released" are unchanged.)*
 - **llama.cpp release `b11195`** (2026-09-26), MIT ("Copyright (c) 2023-2026 The ggml authors"). Used as
   released: we never patch or rebuild llama.cpp.
 - **Our own C shim** (≈ 150 lines, `llm/src/main/c/`) over the C API of that tag, exposing to Kotlin `external`
@@ -49,6 +53,10 @@ The spike also measured what the provisional constants of ADR 0021 §5 guessed:
   model-choice measurements (Ollama-specific GGUF with vision/MTP tensors; b11195 refuses it).
 
 ### 2. Natives: pinned release assets, fetched at build time, never versioned (ADR 0016 discipline)
+> *(Amended 2026-09-26, [ADR 0027](0027-libreria-llama-jni-separata.md) §3–§4: the tasks become the library's
+> `downloadLlamaNatives` / `compileJniShim` / `assembleNatives`; pins live in `llama-jni/`, not the root catalogue;
+> cache in the Gradle user home; shim `libllamajni`; the library loads from an explicit directory and `:avvio`
+> resolves `snastro.llm.native.path` / `compose.application.resources.dir`. The table's hashes are unchanged.)*
 | Asset (b11195) | SHA-256 | Status |
 |---|---|---|
 | `llama-b11195-bin-macos-arm64.tar.gz` (11 751 001 B) | `5320d5f90fde78fd046f78c2eab3e0cbde2ccd8b6aa4d3bcd6c15cbbb3672f98` | **verified, wired** |
@@ -137,6 +145,9 @@ Base URL: `https://github.com/ggml-org/llama.cpp/releases/download/b11195/<asset
 - ADR 0011's `Elaborazione` budget (≤ 600 s per hour) is unchanged and separate.
 
 ### 7. Platforms and packaging: what is open
+> *(Amended 2026-09-26, [ADR 0027](0027-libreria-llama-jni-separata.md) §4 [user]: Windows x64 and Linux x64 are
+> **in scope** for the library (Vulkan assets, dynamic backends, MSVC / gcc shim, CPU fallback); their wiring and
+> verification are ADR 0027's. snastro-on-Windows/Linux stays blocked by ADR 0016 §5.)*
 - **macOS arm64:** proven (`./gradlew run` and `.dmg`, 184.5 s). jpackage's exec-bit loss does not affect JNI
   (no executable is shipped).
 - **Windows x64 / Linux x64: OPEN, untested.** Their assets use `GGML_BACKEND_DL` (per-CPU `ggml-cpu-*` variants
@@ -177,3 +188,18 @@ No account and no token (verified). A verified copy for opt-in `modelliTest` / m
     (§6);
   - discursive (code review): unload after every run; grammar + `max_tokens` on every call; lazy sampling;
     512-token prefill chunks.
+
+## Amendment 2026-09-26 — the binding becomes a separate library ([ADR 0027](0027-libreria-llama-jni-separata.md)) [user]
+The user kept JNI and decided that the binding is an **external, separately shareable library** with zero snastro
+dependencies, developed **fully** (Windows included). ADR 0027 is the single home of the change.
+- **Unchanged:** the runtime, release b11195 and the pinned hashes. So are §3's execution values (applied by the
+  snastro adapter), §4's cancellation mechanics and 10 s bound, §5's bounds and `LimiteIngresso`, §6's NFR and §8's
+  catalogue entry.
+- **What changes:**
+  - module, package and confinement (§1): `:llama-jni` replaces `:llm`;
+  - task names, the home of the pins, the cache and the shim name (§2);
+  - loading: the library receives an explicit directory, and `:avvio` resolves the properties (§2);
+  - Windows/Linux (§7): from OPEN to in scope.
+- **Edges:** `:llm → :kernel, :modelli` is withdrawn. `:sintesi:adattatori → :llama-jni`, and `:llama-jni` has no
+  edges. The installed model's path reaches the adapter from `:avvio`.
+

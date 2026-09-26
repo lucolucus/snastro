@@ -1,0 +1,4 @@
+package io.github.lucolucus.llamajni
+
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+fun load() = System.load("/x/libllamajni.dylib")

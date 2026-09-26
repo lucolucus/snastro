@@ -1,0 +1,5 @@
+package io.github.lucolucus.llamajni;
+
+import snastro.kernel.Esito;
+
+class J {}

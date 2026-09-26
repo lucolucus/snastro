@@ -1,0 +1,11 @@
+package io.github.lucolucus.llamajni
+
+import java.nio.file.Path
+import snastro.kernel.Esito
+
+/** Neutral binding; snastro.sintesi.adattatori is one consumer (a comment never counts). */
+public object LlamaJni {
+    // snastro.llm.native.path is the consumer's property, not ours.
+    public fun load(nativeDir: Path): Unit = System.load(nativeDir.resolve("libllamajni.dylib").toString())
+    private external fun abort(handle: Long)
+}
