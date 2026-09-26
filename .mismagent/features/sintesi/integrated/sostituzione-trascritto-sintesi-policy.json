@@ -1,0 +1,7 @@
+{
+  "id": "sostituzione-trascritto-sintesi-policy",
+  "sha": "afe306816b59d901d00c4f3cfcce224b6fe88655",
+  "merge": "d196f8446675fd0f2d1338f8b20e06482f599bd2",
+  "integration": "integration/sintesi",
+  "at": "2026-09-26T13:24:52Z"
+}
