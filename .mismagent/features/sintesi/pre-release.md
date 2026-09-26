@@ -129,3 +129,7 @@
 - [ ] R3 · schede-registrazione · LOW · SchermataRegistrazione.kt (BannerDiSchermata VociDaIdentificare) · BannerSn(testo = "") leaves an empty body line (extra bottom padding) · verifier · 2026-09-26
 - [ ] R3 · schede-registrazione · LOW · RegistrazionePresenter.kt:182 · contenutoRiassunto new lambda per carica() → Dati never equal, slot recomposes · verifier · 2026-09-26
 - [ ] R3 · schede-registrazione · MED (→ avvio-sintesi) · SelezioneSchedaS3 · the composition must build ONE instance per window and share it across RegistrazionePresenter instances (AC-S121) — prove it in avvio-sintesi · verifier · 2026-09-26
+- [ ] R3 · servizio-modelli-facoltativo · LOW · ServizioModelliFacoltativoContratto.kt ("un id gia Installato non e riscaricato") · doesn't distinguish no-op from re-download (Finta always writes Installato) · verifier · 2026-09-26
+- [ ] R3 · servizio-modelli-facoltativo · LOW · SchermataShell.kt:329-335 · footer wraps "2,1 di / 6,2 GB" — non-breaking space inside the pair · verifier · 2026-09-26
+- [ ] R3 · servizio-modelli-facoltativo · LOW · TestiModelli.kt:31-38 · no sidebar line while in Errore (worker choice) — confirm/amend the ux text · verifier · 2026-09-26
+- [ ] R3 · servizio-modelli-facoltativo · LOW · avvio/.../ServizioModelliProvisioning.kt:68-69 · licenze() lists optional entries too (covered later by modello-facoltativo-avvio AC-S76) · verifier · 2026-09-26
