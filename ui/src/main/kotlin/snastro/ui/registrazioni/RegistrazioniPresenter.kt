@@ -23,6 +23,7 @@ import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
 import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
@@ -83,6 +84,11 @@ import java.time.LocalDate
  * row's More menu — 'Elimina…' (AC-625/626/627/628) and, on the rows where [ritrascrivi] is also
  * offered, 'Ritrascrivi' too (AC-625 (b): the row's own button then folds into the menu). Defaults to
  * `null`, so no row shows a More menu until `avvio-parlanti` supplies it (R0/R1, AC-625).
+ *
+ * ADR 0023 §4 (block `avvio-coda-condivisa`, [posizioniNellaCoda]): the "In coda (n)"/"Ritrascrizione
+ * in coda (n)" position on an `IN_ATTESA` row no longer comes from `StatoRegistrazioneVista` — it is
+ * read from `:ui`'s `PosizioniNellaCoda` (the shared queue's owner, `:avvio`) and joined by
+ * [RegistrazioneId], one snapshot per [costruisciRighe] call, `null`/absent meaning no position (0).
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazioniPresenter(
@@ -102,6 +108,7 @@ class RegistrazioniPresenter(
     private val ritrascrivi: ((AvviaElaborazione) -> Esito<Unit>)? = null,
     private val annullaElaborazione: ((AnnullaElaborazione) -> Esito<Unit>)? = null,
     private val eliminaRegistrazione: ((EliminaRegistrazione) -> Esito<Unit>)? = null,
+    private val posizioniNellaCoda: (() -> PosizioniCoda)? = null,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -215,10 +222,14 @@ class RegistrazioniPresenter(
         val ids = progetto.map { it.registrazioneId }
         val stati = statiElaborazione?.invoke(ids)?.associateBy { it.registrazioneId }
         val conteggiIdentificazione = conteggiIdentificazione(ids)
+        // ADR 0023 §4 (sweep, block avvio-coda-condivisa): the queue position is no longer part of
+        // StatoRegistrazioneVista — it is read from PosizioniNellaCoda (the shared queue's owner) and
+        // joined here by registrazioneId, one snapshot shared by every row (mirrors AC-163's old intent).
+        val posizioni = posizioniNellaCoda?.invoke() ?: PosizioniCoda.VUOTA
         val statoLettore = lettore.stato.value
         return progetto.map { r ->
             val vista = stati?.get(r.registrazioneId)
-            val elaborazioneRiga = vista?.let(::elaborazioneDi)
+            val elaborazioneRiga = vista?.let { elaborazioneDi(it, posizioni) }
             // AC-451: FALLITA over an existing Trascritto renders as Completata + this notice, whatever
             // the `ritrascrivi` source's presence — it reports a FACT, independent of the action's
             // availability (which `ritrascriviDisponibile` gates on its own).
@@ -298,10 +309,16 @@ class RegistrazioniPresenter(
     // over an existing Trascritto gets the "Ritrascrizione …" label instead of the plain one.
     // AC-451: FALLITA over an existing Trascritto is NOT `Fallita` — it renders as `Completata`
     // (`RigaRegistrazione.ritrascrizioneFallita` carries the notice); a plain FALLITA keeps 'Riprova'.
-    private fun elaborazioneDi(v: StatoRegistrazioneVista): StatoElaborazioneRiga = when (v.stato) {
+    private fun elaborazioneDi(
+        v: StatoRegistrazioneVista,
+        posizioni: PosizioniCoda,
+    ): StatoElaborazioneRiga = when (v.stato) {
         StatoElaborazioneVista.NON_AVVIATA -> StatoElaborazioneRiga.NonAvviata
         StatoElaborazioneVista.IN_ATTESA ->
-            StatoElaborazioneRiga.InAttesa(v.posizioneInCoda ?: 0, ritrascrizione = v.trascrittoDisponibile)
+            StatoElaborazioneRiga.InAttesa(
+                posizioni.elaborazioni[v.registrazioneId] ?: 0,
+                ritrascrizione = v.trascrittoDisponibile,
+            )
         StatoElaborazioneVista.IN_CORSO -> StatoElaborazioneRiga.InCorso(
             faseEtichetta = v.fase?.let(::etichetta).orEmpty(),
             trascorsoMs = v.avviataAlle

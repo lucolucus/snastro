@@ -9,8 +9,12 @@ import snastro.trascrizione.dominio.Elaborazione
  * Read-model `stati-elaborazione` (AC-162..165, S2): the processing state S2 (`RegistrazioniDelProgetto`)
  * joins onto Progetto's Registrazioni. Read-only: no rule lives here — [stato] is derived only from
  * [Elaborazione]'s own named predicates (`completata`, `fallita`, `inAttesa`), never by comparing
- * `StatoElaborazione` (§14 gate); [posizioneInCoda] is a rank over [ElaborazioneRepository.inAttesa]'s own
- * FIFO order; [FasiInCorso] is read, never decided on.
+ * `StatoElaborazione` (§14 gate); [FasiInCorso] is read, never decided on.
+ *
+ * ADR 0023 §4 (block `avvio-coda-condivisa`, `enforced_by`): the queue position no longer lives here —
+ * S2's presenter reads it from `:ui`'s `PosizioniNellaCoda` (computed by the shared queue's owner,
+ * `:avvio`) and joins it by [RegistrazioneId] itself, so there is one source of truth across both queued
+ * kinds (Elaborazione, Riassunto).
  */
 public class StatiElaborazione(
     private val elaborazioni: ElaborazioneRepository,
@@ -18,12 +22,10 @@ public class StatiElaborazione(
     private val fasi: FasiInCorso,
 ) {
     /** AC-162: one row per id of [registrazioneIds], same order, each built from its LATEST Elaborazione. */
-    public fun stati(registrazioneIds: List<RegistrazioneId>): List<StatoRegistrazioneVista> {
-        val inAttesa = elaborazioni.inAttesa() // one FIFO snapshot shared by every row (AC-163)
-        return registrazioneIds.map { riga(it, inAttesa) }
-    }
+    public fun stati(registrazioneIds: List<RegistrazioneId>): List<StatoRegistrazioneVista> =
+        registrazioneIds.map(::riga)
 
-    private fun riga(id: RegistrazioneId, inAttesa: List<Elaborazione>): StatoRegistrazioneVista {
+    private fun riga(id: RegistrazioneId): StatoRegistrazioneVista {
         val ultima = ultima(id)
         val trascritto = trascritti.trova(id) // ADR 0018: whatever the latest run's state (AC-165/AC-447)
         val stato = when {
@@ -39,7 +41,6 @@ public class StatiElaborazione(
             fase = fasi.faseDi(id).takeIf { stato == StatoElaborazioneVista.IN_CORSO }, // AC-164
             avviataAlle = ultima?.avviataAlle,
             motivoFallimento = ultima?.motivoFallimento.takeIf { stato == StatoElaborazioneVista.FALLITA },
-            posizioneInCoda = inAttesa.indexOfFirst { it.id == ultima?.id }.takeIf { it >= 0 }?.plus(1), // AC-163
             numVoci = trascritto?.voci?.size,
             numeroPersone = ultima?.numeroPersone?.valore,
             trascrittoDisponibile = trascritto != null,

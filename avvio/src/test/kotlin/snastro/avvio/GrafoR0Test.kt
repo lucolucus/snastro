@@ -63,7 +63,7 @@ class GrafoR0Test {
         // L624b: match the package prefix ANYWHERE a real code line could carry it (a plain
         // `import`, an `as`-aliased one, or an inline FQN with no import at all) — not just the
         // literal `import <pacchetto>` prefix, which missed the other two. Comment lines (KDoc
-        // continuation, `//`, or a one-line `/* … */`) are excluded: `CodaElaborazioni.kt` NAMES
+        // continuation, `//`, or a one-line `/* … */`) are excluded: `CodaCondivisa.kt` NAMES
         // `snastro.trascrizione` in its class doc precisely to explain it never imports it.
         val pattern = proibiti.map { pacchetto -> Regex("""\b${Regex.escape(pacchetto)}\b""") }
         val violazioni = fileR0

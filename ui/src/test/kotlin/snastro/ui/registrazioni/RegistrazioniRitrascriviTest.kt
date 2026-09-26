@@ -17,6 +17,7 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.porte.FaseElaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVistaFinta
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.messaggioPer
@@ -44,7 +45,6 @@ private fun statoVista(
     fase: FaseElaborazione? = null,
     avviataAlle: Instant? = null,
     motivoFallimento: String? = null,
-    posizioneInCoda: Int? = null,
     numeroPersone: Int? = null,
     elaborazioneId: ElaborazioneId? = ELABORAZIONE_1,
 ) = StatoRegistrazioneVista(
@@ -53,7 +53,6 @@ private fun statoVista(
     fase = fase,
     avviataAlle = avviataAlle,
     motivoFallimento = motivoFallimento,
-    posizioneInCoda = posizioneInCoda,
     numVoci = if (trascrittoDisponibile) 3 else null,
     numeroPersone = numeroPersone,
     trascrittoDisponibile = trascrittoDisponibile,
@@ -61,11 +60,9 @@ private fun statoVista(
 )
 
 /** Shortens `presentatore(this, stati = { ids -> ids.map { statoVista(it, …) } })` call sites below. */
-@Suppress("LongParameterList") // one parameter per statoVista field these tests vary
 private fun statiCon(
     stato: StatoElaborazioneVista,
     trascrittoDisponibile: Boolean,
-    posizioneInCoda: Int? = null,
     motivoFallimento: String? = null,
     numeroPersone: Int? = null,
 ): (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = { ids ->
@@ -74,7 +71,6 @@ private fun statiCon(
             it,
             stato,
             trascrittoDisponibile = trascrittoDisponibile,
-            posizioneInCoda = posizioneInCoda,
             motivoFallimento = motivoFallimento,
             numeroPersone = numeroPersone,
         )
@@ -100,6 +96,7 @@ class RegistrazioniRitrascriviTest {
         annullaSupportato: Boolean = true,
         ritrascrivi: (AvviaElaborazione) -> Esito<Unit> = { Esito.Ok(Unit) },
         annulla: (AnnullaElaborazione) -> Esito<Unit> = { Esito.Ok(Unit) },
+        posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         return RegistrazioniPresenter(
@@ -114,6 +111,7 @@ class RegistrazioniRitrascriviTest {
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione (Trascrivi/Riprova) non atteso in questo test") },
+            posizioniNellaCoda = { posizioni },
             ritrascrivi = if (ritrascriviSupportato) {
                 { c ->
                     avvii += c
@@ -312,7 +310,8 @@ class RegistrazioniRitrascriviTest {
     fun `AC-450 IN_ATTESA con Trascritto mostra Ritrascrizione in coda e Annulla, la riga apre S3`() = runTest {
         val presenter = presentatore(
             this,
-            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = true, posizioneInCoda = 2),
+            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = true),
+            posizioni = PosizioniCoda(elaborazioni = mapOf(REG_1 to 2), riassunti = emptyMap()),
         )
         advanceUntilIdle()
 
@@ -350,7 +349,8 @@ class RegistrazioniRitrascriviTest {
     fun `AC-450 una riga senza Trascritto mantiene le etichette semplici di AC-203`() = runTest {
         val presenter = presentatore(
             this,
-            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false, posizioneInCoda = 1),
+            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false),
+            posizioni = PosizioniCoda(elaborazioni = mapOf(REG_1 to 1), riassunti = emptyMap()),
         )
         advanceUntilIdle()
 
@@ -405,7 +405,7 @@ class RegistrazioniRitrascriviTest {
         val presenter = presentatore(
             this,
             annullaSupportato = false,
-            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false, posizioneInCoda = 1),
+            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false),
         )
         advanceUntilIdle()
 
@@ -416,7 +416,7 @@ class RegistrazioniRitrascriviTest {
     fun `AC-475 Annulla invia esattamente un AnnullaElaborazione con l id della riga`() = runTest {
         val presenter = presentatore(
             this,
-            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false, posizioneInCoda = 1),
+            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false),
         )
         advanceUntilIdle()
 
@@ -430,7 +430,7 @@ class RegistrazioniRitrascriviTest {
     fun `AC-475 operazioneInCorso blocca un secondo click su Annulla`() = runTest {
         val presenter = presentatore(
             this,
-            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false, posizioneInCoda = 1),
+            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false),
         )
         advanceUntilIdle()
 
@@ -447,7 +447,7 @@ class RegistrazioniRitrascriviTest {
         val presenter = presentatore(
             this,
             stati = { ids ->
-                ids.map { statoVista(it, statoCorrente, trascrittoDisponibile = false, posizioneInCoda = 1) }
+                ids.map { statoVista(it, statoCorrente, trascrittoDisponibile = false) }
             },
             annulla = {
                 statoCorrente = StatoElaborazioneVista.NON_AVVIATA
@@ -472,7 +472,7 @@ class RegistrazioniRitrascriviTest {
         val presenter = presentatore(
             this,
             stati = { ids ->
-                ids.map { statoVista(it, statoCorrente, trascrittoDisponibile = false, posizioneInCoda = 1) }
+                ids.map { statoVista(it, statoCorrente, trascrittoDisponibile = false) }
             },
             annulla = {
                 statoCorrente = StatoElaborazioneVista.IN_CORSO
@@ -496,7 +496,7 @@ class RegistrazioniRitrascriviTest {
         val presenter = presentatore(
             this,
             stati = { ids ->
-                ids.map { statoVista(it, statoCorrente, trascrittoDisponibile = false, posizioneInCoda = 1) }
+                ids.map { statoVista(it, statoCorrente, trascrittoDisponibile = false) }
             },
             annulla = {
                 statoCorrente = StatoElaborazioneVista.NON_AVVIATA

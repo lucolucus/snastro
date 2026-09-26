@@ -8,8 +8,8 @@ import snastro.trascrizione.applicazione.comandi.RisultatoAvanzamento
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Carry-over 5: RisultatoAvanzamento (Trascrizione) → RisultatoTentativo (CodaElaborazioni), at the wiring site. */
-class FonteAvanzamentoTrascrizioneTest {
+/** Carry-over 5: RisultatoAvanzamento (Trascrizione) → RisultatoTentativo (CodaCondivisa), at the wiring site. */
+class FonteCodaElaborazioneTest {
     @Test
     fun `ogni RisultatoAvanzamento diventa il RisultatoTentativo omonimo con l id primitivo`() {
         val tabella = listOf(

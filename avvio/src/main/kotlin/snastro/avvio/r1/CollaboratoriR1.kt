@@ -4,7 +4,7 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
-import snastro.avvio.CodaElaborazioni
+import snastro.avvio.CodaCondivisa
 import snastro.avvio.ProgettoEsteso
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
@@ -33,7 +33,7 @@ internal class CollaboratoriR1(
     val trascritto: (RegistrazioneId) -> TrascrittoView?,
     val percorsoDocumento: (RegistrazioneId) -> String?,
     val revisione: ComandiRevisione,
-    val coda: CodaElaborazioni,
+    val coda: CodaCondivisa,
     private val lavoroDocumento: Job,
     override val aggiornamenti: AggiornamentiVista,
     val recuperoConcluso: Deferred<Unit>,
