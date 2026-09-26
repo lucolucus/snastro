@@ -27,6 +27,7 @@ import snastro.trascrizione.dominio.SegmentoIniziale
 import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.TrascrittoCreato
 import java.time.Clock
+import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -84,7 +85,7 @@ public class EseguiProssimaElaborazioneServizio(
     @Suppress("ReturnCount") // guard clauses, one per RisultatoAvanzamento branch — clearer than nesting
     public fun esegui(comando: EseguiProssimaElaborazione): Esito<RisultatoAvanzamento> {
         ultimaTentata = null
-        val esito = uow.inTransazione { avviaLaPiuVecchia(comando.esclusi) }
+        val esito = uow.inTransazione { avviaLaPiuVecchia(comando.esclusi, comando.nonDopo) }
         if (esito is Esito.Errore) {
             return Esito.Ok(RisultatoAvanzamento.AvvioRifiutato(checkNotNull(ultimaTentata), esito.errore))
         }
@@ -98,9 +99,18 @@ public class EseguiProssimaElaborazioneServizio(
      * read/avvia race, AC-314's PINNED REQUIREMENT). Sets [ultimaTentata] the moment a head is
      * picked, BEFORE the transactional avvio runs, so it is known to [esegui] even when the
      * transaction below is refused and rolled back (AC-313).
+     *
+     * [nonDopo] (ADR 0023 §2, AC-S21/AC-S22): once the eligible head is picked, it is claimed only if
+     * `creataAlle <= nonDopo` — read HERE, inside this same transaction, against the head this call
+     * just read (never a value read earlier by the coordinator, outside any transaction). A head that
+     * fails the bound is not "attempted": [ultimaTentata] is left untouched and `Esito.Ok(null)` is
+     * returned exactly as when no eligible head exists at all (AC-68) — the next tick re-evaluates
+     * both sources' heads.
      */
-    private fun avviaLaPiuVecchia(esclusi: Set<ElaborazioneId>): Esito<Elaborazione?> {
+    @Suppress("ReturnCount") // guard clauses (AC-68, AC-S21/AC-S22) — clearer than nesting
+    private fun avviaLaPiuVecchia(esclusi: Set<ElaborazioneId>, nonDopo: Instant?): Esito<Elaborazione?> {
         val prossima = elaborazioni.inAttesa().firstOrNull { it.id !in esclusi } ?: return Esito.Ok(null) // AC-68: FIFO
+        if (nonDopo != null && prossima.creataAlle > nonDopo) return Esito.Ok(null) // AC-S21/AC-S22
         ultimaTentata = prossima.id
         return prossima.avvia(orologio.instant()).poi { evento ->
             elaborazioni.salva(prossima).poi {
