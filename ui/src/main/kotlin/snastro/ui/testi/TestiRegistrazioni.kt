@@ -94,9 +94,13 @@ const val MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO: String = "Non puoi eliminarla
  * [snastro.ui.testi.titoloConfermaRitrascrivi]/[snastro.ui.testi.titoloConfermaEliminazioneParlante]
  * ("il titolo è la domanda"). Two body variants, with/without an existing Trascritto. */
 fun titoloConfermaElimina(titolo: String): String = "Eliminare «$titolo»?"
+
+/** ADR 0024 §3: names the `Riassunto` even when none exists yet, same as [MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO]
+ * already does for the `Documento` — a `Riassunto` can only exist alongside a `Trascritto`, so the
+ * "senza Trascritto" variant ([MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO]) is unchanged. */
 const val MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO: String =
     "Verranno cancellati il file audio copiato nel progetto, la trascrizione con le correzioni delle voci, " +
-        "i nomi dati alle voci, il documento e le impronte vocali ricavate da questa registrazione. " +
+        "i nomi dati alle voci, il documento, il riassunto e le impronte vocali ricavate da questa registrazione. " +
         "Non si può annullare."
 const val MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO_RESIDUO: String =
     "Le persone ricorrenti restano, con le impronte delle altre registrazioni. Le persone occasionali " +
