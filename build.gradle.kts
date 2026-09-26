@@ -29,6 +29,7 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":trascrizione" to emptySet(),
     ":parlanti" to emptySet(),
     ":documento" to emptySet(),
+    ":sintesi" to emptySet(),
     ":kernel" to emptySet(),
     ":progetto:dominio" to setOf(":kernel"),
     ":progetto:applicazione" to setOf(":progetto:dominio", ":kernel"),
@@ -52,13 +53,21 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
         ":documento:applicazione", ":kernel", ":trascrizione:applicazione",
         ":parlanti:applicazione", ":progetto:applicazione",
     ),
+    // (2026-09-26, ADR 0021 §2) NO :llm edge yet: :llm does not exist as a module until the
+    // adapter block that spike `runtime-llm-in-app` unblocks creates it.
+    ":sintesi:dominio" to setOf(":kernel"),
+    ":sintesi:applicazione" to setOf(":sintesi:dominio", ":kernel"),
+    ":sintesi:adattatori" to setOf(
+        ":sintesi:applicazione", ":sintesi:dominio", ":kernel", ":persistenza",
+        ":progetto:applicazione", ":trascrizione:applicazione", ":parlanti:applicazione",
+    ),
     ":persistenza" to setOf(":kernel"),
     ":audio" to setOf(":kernel"),
     ":ml-sherpa" to setOf(":kernel", ":modelli"),
     ":modelli" to setOf(":kernel"),
     ":ui" to setOf(
         ":kernel", ":progetto:applicazione", ":trascrizione:applicazione",
-        ":parlanti:applicazione", ":documento:applicazione",
+        ":parlanti:applicazione", ":documento:applicazione", ":sintesi:applicazione",
     ),
     ":avvio" to (allProjectPaths - ":avvio"),
     ":architettura-test" to (allProjectPaths - ":architettura-test"),

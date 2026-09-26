@@ -35,6 +35,11 @@ include(
     ":parlanti:adattatori",
     ":documento:applicazione",
     ":documento:adattatori",
+    // (2026-09-26, ADR 0021) :sintesi is a path-holder only (like :progetto, :trascrizione,
+    // :parlanti, :documento): no build.gradle.kts, no dependencies of its own.
+    ":sintesi:dominio",
+    ":sintesi:applicazione",
+    ":sintesi:adattatori",
     ":persistenza",
     ":audio",
     ":ml-sherpa",
