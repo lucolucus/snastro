@@ -54,6 +54,7 @@ public abstract class LettoreTrascrittoContratto {
         val a = ambiente()
         val id = a.aggiungiRegistrazione()
         a.accodaElaborazione(id)
+        a.avviaElaborazione(id)
         a.fallisciElaborazione(id)
         assertNull(a.lettore.segmenti(id))
 

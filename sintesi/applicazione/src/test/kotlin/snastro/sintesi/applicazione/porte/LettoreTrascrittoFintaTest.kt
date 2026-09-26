@@ -40,7 +40,7 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
 
         override fun completaElaborazione(r: RegistrazioneId, turni: List<SemeTurno>): List<SegmentoConiato> {
             require(turni.isNotEmpty())
-            passa(r, APERTI, Stato.COMPLETATA)
+            passa(r, setOf(Stato.IN_CORSO), Stato.COMPLETATA)
             val voceDi = turni.groupBy { it.voceIndice }
                 .mapValues { (_, suoi) -> suoi.minOf { it.intervallo.inizioMs } }
                 .entries.sortedWith(compareBy({ it.value }, { it.key }))
@@ -59,7 +59,7 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
             return coniati
         }
 
-        override fun fallisciElaborazione(r: RegistrazioneId) = passa(r, APERTI, Stato.FALLITA)
+        override fun fallisciElaborazione(r: RegistrazioneId) = passa(r, setOf(Stato.IN_CORSO), Stato.FALLITA)
 
         override fun annullaElaborazione(r: RegistrazioneId) {
             val stati = elaborazioni.getValue(r)

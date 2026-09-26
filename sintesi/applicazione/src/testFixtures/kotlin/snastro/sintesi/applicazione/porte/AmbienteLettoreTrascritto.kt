@@ -24,13 +24,13 @@ public interface AmbienteLettoreTrascritto {
     public fun avviaElaborazione(r: RegistrazioneId)
 
     /**
-     * The latest Elaborazione of [r], open (in_attesa or in_corso), ends completata with the non-empty
+     * The latest Elaborazione of [r], in_corso only, ends completata with the non-empty
      * [turni] as its output: its Trascritto is created, or replaces the previous one (ids renumbered from 1,
      * ADR 0018). Returns the ids minted for each turno, in the order of [turni].
      */
     public fun completaElaborazione(r: RegistrazioneId, turni: List<SemeTurno>): List<SegmentoConiato>
 
-    /** The latest Elaborazione of [r], open, ends fallita; the Trascritto (if any) is untouched. */
+    /** The latest Elaborazione of [r], in_corso only, ends fallita; the Trascritto (if any) is untouched. */
     public fun fallisciElaborazione(r: RegistrazioneId)
 
     /** The latest Elaborazione of [r], in_attesa, is annullata (removed); the previous one is the latest again. */
