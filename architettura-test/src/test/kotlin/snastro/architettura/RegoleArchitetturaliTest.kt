@@ -20,7 +20,7 @@ import kotlin.test.Test
  * `verificaDipendenzeModuli` / `verifySqlDelightMigration` (root `build.gradle.kts`).
  */
 class RegoleArchitetturaliTest {
-    private val contesti = setOf("progetto", "trascrizione", "parlanti", "documento")
+    private val contesti = setOf("progetto", "trascrizione", "parlanti", "documento", "sintesi")
 
     private fun contestoDi(pacchetto: String): String? {
         val segmenti = pacchetto.removePrefix("snastro.").split(".")
@@ -157,7 +157,7 @@ class RegoleArchitetturaliTest {
             },
             listOf("app.cash.sqldelight", "org.sqlite", "java.sql.", "javax.sql.") to { pkg: String ->
                 pkg == "snastro.persistenza" || pkg.startsWith("snastro.persistenza.") ||
-                    Regex("""^snastro\.(progetto|trascrizione|parlanti)\.adattatori(\..+)?$""").matches(pkg)
+                    Regex("""^snastro\.(progetto|trascrizione|parlanti|sintesi)\.adattatori(\..+)?$""").matches(pkg)
             },
             listOf("java.net.", "io.ktor", "okhttp3") to { pkg: String ->
                 pkg == "snastro.modelli" || pkg.startsWith("snastro.modelli.")
@@ -275,6 +275,25 @@ class RegoleArchitetturaliTest {
     private val sinonimiVietati = setOf(
         "Speaker", "Cluster", "Transcript", "Job", "Utterance", "Chunk", "Embedding", "Voiceprint",
         "Score", "Confidenza", "Merge", "Mapping", "Workspace", "Meeting",
+        // (2026-09-25, ADR 0021) Sintesi's "Not:" terms (context-map.md § Sintesi), single-word
+        // ones that could name a declaration; multi-word terms ("stato elaborazione", "cosa da
+        // fare", …) cannot collide with a Kotlin identifier and are left out. Excluded on purpose:
+        // "sintesi" (the context's own package name), "Contesto" (a real Parlanti class,
+        // `letture/Proposta.kt`), "Proposta" and "Riferimento" (already legitimate terms elsewhere,
+        // per the context-map's own parenthetical).
+        "Summary", "Verbale", "Report", "Resoconto", "Minuta",
+        "Sintetizza", "Rigenera", "Aggiorna",
+        "Tema", "Prompt", "Descrizione", "Oggetto",
+        "Rumore", "Divagazione",
+        "Abstract",
+        "Delibera", "Conclusione", "Accordo",
+        "Ipotesi", "Pendenza",
+        "Task", "Todo", "Compito",
+        "Assegnatario", "Owner", "Incaricato",
+        "Highlight", "Takeaway",
+        "Citazione", "Source", "Prova",
+        "Validazione", "Grounding",
+        "Obsoleto", "Scaduto", "Stale", "Invalidato",
     )
 
     private fun isCanonicalPackage(resideInPackage: (String) -> Boolean): Boolean =

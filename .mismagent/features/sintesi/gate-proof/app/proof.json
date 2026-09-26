@@ -1,0 +1,15 @@
+{
+  "side": "app",
+  "gate": "./gradlew check",
+  "gate_files": [
+    "**/build.gradle.kts",
+    "settings.gradle.kts",
+    "gradle/**",
+    "build-logic/src/**",
+    "build-logic/*.kts",
+    "config/detekt/**",
+    "architettura-test/controlli-adr/**",
+    "architettura-test/src/**"
+  ],
+  "gate_hash": "3314fdb888be9b7225a57cdda395984cdfb14b1be3fbcadeaecb872e4961596f"
+}
