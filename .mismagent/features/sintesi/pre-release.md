@@ -29,3 +29,8 @@
 - [ ] R3 · riassunto · LOW · VerificaDelleFonti.kt:49 vs :29 · element with valid Fonti but blank testo is kept (blank Sommario is absent) — inconsistent · code-review · 2026-09-26
 - [ ] R3 · riassunto · LOW · StrutturaTrascritto.kt:15 · `voci` rebuilds the Set on every call (O(elements×segments)); compute once like chiave · code-review · 2026-09-26
 - [ ] R3 · riassunto · LOW · Argomento.kt:17 · 200-char bound counts UTF-16 units (emoji = 2) · code-review · 2026-09-26
+- [ ] R3 · posizioni-nella-coda · LOW · PosizioniNellaCodaContratto.kt:35-43 · in_corso case uses different registrazioni; add E r-1 in_corso + R r-1 waiting (must be position 1) so a D2 excluding by registrazioneId fails · code-review · 2026-09-26
+- [ ] R3 · posizioni-nella-coda · LOW · ScenarioCoda.kt:16-27 · no init require for unique registrazioneId per kind (INV-4/INV-S2); `associate` keeps the last duplicate silently · code-review · 2026-09-26
+- [ ] R3 · posizioni-nella-coda · LOW · PosizioniNellaCodaContratto.kt:24-33 · no equal-instant tie case (E before R, ADR 0023 §2) — confirm avvio-coda-condivisa tests positions on the tie · code-review · 2026-09-26
+- [ ] R3 · posizioni-nella-coda · LOW · ScenarioCoda.kt:6-34 · three public top-level types + builders in one file (dev-architecture #pacchetti) · code-review · 2026-09-26
+- [ ] R3 · posizioni-nella-coda · LOW · ScenarioCoda.kt · fixture `unaElaborazione(String)` shadows trascrizione.dominio.unaElaborazione — ambiguity risk in :avvio D2 with wildcard imports · verifier · 2026-09-26
