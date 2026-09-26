@@ -59,13 +59,23 @@ import kotlin.test.assertEquals
  * testFixtures): the cross-context dependency rule (ADR 0002/0021, CR-1) allows `sintesi:adattatori`
  * to call only `trascrizione:applicazione`, never its `adattatori`'s SQL repositories.
  *
- * [AmbienteReale.avviaElaborazione] is a precondition check only: Trascrizione's public API has no
- * standalone command for JUST the `in_attesa -> in_corso` transition (only
- * [EseguiProssimaElaborazioneServizio] does it, bundled with the pipeline run and its completion), and
- * [LettoreTrascritto.elaborazioneAperta] cannot observe the difference either way (`true` for both
- * states). The real transition happens, together with the completion, inside
- * [AmbienteReale.completaElaborazione] / [AmbienteReale.fallisciElaborazione]'s own
- * [EseguiProssimaElaborazioneServizio] call (AC-S50).
+ * [AmbienteReale.avviaElaborazione] performs the REAL `in_attesa -> in_corso` transition itself
+ * (rework 1): Trascrizione's public API has no standalone command for it (only
+ * [EseguiProssimaElaborazioneServizio] does, bundled with the pipeline run and its completion), so it
+ * calls the aggregate's own `Elaborazione.avvia` directly and `salva`s it — the one instance method
+ * accessed through inference, never imported by name (CR-1: `sintesi:adattatori` never imports
+ * `trascrizione.dominio`) — so [StatiElaborazione] genuinely reports `IN_CORSO` in between (dropping it
+ * from `LettoreTrascrittoDaTrascrizione.APERTI` now turns AC-S6's "in_corso" assertion red).
+ * [AmbienteReale.fallisciElaborazione] takes that SAME `Elaborazione` to `fallita` the same way
+ * (`Elaborazione.fallisci`, Trascritto untouched). [AmbienteReale.completaElaborazione] cannot: only
+ * [EseguiProssimaElaborazioneServizio] reaches `Trascritto.crea` (a `trascrizione.dominio` factory this
+ * module has no edge to, ADR 0021 §2), and it only ever claims a FIFO `in_attesa` head — never an
+ * already-`in_corso` one. So it first closes the `in_corso` Elaborazione itself (`Elaborazione.completa`,
+ * freeing the one-open-per-Registrazione slot, INV-4) then re-queues a fresh one for the SAME
+ * Registrazione and runs THAT one through [EseguiProssimaElaborazioneServizio] as before — two
+ * `Elaborazione` rows land `completata`, the second carrying the real Trascritto; several `completata`
+ * rows per Registrazione are already normal (ADR 0018) and [LettoreTrascritto] only ever reads the
+ * latest one, so this is unobservable through the port.
  *
  * The clock TICKS 1 ms at every read ([OrologioCheAvanza]): the contract ranks the latest Elaborazione
  * by `(creataAlle, id)` (ADR 0018) — a FIXED Clock would make that ranking rely on
@@ -143,13 +153,25 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         }
 
         override fun avviaElaborazione(r: RegistrazioneId) {
-            check(elaborazioni.diRegistrazione(r).any { it.inAttesa }) {
-                "nessuna Elaborazione in_attesa per ${r.valore}"
-            }
+            val elaborazione = elaborazioni.diRegistrazione(r).singleOrNull { it.inAttesa }
+                ?: error("nessuna Elaborazione in_attesa per ${r.valore}")
+            elaborazione.avvia(clock.instant()).atteso()
+            elaborazioni.salva(elaborazione).atteso()
         }
 
+        /**
+         * Closes the `in_corso` Elaborazione ([avviaElaborazione]) as `completata` itself (freeing the
+         * one-open-per-Registrazione slot, INV-4), then re-queues a FRESH one for [r] and runs THAT one
+         * through [eseguiProssima] — the only path that reaches `Trascritto.crea` (class KDoc). Multiple
+         * `completata` rows per Registrazione are normal (ADR 0018); [LettoreTrascritto] reads only the
+         * latest one, so the extra row is invisible through the port.
+         */
         override fun completaElaborazione(r: RegistrazioneId, turni: List<SemeTurno>): List<SegmentoConiato> {
             require(turni.isNotEmpty())
+            val chiusa = elaborazioneInCorsoDi(r)
+            chiusa.completa().atteso()
+            elaborazioni.salva(chiusa).atteso()
+            accodaElaborazione(r)
             eseguiProssima(r, turni)
             val trascritto = checkNotNull(trascritti.trova(r))
             return turni.map { t ->
@@ -159,9 +181,15 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         }
 
         override fun fallisciElaborazione(r: RegistrazioneId) {
-            // Nessun turno diarizzato -> Trascritto.crea rifiuta con NessunParlatoRilevato (AC-72).
-            eseguiProssima(r, emptyList())
+            val elaborazione = elaborazioneInCorsoDi(r)
+            elaborazione.fallisci(MOTIVO_FALLIMENTO_TEST).atteso()
+            elaborazioni.salva(elaborazione).atteso()
         }
+
+        /** The [r] Elaborazione [avviaElaborazione] left `in_corso` — never imported by name (CR-1). */
+        private fun elaborazioneInCorsoDi(r: RegistrazioneId) =
+            elaborazioni.inCorso().singleOrNull { it.registrazioneId == r }
+                ?: error("nessuna Elaborazione in_corso per ${r.valore}")
 
         override fun annullaElaborazione(r: RegistrazioneId) {
             val id = elaborazioni.diRegistrazione(r).single { it.inAttesa }.id
@@ -184,11 +212,11 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         }
 
         /**
-         * `EseguiProssimaElaborazione` (AC-S50, "with fake ML"): runs the FIFO head through to
-         * completion/failure in one call — the ONLY way Trascrizione's own API reaches in_corso, and it
-         * always finishes it too (§ class KDoc). [esclusi] targets [r]'s OWN Elaborazione even when
-         * another Registrazione has an older one still queued (several Ambiente calls may interleave
-         * across Registrazioni, e.g. AC-S4's four scenarios).
+         * `EseguiProssimaElaborazione` (AC-S50, "with fake ML"): runs the FIFO head — the FRESH
+         * Elaborazione [completaElaborazione] just re-queued for [r] — through avvio, the fake pipeline
+         * and completion in one call; the only path that reaches `Trascritto.crea` (class KDoc).
+         * [esclusi] targets [r]'s OWN head even when another Registrazione has an older one still queued
+         * (several Ambiente calls may interleave across Registrazioni, e.g. AC-S4's four scenarios).
          */
         private fun eseguiProssima(r: RegistrazioneId, turni: List<SemeTurno>) {
             val vista = registrazioniViste.getValue(r)
@@ -217,6 +245,9 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             val PROGETTO_ID = ProgettoId("progetto-1")
             val DATA_REGISTRAZIONE: LocalDate = LocalDate.of(2026, 9, 23)
             const val DURATA_MS = 60_000L
+
+            /** [fallisciElaborazione]'s fixed reason: never read back through [LettoreTrascritto] (AC-S4/S6). */
+            const val MOTIVO_FALLIMENTO_TEST = "fallimento di test"
         }
     }
 }
