@@ -14,8 +14,10 @@ import snastro.kernel.atteso
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
 import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
+import snastro.sintesi.applicazione.porte.AzioneRisposta
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
+import snastro.sintesi.applicazione.porte.ElementoRisposta
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.applicazione.porte.LettoreNomi
 import snastro.sintesi.applicazione.porte.LettoreNomiFinta
@@ -49,7 +51,9 @@ import kotlin.test.assertTrue
 /**
  * [EseguiProssimoRiassuntoServizio] against the ports' fakes (D1): AC-S83..AC-S89. [modello] is built
  * WITH [transazioni], so any read invoked while a transaction is open throws (AC-S84, ADR 0012 (b)) —
- * every test in this file shares that guard.
+ * every test in this file shares that guard. AC-S84 additionally wires [LettoreTrascrittoConGuardia] and
+ * [LettoreNomiConGuardia] — the same `check(!transazioneAperta)` for both lettori, so a regression moving
+ * either read into the claim transaction is also caught there (rework 1, FAIL 2).
  */
 class EseguiProssimoRiassuntoServizioTest {
     private val riassunti = RiassuntoRepositoryFinta()
@@ -129,16 +133,21 @@ class EseguiProssimoRiassuntoServizioTest {
     @Test
     fun `AC-S84 il modello e i lettori sono invocati fuori da ogni transazione`() {
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
+        val trascrittiConGuardia =
+            LettoreTrascrittoConGuardia(transazioni, LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)))
+        val nomiConGuardia = LettoreNomiConGuardia(transazioni, LettoreNomiFinta())
 
         // ModelloLinguisticoFinto(transazioni) throws if riassumi runs while `transazioni` has an open
-        // transaction: reaching a result here already proves phases 2/3's read/call ran outside one.
-        val esito = servizioConSegmenti().esegui(EseguiProssimoRiassunto())
+        // transaction; trascrittiConGuardia / nomiConGuardia throw the same way for segmenti()/nomi() —
+        // reaching a result here already proves phases 2/3's reads/call all ran outside one (rework 1, FAIL 2).
+        val esito = servizio(trascritti = trascrittiConGuardia, nomi = nomiConGuardia)
+            .esegui(EseguiProssimoRiassunto())
 
         assertEquals(RisultatoRiassunto.Avviato(RiassuntoId("r1")), esito.atteso())
     }
 
     @Test
-    fun `AC-S85 la richiesta porta l ingresso etichettato l argomento e il cap del Riassunto`() {
+    fun `AC-S85 INV-S10 la richiesta porta l ingresso etichettato l argomento e il cap del Riassunto`() {
         val nomiPorta = LettoreNomiFinta(
             attribuzioni = mapOf(VoceRef(REG1, VoceId(1)) to "parlante-1"),
             nomiParlanti = mapOf("parlante-1" to "Anna"),
@@ -162,7 +171,7 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-S86 il pronto passa solo per concludi che rimuove da solo il pronto precedente`() {
+    fun `AC-S86 INV-S3 il pronto passa solo per concludi che rimuove da solo il pronto precedente`() {
         val repoSpia = spyk(RiassuntoRepositoryFinta())
         val transazioniSpia = UnitaDiLavoroFinta(repoSpia)
         val eventiSpia = DispatcherEventiFinta(transazioniSpia)
@@ -230,7 +239,7 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-S87 quando la Verifica scarta tutto il Riassunto e fallito nessun_contenuto_verificabile`() {
+    fun `AC-S87 INV-S4 quando la Verifica scarta tutto il Riassunto e fallito nessun_contenuto_verificabile`() {
         modello.rispondi(
             RispostaModello(
                 sommario = null,
@@ -251,7 +260,30 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-S87 un fallimento lascia intatto il pronto precedente della stessa Registrazione`() {
+    fun `INV-S4 Fonti e un token di Voce fuori dalla struttura del run sono scartati e contati`() {
+        // SEGMENTI's structure only has {V1, V2}: fonte 99 doesn't exist, V9 isn't a Voce of the structure.
+        modello.rispondi(
+            RispostaModello(
+                sommario = "{V1} riassume.",
+                decisioni = listOf(ElementoRisposta("fuori struttura", fonti = listOf(99))),
+                questioniAperte = emptyList(),
+                azioni = listOf(AzioneRisposta("{V9} fa qualcosa", fonti = listOf(1), responsabile = null)),
+                puntiChiave = emptyList(),
+            ),
+        )
+        riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
+
+        servizioConSegmenti().esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto, "il Sommario solo resta verificabile")
+        assertEquals(2, concluso.omessi) // la Decisione (fonte 99) e l'Azione (Voce 9 nel testo)
+        assertTrue(concluso.decisioni.isEmpty())
+        assertTrue(concluso.azioni.isEmpty())
+    }
+
+    @Test
+    fun `AC-S87 INV-S3 un fallimento lascia intatto il pronto precedente della stessa Registrazione`() {
         val precedente = unRiassunto("precedente", REG1, richiestoAlle = T0).conAvvio()
             .conCompletamento(BOZZA_SOLO_SOMMARIO, unaStruttura(1 to 1))
         riassunti.salva(precedente).atteso()
@@ -294,17 +326,23 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-S88 la struttura letta durante l esecuzione rende il Riassunto superato dopo una revisione`() {
+    fun `AC-S88 INV-S4 la struttura letta durante l esecuzione rende il Riassunto superato dopo una revisione`() {
+        // The FIRST segmenti() call is what the run must use — the one where LettoreTrascritto still shows
+        // the pre-Revisione assignment. A SECOND call (only a regression re-reading at completion would make
+        // one) returns [dopoRevisione]: real Voci reassigned by a Revisione COMMITTED while this run was
+        // in_corso, between the run's own Segmenti read and completion (rework 1, HIGH).
+        val dopoRevisione = SEGMENTI.map { it.copy(voceId = if (it.voceId == VoceId(1)) VoceId(2) else VoceId(1)) }
+        val trascrittiConRevisioneTardiva = LettoreTrascrittoConRevisioneTardiva(SEGMENTI, dopoRevisione)
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
 
-        servizioConSegmenti().esegui(EseguiProssimoRiassunto()).atteso()
+        servizio(trascritti = trascrittiConRevisioneTardiva).esegui(EseguiProssimoRiassunto()).atteso()
 
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.pronto)
-        val strutturaAllEsecuzione = unaStruttura(1 to 1, 2 to 2, 3 to 1)
-        assertEquals(strutturaAllEsecuzione.chiave, concluso.struttura)
-        val dopoUnaRevisione = unaStruttura(1 to 2, 2 to 1, 3 to 2) // riassegnazioni committed AFTER completion
-        assertTrue(concluso.superato(dopoUnaRevisione))
+        val strutturaLettaNelRun = unaStruttura(1 to 1, 2 to 2, 3 to 1) // SEGMENTI, as the run's OWN read saw it
+        assertEquals(strutturaLettaNelRun.chiave, concluso.struttura)
+        val strutturaCorrenteDelLettore = unaStruttura(1 to 2, 2 to 1, 3 to 2) // what a fresh read gives NOW
+        assertTrue(concluso.superato(strutturaCorrenteDelLettore))
     }
 
     private companion object {
@@ -345,4 +383,52 @@ class EseguiProssimoRiassuntoServizioTest {
             puntiChiave = emptyList(),
         )
     }
+}
+
+/**
+ * Delegates to [delegato], but throws if invoked while [transazioni] has a transaction open — the same
+ * ADR 0012 (b) guard [ModelloLinguisticoFinto] carries for the model, here for [LettoreTrascritto]
+ * (AC-S84, rework 1 FAIL 2).
+ */
+private class LettoreTrascrittoConGuardia(
+    private val transazioni: UnitaDiLavoroFinta,
+    private val delegato: LettoreTrascritto,
+) : LettoreTrascritto {
+    override fun segmenti(r: RegistrazioneId): List<SegmentoSintesi>? {
+        check(!transazioni.transazioneAperta) { "segmenti invocato dentro una transazione (ADR 0012 (b))" }
+        return delegato.segmenti(r)
+    }
+
+    override fun elaborazioneAperta(r: RegistrazioneId): Boolean = delegato.elaborazioneAperta(r)
+}
+
+/** Same guard as [LettoreTrascrittoConGuardia], for [LettoreNomi] (AC-S84, rework 1 FAIL 2). */
+private class LettoreNomiConGuardia(
+    private val transazioni: UnitaDiLavoroFinta,
+    private val delegato: LettoreNomi,
+) : LettoreNomi {
+    override fun nomi(r: RegistrazioneId): Map<VoceRef, String> {
+        check(!transazioni.transazioneAperta) { "nomi invocato dentro una transazione (ADR 0012 (b))" }
+        return delegato.nomi(r)
+    }
+}
+
+/**
+ * Simulates a Revisione COMMITTED by another command while this run is `in_corso`: the FIRST [segmenti]
+ * call — the one this run's own phase 2 makes — returns [original]; any further call returns
+ * [dopoRevisione] instead. Only a regression re-reading the Segmenti at completion (rather than reusing
+ * the structure captured during the run) would ever trigger a second call (AC-S88, rework 1 HIGH).
+ */
+private class LettoreTrascrittoConRevisioneTardiva(
+    private val original: List<SegmentoSintesi>,
+    private val dopoRevisione: List<SegmentoSintesi>,
+) : LettoreTrascritto {
+    private var chiamate = 0
+
+    override fun segmenti(r: RegistrazioneId): List<SegmentoSintesi>? {
+        chiamate++
+        return if (chiamate == 1) original else dopoRevisione
+    }
+
+    override fun elaborazioneAperta(r: RegistrazioneId): Boolean = false
 }
