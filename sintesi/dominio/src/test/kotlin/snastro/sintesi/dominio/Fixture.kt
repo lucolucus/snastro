@@ -35,7 +35,7 @@ internal fun unaBozza(
 internal fun unElemento(testo: String = "si fa", vararg fonti: Int = intArrayOf(1), voce: Int? = null): BozzaElemento =
     BozzaElemento(testo, fonti.toList(), voce)
 
-internal fun testo(s: String): TestoConVoci = TestoConVoci.decodifica(s).atteso()
+internal fun testo(s: String): TestoConVoci = checkNotNull(TestoConVoci.decodifica(s)) { s }
 
 /** Every observable field of a Riassunto, to prove "nothing changed". */
 internal data class Istantanea(

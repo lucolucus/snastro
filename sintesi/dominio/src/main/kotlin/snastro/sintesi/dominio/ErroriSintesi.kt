@@ -35,10 +35,4 @@ public sealed interface ErroreSintesi : ErroreDominio {
 
     /** No Riassunto with this id. */
     public data class RiassuntoNonTrovato(val id: String) : ErroreSintesi
-
-    /**
-     * INV-S5: a text in the `{V<n>}` form holds a malformed token at [posizione] (a lone `{` or `}`,
-     * `{V}`, `{V0}`, `{Vx}`); the element carrying it is dropped by the Verifica delle fonti.
-     */
-    public data class TokenVoceMalformato(val posizione: Int) : ErroreSintesi
 }

@@ -1,6 +1,5 @@
 package snastro.sintesi.dominio
 
-import snastro.kernel.Esito
 import snastro.kernel.VoceId
 
 /**
@@ -21,11 +20,10 @@ public data class TestoConVoci(val parti: List<ParteTesto>) {
     }
 
     public companion object {
-        /** Parses the `{V<n>}` form; a malformed token → [ErroreSintesi.TokenVoceMalformato]. */
-        public fun decodifica(s: String): Esito<TestoConVoci> {
+        /** Parses the `{V<n>}` form; `null` on a malformed token (a lone brace, `{V}`, `{V0}`, `{Vx}`, `{V01}`). */
+        public fun decodifica(s: String): TestoConVoci? {
             val simboli = TOKEN.findAll(s).toList()
-            simboli.firstOrNull { it.value == "{" || it.value == "}" }
-                ?.let { return Esito.Errore(ErroreSintesi.TokenVoceMalformato(it.range.first)) }
+            if (simboli.any { it.value == "{" || it.value == "}" }) return null
             val parti = mutableListOf<ParteTesto>()
             val testo = StringBuilder()
             var da = 0
@@ -43,7 +41,7 @@ public data class TestoConVoci(val parti: List<ParteTesto>) {
             }
             testo.append(s, da, s.length)
             if (testo.isNotEmpty()) parti += ParteTesto.Testo(testo.toString())
-            return Esito.Ok(TestoConVoci(parti))
+            return TestoConVoci(parti)
         }
 
         /** `{{`, `}}`, a well-formed `{V<n>}` (n ≥ 1, no leading zero: lossless), or a lone brace (malformed). */

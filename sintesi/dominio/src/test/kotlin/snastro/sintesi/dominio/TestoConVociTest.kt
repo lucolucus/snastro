@@ -1,10 +1,10 @@
 package snastro.sintesi.dominio
 
 import snastro.kernel.VoceId
-import snastro.kernel.atteso
-import snastro.kernel.erroreAtteso
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
 class TestoConVociTest {
     @Test
@@ -19,19 +19,17 @@ class TestoConVociTest {
         )
 
         casi.forEach { (codificato, parti) ->
-            val t = TestoConVoci.decodifica(codificato).atteso()
+            val t = assertNotNull(TestoConVoci.decodifica(codificato), codificato)
             assertEquals(TestoConVoci(parti), t, codificato)
             assertEquals(codificato, t.codifica(), codificato)
-            assertEquals(t, TestoConVoci.decodifica(t.codifica()).atteso(), codificato)
+            assertEquals(t, TestoConVoci.decodifica(t.codifica()), codificato)
         }
     }
 
     @Test
-    fun `INV-S5 un token malformato e un Errore`() {
-        val casi = listOf("{" to 0, "a }" to 2, "{V}" to 0, "{V0}" to 0, "{Vx}" to 0, "x {V01}" to 2, "{V1" to 0)
-        casi.forEach { (s, pos) ->
-            val errore = TestoConVoci.decodifica(s).erroreAtteso<ErroreSintesi.TokenVoceMalformato>()
-            assertEquals(pos, errore.posizione, s)
+    fun `INV-S5 un token malformato decodifica a null`() {
+        listOf("{", "a }", "{V}", "{V0}", "{Vx}", "x {V01}", "{V1").forEach { s ->
+            assertNull(TestoConVoci.decodifica(s), s)
         }
     }
 

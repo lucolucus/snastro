@@ -1,6 +1,5 @@
 package snastro.sintesi.dominio
 
-import snastro.kernel.Esito
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 
@@ -52,7 +51,7 @@ internal class VerificaDelleFonti(private val struttura: StrutturaTrascritto) {
 
     /** The decoded text if every token is well-formed and a Voce of the structure; else counts it and null. */
     private fun testoValido(s: String): TestoConVoci? {
-        val testo = (TestoConVoci.decodifica(s) as? Esito.Ok)?.valore?.takeIf { struttura.voci.containsAll(it.voci) }
+        val testo = TestoConVoci.decodifica(s)?.takeIf { struttura.voci.containsAll(it.voci) }
         if (testo == null) omessi++
         return testo
     }
