@@ -38,3 +38,68 @@ history the code cannot re-derive. Strike (`~~…~~`) a lesson to drop it from t
 - `ricostituisci` and accessors must defensively copy collections, not keep or return the
   caller's own list by reference — otherwise the caller can mutate the aggregate's state from
   outside, breaking "state captive of the root" (pre-release.md — `Riassunto.kt:156`, `:55-58`).
+
+## adapter
+
+- A D2 (real-supplier) contract test must drive the supplier through its OWN real commands, not a
+  no-op stand-in: `AmbienteReale.avviaElaborazione` was a no-op `check`, so the "in_corso"
+  assertions ran against a still-`in_attesa` `Elaborazione` — dropping IN_CORSO from the port's
+  states would still pass on D2. Seed/advance real supplier state via its own public transitions
+  (e.g. `Elaborazione.avvia`), never bypass them to force a terminal state (rework/lettore-trascritto-da-trascrizione-sintesi-1.md).
+- Don't reach another context's dominio via type inference through a transitive `api` edge to seed
+  or drive a test — invisible to an import-only Konsist rule (CR-1 in spirit); use a supplier-owned
+  testFixtures seeding fixture instead (`LettoreTrascrittoDaTrascrizioneTest.kt:155-192`, pre-release.md).
+- A concurrency AC needs a start barrier (e.g. `CyclicBarrier`) so both racers actually overlap —
+  two threads with no barrier, asserting only the final state, pass even with the lock removed;
+  assert the serialization itself and prove it fails when the lock is removed (AC-S29,
+  rework/modelli-provisioning-facoltativo-1.md).
+- A multi-source queue clause is untested until exercised with TWO real sources, not one — add the
+  explicit cross-source case (e.g. one source's claim must carry the other's next bound)
+  (AC-S58..S61, rework/avvio-coda-condivisa-1.md).
+- Bound an "immediate re-tick" after a non-empty-but-drained peek to ONE retry before falling back
+  to the normal poll interval, or it spins unbounded (CodaCondivisa.kt:186, rework/avvio-coda-condivisa-1.md).
+- Run a source's peek (`teste`, `trattenuta()`) inside the same protected block as its claim — a
+  throwing peek left outside it kills the loop instead of being handled like an ordinary escape
+  (CodaCondivisa.kt:157-158, rework/avvio-coda-condivisa-1.md).
+- A `runTest` queue test that gets the order wrong must FAIL, not HANG the gate — put
+  `scope.cancel()` in `finally` (or use `backgroundScope` + a JUnit default timeout), never only
+  after the assertion (CodaCondivisaTest.kt, pre-release.md).
+- A repository UPDATE must check its affected-row count before returning `Ok` — an "existing-row"
+  UPDATE that matches 0 rows (stale/skipped state) silently succeeds while children are written
+  against the wrong row; `check(righe == 1L)` or state the one-step precondition in the port's
+  KDoc (RiassuntoRepositorySql.kt:124-130, :81-86, pre-release.md).
+
+## application-service
+
+- Tag every invariant-covering test with its INV id as a name prefix — the block asks one test per
+  invariant by name, not just an AC number (rework/esegui-riassunto-1.md).
+- Guard EVERY collaborator that must run outside the transaction, not just the "main" one — sibling
+  fakes need the same `check(!transazioni.transazioneAperta)` delegating-double guard as the one
+  already covered, or the AC only proves half its claim (AC-S84, rework/esegui-riassunto-1.md).
+- A race AC ("reads state as of the claim, not at completion") must be exercised by a double that
+  actually CHANGES state mid-run (e.g. commits a revision between the read and completion) — a test
+  that never mutates state during the run passes even with the bug (AC-S88, rework/esegui-riassunto-1.md).
+- Never ignore the `Esito` of a repository call inside a service — an ignored `Esito` on
+  `rimuovi`/`concludi` is a swallowed failure (ADR 0003/CR-7): chain it (`.poi`) or propagate/throw
+  instead of letting a domain `Errore` silently roll back or leave a stale row
+  (RiassumiServizio.kt:70, EseguiProssimoRiassuntoServizio.kt:134-142, pre-release.md).
+
+## read-model
+
+- An estimate a read-model reports must be consistent with the command that will act on it —
+  compute it over the SAME name-free input the command estimates over, or an "insufficient
+  headroom" answer can disagree with the command's own estimate (riassumi INV-S6 vs riassunto-vista,
+  pre-release.md).
+- Lock a name-free/size estimate with a test sized to the real limit, not an arbitrary large
+  fixture — size the input to exactly the threshold plus a long name and assert the boundary
+  outcome (AC-S107, RiassuntoVisteLetturaTest.kt:263-270, pre-release.md).
+
+## ui
+
+- A Row with an unweighted, wrapping `Text` sibling starves its OTHER siblings of width — a name
+  that wraps to a second line can push a fixed-content sibling (e.g. a timecode) outside the
+  container and get it clipped; assert the sibling's bounds/one-line-ness and read the render-check
+  PNGs, not just green unit tests (FonteChip.kt:42-47, rework/stile-sintesi-1.md).
+- `weight(1f, fill = false)` only bounds width inside a container with a bounded max width — under
+  an unbounded width (LazyRow / horizontalScroll) the weighted child gets `maxWidth = 0` and
+  disappears; document "requires bounded width" or avoid weight there (FonteChip.kt:54, pre-release.md).
