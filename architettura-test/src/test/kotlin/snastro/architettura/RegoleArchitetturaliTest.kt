@@ -188,6 +188,7 @@ class RegoleArchitetturaliTest {
         "Trascritto",
         "Parlante",
         "Attribuzione",
+        "Riassunto",
     )
 
     @Test
