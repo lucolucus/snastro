@@ -10,6 +10,7 @@ import java.security.MessageDigest
 import java.time.Duration
 import java.util.HexFormat
 import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
@@ -438,8 +439,19 @@ class ProvisioningModelliTest {
             .copy(obbligatoria = false)
         val provisioning = ProvisioningModelli(CatalogoModelli(listOf(facoltativa)), cartella)
         val esecutore = Executors.newFixedThreadPool(2)
+        // Un via libera comune: entrambe le chiamate entrano in scarica(id) nello stesso istante,
+        // cosi' il test coglie la corsa se il lucchetto sparisse (senza barriera i due thread
+        // potrebbero non sovrapporsi mai, e il test passerebbe anche senza serializzazione).
+        val viaLibera = CyclicBarrier(2)
         try {
-            val futures = (1..2).map { esecutore.submit(Callable { provisioning.scarica(facoltativa.id) { _, _ -> } }) }
+            val futures = (1..2).map {
+                esecutore.submit(
+                    Callable {
+                        viaLibera.await(10, TimeUnit.SECONDS)
+                        provisioning.scarica(facoltativa.id) { _, _ -> }
+                    },
+                )
+            }
             val risultati = futures.map { it.get(10, TimeUnit.SECONDS) }
             risultati.forEach { it.atteso() }
         } finally {
@@ -449,6 +461,15 @@ class ProvisioningModelliTest {
         assertContentEquals(
             ByteArray(50_000) { (it % 256).toByte() },
             Files.readAllBytes(provisioning.percorso(facoltativa.id).resolve("peso.bin")),
+        )
+        // La prova della serializzazione: se il lucchetto serializza davvero le due chiamate, quella
+        // che acquisisce il lucchetto per seconda trova gia' installata la voce e non tocca la rete —
+        // una sola richiesta arriva al server. Senza lucchetto (rimosso a scopo di verifica) entrambe
+        // superano il controllo "gia' installata" prima che l'altra scriva, ed entrambe scaricano.
+        assertEquals(
+            1,
+            server.richiesteA(facoltativa.url.percorsoDaUrl()),
+            "il lucchetto serializza le due chiamate: la seconda trova gia' installato, zero richieste in piu'",
         )
     }
 
