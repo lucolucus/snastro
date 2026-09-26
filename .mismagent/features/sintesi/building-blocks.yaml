@@ -3,7 +3,7 @@
 # Banner precedence), architetture/architecture-overview.md (D-1..D-12), ADRs 0021-0025 (+ 0008, 0018, 0020, 0023 amendments),
 # architecture.md, code-rules.md, context-map.md, profile.md. Worktree: snastro-wt/sintesi (branch feature/sintesi).
 # Side `app` only → every boundary is in-process (port + in-process consumer-driven contract test); no OpenAPI, no operationId.
-# AC NUMBERING: Sintesi-local prefix AC-S1..AC-S160 (never collides with trascrizione-con-parlanti's AC-1..AC-636); invariants
+# AC NUMBERING: Sintesi-local prefix AC-S1..AC-S161 (never collides with trascrizione-con-parlanti's AC-1..AC-636); invariants
 # INV-S1..INV-S10 from features/sintesi/tactical-model.md. Test names start with the tag followed by a space (`AC-S12 `, `INV-S4 `),
 # JVM-safe, greppable per block (rule 18). New items take the next free number; never renumber.
 # `(by-construction)` items cannot fail — listed for completeness, NOT counted as coverage.
@@ -1048,7 +1048,8 @@ blocks:
       - "AC-S149 E2E deletion during a run: ModelloLinguisticoFinto blocks on a latch, EliminaRegistrazione commits, the latch is released → no riassunto row, neither RiassuntoPronto nor RiassuntoFallito delivered, the queue moves on"
       - "AC-S150 The LLM run takes no sherpa Mutex: a Conferma extraction completes while a fake Riassunto run is blocked (ADR 0023 §5)"
       - "AC-S151 --smoke with a fixture holding a pronto Riassunto captures S3 with the Riassunto tab selected to avvio/build/smoke/ and exits 0"
-    notes: "Release R3 = the set of blocks with release ≤ R3. The placeholder ModelloLinguistico keeps R3 buildable and demonstrable (tab, queue, download UI) before the spike; R3 is shippable only after modello-linguistico-llama."
+      - "AC-S161 (MANDATORY, user 2026-09-26, D-0004) A late or duplicate RiassuntoEliminato does not cancel a Riassunto that still exists: the RiassuntoEliminato(r) handler flips the running run's annullato only if the running Riassunto's own row is gone (riassunti.trova(runningId) == null); the flag is per run — keyed by the running RiassuntoId, a fresh one for each claim — never a service-lifetime latch. Test (real SQLite, ModelloLinguisticoFinto on a latch): sostituzione re-queues X for r (commits RiassuntoEliminato(r) + RiassuntoRichiesto(r)); X is claimed first; then the Eliminato is delivered → X completes normally (pronto, not stuck in_corso) and a later Riassumi on r is not refused; duplicate delivery: the same RiassuntoEliminato(r) delivered twice after X is claimed → X still completes, while AC-S149 (row really deleted) still cancels"
+    notes: "Release R3 = the set of blocks with release ≤ R3. The placeholder ModelloLinguistico keeps R3 buildable and demonstrable (tab, queue, download UI) before the spike; R3 is shippable only after modello-linguistico-llama. MANDATORY AC-S161 (user decision 2026-09-26, D-0004; folds pre-release MEDs esegui-riassunto EseguiProssimoRiassuntoServizio.kt:66,93 and sostituzione-trascritto-sintesi-policy cross-block): the single service-lifetime `annullato` flag of EseguiProssimoRiassuntoServizio (constructor `annullato: () -> Boolean`) must become per run, keyed by the running RiassuntoId and reset at each claim, and the RiassuntoEliminato → annullaInCorso mapping of AC-S144 is guarded by riassunti.trova(runningId) == null — a late/duplicate/coalesced Eliminato after sostituzione re-queued X must not leave X stuck in_corso."
     sources: "ADR 0021 §10, ADR 0023 §2/§5, ADR 0024 §1/§4, ADR 0025 §4, profile run binding"
   - id: "modello-linguistico-llama"
     type: "adapter"

@@ -36,3 +36,16 @@
 - By: decided: user (Luca Parsani); recorded: build-manifest
 - Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0022](../../decisions/0022-persistenza-sintesi-6sqm.md), [ADR 0003](../../decisions/0003-politica-errori-esito.md)
 - Revisit: A second pronto must be reported differently from an open request, or completion leaves the repository.
+
+### D-0004 · Eliminato cancels only a vanished Riassunto
+- Meta: 2026-09-26; scope: block:avvio-sintesi; status: accepted
+- Question: sostituzione commits RiassuntoEliminato(r) plus a new claimable X; a late or duplicate Eliminato after X is claimed cancels X, stuck in_corso until restart.
+- Options: 1 guard the cancel on riassunti.trova(runningId) == null with a per-run flag (kept); 2 on Annullata still CAS fallisci(INTERROTTO): X fails spuriously, AC text changes; 3 accept, restart recovers: user blocked meanwhile.
+- Hypothesis: n/a — decided by the user on the pre-release MEDs, [pre-release.md](pre-release.md)
+- Check: n/a — decided by the user on the pre-release MEDs, [pre-release.md](pre-release.md)
+- Result: n/a — decided by the user on the pre-release MEDs, [pre-release.md](pre-release.md)
+- Debate: code-review of esegui-riassunto flagged the single service-lifetime annullato flag; code-review of sostituzione-trascritto-sintesi-policy flagged the cross-block race and proposed a required avvio-sintesi AC; the user confirmed it as mandatory.
+- Decision: MANDATORY AC-S161 on avvio-sintesi: cancel flips annullato only if the running Riassunto's row is gone; the flag is per run, keyed by RiassuntoId, reset per claim. Cost: one read per Eliminato, composition rework.
+- By: decided: user (Luca Parsani); recorded: build-manifest
+- Docs: [building-blocks.yaml](building-blocks.yaml), [ADR 0023](../../decisions/0023-coda-condivisa-elaborazioni-riassunti.md)
+- Revisit: Riassunto ids are reused across sostituzione, or cancellation moves out of the composition root.
