@@ -2,7 +2,6 @@ package snastro.sintesi.applicazione.porte
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
@@ -15,7 +14,6 @@ import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import java.time.Instant
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -129,11 +127,13 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S66 un secondo pronto della stessa Registrazione e un Errore e nulla e scritto`() {
+    public fun `AC-S66 un secondo pronto della stessa Registrazione e RiassuntoGiaAperto e nulla e scritto`() {
         val primo = unPronto("riassunto-1")
         repo.salva(primo).atteso()
 
-        assertIs<Esito.Errore>(repo.salva(unPronto("riassunto-2")))
+        val errore = repo.salva(unPronto("riassunto-2")).erroreAtteso<RiassuntoGiaAperto>()
+
+        assertEquals(RiassuntoGiaAperto(REGISTRAZIONE), errore)
 
         assertEquals(listOf(primo.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
         assertNull(repo.trova(RiassuntoId("riassunto-2")))
@@ -184,32 +184,47 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S68 concludi di una riga assente e Ok false e non scrive nulla`() {
+    public fun `AC-S68 concludi pronto di una riga assente e Ok false e il pronto precedente resta`() {
+        val precedente = unPronto("precedente")
+        repo.salva(precedente).atteso()
         val r = unRiassunto("riassunto-1", REGISTRAZIONE).conAvvio().conCompletamento(BOZZA, STRUTTURA)
 
         assertEquals(false, repo.concludi(r).atteso())
 
         assertNull(repo.trova(r.id))
-        assertEquals(emptyList(), repo.diRegistrazione(REGISTRAZIONE))
+        // D-0003: the previous pronto goes only after the in_corso check succeeds.
+        assertEquals(listOf(precedente.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
     }
 
     @Test
-    public fun `AC-S68 concludi di una riga in_attesa pronto o fallito e Ok false e la riga non cambia`() {
+    public fun `AC-S68 concludi di una riga in_attesa pronto o fallito e Ok false e nulla cambia`() {
         val salvate = listOf(
             unRiassunto("riassunto-0", REGISTRAZIONI[0]),
             unPronto("riassunto-1", registrazioneId = REGISTRAZIONI[1]),
             unRiassunto("riassunto-2", REGISTRAZIONI[2]).conAvvio().conFallimento(MotivoFallimento.INTERROTTO),
         )
-        salvate.forEach { repo.salva(it).atteso() }
+        // A previous pronto next to the in_attesa and the fallito row: a losing concludi(pronto) must not remove it.
+        val precedenti = listOf(
+            unPronto("precedente-0", registrazioneId = REGISTRAZIONI[0]),
+            unPronto("precedente-2", registrazioneId = REGISTRAZIONI[2]),
+        )
+        (salvate + precedenti).forEach { repo.salva(it).atteso() }
 
         salvate.forEach { salvata ->
+            val prima = repo.diRegistrazione(salvata.registrazioneId).map { it.statoOsservabile() }.toSet()
             // The caller's copy of the same row, concluded the other way (pronto over fallito and vice versa).
             val copia = unRiassunto(salvata.id.valore, salvata.registrazioneId).conAvvio()
             if (salvata.pronto) copia.conFallimento() else copia.conCompletamento(BOZZA, STRUTTURA)
 
             assertEquals(false, repo.concludi(copia).atteso(), "${salvata.id}")
             assertEquals(salvata.statoOsservabile(), checkNotNull(repo.trova(salvata.id)).statoOsservabile())
+            assertEquals(
+                prima,
+                repo.diRegistrazione(salvata.registrazioneId).map { it.statoOsservabile() }.toSet(),
+                "nulla cambia per ${salvata.id}",
+            )
         }
+        precedenti.forEach { assertEquals(it.statoOsservabile(), checkNotNull(repo.trova(it.id)).statoOsservabile()) }
     }
 
     @Test
