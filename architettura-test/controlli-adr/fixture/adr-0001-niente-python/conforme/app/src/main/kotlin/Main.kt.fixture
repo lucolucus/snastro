@@ -1,0 +1,3 @@
+package app
+
+val script = "converti.py"

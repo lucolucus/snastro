@@ -7,10 +7,10 @@ wave: 4
 release: "R3"
 module: ":sintesi:applicazione (..letture)"
 consumes:
-  - "kernel-pl"
   - "agg-lunghezza-massima-riassunto"
   - "repo-sintesi"
-depends_on: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0022"
 tests_nl_status: "draft"
@@ -33,7 +33,7 @@ Per-Progetto view of the lunghezza massima del Riassunto with its bounds, for th
 ## Dependencies
 - **vista-impostazioni-sintesi** (OWNED here; owner impostazioni-sintesi; projection in-process; contract_test `consumer-driven`)
   - `ImpostazioniSintesiVista`: ≡ impostazioni-sintesi.view_shape
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

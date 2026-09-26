@@ -4,10 +4,12 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0009 (a new print-removal path + WAL checkpoint on every removal), ADR 0018 Amendment (b) §3 ("the only physical deletion of an Elaborazione"), dev-architecture-app.md ("no deletion method"), tactical R25 note
 closes_spike: null
 amended: 2026-09-25   # "Amendment 2026-09-25 (ADR 0024)": [INV-28] + dialog text gain the Riassunto; third synchronous subscriber (Sintesi)
-enforced_by:
-  kind: presence+prohibition
-  rule: "grep -qE '^CREATE TABLE eliminazione_in_sospeso[[:space:]]*[(]' persistenza/src/main/sqldelight/migrations/5.sqm && ! grep -rnE --include='*.kt' --exclude-dir=build '(elaborazioneQueries|trascrittoQueries|voceQueries|segmentoQueries|attribuzioneQueries|improntaVocaleQueries|parlanteQueries)' progetto | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-  exigible_from: "persistenza-elimina-registrazione"   # validated 2026-09-25 via bash -c: tree exit 2 (5.sqm absent — red BY DESIGN until that block); prohibition clause alone exit 0 on the tree; fixtures: PASS (table on one line + only registrazioneQueries and commented mentions in progetto/), FAIL on `db.elaborazioneQueries…` in progetto/, FAIL when the CREATE line is commented out
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0020-tabella-eliminazione-in-sospeso.sh
+    from: persistenza-elimina-registrazione
+  - check: architettura-test/controlli-adr/adr-0020-progetto-non-tocca-altri-contesti.sh
+    from: persistenza-elimina-registrazione
+  # legacy note: validated 2026-09-25 via bash -c: tree exit 2 (5.sqm absent — red BY DESIGN until that block); prohibition clause alone exit 0 on the tree; fixtures: PASS (table on one line + only registrazioneQueries and commented mentions in progetto/), FAIL on `db.elaborazioneQueries…` in progetto/, FAIL when the CREATE line is commented out
 ---
 # 0020 — "Elimina registrazione": a hard delete across the four contexts. One transaction for the rows, file removal after commit, and a pending-cleanup row for crash recovery
 

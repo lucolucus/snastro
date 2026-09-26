@@ -4,6 +4,7 @@ type: spike
 side: app
 repo: .
 depends_on: []
+central: true
 ---
 # Spike / How does the app run Qwen3.5 9B q4_K_M bundled, with no user-installed Ollama?
 
@@ -37,7 +38,13 @@ tactical [INV-S9]) is confirmed. The download is "download only" (user 2026-09-2
 starts it, and no `Riassunto` is created until the model is installed.
 
 ## Unblocks
-(block ids pinned by build-manifest) the `ModelloLinguistico` adapter block, the `:modelli`
-catalogue/download extension for an optional model, the `esegui-riassunto` application-service's
-real-runtime e2e, packaging of the `.dmg`. NOT the gate: the port's fake keeps every other Sintesi
-block buildable.
+- modello-linguistico-llama
+
+(block ids pinned by build-manifest 2026-09-26; `central: true` by user decision 2026-09-26 — it runs at wave 0
+beside scaffold-sintesi.) `modello-linguistico-llama` holds everything the closure protocol decides: the
+`ModelloLinguistico` adapter (`:llm`, JNI vs sidecar), the optional `:modelli` catalogue entry (URL, SHA-256,
+id, licence — AC-S155), the build-time natives and `.dmg` packaging (AC-S156), the `avvio-sintesi` binding of the
+real adapter and the model unload/keep-warm choice (AC-S157), and the real-runtime NFR/e2e (AC-S152..S154).
+NOT the gate and no other block: the port's fake (`ModelloLinguisticoFinto`) keeps every other Sintesi block
+buildable; the provisional constants the spike calibrates (LimiteIngresso, INV-S9 upper bound 2500, the
+Argomento bound) each have one home and are recalibrated through the spike's ADR, never by blocking their owners.

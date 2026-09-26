@@ -11,16 +11,9 @@ consumes:
   - "vista-impostazioni-sintesi"
   - "posizioni-nella-coda"
   - "tec-modelli-ui-facoltativo"
-  - "tec-shell-ui"
   - "ui-kit-sintesi"
-depends_on:
-  - "riassunto-vista"
-  - "impostazioni-sintesi"
-  - "riassumi"
-  - "modifica-lunghezza-massima-riassunto"
-  - "stile-sintesi"
-  - "servizio-modelli-facoltativo"
-  - "posizioni-nella-coda"
+reuses:
+  - "trascrizione-con-parlanti/tec-shell-ui"
 related_adrs:
   - "0003"
   - "0021"
@@ -77,7 +70,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
   - `StatoModelloFacoltativo`: sealed { NonInstallato(dimensioneByte: Long); InDownload(scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreServizioModelli); Installato }
   - `ErroreServizioModelli`: + SpazioInsufficiente(richiestiByte: Long)
   - key `id`: see tec-modelli-facoltativo
-- **tec-shell-ui** (consumed; owner ui-fondamenta (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-shell-ui** (REUSED — boundary `tec-shell-ui` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `ui-fondamenta` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: AggiornamentiVista.cambiamenti: Flow<Cambiamento>; Cambiamento(registrazioneId: RegistrazioneId?) — as pinned in the sibling manifest
 - **ui-kit-sintesi** (consumed; owner stile-sintesi; projection in-process; contract_test `consumer-driven`)
   - `FonteChip`: @Composable fun FonteChip(voceId: Int, nome: String?, inizioMs: Long, modifier: Modifier = Modifier) — not interactive

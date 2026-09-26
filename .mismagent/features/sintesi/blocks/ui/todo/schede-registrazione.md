@@ -7,10 +7,9 @@ wave: 5
 release: "R3"
 module: ":ui (snastro.ui.registrazione)"
 consumes:
-  - "tec-shell-ui"
   - "ui-kit-sintesi"
-depends_on:
-  - "stile-sintesi"
+reuses:
+  - "trascrizione-con-parlanti/tec-shell-ui"
 related_adrs:
   - "0018"
   - "0021"
@@ -36,7 +35,7 @@ Note: Id pinned as `schede-registrazione` (architect/ux called it `schermata-reg
 ## Dependencies
 - **ui-schede-registrazione** (OWNED here; owner schede-registrazione; projection in-process; contract_test `consumer-driven`)
   - `SorgenteRiassuntoS3 (optional presenter input)`: data class(contenuto: @Composable (RegistrazioneId) -> Unit, segno: (RegistrazioneId) -> Flow<SegnoScheda?>) — null in R1/R2 (no tabs)
-- **tec-shell-ui** (consumed; owner ui-fondamenta (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-shell-ui** (REUSED — boundary `tec-shell-ui` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `ui-fondamenta` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: AggiornamentiVista.cambiamenti: Flow<Cambiamento>; Cambiamento(registrazioneId: RegistrazioneId?) — as pinned in the sibling manifest
 - **ui-kit-sintesi** (consumed; owner stile-sintesi; projection in-process; contract_test `consumer-driven`)
   - `FonteChip`: @Composable fun FonteChip(voceId: Int, nome: String?, inizioMs: Long, modifier: Modifier = Modifier) — not interactive

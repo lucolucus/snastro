@@ -1,0 +1,3 @@
+package snastro.documento.adattatori
+
+fun f(f: java.io.File) = java.io.FileReader(f)

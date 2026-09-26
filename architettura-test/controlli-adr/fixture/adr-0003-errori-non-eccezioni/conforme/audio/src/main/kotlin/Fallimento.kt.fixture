@@ -1,0 +1,3 @@
+package snastro.audio
+
+class DecodificaFallita(msg: String) : Exception(msg)

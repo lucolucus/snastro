@@ -1,0 +1,2 @@
+CREATE UNIQUE INDEX elaborazione_aperta_unica ON elaborazione(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso');
+CREATE UNIQUE INDEX parlante_nome_attivo_unico ON parlante(progetto_id, nome_normalizzato) WHERE stato = 'attivo';

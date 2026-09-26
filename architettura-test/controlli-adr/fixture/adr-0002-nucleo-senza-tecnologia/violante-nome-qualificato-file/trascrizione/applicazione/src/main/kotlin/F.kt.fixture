@@ -1,0 +1,3 @@
+package snastro.trascrizione.applicazione
+
+val f = java.io.File("x")

@@ -1,0 +1,4 @@
+package snastro.trascrizione.applicazione
+
+// posizioneInCoda is computed by avvio's shared queue (ADR 0023)
+class StatiElaborazione

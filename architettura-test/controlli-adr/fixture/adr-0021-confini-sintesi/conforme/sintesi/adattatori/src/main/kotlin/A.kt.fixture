@@ -1,0 +1,4 @@
+package snastro.sintesi.adattatori
+
+import snastro.parlanti.applicazione.porte.LettoreNomi
+val q = db.riassuntoQueries

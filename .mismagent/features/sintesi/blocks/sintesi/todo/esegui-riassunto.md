@@ -7,7 +7,6 @@ wave: 4
 release: "R3"
 module: ":sintesi:applicazione (..comandi)"
 consumes:
-  - "kernel-pl"
   - "agg-riassunto"
   - "repo-sintesi"
   - "trascritto-per-sintesi"
@@ -15,7 +14,8 @@ consumes:
   - "tec-modello-linguistico"
   - "disponibilita-modello"
   - "eventi-sintesi"
-depends_on: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0003"
   - "0012"
@@ -47,7 +47,7 @@ Three phases, no transaction around the LLM: (1) claim — inside a short BEGIN 
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
-- AC-S83 Claim: two in_attesa (t1 < t2) → the t1 one becomes in_corso with avviatoAlle = clock and RiassuntoAvviato is published; with primaDi = t1 → Nessuno, nothing written; with t1's id in esclusi → t2 is claimed; empty queue → Nessuno
+- AC-S83 EseguiProssimoRiassunto(esclusi: Set<String>, primaDi: Instant?) claim: two in_attesa (t1 < t2) → the t1 one becomes in_corso with avviatoAlle = clock and RiassuntoAvviato is published; with primaDi = t1 → Nessuno, nothing written; with t1's id in esclusi → t2 is claimed; empty queue → Nessuno
 - AC-S84 The model and both lettori are invoked OUTSIDE any transaction: every test runs with ModelloLinguisticoFinto's transaction guard, which throws if a regression moves the call inside
 - AC-S85 Input: the RichiestaRiassunto carries the IngressoRiassunto built from LettoreTrascritto's Segmenti and LettoreNomi's legend (named Voce → Nome, unattributed → 'Voce n'), the Riassunto's Argomento, and ITS cap — requested at 1500, Progetto changed to 2500 before the run → 1500 is sent
 - AC-S86 Success: the verified content is committed pronto, the previous pronto of that Registrazione is removed in the same transaction, RiassuntoPronto is published; afterwards exactly one pronto exists
@@ -57,7 +57,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 - AC-S89 RecuperaRiassuntiInterrotti: every in_corso row → fallito interrotto + RiassuntoFallito; in_attesa rows untouched; running it twice changes nothing more
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

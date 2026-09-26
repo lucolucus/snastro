@@ -1,0 +1,3 @@
+package snastro.trascrizione.applicazione
+
+data class Stato(val posizioneInCoda: Int?)

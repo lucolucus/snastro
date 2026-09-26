@@ -3,10 +3,9 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by:
-  kind: presence
-  rule: "grep -rniE --include='*.kt' --exclude-dir=build '(secure_delete[[:space:]]*=[[:space:]]*(on|1|true)|setSecureDelete\\(true\\))' persistenza | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-  exigible_from: "persistenza-schema"
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0009-secure-delete.sh
+    from: persistenza-schema
 amended: 2026-09-25   # see "Amendment 2026-09-25 (ADR 0020)"; see "Amendment 2026-09-24 (ADR 0019)"; earlier: "Amendment 2026-09-23 (b)" — R12 superseded by ADR 0012 Amendment (b)
 ---
 # 0009 — `ImprontaVocale` (biometric): stored only in the project DB, purged in the tombstone transaction

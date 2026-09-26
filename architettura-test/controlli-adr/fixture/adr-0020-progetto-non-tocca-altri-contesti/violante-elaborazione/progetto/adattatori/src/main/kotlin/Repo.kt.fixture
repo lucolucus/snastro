@@ -1,0 +1,3 @@
+package snastro.progetto.adattatori
+
+fun f(db: Db) = db.elaborazioneQueries.cancella()

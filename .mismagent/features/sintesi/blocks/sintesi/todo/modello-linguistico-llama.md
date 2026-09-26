@@ -9,8 +9,6 @@ module: ":llm (new) + :sintesi:adattatori (..ml) + catalogue entry in :modelli +
 consumes:
   - "tec-modello-linguistico"
   - "tec-modelli-facoltativo"
-depends_on:
-  - "avvio-sintesi"
 related_adrs:
   - "0004"
   - "0008"

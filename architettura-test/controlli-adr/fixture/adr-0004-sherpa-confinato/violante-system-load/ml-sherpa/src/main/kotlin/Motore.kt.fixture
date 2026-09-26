@@ -1,0 +1,4 @@
+package snastro.mlsherpa
+
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+fun carica() = System.load("/x/libsherpa.dylib")

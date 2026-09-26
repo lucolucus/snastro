@@ -1,0 +1,3 @@
+CREATE TABLE eliminazione_in_sospeso(
+    registrazione_id TEXT NOT NULL PRIMARY KEY
+);

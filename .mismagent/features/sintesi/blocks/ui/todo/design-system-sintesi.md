@@ -7,10 +7,9 @@ wave: 1
 release: "R3"
 module: "features/trascrizione-con-parlanti/UI/design-system/ (README.md, anteprime/RecordingSummary.*, Tabs, FonteChip.*, StatusChip) — docs only, no code"
 consumes: []
-depends_on: []
 related_adrs:
   - "0001"
-ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
 tests_nl_status: "draft"
 consumes_rm: []
 triggers: []
@@ -22,7 +21,7 @@ The DOCS half of the ux-proposal's 'Design-system delta' (split 2026-09-25, user
 
 Note: SPLIT 2026-09-25 (user answer R19-8): docs only, edits the sibling feature's design-system FILES (owner trascrizione-con-parlanti) — allowed only after the rebase. Nothing depends on it.
 
-**ready_when:** Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased — the worker-composer does not dispatch this block before that.
+**ready_when:** SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it.
 
 ## Tasks
 - AC-S42 Docs: anteprime/RecordingSummary.md/.html show the centre-column Riassunto tab with Sommario, Decisioni, Azioni, Questioni aperte, Punti chiave and Fonti chips (the 'Esempio · v2' content replaced; the facts part stays marked part B); Tabs doc lists the centre-column use; README § Layout reads 'il corpo a sinistra con le schede Trascrizione / Riassunto, e il pannello destro con Voci'; new anteprime/FonteChip.md/.html; StatusChip doc lists the Riassunto usage (queued 'In coda · n' / running 'Sto riassumendo' + elapsed / failed 'Non riuscito')

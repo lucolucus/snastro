@@ -6,15 +6,15 @@ side: "app"
 wave: 1
 release: "R3"
 module: ":persistenza (migrations/6.sqm, Riassunto.sq, RiassuntoElemento.sq, RiassuntoFonte.sq, ImpostazioniSintesi.sq)"
-consumes:
-  - "kernel-pl"
-depends_on: []
+consumes: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0006"
   - "0007"
   - "0020"
   - "0022"
-ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
 tests_nl_status: "draft"
 ---
 # persistenza-sintesi — Migrazione 6.sqm (Sintesi) + query .sq
@@ -22,7 +22,7 @@ tests_nl_status: "draft"
 ## What to do
 Own migrations/6.sqm exactly as ADR 0022 §1 (riassunto with the cap column and canonical struttura, riassunto_elemento, riassunto_fonte, impostazioni_sintesi, the two one-line partial unique indexes, the IMMEDIATE FK to registrazione) and the four .sq files with every query the repositories need (incl. the conditional completion UPDATE ... WHERE id = :id AND stato = 'in_corso'). Schema.version 7. Forward-only: 5.sqm (ADR 0020) must already be on the branch.
 
-**ready_when:** Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased — the worker-composer does not dispatch this block before that.
+**ready_when:** SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it.
 
 ## Tasks
 - AC-S36 ADR 0022 enforced_by exits 0 (exigible_from this block); Schema.version = 7
@@ -33,7 +33,7 @@ Own migrations/6.sqm exactly as ADR 0022 §1 (riassunto with the cap column and 
 - AC-S41 The completion UPDATE affects 0 rows on an in_attesa / pronto / fallito / absent row and 1 on an in_corso row; inAttesa is ordered by (richiesto_alle, id); the child deletes run fonte → elemento → riassunto (no cascade)
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

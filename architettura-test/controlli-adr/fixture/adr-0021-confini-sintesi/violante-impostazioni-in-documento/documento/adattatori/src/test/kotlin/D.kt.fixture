@@ -1,0 +1,3 @@
+package d
+
+val q = db.impostazioniSintesiQueries

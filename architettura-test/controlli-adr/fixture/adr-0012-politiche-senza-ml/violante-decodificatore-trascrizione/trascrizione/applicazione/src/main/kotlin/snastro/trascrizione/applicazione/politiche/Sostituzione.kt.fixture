@@ -1,0 +1,4 @@
+package snastro.trascrizione.applicazione.politiche
+
+import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
+class Sostituzione

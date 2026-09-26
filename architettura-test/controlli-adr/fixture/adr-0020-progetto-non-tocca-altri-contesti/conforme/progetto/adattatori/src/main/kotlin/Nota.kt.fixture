@@ -1,0 +1,5 @@
+package snastro.progetto.adattatori
+
+// never db.segmentoQueries here
+ * nor voceQueries
+class Nota

@@ -7,13 +7,11 @@ wave: 2
 release: "R3"
 module: ":avvio (CodaElaborazioni → CodaCondivisa, r1/r2 wiring) + sweep: :trascrizione:applicazione ..letture (StatoRegistrazioneVista, StatiElaborazione), :ui snastro.ui.registrazioni (S2 presenter)"
 consumes:
-  - "kernel-pl"
   - "elaborazioni-in-coda"
   - "posizioni-nella-coda"
-  - "tec-modelli"
-depends_on:
-  - "coda-trascrizione-delta"
-  - "posizioni-nella-coda"
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
+  - "trascrizione-con-parlanti/tec-modelli"
 related_adrs:
   - "0004"
   - "0012"
@@ -52,7 +50,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
   - `RisultatoTentativo`: existing sealed { Nessuno; Avviata(id); Rifiutata(id) }
   - key `order`: (istante, tipo.ordinal, id) — total, deterministic; a single-thread dispatcher (AC-314) claims; the bound passed to a claim = the other source's head instant
   - delivery: in-process, single worker thread; signals coalesced (avanza) + 1 s re-arm; recupera() per source at start and after an escape
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)
@@ -66,7 +64,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
   - `PosizioniNellaCoda (snastro.ui.coda)`: interface { fun istantanea(): PosizioniCoda }
   - `PosizioniCoda`: data class(elaborazioni: Map<RegistrazioneId, Int>, riassunti: Map<RegistrazioneId, Int>) { companion VUOTA } — 1-based over ALL in_attesa items of both kinds in the global order; in_corso not counted
   - key `RegistrazioneId`: exact per kind: at most one open item per Registrazione per kind (INV-4, INV-S2)
-- **tec-modelli** (consumed; owner modelli-provisioning (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-modelli** (REUSED — boundary `tec-modelli` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `modelli-provisioning` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary tec-modelli; extended by tec-modelli-facoltativo
 - coda-trascrizione-delta — build dependency (merged before this block)
 - posizioni-nella-coda — build dependency (merged before this block)

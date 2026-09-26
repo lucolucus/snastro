@@ -1,0 +1,3 @@
+package snastro.avvio
+
+import com.k2fsa.sherpa.onnx.OfflineRecognizer

@@ -1,0 +1,3 @@
+package snastro.avvio
+
+val s = "PRAGMA secure_delete = ON"

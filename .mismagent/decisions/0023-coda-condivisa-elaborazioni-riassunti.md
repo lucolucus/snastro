@@ -3,10 +3,10 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0004 ("one Elaborazione at a time from a serial FIFO queue" → one item at a time from a SHARED FIFO), architecture.md § Pipeline and progress, ADR 0018 Amendment (b) (S2's position counts Riassunti ahead)
 closes_spike: null
-enforced_by:
-  kind: prohibition
-  rule: "! grep -rnE --include='*.kt' --exclude-dir=build 'posizioneInCoda' trascrizione sintesi 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-  exigible_from: "avvio-coda-condivisa"   # block id proposed here, pinned by build-manifest. Validated 2026-09-25 via bash -c: tree exit 1 — red BY DESIGN (StatiElaborazione/StatoRegistrazioneVista still compute posizioneInCoda in Trascrizione; this ADR moves it to :avvio); green once that block removes the field
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0023-posizione-in-coda-fuori-dai-contesti.sh
+    from: avvio-coda-condivisa
+  # legacy note: block id proposed here, pinned by build-manifest. Validated 2026-09-25 via bash -c: tree exit 1 — red BY DESIGN (StatiElaborazione/StatoRegistrazioneVista still compute posizioneInCoda in Trascrizione; this ADR moves it to :avvio); green once that block removes the field
 ---
 # 0023 — One shared FIFO queue for Elaborazioni and Riassunti, owned by `:avvio`; the queue position is computed by the owner
 

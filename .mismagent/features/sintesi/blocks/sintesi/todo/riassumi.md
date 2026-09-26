@@ -7,14 +7,14 @@ wave: 4
 release: "R3"
 module: ":sintesi:applicazione (..comandi)"
 consumes:
-  - "kernel-pl"
   - "agg-riassunto"
   - "agg-lunghezza-massima-riassunto"
   - "repo-sintesi"
   - "trascritto-per-sintesi"
   - "disponibilita-modello"
   - "eventi-sintesi"
-depends_on: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0003"
   - "0007"
@@ -46,7 +46,7 @@ One transaction: read the guards inside it (model Installato, Trascritto present
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
-- AC-S77 Happy path: model Installato, Trascritto present, no open Elaborazione or Riassunto, input under the limit, argomento 'budget', Progetto cap set to 1500 → ONE transaction creates exactly one in_attesa Riassunto (argomento 'budget', cap 1500, richiestoAlle = the injected clock) and returns its id; RiassuntoRichiesto(registrazioneId) is delivered after commit only
+- AC-S77 Riassumi(registrazioneId, argomento?) happy path: model Installato, Trascritto present, no open Elaborazione or Riassunto, input under the limit, argomento 'budget', Progetto cap set to 1500 → ONE transaction creates exactly one in_attesa Riassunto (argomento 'budget', cap 1500, richiestoAlle = the injected clock) and returns its id; RiassuntoRichiesto(registrazioneId) is delivered after commit only
 - AC-S78 Each refusal alone writes nothing and publishes nothing: model NonInstallato / InDownload / DownloadFallito → ModelloNonInstallato; no Trascritto → TrascrittoNonDisponibile; an Elaborazione in_attesa or in_corso → ElaborazioneGiaAperta; a Riassunto in_attesa or in_corso → RiassuntoGiaAperto; labelled input estimated over 28 000 tokens → RegistrazioneTroppoLunga; argomento of 201 characters → ArgomentoTroppoLungo
 - INV-S3 with a pronto and a fallito existing, Riassumi removes the fallito in the same transaction, leaves the pronto byte-identical, creates the in_attesa → afterwards exactly one pronto + one in_attesa
 - AC-S79 A blank argomento ('   ') is stored as absent; the previous Argomento is NOT inherited by a manual Riassumi (only the UI prefills it)
@@ -55,7 +55,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 - AC-S82 Never downloads: DisponibilitaModelloLinguisticoFinta records only stato() calls; the service has no :modelli / ServizioModelli collaborator (constructor test)
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

@@ -6,10 +6,10 @@ side: "app"
 wave: 1
 release: "R3"
 module: ":ui (snastro.ui.modelli, shell sidebar, MessaggiErrore)"
-consumes:
-  - "tec-modelli-ui"
-  - "tec-shell-ui"
-depends_on: []
+consumes: []
+reuses:
+  - "trascrizione-con-parlanti/tec-modelli-ui"
+  - "trascrizione-con-parlanti/tec-shell-ui"
 related_adrs:
   - "0008"
   - "0025"
@@ -37,9 +37,9 @@ Note: REWORK of trascrizione-con-parlanti's schermata-modelli / tec-modelli-ui (
   - `StatoModelloFacoltativo`: sealed { NonInstallato(dimensioneByte: Long); InDownload(scaricatiByte: Long, totaliByte: Long); Errore(errore: ErroreServizioModelli); Installato }
   - `ErroreServizioModelli`: + SpazioInsufficiente(richiestiByte: Long)
   - key `id`: see tec-modelli-facoltativo
-- **tec-modelli-ui** (consumed; owner schermata-modelli (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-modelli-ui** (REUSED — boundary `tec-modelli-ui` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `schermata-modelli` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: ServizioModelli / StatoModelli / ErroreServizioModelli / LicenzaVista as pinned in the sibling manifest; extended by tec-modelli-ui-facoltativo
-- **tec-shell-ui** (consumed; owner ui-fondamenta (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-shell-ui** (REUSED — boundary `tec-shell-ui` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `ui-fondamenta` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: AggiornamentiVista.cambiamenti: Flow<Cambiamento>; Cambiamento(registrazioneId: RegistrazioneId?) — as pinned in the sibling manifest
 
 Sources: ADR 0025 §4, ux-proposal § Sidebar / S5 Modelli; related_adrs 0008, 0010, 0025; tactical-model: features/sintesi/tactical-model.md

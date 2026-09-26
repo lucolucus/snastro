@@ -1,0 +1,3 @@
+package snastro.kernel
+
+interface ErroreDominio

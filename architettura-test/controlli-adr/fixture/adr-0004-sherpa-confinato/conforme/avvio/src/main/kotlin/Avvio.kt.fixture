@@ -1,0 +1,5 @@
+package snastro.avvio
+
+// System.load happens in ml-sherpa only
+/* com.k2fsa */
+class Avvio

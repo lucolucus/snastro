@@ -7,14 +7,14 @@ wave: 4
 release: "R3"
 module: ":sintesi:applicazione (..politiche)"
 consumes:
-  - "kernel-pl"
   - "agg-riassunto"
   - "agg-lunghezza-massima-riassunto"
   - "repo-sintesi"
   - "trascritto-per-sintesi"
   - "disponibilita-modello"
   - "eventi-sintesi"
-depends_on: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0012"
   - "0018"
@@ -39,7 +39,7 @@ Synchronous, inside the re-run's completion transaction (after ADR 0018 §2 save
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
-- AC-S92 r has a pronto (argomento 'A1', t1) and a fallito (argomento 'A2', t2 > t1) → both removed with their elements and Fonti; ONE new in_attesa with argomento 'A2', the Progetto's current cap and richiestoAlle = clock; RiassuntoEliminato(r) and RiassuntoRichiesto(r) published
+- AC-S92 ApplicaSostituzioneTrascrittoSintesi(registrazioneId): r has a pronto (argomento 'A1', t1) and a fallito (argomento 'A2', t2 > t1) → both removed with their elements and Fonti; ONE new in_attesa with argomento 'A2', the Progetto's current cap and richiestoAlle = clock; RiassuntoEliminato(r) and RiassuntoRichiesto(r) published
 - AC-S93 Any state is removed, in_attesa and in_corso included (the in_corso run's completion will then write nothing — esegui-riassunto INV-S8)
 - AC-S94 r has no Riassunto → Ok, nothing created, nothing published (the only automatic Riassumi exists only when one existed)
 - AC-S95 New Trascritto over the input limit, or model not Installato → the old ones are removed, NOTHING is created, only RiassuntoEliminato is published; the policy returns Ok (never Errore for a refused re-summary)
@@ -47,7 +47,7 @@ _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 - AC-S97 A repository Errore is returned unchanged (the completion transaction rolls back; ADR 0018 §6 compensates); ModelloLinguistico is not a collaborator (constructor test)
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

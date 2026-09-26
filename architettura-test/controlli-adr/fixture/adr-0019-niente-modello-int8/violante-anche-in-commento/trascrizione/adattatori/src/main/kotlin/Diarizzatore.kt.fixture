@@ -1,0 +1,4 @@
+package snastro.trascrizione.adattatori
+
+// was model.int8.onnx
+class Diarizzatore

@@ -1,0 +1,5 @@
+[versions]
+javacpp = "1.5.10"
+
+[libraries]
+ffmpeg-platform = { module = "org.bytedeco:ffmpeg-platform", version = "6.1.1-1.5.10" }

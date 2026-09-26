@@ -7,11 +7,11 @@ wave: 4
 release: "R3"
 module: ":sintesi:applicazione (..comandi)"
 consumes:
-  - "kernel-pl"
   - "agg-lunghezza-massima-riassunto"
   - "repo-sintesi"
   - "eventi-sintesi"
-depends_on: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0003"
   - "0012"
@@ -35,12 +35,12 @@ Validate and save the per-Progetto lunghezza massima through its root, publish L
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
-- AC-S90 1500 on a Progetto with no row → saved (trova → 1500), LunghezzaMassimaRiassuntoModificata(progettoId) after commit; a second change to 1800 updates the same row
+- AC-S90 ModificaLunghezzaMassimaRiassunto(progettoId, parole: Int) with 1500 on a Progetto with no row → saved (trova → 1500), LunghezzaMassimaRiassuntoModificata(progettoId) after commit; a second change to 1800 updates the same row
 - AC-S91 299 and 2501 → Errore(LunghezzaMassimaFuoriIntervallo), nothing written, no event
 - INV-S10 an in_attesa, an in_corso and a pronto Riassunto keep their cap (rows identical before/after) and the pronto's superato is unchanged
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

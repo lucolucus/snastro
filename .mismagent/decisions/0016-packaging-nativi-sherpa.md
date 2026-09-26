@@ -4,7 +4,8 @@ status: accepted
 supersedes: null
 closes_spike: packaging-modelli-desktop
 amended: 2026-09-24   # see "Amendment 2026-09-24 — auto-load disabled before the explicit load" (§4)
-enforced_by: "! git ls-files | grep -qE '(\\.(dylib|so|dll|jnilib)|sherpa-onnx[^/]*\\.(jar|tar\\.bz2))$'"
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0016-nativi-non-versionati.sh
 ---
 # 0016 — sherpa-onnx natives: pinned GitHub release assets, a SHA-verified Gradle fetch, Compose app resources, explicit load
 

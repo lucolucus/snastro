@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! find . -name '*.py' -not -path './.mismagent/*' -not -path '*/build/*' -not -path './.gradle/*' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0001-niente-python.sh
 ---
 # 0001 — Stack: all-Kotlin desktop (Compose Multiplatform, JetBrains Runtime 21), no Python
 

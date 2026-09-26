@@ -3,10 +3,11 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with pointers here: ADR 0007 (index elaborazione_completata_unica, INV-4 "at most one completata"); tactical INV-4 "no re-run after completata" / INV-5 wording; ADR 0014 (where the Numero di persone field is offered)
 closes_spike: null
-enforced_by:
-  kind: presence+prohibition
-  rule: "grep -qE '^DROP INDEX elaborazione_completata_unica;$' persistenza/src/main/sqldelight/migrations/3.sqm && ! grep -rnE --include='*.kt' --exclude-dir=build '(attribuzioneQueries|improntaVocaleQueries|parlanteQueries)' trascrizione | grep -q ."
-  exigible_from: "persistenza-ritrascrivi"
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0018-drop-indice-completata.sh
+    from: persistenza-ritrascrivi
+  - check: architettura-test/controlli-adr/adr-0018-trascrizione-non-tocca-parlanti.sh
+    from: persistenza-ritrascrivi
 ---
 # 0018 — "Ritrascrivi": a new Elaborazione over a completata one; the Trascritto is replaced atomically when it completes, and the Parlanti data keyed by the old Voci is purged in the same transaction
 

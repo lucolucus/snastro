@@ -1,0 +1,3 @@
+package snastro.sintesi.applicazione
+
+import snastro.kernel.ParlanteId

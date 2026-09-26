@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(org\\.bytedeco|javax\\.sound)' . | grep -vE '^(\\./)?(audio|architettura-test)/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q . && ! grep -rniE --include='*.kts' --include='*.toml' --include='*.gradle' --exclude-dir=build '(-|_|\")gpl' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*|#)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0005-audio-confinato-senza-gpl.sh
 amended: 2026-09-24   # see "Amendment 2026-09-23" (enforced_by scope: architettura-test) + "Amendment 2026-09-23 (b)" (-gpl clause blind spot; module-path scoping) + "Amendment 2026-09-24" (packaging spike evidence, ADR 0016)
 ---
 # 0005 — Audio: decode once with bytedeco FFmpeg (LGPL) to a derived WAV; play via javax.sound

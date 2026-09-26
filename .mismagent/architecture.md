@@ -135,7 +135,9 @@ allowed because it carries ids and intervals only, never an embedding.)*
 1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).
 2. Konsist in `:architettura-test` (imports/packages/naming — `code-rules.md`).
 3. detekt (style, error handling, `!!`) with `allWarningsAsErrors`.
-4. ADR `enforced_by` rules (run by `mismagent-verifier`).
+4. ADR `enforced_by` checks — versioned POSIX `sh` scripts in `architettura-test/controlli-adr/` (`{check, from}` form,
+   migrated 2026-09-26), run by `:architettura-test`'s `ControlliAdrTest`: red-green on each check's fixtures, then on the
+   tree (a check whose `from` block is not yet integrated is reported, not enforced).
 
 ## Amendment 2026-09-23 (build-manifest reconciliation, feature trascrizione-con-parlanti)
 - **R9 kernel list** (row above): adds `ElaborazioneId`, `RiferimentoAudio`, `CampioniAudio` (shared by

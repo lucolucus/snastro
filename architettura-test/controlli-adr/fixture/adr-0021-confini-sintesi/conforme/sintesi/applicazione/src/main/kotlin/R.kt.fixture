@@ -1,0 +1,7 @@
+package snastro.sintesi.applicazione
+
+// ParlanteId never crosses into Sintesi
+/**
+ * not snastro.parlanti.dominio.Parlante
+ */
+val x = ParlanteIdentita()

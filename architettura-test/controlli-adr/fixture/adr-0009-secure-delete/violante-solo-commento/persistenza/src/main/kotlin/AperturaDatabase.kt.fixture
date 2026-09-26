@@ -1,0 +1,5 @@
+package snastro.persistenza
+
+// PRAGMA secure_delete = ON
+ * secure_delete=ON
+class A

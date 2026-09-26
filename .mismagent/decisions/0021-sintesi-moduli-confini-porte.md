@@ -3,10 +3,9 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: architecture.md (module map + edges + boundaries), ADR 0006 enforced_by (deny-list gains `llm`), ADR 0018 §5 (TrascrittoSostituito gains a Sintesi synchronous consumer), code-rules.md CR-3 / CR-10, dev-architecture-app.md (physical deletions list)
 closes_spike: null
-enforced_by:
-  kind: prohibition
-  rule: "! grep -rnE --include='*.kt' --exclude-dir=build '(ParlanteId([^A-Za-z0-9_]|$)|snastro\\.parlanti\\.)' sintesi/dominio/src/main sintesi/applicazione/src/main 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q . && ! grep -rnE --include='*.kt' --exclude-dir=build '(progettoQueries|registrazioneQueries|eliminazioneInSospesoQueries|elaborazioneQueries|trascrittoQueries|voceQueries|segmentoQueries|attribuzioneQueries|improntaVocaleQueries|parlanteQueries)' sintesi 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q . && ! grep -rnE --include='*.kt' --exclude-dir=build '(riassunto[A-Za-z]*Queries|impostazioniSintesiQueries)' progetto trascrizione parlanti documento 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
-  exigible_from: null   # green on the tree today (vacuous: no sintesi/ yet); validated 2026-09-25 via bash -c — tree exit 0; fixtures: PASS with `ParlanteId` only in `//`/KDoc lines, with `ParlanteIdentita`, with a `snastro.parlanti.applicazione` import in sintesi/adattatori, with `riassuntoQueries` in sintesi/; FAIL on `import snastro.kernel.ParlanteId` in sintesi/applicazione, on a fully-qualified `snastro.parlanti.…` use in sintesi/dominio, on `segmentoQueries` in sintesi/adattatori, on `riassuntoFonteQueries` in trascrizione/
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0021-confini-sintesi.sh
+  # legacy note: green on the tree today (vacuous: no sintesi/ yet); validated 2026-09-25 via bash -c — tree exit 0; fixtures: PASS with `ParlanteId` only in `//`/KDoc lines, with `ParlanteIdentita`, with a `snastro.parlanti.applicazione` import in sintesi/adattatori, with `riassuntoQueries` in sintesi/; FAIL on `import snastro.kernel.ParlanteId` in sintesi/applicazione, on a fully-qualified `snastro.parlanti.…` use in sintesi/dominio, on `segmentoQueries` in sintesi/adattatori, on `riassuntoFonteQueries` in trascrizione/
 ---
 # 0021 — Sintesi: modules, in-process boundaries and ports
 

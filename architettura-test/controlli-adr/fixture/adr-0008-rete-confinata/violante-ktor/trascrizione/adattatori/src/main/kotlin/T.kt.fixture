@@ -1,0 +1,3 @@
+package snastro.trascrizione.adattatori
+
+import io.ktor.client.HttpClient

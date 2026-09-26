@@ -7,28 +7,17 @@ wave: 6
 release: "R3"
 module: ":avvio (snastro.avvio.r3)"
 consumes:
-  - "kernel-pl"
   - "coda-condivisa"
   - "riassunti-in-coda"
   - "eventi-sintesi"
   - "posizioni-nella-coda"
   - "ui-schede-registrazione"
-  - "tec-shell-ui"
   - "disponibilita-modello"
   - "tec-modello-linguistico"
-depends_on:
-  - "avvio-coda-condivisa"
-  - "modello-facoltativo-avvio"
-  - "esegui-riassunto"
-  - "riassunti-in-attesa"
-  - "abbonato-trascrizione-sintesi"
-  - "abbonato-progetto-sintesi"
-  - "lettore-trascritto-da-trascrizione-sintesi"
-  - "lettore-nomi-da-parlanti-sintesi"
-  - "repository-sql-sintesi"
-  - "schede-registrazione"
-  - "scheda-riassunto"
-  - "dialogo-elimina-riassunto"
+  - "vista-riassunto"
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
+  - "trascrizione-con-parlanti/tec-shell-ui"
 related_adrs:
   - "0012"
   - "0020"
@@ -36,7 +25,7 @@ related_adrs:
   - "0023"
   - "0024"
   - "0025"
-ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
 model_hint: "deep"
 tests_nl_status: "draft"
 ---
@@ -47,7 +36,7 @@ The R3 composition on top of R2 (ADR 0021 §10): registers all synchronous subsc
 
 Note: Release R3 = the set of blocks with release ≤ R3. The placeholder ModelloLinguistico keeps R3 buildable and demonstrable (tab, queue, download UI) before the spike; R3 is shippable only after modello-linguistico-llama.
 
-**ready_when:** Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased — the worker-composer does not dispatch this block before that.
+**ready_when:** SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it.
 
 ## Tasks
 - AC-S143 The R3 graph registers the five synchronous subscribers before offering any command (test on the built graph: dispatcher inspection); R0–R2 compositions show no Riassunto tab and never create a riassunto row
@@ -61,7 +50,10 @@ Note: Release R3 = the set of blocks with release ≤ R3. The placeholder Modell
 - AC-S151 --smoke with a fixture holding a pronto Riassunto captures S3 with the Riassunto tab selected to avvio/build/smoke/ and exits 0
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **vista-riassunto** (consumed; owner riassunto-vista; projection in-process; contract_test `consumer-driven`)
+  - `RiassuntoVista`: ≡ riassunto-vista.view_shape (one Published Language written once; rule 16) — RiassuntoVista.di(r): RiassuntoVista? via class RiassuntoVisteLettura (..letture)
+  - key `voceId / segmentoId in the view`: Int values of the CURRENT Trascritto generation
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)
@@ -94,7 +86,7 @@ Note: Release R3 = the set of blocks with release ≤ R3. The placeholder Modell
   - key `RegistrazioneId`: exact per kind: at most one open item per Registrazione per kind (INV-4, INV-S2)
 - **ui-schede-registrazione** (consumed; owner schede-registrazione; projection in-process; contract_test `consumer-driven`)
   - `SorgenteRiassuntoS3 (optional presenter input)`: data class(contenuto: @Composable (RegistrazioneId) -> Unit, segno: (RegistrazioneId) -> Flow<SegnoScheda?>) — null in R1/R2 (no tabs)
-- **tec-shell-ui** (consumed; owner ui-fondamenta (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-shell-ui** (REUSED — boundary `tec-shell-ui` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `ui-fondamenta` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: AggiornamentiVista.cambiamenti: Flow<Cambiamento>; Cambiamento(registrazioneId: RegistrazioneId?) — as pinned in the sibling manifest
 - **disponibilita-modello** (consumed; owner disponibilita-modello-linguistico; projection in-process; contract_test `consumer-driven`)
   - `DisponibilitaModelloLinguistico`: interface { fun stato(): StatoModelloLinguistico }

@@ -1,0 +1,3 @@
+package snastro.documento.adattatori
+
+fun f(p: java.nio.file.Path) = p.toFile().writeText("x")

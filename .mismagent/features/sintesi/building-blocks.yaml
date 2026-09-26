@@ -14,11 +14,20 @@
 # facoltativo, servizio-modelli-facoltativo, schede-registrazione, dialogo-elimina-riassunto) are Sintesi blocks here; the sibling
 # manifest is NOT edited (its superseded ACs are named in each block's notes).
 # ready_when: blocks needing "Elimina registrazione" code (RegistrazioneEliminata, 5.sqm, the S2 dialog, the design-system files)
-# wait for: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"; the real LLM adapter waits for the runtime-llm-in-app spike ADR. Everything else builds against the Finte.
+# waited for: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased" (SATISFIED 2026-09-26, main 6daba4e); the real LLM adapter waits for the runtime-llm-in-app spike ADR. Everything else builds against the Finte.
 # AMENDED 2026-09-25 (user checkpoint answers): high-value tests_nl CONFIRMED; R19-2 'In coda · n' everywhere; R19-8 design-system
 # delta SPLIT into stile-sintesi (code, ungated, owner of ui-kit-sintesi) + design-system-sintesi (docs only, gated) — schede-registrazione
 # and scheda-riassunto lose their rebase gate (they need no 5.sqm / RegistrazioneEliminata); R19-1/3/4/5/6/7 defaults accepted.
-# `depends_on` = non-boundary build dependencies. `external: true` boundaries are owned by merged blocks of trascrizione-con-parlanti.
+# AMENDED 2026-09-26 (build-manifest, mismAgent 0.22, bounce from worker-composer readiness; integration/sintesi rebased on main 6daba4e):
+# - REUSED boundaries: kernel-pl, tec-modelli, tec-modelli-ui, tec-shell-ui, eventi-elaborazione and eventi-progetto (RegistrazioneEliminata,
+#   formerly redeclared here as eventi-progetto-eliminazione) belong to trascrizione-con-parlanti, whose owner blocks are already on main.
+#   A boundary an earlier feature introduced is reused, never redeclared: they are no longer rows of `boundaries:` nor `consumes` entries
+#   (a `consumes` owner must be a block of THIS manifest). Each consuming row lists them in `reuses: [<feature>/<boundary-id>]`, and its
+#   block file keeps their pins under ## Dependencies (marked REUSED). They impose no build order: their owners are already integrated.
+# - Build order: `depends_on` became `after:` (the only order the tool reads); `build_order:` removed (read by nothing — the waves stay on
+#   each row's `wave`). The runtime-llm-in-app spike is central (wave 0 beside scaffold-sintesi, user decision 2026-09-26) and its
+#   ## Unblocks holds modello-linguistico-llama.
+# - Every `ready_when` on 'Elimina registrazione merged' is SATISFIED (ADR 0020 delta on main 6daba4e).
 feature: sintesi
 profile: .mismagent/profile.md
 ac_scheme: "AC-S1..AC-S157 Sintesi-local (assigned in manifest order 2026-09-25); INV-S1..INV-S10 from features/sintesi/tactical-model.md"
@@ -32,7 +41,6 @@ blocks:
     module: "settings.gradle.kts, build.gradle.kts (allowedModuleEdges), :sintesi (path holder), :sintesi:dominio, :sintesi:applicazione (+ java-test-fixtures), :sintesi:adattatori, :ui/:avvio/:architettura-test build files, :architettura-test (Konsist)"
     title: "Moduli Sintesi, archi ammessi e regole Konsist (scheletro incrementale)"
     consumes: []
-    depends_on: []
     related_adrs:
       - "0002"
       - "0006"
@@ -55,9 +63,9 @@ blocks:
     release: "R3"
     module: ":sintesi:dominio"
     title: "Aggregato Riassunto + Verifica delle fonti + guardie pure (Riassumibilita, IngressoRiassunto, LimiteIngresso)"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0003"
       - "0021"
@@ -113,9 +121,9 @@ blocks:
     release: "R3"
     module: ":sintesi:applicazione (..porte) + testFixtures"
     title: "Porta LettoreTrascritto di Sintesi (+ Contratto + Finta)"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0002"
       - "0021"
@@ -134,9 +142,9 @@ blocks:
     release: "R3"
     module: ":sintesi:applicazione (..porte) + testFixtures"
     title: "Porta LettoreNomi di Sintesi (+ Contratto + Finta)"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0002"
       - "0021"
@@ -154,9 +162,9 @@ blocks:
     release: "R3"
     module: ":sintesi:applicazione (..porte) + testFixtures"
     title: "Porta ModelloLinguistico (runtime-neutrale) + ErroreApplicazioneSintesi + Finta con guardia di transazione"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0012"
       - "0021"
@@ -178,9 +186,9 @@ blocks:
     release: "R3"
     module: ":sintesi:applicazione (..porte) + testFixtures"
     title: "Porta DisponibilitaModelloLinguistico (+ Contratto + Finta)"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0021"
       - "0025"
@@ -198,9 +206,9 @@ blocks:
     release: "R3"
     module: ":trascrizione:applicazione (..comandi, ..letture)"
     title: "Rework Trascrizione per la coda condivisa: EseguiProssimaElaborazione.nonDopo + ElaborazioniInAttesa"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0012"
       - "0018"
@@ -210,7 +218,7 @@ blocks:
     tests_nl_status: "confirmed"
     tests_nl:
       - "AC-S20 With nonDopo = null the behaviour is unchanged: the existing EseguiProssimaElaborazione tests (AC-68, AC-313 exclusion, AC-314, Ritrascrivi, NumeroPersone) stay green unmodified"
-      - "AC-S21 Head creataAlle = 10:00:00.000: nonDopo 10:00:00.000 → claimed (≤ is inclusive); nonDopo 09:59:59.999 → Nessuno, nothing written, no event, the head stays in_attesa"
+      - "AC-S21 EseguiProssimaElaborazione (+ nonDopo: Instant? = null) — head creataAlle = 10:00:00.000: nonDopo 10:00:00.000 → claimed (≤ is inclusive); nonDopo 09:59:59.999 → Nessuno, nothing written, no event, the head stays in_attesa"
       - "AC-S22 The bound is honoured INSIDE the claim transaction: the head read before is cancelled (AnnullaElaborazione) before the claim, the next in_attesa has creataAlle > nonDopo → Nessuno (not a claim of the newer item)"
       - "AC-S23 ElaborazioniInAttesa.elenco() returns (elaborazioneId, registrazioneId, creataAlle) of in_attesa Elaborazioni only, FIFO by (creataAlle, id); in_corso / completata / fallita rows never appear; an annullata (deleted) one disappears"
     notes: "REWORK of trascrizione-con-parlanti code (esegui-elaborazione, stati-elaborazione owners). The sibling manifest is not edited; this block carries the new ACs."
@@ -223,9 +231,9 @@ blocks:
     release: "R3"
     module: ":ui (snastro.ui.coda) + test fixture"
     title: "Porta PosizioniNellaCoda (:ui) — posizione nella coda condivisa, calcolata dal proprietario"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0023"
     tests_nl_status: "draft"
@@ -241,9 +249,9 @@ blocks:
     release: "R3"
     module: ":modelli"
     title: "Rework provisioning: voce di catalogo facoltativa, installata/scarica(id), spostamento FILE, controllo spazio"
-    consumes:
-      - "tec-modelli"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/tec-modelli"
     related_adrs:
       - "0008"
       - "0016"
@@ -266,10 +274,10 @@ blocks:
     release: "R3"
     module: ":ui (snastro.ui.modelli, shell sidebar, MessaggiErrore)"
     title: "Rework ServizioModelli (:ui): download facoltativo, stato del modello di linguaggio in barra laterale"
-    consumes:
-      - "tec-modelli-ui"
-      - "tec-shell-ui"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/tec-modelli-ui"
+      - "trascrizione-con-parlanti/tec-shell-ui"
     related_adrs:
       - "0008"
       - "0025"
@@ -292,15 +300,15 @@ blocks:
     release: "R3"
     module: ":persistenza (migrations/6.sqm, Riassunto.sq, RiassuntoElemento.sq, RiassuntoFonte.sq, ImpostazioniSintesi.sq)"
     title: "Migrazione 6.sqm (Sintesi) + query .sq"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0006"
       - "0007"
       - "0020"
       - "0022"
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+    ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
     tests_nl_status: "draft"
     tests_nl:
       - "AC-S36 ADR 0022 enforced_by exits 0 (exigible_from this block); Schema.version = 7"
@@ -318,9 +326,9 @@ blocks:
     release: "R3"
     module: ":ui (snastro.ui.stile)"
     title: "Ui-kit per il Riassunto: FonteChip, GruppoFonti, SchedeSn, testo di ChipStato"
-    consumes:
-      - "kernel-pl"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0001"
       - "0002"
@@ -344,10 +352,9 @@ blocks:
     module: "features/trascrizione-con-parlanti/UI/design-system/ (README.md, anteprime/RecordingSummary.*, Tabs, FonteChip.*, StatusChip) — docs only, no code"
     title: "Delta del design system (solo documenti): RecordingSummary, Tabs, README Layout, FonteChip, StatusChip"
     consumes: []
-    depends_on: []
     related_adrs:
       - "0001"
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+    ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
     consumes_rm: []
     triggers: []
     tests_nl_status: "draft"
@@ -365,9 +372,9 @@ blocks:
     module: ":sintesi:dominio"
     title: "Aggregato LunghezzaMassimaRiassunto (impostazione per Progetto) + VO LunghezzaMassimaParole"
     consumes:
-      - "kernel-pl"
       - "agg-riassunto"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0021"
       - "0022"
@@ -394,8 +401,8 @@ blocks:
     title: "Adattatore LettoreTrascrittoDaTrascrizione (su VociDelTrascritto + StatiElaborazione)"
     consumes:
       - "trascritto-per-sintesi"
-      - "kernel-pl"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0002"
       - "0018"
@@ -416,8 +423,8 @@ blocks:
     title: "Adattatore LettoreNomiDaParlanti (su NomiDelleVoci)"
     consumes:
       - "nomi-per-sintesi"
-      - "kernel-pl"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0002"
       - "0021"
@@ -435,11 +442,12 @@ blocks:
     module: ":avvio (CodaElaborazioni → CodaCondivisa, r1/r2 wiring) + sweep: :trascrizione:applicazione ..letture (StatoRegistrazioneVista, StatiElaborazione), :ui snastro.ui.registrazioni (S2 presenter)"
     title: "Coda FIFO condivisa multi-sorgente (CodaCondivisa) + PosizioniNellaCoda + rimozione di posizioneInCoda"
     consumes:
-      - "kernel-pl"
       - "elaborazioni-in-coda"
       - "posizioni-nella-coda"
-      - "tec-modelli"
-    depends_on:
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
+      - "trascrizione-con-parlanti/tec-modelli"
+    after:
       - "coda-trascrizione-delta"
       - "posizioni-nella-coda"
     related_adrs:
@@ -471,10 +479,10 @@ blocks:
     module: ":sintesi:applicazione (..porte, ..eventi) + testFixtures"
     title: "Porte di persistenza Sintesi (RiassuntoRepository, LunghezzaMassimaRiassuntoRepository) + eventi pubblicati"
     consumes:
-      - "kernel-pl"
       - "agg-riassunto"
       - "agg-lunghezza-massima-riassunto"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0007"
       - "0012"
@@ -502,8 +510,9 @@ blocks:
       - "tec-modelli-facoltativo"
       - "tec-modelli-ui-facoltativo"
       - "disponibilita-modello"
-      - "kernel-pl"
-    depends_on:
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
+    after:
       - "modelli-provisioning-facoltativo"
       - "servizio-modelli-facoltativo"
       - "disponibilita-modello-linguistico"
@@ -527,14 +536,14 @@ blocks:
     module: ":sintesi:applicazione (..comandi)"
     title: "Comando Riassumi"
     consumes:
-      - "kernel-pl"
       - "agg-riassunto"
       - "agg-lunghezza-massima-riassunto"
       - "repo-sintesi"
       - "trascritto-per-sintesi"
       - "disponibilita-modello"
       - "eventi-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0003"
       - "0007"
@@ -552,7 +561,7 @@ blocks:
       - "Riassumi(registrazioneId, argomento?)"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "AC-S77 Happy path: model Installato, Trascritto present, no open Elaborazione or Riassunto, input under the limit, argomento 'budget', Progetto cap set to 1500 → ONE transaction creates exactly one in_attesa Riassunto (argomento 'budget', cap 1500, richiestoAlle = the injected clock) and returns its id; RiassuntoRichiesto(registrazioneId) is delivered after commit only"
+      - "AC-S77 Riassumi(registrazioneId, argomento?) happy path: model Installato, Trascritto present, no open Elaborazione or Riassunto, input under the limit, argomento 'budget', Progetto cap set to 1500 → ONE transaction creates exactly one in_attesa Riassunto (argomento 'budget', cap 1500, richiestoAlle = the injected clock) and returns its id; RiassuntoRichiesto(registrazioneId) is delivered after commit only"
       - "AC-S78 Each refusal alone writes nothing and publishes nothing: model NonInstallato / InDownload / DownloadFallito → ModelloNonInstallato; no Trascritto → TrascrittoNonDisponibile; an Elaborazione in_attesa or in_corso → ElaborazioneGiaAperta; a Riassunto in_attesa or in_corso → RiassuntoGiaAperto; labelled input estimated over 28 000 tokens → RegistrazioneTroppoLunga; argomento of 201 characters → ArgomentoTroppoLungo"
       - "INV-S3 with a pronto and a fallito existing, Riassumi removes the fallito in the same transaction, leaves the pronto byte-identical, creates the in_attesa → afterwards exactly one pronto + one in_attesa"
       - "AC-S79 A blank argomento ('   ') is stored as absent; the previous Argomento is NOT inherited by a manual Riassumi (only the UI prefills it)"
@@ -569,7 +578,6 @@ blocks:
     module: ":sintesi:applicazione (..comandi)"
     title: "EseguiProssimoRiassunto + RecuperaRiassuntiInterrotti"
     consumes:
-      - "kernel-pl"
       - "agg-riassunto"
       - "repo-sintesi"
       - "trascritto-per-sintesi"
@@ -577,7 +585,8 @@ blocks:
       - "tec-modello-linguistico"
       - "disponibilita-modello"
       - "eventi-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0003"
       - "0012"
@@ -595,7 +604,7 @@ blocks:
       - "RecuperaRiassuntiInterrotti"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "AC-S83 Claim: two in_attesa (t1 < t2) → the t1 one becomes in_corso with avviatoAlle = clock and RiassuntoAvviato is published; with primaDi = t1 → Nessuno, nothing written; with t1's id in esclusi → t2 is claimed; empty queue → Nessuno"
+      - "AC-S83 EseguiProssimoRiassunto(esclusi: Set<String>, primaDi: Instant?) claim: two in_attesa (t1 < t2) → the t1 one becomes in_corso with avviatoAlle = clock and RiassuntoAvviato is published; with primaDi = t1 → Nessuno, nothing written; with t1's id in esclusi → t2 is claimed; empty queue → Nessuno"
       - "AC-S84 The model and both lettori are invoked OUTSIDE any transaction: every test runs with ModelloLinguisticoFinto's transaction guard, which throws if a regression moves the call inside"
       - "AC-S85 Input: the RichiestaRiassunto carries the IngressoRiassunto built from LettoreTrascritto's Segmenti and LettoreNomi's legend (named Voce → Nome, unattributed → 'Voce n'), the Riassunto's Argomento, and ITS cap — requested at 1500, Progetto changed to 2500 before the run → 1500 is sent"
       - "AC-S86 Success: the verified content is committed pronto, the previous pronto of that Registrazione is removed in the same transaction, RiassuntoPronto is published; afterwards exactly one pronto exists"
@@ -613,11 +622,11 @@ blocks:
     module: ":sintesi:applicazione (..comandi)"
     title: "Comando ModificaLunghezzaMassimaRiassunto"
     consumes:
-      - "kernel-pl"
       - "agg-lunghezza-massima-riassunto"
       - "repo-sintesi"
       - "eventi-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0003"
       - "0012"
@@ -629,7 +638,7 @@ blocks:
       - "ModificaLunghezzaMassimaRiassunto(progettoId, parole: Int)"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "AC-S90 1500 on a Progetto with no row → saved (trova → 1500), LunghezzaMassimaRiassuntoModificata(progettoId) after commit; a second change to 1800 updates the same row"
+      - "AC-S90 ModificaLunghezzaMassimaRiassunto(progettoId, parole: Int) with 1500 on a Progetto with no row → saved (trova → 1500), LunghezzaMassimaRiassuntoModificata(progettoId) after commit; a second change to 1800 updates the same row"
       - "AC-S91 299 and 2501 → Errore(LunghezzaMassimaFuoriIntervallo), nothing written, no event"
       - "INV-S10 an in_attesa, an in_corso and a pronto Riassunto keep their cap (rows identical before/after) and the pronto's superato is unchanged"
     sources: "tactical-model § Commands (ModificaLunghezzaMassimaRiassunto), INV-S9/S10"
@@ -642,14 +651,14 @@ blocks:
     module: ":sintesi:applicazione (..politiche)"
     title: "Policy su TrascrittoSostituito: elimina i Riassunti e riaccoda un Riassumi automatico"
     consumes:
-      - "kernel-pl"
       - "agg-riassunto"
       - "agg-lunghezza-massima-riassunto"
       - "repo-sintesi"
       - "trascritto-per-sintesi"
       - "disponibilita-modello"
       - "eventi-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0012"
       - "0018"
@@ -662,7 +671,7 @@ blocks:
       - "ApplicaSostituzioneTrascrittoSintesi(registrazioneId)"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "AC-S92 r has a pronto (argomento 'A1', t1) and a fallito (argomento 'A2', t2 > t1) → both removed with their elements and Fonti; ONE new in_attesa with argomento 'A2', the Progetto's current cap and richiestoAlle = clock; RiassuntoEliminato(r) and RiassuntoRichiesto(r) published"
+      - "AC-S92 ApplicaSostituzioneTrascrittoSintesi(registrazioneId): r has a pronto (argomento 'A1', t1) and a fallito (argomento 'A2', t2 > t1) → both removed with their elements and Fonti; ONE new in_attesa with argomento 'A2', the Progetto's current cap and richiestoAlle = clock; RiassuntoEliminato(r) and RiassuntoRichiesto(r) published"
       - "AC-S93 Any state is removed, in_attesa and in_corso included (the in_corso run's completion will then write nothing — esegui-riassunto INV-S8)"
       - "AC-S94 r has no Riassunto → Ok, nothing created, nothing published (the only automatic Riassumi exists only when one existed)"
       - "AC-S95 New Trascritto over the input limit, or model not Installato → the old ones are removed, NOTHING is created, only RiassuntoEliminato is published; the policy returns Ok (never Errore for a refused re-summary)"
@@ -678,10 +687,10 @@ blocks:
     module: ":sintesi:applicazione (..politiche)"
     title: "Policy su RegistrazioneEliminata: elimina ogni Riassunto (senza veto)"
     consumes:
-      - "kernel-pl"
       - "repo-sintesi"
       - "eventi-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0012"
       - "0020"
@@ -692,7 +701,7 @@ blocks:
       - "ApplicaEliminazioneRegistrazioneSintesi(registrazioneId)"
     tests_nl_status: "confirmed"
     tests_nl:
-      - "AC-S98 r with a pronto + an in_attesa, and (separate case) a pronto + an in_corso, and (separate case) a fallito → every row of r removed with its elements and Fonti; the Riassunti of another Registrazione untouched (byte-identical)"
+      - "AC-S98 ApplicaEliminazioneRegistrazioneSintesi(registrazioneId): r with a pronto + an in_attesa, and (separate case) a pronto + an in_corso, and (separate case) a fallito → every row of r removed with its elements and Fonti; the Riassunti of another Registrazione untouched (byte-identical)"
       - "AC-S99 RiassuntoEliminato(r) is published iff at least one was removed; r with none → Ok, nothing published"
       - "AC-S100 Never vetoes: an in_corso Riassunto → Ok (the deletion proceeds; the run's completion will write nothing)"
       - "AC-S101 A repository Errore is returned unchanged so the deleting transaction rolls back"
@@ -706,13 +715,13 @@ blocks:
     module: ":sintesi:applicazione (..letture)"
     title: "Read-model RiassuntoVista (per Registrazione)"
     consumes:
-      - "kernel-pl"
       - "agg-riassunto"
       - "repo-sintesi"
       - "trascritto-per-sintesi"
       - "nomi-per-sintesi"
       - "disponibilita-modello"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0021"
       - "0022"
@@ -758,10 +767,10 @@ blocks:
     module: ":sintesi:applicazione (..letture)"
     title: "Read-model ImpostazioniSintesiVista (per Progetto)"
     consumes:
-      - "kernel-pl"
       - "agg-lunghezza-massima-riassunto"
       - "repo-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0022"
     view_shape:
@@ -782,9 +791,9 @@ blocks:
     module: ":sintesi:applicazione (..letture)"
     title: "Read-model RiassuntiInAttesa (elenco per la coda condivisa)"
     consumes:
-      - "kernel-pl"
       - "repo-sintesi"
-    depends_on: []
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
     related_adrs:
       - "0021"
       - "0023"
@@ -807,8 +816,11 @@ blocks:
     title: "RiassuntoRepositorySql + LunghezzaMassimaRiassuntoRepositorySql"
     consumes:
       - "repo-sintesi"
-      - "kernel-pl"
-    depends_on:
+      - "agg-riassunto"
+      - "agg-lunghezza-massima-riassunto"
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
+    after:
       - "persistenza-sintesi"
     related_adrs:
       - "0006"
@@ -816,7 +828,7 @@ blocks:
       - "0012"
       - "0021"
       - "0022"
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+    ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
     tests_nl_status: "draft"
     tests_nl:
       - "AC-S111 RiassuntoRepositoryContratto and LunghezzaMassimaRiassuntoRepositoryContratto pass against the SQL implementations on databaseInMemoria()"
@@ -832,9 +844,10 @@ blocks:
     release: "R3"
     module: ":sintesi:adattatori (..eventi)"
     title: "Abbonato sincrono a TrascrittoSostituito (Sintesi)"
-    consumes:
-      - "eventi-elaborazione"
-    depends_on:
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/eventi-elaborazione"
+    after:
       - "sostituzione-trascritto-sintesi-policy"
     related_adrs:
       - "0012"
@@ -853,15 +866,16 @@ blocks:
     release: "R3"
     module: ":sintesi:adattatori (..eventi)"
     title: "Abbonato sincrono a RegistrazioneEliminata (Sintesi)"
-    consumes:
-      - "eventi-progetto-eliminazione"
-    depends_on:
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/eventi-progetto"
+    after:
       - "eliminazione-registrazione-sintesi-policy"
     related_adrs:
       - "0012"
       - "0020"
       - "0024"
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+    ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
     tests_nl_status: "draft"
     tests_nl:
       - "AC-S117 registra() adds exactly one synchronous subscriber for RegistrazioneEliminata; publishing it inside a fake transaction calls the policy once with its registrazioneId"
@@ -876,9 +890,10 @@ blocks:
     module: ":ui (snastro.ui.registrazione)"
     title: "S3 · schede Trascrizione | Riassunto nella colonna centrale + precedenza dei banner"
     consumes:
-      - "tec-shell-ui"
       - "ui-kit-sintesi"
-    depends_on:
+    reuses:
+      - "trascrizione-con-parlanti/tec-shell-ui"
+    after:
       - "stile-sintesi"
     related_adrs:
       - "0018"
@@ -908,9 +923,10 @@ blocks:
       - "vista-impostazioni-sintesi"
       - "posizioni-nella-coda"
       - "tec-modelli-ui-facoltativo"
-      - "tec-shell-ui"
       - "ui-kit-sintesi"
-    depends_on:
+    reuses:
+      - "trascrizione-con-parlanti/tec-shell-ui"
+    after:
       - "riassunto-vista"
       - "impostazioni-sintesi"
       - "riassumi"
@@ -958,13 +974,13 @@ blocks:
     release: "R3"
     module: ":ui (snastro.ui.registrazioni — the S2 Elimina dialog texts)"
     title: "Testo del dialogo Elimina registrazione: '… il riassunto …' (ADR 0024 §3)"
-    consumes:
-      - "tec-shell-ui"
-    depends_on: []
+    consumes: []
+    reuses:
+      - "trascrizione-con-parlanti/tec-shell-ui"
     related_adrs:
       - "0020"
       - "0024"
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+    ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
     consumes_rm: []
     triggers: []
     tests_nl_status: "draft"
@@ -982,16 +998,18 @@ blocks:
     module: ":avvio (snastro.avvio.r3)"
     title: "Composizione R3 'Sintesi': abbonati, coda condivisa con la sorgente Riassunto, scheda Riassunto, e2e"
     consumes:
-      - "kernel-pl"
       - "coda-condivisa"
       - "riassunti-in-coda"
       - "eventi-sintesi"
       - "posizioni-nella-coda"
       - "ui-schede-registrazione"
-      - "tec-shell-ui"
       - "disponibilita-modello"
       - "tec-modello-linguistico"
-    depends_on:
+      - "vista-riassunto"
+    reuses:
+      - "trascrizione-con-parlanti/kernel-pl"
+      - "trascrizione-con-parlanti/tec-shell-ui"
+    after:
       - "avvio-coda-condivisa"
       - "modello-facoltativo-avvio"
       - "esegui-riassunto"
@@ -1011,7 +1029,7 @@ blocks:
       - "0023"
       - "0024"
       - "0025"
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+    ready_when: "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
     model_hint: "deep"
     tests_nl_status: "draft"
     tests_nl:
@@ -1037,7 +1055,7 @@ blocks:
     consumes:
       - "tec-modello-linguistico"
       - "tec-modelli-facoltativo"
-    depends_on:
+    after:
       - "avvio-sintesi"
     related_adrs:
       - "0004"
@@ -1060,45 +1078,6 @@ blocks:
     notes: "GATED by the open spike runtime-llm-in-app; spikes qualita-riassunto (schema v1/prompt, cap adherence, [300, 2500]) and filtro-fuori-tema (Argomento wording/bound) refine its prompt and may recalibrate LimiteIngresso / INV-S9 / Argomento bound — through their ADRs, never silently."
     sources: "ADR 0021 §4–5, ADR 0023 §5–6, ADR 0025 §5, tasks/app/todo/runtime-llm-in-app.md"
 boundaries:
-  - id: "kernel-pl"
-    owner: "kernel (trascrizione-con-parlanti, merged)"
-    external: True
-    consumers:
-      - "riassunto"
-      - "lettore-trascritto-sintesi"
-      - "lettore-nomi-sintesi"
-      - "modello-linguistico"
-      - "disponibilita-modello-linguistico"
-      - "coda-trascrizione-delta"
-      - "posizioni-nella-coda"
-      - "persistenza-sintesi"
-      - "stile-sintesi"
-      - "lunghezza-massima-riassunto"
-      - "lettore-trascritto-da-trascrizione-sintesi"
-      - "lettore-nomi-da-parlanti-sintesi"
-      - "avvio-coda-condivisa"
-      - "porte-sintesi"
-      - "modello-facoltativo-avvio"
-      - "riassumi"
-      - "esegui-riassunto"
-      - "modifica-lunghezza-massima-riassunto"
-      - "sostituzione-trascritto-sintesi-policy"
-      - "eliminazione-registrazione-sintesi-policy"
-      - "riassunto-vista"
-      - "impostazioni-sintesi"
-      - "riassunti-in-attesa"
-      - "repository-sql-sintesi"
-      - "avvio-sintesi"
-    projection: "in-process"
-    pinned_types:
-      "Published Language (unchanged)": "RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl"
-    keys:
-      RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row"
-      "SegmentoId / VoceId": "minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)"
-    contract_test: "consumer-driven"
-    related_adrs:
-      - "0002"
-      - "0012"
   - id: "agg-riassunto"
     owner: "riassunto"
     consumers:
@@ -1358,19 +1337,6 @@ boundaries:
     contract_test: "consumer-driven"
     related_adrs:
       - "0023"
-  - id: "tec-modelli"
-    owner: "modelli-provisioning (trascrizione-con-parlanti, merged)"
-    external: True
-    consumers:
-      - "modelli-provisioning-facoltativo"
-      - "avvio-coda-condivisa"
-    projection: "in-process"
-    pinned_types:
-      "(unchanged)": "as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary tec-modelli; extended by tec-modelli-facoltativo"
-    keys: {}
-    contract_test: "consumer-driven"
-    related_adrs:
-      - "0008"
   - id: "tec-modelli-facoltativo"
     owner: "modelli-provisioning-facoltativo"
     consumers:
@@ -1387,18 +1353,6 @@ boundaries:
     related_adrs:
       - "0008"
       - "0025"
-  - id: "tec-modelli-ui"
-    owner: "schermata-modelli (trascrizione-con-parlanti, merged)"
-    external: True
-    consumers:
-      - "servizio-modelli-facoltativo"
-    projection: "in-process"
-    pinned_types:
-      "(unchanged)": "ServizioModelli / StatoModelli / ErroreServizioModelli / LicenzaVista as pinned in the sibling manifest; extended by tec-modelli-ui-facoltativo"
-    keys: {}
-    contract_test: "consumer-driven"
-    related_adrs:
-      - "0008"
   - id: "tec-modelli-ui-facoltativo"
     owner: "servizio-modelli-facoltativo"
     supplier: "modello-facoltativo-avvio"
@@ -1468,70 +1422,14 @@ boundaries:
     contract_test: "consumer-driven"
     related_adrs:
       - "0021"
-  - id: "tec-shell-ui"
-    owner: "ui-fondamenta (trascrizione-con-parlanti, merged)"
-    external: True
-    consumers:
-      - "servizio-modelli-facoltativo"
-      - "schede-registrazione"
-      - "scheda-riassunto"
-      - "dialogo-elimina-riassunto"
-      - "avvio-sintesi"
-    projection: "in-process"
-    pinned_types:
-      "(unchanged)": "AggiornamentiVista.cambiamenti: Flow<Cambiamento>; Cambiamento(registrazioneId: RegistrazioneId?) — as pinned in the sibling manifest"
-    keys: {}
-    contract_test: "consumer-driven"
-    related_adrs:
-      - "0010"
-  - id: "eventi-elaborazione"
-    owner: "eventi-pubblicati (trascrizione-con-parlanti, merged)"
-    external: True
-    consumers:
-      - "abbonato-trascrizione-sintesi"
-    projection: "in-process"
-    pinned_types:
-      TrascrittoSostituito: "data class(registrazioneId: RegistrazioneId) : EventoPubblicato — published ONLY in a completion transaction that replaced a Trascritto, BEFORE ElaborazioneCompletata; now TWO synchronous subscribers (Parlanti purge, Sintesi policy — ADR 0018 §5 amended by ADR 0021)"
-    keys:
-      RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row"
-    contract_test: "consumer-driven"
-    delivery: "SYNCHRONOUS inside the publishing (completion) transaction for TrascrittoSostituito's subscribers; an Errore dooms the completion (ADR 0018 §6 compensates to fallita)"
-    related_adrs:
-      - "0012"
-      - "0018"
-      - "0021"
-  - id: "eventi-progetto-eliminazione"
-    owner: "eventi-pubblicati (ADR 0020 delta AC-618, sibling branch — NOT yet on feature/sintesi)"
-    external: True
-    ready_when: "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
-    consumers:
-      - "abbonato-progetto-sintesi"
-    projection: "in-process"
-    pinned_types:
-      RegistrazioneEliminata: "data class(registrazioneId: RegistrazioneId, progettoId: ProgettoId, titolo: String, dataRegistrazione: LocalDate, riferimentoAudio: RiferimentoAudio) : EventoPubblicato (snastro.progetto.applicazione.eventi) — Sintesi reads only registrazioneId"
-    keys:
-      RegistrazioneId: "minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row"
-    contract_test: "consumer-driven"
-    delivery: "SYNCHRONOUS inside EliminaRegistrazione's single transaction (ADR 0020 §2 step 4, before the registrazione row is removed); any subscriber Errore dooms the deletion; after-commit consumers separately"
-    related_adrs:
-      - "0020"
-      - "0024"
-build_order:
-  - [scaffold-sintesi]  # wave 0
-  - [riassunto, lettore-trascritto-sintesi, lettore-nomi-sintesi, modello-linguistico, disponibilita-modello-linguistico, coda-trascrizione-delta, posizioni-nella-coda, modelli-provisioning-facoltativo, servizio-modelli-facoltativo, persistenza-sintesi, stile-sintesi, design-system-sintesi]  # wave 1 — ready_when-gated: persistenza-sintesi, design-system-sintesi
-  - [lunghezza-massima-riassunto, lettore-trascritto-da-trascrizione-sintesi, lettore-nomi-da-parlanti-sintesi, avvio-coda-condivisa]  # wave 2
-  - [porte-sintesi, modello-facoltativo-avvio]  # wave 3
-  - [riassumi, esegui-riassunto, modifica-lunghezza-massima-riassunto, sostituzione-trascritto-sintesi-policy, eliminazione-registrazione-sintesi-policy, riassunto-vista, impostazioni-sintesi, riassunti-in-attesa, repository-sql-sintesi]  # wave 4 — ready_when-gated: repository-sql-sintesi
-  - [abbonato-trascrizione-sintesi, abbonato-progetto-sintesi, schede-registrazione, scheda-riassunto, dialogo-elimina-riassunto]  # wave 5 — ready_when-gated: abbonato-progetto-sintesi, dialogo-elimina-riassunto
-  - [avvio-sintesi]  # wave 6 — ready_when-gated: avvio-sintesi
-  - [modello-linguistico-llama]  # wave 7 — ready_when-gated: modello-linguistico-llama
+
 ready_when_summary:
-  "persistenza-sintesi": "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
-  "design-system-sintesi": "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
-  "repository-sql-sintesi": "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
-  "abbonato-progetto-sintesi": "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
-  "dialogo-elimina-riassunto": "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
-  "avvio-sintesi": "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased"
+  "persistenza-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
+  "design-system-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
+  "repository-sql-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
+  "abbonato-progetto-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
+  "dialogo-elimina-riassunto": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
+  "avvio-sintesi": "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it"
   "modello-linguistico-llama": "ADR closing spike runtime-llm-in-app accepted (JNI vs llama-server sidecar, :llm content, natives per ADR 0016, cancellation bound, keep-warm vs unload, LimiteIngresso / INV-S9 calibration, ADR 0025 §5 catalogue entry values)"
 post_rebase_tasks:
   - "After the rebase onto main (Elimina merged): add a dated 'SUPERSEDED by sintesi AC-S64 (avvio-coda-condivisa, ADR 0023 §4)' pointer to trascrizione-con-parlanti's stati-elaborazione AC-163 and to the posizioneInCoda half of AC-162 / AC-474 (R19-5, user 2026-09-25) — the sibling manifest is not edited before that"
@@ -1542,7 +1440,7 @@ release_plan:
     composition_root: "avvio-sintesi"
     scope: "Riassunto of a Registrazione by a local LLM: Riassunto tab (S3 centre column) with Sommario, Decisioni, Azioni, Questioni aperte, Punti chiave and verified Fonti; optional 6.6 GB model downloaded on demand; ONE shared FIFO queue for Elaborazioni and Riassunti; per-Progetto lunghezza massima; automatic re-summary after Ritrascrivi; Elimina registrazione also deletes the Riassunto"
     gated_by:
-      - "Elimina registrazione (ADR 0020) merged into main and feature/sintesi rebased — persistenza-sintesi, repository-sql-sintesi, abbonato-progetto-sintesi, design-system-sintesi (docs only), dialogo-elimina-riassunto, avvio-sintesi"
+      - "SATISFIED 2026-09-26 — Elimina registrazione (ADR 0020) is on main (6daba4e) and integration/sintesi is rebased on it — persistenza-sintesi, repository-sql-sintesi, abbonato-progetto-sintesi, design-system-sintesi (docs only), dialogo-elimina-riassunto, avvio-sintesi"
       - "ADR closing spike runtime-llm-in-app accepted (JNI vs llama-server sidecar, :llm content, natives per ADR 0016, cancellation bound, keep-warm vs unload, LimiteIngresso / INV-S9 calibration, ADR 0025 §5 catalogue entry values) — modello-linguistico-llama (R3 is demonstrable with the placeholder model before it, shippable only after it)"
     cut:
       - "Clickable Fonti (seek to the Segmento) — brief: out of scope v1"

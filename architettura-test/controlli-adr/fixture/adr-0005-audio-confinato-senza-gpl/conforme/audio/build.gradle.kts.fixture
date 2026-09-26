@@ -1,0 +1,2 @@
+// never the ffmpeg-gpl classifier
+dependencies { implementation(libs.ffmpeg.platform) }

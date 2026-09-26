@@ -1,0 +1,4 @@
+package snastro.parlanti.applicazione.politiche
+
+import snastro.parlanti.applicazione.porte.EstrattoreImpronta
+class Revisione

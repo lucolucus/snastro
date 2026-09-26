@@ -1,0 +1,7 @@
+package snastro.progetto.dominio
+
+// class ErroreProgettoEccezione : ErroreProgetto, Exception()
+/*
+ * class ErroreX : Throwable() is forbidden
+ */
+class Nota

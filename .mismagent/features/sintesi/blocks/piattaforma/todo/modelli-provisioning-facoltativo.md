@@ -6,9 +6,9 @@ side: "app"
 wave: 1
 release: "R3"
 module: ":modelli"
-consumes:
-  - "tec-modelli"
-depends_on: []
+consumes: []
+reuses:
+  - "trascrizione-con-parlanti/tec-modelli"
 related_adrs:
   - "0008"
   - "0016"
@@ -36,7 +36,7 @@ Note: REWORK of trascrizione-con-parlanti's modelli-provisioning (merged). tec-m
   - `ProvisioningModelli`: + fun installata(id: String): Boolean; + fun scarica(id: String, progresso: (scaricati: Long, totali: Long) -> Unit): Esito<Unit>; pronti()/mancanti() range over obbligatoria entries only
   - `ErroreModelli`: + SpazioInsufficiente(richiestiByte: Long)
   - key `VoceCatalogo.id (optional LLM)`: minted by the runtime-llm-in-app spike ADR (e.g. 'llm-qwen3.5-9b-q4_k_m'); any SHA-256 change mints a new id (ADR 0008 (c)(2)); URL immutable (HF …/resolve/<commit-sha>/<file>)
-- **tec-modelli** (consumed; owner modelli-provisioning (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **tec-modelli** (REUSED — boundary `tec-modelli` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `modelli-provisioning` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `(unchanged)`: as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary tec-modelli; extended by tec-modelli-facoltativo
 
 Sources: ADR 0025 §1–3, ADR 0008 (c); related_adrs 0008, 0016, 0025; tactical-model: features/sintesi/tactical-model.md

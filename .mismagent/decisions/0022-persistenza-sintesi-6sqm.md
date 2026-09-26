@@ -3,10 +3,12 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by:
-  kind: presence+prohibition
-  rule: "F=persistenza/src/main/sqldelight/migrations/6.sqm; grep -qE '^CREATE TABLE riassunto[[:space:]]*[(]' $F && grep -qE '^[[:space:]]+registrazione_id TEXT NOT NULL REFERENCES registrazione[(]id[)],' $F && grep -qE '^CREATE UNIQUE INDEX riassunto_non_pronto_unico ON riassunto[(]registrazione_id[)] WHERE stato IN [(].in_attesa., .in_corso., .fallito.[)];$' $F && grep -qE '^CREATE UNIQUE INDEX riassunto_pronto_unico ON riassunto[(]registrazione_id[)] WHERE stato = .pronto.;$' $F && grep -qE '^CREATE TABLE impostazioni_sintesi[[:space:]]*[(]' $F && ! grep -vE '^[[:space:]]*--' $F | grep -qiE '(parlante_id|nome)'"
-  exigible_from: "persistenza-sintesi"   # block id proposed here, pinned by build-manifest. Validated 2026-09-25 via bash -c: tree exit 2 (6.sqm absent — red BY DESIGN until that block); fixtures: PASS on a 6.sqm with the table, the immediate FK line, both indexes each on one line, impostazioni_sintesi, and `nome`/`parlante_id` only in `--` comments; FAIL when the pronto index is commented out, when the non-pronto index omits 'fallito', when the FK is removed, on a `responsabile_nome` column, on a `parlante_id` column
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0022-schema-sintesi.sh
+    from: persistenza-sintesi
+  - check: architettura-test/controlli-adr/adr-0022-riassunto-senza-parlanti.sh
+    from: persistenza-sintesi
+  # legacy note: block id proposed here, pinned by build-manifest. Validated 2026-09-25 via bash -c: tree exit 2 (6.sqm absent — red BY DESIGN until that block); fixtures: PASS on a 6.sqm with the table, the immediate FK line, both indexes each on one line, impostazioni_sintesi, and `nome`/`parlante_id` only in `--` comments; FAIL when the pronto index is commented out, when the non-pronto index omits 'fallito', when the FK is removed, on a `responsabile_nome` column, on a `parlante_id` column
 ---
 # 0022 — Sintesi persistence: `6.sqm`, one row per element and per Fonte, the structure as canonical text, INV-S2/S3 as partial unique indexes
 

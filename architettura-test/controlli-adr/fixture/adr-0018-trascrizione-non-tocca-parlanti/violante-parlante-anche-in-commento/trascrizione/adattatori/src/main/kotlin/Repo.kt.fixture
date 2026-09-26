@@ -1,0 +1,4 @@
+package snastro.trascrizione.adattatori
+
+// db.parlanteQueries is Parlanti's
+class Repo

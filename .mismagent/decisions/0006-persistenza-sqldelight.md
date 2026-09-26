@@ -4,7 +4,8 @@ status: accepted
 supersedes: null
 closes_spike: null
 amended: 2026-09-25   # see "Amendment 2026-09-25 (ADR 0021)" (enforced_by deny-list gains `llm`)
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(java\\.sql\\.|javax\\.sql\\.|app\\.cash\\.sqldelight|org\\.sqlite)' ui audio ml-sherpa modelli avvio documento llm 2>/dev/null | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0006-sql-confinato.sh
 ---
 # 0006 — Persistence: SQLDelight + sqlite-jdbc, one DB per Progetto, forward-only verified migrations
 

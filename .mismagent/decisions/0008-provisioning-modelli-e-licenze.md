@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(java\\.net\\.|io\\.ktor|okhttp3|HttpClient|HttpURLConnection)' . | grep -vE '^(\\./)?(modelli|architettura-test)/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0008-rete-confinata.sh
 amended: 2026-09-25   # "Amendment 2026-09-25 (ADR 0025)" (optional on-demand model, host, FILE move); earlier: see "Amendment 2026-09-23 (b)" (enforced_by scope) + "Amendment 2026-09-23 (c)" (Windows LOCALAPPDATA, archive entries, enforced_by module-path scoping)
 ---
 # 0008 — Model provisioning: first-run download from k2-fsa releases, pinned SHA-256, offline after; network only in `:modelli`

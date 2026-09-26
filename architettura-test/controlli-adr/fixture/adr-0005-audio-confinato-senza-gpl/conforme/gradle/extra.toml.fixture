@@ -1,0 +1,3 @@
+# no -gpl artifact here
+[versions]
+x = "1"

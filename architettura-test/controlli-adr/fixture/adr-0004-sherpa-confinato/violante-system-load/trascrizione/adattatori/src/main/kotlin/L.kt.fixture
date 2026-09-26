@@ -1,0 +1,3 @@
+package snastro.trascrizione.adattatori
+
+fun f() = System.load("/x/lib.dylib")

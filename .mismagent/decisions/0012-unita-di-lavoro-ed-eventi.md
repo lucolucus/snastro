@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' 'snastro\\.(parlanti\\.applicazione\\.porte\\.(EstrattoreImpronta|DecodificatoreAudio)|trascrizione\\.applicazione\\.porte\\.DecodificatoreAudio|kernel\\.CampioniAudio|parlanti\\.dominio\\.Impronta)([^A-Za-z0-9_]|$)' parlanti/applicazione/src/main trascrizione/applicazione/src/main | grep '/politiche/' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0012-politiche-senza-ml.sh
 amended: 2026-09-25   # see "Amendment 2026-09-25 (d)" — enforced_by widened to :trascrizione:applicazione politiche (user Q-3, elimina-registrazione fold). See "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added. "Amendment 2026-09-23 (c)" — R2 auto-start removed (ADR 0014 [user])
 ---
 # 0012 — Unit of work and domain-event dispatch: invariant policies in-transaction, Rigenerazione after commit

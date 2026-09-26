@@ -1,0 +1,5 @@
+package snastro.progetto.adattatori
+
+import java.sql.Connection
+import app.cash.sqldelight.db.SqlDriver
+class Repo

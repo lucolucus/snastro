@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' '(java\\.sql\\.|javax\\.sql\\.|javax\\.sound\\.|java\\.net\\.|java\\.nio\\.file\\.|java\\.io\\.File|app\\.cash\\.sqldelight|org\\.sqlite|androidx\\.compose|org\\.jetbrains\\.compose|com\\.k2fsa|org\\.bytedeco|io\\.ktor|okhttp3)' kernel progetto/dominio progetto/applicazione trascrizione/dominio trascrizione/applicazione parlanti/dominio parlanti/applicazione documento/applicazione | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0002-nucleo-senza-tecnologia.sh
 ---
 # 0002 — Style: hexagonal (ports & adapters), one Gradle module set per bounded context
 

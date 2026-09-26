@@ -1,0 +1,4 @@
+package snastro.modelli
+
+import java.net.URI
+import java.net.http.HttpClient

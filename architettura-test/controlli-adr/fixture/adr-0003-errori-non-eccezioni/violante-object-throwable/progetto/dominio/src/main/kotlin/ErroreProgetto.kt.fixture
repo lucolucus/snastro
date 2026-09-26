@@ -1,0 +1,5 @@
+package snastro.progetto.dominio
+
+sealed interface ErroreProgetto : ErroreDominio {
+    data object NomeVuoto : ErroreProgetto
+}

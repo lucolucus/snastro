@@ -1,0 +1,16 @@
+-- Aggregate: Riassunto (Sintesi, ADR 0022). No speaker nome, no parlante_id (INV-S5).
+CREATE TABLE riassunto (
+    id TEXT NOT NULL PRIMARY KEY,
+    registrazione_id TEXT NOT NULL REFERENCES registrazione(id),
+    stato TEXT NOT NULL CHECK (stato IN ('in_attesa', 'in_corso', 'pronto', 'fallito')),
+    sommario TEXT
+);
+
+CREATE UNIQUE INDEX riassunto_non_pronto_unico ON riassunto(registrazione_id) WHERE stato IN ('in_attesa', 'in_corso', 'fallito');
+
+CREATE UNIQUE INDEX riassunto_pronto_unico ON riassunto(registrazione_id) WHERE stato = 'pronto';
+
+CREATE TABLE impostazioni_sintesi (
+    progetto_id TEXT NOT NULL PRIMARY KEY REFERENCES progetto(id),
+    lunghezza_massima_riassunto_parole INTEGER NOT NULL
+);

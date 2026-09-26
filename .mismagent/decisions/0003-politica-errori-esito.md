@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(class|interface|object)[[:space:]][^:]*:.*(ErroreDominio|Errore[A-Z][A-Za-z]*).*(Exception|Throwable|Error)[[:space:]]*\\(|(class|interface|object)[[:space:]][^:]*:.*(Exception|Throwable|Error)[[:space:]]*\\(.*(ErroreDominio|Errore[A-Z][A-Za-z]*)|(class|interface)[[:space:]]+ErroreDominio[^{]*(Exception|Throwable|Error)[[:space:]]*\\(' . | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0003-errori-non-eccezioni.sh
 amended: 2026-09-23   # R25 — see "Amendment 2026-09-23" (ErroreDominio non-sealed; enforced_by replaced) + "Amendment 2026-09-23 (b)" (error placement)
 ---
 # 0003 — Error policy: expected failures are `Esito` values, exceptions only for bugs/infra

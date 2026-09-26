@@ -7,7 +7,6 @@ wave: 0
 release: "R3"
 module: "settings.gradle.kts, build.gradle.kts (allowedModuleEdges), :sintesi (path holder), :sintesi:dominio, :sintesi:applicazione (+ java-test-fixtures), :sintesi:adattatori, :ui/:avvio/:architettura-test build files, :architettura-test (Konsist)"
 consumes: []
-depends_on: []
 related_adrs:
   - "0002"
   - "0006"

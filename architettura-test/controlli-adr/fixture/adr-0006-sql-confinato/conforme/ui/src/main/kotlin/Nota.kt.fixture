@@ -1,0 +1,5 @@
+package snastro.ui
+
+// no java.sql. here
+ * nor app.cash.sqldelight
+class Nota

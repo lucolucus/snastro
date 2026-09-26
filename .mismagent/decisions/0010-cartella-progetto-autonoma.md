@@ -3,7 +3,8 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by: "! grep -rnE --include='*.kt' --exclude-dir=build '(readText|readLines|readBytes|readAllBytes|readAllLines|readString|bufferedReader|inputStream|FileReader|Files\\.lines|Files\\.newBufferedReader|Files\\.newInputStream)' documento | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\\*|/\\*)' | grep -q ."
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0010-documento-non-legge.sh
 ---
 # 0010 — The Progetto is a self-contained, relocatable folder; `Documento` is written, never read back
 

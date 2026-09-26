@@ -1,0 +1,2 @@
+-- Ritrascrivi (ADR 0018)
+DROP INDEX elaborazione_completata_unica;

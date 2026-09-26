@@ -1,0 +1,3 @@
+package snastro.parlanti.applicazione.politiche
+
+import snastro.parlanti.dominio.Impronta

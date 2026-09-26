@@ -1,0 +1,4 @@
+package snastro.avvio
+
+// javax.sound lives in audio
+class Avvio

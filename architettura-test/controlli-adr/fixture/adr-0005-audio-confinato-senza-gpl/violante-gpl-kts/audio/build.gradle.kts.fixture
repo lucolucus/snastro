@@ -1,0 +1,2 @@
+dependencies { implementation("org.bytedeco:ffmpeg:6.1.1-1.5.10:macosx-arm64-GPL") }
+val c = "gpl"

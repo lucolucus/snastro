@@ -3,10 +3,12 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0014 (runtime config rows Segmentation file / Clustering, "Embedding reuse"); ADR 0017 §1.1 (diarizza no longer a single native call); ADR 0009 (transient per-Segmento embeddings); tactical INV-8 wording
 closes_spike: null  # impronta-vocale-affidabilita is PARTIALLY answered (model chosen, §2); it stays open for SoglieFascia / BUDGET_IMPRONTA_MS / go-no-go
-enforced_by:
-  kind: presence+prohibition
-  rule: "! grep -rn --include='*.kt' --exclude-dir=build 'model\\.int8\\.onnx' avvio/src/main trascrizione/adattatori/src/main && grep -q 'ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e' modelli/src/main/kotlin/snastro/modelli/CatalogoDiarizzazione.kt"
-  exigible_from: "diarizzatore-sherpa"   # its 2026-09-24 (ADR 0019) rework; red on the tree today BY DESIGN (validated 2026-09-24 via bash -c: exit 1 — SelezioneAdattatoriMl.kt:82 still resolves model.int8.onnx and the TitaNet entry does not exist yet)
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0019-niente-modello-int8.sh
+    from: diarizzatore-sherpa
+  - check: architettura-test/controlli-adr/adr-0019-catalogo-titanet.sh
+    from: diarizzatore-sherpa
+  # legacy note: its 2026-09-24 (ADR 0019) rework; red on the tree today BY DESIGN (validated 2026-09-24 via bash -c: exit 1 — SelezioneAdattatoriMl.kt:82 still resolves model.int8.onnx and the TitaNet entry does not exist yet)
 experiment: "scratchpad/diar2 of session 1f80eddf (outside the repo): common.py, clus.py, stage1-3.py, out/stage*.log — the settings below are read from it (2026-09-24)"
 amended: 2026-09-24   # "Amendment 2026-09-24 (b) — the user's answers to the Points for the user" [user]: fallback references (whole named Voce), preview before apply (Applica/Annulla), incerte stay (confirmed), provisional Proposte shown (confirmed); §1.9 "Parametri misurati" copied from the experiment scripts
 ---

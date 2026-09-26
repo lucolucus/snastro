@@ -7,10 +7,10 @@ wave: 4
 release: "R3"
 module: ":sintesi:applicazione (..politiche)"
 consumes:
-  - "kernel-pl"
   - "repo-sintesi"
   - "eventi-sintesi"
-depends_on: []
+reuses:
+  - "trascrizione-con-parlanti/kernel-pl"
 related_adrs:
   - "0012"
   - "0020"
@@ -32,13 +32,13 @@ Synchronous, inside ADR 0020's deleting transaction: riassunti.rimuoviDiRegistra
 ## Tasks
 _tests_nl status: CONFIRMED by the user at the rule-5 checkpoint (2026-09-25)._
 
-- AC-S98 r with a pronto + an in_attesa, and (separate case) a pronto + an in_corso, and (separate case) a fallito → every row of r removed with its elements and Fonti; the Riassunti of another Registrazione untouched (byte-identical)
+- AC-S98 ApplicaEliminazioneRegistrazioneSintesi(registrazioneId): r with a pronto + an in_attesa, and (separate case) a pronto + an in_corso, and (separate case) a fallito → every row of r removed with its elements and Fonti; the Riassunti of another Registrazione untouched (byte-identical)
 - AC-S99 RiassuntoEliminato(r) is published iff at least one was removed; r with none → Ok, nothing published
 - AC-S100 Never vetoes: an in_corso Riassunto → Ok (the deletion proceeds; the run's completion will write nothing)
 - AC-S101 A repository Errore is returned unchanged so the deleting transaction rolls back
 
 ## Dependencies
-- **kernel-pl** (consumed; owner kernel (trascrizione-con-parlanti, merged); projection in-process; contract_test `consumer-driven`)
+- **kernel-pl** (REUSED — boundary `kernel-pl` of features/trascrizione-con-parlanti/building-blocks.yaml, owner `kernel` already integrated on main; not redeclared in this manifest; projection in-process; contract_test `consumer-driven`)
   - `Published Language (unchanged)`: RegistrazioneId, ProgettoId, SegmentoId, VoceId, VoceRef(registrazioneId, voceId), IntervalloMs, Esito, ErroreDominio, EventoPubblicato, Creato, GeneratoreId, UnitaDiLavoro (+ testFixtures UnitaDiLavoroFinta.transazioneAperta), DispatcherEventi — as pinned in features/trascrizione-con-parlanti/building-blocks.yaml boundary kernel-pl
   - key `RegistrazioneId`: minted by servizi-registrazione (AggiungiRegistrazione) via GeneratoreId (UUID v4) — immutable; the correlation key of every Sintesi row
   - key `SegmentoId / VoceId`: minted by the trascritto aggregate per Trascritto GENERATION (ADR 0018: a replacement renumbers from 1) — stable for the generation's life; Sintesi stores them only inside a Riassunto that is deleted with its generation (INV-S8)

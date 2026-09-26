@@ -3,10 +3,9 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-enforced_by:
-  kind: presence
-  rule: "grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(registrazione_id\\) WHERE .*in_attesa.*in_corso' persistenza | grep -q . && grep -rhE --include='*.sq' --include='*.sqm' '^CREATE UNIQUE INDEX .*\\(progetto_id, nome_normalizzato\\) WHERE .*attivo' persistenza | grep -q ."
-  exigible_from: "persistenza-schema"
+enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
+  - check: architettura-test/controlli-adr/adr-0007-indici-unici.sh
+    from: persistenza-schema
 amended: 2026-09-24   # ADR 0018 (Ritrascrivi, user decision): elaborazione_completata_unica DROPPED by 3.sqm; its presence clause removed from enforced_by (was: "... WHERE .*completata"). See "Amendment 2026-09-24 (ADR 0018)".
 ---
 # 0007 — Set invariants INV-4 and INV-16 backed by partial unique indexes
