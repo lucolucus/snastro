@@ -140,6 +140,46 @@ class ShellRenderCheckTest {
     fun `AC-572 con S5 mostrato il piede Modelli e licenze e la voce selezionata a 1280x800 (scuro)`() =
         verificaConProgetto(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, conParlanti = true, modelli = true, scuro = true)
 
+    // AC-S35 "without the line": already covered by every `verificaConProgetto` call above —
+    // `statoModelloLinguisticoPiede` defaults to null there, and the helper asserts the tag absent.
+    @Test
+    fun `AC-S33 AC-S35 con la riga del modello opzionale in download a 1280x800`() =
+        verificaConProgetto(
+            LARGHEZZA_GRANDE_PX,
+            ALTEZZA_GRANDE_PX,
+            conParlanti = true,
+            statoModelloLinguisticoPiede = "Modello di linguaggio: 2,1 di 6,2 GB",
+        )
+
+    @Test
+    fun `AC-S33 AC-S35 con la riga del modello opzionale in download a 1024x640`() =
+        verificaConProgetto(
+            LARGHEZZA_PICCOLA_PX,
+            ALTEZZA_PICCOLA_PX,
+            conParlanti = true,
+            statoModelloLinguisticoPiede = "Modello di linguaggio: 2,1 di 6,2 GB",
+        )
+
+    @Test
+    fun `AC-S33 AC-S35 con la riga del modello opzionale in download a 1280x800 (scuro)`() =
+        verificaConProgetto(
+            LARGHEZZA_GRANDE_PX,
+            ALTEZZA_GRANDE_PX,
+            conParlanti = true,
+            statoModelloLinguisticoPiede = "Modello di linguaggio: 2,1 di 6,2 GB",
+            scuro = true,
+        )
+
+    @Test
+    fun `AC-S33 AC-S35 con la riga del modello opzionale in download a 1024x640 (scuro)`() =
+        verificaConProgetto(
+            LARGHEZZA_PICCOLA_PX,
+            ALTEZZA_PICCOLA_PX,
+            conParlanti = true,
+            statoModelloLinguisticoPiede = "Modello di linguaggio: 2,1 di 6,2 GB",
+            scuro = true,
+        )
+
     private fun verificaSenzaProgetto(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
             setContent {
@@ -216,12 +256,14 @@ class ShellRenderCheckTest {
             catturaPng("shell-errore-con-progetto", width, height, scuro)
         }
 
+    @Suppress("LongParameterList") // size + theme + every ConProgetto render-check knob this helper covers
     private fun verificaConProgetto(
         width: Int,
         height: Int,
         conParlanti: Boolean,
         scuro: Boolean = false,
         modelli: Boolean = false,
+        statoModelloLinguisticoPiede: String? = null,
     ) =
         runDesktopComposeUiTest(width, height) {
             val sezioni = if (conParlanti) {
@@ -236,6 +278,7 @@ class ShellRenderCheckTest {
                     contenuto = { Text("Contenuto della sezione selezionata") },
                     onModelliELicenze = {},
                     modelliSelezionati = modelli,
+                    statoModelloLinguisticoPiede = statoModelloLinguisticoPiede,
                     scuro = scuro,
                     riduciMovimento = true,
                 )
@@ -249,7 +292,21 @@ class ShellRenderCheckTest {
             } else {
                 onNodeWithText("Parlanti").assertDoesNotExist()
             }
-            val nome = if (modelli) "shell-modelli-selezionati" else "shell-con-progetto-parlanti-$conParlanti"
+            // AC-S33/AC-S35: the optional-model line is opt-in and never clipped when present; absent
+            // entirely (not just blank) when there is nothing to show. `onModelliELicenze` above makes
+            // the whole footer row a single merged semantics node (like the progress bar in
+            // ModelliRenderCheckTest), so the child's own tag needs the unmerged tree.
+            if (statoModelloLinguisticoPiede != null) {
+                onNodeWithTag("shell-piede-modello-linguistico", useUnmergedTree = true).assertIsDisplayed()
+                onNodeWithText(statoModelloLinguisticoPiede).assertIsDisplayed()
+            } else {
+                onNodeWithTag("shell-piede-modello-linguistico", useUnmergedTree = true).assertDoesNotExist()
+            }
+            val nome = when {
+                statoModelloLinguisticoPiede != null -> "shell-piede-modello-linguistico"
+                modelli -> "shell-modelli-selezionati"
+                else -> "shell-con-progetto-parlanti-$conParlanti"
+            }
             catturaPng(nome, width, height, scuro)
         }
 

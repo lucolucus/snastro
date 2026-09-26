@@ -14,6 +14,7 @@ import snastro.ui.testi.messaggioPer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 
 /**
  * [ServizioModelli] whose `scarica` throws instead of updating `stato` — a hand-written fake
@@ -24,6 +25,10 @@ private class ServizioModelliCheEsplode(iniziale: StatoModelli) : ServizioModell
     override val stato: StateFlow<StatoModelli> = _stato.asStateFlow()
     override fun scarica(): Nothing = error("errore imprevisto")
     override fun licenze(): List<LicenzaVista> = emptyList()
+
+    private val _statoFacoltativi = MutableStateFlow<Map<String, StatoModelloFacoltativo>>(emptyMap())
+    override val statoFacoltativi: StateFlow<Map<String, StatoModelloFacoltativo>> = _statoFacoltativi.asStateFlow()
+    override fun scaricaFacoltativo(id: String): Nothing = error("errore imprevisto")
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -114,5 +119,46 @@ class ModelliPresenterTest {
         advanceUntilIdle()
 
         assertEquals(ModelliUiStato.Errore(MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+    }
+
+    @Test
+    fun `AC-S33 nessun modello facoltativo tracciato non mostra nessuna riga`() = runTest {
+        val fake = ServizioModelliFinta(iniziale = StatoModelli.Pronti)
+        val presenter = presentatore(this, fake)
+
+        assertNull(presenter.etichettaModelloLinguisticoPiede.value)
+    }
+
+    @Test
+    fun `AC-S33 il modello opzionale in download mostra la riga del piede in GB decimali`() = runTest {
+        val fake = ServizioModelliFinta(iniziale = StatoModelli.Pronti)
+        val presenter = presentatore(this, fake)
+
+        fake.emettiFacoltativo("llm", StatoModelloFacoltativo.InDownload(2_100_000_000, 6_169_341_984))
+        advanceUntilIdle()
+
+        assertEquals("Modello di linguaggio: 2,1 di 6,2 GB", presenter.etichettaModelloLinguisticoPiede.value)
+    }
+
+    @Test
+    fun `AC-S33 NonInstallato non mostra nessuna riga`() = runTest {
+        val fake = ServizioModelliFinta(iniziale = StatoModelli.Pronti)
+        val presenter = presentatore(this, fake)
+
+        fake.emettiFacoltativo("llm", StatoModelloFacoltativo.NonInstallato(6_169_341_984))
+        advanceUntilIdle()
+
+        assertNull(presenter.etichettaModelloLinguisticoPiede.value)
+    }
+
+    @Test
+    fun `AC-S33 Installato non mostra nessuna riga`() = runTest {
+        val fake = ServizioModelliFinta(iniziale = StatoModelli.Pronti)
+        val presenter = presentatore(this, fake)
+
+        fake.emettiFacoltativo("llm", StatoModelloFacoltativo.Installato)
+        advanceUntilIdle()
+
+        assertNull(presenter.etichettaModelloLinguisticoPiede.value)
     }
 }

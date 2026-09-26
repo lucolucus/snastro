@@ -13,6 +13,7 @@ import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.LicenzaVista
 import snastro.ui.modelli.ServizioModelli
 import snastro.ui.modelli.StatoModelli
+import snastro.ui.modelli.StatoModelloFacoltativo
 import snastro.ui.stile.LICENZE_CARATTERI
 import java.io.IOException
 import java.io.UncheckedIOException
@@ -67,6 +68,20 @@ internal class ServizioModelliProvisioning(
     override fun licenze(): List<LicenzaVista> =
         catalogo.voci.map { LicenzaVista(it.id, it.ruolo, it.licenza, it.attribuzione) } + LICENZE_CARATTERI
 
+    // Stopgap (`tec-modelli-ui-facoltativo`, ADR 0025 §5): the real wiring over
+    // `ProvisioningModelli.scarica(id)`/`installata(id)` — the single `ComponentiR1.provisioning`
+    // instance, the IOException catch around it, the per-entry progress callback — is block
+    // `modello-facoltativo-avvio`'s job, not this one's. Nothing calls either member yet (no composition
+    // root wires an optional catalogue entry, no `scheda-riassunto` screen exists), so an empty/inert
+    // stub keeps `:avvio` compiling against the extended `ServizioModelli` port without inventing that
+    // block's behaviour.
+    private val _statoFacoltativi = MutableStateFlow<Map<String, StatoModelloFacoltativo>>(emptyMap())
+    override val statoFacoltativi: StateFlow<Map<String, StatoModelloFacoltativo>> = _statoFacoltativi.asStateFlow()
+
+    override fun scaricaFacoltativo(id: String) {
+        error("scaricaFacoltativo(\"$id\") non ancora cablato: block modello-facoltativo-avvio")
+    }
+
     private fun statoAttuale(): StatoModelli = try {
         if (pronti()) StatoModelli.Pronti else mancantiDi(mancanti())
     } catch (e: IOException) {
@@ -110,13 +125,9 @@ internal fun mappaErrore(errore: ErroreDominio): ErroreServizioModelli = when (e
         ErroreModelli.ReteAssente -> ErroreServizioModelli.ReteAssente
         is ErroreModelli.ScritturaFallita -> ErroreServizioModelli.ScritturaFallita(errore.motivo)
         is ErroreModelli.DownloadFallito -> ErroreServizioModelli.DownloadFallito(errore.motivo)
-        // Stopgap (block modelli-provisioning-facoltativo, ADR 0025 §3): RC-4 forces this branch
-        // the moment `:modelli` gains the case, but the dedicated UI surface (its own
-        // ErroreServizioModelli variant + sidebar/S5 message) is ADR 0025 §5's "`:avvio`
-        // ServizioModelliProvisioning + `:ui` ... the optional entry" block, not this one — reuse
-        // the closest existing case so `:ui` keeps compiling without a not-yet-designed message.
-        is ErroreModelli.SpazioInsufficiente ->
-            ErroreServizioModelli.ScritturaFallita("spazio insufficiente: servono ${errore.richiestiByte} byte")
+        // ADR 0025 §3/tec-modelli-ui-facoltativo: replaces the ScritturaFallita stopgap now that
+        // `:ui` has its own dedicated variant + message (AC-S34).
+        is ErroreModelli.SpazioInsufficiente -> ErroreServizioModelli.SpazioInsufficiente(errore.richiestiByte)
     }
     else -> ErroreServizioModelli.DownloadFallito(errore.toString())
 }

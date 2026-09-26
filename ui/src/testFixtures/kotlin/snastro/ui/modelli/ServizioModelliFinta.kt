@@ -11,17 +11,30 @@ import kotlinx.coroutines.flow.asStateFlow
  * lets a test simulate an intermediate progress tick (AC-228) the way the real implementation would,
  * asynchronously, while the blocking download is still running — mirrors
  * [snastro.ui.lettore.LettoreAudioFinta.emetti].
+ *
+ * [scaricaFacoltativo]/[statoFacoltativi] (ADR 0025, `tec-modelli-ui-facoltativo`) mirror the same
+ * shape one level down, keyed by id: [emettiFacoltativo] simulates a later tick the same way [emetti]
+ * does for the required flow.
  */
 class ServizioModelliFinta(
     iniziale: StatoModelli = StatoModelli.Mancanti(numero = 1, totaleByte = 1_000_000),
     private val licenzeIniziali: List<LicenzaVista> = emptyList(),
     private val risultatoScarica: StatoModelli = StatoModelli.Pronti,
+    facoltativiIniziali: Map<String, StatoModelloFacoltativo> = emptyMap(),
+    private val risultatoScaricaFacoltativo: StatoModelloFacoltativo = StatoModelloFacoltativo.Installato,
 ) : ServizioModelli {
     private val _stato = MutableStateFlow(iniziale)
     override val stato: StateFlow<StatoModelli> = _stato.asStateFlow()
 
+    private val _statoFacoltativi = MutableStateFlow(facoltativiIniziali)
+    override val statoFacoltativi: StateFlow<Map<String, StatoModelloFacoltativo>> = _statoFacoltativi.asStateFlow()
+
     override fun scarica() {
         _stato.value = risultatoScarica
+    }
+
+    override fun scaricaFacoltativo(id: String) {
+        _statoFacoltativi.value = _statoFacoltativi.value + (id to risultatoScaricaFacoltativo)
     }
 
     override fun licenze(): List<LicenzaVista> = licenzeIniziali
@@ -29,6 +42,11 @@ class ServizioModelliFinta(
     /** Test-only: simulates the underlying implementation reporting a later tick (see class KDoc). */
     fun emetti(stato: StatoModelli) {
         _stato.value = stato
+    }
+
+    /** Test-only: simulates a later tick for one optional entry (see class KDoc). */
+    fun emettiFacoltativo(id: String, stato: StatoModelloFacoltativo) {
+        _statoFacoltativi.value = _statoFacoltativi.value + (id to stato)
     }
 }
 

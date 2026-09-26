@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
+import snastro.ui.testi.etichettaModelloLinguisticoPiede
 import snastro.ui.testi.messaggioPer
 
 /**
@@ -17,6 +18,11 @@ import snastro.ui.testi.messaggioPer
  * missing/downloading/failed (RC-1) — it only maps [StatoModelli]/[ErroreServizioModelli] into
  * [ModelliUiStato]/a message, exactly the way [snastro.ui.lettore.LettorePresenter] reflects
  * `LettoreAudio.stato` for the shared audio bar.
+ *
+ * [etichettaModelloLinguisticoPiede] (AC-S33, ADR 0025) is this same presenter's second, independent
+ * derived state: the sidebar-foot line for the optional model, reflecting
+ * [ServizioModelli.statoFacoltativi] the same reactive way [stato] reflects [ServizioModelli.stato] —
+ * one instance of this presenter feeds both S5 and the shell's sidebar (composition root wiring).
  */
 class ModelliPresenter(
     private val scope: CoroutineScope,
@@ -26,8 +32,17 @@ class ModelliPresenter(
     private val _stato = MutableStateFlow(mappa(servizio.stato.value))
     val stato: StateFlow<ModelliUiStato> = _stato.asStateFlow()
 
+    private val _etichettaModelloLinguisticoPiede =
+        MutableStateFlow(etichettaModelloLinguisticoPiede(servizio.statoFacoltativi.value))
+    val etichettaModelloLinguisticoPiede: StateFlow<String?> = _etichettaModelloLinguisticoPiede.asStateFlow()
+
     init {
         scope.launch { servizio.stato.collect { s -> _stato.value = mappa(s) } }
+        scope.launch {
+            servizio.statoFacoltativi.collect { m ->
+                _etichettaModelloLinguisticoPiede.value = etichettaModelloLinguisticoPiede(m)
+            }
+        }
     }
 
     private fun mappa(s: StatoModelli): ModelliUiStato = when (s) {
