@@ -1,0 +1,42 @@
+-- Queries for `riassunto` — schema in migrations/6.sqm (ADR 0022, ADR 0006 Amendment (a)).
+
+trovaPerId:
+SELECT * FROM riassunto WHERE id = :id;
+
+trovaDiRegistrazione:
+SELECT * FROM riassunto WHERE registrazione_id = :registrazioneId ORDER BY richiesto_alle, id;
+
+-- ADR 0022 §4 / ADR 0023: FIFO order of the shared queue.
+trovaInAttesa:
+SELECT * FROM riassunto WHERE stato = 'in_attesa' ORDER BY richiesto_alle, id;
+
+trovaInCorso:
+SELECT * FROM riassunto WHERE stato = 'in_corso' ORDER BY richiesto_alle, id;
+
+inserisci:
+INSERT INTO riassunto(id, registrazione_id, stato, argomento, lunghezza_massima_parole, richiesto_alle,
+    avviato_alle, motivo_fallimento, sommario, omessi, struttura)
+VALUES (:id, :registrazioneId, :stato, :argomento, :lunghezzaMassimaParole, :richiestoAlle,
+    :avviatoAlle, :motivoFallimento, :sommario, :omessi, :struttura);
+
+-- The queue's claim: in_attesa -> in_corso. A plain UPDATE is safe here — at most one in_attesa|
+-- in_corso row exists per Registrazione (riassunto_non_pronto_unico), so there is nothing to race
+-- against on this id. The completion transition below is the one that needs a CAS.
+avvia:
+UPDATE riassunto SET stato = 'in_corso', avviato_alle = :avviatoAlle WHERE id = :id;
+
+-- ADR 0022 §4 step 3 (INV-S8): the CAS half of completion — 0 affected rows iff the id is absent, or
+-- no longer in_corso (already completed, or every Riassunto of the Registrazione was purged meanwhile).
+concludi:
+UPDATE riassunto SET stato = :stato, motivo_fallimento = :motivoFallimento, sommario = :sommario,
+    omessi = :omessi, struttura = :struttura
+    WHERE id = :id AND stato = 'in_corso';
+
+-- Single-row removal: the caller deletes riassunto_fonte then riassunto_elemento first (no cascade).
+elimina:
+DELETE FROM riassunto WHERE id = :id;
+
+-- ADR 0020 / ADR 0022: every Riassunto of a Registrazione (TrascrittoSostituito, RegistrazioneEliminata).
+-- The caller deletes riassunto_fonte then riassunto_elemento (their eliminaDiRegistrazione) first.
+eliminaDiRegistrazione:
+DELETE FROM riassunto WHERE registrazione_id = :registrazioneId;

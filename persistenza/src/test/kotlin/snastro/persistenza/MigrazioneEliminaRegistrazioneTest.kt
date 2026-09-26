@@ -21,7 +21,7 @@ import kotlin.test.assertTrue
  */
 class MigrazioneEliminaRegistrazioneTest {
     @Test
-    fun `AC-597 5 sqm contiene solo il CREATE TABLE eliminazione_in_sospeso e lo schema e alla versione 6`() {
+    fun `AC-597 5 sqm contiene solo il CREATE TABLE eliminazione_in_sospeso, schema 5 a 6`() {
         val istruzioni = File("src/main/sqldelight/migrations/5.sqm").readLines()
             .map(String::trim)
             .filter { it.isNotEmpty() && !it.startsWith("--") }
@@ -39,7 +39,9 @@ class MigrazioneEliminaRegistrazioneTest {
             istruzioni.drop(1),
         )
         assertTrue(istruzioni.none { "REFERENCES" in it || "FOREIGN" in it }, "nessuna FK")
-        assertEquals(VERSIONE_ELIMINA, SnastroDatabase.Schema.version)
+        // NOT current-version equality: 5.sqm is a fixed 5->6 step, not necessarily the latest migration
+        // (ADR 0022's 6.sqm follows it) — SnastroDatabase.Schema.version tracks the LATEST one instead.
+        assertTrue(VERSIONE_ELIMINA <= SnastroDatabase.Schema.version)
     }
 
     @Test
@@ -57,7 +59,9 @@ class MigrazioneEliminaRegistrazioneTest {
         val db = apriDatabaseProgetto(cartella.toFile())
         val driver = driverSqlite(url)
         try {
-            assertEquals(VERSIONE_ELIMINA, pragmaLong(driver, "user_version"))
+            // The LATEST schema version, not the fixed VERSIONE_ELIMINA (5.sqm's own target) — a later
+            // migration (ADR 0022's 6.sqm) moves this DB further still.
+            assertEquals(SnastroDatabase.Schema.version, pragmaLong(driver, "user_version"))
             TABELLE.forEach { assertEquals(prima.getValue(it), contenuto(driver, it), "righe di $it intatte") }
             assertTrue(prima.values.all { it.isNotEmpty() }, "ogni tabella del fixture ha almeno una riga")
             assertEquals(emptyList(), db.database.eliminazioneInSospesoQueries.elenco().executeAsList())

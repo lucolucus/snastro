@@ -1,0 +1,18 @@
+-- Queries for `riassunto_elemento` — schema in migrations/6.sqm (ADR 0022, ADR 0006 Amendment (a)).
+
+trovaDiRiassunto:
+SELECT * FROM riassunto_elemento WHERE riassunto_id = :riassuntoId ORDER BY tipo, posizione;
+
+inserisci:
+INSERT INTO riassunto_elemento(riassunto_id, tipo, posizione, testo, voce_id)
+VALUES (:riassuntoId, :tipo, :posizione, :testo, :voceId);
+
+-- Second step of the no-cascade removal order (fonte -> elemento -> riassunto, ADR 0022 §2) —
+-- also used by `salva`'s "replace of children" before re-inserting the current set.
+eliminaDiRiassunto:
+DELETE FROM riassunto_elemento WHERE riassunto_id = :riassuntoId;
+
+-- ADR 0020 / ADR 0022: every element of every Riassunto of a Registrazione. The caller runs this
+-- BEFORE Riassunto.sq's eliminaDiRegistrazione (children first, no cascade).
+eliminaDiRegistrazione:
+DELETE FROM riassunto_elemento WHERE riassunto_id IN (SELECT id FROM riassunto WHERE registrazione_id = :registrazioneId);
