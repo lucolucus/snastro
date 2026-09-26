@@ -4,6 +4,7 @@ import snastro.kernel.Esito
 import snastro.kernel.poi
 import java.io.IOException
 import java.net.URI
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
@@ -17,8 +18,16 @@ import java.util.Locale
  * then an ATOMIC directory rename — nothing under `<id>/` is ever visible half-written. A stale
  * `<id>/` (a re-install, AC-333) is renamed aside first (POSIX `rename` cannot atomically replace a
  * non-empty directory) and deleted only after the swap succeeds.
+ *
+ * [FormatoVoce.FILE] is MOVED, never copied (ADR 0025 §3, AC-S30): [operazioniFile] tries an
+ * ATOMIC_MOVE first and falls back to a plain move — still on the SAME store, never a copy — when
+ * [AtomicMoveNotSupportedException] is thrown.
  */
-internal class InstallatoreAsset(private val voce: VoceCatalogo, private val cartella: Path) {
+internal class InstallatoreAsset(
+    private val voce: VoceCatalogo,
+    private val cartella: Path,
+    private val operazioniFile: OperazioniFile = OperazioniFileReali,
+) {
     private val parziale = cartella.resolve("${voce.id}.part")
     private val destinazione = cartella.resolve(voce.id)
     private val temp = cartella.resolve("${voce.id}.tmp-0")
@@ -49,12 +58,21 @@ internal class InstallatoreAsset(private val voce: VoceCatalogo, private val car
     }
 
     private fun installaFile(): Esito<Unit> {
-        val nomeFile = nomeFileDaUrl(voce.url)
+        val bersaglio = temp.resolve(nomeFileDaUrl(voce.url))
         return try {
-            Files.move(parziale, temp.resolve(nomeFile))
+            muoviConRipiego(bersaglio)
             Esito.Ok(Unit)
         } catch (e: IOException) {
             Esito.Errore(ErroreModelli.ScritturaFallita(motivoLocale(e)))
+        }
+    }
+
+    /** AC-S30: ATOMIC_MOVE first; a store that refuses it falls back to a plain move — never a copy. */
+    private fun muoviConRipiego(bersaglio: Path) {
+        try {
+            operazioniFile.spostaAtomico(parziale, bersaglio)
+        } catch (ignore: AtomicMoveNotSupportedException) {
+            operazioniFile.sposta(parziale, bersaglio)
         }
     }
 

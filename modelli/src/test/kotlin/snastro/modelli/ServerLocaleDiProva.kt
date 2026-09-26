@@ -20,10 +20,15 @@ internal class ServerLocaleDiProva : AutoCloseable {
     private val rifiuta416 = mutableSetOf<String>()
     private val ignoraRange = mutableSetOf<String>()
     private val sospesi = mutableMapOf<String, Int>()
+    private val contatoreRichieste = mutableMapOf<String, Int>()
 
     /** Bytes actually written by the server on the last request it answered (assertions on resume). */
     var byteServitiUltimaRichiesta: Int = 0
         private set
+
+    /** How many requests [percorso] received so far (AC-S27: an optional entry's URL gets zero). */
+    @Synchronized
+    fun richiesteA(percorso: String): Int = contatoreRichieste[percorso] ?: 0
 
     private val executor = Executors.newCachedThreadPool { azione ->
         Thread(azione, "server-di-prova").apply { isDaemon = true }
@@ -72,8 +77,14 @@ internal class ServerLocaleDiProva : AutoCloseable {
         executor.awaitTermination(1, TimeUnit.SECONDS)
     }
 
+    @Synchronized
+    private fun contaRichiesta(percorso: String) {
+        contatoreRichieste[percorso] = (contatoreRichieste[percorso] ?: 0) + 1
+    }
+
     private fun gestisci(scambio: HttpExchange) {
         val percorso = scambio.requestURI.path
+        contaRichiesta(percorso)
         val gestito = rispondiRedirectSeConfigurato(scambio, percorso) ||
             rispondiNonTrovatoSeAssente(scambio, percorso) ||
             rispondi416SeConfigurato(scambio, percorso) ||

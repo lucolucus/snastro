@@ -49,6 +49,15 @@ class ServizioModelliProvisioningTest {
     }
 
     @Test
+    fun `SpazioInsufficiente e uno stopgap su ScritturaFallita finche il blocco della voce facoltativa non arriva`() {
+        // ADR 0025 §3/§5: nessuna variante omonima dedicata in :ui finche' il blocco che disegna la
+        // UI della voce facoltativa non la aggiunge — vedi il commento su mappaErrore.
+        val mappato = mappaErrore(ErroreModelli.SpazioInsufficiente(6_600_000_000))
+
+        assertEquals(ErroreServizioModelli.ScritturaFallita("spazio insufficiente: servono 6600000000 byte"), mappato)
+    }
+
+    @Test
     fun `AC-329 un Errore di scarica arriva come StatoModelli Errore mappato`() {
         val servizio = servizio(scarica = { Esito.Errore(ErroreModelli.HashNonValido("vad-prova")) })
 

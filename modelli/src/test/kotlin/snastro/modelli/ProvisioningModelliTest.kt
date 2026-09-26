@@ -31,6 +31,12 @@ class ProvisioningModelliTest {
         server.close()
     }
 
+    private companion object {
+        // AC-S31: 64 MiB, la stessa soglia di ProvisioningModelli.MARGINE_SPAZIO_BYTE (privata: il
+        // test la ripete per costruire soglie esatte, mai per ispezionare l'implementazione).
+        const val MARGINE_SPAZIO_BYTE_TEST = 64L * 1024 * 1024
+    }
+
     @Test
     fun `un catalogo vuoto e sempre pronto`() {
         val provisioning = ProvisioningModelli(CatalogoModelli(emptyList()), cartella)
@@ -350,6 +356,160 @@ class ProvisioningModelliTest {
         }
         assertTrue(provisioning.pronti())
         assertContentEquals(contenuto, Files.readAllBytes(provisioning.percorso("a").resolve("peso.bin")))
+    }
+
+    @Test
+    fun `AC-S26 pronti e mancanti ignorano una voce facoltativa non installata`() {
+        val obbligatoria = unaVoceServita("richiesta", "contenuto".toByteArray())
+        val facoltativa = unaVoce("facoltativa", "peso llm".toByteArray()).copy(obbligatoria = false)
+        val provisioning = ProvisioningModelli(CatalogoModelli(listOf(obbligatoria, facoltativa)), cartella)
+
+        val esito = provisioning.scarica { _, _, _ -> }
+
+        esito.atteso()
+        assertTrue(provisioning.pronti())
+        assertEquals(emptyList(), provisioning.mancanti())
+        assertFalse(provisioning.installata(facoltativa.id))
+    }
+
+    @Test
+    fun `AC-S27 lo scarica di massa non fa mai una richiesta per una voce facoltativa`() {
+        val obbligatoria = unaVoceServita("richiesta", "contenuto".toByteArray())
+        val facoltativa = unaVoce("facoltativa", "peso llm".toByteArray()).copy(obbligatoria = false)
+        // Nota: server.servi() non e' MAI chiamato per facoltativa.url: se scarica() la richiedesse
+        // comunque, il server risponderebbe 404 e l'esito complessivo sarebbe un Errore, non Ok.
+        val provisioning = ProvisioningModelli(CatalogoModelli(listOf(obbligatoria, facoltativa)), cartella)
+
+        val esito = provisioning.scarica { _, _, _ -> }
+
+        esito.atteso()
+        assertEquals(0, server.richiesteA(facoltativa.url.percorsoDaUrl()))
+    }
+
+    @Test
+    fun `AC-S28 installata(id) e vera solo se la directory esiste e il marcatore combacia col catalogo`() {
+        val facoltativa = unaVoceServita("facoltativa", "peso llm".toByteArray()).copy(obbligatoria = false)
+        val provisioning = ProvisioningModelli(CatalogoModelli(listOf(facoltativa)), cartella)
+
+        assertFalse(provisioning.installata(facoltativa.id), "nessuna directory ancora")
+        assertFalse(provisioning.installata("id-sconosciuto-nel-catalogo"))
+
+        provisioning.scarica(facoltativa.id) { _, _ -> }.atteso()
+        assertTrue(provisioning.installata(facoltativa.id))
+
+        Files.writeString(provisioning.percorso(facoltativa.id).resolve(".sha256"), "hash-non-valido")
+        assertFalse(provisioning.installata(facoltativa.id), "un marcatore diverso dal catalogo non e' installato")
+    }
+
+    @Test
+    fun `AC-S29 scarica(id) installa solo quella voce, lascia intatte le obbligatorie, progresso monotono`() {
+        val obbligatoria = unaVoceServita("richiesta", "contenuto richiesto".toByteArray())
+        val facoltativa = unaVoceServita("facoltativa", ByteArray(30_000) { (it % 256).toByte() })
+            .copy(obbligatoria = false)
+        val provisioning = ProvisioningModelli(CatalogoModelli(listOf(obbligatoria, facoltativa)), cartella)
+        provisioning.scarica { _, _, _ -> }.atteso() // installa solo la voce obbligatoria
+        val hashRichiestaPrima = Files.readString(provisioning.percorso("richiesta").resolve(".sha256"))
+        val progressi = mutableListOf<Pair<Long, Long>>()
+
+        val esito = provisioning.scarica(facoltativa.id) { scaricati, totali -> progressi += scaricati to totali }
+
+        esito.atteso()
+        assertTrue(provisioning.installata(facoltativa.id))
+        assertContentEquals(
+            "contenuto richiesto".toByteArray(),
+            Files.readAllBytes(provisioning.percorso("richiesta").resolve("peso.bin")),
+        )
+        assertEquals(
+            hashRichiestaPrima,
+            Files.readString(provisioning.percorso("richiesta").resolve(".sha256")),
+            "la voce obbligatoria resta intatta byte per byte",
+        )
+        assertTrue(progressi.isNotEmpty())
+        for (i in 1 until progressi.size) {
+            assertTrue(progressi[i].first >= progressi[i - 1].first, "il progresso non decresce mai")
+        }
+        assertEquals(facoltativa.dimensioneByte, progressi.last().first)
+        assertEquals(facoltativa.dimensioneByte, progressi.last().second)
+    }
+
+    @Test
+    fun `AC-S29 due chiamate concorrenti a scarica(id) sono serializzate sullo stesso lucchetto`() {
+        val facoltativa = unaVoceServita("facoltativa", ByteArray(50_000) { (it % 256).toByte() })
+            .copy(obbligatoria = false)
+        val provisioning = ProvisioningModelli(CatalogoModelli(listOf(facoltativa)), cartella)
+        val esecutore = Executors.newFixedThreadPool(2)
+        try {
+            val futures = (1..2).map { esecutore.submit(Callable { provisioning.scarica(facoltativa.id) { _, _ -> } }) }
+            val risultati = futures.map { it.get(10, TimeUnit.SECONDS) }
+            risultati.forEach { it.atteso() }
+        } finally {
+            esecutore.shutdown()
+        }
+        assertTrue(provisioning.installata(facoltativa.id))
+        assertContentEquals(
+            ByteArray(50_000) { (it % 256).toByte() },
+            Files.readAllBytes(provisioning.percorso(facoltativa.id).resolve("peso.bin")),
+        )
+    }
+
+    @Test
+    fun `AC-S31 spazio insufficiente restituisce SpazioInsufficiente senza toccare la rete`() {
+        val facoltativa = unaVoce("facoltativa", "x".repeat(1000).toByteArray()).copy(obbligatoria = false)
+        // Nessun contenuto servito per facoltativa: se la rete fosse toccata l'esito sarebbe
+        // DownloadFallito (404), mai SpazioInsufficiente.
+        val necessari = facoltativa.dimensioneByte + MARGINE_SPAZIO_BYTE_TEST
+        val provisioning = ProvisioningModelli(
+            CatalogoModelli(listOf(facoltativa)),
+            cartella,
+            spazioDisponibileByte = { necessari - 1 },
+        )
+
+        val esito = provisioning.scarica(facoltativa.id) { _, _ -> }
+
+        val errore = esito.erroreAtteso<ErroreModelli.SpazioInsufficiente>()
+        assertEquals(facoltativa.dimensioneByte, errore.richiestiByte)
+        assertFalse(Files.exists(cartella.resolve("facoltativa.part")))
+        assertEquals(0, server.richiesteA(facoltativa.url.percorsoDaUrl()))
+    }
+
+    @Test
+    fun `AC-S31 spazio esattamente sufficiente fa procedere il download`() {
+        val contenuto = "contenuto ottimale per lo spazio".toByteArray()
+        val facoltativa = unaVoceServita("facoltativa", contenuto).copy(obbligatoria = false)
+        val necessari = contenuto.size.toLong() + MARGINE_SPAZIO_BYTE_TEST
+        val provisioning = ProvisioningModelli(
+            CatalogoModelli(listOf(facoltativa)),
+            cartella,
+            spazioDisponibileByte = { necessari },
+        )
+
+        val esito = provisioning.scarica(facoltativa.id) { _, _ -> }
+
+        esito.atteso()
+        assertTrue(provisioning.installata(facoltativa.id))
+    }
+
+    @Test
+    fun `AC-S31 un part esistente riduce lo spazio richiesto e la ripresa parte dal punto raggiunto`() {
+        val contenuto = ByteArray(20_000) { (it % 256).toByte() }
+        val facoltativa = unaVoceServita("facoltativa", contenuto).copy(obbligatoria = false)
+        Files.createDirectories(cartella)
+        Files.write(cartella.resolve("facoltativa.part"), contenuto.copyOfRange(0, 5_000))
+        val necessari = (contenuto.size - 5_000).toLong() + MARGINE_SPAZIO_BYTE_TEST
+        val provisioning = ProvisioningModelli(
+            CatalogoModelli(listOf(facoltativa)),
+            cartella,
+            spazioDisponibileByte = { necessari }, // esattamente cio' che serve DOPO aver contato il .part
+        )
+
+        val esito = provisioning.scarica(facoltativa.id) { _, _ -> }
+
+        esito.atteso()
+        assertContentEquals(contenuto, Files.readAllBytes(provisioning.percorso("facoltativa").resolve("peso.bin")))
+        assertTrue(
+            server.byteServitiUltimaRichiesta < contenuto.size,
+            "la richiesta ha ricevuto solo il resto: e' una ripresa",
+        )
     }
 
     private fun unaVoce(

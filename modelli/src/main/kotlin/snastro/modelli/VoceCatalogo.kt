@@ -12,6 +12,12 @@ package snastro.modelli
  * [id] also names the installed directory (`<cartella>/<id>/`) and the temporary files used while
  * installing it, so it is restricted to a safe, portable set of path characters — a programmer
  * error (a malformed catalogue entry), never user input.
+ *
+ * [obbligatoria] (ADR 0025 §1, default `true` so every entry declared before this rework is
+ * unchanged) marks an entry [ProvisioningModelli.pronti]/[ProvisioningModelli.mancanti] range
+ * over: a `false` entry (an optional, on-demand model — e.g. the Sintesi LLM) is never touched by
+ * the bulk onboarding [ProvisioningModelli.scarica], only by its own
+ * [ProvisioningModelli.installata]/[ProvisioningModelli.scarica] (by id).
  */
 public data class VoceCatalogo(
     public val id: String,
@@ -22,6 +28,7 @@ public data class VoceCatalogo(
     public val formato: FormatoVoce,
     public val licenza: String,
     public val attribuzione: String,
+    public val obbligatoria: Boolean = true,
 ) {
     init {
         require(ID_PATTERN.matches(id)) { "id di VoceCatalogo non valido: '$id' (atteso ${ID_PATTERN.pattern})" }
