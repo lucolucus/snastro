@@ -89,3 +89,16 @@
 - Docs: [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md), [building-blocks.yaml](building-blocks.yaml)
 - Revisit: The user picks a Windows/Linux build host, or snastro targets Windows/Linux.
 - ADR: [ADR 0027](../../decisions/0027-libreria-llama-jni-separata.md)
+
+### D-0008 · Foreign leak: isolate tests, fix Documento
+- Meta: 2026-09-27; scope: block:modello-facoltativo-avvio; status: accepted
+- Question: the modello-facoltativo-avvio candidate red is a foreign leak: AbbonatoDocumentoEventi rebuilds a half-written Trascritto at ComposizioneR2Test teardown; the next runTest rethrows it.
+- Options: fix Documento first, then re-gate (slower) vs only clear the collector in the footer tests (hides a race) vs both (kept).
+- Hypothesis: n/a — decided by the user on the rework-2 BLOCKED return, [rework 2](rework/modello-facoltativo-avvio-2.md)
+- Check: n/a — decided by the user on the rework-2 BLOCKED return, [rework 2](rework/modello-facoltativo-avvio-2.md)
+- Result: n/a — decided by the user on the rework-2 BLOCKED return, [rework 2](rework/modello-facoltativo-avvio-2.md)
+- Debate: worker probe (a JUnit extension running an empty runTest around every :avvio test) pinned the leak after ComposizioneR2Test AC-315 in 1 of 4 runs; both footer tests green 50/50 alone.
+- Decision: footer tests drain the coroutine-test collector (foreign exceptions logged), integrate; separately fix Documento so a failed Trascritto rebuild retries instead of escaping. Cost: leak only logged meanwhile.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [rework 2](rework/modello-facoltativo-avvio-2.md), [pre-release](pre-release.md)
+- Revisit: the Documento fix lands — then the drain in the footer tests can go.
