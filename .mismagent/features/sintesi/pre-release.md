@@ -72,3 +72,10 @@
 - [ ] R3 · modello-linguistico · LOW · ModelloLinguisticoContratto.kt:105-107, ModelloLinguisticoFintoTest.kt:26 · example ingresso strings still carry m:ss timestamps (ADR 0021 §4 amended; format never asserted) · verifier · 2026-09-26
 - [ ] R3 · riassunto · LOW · sintesi/dominio/.../LunghezzaMassimaParole.kt:7 · KDoc says bounds "provisional" though ADR 0026 §5 confirms MASSIMO 2500 · verifier · 2026-09-26
 - [ ] R3 · (gate) · MED · architettura-test/controlli-adr/adr-0001*, adr-0005*, adr-0008* (and any `find .`/`grep -r .` check) · checks walk git-ignored nested `.worktrees/` checkouts → false FAILs (and Konsist OOM) when the gate runs in the integration checkout; exclude `.worktrees/` (or scan `git ls-files`) · verifier + architect · 2026-09-26
+- [ ] R3 · riassumi · MED · RiassumiServizio.kt:70 · Esito of riassunti.rimuovi(fallito) ignored (ADR 0003/CR-7 swallowed failure) — chain with .poi · verifier+code-review · 2026-09-26
+- [ ] R3 · riassumi · MED · RiassumiServizioTest.kt:227-251 · AC-S81 doesn't prove rollback (no fallito seeded) — seed a fallito, force salva Errore, assert fallito restored · verifier+code-review · 2026-09-26
+- [ ] R3 · riassumi · LOW · RiassumiServizio.kt:55, :82-85 · INV-S6 estimate with nomi=emptyMap() can under-estimate by ~Δname chars (negligible vs ÷2.4 margin + n_ctx headroom; contaToken backstop). riassunto-vista MUST estimate the same name-free way (check in its review); optionally note in ADR 0021/0026 · verifier+code-review · 2026-09-26
+- [ ] R3 · riassumi · LOW · RiassumiServizioTest.kt:196-224 · AC-S80 spies don't cover lunghezzeMassime.trova · code-review · 2026-09-26
+- [ ] R3 · riassumi · LOW · RiassumiServizioTest.kt:253-274 · AC-S82 "records only stato()" not asserted (Konsist constructor check carries it) · verifier+code-review · 2026-09-26
+- [ ] R3 · riassumi · LOW · RiassumiServizio.kt:73-75 · creato.evento dropped, RiassuntoRichiesto rebuilt by hand (dev-architecture §4 pubblicato() extension) · verifier+code-review · 2026-09-26
+- [ ] R3 · riassumi · LOW · RiassumiServizioTest.kt · INV-S2/S6/S10 have no test named with the tag · verifier · 2026-09-26
