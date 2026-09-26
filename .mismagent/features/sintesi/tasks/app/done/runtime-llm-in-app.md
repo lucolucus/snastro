@@ -48,3 +48,9 @@ real adapter and the model unload/keep-warm choice (AC-S157), and the real-runti
 NOT the gate and no other block: the port's fake (`ModelloLinguisticoFinto`) keeps every other Sintesi block
 buildable; the provisional constants the spike calibrates (LimiteIngresso, INV-S9 upper bound 2500, the
 Argomento bound) each have one home and are recalibrated through the spike's ADR, never by blocking their owners.
+
+## Closure
+**Closed 2026-09-26 by [ADR 0026](../../../../../decisions/0026-runtime-llm-jni-llama.md) [user]** (`closes_spike: runtime-llm-in-app`;
+context-map entry `[x]`). Evidence: `features/sintesi/spikes/runtime-llm-in-app.md`. Runtime = llama.cpp b11195 in-process
+via our JNI shim (the spike recommended the sidecar; the user chose JNI). `modello-linguistico-llama` is unblocked.
+The node's move to `done/` is the worker-composer's (state).

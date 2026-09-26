@@ -5,7 +5,7 @@ supersedes: null
 closes_spike: null
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0004-sherpa-confinato.sh
-amended: 2026-09-25   # "Amendment 2026-09-25 (ADR 0023)" (the serial queue is SHARED with Riassunti); earlier: see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
+amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0026)" (System.load also admitted in the top-level ./llm/ module; check + fixtures amended); earlier: "Amendment 2026-09-25 (ADR 0023)" (the serial queue is SHARED with Riassunti); earlier: see "Amendment 2026-09-23" (enforced_by scope: --exclude-dir=architettura-test), "Amendment 2026-09-23 (b)" (no automatic start, ADR 0014 [user]) and "Amendment 2026-09-24" (native coordinates, fetch, explicit load, provider — ADR 0016)
 ---
 # 0004 — ML runtime: sherpa-onnx (JNI) in-process, confined to `:ml-sherpa`, serial pipeline
 
@@ -111,3 +111,18 @@ home of the answers. The text above is kept as written. Read it with these refin
 thread, the native wrappers and this ADR's `enforced_by` are unchanged. If the LLM runtime is JNI,
 spike `runtime-llm-in-app`'s ADR amends this rule's `System.load` clause to admit `./llm/`
 ([ADR 0021](0021-sintesi-moduli-confini-porte.md) §5). Nothing else in this ADR changes.
+
+## Amendment 2026-09-26 — native loading admitted in `./llm/` ([ADR 0026](0026-runtime-llm-jni-llama.md))
+**Why.** Spike `runtime-llm-in-app` closed with the user's choice of **llama.cpp in-process via our own JNI
+shim** (ADR 0026 §1). The shim needs one `System.load`, and ADR 0021 §5 reserved exactly this amendment.
+
+**Amended rule** (the check `architettura-test/controlli-adr/adr-0004-sherpa-confinato.sh`, same name and path):
+- `com.k2fsa` appears only in `ml-sherpa` — **unchanged**, and not admitted in `./llm/`;
+- native loading — `System.load`, `System.loadLibrary`, and now also `Runtime.getRuntime().load*` (an idiomatic
+  alternative the old rule missed) — appears only in `ml-sherpa` **and in the top-level `./llm/` module**. A
+  directory named `llm` nested anywhere else (e.g. `sintesi/adattatori/…/llm/`) is not admitted.
+
+New fixtures: `conforme/llm/…/LlamaNativo.kt` (a `System.load` + an `external fun` in `./llm/`: PASS);
+`violante-k2fsa-in-llm`, `violante-llm-annidato`, `violante-runtime-load` (FAIL). Everything else in this ADR
+(sherpa in-process, the serial queue, CPU provider, recovery) is unchanged; the LLM's own load/unload and
+cancellation rules are ADR 0026's.

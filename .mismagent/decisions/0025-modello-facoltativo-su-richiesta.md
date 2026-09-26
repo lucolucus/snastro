@@ -3,6 +3,7 @@ scope: global
 status: accepted
 supersedes: null   # AMENDS ADR 0008 (catalogue scope, host, "required at onboarding", Amendment (c) FILE install step) and code-rules.md RC-8; pointers added there. ADR 0008's network confinement and its enforced_by are UNCHANGED by this ADR (see §5).
 closes_spike: null
+amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0026)": §5 catalogue values fixed; the size is 6,2 GB, not 6,6
 enforced_by: null   # confinement stays ADR 0008's rule; `:sintesi:*` has no edge to `:modelli` (verificaDipendenzeModuli, ADR 0021 §2); the rest is test + review
 ---
 # 0025 — An OPTIONAL model downloaded on demand (the LLM of Sintesi): catalogue, host, install, availability (amends ADR 0008)
@@ -86,6 +87,7 @@ space and minutes of I/O. With the move, peak disk use is 1× the asset.
   for the optional entry. Progress is a UI flow, not a domain event.
 
 ### 5. Deferred to spike `runtime-llm-in-app` (its closing ADR)
+*(answered 2026-09-26 by [ADR 0026](0026-runtime-llm-jni-llama.md) §1, §2, §8; see the Amendment below)*
 - **Catalogue entry values:**
   - the URL at a commit;
   - `sha256` and `dimensioneByte`;
@@ -148,3 +150,16 @@ untouched, and the optional entry's four states map 1:1 onto `DisponibilitaModel
 boundary `tec-modelli-ui-facoltativo` (owner block `servizio-modelli-facoltativo`).
 Enforcement: unchanged — no new mechanical constraint (discursive → code-review; the boundary's
 consumer-driven contract and the presenter tests cover it).
+
+## Amendment 2026-09-26 — the catalogue entry's values ([ADR 0026](0026-runtime-llm-jni-llama.md) §8) [user]
+The values §5 deferred, fixed by the closure of spike `runtime-llm-in-app`:
+- id `llm-qwen3.5-9b-q4_k_m`, `obbligatoria = false`, `formato = FILE`;
+- URL `https://huggingface.co/bartowski/Qwen_Qwen3.5-9B-GGUF/resolve/182be2fd6c7bc44887d88a91cb03ff009cc9f549/Qwen_Qwen3.5-9B-Q4_K_M.gguf`
+  (pinned commit, ungated, no token: §2 satisfied);
+- `dimensioneByte` 6 169 341 984; `sha256` `d784ce9eda1a5a7b51e8f705a9e6310844bf4f173654d115823c775fdea56d43`;
+- licence Apache-2.0; attribution "Qwen3.5 9B, Qwen team; quant bartowski".
+
+**The size is 6,2 GB, not 6,6.** The 6.6 GB of the Context and of the UI texts was the Ollama blob, which the app
+cannot use (ADR 0026 §1). Every user-facing size text reads **"6,2 GB"**, derived from `dimensioneByte`
+("Scarica il modello (6,2 GB)", "servono 6,2 GB", "2,1 di 6,2 GB"). The runtime (§5 second bullet) is JNI: ADR
+0004's `System.load` rule admits `./llm/`; ADR 0008's network rule is untouched. Runtime natives: ADR 0026 §2.

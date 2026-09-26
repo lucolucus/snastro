@@ -37,7 +37,7 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:persistenza` | `snastro.persistenza` | SQLDelight schema `.sq`, migrations `.sqm` (source of the schema, ADR 0006 (a)), driver factory (WAL, FK, `secure_delete`), `UnitaDiLavoro` impl |
 | `:audio` | `snastro.audio` | bytedeco FFmpeg `sonda`/`decodifica` → derived WAV; javax.sound player `RiproduttoreWav` (adapted to `:ui`'s `LettoreAudio` by `:avvio`) |
 | `:ml-sherpa` | `snastro.ml` | native-lib loading, sherpa session config, `AutoCloseable` wrappers, diarization/ASR/VAD/embedding engines |
-| `:llm` | `snastro.llm` | *(2026-09-25, ADR 0021)* local LLM runtime (technical, like `:ml-sherpa`); content decided by spike `runtime-llm-in-app`'s ADR |
+| `:llm` | `snastro.llm` | *(2026-09-25, ADR 0021; content 2026-09-26, [ADR 0026](decisions/0026-runtime-llm-jni-llama.md))* local LLM runtime (technical, like `:ml-sherpa`): llama.cpp b11195 via our JNI shim (`src/main/c/`, compiled outside the gate), the one `System.load`, load / exact token count / bounded generation / cancel / release |
 | `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |
 | `:ui` | `snastro.ui` | Compose screens S1–S4 + shared `lettore-audio`: presenters (state holders, unit-tested) + thin composables; declares `LettoreAudio` |
 | `:avvio` | `snastro.avvio` | `main()`, composition root, adapter selection (config), serial `Elaborazione` queue + pipeline dispatcher, startup policies, `--smoke` mode |
@@ -74,7 +74,7 @@ from adapters (and `avvio`).
 
 ## Boundaries (feature `sintesi`, 2026-09-25)
 Detailed in `features/sintesi/architetture/architecture-overview.md` ([ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md) §3): `LettoreTrascritto`
-and `LettoreNomi` (Sintesi's own ports), `ModelloLinguistico` (runtime-neutral, the runtime is spike `runtime-llm-in-app`),
+and `LettoreNomi` (Sintesi's own ports), `ModelloLinguistico` (runtime-neutral; the runtime is llama.cpp via JNI, [ADR 0026](decisions/0026-runtime-llm-jni-llama.md)),
 `DisponibilitaModelloLinguistico` (implemented in `:avvio`, [ADR 0025](decisions/0025-modello-facoltativo-su-richiesta.md)), synchronous subscribers to
 `TrascrittoSostituito` and `RegistrazioneEliminata`.
 

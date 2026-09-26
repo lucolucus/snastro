@@ -45,11 +45,12 @@ Konsist rule allows exactly (a) and (b) above, nothing else of `dominio`). Backu
 I/O, persistence, UI, ML, audio or network API — incl. JDK `java.sql`, `java.net`, `java.nio.file`,
 `java.io.File`, `javax.sound`. → gate lint: Konsist (+ ADR 0002 `enforced_by`).
 
-**CR-3 · Technical confinement.** `com.k2fsa` / `System.load*` only in `:ml-sherpa` (ADR 0004);
+**CR-3 · Technical confinement.** `com.k2fsa` only in `:ml-sherpa`; `System.load*` / `Runtime.load*` only in `:ml-sherpa` and
+the top-level `:llm` (ADR 0004, amended 2026-09-26 by ADR 0026);
 `org.bytedeco` / `javax.sound` only in `:audio`, never an FFmpeg `-gpl` artifact (ADR 0005);
 JDBC / SQLDelight / `org.sqlite` only in `:persistenza` and `:progetto|:trascrizione|:parlanti|:sintesi:adattatori`
-(ADR 0006; `:sintesi` added 2026-09-25, ADR 0021/0022); the LLM runtime only in `:llm` (ADR 0021; its
-native-load or loopback exception is fixed by spike `runtime-llm-in-app`'s ADR); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `documento`
+(ADR 0006; `:sintesi` added 2026-09-25, ADR 0021/0022); the LLM runtime only in `:llm` (ADR 0021; llama.cpp via our JNI shim,
+[ADR 0026](decisions/0026-runtime-llm-jni-llama.md): the native-load exception above, no loopback); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `documento`
 (ADR 0010). → gate lint: Konsist (+ each ADR's `enforced_by`).
 
 **CR-4 · Aggregates are encapsulated, never `data class`.** Aggregate roots are plain classes: state

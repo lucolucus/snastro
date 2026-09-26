@@ -3,6 +3,7 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: architecture.md (module map + edges + boundaries), ADR 0006 enforced_by (deny-list gains `llm`), ADR 0018 §5 (TrascrittoSostituito gains a Sintesi synchronous consumer), code-rules.md CR-3 / CR-10, dev-architecture-app.md (physical deletions list)
 closes_spike: null
+amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0026)": §4 input line without m:ss, §5 LimiteIngresso ÷ 2.4 and the deferred items answered
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0021-confini-sintesi.sh
   # legacy note: green on the tree today (vacuous: no sintesi/ yet); validated 2026-09-25 via bash -c — tree exit 0; fixtures: PASS with `ParlanteId` only in `//`/KDoc lines, with `ParlanteIdentita`, with a `snastro.parlanti.applicazione` import in sintesi/adattatori, with `riassuntoQueries` in sintesi/; FAIL on `import snastro.kernel.ParlanteId` in sintesi/applicazione, on a fully-qualified `snastro.parlanti.…` use in sintesi/dominio, on `segmentoQueries` in sintesi/adattatori, on `riassuntoFonteQueries` in trascrizione/
@@ -96,6 +97,7 @@ public data class PuntoChiaveRisposta(val testo: String, val fonti: List<Int>, v
 ```
 - **Who owns what.** Sintesi owns the **input format** and the **reference syntax**:
   - the input line is `[s<segmentoId> V<voceId> m:ss] <testo>`, plus a legend `V<n> = <Nome | Voce n>`;
+    *(amended 2026-09-26, ADR 0026: `[s<segmentoId> V<voceId>] <testo>`, no `m:ss` — see the Amendment below)*
   - in every answer text, a speaker is written `{V<n>}` (literal braces doubled). This is the port's
     canonical form. The adapter translates whatever syntax its prompt uses into it, so the root and
     storage (ADR 0022) never depend on a prompt.
@@ -123,6 +125,7 @@ public data class PuntoChiaveRisposta(val testo: String, val fonti: List<Int>, v
   on a regression that moves the call into a transaction.
 
 ### 5. Deferred to spike `runtime-llm-in-app` (its closing ADR, numbered after this feature's)
+*(answered 2026-09-26 by [ADR 0026](0026-runtime-llm-jni-llama.md): JNI in-process; see the Amendment below)*
 This ADR fixes **only** the port and the module. The spike's ADR decides:
 - **JNI (llama.cpp in-process) or `llama-server` sidecar (loopback).**
   - JNI → ADR 0004's `enforced_by` (`System.load` only in `ml-sherpa`) must admit `./llm/`.
@@ -226,3 +229,20 @@ and the Riassunto tab. R0–R2 compositions create no `Riassunto` and show no ta
   - Test: the `ModelloLinguisticoFinto` transaction guard.
   - Discursive (code review): policies never call `ModelloLinguistico`; names only through
     `LettoreNomi`; the adapter re-expresses every speaker as `{V<n>}`.
+
+## Amendment 2026-09-26 — the runtime spike's answers ([ADR 0026](0026-runtime-llm-jni-llama.md)) [user]
+Spike `runtime-llm-in-app` closed. ADR 0026 is the single home of the runtime; this ADR changes only where §4
+and §5 fixed provisional values:
+- **§4, input line (user decision):** each `Segmento` becomes **`[s<segmentoId> V<voceId>] <testo>`**. The `m:ss`
+  timestamp is dropped: it cost 21.3 % of the input tokens (Qwen splits digits one token each), and nothing in the
+  answer uses it (a `Fonte` is a `segmentoId`; its minute is resolved at display). The legend
+  `V<n> = <Nome | Voce n>` and the `{V<n>}` reference syntax are unchanged.
+- **§4, cancellation bound:** `ModelloLinguisticoContratto` asserts `Errore(Annullato)` within **10 s**, native
+  release included (ADR 0026 §4).
+- **§5, `LimiteIngresso` (calibrated, still its single home in `:sintesi:dominio`):** estimated tokens =
+  **⌈characters ÷ 2.4⌉** (integer form ⌈5 × characters ÷ 12⌉), limit **28 000** unchanged. The provisional ÷ 3
+  under-estimated by ≈ 17 % (measured 2.51 characters/token). Consistent with the runtime's `n_ctx` = 40 960
+  (ADR 0026 §5). The exact count stays the run-time backstop (`IngressoTroppoLungo` → `troppo_lunga`).
+- **§5, [INV-S9]:** the upper bound stays **2500 words** (default 2000); the context is sized for it (ADR 0026 §5).
+- **§5, the other deferred items:** JNI (ADR 0004 amended, ADR 0008 untouched), natives, Metal, unload after each
+  run, the catalogue values: ADR 0026 §1–§8.

@@ -1,0 +1,6 @@
+package snastro.llm
+
+internal object LlamaNativo {
+    fun carica(cartella: String) = System.load("$cartella/libsnastro-llama-jni.dylib")
+    external fun annulla(handle: Long)
+}

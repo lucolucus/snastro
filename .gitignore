@@ -21,6 +21,10 @@ native-cache/
 # sherpa-onnx release artifacts (ADR 0016 enforced_by: never tracked, even outside native-cache/)
 sherpa-onnx*.jar
 *.tar.bz2
+# llama.cpp release archives and GGUF weights (ADR 0026 enforced_by: never tracked)
+llama-b*-bin-*.tar.gz
+llama-b*-bin-*.zip
+*.gguf
 
 # build
 build/

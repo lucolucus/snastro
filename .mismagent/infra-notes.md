@@ -17,6 +17,13 @@
   fetch, SHA-256, never downloaded by the app) and the Metal use. It runs on the SHARED serial queue, one item at
   a time with the `Elaborazione`s, is unloaded after each `Riassunto` by default, and never takes the sherpa Mutex.
   NFR: ≤ 300 s for a 60-min `Registrazione` on the M3 Pro (opt-in, outside the gate).
+  → *(amended 2026-09-26, [ADR 0026](decisions/0026-runtime-llm-jni-llama.md), spike closed [user])* **llama.cpp b11195
+  in-process via our own JNI shim** in `:llm` (no sidecar, no loopback: ADR 0008 untouched; ADR 0004 admits
+  `System.load` in `./llm/`). Natives: pinned release assets + SHA-256, `scaricaNativiLlama` + `compilaShimLlama`
+  (clang, outside the gate) into `:avvio`'s app resources; Metal all layers, `n_ctx` 40 960, unloaded after every
+  run. **NFR amended:** a 60-min `Registrazione` at the default 2000-word cap in **≤ 600 s** (`benchmarkRiassunto`,
+  opt-in); typical ≈ 3–4 min, up to ≈ 8–10 min near the 2500-word cap. Windows/Linux (dynamic ggml backends, Vulkan,
+  per-OS shim build) open and untested; Developer ID signing (ADR 0016 O-2) must cover the llama/ggml dylibs and the shim.
 - **Native libs:** sherpa-onnx JNI + onnxruntime per OS, fetched by a Gradle task from a pinned
   release with SHA-256, cached outside the repo, never committed.
   → pinned by **ADR 0016** (2026-09-24): v1.13.8 GitHub release assets (not Maven Central);
@@ -44,7 +51,8 @@
   q4_K_M GGUF, Apache-2.0, 6.6 GB) is a catalogue entry with `obbligatoria = false`. It is not part of onboarding, and
   only the user downloads it, from the Riassunto tab. The host is an ungated, immutable HTTPS URL (Hugging Face
   `resolve/<commit>`), with SHA-256 pinned. A single-file asset is **moved**, not copied, into place (peak disk use =
-  1× its size), and free space is checked first. The "v2 Ollama loopback" note above is superseded: no user-installed
+  1× its size), and free space is checked first. *(2026-09-26, ADR 0026 §8)* Entry `llm-qwen3.5-9b-q4_k_m`: bartowski
+  Q4_K_M at HF commit `182be2fd…`, 6 169 341 984 B (**6,2 GB**, not 6.6), SHA-256 `d784ce9e…`. The "v2 Ollama loopback" note above is superseded: no user-installed
   Ollama. Whether a loopback client exists at all is spike `runtime-llm-in-app`.
 
 ## Local persistence (ADR 0006, 0007, 0010)

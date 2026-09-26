@@ -1,0 +1,4 @@
+package snastro.llm
+
+import com.k2fsa.sherpa.onnx.OfflineRecognizer
+fun carica() = System.load("/x/libsnastro-llama-jni.dylib")
