@@ -48,7 +48,8 @@ import kotlin.time.Duration.Companion.seconds
  * at most one entry per key, merged by [primaArrivata]. A write failure is retried with an
  * exponential backoff, capped at [ritardoMassimo] and reset to [ritardoIniziale] after a fully
  * successful pass — never a busy loop ([ciclo] only ever suspends, on [Channel.receive] or [delay]),
- * never dropped (AC-184). The startup sweep (AC-185, [RigeneraTuttiIDocumenti], ADR 0012 R4) is
+ * never dropped (AC-184). A unit that THROWS (e.g. a Trascritto read failing its rebuild) is retried the same way
+ * and never escapes [ciclo] (D-0008). The startup sweep (AC-185, [RigeneraTuttiIDocumenti], ADR 0012 R4) is
  * queued the same way in `init` ([rigeneraTutte] starts `true`), so a startup failure is retried
  * exactly like any other unit of work.
  *
@@ -165,18 +166,18 @@ public class AbbonatoDocumentoEventi(
     /** One pass over every currently queued unit of work; a failed unit is re-queued for the next pass. */
     private fun elaboraLotto(): Boolean {
         var tutteOk = true
-        if (rigeneraTutte.compareAndSet(true, false) && politica.esegui(RigeneraTuttiIDocumenti) is Esito.Errore) {
+        if (rigeneraTutte.compareAndSet(true, false) && fallito { politica.esegui(RigeneraTuttiIDocumenti) }) {
             rigeneraTutte.set(true)
             tutteOk = false
         }
         for ((id, lavoro) in drenaRegistrazioni()) {
-            if (eseguiLavoro(id, lavoro) is Esito.Errore) {
+            if (fallito { eseguiLavoro(id, lavoro) }) {
                 pendenti.merge(id, lavoro) { accumulato, fallito -> primaArrivata(fallito, accumulato) }
                 tutteOk = false
             }
         }
         for (parlanteId in drenaParlanti()) {
-            if (politica.perParlanteRinominato(parlanteId) is Esito.Errore) {
+            if (fallito { politica.perParlanteRinominato(parlanteId) }) {
                 pendentiParlante += parlanteId
                 tutteOk = false
             }
@@ -225,3 +226,11 @@ public class AbbonatoDocumentoEventi(
         val RITARDO_MASSIMO_DEFAULT: Duration = 30.seconds
     }
 }
+
+/**
+ * `true` on an [Esito.Errore] OR a thrown exception (D-0008, as `AbbonatoRiallineamentoImpronte`): an exception must
+ * never escape `AbbonatoDocumentoEventi.ciclo` — it would kill the only coroutine draining the queue for the whole
+ * session — so the unit is re-queued and retried with the same backoff, never swallowed.
+ */
+private inline fun fallito(unita: () -> Esito<Unit>): Boolean =
+    runCatching(unita).fold(onSuccess = { it is Esito.Errore }, onFailure = { true })
