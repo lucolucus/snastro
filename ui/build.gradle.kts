@@ -17,6 +17,10 @@ dependencies {
     implementation(project(":progetto:applicazione"))
     implementation(project(":trascrizione:applicazione"))
     implementation(project(":parlanti:applicazione"))
+    // ADR 0021 §2 (`:ui` *(adds)* `:sintesi:applicazione`): RiassuntoVista/ImpostazioniSintesiVista,
+    // the Riassumi/ModificaLunghezzaMassimaRiassunto commands, ErroreSintesi (CR-1(b), scheda-riassunto's
+    // own boundary).
+    implementation(project(":sintesi:applicazione"))
 
     testImplementation(compose.desktop.uiTestJUnit4)
     // RegistroProgettiFinta — ElencoProgetti's own dependency fake (ProgettiPresenterTest, AC-192/193/198).
