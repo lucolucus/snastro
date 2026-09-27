@@ -124,4 +124,48 @@ class ConfiguraLoggingAppTest {
             "mai la cartella reale dell'utente che esegue il test",
         )
     }
+
+    /**
+     * Rework cycle 1, #3: AC-C90 richiede esplicitamente "asserted by pointing user.home at a temp dir" — i
+     * test sopra passano sempre `cartellaLog` esplicito, non provano mai il ramo di DEFAULT
+     * (`configuraLoggingApp()`, che usa [cartellaLogAppReale] e quindi il VERO `user.home`). Qui si punta
+     * `user.home` a una cartella finta e si chiama [configuraLoggingApp] SENZA argomento: la scrittura deve
+     * seguire la cartella finta, e la cartella reale dell'utente non deve guadagnare alcun file nuovo.
+     */
+    @Test
+    fun `AC-C90 con user_home ridiretto a una cartella finta configuraLoggingApp scrive li, mai nella cartella reale`(
+        @TempDir cartellaUtenteFinta: Path,
+    ) {
+        val cartellaLogReale = cartellaLogAppReale()
+        val contenutoRealePrima = elencoFile(cartellaLogReale)
+        val userHomeOriginale = System.getProperty("user.home")
+        try {
+            System.setProperty("user.home", cartellaUtenteFinta.toString())
+            val cartellaLogFinta = cartellaLogAppReale()
+            assertTrue(
+                cartellaLogFinta.startsWith(cartellaUtenteFinta),
+                "cartellaLogAppReale deve seguire lo user.home CORRENTE, mai uno risolto in anticipo",
+            )
+
+            val handler = checkNotNull(configuraLoggingApp()) // il ramo di DEFAULT: cartellaLog = cartellaLogAppReale()
+            segnalazioneApp.segnala("mai nella cartella reale dell'utente", null)
+            handler.flush()
+
+            assertTrue(Files.exists(cartellaLogFinta), "la cartella FINTA (sotto user.home ridiretto) ha il log")
+            assertEquals(
+                contenutoRealePrima,
+                elencoFile(cartellaLogReale),
+                "la cartella REALE dell'utente non deve guadagnare alcun file nuovo",
+            )
+        } finally {
+            System.setProperty("user.home", userHomeOriginale)
+        }
+    }
+
+    private fun elencoFile(cartella: Path): Set<String> =
+        if (Files.isDirectory(cartella)) {
+            Files.list(cartella).use { it.map(Path::toString).toList() }.toSet()
+        } else {
+            emptySet()
+        }
 }

@@ -41,6 +41,19 @@ private const val LIMITE_LOG_BYTE = 2_000_000
 private const val NUMERO_FILE_LOG = 5
 
 /**
+ * The ONE `"snastro"` JUL [Logger] — a STRONG top-level reference (rework cycle 1, HIGH #1). JUL's
+ * `LogManager` holds every named logger by a WEAK reference only: `Logger.getLogger("snastro")`
+ * fetches-or-creates it, but with nothing else pointing at the returned instance a garbage collection
+ * can silently collect it — and the [FileHandler] [configuraLoggingApp] attached to it along with it —
+ * between the call that installs the handler and a LATER call that logs by name
+ * ([snastro.avvio.segnalazioneApp]). The file then stays empty forever: the report falls back to the
+ * root logger's default console handler, with nobody noticing. [configuraLoggingApp] and
+ * [snastro.avvio.segnalazioneApp] both go through this SAME instance, never a fresh
+ * `Logger.getLogger(...)`.
+ */
+internal val loggerSnastro: Logger = Logger.getLogger("snastro")
+
+/**
  * AC-C87/AC-C88/AC-C90: installs ONE rotating [FileHandler] on the `"snastro"` root logger, writing
  * `<cartellaLog>/snastro.%g.log` (the JDK's own rotation: generation 0 is always the newest, the oldest
  * generation's content is dropped past [numeroFile] files of at most [limiteByte] bytes each). `main()`'s
@@ -57,19 +70,18 @@ internal fun configuraLoggingApp(
     limiteByte: Int = LIMITE_LOG_BYTE,
     numeroFile: Int = NUMERO_FILE_LOG,
 ): FileHandler? {
-    val logger = Logger.getLogger("snastro")
     return try {
         Files.createDirectories(cartellaLog)
         val pattern = cartellaLog.resolve("snastro.%g.log").toString()
         FileHandler(pattern, limiteByte, numeroFile, true).apply {
             level = Level.ALL
             formatter = SimpleFormatter() // AC-C89: a human-readable file, not FileHandler's default XML
-            logger.addHandler(this)
+            loggerSnastro.addHandler(this)
         }
     } catch (
         @Suppress("TooGenericExceptionCaught") e: Exception, // AC-C90: never abort startup for a log-folder fault
     ) {
-        logger.log(Level.WARNING, "log su file non disponibile ($cartellaLog): resto sulla console", e)
+        loggerSnastro.log(Level.WARNING, "log su file non disponibile ($cartellaLog): resto sulla console", e)
         null
     }
 }

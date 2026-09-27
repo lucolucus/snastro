@@ -119,8 +119,13 @@ internal class EstensioneR1(
                     modelliPronti = modelliPronti,
                 ),
             ) + contesto.fontiCoda, // ADR 0023 §1: R3 adds the Riassunto source; R0–R2 none (behaviour unchanged)
-            segnalaBloccato = { id -> log.warning("elaborazione $id esclusa dalla coda") },
-            // AC-C57/AC-C58 (ADR 0028 §7.5): the ONE JUL-backed Segnalazione, not a local lambda.
+            // AC-C54/AC-C57/AC-C58 (ADR 0028 §7.5): the ONE JUL-backed Segnalazione, never a local `log.warning`.
+            // `Segnalazione.segnala` is pinned (message, cause?) and never string-matched: a NON-NULL cause
+            // (never a real throwable, only a descriptive one) is what makes segnalazioneApp log this at
+            // WARNING instead of the INFO it reserves for a cause-less recovery.
+            segnalaBloccato = { id ->
+                segnalazioneApp.segnala("elemento della coda condivisa escluso", ElementoCodaEscluso(id))
+            },
             segnalaSfuggito = { e -> segnalazioneApp.segnala("elemento della coda condivisa sfuggito", e) },
         )
 
@@ -208,3 +213,10 @@ internal class EstensioneR1(
                 ?.toString()
     }
 }
+
+/**
+ * AC-C54: [CodaCondivisa]'s `segnalaBloccato` hook's own report needs a non-null `causa` so
+ * [snastro.avvio.segnalazioneApp] logs it at WARNING — never a real thrown exception (nothing threw), so a
+ * dedicated, descriptive marker type, never string-matched.
+ */
+private class ElementoCodaEscluso(id: String) : Exception("elemento '$id' escluso dalla coda")
