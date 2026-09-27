@@ -15,3 +15,7 @@
 2026-09-27T12:37:32Z	b2-lettura-coerente-migrazione	verifier	result	cycle=0	tier=deep	model=opus	FAIL
 2026-09-27T12:37:32Z	b2-lettura-coerente-migrazione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES
 2026-09-27T12:37:32Z	b2-lettura-coerente-migrazione	worker	dispatch	cycle=1	tier=standard	model=sonnet
+2026-09-27T12:53:02Z	b2-lettura-coerente-migrazione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-27T13:03:04Z	b2-lettura-coerente-migrazione	verifier	result	cycle=1	tier=deep	model=opus	FAIL
+2026-09-27T13:03:04Z	b2-lettura-coerente-migrazione	code-review	result	cycle=1	tier=deep	model=opus	CHANGES
+2026-09-27T13:03:04Z	b2-lettura-coerente-migrazione	worker	dispatch	cycle=2	tier=deep	model=opus
