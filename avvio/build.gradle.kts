@@ -92,6 +92,8 @@ val copiaNativiLlama = tasks.register<Copy>("copiaNativiLlama") {
 compose.desktop {
     application {
         mainClass = "snastro.avvio.MainKt"
+        // SPIKE runtime-llm-ladenthin: `-Pruntime=ladenthin` on run / packageDmg bakes the java-llama.cpp fork in.
+        providers.gradleProperty("runtime").orNull?.let { jvmArgs("-Dsnastro.llm.runtime=$it") }
         nativeDistributions {
             // ADR 0016 §3: generated under build/ (never src/), filled by the root task
             // scaricaNativiSherpa (<this dir>/<os-arch>/ = the two sherpa-onnx libs). At runtime Compose
@@ -156,6 +158,8 @@ tasks.register<Test>("benchmarkRiassunto") {
     }
     val campione = providers.gradleProperty("campione")
     val modello = providers.gradleProperty("modello")
+    // SPIKE runtime-llm-ladenthin: -Pruntime=ladenthin measures the java-llama.cpp fork instead of :llama-jni.
+    val runtime = providers.gradleProperty("runtime")
     doFirst {
         if (!campione.isPresent) throw GradleException("benchmarkRiassunto needs -Pcampione=<path to a Documento .md>")
     }
@@ -163,6 +167,7 @@ tasks.register<Test>("benchmarkRiassunto") {
         listOf(
             "-Dsnastro.benchmark.campione=${campione.orNull.orEmpty()}",
             "-Dsnastro.benchmark.modello=${modello.orNull.orEmpty()}",
+            "-Dsnastro.llm.runtime=${runtime.orNull.orEmpty()}",
             "-Dsnastro.llm.native.path=${cartellaNativiApp.get().asFile.absolutePath}",
         )
     }

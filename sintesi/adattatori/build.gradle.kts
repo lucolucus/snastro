@@ -61,6 +61,12 @@ dependencies {
     // ..ml: ModelloLinguisticoLlama over the standalone llama.cpp binding (ADR 0026, ADR 0027 §7). The gate only
     // compiles against its Kotlin API and runs the adapter over fakes of its interfaces: no native, no model.
     implementation(project(":llama-jni"))
+
+    // SPIKE runtime-llm-ladenthin (throwaway): ModelloLinguisticoLadenthin over the published java-llama.cpp fork,
+    // measured against :llama-jni behind the same port. Its runtime logback binding is not wanted in a library user.
+    implementation(libs.llama.ladenthin) {
+        exclude(group = "ch.qos.logback")
+    }
 }
 
 // Opt-in (@Tag("modelli"), never in `check`): ModelloLinguisticoContratto against the REAL adapter over the real

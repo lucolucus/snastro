@@ -16,6 +16,7 @@ import snastro.modelli.CatalogoModelli
 import snastro.modelli.ProvisioningModelli
 import snastro.modelli.VOCE_CATALOGO_MODELLO_LINGUISTICO
 import snastro.sintesi.adattatori.ml.MisureRiassunto
+import snastro.sintesi.adattatori.ml.ModelloLinguisticoLadenthin
 import snastro.sintesi.adattatori.ml.ModelloLinguisticoLlama
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassunto
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
@@ -74,7 +75,11 @@ class BenchmarkRiassuntoTest {
                 nomi.entries.associate { (voce, nome) -> VoceRef(registrazione, voce) to nome },
                 nomi.values.associateWith { it },
             ),
-            ModelloLinguisticoLlama({ cartellaNativiLlama() }, { fileModello() }, misure = { misure += it }),
+            if (runtimeLadenthin()) {
+                ModelloLinguisticoLadenthin({ fileModello() }, misure = { misure += it })
+            } else {
+                ModelloLinguisticoLlama({ cartellaNativiLlama() }, { fileModello() }, misure = { misure += it })
+            },
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             dispatcher,
         )
@@ -88,7 +93,7 @@ class BenchmarkRiassuntoTest {
         val secondi = pronto?.let { (it - avviato) / NANOS_PER_SECONDO.toDouble() }
         println(
             """
-            benchmarkRiassunto — ${campione.fileName}: ${segmenti.size} segmenti, ${nomi.size} nomi
+            benchmarkRiassunto [${if (runtimeLadenthin()) "net.ladenthin:llama" else ":llama-jni"}] — ${campione.fileName}: ${segmenti.size} segmenti, ${nomi.size} nomi
               esito: ${riassunto.stato} ${riassunto.motivoFallimento ?: ""} (eventi: ${eventi.map { it.first::class.simpleName }})
               RiassuntoAvviato -> RiassuntoPronto: ${secondi?.let { "%.1f s".format(it) } ?: "-"} (limite 600 s)
               misure: ${misure.singleOrNull()}

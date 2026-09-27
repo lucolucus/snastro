@@ -4,6 +4,7 @@ import snastro.avvio.r1.SceltaMl
 import snastro.avvio.r1.SelezioneAdattatoriMl
 import snastro.modelli.ProvisioningModelli
 import snastro.modelli.VOCE_CATALOGO_MODELLO_LINGUISTICO
+import snastro.sintesi.adattatori.ml.ModelloLinguisticoLadenthin
 import snastro.sintesi.adattatori.ml.ModelloLinguisticoLlama
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import java.nio.file.Path
@@ -19,12 +20,27 @@ private val log: Logger = Logger.getLogger("snastro.avvio.r3.ModelloLinguisticoR
 internal fun modelloLinguisticoR3(scelta: SceltaMl, provisioning: ProvisioningModelli): ModelloLinguistico =
     when (scelta) {
         SceltaMl.FINTE -> ModelloLinguisticoNonDisponibile
-        SceltaMl.REALI -> ModelloLinguisticoLlama(
-            cartellaNativi = { cartellaNativiLlama() },
-            fileModello = { fileModelloLinguistico(provisioning) },
-            misure = { log.info("riassunto: $it") },
-        )
+        SceltaMl.REALI -> if (runtimeLadenthin()) {
+            ModelloLinguisticoLadenthin(
+                fileModello = { fileModelloLinguistico(provisioning) },
+                misure = { log.info("riassunto (ladenthin): $it") },
+            )
+        } else {
+            ModelloLinguisticoLlama(
+                cartellaNativi = { cartellaNativiLlama() },
+                fileModello = { fileModelloLinguistico(provisioning) },
+                misure = { log.info("riassunto: $it") },
+            )
+        }
     }
+
+/**
+ * SPIKE runtime-llm-ladenthin (throwaway): `-Dsnastro.llm.runtime=ladenthin` selects the adapter over the
+ * published java-llama.cpp fork instead of :llama-jni, to measure both behind the same port. Any other value, or
+ * none: :llama-jni.
+ */
+internal fun runtimeLadenthin(proprieta: (String) -> String? = System::getProperty): Boolean =
+    proprieta("snastro.llm.runtime") == "ladenthin"
 
 /**
  * The llama.cpp native directory (ADR 0026 §2 / ADR 0027 §7): `snastro.llm.native.path` if set (`modelliTest`,
