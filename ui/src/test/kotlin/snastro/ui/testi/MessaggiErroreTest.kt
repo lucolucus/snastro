@@ -12,11 +12,14 @@ import snastro.kernel.VoceRef
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.registrazione.ErroreComandoVoce
+import java.io.File
+import java.util.jar.JarFile
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -232,7 +235,27 @@ class MessaggiErroreTest {
     }
 
     @Test
-    fun `il punto di ingresso instrada ogni gerarchia raggiungibile`() {
+    fun `AC-S139 ErroreApplicazioneSintesi`() {
+        verificaCopertura(
+            ErroreApplicazioneSintesi::class.java,
+            listOf(
+                ErroreApplicazioneSintesi.ModelloNonDisponibile,
+                ErroreApplicazioneSintesi.IngressoTroppoLungo(31_000),
+                ErroreApplicazioneSintesi.ErroreRuntime("metal non disponibile"),
+                ErroreApplicazioneSintesi.RispostaNonValida,
+                ErroreApplicazioneSintesi.Annullato,
+            ),
+        ) { messaggioPer(it) }
+    }
+
+    /**
+     * X6 (ADR 0003 RC-4): the hierarchies are DISCOVERED on this module's own classpath — every sealed direct
+     * subtype of [ErroreDominio] `:ui` can load — never listed by hand, so a hierarchy newly made visible to `:ui`
+     * (a new `*:applicazione` dependency, a new `ErroreApplicazione<Contesto>`) without a branch in the entry
+     * point goes red here instead of crashing a screen at `else -> error(..)`.
+     */
+    @Test
+    fun `il punto di ingresso instrada ogni gerarchia visibile a ui`() {
         val esempi: List<ErroreDominio> = listOf(
             ErroreSessione.CartellaNonValida,
             ErroreApplicazioneProgetto.AudioNonLeggibile("x"),
@@ -242,8 +265,46 @@ class MessaggiErroreTest {
             ErroreServizioModelli.ReteAssente,
             ErroreComandoVoce.NonRiuscito,
             ErroreSintesi.ModelloNonInstallato,
+            ErroreApplicazioneSintesi.RispostaNonValida,
         )
-        esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank()) }
+
+        assertEquals(
+            gerarchieVisibili().map { it.name }.sorted(),
+            esempi.map { gerarchiaDi(it).name }.distinct().sorted(),
+            "ogni gerarchia di ErroreDominio visibile a :ui ha un esempio (e un ramo in messaggioPer)",
+        )
+        esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank(), "messaggio vuoto per $errore") }
+    }
+
+    /** The sealed `Errore<X>` of [errore]: the one interface of its class directly extending [ErroreDominio]. */
+    private fun gerarchiaDi(errore: ErroreDominio): Class<*> =
+        errore.javaClass.interfaces.single { ErroreDominio::class.java in it.interfaces }
+
+    /**
+     * Every sealed interface directly extending [ErroreDominio] among the `snastro` classes on this test's classpath
+     * (class directories and jars alike), minus [MAI_MOSTRATE]. Loaded without initialisation.
+     */
+    private fun gerarchieVisibili(): Set<Class<*>> {
+        val caricatore = javaClass.classLoader
+        return System.getProperty("java.class.path").split(File.pathSeparator)
+            .map(::File)
+            .flatMap(::classiSnastro)
+            .map { nome -> Class.forName(nome, false, caricatore) }
+            .filter { it.isInterface && it.isSealed && ErroreDominio::class.java in it.interfaces }
+            .filterNot { it in MAI_MOSTRATE }
+            .toSet()
+    }
+
+    private fun classiSnastro(voce: File): List<String> {
+        val percorsi = when {
+            voce.isDirectory ->
+                voce.walkTopDown().filter { it.isFile }.map { it.relativeTo(voce).invariantSeparatorsPath }.toList()
+            voce.isFile && voce.name.endsWith(".jar") ->
+                JarFile(voce).use { jar -> jar.entries().toList().map { it.name } }
+            else -> emptyList()
+        }
+        return percorsi.filter { it.startsWith("snastro/") && it.endsWith(".class") }
+            .map { it.removeSuffix(".class").replace('/', '.') }
     }
 
     @Test
@@ -252,5 +313,10 @@ class MessaggiErroreTest {
         // into the entry-point dispatcher" — RC-4: its only `else` is a programmer error, never a
         // generic user message.
         assertFailsWith<IllegalStateException> { messaggioPer(ErroreDiProva.Fallito("x")) }
+    }
+
+    private companion object {
+        /** Hierarchies on the classpath that never reach a screen: [ErroreDiProva] is kernel testFixtures only. */
+        val MAI_MOSTRATE: Set<Class<*>> = setOf(ErroreDiProva::class.java)
     }
 }

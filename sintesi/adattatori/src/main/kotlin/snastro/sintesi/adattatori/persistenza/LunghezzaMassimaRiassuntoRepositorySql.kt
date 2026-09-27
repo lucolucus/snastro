@@ -3,6 +3,7 @@ package snastro.sintesi.adattatori.persistenza
 import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
 import snastro.kernel.RicostituzioneDaPersistenza
+import snastro.kernel.valoreOppureErrore
 import snastro.persistenza.SnastroDatabase
 import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
 import snastro.sintesi.dominio.LunghezzaMassimaParole
@@ -22,7 +23,7 @@ public class LunghezzaMassimaRiassuntoRepositorySql(private val db: SnastroDatab
         val riga = db.impostazioniSintesiQueries.trova(p.valore).executeAsOneOrNull()
             ?: return LunghezzaMassimaRiassunto.predefinita(p)
         val valore = riga.lunghezza_massima_riassunto_parole
-        val parole = LunghezzaMassimaParole.di(valore.toInt()).dalDatabase("parole fuori intervallo: $valore")
+        val parole = LunghezzaMassimaParole.di(valore.toInt()).valoreOppureErrore { "parole fuori intervallo: $valore" }
         return LunghezzaMassimaRiassunto.ricostituisci(p, parole)
     }
 

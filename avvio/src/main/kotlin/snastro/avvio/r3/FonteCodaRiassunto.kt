@@ -41,7 +41,7 @@ internal fun fonteCodaRiassunto(
                 RisultatoRiassunto.Nessuno -> RisultatoTentativo.Nessuno
                 is RisultatoRiassunto.Avviato -> RisultatoTentativo.Avviata(r.id.valore)
             }
-            // the claim transaction failed: its head (if one was saved) counts toward its exclusion
+            // the claim (or completion) transaction failed: its head (if one was saved) counts toward its exclusion
             is Esito.Errore ->
                 esecuzioni.ultimoReclamato?.let(RisultatoTentativo::Rifiutata) ?: RisultatoTentativo.Nessuno
         }

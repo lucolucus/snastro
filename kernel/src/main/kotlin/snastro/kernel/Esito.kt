@@ -26,3 +26,22 @@ public inline fun <T> Esito<T>.seErrore(azione: (ErroreDominio) -> Unit): Esito<
     if (this is Esito.Errore) azione(errore)
     return this
 }
+
+/**
+ * The value of an [Esito.Ok], where an [Esito.Errore] cannot happen (a trusted DB value, a constant, a snapshot read
+ * wrapped in `inTransazione`): an [Esito.Errore] here is a programmer error or data corruption, never an expected
+ * failure (ADR 0003), so it throws [IllegalStateException] with [messaggio].
+ */
+public inline fun <T> Esito<T>.valoreOppureErrore(messaggio: () -> String): T =
+    when (this) {
+        is Esito.Ok -> valore
+        is Esito.Errore -> error(messaggio())
+    }
+
+/**
+ * Discards this [Esito] ON PURPOSE, naming why ([motivo], never blank): the only accepted way to drop an `Esito`
+ * (ADR 0003, CR-7), so an intentional discard is never mistaken for a swallowed failure.
+ */
+public fun Esito<*>.ignoraEsito(motivo: String) {
+    require(motivo.isNotBlank()) { "ignoraEsito senza motivo" }
+}

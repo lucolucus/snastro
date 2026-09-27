@@ -4,6 +4,7 @@ import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.mappa
+import snastro.kernel.valoreOppureErrore
 
 /**
  * The per-Progetto lunghezza massima del Riassunto (one per [progettoId]; no stored row ⇒ [predefinita]).
@@ -28,7 +29,8 @@ public class LunghezzaMassimaRiassunto private constructor(
         /** The value read for a Progetto with no stored setting (e.g. created before Sintesi). */
         public fun predefinita(progettoId: ProgettoId): LunghezzaMassimaRiassunto {
             val parole = LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA)
-            return LunghezzaMassimaRiassunto(progettoId, checkNotNull((parole as? Esito.Ok)?.valore))
+                .valoreOppureErrore { "PREDEFINITA fuori intervallo" }
+            return LunghezzaMassimaRiassunto(progettoId, parole)
         }
 
         /** Rebuilds from persisted state (the DB is trusted). */

@@ -9,6 +9,7 @@ import snastro.avvio.r2.CollaboratoriR2
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.mappa
+import snastro.kernel.valoreOppureErrore
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.applicazione.letture.NomiDelleVoci
@@ -148,7 +149,9 @@ internal class EstensioneR3(
             r2 = collaboratoriR2,
             // ONE read transaction: the row and its children from the same snapshot, never a row read before a
             // concurrent completion commits and its elements after (INV-S1 reconstitution would throw).
-            vista = { r -> (uow.inTransazione { Esito.Ok(vista.di(r)) } as Esito.Ok).valore },
+            vista = { r ->
+                uow.inTransazione { Esito.Ok(vista.di(r)) }.valoreOppureErrore { "lettura della vista mai in Errore" }
+            },
             impostazioni = { impostazioni.di(progettoId) },
             riassumi = { id, argomento -> riassumi.esegui(Riassumi(id, argomento)).mappa { } },
             modificaLunghezzaMassima = { parole ->

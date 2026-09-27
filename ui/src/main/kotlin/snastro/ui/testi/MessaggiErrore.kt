@@ -4,6 +4,7 @@ import snastro.kernel.ErroreDominio
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.ErroreSessione
@@ -26,6 +27,7 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
     is ErroreServizioModelli -> messaggioPer(errore)
     is ErroreComandoVoce -> messaggioPer(errore)
     is ErroreSintesi -> messaggioPer(errore)
+    is ErroreApplicazioneSintesi -> messaggioPer(errore)
     else -> error("ErroreDominio non mappato: $errore")
 }
 
@@ -127,4 +129,17 @@ fun messaggioPer(errore: ErroreSintesi): String = when (errore) {
     // names no state, same rationale as `ErroreTrascrizione.TransizioneNonAmmessa`'s own mapping.
     is ErroreSintesi.TransizioneNonAmmessa -> "Operazione non ammessa nello stato attuale del riassunto."
     is ErroreSintesi.RiassuntoNonTrovato -> "Riassunto non trovato."
+}
+
+/**
+ * X6: the Sintesi application's technical failures (ADR 0003 (b)). `EseguiProssimoRiassunto` maps them to the
+ * Riassunto's own failure reason, so none reaches a screen today; the branch keeps the entry point total for every
+ * hierarchy `:ui` can see, with wording aligned to the tab's failure reasons (`TestiRiassunto`).
+ */
+fun messaggioPer(errore: ErroreApplicazioneSintesi): String = when (errore) {
+    ErroreApplicazioneSintesi.ModelloNonDisponibile -> "Il modello di linguaggio non è disponibile."
+    is ErroreApplicazioneSintesi.IngressoTroppoLungo -> "La registrazione è troppo lunga per il riassunto."
+    is ErroreApplicazioneSintesi.ErroreRuntime -> "Il modello di linguaggio non è riuscito a generare il riassunto."
+    ErroreApplicazioneSintesi.RispostaNonValida -> "Il modello di linguaggio ha dato una risposta non valida."
+    ErroreApplicazioneSintesi.Annullato -> "Il riassunto è stato annullato."
 }

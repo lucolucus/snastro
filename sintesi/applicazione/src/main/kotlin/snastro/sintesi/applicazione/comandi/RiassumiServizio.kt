@@ -65,15 +65,21 @@ public class RiassumiServizio(
             .poi { argomento -> crea(c.registrazioneId, argomento) }
     }
 
-    /** INV-S3 (previous `fallito` removed), INV-S10 (cap fixed at request), then `Riassunto.richiedi`. */
+    /**
+     * INV-S3 (previous `fallito` removed — an `Errore` of [RiassuntoRepository.rimuovi] stops here and rolls back,
+     * ADR 0003), INV-S10 (cap fixed at request), then `Riassunto.richiedi`.
+     */
     private fun crea(registrazioneId: RegistrazioneId, argomento: Argomento?): Esito<RiassuntoId> {
-        riassunti.diRegistrazione(registrazioneId).singleOrNull { it.fallito }?.let { riassunti.rimuovi(it.id) }
-        val cap = lunghezzeMassime.trova(progettoId).parole
-        val id = RiassuntoId(generatoreId.nuovo())
-        val creato = Riassunto.richiedi(id, registrazioneId, argomento, cap, clock.instant())
-        return riassunti.salva(creato.aggregato).poi {
-            eventi.pubblica(RiassuntoRichiesto(registrazioneId))
-            Esito.Ok(id)
+        val fallito = riassunti.diRegistrazione(registrazioneId).singleOrNull { it.fallito }
+        val rimosso = fallito?.let { riassunti.rimuovi(it.id) } ?: Esito.Ok(Unit)
+        return rimosso.poi {
+            val cap = lunghezzeMassime.trova(progettoId).parole
+            val id = RiassuntoId(generatoreId.nuovo())
+            val creato = Riassunto.richiedi(id, registrazioneId, argomento, cap, clock.instant())
+            riassunti.salva(creato.aggregato).poi {
+                eventi.pubblica(RiassuntoRichiesto(registrazioneId))
+                Esito.Ok(id)
+            }
         }
     }
 

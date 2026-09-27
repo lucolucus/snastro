@@ -3,6 +3,7 @@ package snastro.sintesi.applicazione.comandi
 import io.mockk.spyk
 import io.mockk.verify
 import snastro.kernel.DispatcherEventiFinta
+import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
@@ -11,6 +12,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.erroreAtteso
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
 import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
@@ -25,6 +27,7 @@ import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguisticoFinto
+import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
@@ -38,6 +41,7 @@ import snastro.sintesi.applicazione.porte.unaStruttura
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.MotivoFallimento
+import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import snastro.sintesi.dominio.SegmentoIngresso
 import java.time.Clock
@@ -310,6 +314,30 @@ class EseguiProssimoRiassuntoServizioTest {
 
         assertNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(eventi.pubblicati.none { it is RiassuntoPronto || it is RiassuntoFallito })
+    }
+
+    @Test
+    fun `ADR 0003 un Errore di concludi si propaga da esegui e non pubblica la conclusione`() {
+        val concludiGuasto = object : RiassuntoRepository by riassunti {
+            override fun concludi(r: Riassunto): Esito<Boolean> = Esito.Errore(ErroreDiProva.Fallito("concludi"))
+        }
+        riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
+        val servizioGuasto = EseguiProssimoRiassuntoServizio(
+            eventi.unitaDiLavoro,
+            orologio,
+            concludiGuasto,
+            LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)),
+            LettoreNomiFinta(),
+            modello,
+            DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
+            eventi,
+        )
+
+        val esito = servizioGuasto.esegui(EseguiProssimoRiassunto())
+
+        assertEquals(ErroreDiProva.Fallito("concludi"), esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertTrue(checkNotNull(riassunti.trova(RiassuntoId("r1"))).inCorso, "rollback: resta in_corso")
+        assertEquals(listOf(RiassuntoAvviato(REG1)), eventi.pubblicati)
     }
 
     @Test

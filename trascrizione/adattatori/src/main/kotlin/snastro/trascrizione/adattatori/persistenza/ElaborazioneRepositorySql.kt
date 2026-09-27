@@ -6,6 +6,7 @@ import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
+import snastro.kernel.valoreOppureErrore
 import snastro.persistenza.SnastroDatabase
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.dominio.Elaborazione
@@ -102,7 +103,6 @@ private fun ElaborazioneRiga.inDominio(): Elaborazione = Elaborazione.ricostitui
     motivoFallimento = motivo_fallimento,
 )
 
-private fun Int.numeroPersone(): NumeroPersone = when (val esito = NumeroPersone.di(this)) {
-    is Esito.Ok -> esito.valore
-    is Esito.Errore -> error("numero_persone $this fuori da 1..10 nel database (il CHECK dello schema lo impedisce)")
+private fun Int.numeroPersone(): NumeroPersone = NumeroPersone.di(this).valoreOppureErrore {
+    "numero_persone $this fuori da 1..10 nel database (il CHECK dello schema lo impedisce)"
 }
