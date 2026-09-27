@@ -94,7 +94,7 @@ class RitrascriviR2Test {
                 r?.elaborazione == StatoElaborazioneRiga.Completata && r.identificazione == IdentificazioneRiga(3, 3)
             }
             assertEquals(NumeroPersone.di(2).atteso(), diarizzatore.numeroPersoneRicevuti.last())
-            val parlanti = ParlanteRepositorySql(it.contesto.database)
+            val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
             val attribuzioni = AttribuzioneRepositorySql(it.contesto.database)
             assertEquals(emptyList(), attribuzioni.diRegistrazione(s.x))
             assertEquals(emptyList(), parlanti.impronteDiRegistrazione(s.x))
@@ -213,7 +213,8 @@ class RitrascriviR2Test {
                 it.r2.r1.statiElaborazione(listOf(s.x)).single().motivoFallimento,
             )
             assertEquals(2, attribuzioni.diRegistrazione(s.x).size, "il rollback annulla anche la purga")
-            assertEquals(2, ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(s.x).size)
+            val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
+            assertEquals(2, parlanti.impronteDiRegistrazione(s.x).size)
             assertEquals(2, it.r2.r1.trascritto(s.x)?.voci?.size)
         }
     }
@@ -278,7 +279,8 @@ class RitrascriviR2Test {
             }
             // Same Voce numbers in the new generation: without the purge Anna would silently re-attach.
             assertEquals(emptyList(), AttribuzioneRepositorySql(it.contesto.database).diRegistrazione(x))
-            assertEquals(emptyList(), ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(x))
+            val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
+            assertEquals(emptyList(), parlanti.impronteDiRegistrazione(x))
             assertEquals(listOf("Anna"), it.r2.letture.parlantiDelProgetto().map { p -> p.nome }, "ricorrente: resta")
         }
     }
@@ -297,7 +299,8 @@ class RitrascriviR2Test {
         assertEquals(Esito.Ok(Unit), comando(ambiente, ComandoVoce.Salta(voce(x, 2))))
         val mario = ambiente.r2.letture.parlantiDelProgetto().single { p -> p.nome == "Mario" }.parlanteId
         assertEquals(Esito.Ok(Unit), comando(ambiente, ComandoVoce.Conferma(voce(y, 1), mario)))
-        assertEquals(2, ParlanteRepositorySql(ambiente.contesto.database).impronteDiRegistrazione(x).size)
+        val parlanti = ParlanteRepositorySql(ambiente.contesto.database, ambiente.contesto.lettura)
+        assertEquals(2, parlanti.impronteDiRegistrazione(x).size)
         assertEquals(2, ambiente.r2.letture.parlantiDelProgetto().size)
         attendiFinche(messaggio = "Documento di X con i Nomi") { documento(ambiente, x)?.contains("**Mario**") == true }
         return Scenario(x, y, mario)
@@ -384,7 +387,8 @@ class RitrascriviR2Test {
             fun di(ambiente: AmbienteR2, id: RegistrazioneId): Istantanea = Istantanea(
                 attribuzioni = AttribuzioneRepositorySql(ambiente.contesto.database).diRegistrazione(id)
                     .map { a -> a.voceRef to a.parlanteId },
-                impronte = ParlanteRepositorySql(ambiente.contesto.database).impronteDiRegistrazione(id),
+                impronte = ParlanteRepositorySql(ambiente.contesto.database, ambiente.contesto.lettura)
+                    .impronteDiRegistrazione(id),
                 trascritto = ambiente.r2.r1.trascritto(id),
                 documento = ambiente.r2.r1.percorsoDocumento(id)?.let { p -> Path.of(p).readBytes() },
                 galleria = ambiente.r2.letture.parlantiDelProgetto(),

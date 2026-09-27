@@ -1,0 +1,9 @@
+package snastro.sintesi.adattatori.persistenza
+
+// A regression case: this file's OWN path also contains a "persistenza" segment (its adattatori package),
+// but it is not the top-level :persistenza module — the check must still flag it.
+class X(private val db: SnastroDatabase) {
+    fun leggi() {
+        db.transactionWithResult { 1 }
+    }
+}

@@ -1,6 +1,7 @@
 package snastro.trascrizione.adattatori.persistenza
 
 import snastro.persistenza.SnastroDatabase
+import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
 import snastro.trascrizione.applicazione.porte.PredisposizioneTrascrizione
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
@@ -12,7 +13,7 @@ class TrascrittoRepositorySqlTest : TrascrittoRepositoryContratto() {
 
     override fun repository(): TrascrittoRepository {
         db = databaseInMemoria()
-        return TrascrittoRepositorySql(db)
+        return TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
     }
 
     override fun predisponi(predisposizione: PredisposizioneTrascrizione) {

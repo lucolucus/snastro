@@ -58,6 +58,10 @@ dependencies {
     // repository-sql-sintesi
     testImplementation(testFixtures(project(":persistenza")))
 
+    // attendiFinche (ADR 0028 §3, the only polling wait of the tests) — AC-C31's latch-driven concurrency case
+    // (RiassuntoRepositorySqlTest).
+    testImplementation(project(":supporto-test"))
+
     // ..ml: ModelloLinguisticoLlama over the standalone llama.cpp binding (ADR 0026, ADR 0027 §7). The gate only
     // compiles against its Kotlin API and runs the adapter over fakes of its interfaces: no native, no model.
     implementation(project(":llama-jni"))

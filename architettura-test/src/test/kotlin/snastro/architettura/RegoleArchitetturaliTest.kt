@@ -182,6 +182,43 @@ class RegoleArchitetturaliTest {
             }
     }
 
+    // --- CR-3b - Transactions only through the kernel ports (ADR 0029) --------------------------
+
+    /** SQLDelight's `transaction { }` / `transaction(...)` / `transactionWithResult { }` calls (member-call
+     * syntax, the `.transaction`/`.transactionWithResult` receiver dot required — never a bare declaration). */
+    private val chiamataTransazioneSql = Regex("""\.transaction(WithResult)?\s*[({]""")
+
+    private fun KoFileDeclaration.isSrcMain(): Boolean = "/src/main/" in path.replace('\\', '/')
+
+    private fun pacchettoPersistenza(pkg: String): Boolean =
+        pkg == "snastro.persistenza" || pkg.startsWith("snastro.persistenza.")
+
+    private fun KoFileDeclaration.isPersistenza(): Boolean = pacchettoPersistenza(packagee?.name.orEmpty())
+
+    @Test
+    fun `CR-3b transaction e transactionWithResult di SQLDelight si chiamano in src main solo dentro persistenza`() {
+        progetto
+            .files
+            .filter { it.isSrcMain() }
+            .assertTrue { file -> file.isPersistenza() || !chiamataTransazioneSql.containsMatchIn(file.codice()) }
+    }
+
+    /**
+     * Direct unit test of the predicate above (CR-1's own pattern, line 110): a throwaway `db.transaction { }`
+     * in a *:adattatori file (package `snastro.trascrizione.adattatori.persistenza`) or in `:avvio`
+     * (`snastro.avvio`) would FAIL the rule above; the same call inside `snastro.persistenza` passes.
+     */
+    @Test
+    fun `CR-3b un transaction fuori da persistenza in adattatori o avvio fallirebbe, persistenza passa`() {
+        fun violerebbe(pacchetto: String, testo: String): Boolean =
+            !pacchettoPersistenza(pacchetto) && chiamataTransazioneSql.containsMatchIn(testo)
+
+        kotlin.test.assertTrue(violerebbe("snastro.trascrizione.adattatori.persistenza", "db.transaction { }"))
+        kotlin.test.assertTrue(violerebbe("snastro.avvio", "db.transactionWithResult { 1 }"))
+        kotlin.test.assertFalse(violerebbe("snastro.persistenza", "db.transaction { }"))
+        kotlin.test.assertFalse(violerebbe("snastro.avvio", "qualcosaltro.chiamata { }"))
+    }
+
     // --- CR-4 - Aggregates are encapsulated, never `data class` -----------------------------
 
     /**

@@ -80,6 +80,10 @@ dependencies {
     // in-memory JdbcSqliteDriver — never through the generated Parlanti queries (ADR 0018 enforced_by).
     testImplementation(libs.sqldelight.driver)
 
+    // attendiFinche (ADR 0028 §3, the only polling wait of the tests) — AC-C31/AC-C36's latch-driven
+    // concurrency case (TrascrittoRepositorySqlLetturaAtomicaTest).
+    testImplementation(project(":supporto-test"))
+
     // Progetto's own commands (CreaProgettoServizio, AggiungiRegistrazioneServizio,
     // ModificaDataRegistrazioneServizio) + its port fakes (RegistrazioneRepositoryFinta,
     // ProgettoRepositoryFinta, SondaAudioFinta, ArchivioAudioFinta) — LettoreRegistrazioneDaProgettoTest

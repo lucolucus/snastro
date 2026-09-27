@@ -192,6 +192,27 @@ class LetturaCoerenteSqlSoloTest {
     }
 
     @Test
+    fun `AC-C15 inLettura in una transazione ignota allo Stato fallisce subito, senza lasciare DEFERRED`() {
+        val sql = DatabaseTracciato(cartella)
+
+        assertFailsWith<IllegalStateException> {
+            sql.db.transaction {
+                sql.uow.inLettura { sql.effetti() }
+            }
+        }
+
+        assertEquals(emptyList(), sql.effetti(), "la transazione grezza e annullata: nessun pragma toccato prima")
+        sql.istruzioni.clear()
+        sql.uow.inTransazione {
+            sql.scrivi("dopo")
+            Esito.Ok(Unit)
+        }.atteso()
+
+        assertEquals(listOf("BEGIN IMMEDIATE TRANSACTION", "END TRANSACTION"), sql.transazioni(), "niente DEFERRED")
+        assertEquals(listOf("dopo"), sql.effetti())
+    }
+
+    @Test
     fun `AC-C25 un BEGIN DEFERRED fallito azzera il modo, libera lo slot e poi si apre BEGIN IMMEDIATE`() {
         val guasta = AtomicReference(true)
         val sql = DatabaseTracciato(cartella) {

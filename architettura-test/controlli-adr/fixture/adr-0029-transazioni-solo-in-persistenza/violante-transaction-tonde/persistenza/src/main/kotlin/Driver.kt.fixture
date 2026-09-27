@@ -1,0 +1,7 @@
+package snastro.persistenza
+
+class UnitaDiLavoroSql(private val db: SnastroDatabase) {
+    fun leggi() {
+        db.transactionWithResult(noEnclosing = true) { 1 }
+    }
+}

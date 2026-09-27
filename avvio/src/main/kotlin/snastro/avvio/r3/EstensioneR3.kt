@@ -9,7 +9,6 @@ import snastro.avvio.r2.CollaboratoriR2
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.mappa
-import snastro.kernel.valoreOppureErrore
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.applicazione.letture.NomiDelleVoci
@@ -72,15 +71,15 @@ internal class EstensioneR3(
         val uow = dispatcher.unitaDiLavoro
         val database = contesto.database
         val progettoId = contesto.progettoId
-        val riassunti = RiassuntoRepositorySql(database)
+        val riassunti = RiassuntoRepositorySql(database, contesto.lettura)
         val lunghezze = LunghezzaMassimaRiassuntoRepositorySql(database)
-        val trascritti = TrascrittoRepositorySql(database)
+        val trascritti = TrascrittoRepositorySql(database, contesto.lettura)
         val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(
             VociDelTrascritto(trascritti),
             StatiElaborazione(ElaborazioneRepositorySql(database), trascritti, FasiInCorso()), // only the state is read
         )
         val nomi = LettoreNomiDaParlanti(
-            NomiDelleVoci(AttribuzioneRepositorySql(database), ParlanteRepositorySql(database)),
+            NomiDelleVoci(AttribuzioneRepositorySql(database), ParlanteRepositorySql(database, contesto.lettura)),
         )
 
         AbbonatoTrascrizioneSintesi(
@@ -144,14 +143,13 @@ internal class EstensioneR3(
         )
         val modifica = ModificaLunghezzaMassimaRiassuntoServizio(uow, lunghezze, dispatcher)
         val impostazioni = ImpostazioniSintesiLettura(lunghezze)
-        val vista = RiassuntoVisteLettura(riassunti, lettoreTrascritto, nomi, disponibilita)
+        // The read-model itself owns the ONE snapshot (RiassuntoVisteLettura, ADR 0029 §5/AC-C32): the row and
+        // its children from the same snapshot, never a row read before a concurrent completion commits and its
+        // elements after (INV-S1 reconstitution would throw) — no composition wrap needed anymore.
+        val vista = RiassuntoVisteLettura(contesto.lettura, riassunti, lettoreTrascritto, nomi, disponibilita)
         return CollaboratoriR3(
             r2 = collaboratoriR2,
-            // ONE read transaction: the row and its children from the same snapshot, never a row read before a
-            // concurrent completion commits and its elements after (INV-S1 reconstitution would throw).
-            vista = { r ->
-                uow.inTransazione { Esito.Ok(vista.di(r)) }.valoreOppureErrore { "lettura della vista mai in Errore" }
-            },
+            vista = vista::di,
             impostazioni = { impostazioni.di(progettoId) },
             riassumi = { id, argomento -> riassumi.esegui(Riassumi(id, argomento)).mappa { } },
             modificaLunghezzaMassima = { parole ->

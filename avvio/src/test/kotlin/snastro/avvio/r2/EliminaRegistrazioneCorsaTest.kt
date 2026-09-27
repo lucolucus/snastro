@@ -100,13 +100,14 @@ class EliminaRegistrazioneCorsaTest {
         registrazioni: RegistrazioneRepositorySql,
         elaborazioni: ElaborazioneRepositorySql,
     ): Pair<EliminaRegistrazioneServizio, AvviaElaborazioneServizio> {
-        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db))
+        val unitaDiLavoroSql = UnitaDiLavoroSql(db)
+        val dispatcher = DispatcherEventiInMemoria(unitaDiLavoroSql)
         val uow = dispatcher.unitaDiLavoro
-        val parlanti = ParlanteRepositorySql(db)
+        val parlanti = ParlanteRepositorySql(db, unitaDiLavoroSql)
         val attribuzioni = AttribuzioneRepositorySql(db)
         AbbonatoEliminazioneRegistrazione(
             dispatcher,
-            ApplicaEliminazioneRegistrazionePolitica(elaborazioni, TrascrittoRepositorySql(db)),
+            ApplicaEliminazioneRegistrazionePolitica(elaborazioni, TrascrittoRepositorySql(db, unitaDiLavoroSql)),
         )
         AbbonatoRevisioneParlanti(
             dispatcher,

@@ -8,6 +8,7 @@ import snastro.kernel.atteso
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
+import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import java.io.File
 import java.util.concurrent.CyclicBarrier
@@ -31,7 +32,7 @@ class ParlanteRepositorySqlConcorrenzaTest {
         val database = apriDatabaseProgetto(cartella)
         try {
             database.database.progettoQueries.inserisci("progetto-1", "Progetto di prova")
-            val repo = ParlanteRepositorySql(database.database)
+            val repo = ParlanteRepositorySql(database.database, UnitaDiLavoroSql(database.database))
             val progettoId = ProgettoId("progetto-1")
 
             val partenza = CyclicBarrier(2)

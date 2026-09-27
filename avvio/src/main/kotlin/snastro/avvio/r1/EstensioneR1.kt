@@ -86,7 +86,7 @@ internal class EstensioneR1(
         val dispatcher = contesto.dispatcher
         val uow = dispatcher.unitaDiLavoro
         val elaborazioni = ElaborazioneRepositorySql(contesto.database)
-        val trascritti = TrascrittoRepositorySql(contesto.database)
+        val trascritti = TrascrittoRepositorySql(contesto.database, contesto.lettura)
         val catalogo = CatalogoRegistrazioni(contesto.registrazioni)
         val lettoreRegistrazione = LettoreRegistrazioneDaProgetto(catalogo)
         val fasi = FasiInCorso()

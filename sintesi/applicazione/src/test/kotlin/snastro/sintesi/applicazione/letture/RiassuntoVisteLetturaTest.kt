@@ -5,6 +5,7 @@ import snastro.kernel.Esito
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
@@ -115,7 +116,7 @@ class RiassuntoVisteLetturaTest {
             attribuzioni = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "parlante-1"),
             nomiParlanti = mapOf("parlante-1" to "Marco"),
         )
-        val lettura = RiassuntoVisteLettura(riassunti, trascritti, nomi, unModelloInstallato())
+        val lettura = RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomi, unModelloInstallato())
         val primaDellaRinomina = riassunti.trova(RiassuntoId("r-1"))
 
         val primaVista = checkNotNull(checkNotNull(lettura.di(REGISTRAZIONE)).mostrato).sommario
@@ -123,7 +124,8 @@ class RiassuntoVisteLetturaTest {
             attribuzioni = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "parlante-1"),
             nomiParlanti = mapOf("parlante-1" to "Marchetto"),
         )
-        val letturaRinominata = RiassuntoVisteLettura(riassunti, trascritti, nomiRinominati, unModelloInstallato())
+        val letturaRinominata =
+            RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomiRinominati, unModelloInstallato())
         val dopoVista = checkNotNull(checkNotNull(letturaRinominata.di(REGISTRAZIONE)).mostrato).sommario
 
         assertEquals(
@@ -188,7 +190,7 @@ class RiassuntoVisteLetturaTest {
         riassunti.salva(pronto).atteso()
         fun lettura(segmenti: List<SegmentoSintesi>, nomi: LettoreNomi = LettoreNomiFinta()): RiassuntoVisteLettura {
             val trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to segmenti))
-            return RiassuntoVisteLettura(riassunti, trascritti, nomi, unModelloInstallato())
+            return RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomi, unModelloInstallato())
         }
 
         val subitoDopo = lettura(strutturaIniziale)
@@ -219,20 +221,26 @@ class RiassuntoVisteLetturaTest {
     @Test
     fun `AC-S106 richiestaAperta rispecchia in_attesa e in_corso, un fallito la lascia null`() {
         val trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi())))
+        fun vistaDi(riassunti: RiassuntoRepository): RiassuntoVista {
+            val lettura = RiassuntoVisteLettura(
+                UnitaDiLavoroFinta(),
+                riassunti,
+                trascritti,
+                LettoreNomiFinta(),
+                unModelloInstallato(),
+            )
+            return checkNotNull(lettura.di(REGISTRAZIONE))
+        }
 
         val inAttesa = RiassuntoRepositoryFinta()
         inAttesa.salva(unRiassunto("r-attesa", REGISTRAZIONE)).atteso()
-        val vistaAttesa = checkNotNull(
-            RiassuntoVisteLettura(inAttesa, trascritti, LettoreNomiFinta(), unModelloInstallato()).di(REGISTRAZIONE),
-        )
+        val vistaAttesa = vistaDi(inAttesa)
         assertEquals(RichiestaApertaVista.InAttesa(RICHIESTO_ALLE), vistaAttesa.richiestaAperta)
         assertNull(vistaAttesa.ultimoFallimento)
 
         val inCorso = RiassuntoRepositoryFinta()
         inCorso.salva(unRiassunto("r-corso", REGISTRAZIONE).conAvvio(AVVIATO_ALLE)).atteso()
-        val vistaCorso = checkNotNull(
-            RiassuntoVisteLettura(inCorso, trascritti, LettoreNomiFinta(), unModelloInstallato()).di(REGISTRAZIONE),
-        )
+        val vistaCorso = vistaDi(inCorso)
         assertEquals(RichiestaApertaVista.InCorso(AVVIATO_ALLE), vistaCorso.richiestaAperta)
         assertNull(vistaCorso.ultimoFallimento)
 
@@ -240,9 +248,7 @@ class RiassuntoVisteLetturaTest {
         val rigaFallita = unRiassunto("r-fallito", REGISTRAZIONE).conAvvio()
             .conFallimento(MotivoFallimento.ERRORE_MODELLO)
         fallito.salva(rigaFallita).atteso()
-        val vistaFallita = checkNotNull(
-            RiassuntoVisteLettura(fallito, trascritti, LettoreNomiFinta(), unModelloInstallato()).di(REGISTRAZIONE),
-        )
+        val vistaFallita = vistaDi(fallito)
         assertNull(vistaFallita.richiestaAperta)
         assertEquals(FallimentoVista(MotivoFallimento.ERRORE_MODELLO), vistaFallita.ultimoFallimento)
     }
@@ -271,14 +277,26 @@ class RiassuntoVisteLetturaTest {
 
         val spia = RiassuntoRepositorySpia(RiassuntoRepositoryFinta())
         val trascrittiSpia = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi())))
-        val lettura = RiassuntoVisteLettura(spia, trascrittiSpia, LettoreNomiFinta(), unModelloInstallato())
+        val lettura = RiassuntoVisteLettura(
+            UnitaDiLavoroFinta(),
+            spia,
+            trascrittiSpia,
+            LettoreNomiFinta(),
+            unModelloInstallato(),
+        )
         repeat(3) { lettura.di(REGISTRAZIONE) }
         assertEquals(0, spia.scritture)
 
         val scope = Konsist.scopeFromPackage(PACCHETTO, "sintesi/applicazione", "main")
         val costruttore = checkNotNull(scope.classes().single { it.name == "RiassuntoVisteLettura" }.primaryConstructor)
         assertEquals(
-            listOf("RiassuntoRepository", "LettoreTrascritto", "LettoreNomi", "DisponibilitaModelloLinguistico"),
+            listOf(
+                "LetturaCoerente",
+                "RiassuntoRepository",
+                "LettoreTrascritto",
+                "LettoreNomi",
+                "DisponibilitaModelloLinguistico",
+            ),
             costruttore.parameters.map { it.type.text },
             "nessun collaboratore verso ModelloLinguistico e' anche possibile solo cosi'",
         )
@@ -299,7 +317,13 @@ class RiassuntoVisteLetturaTest {
 
         val trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi())))
         fun argomentoPrecompilatoDi(riassunti: RiassuntoRepositoryFinta): String? {
-            val lettura = RiassuntoVisteLettura(riassunti, trascritti, LettoreNomiFinta(), unModelloInstallato())
+            val lettura = RiassuntoVisteLettura(
+                UnitaDiLavoroFinta(),
+                riassunti,
+                trascritti,
+                LettoreNomiFinta(),
+                unModelloInstallato(),
+            )
             return checkNotNull(lettura.di(REGISTRAZIONE)).argomentoPrecompilato
         }
 
@@ -390,7 +414,8 @@ class RiassuntoVisteLetturaTest {
         disponibilita: DisponibilitaModelloLinguistico = unModelloInstallato(),
     ): Ambiente {
         val riassunti = RiassuntoRepositoryFinta()
-        return Ambiente(RiassuntoVisteLettura(riassunti, trascritti, nomi, disponibilita), riassunti)
+        val lettura = RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomi, disponibilita)
+        return Ambiente(lettura, riassunti)
     }
 
     private fun unSegmentoSintesi(

@@ -1,6 +1,7 @@
 package snastro.trascrizione.adattatori.persistenza
 
 import snastro.kernel.IntervalloMs
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
@@ -26,17 +27,23 @@ import migrations.Segmento as SegmentoRiga
  * `voce` rows carry no data beyond the id: a Voce's Segmenti are the observable state (INV-6 — a Voce
  * with none does not exist), so [trova] never reads `voce`, only `trascritto` + `segmento`.
  */
-public class TrascrittoRepositorySql(private val db: SnastroDatabase) : TrascrittoRepository {
+public class TrascrittoRepositorySql(
+    private val db: SnastroDatabase,
+    private val lettura: LetturaCoerente,
+) : TrascrittoRepository {
     /**
-     * The counters (`trascritto`) and the Segmenti are read in ONE transaction (D-0008): outside one, each SELECT
-     * runs on its own autocommit connection, so a Revisione committing between them paired the OLD `prossimaVoce`
-     * with the NEW Segmenti and `ricostituisci` refused it. Inside the caller's [snastro.kernel.UnitaDiLavoro] this
-     * is a plain nested SQLDelight transaction (no BEGIN): the reads join the caller's.
+     * The counters (`trascritto`) and the Segmenti are read from ONE snapshot (ADR 0029 §5, AC-C28/C29):
+     * called outside any unit of work, [lettura] opens the outermost `BEGIN DEFERRED` read (no queueing
+     * behind a writer, AC-C28); called inside a command's [snastro.kernel.UnitaDiLavoro.inTransazione], it
+     * joins that transaction and sees its uncommitted writes (rule 2) — a throw here dooms the whole unit
+     * (AC-C29). Never a raw `db.transactionWithResult` (CR-3b): a Revisione committing between the two
+     * SELECTs used to pair the OLD `prossimaVoce` with the NEW Segmenti and `ricostituisci` refused it
+     * (D-0008); the snapshot rules that out.
      */
     @OptIn(RicostituzioneDaPersistenza::class)
-    override fun trova(id: RegistrazioneId): Trascritto? = db.transactionWithResult {
+    override fun trova(id: RegistrazioneId): Trascritto? = lettura.inLettura {
         val riga = db.trascrittoQueries.trovaPerRegistrazione(id.valore).executeAsOneOrNull()
-            ?: return@transactionWithResult null
+            ?: return@inLettura null
         val segmenti = db.segmentoQueries.trovaDiTrascritto(id.valore).executeAsList().map { it.inDominio() }
         Trascritto.ricostituisci(id, segmenti, riga.prossima_voce.toInt(), riga.prossimo_segmento.toInt())
     }

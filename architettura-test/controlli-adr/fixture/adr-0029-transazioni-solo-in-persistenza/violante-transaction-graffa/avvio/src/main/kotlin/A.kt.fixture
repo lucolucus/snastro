@@ -1,0 +1,7 @@
+package snastro.avvio
+
+class A(private val db: SnastroDatabase) {
+    fun scrivi() {
+        db.transaction { }
+    }
+}

@@ -19,6 +19,7 @@ import snastro.documento.adattatori.porte.ScrittoreDocumentoFile
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.ProgettoId
 import snastro.kernel.VoceRef
 import snastro.parlanti.adattatori.eventi.AbbonatoRevisioneParlanti
@@ -105,7 +106,7 @@ internal class EstensioneR2(
     override fun apri(contesto: ContestoEstensione): ProgettoEsteso {
         val dispatcher = contesto.dispatcher
         val uow = dispatcher.unitaDiLavoro
-        val porte = PorteParlanti(contesto.database, CatalogoRegistrazioni(contesto.registrazioni))
+        val porte = PorteParlanti(contesto.database, contesto.lettura, CatalogoRegistrazioni(contesto.registrazioni))
         val ml = adattatori()
         val decodificatore = ml.decodificatore(contesto.cartella)
         val estrattoAudio = EstrattoAudio(porte.voci)
@@ -121,7 +122,7 @@ internal class EstensioneR2(
             ),
         )
         val aggiornamenti = AggiornamentiVistaParlanti(dispatcher, proposte)
-        val trascritti = TrascrittoRepositorySql(contesto.database)
+        val trascritti = TrascrittoRepositorySql(contesto.database, contesto.lettura)
         AbbonatoEliminazioneRegistrazione(
             dispatcher,
             ApplicaEliminazioneRegistrazionePolitica(ElaborazioneRepositorySql(contesto.database), trascritti),
@@ -152,7 +153,7 @@ internal class EstensioneR2(
         avviaRiallineamentoIniziale(
             scope,
             collaboratoriR1,
-            RiallineaTutteLeImpronteServizio(uow, porte.parlanti, riallinea),
+            RiallineaTutteLeImpronteServizio(contesto.lettura, porte.parlanti, riallinea),
             contesto.progettoId,
         )
         completaEliminazioni(
@@ -297,10 +298,10 @@ internal class EstensioneR2(
 }
 
 /** The Parlanti ports of one project database (stateless adapters over it). */
-private class PorteParlanti(database: SnastroDatabase, catalogo: CatalogoRegistrazioni) {
-    val parlanti = ParlanteRepositorySql(database)
+private class PorteParlanti(database: SnastroDatabase, lettura: LetturaCoerente, catalogo: CatalogoRegistrazioni) {
+    val parlanti = ParlanteRepositorySql(database, lettura)
     val attribuzioni = AttribuzioneRepositorySql(database)
-    val voci = LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database)))
+    val voci = LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database, lettura)))
     val registrazione = LettoreRegistrazionePerParlanti(catalogo)
 }
 
@@ -313,7 +314,7 @@ private fun puliziaDerivati(contesto: ContestoEstensione): PuliziaDerivatiFile {
     val database = contesto.database
     val documento = RigenerazioneDocumentoPolitica(
         LettoreTrascrittoDaTrascrizione(
-            VociDelTrascritto(TrascrittoRepositorySql(database)),
+            VociDelTrascritto(TrascrittoRepositorySql(database, contesto.lettura)),
             CatalogoRegistrazioni(contesto.registrazioni),
         ),
         lettoreNomiDaParlanti(contesto),
@@ -325,5 +326,6 @@ private fun puliziaDerivati(contesto: ContestoEstensione): PuliziaDerivatiFile {
 /** The Documento's Nomi from the Parlanti of [contesto]'s database — what R2 hands R1 in place of 'Voce n'. */
 internal fun lettoreNomiDaParlanti(contesto: ContestoEstensione): LettoreNomiDaParlanti {
     val database = contesto.database
-    return LettoreNomiDaParlanti(NomiDelleVoci(AttribuzioneRepositorySql(database), ParlanteRepositorySql(database)))
+    val parlanti = ParlanteRepositorySql(database, contesto.lettura)
+    return LettoreNomiDaParlanti(NomiDelleVoci(AttribuzioneRepositorySql(database), parlanti))
 }
