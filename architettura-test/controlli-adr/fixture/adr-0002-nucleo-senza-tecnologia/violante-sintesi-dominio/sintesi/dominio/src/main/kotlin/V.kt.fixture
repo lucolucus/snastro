@@ -1,0 +1,4 @@
+package snastro.sintesi.dominio
+
+import java.sql.Connection
+class V(val c: Connection)

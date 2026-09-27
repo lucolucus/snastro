@@ -1,0 +1,7 @@
+package snastro.kernel
+
+// import java.io.File
+/*
+ * uses java.sql.Connection only in adapters
+ */
+class Commentato

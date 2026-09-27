@@ -14,11 +14,12 @@ import com.lemonappdev.konsist.api.verify.assertTrue
 import kotlin.test.Test
 
 /**
- * Executable projection of `code-rules.md`'s mechanical rules CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
- * (the gate lint). Vacuously green at wave 0 (no domain code yet, `strict = false` default on every
- * Konsist assertion) — real coverage begins the moment an owner block adds source under a module.
- * CR-6, CR-7, CR-9, CR-11 are detekt/compiler jobs (`build-logic`); CR-12, CR-13 are
- * `verificaDipendenzeModuli` / `verifySqlDelightMigration` (root `build.gradle.kts`).
+ * Proiezione eseguibile delle regole meccaniche di `code-rules.md` CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
+ * (il lint del gate), su tutti i contesti (Progetto, Trascrizione, Parlanti, Documento, Sintesi) e sui
+ * moduli tecnici. Lo scope e il progetto intero, `.worktrees/` esclusa ([progetto]), letto una sola volta.
+ * CR-6, CR-7, CR-9, CR-11 sono compiti di detekt e del compilatore (`build-logic`); CR-12 e
+ * `verificaDipendenzeModuli` (`build.gradle.kts` di radice); CR-13 e il test di migrazione di
+ * `:persistenza:test`. Gli script di `controlli-adr` degli ADR girano in [ControlliAdrTest].
  */
 class RegoleArchitetturaliTest {
     private val contesti = setOf("progetto", "trascrizione", "parlanti", "documento", "sintesi")
@@ -97,10 +98,9 @@ class RegoleArchitetturaliTest {
     }
 
     /**
-     * Direct unit test of the predicate above (no fixture files needed — `:ui` stays untouched at
-     * wave 0/fix-batch-10). Verifies BOTH directions stay live: the two new allowances accept their
-     * cases, and a `dominio` type that is NOT an error hierarchy (e.g. an aggregate root) is still
-     * rejected — i.e. the rule can still go red.
+     * Direct unit test of the predicate above (no fixture files needed). Verifies BOTH directions stay
+     * live: the two allowances accept their cases, and a `dominio` type that is NOT an error hierarchy
+     * (e.g. an aggregate root) is still rejected — i.e. the rule can still go red.
      */
     @Test
     fun `CR-1 il predicato di importazione ui accetta le nuove eccezioni e rifiuta il resto del dominio`() {
@@ -177,10 +177,12 @@ class RegoleArchitetturaliTest {
     // --- CR-4 - Aggregates are encapsulated, never `data class` -----------------------------
 
     /**
-     * The aggregate roots, verbatim from `.mismagent/features/trascrizione-con-parlanti/tactical-model.md`
-     * (the `(root)` rows: Progetto, Registrazione — § Progetto; Elaborazione, Trascritto — § Trascrizione;
-     * Parlante, Attribuzione — § Parlanti; Documento has none). CR-4 bans `data class` for these only:
-     * VOs, events and error members MUST be `data class` (CR-5). A feature adding a root amends this list.
+     * The aggregate roots, verbatim from the features' tactical models (the `(root)` rows):
+     * `.mismagent/features/trascrizione-con-parlanti/tactical-model.md` — Progetto, Registrazione (§ Progetto);
+     * Elaborazione, Trascritto (§ Trascrizione); Parlante, Attribuzione (§ Parlanti); Documento has none —
+     * and `.mismagent/features/sintesi/tactical-model.md` — Riassunto, LunghezzaMassimaRiassunto (§ Sintesi).
+     * CR-4 bans `data class` for these only: VOs, events and error members MUST be `data class` (CR-5).
+     * A feature adding a root amends this list.
      */
     private val radiciAggregato = setOf(
         "Progetto",
@@ -396,7 +398,7 @@ class RegoleArchitetturaliTest {
             .assertFalse { aliasRicostituzione.containsMatchIn(it.codice()) }
         val radice = java.io.File(System.getProperty("user.dir")).parentFile
         val buildConOptIn = radice.walkTopDown()
-            .onEnter { it.name !in setOf("build", ".gradle", ".git", ".mismagent") }
+            .onEnter { it.name !in setOf("build", ".gradle", ".git", ".mismagent", ".worktrees") }
             .filter { it.isFile && it.name.endsWith(".gradle.kts") }
             .filter { it.readText().contains("RicostituzioneDaPersistenza") }
             .toList()
@@ -472,10 +474,32 @@ class RegoleArchitetturaliTest {
     }
 
     private companion object {
+        /** La radice del progetto: `:architettura-test` gira con la propria cartella come `user.dir`. */
+        val radice: java.io.File = java.io.File(System.getProperty("user.dir")).parentFile
+
         /**
-         * Il progetto analizzato UNA volta per l'intera classe (JUnit crea un'istanza per test):
-         * ogni regola filtra lo stesso scope invece di ri-parsare tutti i sorgenti.
+         * Cartelle in radice che non sono sorgenti di QUESTO albero: `.worktrees` (i worktree git di altri
+         * rami, copie intere del progetto) e, come fa gia `scopeFromProject`, `.gradle` e `build`.
          */
-        val progetto: KoScope by lazy { Konsist.scopeFromProject() }
+        val cartelleEscluse = setOf(".worktrees", ".gradle", "build")
+
+        /** Segmenti di percorso esclusi a ogni profondita, come in `scopeFromProject` (output di build). */
+        val segmentiEsclusi = setOf("build", "target", "buildSrc")
+
+        /**
+         * Il progetto analizzato UNA volta per l'intera classe (JUnit crea un'istanza per test): ogni
+         * regola filtra lo stesso scope. Stessi file di `Konsist.scopeFromProject()`, tranne `.worktrees`:
+         * lo scope parte dalle cartelle di radice, cosi i worktree annidati non vengono nemmeno letti
+         * (`scopeFromProject` li analizzerebbe tutti prima di qualunque filtro).
+         */
+        val progetto: KoScope by lazy {
+            val cartelle = radice.listFiles { f -> f.isDirectory && f.name !in cartelleEscluse }.orEmpty()
+            Konsist.scopeFromExternalDirectories(cartelle.map { it.absolutePath })
+                .slice { file ->
+                    java.io.File(file.path).relativeTo(radice).invariantSeparatorsPath
+                        .split('/')
+                        .none { it in segmentiEsclusi }
+                }
+        }
     }
 }

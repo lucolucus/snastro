@@ -7,13 +7,14 @@
 #     directory named `llama-jni` nested anywhere else are NOT admitted, and `com.k2fsa` is not admitted
 #     in `./llama-jni/`.
 # architettura-test and build/ are excluded; comment lines (`//`, `*`, `/*`) never count.
+# (2026-09-27) .worktrees/ (the git worktrees of other branches, not this tree) is excluded too.
 # Usage: sh architettura-test/controlli-adr/adr-0004-sherpa-confinato.sh [project-root]
 N='ADR-0004 sherpa-confinato'
 cd "${1:-.}" 2>/dev/null || { echo "$N: FAIL (root not found: ${1:-.})"; exit 1; }
 [ -f settings.gradle.kts ] || { echo "$N: FAIL (target missing: settings.gradle.kts, not the project root)"; exit 1; }
 COMMENTO='^[^:]*:[0-9]+:[[:space:]]*(//|\*|/\*)'
-V1=$(grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=architettura-test 'com\.k2fsa' . | grep -vE "$COMMENTO")
-V2=$(grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=architettura-test '(System\.load|Runtime\.getRuntime\(\)\.load)' . | grep -vE "$COMMENTO" | grep -vE '^\./llama-jni/')
+V1=$(grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=.worktrees --exclude-dir=architettura-test 'com\.k2fsa' . | grep -vE "$COMMENTO")
+V2=$(grep -rnE --include='*.kt' --exclude-dir=ml-sherpa --exclude-dir=build --exclude-dir=.worktrees --exclude-dir=architettura-test '(System\.load|Runtime\.getRuntime\(\)\.load)' . | grep -vE "$COMMENTO" | grep -vE '^\./llama-jni/')
 V=$(printf '%s\n%s' "$V1" "$V2" | grep -v '^$')
 [ -z "$V" ] || { echo "$N: FAIL"; printf '%s\n' "$V"; exit 1; }
 echo "$N: PASS"

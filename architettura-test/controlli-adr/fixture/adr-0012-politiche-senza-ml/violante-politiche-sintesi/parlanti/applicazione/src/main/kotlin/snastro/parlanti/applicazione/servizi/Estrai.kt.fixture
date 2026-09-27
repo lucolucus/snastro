@@ -1,0 +1,4 @@
+package snastro.parlanti.applicazione.servizi
+
+import snastro.parlanti.applicazione.porte.EstrattoreImpronta
+import snastro.kernel.CampioniAudio

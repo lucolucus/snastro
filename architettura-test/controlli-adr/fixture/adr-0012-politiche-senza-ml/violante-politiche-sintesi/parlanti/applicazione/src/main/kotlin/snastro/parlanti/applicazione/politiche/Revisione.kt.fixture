@@ -1,0 +1,6 @@
+package snastro.parlanti.applicazione.politiche
+
+// import snastro.parlanti.applicazione.porte.EstrattoreImpronta
+import snastro.kernel.CampioniAudioDescrittore
+import snastro.parlanti.dominio.ImprontaId
+class Revisione
