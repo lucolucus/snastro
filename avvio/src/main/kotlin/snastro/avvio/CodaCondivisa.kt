@@ -14,6 +14,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.catturaNonFatale
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.coda.PosizioniNellaCoda
 import java.io.Closeable
@@ -87,6 +88,20 @@ import kotlin.coroutines.coroutineContext
  * whose peek throws is treated exactly like an ordinary escape — every source's [FonteCoda.recupera]
  * runs, and the queue reschedules normally instead of dying.
  *
+ * **[segnalaSfuggito] (ADR 0028 §7.5, AC-C57/AC-C58).** The ONE report of "something on this worker
+ * thread escaped": every [RisultatoProtetto.Sfuggito] (a peek or [FonteCoda.prossima] throwing something
+ * non-fatal — the run itself is retried/excluded exactly as before, unchanged) calls it once with the
+ * actual [Throwable]; so does a throwing [FonteCoda.interrompi] inside [fermaEAttendi], a throwing
+ * [FonteCoda.ultimaTentata] and a throwing [segnalaBloccato] — each of those three wrapped in
+ * [catturaNonFatale] so the fault itself never stops the shutdown or the queue (AC-C58). A
+ * [StackOverflowError] from [FonteCoda.prossima]/[FonteCoda.teste] is the one exception NOT treated as an
+ * escape: [eseguiProtetto] rethrows it unconditionally (AC-C57) — it kills [lavoro] (this worker's own
+ * `launch`, a child of a `SupervisorJob`), which routes it to the scope's own
+ * `CoroutineExceptionHandler` (`:avvio`'s [gestoreErrori]) instead: reported once, through the gestore,
+ * and the queue claims no further item. Every OTHER [Throwable] ([OutOfMemoryError] included, AC-312)
+ * keeps its pre-existing behaviour: caught, reported via [segnalaSfuggito], retried/excluded like any
+ * escape — [StackOverflowError] is the sole, deliberate exception to that rule.
+ *
  * **The AC-S59 immediate re-tick is bounded to ONE (MED, user-approved 2026-09-26).** A source whose
  * [FonteCoda.teste] and [FonteCoda.prossima] permanently disagree (a persistently "eligible" head that
  * never actually claims) would otherwise spin the immediate re-tick forever, with no delay between
@@ -99,6 +114,8 @@ internal class CodaCondivisa(
     scope: CoroutineScope,
     private val fonti: List<FonteCoda>,
     private val segnalaBloccato: (String) -> Unit = {},
+    /** ADR 0028 §7.5, AC-C57/AC-C58: the one report of "something on this worker escaped" — see the class KDoc. */
+    private val segnalaSfuggito: (Throwable) -> Unit = {},
     dispatcherSingoloThread: CoroutineDispatcher = nuovoDispatcherPipeline(),
 ) : PosizioniNellaCoda {
     private val segnali = Channel<Unit>(Channel.CONFLATED)
@@ -148,7 +165,12 @@ internal class CodaCondivisa(
      * it finished in time.
      */
     fun fermaEAttendi(timeoutMs: Long = TIMEOUT_STOP_MS): Boolean {
-        corrente?.let { attivo -> fonti.firstOrNull { it.tipo == attivo.tipo }?.interrompi() }
+        corrente?.let { attivo ->
+            fonti.firstOrNull { it.tipo == attivo.tipo }?.let { fonte ->
+                // AC-C58: interrompi non deve mai impedire lo spegnimento (database chiuso, lock rilasciato).
+                catturaNonFatale { fonte.interrompi() }.onFailure(segnalaSfuggito)
+            }
+        }
         return runBlocking {
             withTimeoutOrNull(timeoutMs) { lavoro.join() } != null
         }
@@ -184,8 +206,9 @@ internal class CodaCondivisa(
     private suspend fun provaAvanzare() {
         val picco = when (val esito = eseguiProtetto { raccogliPicco() }) {
             is RisultatoProtetto.Concluso -> esito.valore
-            RisultatoProtetto.Sfuggito -> {
+            is RisultatoProtetto.Sfuggito -> {
                 // il picco stesso e' sfuggito (MED user-approved): trattato come una fuga qualunque, su ogni fonte
+                segnalaSfuggito(esito.errore) // AC-C57
                 fonti.forEach { fonte -> eseguiProtetto { fonte.recupera() } }
                 riprogramma(INTERVALLO_CONTROLLO)
                 return
@@ -204,9 +227,11 @@ internal class CodaCondivisa(
         }
         when (risultato) {
             is RisultatoProtetto.Sfuggito -> {
+                segnalaSfuggito(risultato.errore) // AC-C57: segnalato una volta, la coda prosegue
                 fonti.forEach { fonte -> eseguiProtetto { fonte.recupera() } } // AC-S61: ogni fonte, dopo la fuga
-                fonteScelta.ultimaTentata()?.let { gestisciFallimento(fonteScelta, it) }
-                    ?: riprogramma(INTERVALLO_CONTROLLO)
+                // AC-C58: un ultimaTentata guasto non deve bloccare il recupero — catturato e segnalato, come null.
+                val ultima = catturaNonFatale { fonteScelta.ultimaTentata() }.onFailure(segnalaSfuggito).getOrNull()
+                ultima?.let { gestisciFallimento(fonteScelta, it) } ?: riprogramma(INTERVALLO_CONTROLLO)
             }
 
             is RisultatoProtetto.Concluso -> when (val esito = risultato.valore) {
@@ -259,7 +284,8 @@ internal class CodaCondivisa(
         if (tentativo >= MAX_TENTATIVI_PER_ID) {
             tentativiFonte.remove(id)
             esclusi.getValue(fonte) += id
-            segnalaBloccato(id)
+            // AC-C58: un segnalaBloccato guasto non deve impedire il riavvio della coda.
+            catturaNonFatale { segnalaBloccato(id) }.onFailure(segnalaSfuggito)
             riprogramma(INTERVALLO_CONTROLLO) // riparte subito sul prossimo elemento idoneo
         } else {
             tentativiFonte[id] = tentativo
@@ -351,34 +377,39 @@ internal sealed interface RisultatoTentativo {
     data class Rifiutata(val id: String) : RisultatoTentativo
 }
 
-/** Esito di una chiamata protetta ([eseguiProtetto]): conclusa normalmente, o sfuggita (AC-312). */
+/** Esito di una chiamata protetta ([eseguiProtetto]): conclusa normalmente, o sfuggita con [errore] (AC-312). */
 private sealed interface RisultatoProtetto<out T> {
     data class Concluso<T>(val valore: T) : RisultatoProtetto<T>
-    data object Sfuggito : RisultatoProtetto<Nothing>
+    data class Sfuggito(val errore: Throwable) : RisultatoProtetto<Nothing>
 }
 
 /**
  * Runs [blocco] through [runInterruptible] (so cancelling the worker's scope interrupts the dedicated
  * thread if it is mid-call). A cancellation, an interrupt (flag CLEARED, never restored — this thread
  * keeps running so it must be clean for its NEXT blocking call) or any unexpected `Throwable`
- * (`Error`/`OutOfMemoryError` included) is caught and treated as "the run was interrupted" — UNLESS the
- * caller's own coroutine is no longer active, in which case this is a REAL stop request and is
- * rethrown so the worker coroutine actually ends. No logging sink exists in this codebase for the
- * survived-escape case (same accepted trade-off as `eseguiFase`/`chiudiSilenziosamente`/
- * `fuoriDalThreadUi` in `:avvio`, and `DispatcherEventiInMemoria`'s own broad catch for a symmetrical,
- * already-reviewed reason).
+ * (`OutOfMemoryError` included, AC-312) is caught and treated as "the run was interrupted" — reported
+ * through the caller's own [CodaCondivisa.segnalaSfuggito] — UNLESS the caller's own coroutine is no
+ * longer active, in which case this is a REAL stop request and is rethrown so the worker coroutine
+ * actually ends.
+ *
+ * [StackOverflowError] is the ONE deliberate exception (AC-C57, user-approved): it is always rethrown,
+ * never treated as an escape — a corrupted call stack is not something [CodaCondivisa] retries; it kills
+ * the worker's own `launch`, which its scope's `CoroutineExceptionHandler` (`:avvio`'s [gestoreErrori])
+ * reports, and the queue claims no further item.
  */
 private suspend fun <T> eseguiProtetto(blocco: () -> T): RisultatoProtetto<T> = try {
     RisultatoProtetto.Concluso(runInterruptible { blocco() })
 } catch (e: InterruptedException) {
     Thread.interrupted() // CLEAR, never restore — this thread runs more work right after
     if (!coroutineContext.isActive) throw CancellationException("coda fermata", e)
-    RisultatoProtetto.Sfuggito
+    RisultatoProtetto.Sfuggito(e)
+} catch (e: StackOverflowError) {
+    throw e // AC-C57: mai ingoiato, mai ritentato — vedi la KDoc sopra
 } catch (
     @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Throwable,
 ) {
     if (!coroutineContext.isActive) throw e
-    RisultatoProtetto.Sfuggito
+    RisultatoProtetto.Sfuggito(e)
 }
 
 /** The real, production default: one dedicated daemon OS thread (ADR 0004's "single-thread pipeline"). */

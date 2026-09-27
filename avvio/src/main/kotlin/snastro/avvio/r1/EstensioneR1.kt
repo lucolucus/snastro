@@ -2,13 +2,13 @@ package snastro.avvio.r1
 
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import snastro.avvio.CodaCondivisa
 import snastro.avvio.ContestoEstensione
 import snastro.avvio.EstensioneSessione
 import snastro.avvio.ProgettoEsteso
+import snastro.avvio.gestoreErrori
+import snastro.avvio.segnalazioneApp
 import snastro.documento.adattatori.eventi.AbbonatoDocumentoEventi
 import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione
 import snastro.documento.adattatori.porte.ScrittoreDocumentoFile
@@ -19,7 +19,7 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
-import snastro.supporto.Segnalazione
+import snastro.supporto.figlioDi
 import snastro.trascrizione.adattatori.audio.DecodificatoreAudioFfmpeg
 import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
@@ -43,7 +43,6 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
-import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
@@ -121,6 +120,8 @@ internal class EstensioneR1(
                 ),
             ) + contesto.fontiCoda, // ADR 0023 §1: R3 adds the Riassunto source; R0–R2 none (behaviour unchanged)
             segnalaBloccato = { id -> log.warning("elaborazione $id esclusa dalla coda") },
+            // AC-C57/AC-C58 (ADR 0028 §7.5): the ONE JUL-backed Segnalazione, not a local lambda.
+            segnalaSfuggito = { e -> segnalazioneApp.segnala("elemento della coda condivisa sfuggito", e) },
         )
 
         val stati = StatiElaborazione(elaborazioni, trascritti, fasi)
@@ -145,15 +146,16 @@ internal class EstensioneR1(
     }
 
     /**
-     * `AbbonatoDocumentoEventi` (after-commit, startup sweep) on its own child of the session scope, on
-     * [io] — never the UI thread; returns that child's [Job], which [CollaboratoriR1.ferma] joins.
+     * `AbbonatoDocumentoEventi` (after-commit, startup sweep) on its own child of the session scope
+     * ([figlioDi], AC-C56), on [io] — never the UI thread; returns that child's [Job], which
+     * [CollaboratoriR1.ferma] joins.
      */
     private fun avviaRigenerazioneDocumento(
         contesto: ContestoEstensione,
         trascritti: TrascrittoRepositorySql,
         catalogo: CatalogoRegistrazioni,
     ): Job {
-        val lavoro = SupervisorJob(contesto.scope.coroutineContext[Job])
+        val scope = figlioDi(contesto.scope, io, gestoreErrori)
         val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo)
         AbbonatoDocumentoEventi(
             contesto.dispatcher,
@@ -165,12 +167,11 @@ internal class EstensioneR1(
             // AC-C47: the startup sweep lists ids itself, so a poisoned Registrazione's retries never block or
             // re-run every other one (never through RigenerazioneDocumentoPolitica's all-or-nothing fold).
             lettoreTrascritto::registrazioniConTrascritto,
-            CoroutineScope(contesto.scope.coroutineContext + lavoro + io),
-            // JUL-backed (ADR 0028 §2): :supporto never touches JUL. Wired here until a4 unifies every
-            // Segnalazione behind one gestoreErroriNonCatturati-style collaborator.
-            Segnalazione { messaggio, causa -> log.log(Level.WARNING, messaggio, causa) },
+            scope,
+            // AC-C54: the ONE JUL-backed Segnalazione of `:avvio` — the a2 local lambda is gone.
+            segnalazioneApp,
         )
-        return lavoro
+        return checkNotNull(scope.coroutineContext[Job]) { "figlioDi restituisce sempre uno scope con un Job" }
     }
 
     /**

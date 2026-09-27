@@ -6,7 +6,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,11 +14,13 @@ import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
+import snastro.avvio.gestoreErrori
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.PianoRiassegnazione
 import snastro.parlanti.dominio.ErroreParlanti
+import snastro.supporto.figlioDi
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
@@ -59,8 +60,10 @@ internal class AzioniSomiglianzaProgetto(
     private val calcolaPiano: (RegistrazioneId, (fatti: Int, totale: Int) -> Unit) -> Esito<PianoRiassegnazione>,
     private val applicaPiano: (RiassegnaSegmenti) -> Esito<Unit>,
 ) : AzioniSomiglianza {
-    private val lavoro = SupervisorJob(progetto.coroutineContext[Job])
-    private val scope = CoroutineScope(progetto.coroutineContext + lavoro)
+    private val scope = figlioDi(progetto, gestore = gestoreErrori) // AC-C56
+    private val lavoro = checkNotNull(scope.coroutineContext[Job]) {
+        "figlioDi restituisce sempre uno scope con un Job"
+    }
     private val _stato = MutableStateFlow<Map<RegistrazioneId, StatoSomiglianza>>(emptyMap())
     override val stato: StateFlow<Map<RegistrazioneId, StatoSomiglianza>> = _stato.asStateFlow()
     private val piani = mutableMapOf<RegistrazioneId, PianoRiassegnazione>() // guarded by this

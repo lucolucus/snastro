@@ -48,7 +48,9 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.time.LocalDate
+import java.util.logging.Logger
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
@@ -72,6 +74,8 @@ class SmokeTest {
         val cartellaFixture = cartella.resolve("Fixture.snastro")
         costruisciProgettoFixture(cartellaFixture)
         SCHERMATE.forEach { Files.deleteIfExists(Path.of("build/smoke/$it.png")) }
+        // AC-C90: lo smoke non installa MAI il file handler di produzione (mai scrittura sulla cartella reale).
+        val gestoriPrimaDelloSmoke = Logger.getLogger("snastro").handlers.size
 
         eseguiSmoke(cartellaFixture.toString())
 
@@ -79,6 +83,11 @@ class SmokeTest {
             val png = Path.of("build/smoke/$nome.png")
             assertTrue(Files.exists(png) && Files.size(png) > 0, "screenshot di $nome mancante o vuoto: $png")
         }
+        assertEquals(
+            gestoriPrimaDelloSmoke,
+            Logger.getLogger("snastro").handlers.size,
+            "AC-C90: eseguiSmoke non deve mai installare un FileHandler sul logger \"snastro\"",
+        )
     }
 
     /** A valid `.snastro` folder with a Progetto and one Registrazione — SQL only, no FFmpeg. */
