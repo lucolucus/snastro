@@ -2,6 +2,7 @@ package snastro.sintesi.applicazione.comandi
 
 import com.lemonappdev.konsist.api.Konsist
 import snastro.kernel.DispatcherEventiFinta
+import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.IntervalloMs
@@ -247,6 +248,35 @@ class RiassumiServizioTest {
         servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
 
         assertEquals(emptyList(), riassuntiReali.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `INV-S3 un Errore di rimuovi sul fallito precedente si propaga, rollback e niente pubblicato`() {
+        val riassuntiReali = RiassuntoRepositoryFinta()
+        val lunghezze = LunghezzaMassimaRiassuntoRepositoryFinta()
+        val fallito = unRiassunto("fallito-1", REGISTRAZIONE).conAvvio().conFallimento()
+        riassuntiReali.salva(fallito).atteso()
+        val riassuntiGuasti = object : RiassuntoRepository by riassuntiReali {
+            override fun rimuovi(id: RiassuntoId): Esito<Unit> = Esito.Errore(ErroreDiProva.Fallito("rimuovi"))
+        }
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(riassuntiReali, lunghezze))
+        val servizio = RiassumiServizio(
+            eventi.unitaDiLavoro,
+            GeneratoreIdFinto(),
+            CLOCK,
+            PROGETTO,
+            riassuntiGuasti,
+            lunghezze,
+            LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi()))),
+            DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
+            eventi,
+        )
+
+        val esito = servizio.esegui(Riassumi(REGISTRAZIONE))
+
+        assertEquals(ErroreDiProva.Fallito("rimuovi"), esito.erroreAtteso<ErroreDiProva.Fallito>())
+        assertEquals(listOf(fallito.id), riassuntiReali.diRegistrazione(REGISTRAZIONE).map { it.id })
         assertEquals(emptyList(), eventi.pubblicati)
     }
 

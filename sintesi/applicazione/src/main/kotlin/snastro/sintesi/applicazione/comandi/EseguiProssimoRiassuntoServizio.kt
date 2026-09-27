@@ -46,7 +46,8 @@ import java.time.Instant
  *    `rimuovi` (D-0003, AC-S86). [RiassuntoRepository.concludi] returning `false` (the row vanished or is
  *    no longer `in_corso` — e.g. a concurrent eliminazione/sostituzione policy, INV-S8) means nothing is
  *    written and NOTHING is published. `Errore(Annullato)` from the model skips this step entirely:
- *    nothing is written, nothing published.
+ *    nothing is written, nothing published. An `Errore` of the compare-and-set itself is
+ *    returned by [esegui] (ADR 0003), never discarded.
  *
  * [annullato] is this run's own cancellation flag (ADR 0023 §5): a constructor collaborator, not part of
  * the pinned [EseguiProssimoRiassunto] command — the shared queue (`:avvio`, not yet built) can inject a
@@ -65,13 +66,14 @@ public class EseguiProssimoRiassuntoServizio(
     private val eventi: DispatcherEventi,
     private val annullato: () -> Boolean = { false },
 ) {
-    @Suppress("ReturnCount") // guard clauses (empty queue / bound refused / race) — clearer than nesting
+    @Suppress("ReturnCount") // guard clauses (claim refused / empty queue) — clearer than nesting
     public fun esegui(comando: EseguiProssimoRiassunto): Esito<RisultatoRiassunto> {
         val esito = uow.inTransazione { avviaIlPiuVecchio(comando.esclusi, comando.primaDi) }
-        if (esito is Esito.Errore) return esito
-        val riassunto = (esito as Esito.Ok).valore ?: return Esito.Ok(RisultatoRiassunto.Nessuno)
-        eseguiEConcludi(riassunto)
-        return Esito.Ok(RisultatoRiassunto.Avviato(riassunto.id))
+        val riassunto = when (esito) {
+            is Esito.Errore -> return esito
+            is Esito.Ok -> esito.valore ?: return Esito.Ok(RisultatoRiassunto.Nessuno)
+        }
+        return eseguiEConcludi(riassunto).mappa { RisultatoRiassunto.Avviato(riassunto.id) }
     }
 
     /** Reads the oldest eligible `in_attesa` and marks it `in_corso` in ONE transaction (AC-S83). */
@@ -88,14 +90,13 @@ public class EseguiProssimoRiassuntoServizio(
     }
 
     /** Phases 2 (run) + 3 (complete): no transaction is open until the final compare-and-set. */
-    private fun eseguiEConcludi(riassunto: Riassunto) {
+    private fun eseguiEConcludi(riassunto: Riassunto): Esito<Unit> =
         when (val esecuzione = eseguiSulModello(riassunto)) {
-            EsecuzioneModello.Annullata -> Unit // INV-S8: nothing written, nothing published
+            EsecuzioneModello.Annullata -> Esito.Ok(Unit) // INV-S8: nothing written, nothing published
             is EsecuzioneModello.Fallita -> concludi(riassunto) { riassunto.fallisci(esecuzione.motivo) }
             is EsecuzioneModello.Completata ->
                 concludi(riassunto) { riassunto.completa(esecuzione.bozza, esecuzione.struttura) }
         }
-    }
 
     /** AC-S84: no transaction is open here. AC-S87: [ModelloLinguistico] is skipped when not Installato. */
     private fun eseguiSulModello(riassunto: Riassunto): EsecuzioneModello {
@@ -126,12 +127,14 @@ public class EseguiProssimoRiassuntoServizio(
     /**
      * The completion compare-and-set (ADR 0022 §4, D-0003): [transizione] runs on OUR OWN in-memory
      * [riassunto] (already `in_corso`, so it never actually fails); only [RiassuntoRepository.concludi]
-     * writes, and only a write it accepts is published (AC-S86, INV-S8).
+     * writes, and only a write it accepts is published (AC-S86, INV-S8). An `Errore` of
+     * [RiassuntoRepository.concludi] rolls back and is returned to the caller (ADR 0003): the row stays
+     * `in_corso` until `RecuperaRiassuntiInterrotti` recovers it (AC-S89).
      */
-    private fun concludi(riassunto: Riassunto, transizione: () -> Esito<*>) {
+    private fun concludi(riassunto: Riassunto, transizione: () -> Esito<*>): Esito<Unit> {
         val transito = transizione()
         check(transito !is Esito.Errore) { "transizione impossibile su un Riassunto appena avviato: $transito" }
-        uow.inTransazione {
+        return uow.inTransazione {
             riassunti.concludi(riassunto).poi { scritto ->
                 if (scritto) eventi.pubblica(eventoConclusione(riassunto))
                 Esito.Ok(Unit)
