@@ -3,7 +3,7 @@ scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: architecture.md (module map + edges + boundaries), ADR 0006 enforced_by (deny-list gains `llm`), ADR 0018 §5 (TrascrittoSostituito gains a Sintesi synchronous consumer), code-rules.md CR-3 / CR-10, dev-architecture-app.md (physical deletions list)
 closes_spike: null
-amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0026)": §4 input line without m:ss, §5 LimiteIngresso ÷ 2.4 and the deferred items answered
+amended: 2026-09-27   # see §10 dated note 2026-09-27 (single composition, ADR 0030). Earlier (2026-09-26): "Amendment 2026-09-26 (ADR 0026)": §4 input line without m:ss, §5 LimiteIngresso ÷ 2.4 and the deferred items answered
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0021-confini-sintesi.sh
   # legacy note: green on the tree today (vacuous: no sintesi/ yet); validated 2026-09-25 via bash -c — tree exit 0; fixtures: PASS with `ParlanteId` only in `//`/KDoc lines, with `ParlanteIdentita`, with a `snastro.parlanti.applicazione` import in sintesi/adattatori, with `riassuntoQueries` in sintesi/; FAIL on `import snastro.kernel.ParlanteId` in sintesi/applicazione, on a fully-qualified `snastro.parlanti.…` use in sintesi/dominio, on `segmentoQueries` in sintesi/adattatori, on `riassuntoFonteQueries` in trascrizione/
@@ -200,6 +200,11 @@ The feature's wiring is a new composition **R3** (`snastro.avvio.r3`, block `avv
 built on R2 because `LettoreNomi` needs Parlanti). It registers both synchronous subscribers
 **before** the first command. It wires the shared queue (ADR 0023), `DisponibilitaModelloLinguistico`
 and the Riassunto tab. R0–R2 compositions create no `Riassunto` and show no tab.
+
+*(2026-09-27, [ADR 0030](0030-composizione-unica-per-contesto.md) [user])* R0–R2 are retired as compositions. Sintesi is
+now `ModuloSintesi` of the single composition (`snastro.avvio.sintesi`), and its two synchronous subscribers head the
+declared list (Sintesi → Parlanti → Trascrizione) that `apriProgetto` registers before the queue and before any
+command. "R0–R2 compositions create no `Riassunto`" no longer applies: no such composition exists.
 
 ## Rejected options
 - **Reusing Documento's ports / a shared "transcript reader".** Ports are consumer-owned (ISP).

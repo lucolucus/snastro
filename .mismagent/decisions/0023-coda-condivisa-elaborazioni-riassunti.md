@@ -2,6 +2,7 @@
 scope: global
 status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0004 ("one Elaborazione at a time from a serial FIFO queue" → one item at a time from a SHARED FIFO), architecture.md § Pipeline and progress, ADR 0018 Amendment (b) (S2's position counts Riassunti ahead)
+amended: 2026-09-27   # see "Note 2026-09-27" (segnalaSfuggito, ADR 0028; Campanello / avvio.coda, ADR 0030)
 closes_spike: null
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0023-posizione-in-coda-fuori-dai-contesti.sh
@@ -170,3 +171,12 @@ The LLM runs on the queue's dedicated worker thread (`runInterruptible`, as the 
     claim; a `Riassunto` behind a held `Elaborazione`).
   - Discursive (code review): the claim reads its head inside its transaction; the bound is honoured
     inside the claim, not only by the coordinator; no Mutex acquisition around the LLM.
+
+## Note 2026-09-27 — escaped throwables are reported; the queue's home ([ADR 0028](0028-librerie-tecniche-supporto.md), [ADR 0030](0030-composizione-unica-per-contesto.md)) [user]
+- **Escaped throwables.** `CodaCondivisa`'s protected run no longer swallows silently. Every escaped `Throwable` is
+  reported through an injected `segnalaSfuggito` hook, which `:avvio` wires to the JUL `Segnalazione` of ADR 0028.
+  `VirtualMachineError` is rethrown. The next item still runs after a non-fatal failure, as before.
+- **Cycle.** The queue is built by `apriProgetto` from every module's `fontiCoda()`. The queue↔Sintesi cycle is
+  broken by a `Campanello` wake-up handle, not by an `AtomicReference`.
+- **Home.** The queue lives in `snastro.avvio.coda`. §4 (the position is computed by the owner) and this ADR's check
+  are unchanged.

@@ -2,6 +2,7 @@
 scope: global
 status: accepted
 supersedes: null
+amended: 2026-09-27   # see §4 dated note 2026-09-27 (reads in a LetturaCoerente snapshot, ADR 0029)
 closes_spike: null
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0022-schema-sintesi.sh
@@ -165,6 +166,11 @@ ADR 0021's prohibition relies on).
 - The fake (`RiassuntoRepositoryFinta`) honours both indexes, like the other repository fakes. The
   `RiassuntoRepositoryContratto` runs against the fake and against the SQL implementation
   (round-trip, index → `Esito` mapping, a concurrent-insert case, the CAS race cases).
+- *(2026-09-27, [ADR 0029](0029-lettura-coerente-deferred.md) [user])* `trova`, `diRegistrazione` and every read that
+  loads a `Riassunto` with its children run inside `LetturaCoerente.inLettura` (BEGIN DEFERRED, read-only snapshot),
+  received by the repository's constructor. The row and its children are never read from two different snapshots.
+  The SQL subclass of `RiassuntoRepositoryContratto` gains the concurrency case of ADR 0029 §5. Completion (the CAS
+  above) is a write and stays `BEGIN IMMEDIATE`.
 
 ### 5. Migration test
 `6.sqm` joins the `:persistenza:test` migration test unchanged (ADR 0006 (a)): an empty DB migrated

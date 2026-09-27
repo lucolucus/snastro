@@ -10,7 +10,15 @@
 
 Sections: [#pacchetti](#pacchetti) · [#valori-id](#valori-id) · [#aggregato](#aggregato) ·
 [#servizio](#servizio) · [#porta-contratto](#porta-contratto) · [#repository](#repository) ·
-[#presenter](#presenter) · [#test](#test) · [#dipendenze-test](#dipendenze-test)
+[#presenter](#presenter) · [#test](#test) · [#dipendenze-test](#dipendenze-test) ·
+[#composizione](#composizione)
+
+> **Delta 2026-09-27 [user]** (ADRs 0028/0029/0030):
+> - `#pacchetti`: `snastro.supporto` and the `:avvio` packages by concern;
+> - `#repository`: `LetturaCoerente` and the snapshot rule;
+> - `#test`: the shared test helpers;
+> - `#dipendenze-test`: the test-only edge;
+> - new §10 `#composizione`.
 
 ---
 
@@ -29,6 +37,12 @@ Sections: [#pacchetti](#pacchetti) · [#valori-id](#valori-id) · [#aggregato](#
 - Technical modules: `snastro.persistenza`, `snastro.audio`, `snastro.ml`, `snastro.modelli`;
   `snastro.ui.<schermata>` (`progetti`, `registrazioni`, `registrazione`, `parlanti`, `lettore`),
   `snastro.ui.testi`; `snastro.avvio`.
+- *(2026-09-27, ADR 0028)* `snastro.supporto` (flat; the domain-free technical library) and `snastro.supporto.test`
+  (test helpers, test source sets only).
+- *(2026-09-27, ADR 0030)* `:avvio` by concern:
+  - `snastro.avvio.{progetto, trascrizione, parlanti, sintesi, documento, modelli, coda, smoke}`;
+  - `Main.kt` in `snastro.avvio`;
+  - never a per-release package (`r0`…`r3`).
 
 **File per type:** one public top-level type per file, file named after it. Exceptions: a sealed
 hierarchy in one file · an aggregate's domain events in `<Aggregato>Eventi.kt` · a context's error
@@ -224,6 +238,11 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() { override fun con(
 - ML/audio real subclasses carry `@Tag("modelli")` (excluded from `check`).
 - Repository ports: the contract runs against the fake (in-memory map honouring INV-4/INV-16 like
   the indexes) and against `…RepositorySql`.
+- *(2026-09-27, [ADR 0029](../decisions/0029-lettura-coerente-deferred.md))* **Two ports, one state.**
+  - `LetturaCoerenteContratto` (`:kernel` testFixtures) has an `Ambiente` that exposes both `lettura` and
+    `unitaDiLavoro`, backed by the same state. `UnitaDiLavoroContratto` is unchanged.
+  - One class implements both ports: `UnitaDiLavoroSql`, and `UnitaDiLavoroFinta` among the fakes.
+  - When two ports must share state, prefer one implementing class over two linked fakes.
 
 ---
 
@@ -244,6 +263,16 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() { override fun con(
     (`NomeGiaInUso`, `ElaborazioneGiaAperta`), never propagated raw.
 - Tests per repository: **round-trip** (salva → trova → equal observable state), the constraint →
   `Esito` mapping, and the repository port's `Contratto` subclass.
+- **Reads and snapshots** *(2026-09-27, [ADR 0029](../decisions/0029-lettura-coerente-deferred.md) [user])*:
+  - A read that issues more than one SELECT for one aggregate or one view (a root plus its children, e.g.
+    `Trascritto`, `Riassunto`, `Parlante`) runs inside `lettura.inLettura { … }`, **inside the repository**.
+    `lettura: LetturaCoerente` is a constructor parameter, the same `UnitaDiLavoroSql` instance the project uses.
+  - Called inside a command's transaction, the read joins it.
+  - Never call SQLDelight's `transaction`/`transactionWithResult` outside `:persistenza` (CR-3b).
+  - An after-commit WAL checkpoint uses `checkpointDopoCommit()`.
+  - A multi-table repository's SQL `Contratto` subclass carries a concurrency case: the aggregate read while
+    another thread rewrites it is always the old or the new one, never a mix.
+  - Read-models and services that only read receive `LetturaCoerente`, never `UnitaDiLavoro`.
 
 ---
 
@@ -329,6 +358,15 @@ public sealed interface RegistrazioneUiStato {
   `unParlante(nome = "Marco", tipo = TipoParlante.RICORRENTE)`, `unTrascritto(voci = 2, segmentiPerVoce = 3)`.
   No DSL, no randomness; ids from `GeneratoreIdFinto`, time from `Clock.fixed(…)`.
 - **Coroutines:** `kotlinx-coroutines-test` `runTest`; inject `StandardTestDispatcher` as `io`.
+- **Shared test helpers** *(2026-09-27, [ADR 0028](../decisions/0028-librerie-tecniche-supporto.md) [user])*, from `:supporto-test`:
+  - `attendiFinche(timeout, messaggio) { condizione }` is the ONLY polling wait. No private copies.
+  - `OrologioFinto` separates instants: never `Thread.sleep` to make two timestamps differ.
+  - `conScopeDiProva { }` / `backgroundScope` for every scope a test creates: it is cancelled in `finally`, never
+    after an assertion that can fail.
+  - Real threads only where thread identity is the subject of the test (e.g. the mutex tests), and then compare
+    executors, not thread names.
+  - A default JUnit timeout applies to every test.
+  - Until M2/S5, a helper needed by a `testFixtures` source set stays local there.
 - **Tags:** `@Tag("modelli")` real ML/audio adapters (opt-in `modelliTest`); `@Tag("render")`
   render checks (in `check`).
 - **Test doubles — fakes vs MockK [user K-e]:**
@@ -352,3 +390,45 @@ stable compatible with the Kotlin version):
 - `konsist` — `:architettura-test`;
 - Compose `ui-test` (desktop, `compose.desktop.uiTestJUnit4` / `runComposeUiTest`) — `:ui`;
 - plugin `java-test-fixtures` on every module that declares ports, fakes or builders.
+- *(2026-09-27, ADR 0028)* `testImplementation(project(":supporto-test"))` in any module (not `:llama-jni`).
+  - Allowed in `testImplementation`/`testRuntimeOnly` ONLY (`verificaDipendenzeModuli` test-only rule).
+  - `testFixtures*` is forbidden until `:avvio` stops shipping testFixtures (M2/S5).
+- `:supporto` (main) is an `implementation` edge of adapters, `:ui` and `:avvio` only.
+
+---
+
+<a id="composizione"></a>
+## 10. Composition root (`:avvio`)
+*(2026-09-27, [ADR 0030](../decisions/0030-composizione-unica-per-contesto.md) [user]; replaces the per-release R0–R3 compositions)*
+
+- **`PorteProgetto`** (`avvio.progetto`) is built once per open project by `SessioneProgettoImpl`:
+  - **one** `UnitaDiLavoroSql`, passed as `UnitaDiLavoro` (the delegate of `DispatcherEventiInMemoria`) AND as
+    `LetturaCoerente`;
+  - one instance of each SQL repository;
+  - `CatalogoRegistrazioni`, the cross-context readers, `LayoutCartellaProgetto`.
+  - A module never builds a repository of its own.
+- **`Modulo<Contesto>`** (`avvio.<ctx>`): a plain class built from `PorteProgetto`, exposing:
+  - `abbonatiSincroni()` / `abbonatiDopoCommit()`: lists of subscriber **values** (adapters expose their
+    `AbbonatoSincrono`/`AbbonatoDopoCommit`; they never register in `init` nor import `DispatcherEventiInMemoria`);
+  - `fontiCoda()`;
+  - `avvia(scope)` / `ferma()` for background loops (`RitentaConBackoff`, ADR 0028);
+  - the typed collaborators the `:ui` presenters need (function types, `#presenter`).
+- **`apriProgetto(porte)`** is the only code with order:
+  1. build the modules;
+  2. register the synchronous subscribers from the declared list `sintesi, parlanti, trascrizione` (ADR 0030 §2,
+     asserted by AC-S143);
+  3. register the after-commit subscribers;
+  4. `CodaCondivisa(fonti)`, woken through the `Campanello`;
+  5. the recoveries;
+  6. `avvia`.
+  - A reorder is a one-line diff reviewed against ADR 0030.
+- **`CollaboratoriProgetto`**: typed, non-null fields per context. No `as`/`as?` casts, no chained `r3.r2.r1`.
+- **Scopes**: every per-project scope is `figlioDi(scopeProgetto, dispatcher, gestore)` (ADR 0028). Shutdown is one
+  `ArrestoProgetto(scadenza)`, in reverse order.
+- **Imports**: `snastro.<ctx>.adattatori` is imported only from `avvio.<ctx>` and `avvio.progetto` (ADR 0030
+  `enforced_by`).
+- **Tests**: ONE `AmbienteProgetto` built through the production `apriProgetto`, never re-wired by hand. AC ids of
+  the old R-tests are kept (ADR 0030 §3).
+- **Glue**: the ADR 0019 §4.1 cross-context glue (`LavoriPerChiave`, `ProposteSerializzate`,
+  `AzioniSomiglianzaProgetto`) stays in `:avvio` (`avvio.parlanti`), with no domain rule.
+

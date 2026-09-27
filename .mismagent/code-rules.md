@@ -7,7 +7,8 @@
 > Style and module map: `architecture.md`. Stack: Kotlin/JVM, Compose Desktop (ADR 0001).
 > Codebase conventions (style memory): `architetture/dev-architecture-app.md`.
 > **Deltas:** 2026-09-23 (targeted style dispatch) — CR-14…CR-17, RC-9 · 2026-09-23 (R25 amendment) — CR-8, RC-4 ·
-> 2026-09-23 (fix-batch-10) — CR-1 · 2026-09-25 (feature `sintesi`, ADRs 0021/0023/0025) — CR-3, CR-10, RC-7, RC-8.
+> 2026-09-23 (fix-batch-10) — CR-1 · 2026-09-25 (feature `sintesi`, ADRs 0021/0023/0025) — CR-3, CR-10, RC-7, RC-8 ·
+> 2026-09-27 (post-R3 amendments [user], ADRs 0028/0029/0030) — CR-2 note, CR-3b, CR-18, RC-7.
 
 Channels:
 - **gate lint** — runs inside `./gradlew check` (the worker's own loop, verifier step 2, CI). Tools and
@@ -44,6 +45,10 @@ Konsist rule allows exactly (a) and (b) above, nothing else of `dominio`). Backu
 **CR-2 · Inner modules are pure.** `:kernel`, `*:dominio`, `*:applicazione` import no framework,
 I/O, persistence, UI, ML, audio or network API — incl. JDK `java.sql`, `java.net`, `java.nio.file`,
 `java.io.File`, `javax.sound`. → gate lint: Konsist (+ ADR 0002 `enforced_by`).
+*(note 2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])*
+- `:kernel` declares **no library dependency**; in particular, no coroutines.
+- Technical helpers that need a library live in the domain-free `:supporto` (CR-18), which inner modules never reach.
+- `:kernel` keeps the shared vocabulary only: ids, `Esito` and its helpers, the transaction ports `UnitaDiLavoro` / `LetturaCoerente`.
 
 **CR-3 · Technical confinement.** `com.k2fsa` only in `:ml-sherpa`; `System.load*` / `Runtime.load*` only in `:ml-sherpa` and
 the top-level library `:llama-jni` (ADR 0004, amended 2026-09-26 by ADR 0026 and, for the path, by [ADR 0027](decisions/0027-libreria-llama-jni-separata.md));
@@ -54,6 +59,12 @@ JDBC / SQLDelight / `org.sqlite` only in `:persistenza` and `:progetto|:trascriz
 no project dependency, no `snastro.*` in code or build scripts, no snastro plugin / `rootProject` / `rootDir` / `../`
 ([ADR 0027](decisions/0027-libreria-llama-jni-separata.md) `enforced_by`); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `documento`
 (ADR 0010). → gate lint: Konsist (+ each ADR's `enforced_by`).
+
+**CR-3b · Transactions only through the kernel ports.** *(2026-09-27, [ADR 0029](decisions/0029-lettura-coerente-deferred.md) [user])*
+- SQLDelight's `transaction { }` / `transaction(…)` / `transactionWithResult { }` are called in `src/main` only inside `:persistenza`.
+- Every other module goes through `UnitaDiLavoro.inTransazione` (writes) or `LetturaCoerente.inLettura` (reads).
+- An after-commit checkpoint uses `:persistenza`'s `checkpointDopoCommit()`.
+→ gate lint: Konsist (call sites in `src/main` outside `snastro.persistenza..`). Backup: ADR 0029 `enforced_by`.
 
 **CR-4 · Aggregates are encapsulated, never `data class`.** Aggregate roots are plain classes: state
 in `private set` properties / private mutable collections exposed as read-only views, changed only
@@ -129,6 +140,16 @@ annotation is `@RequiresOptIn(level = ERROR)`, so the compiler blocks unopted ca
 would be the only alternative, never stubbing a port that has a fake — is a **review criterion**
 (RC-9). Build-level: `mockk` is declared `testImplementation` only. *(delta 2026-09-23, `#test`)*
 
+**CR-18 · Shared technical libraries carry no domain.** *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])*
+- **CR-18a.** Files of `snastro.supporto..` (`:supporto`, `:supporto-test`) import no `snastro.*` outside `snastro.supporto..`.
+- **CR-18b.** No declaration in those modules has a name containing a ubiquitous-language token of `context-map.md`
+  (`Progetto`, `Registrazione`, `Elaborazione`, `Trascritto`, `Voce`, `Segmento`, `Parlante`, `Impronta`, `Attribuzione`,
+  `Documento`, `Riassunto`, `Fonte`, … — the list lives once in the Konsist rule, sourced from the context-map).
+- **CR-18c.** The public declarations of `:supporto` equal the list pinned in ADR 0028 §2. Adding one amends the ADR.
+- **Also.** No `snastro.supporto.test` import under `src/main` or `src/testFixtures`. Build level: `:supporto-test` appears
+  only in `testImplementation`/`testRuntimeOnly` (`verificaDipendenzeModuli` test-only rule).
+→ gate lint: Konsist + `verificaDipendenzeModuli`. Backup: ADR 0028 `enforced_by`.
+
 ## Discursive rules (review criteria)
 
 **RC-1 · The root owns the rule.** A command goes through the aggregate that owns the invariant;
@@ -157,6 +178,10 @@ cache, log of embedding values; every removal path deletes rows in the command's
 `Documento` `Rigenerazione` runs after commit, idempotent; the ML pipeline never holds a transaction
 (ADR 0012). *(2026-09-25, ADR 0023)* The LLM (`ModelloLinguistico`) is never called inside a transaction, and the
 Sintesi policies (`..politiche`) never call it. The test half: `ModelloLinguisticoFinto` throws if a transaction is open.
+*(2026-09-27, [ADR 0029](decisions/0029-lettura-coerente-deferred.md) [user])* **Snapshot rule** (review criterion):
+- A repository read that issues more than one SELECT for one aggregate or one view runs inside `LetturaCoerente.inLettura`, in the repository.
+- It is never wrapped by `applicazione` or the composition, and a pure read never opens `inTransazione`.
+- The test half: the per-repository concurrency case of ADR 0029 §5.
 
 **RC-8 · Offline inference.** No inference/adapter path triggers a download or a network call
 (ADR 0008) — beyond CR-3's mechanical part, review that `:modelli` download is invoked only from the

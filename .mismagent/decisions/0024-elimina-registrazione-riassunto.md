@@ -2,6 +2,7 @@
 scope: global
 status: accepted
 supersedes: null   # AMENDS ADR 0020 (§2 step 4 subscribers, §6 dialog text, §7 [INV-28], Consequences "Release"); pointer added there. Nothing of ADR 0020 is withdrawn.
+amended: 2026-09-27   # see §4 dated note 2026-09-27 (R2 composition retired; subscriber order declared, ADR 0030)
 closes_spike: null
 enforced_by: null   # the fail-closed guarantee is structural (the IMMEDIATE FK riassunto → registrazione, presence-checked by ADR 0022's enforced_by); the rest is test + review
 ---
@@ -74,6 +75,17 @@ ADR 0020 is R2 (`avvio-parlanti`). This amendment is **R3** (`avvio-sintesi`, AD
 
 A `progetto.db` that already holds `Riassunto`s, opened by an R2 composition (development only),
 refuses the delete on the FK. It fails closed, and the error surfaces as an infra fault per ADR 0003.
+
+*(2026-09-27, [ADR 0030](0030-composizione-unica-per-contesto.md) [user]; closes pending user decision 5)*
+- **Compositions.** R0–R2 are retired as compositions, so the "R2 composition" case above no longer exists. The
+  single composition always registers the three synchronous subscribers of `RegistrazioneEliminata`.
+- **Subscriber order.** The order is now **declared**, as one list in `apriProgetto`: **Sintesi → Parlanti →
+  Trascrizione**. It is today's effective order, unchanged.
+  - Correctness does not depend on it. All three run in the command's single transaction, and a Trascrizione veto
+    or any failure in any position dooms the whole unit (ADR 0020 §2, ADR 0012).
+  - It is declared for reproducibility and review. AC-S143 asserts the list.
+  - This also answers the §1 pre-release note ("subscriber order irrelevant"): irrelevant to correctness, pinned all
+    the same.
 
 ## Consequences
 - **Tests** (ids pinned by build-manifest):

@@ -5,7 +5,7 @@ supersedes: null
 closes_spike: null
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0012-politiche-senza-ml.sh
-amended: 2026-09-25   # see "Amendment 2026-09-25 (d)" — enforced_by widened to :trascrizione:applicazione politiche (user Q-3, elimina-registrazione fold). See "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added. "Amendment 2026-09-23 (c)" — R2 auto-start removed (ADR 0014 [user])
+amended: 2026-09-27   # see "Amendment 2026-09-27 (e)" (second kernel port LetturaCoerente, ADR 0029) and "Note 2026-09-27" (retrying workers, ADR 0028; composition, ADR 0030). Earlier: "Amendment 2026-09-25 (d)" — enforced_by widened to :trascrizione:applicazione politiche (user Q-3, elimina-registrazione fold). See "Amendment 2026-09-23 (b)" — R12 premise superseded (option (c)); enforced_by added. "Amendment 2026-09-23 (c)" — R2 auto-start removed (ADR 0014 [user])
 ---
 # 0012 — Unit of work and domain-event dispatch: invariant policies in-transaction, Rigenerazione after commit
 
@@ -253,3 +253,24 @@ separate, project-wide decision and is not taken here.
 
 **Consequences.** In `eliminazione-registrazione-policy`, the "prohibition grep stays green" half of AC-611 is now
 falsifiable, so it counts as coverage. The manifest is re-folded by `build-manifest`.
+
+## Amendment 2026-09-27 (e): a second kernel port for reads, `LetturaCoerente` ([ADR 0029](0029-lettura-coerente-deferred.md)) [user]
+- `:kernel` declares `LetturaCoerente.inLettura(blocco): T` next to `UnitaDiLavoro`. The signature and the contract
+  of `UnitaDiLavoro` are unchanged.
+- The two ports share one per-thread state. `:persistenza`'s `UnitaDiLavoroSql` implements both, and so does
+  `UnitaDiLavoroFinta`. Across the two ports:
+  - a read nested in a write joins it;
+  - a write nested in a read throws `IllegalStateException`;
+  - **the nested-doom rule also covers a joined read**: an exception inside an `inLettura` nested in
+    `inTransazione` dooms the whole unit.
+- The contract is `LetturaCoerenteContratto` (`:kernel` testFixtures).
+- `DispatcherEventiInMemoria` does not wrap `LetturaCoerente`, because reads publish nothing. The composition passes
+  the same `UnitaDiLavoroSql` instance as both the dispatcher's delegate and the project's `LetturaCoerente`.
+
+## Note 2026-09-27: retrying after-commit workers and subscriber wiring ([ADR 0028](0028-librerie-tecniche-supporto.md), [ADR 0030](0030-composizione-unica-per-contesto.md)) [user]
+- **Retries.** "`Documento` `Rigenerazione` … idempotent, retried" and Parlanti's `RiallineaImpronte` loop are
+  implemented by `:supporto`'s `RitentaConBackoff`. Every failure is reported through the injected `Segnalazione`,
+  and cancellations and `Error`s are rethrown. The semantics are unchanged; only the implementation and the logging
+  change.
+- **Wiring.** "Subscribers register on the dispatcher" is done by `:avvio`'s `apriProgetto`, from declared ordered
+  lists of subscriber values. Adapters no longer register themselves in `init` (ADR 0030 §1–§2).

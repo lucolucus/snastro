@@ -19,7 +19,7 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 
 | Gradle module | Package | Contains |
 |---|---|---|
-| `:kernel` | `snastro.kernel` | shared kernel: ids (`@JvmInline value class`: `ProgettoId`, `RegistrazioneId`, `ElaborazioneId`, `VoceId`, `SegmentoId`, `ParlanteId`), `VoceRef`, `IntervalloMs`, `RiferimentoAudio`, `CampioniAudio`, `EstrattoRef`, `Esito`, `ErroreDominio` base, `EventoDominio`, `EventoPubblicato`, `Creato`, `RicostituzioneDaPersistenza`, ports `GeneratoreId`, `UnitaDiLavoro`, `DispatcherEventi` *(amended 2026-09-23, R9)* |
+| `:kernel` | `snastro.kernel` | shared kernel: ids (`@JvmInline value class`: `ProgettoId`, `RegistrazioneId`, `ElaborazioneId`, `VoceId`, `SegmentoId`, `ParlanteId`), `VoceRef`, `IntervalloMs`, `RiferimentoAudio`, `CampioniAudio`, `EstrattoRef`, `Esito`, `ErroreDominio` base, `EventoDominio`, `EventoPubblicato`, `Creato`, `RicostituzioneDaPersistenza`, ports `GeneratoreId`, `UnitaDiLavoro`, `LetturaCoerente` *(2026-09-27, [ADR 0029](decisions/0029-lettura-coerente-deferred.md))*, `DispatcherEventi`; the `Esito` helpers (`valoreOppureErrore`, `ignoraEsito`) *(2026-09-27, shared vocabulary)*. No library dependency, no coroutines *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md))* *(amended 2026-09-23, R9)* |
 | `:progetto:dominio` | `snastro.progetto.dominio` | `Progetto`, `Registrazione` aggregates, VOs, events |
 | `:progetto:applicazione` | `snastro.progetto.applicazione` | commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`, *(2026-09-25, ADR 0020)* `EliminaRegistrazione`, `CompletaEliminazioniRegistrazioni`), queries/read-models, repository ports, `SondaAudio` port, public query API (`CatalogoRegistrazioni`) |
 | `:progetto:adattatori` | `snastro.progetto.adattatori` | SQLDelight repositories, file copy of sources, `SondaAudio` adapter (→ `:audio`) |
@@ -40,8 +40,10 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:llama-jni` | `io.github.lucolucus.llamajni` | *(2026-09-26, [ADR 0027](decisions/0027-libreria-llama-jni-separata.md) [user]; replaces `:llm` of ADR 0021/0026, never created)* **separate, shareable library, no snastro dependency** (no project edge, no `snastro.*` in code or build — ADR 0027's check): llama.cpp b11195 via our JNI shim (`src/main/c/`, compiled outside the gate, per OS: macOS arm64 Metal, Windows x64 / Linux x64 Vulkan + CPU), every native load, neutral English API (load / devices / open model / exact token count / bounded, cancellable generation / close), its own native tasks, README, notices, tests |
 | `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |
 | `:ui` | `snastro.ui` | Compose screens S1–S4 + shared `lettore-audio`: presenters (state holders, unit-tested) + thin composables; declares `LettoreAudio` |
-| `:avvio` | `snastro.avvio` | `main()`, composition root, adapter selection (config), serial `Elaborazione` queue + pipeline dispatcher, startup policies, `--smoke` mode |
+| `:supporto` | `snastro.supporto` | *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])* **domain-free technical library**: `RitentaConBackoff`, `gestoreErroriNonCatturati`, `figlioDi`, `catturaNonFatale`, `Segnalazione` (the pinned public API, CR-18c). Only `kotlinx-coroutines-core`; no snastro dependency |
+| `:avvio` | `snastro.avvio.{progetto, trascrizione, parlanti, sintesi, documento, modelli, coda, smoke}` | `main()`, the **single** composition root (*2026-09-27, [ADR 0030](decisions/0030-composizione-unica-per-contesto.md)*: `PorteProgetto` once per project, one `ModuloComposizione` per context, `apriProgetto` with declared orders; no per-release composition), adapter selection (config), the shared queue (`avvio.coda`), startup policies, `--smoke` mode |
 | `:architettura-test` | `snastro.architettura` | Konsist rules (test-only module) |
+| `:supporto-test` | `snastro.supporto.test` | *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])* test-only helpers, **never shipped**: `attendiFinche`, `OrologioFinto`, `conScopeDiProva`. No snastro dependency |
 
 ## Allowed dependency edges (project → project) — the dependency lint's source
 Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
@@ -51,26 +53,33 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 | `:kernel` | — |
 | `:<ctx>:dominio` | `:kernel` |
 | `:<ctx>:applicazione` | `:<ctx>:dominio`, `:kernel` |
-| `:progetto:adattatori` | `:progetto:applicazione`, `:progetto:dominio`, `:kernel`, `:persistenza`, `:audio` |
-| `:trascrizione:adattatori` | `:trascrizione:applicazione`, `:trascrizione:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:audio`, `:ml-sherpa` |
-| `:parlanti:adattatori` | `:parlanti:applicazione`, `:parlanti:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:audio`, `:ml-sherpa` |
+| `:progetto:adattatori` | `:progetto:applicazione`, `:progetto:dominio`, `:kernel`, `:persistenza`, `:audio`, `:supporto` |
+| `:trascrizione:adattatori` | `:trascrizione:applicazione`, `:trascrizione:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:audio`, `:ml-sherpa`, `:supporto` |
+| `:parlanti:adattatori` | `:parlanti:applicazione`, `:parlanti:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:audio`, `:ml-sherpa`, `:supporto` |
 | `:documento:applicazione` | `:kernel` |
-| `:documento:adattatori` | `:documento:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione` |
-| `:sintesi:adattatori` | `:sintesi:applicazione`, `:sintesi:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:llama-jni` *(ADR 0021; library per ADR 0027)* |
+| `:documento:adattatori` | `:documento:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione`, `:supporto` |
+| `:sintesi:adattatori` | `:sintesi:applicazione`, `:sintesi:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:llama-jni` *(ADR 0021; library per ADR 0027)*, `:supporto` |
 | `:llama-jni` | — *(no project dependency, ADR 0027; `:llm → :kernel, :modelli` of ADR 0021 withdrawn)* |
 | `:persistenza` | `:kernel` |
 | `:audio` | `:kernel` |
 | `:ml-sherpa` | `:kernel`, `:modelli` |
 | `:modelli` | `:kernel` |
-| `:ui` | `:kernel`, every `:<ctx>:applicazione` |
+| `:ui` | `:kernel`, every `:<ctx>:applicazione`, `:supporto` |
+| `:supporto` | — *(ADR 0028: no snastro dependency, not even `:kernel`)* |
+| `:supporto-test` | — *(ADR 0028)* |
 | `:avvio` | every module (composition root) |
 | `:architettura-test` | (test) every module |
+
+**Test-only edge** *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])*:
+- Any module except `:llama-jni` may depend on `:supporto-test`, but only in `testImplementation` / `testRuntimeOnly`.
+- `testFixtures*` stays forbidden until `:avvio` stops shipping testFixtures (M2/S5).
+- `:supporto` is never reachable from `:kernel`, `*:dominio` or `*:applicazione` (CR-2).
 
 Direction summary: `adattatori → applicazione → dominio → kernel`; cross-context only
 `consumer:adattatori → supplier:applicazione`; `Progetto` is upstream of all; `Trascrizione` is
 upstream of `Parlanti`, `Documento` and `Sintesi`; `Parlanti` is upstream of `Documento` and `Sintesi`; no context depends on `Sintesi` (ADR 0021). `ui` sees only
 `applicazione`. Technical modules (`persistenza`, `audio`, `ml-sherpa`, `modelli`, and the separate library
-`llama-jni`) are reached only from adapters (and `avvio`). The library depends on nothing of snastro (ADR 0027).
+`llama-jni`) are reached only from adapters (and `avvio`). The library depends on nothing of snastro (ADR 0027). *(2026-09-27, ADR 0028)* The domain-free `:supporto` is reached only by adapters, `:ui` and `avvio`, and it depends on nothing of snastro. `:supporto-test` is reached only from test source sets.
 
 ## Boundaries (feature `sintesi`, 2026-09-25)
 Detailed in `features/sintesi/architetture/architecture-overview.md` ([ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md) §3): `LettoreTrascritto`
@@ -107,6 +116,16 @@ Cross-context events flow `supplier:applicazione` (published events, Published L
 `consumer:adattatori` (subscriber, via the kernel `DispatcherEventi`) → `consumer:applicazione`
 (policy). This keeps the edges table above intact (no consumer depends on a supplier's `dominio`).
 
+**Reads** *(2026-09-27, [ADR 0029](decisions/0029-lettura-coerente-deferred.md) [user])*:
+- A read runs through the kernel port `LetturaCoerente.inLettura`: `BEGIN DEFERRED` + `query_only`, one snapshot, no write lock.
+- Writes stay `BEGIN IMMEDIATE` through `UnitaDiLavoro`.
+- One `UnitaDiLavoroSql` per project implements both ports and shares their per-thread state:
+  - a read nested in a write joins it;
+  - a write nested in a read throws;
+  - a failing joined read dooms the write.
+- Every multi-table repository read runs in a snapshot, inside the repository.
+- SQLDelight transactions are called only in `:persistenza` (CR-3b).
+
 **UI actions that span two contexts (2026-09-24, [ADR 0019](decisions/0019-separazione-semi-automatica.md) §4.1, §5).**
 Some user actions need both contexts:
 - "Riassegna per somiglianza": a Parlanti plan, then a Trascrizione batch command;
@@ -131,8 +150,26 @@ allowed because it carries ids and intervals only, never an embedding.)*
 - *(2026-09-25, [ADR 0024](decisions/0024-elimina-registrazione-riassunto.md))* A third synchronous subscriber (Sintesi) removes every `Riassunto` of
   the `Registrazione` in any state, and never vetoes. Its IMMEDIATE FK makes a missing subscriber fail the delete.
 
+## Composition (2026-09-27, [ADR 0030](decisions/0030-composizione-unica-per-contesto.md)) [user]
+One composition, organised by context rather than by release. The release **method** is unchanged: a new release adds a module and its ACs.
+- **`PorteProgetto`**: built once per open project by `SessioneProgettoImpl`. It holds the database, the one `UnitaDiLavoroSql` (`UnitaDiLavoro` + `LetturaCoerente`), the dispatcher, one instance of every SQL repository, `CatalogoRegistrazioni`, the cross-context readers and `LayoutCartellaProgetto`.
+- **`ModuloComposizione<Ctx>`**, one each for Trascrizione, Parlanti, Sintesi and Documento. Each exposes:
+  - its synchronous and after-commit subscribers as values (no self-registration in `init`);
+  - `fontiCoda()`, `avvia(scope)`/`ferma()`, and typed collaborators for `:ui`.
+- **`apriProgetto(porte)`**, in this order:
+  1. build the modules;
+  2. register the synchronous subscribers from ONE declared list, **Sintesi → Parlanti → Trascrizione**;
+  3. register the after-commit subscribers;
+  4. `CodaCondivisa(fonti)`, woken by a `Campanello`;
+  5. the recoveries;
+  6. `avvia`.
+- **Shutdown**: `ArrestoProgetto` stops everything in reverse order, with one deadline.
+- **`CollaboratoriProgetto`**: typed, non-null fields; no casts.
+- **Singletons**: one `Grafo`, one `ContenutoApp`, one `SEZIONI_SHELL`.
+- **Import rule**: `snastro.<ctx>.adattatori` is imported only from `avvio.<ctx>` and `avvio.progetto` (ADR 0030 `enforced_by`).
+
 ## Enforcement channels (all inside `./gradlew check`)
-1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above).
+1. Gradle module graph (compile) + `verificaDipendenzeModuli` (edges table above, plus the test-only edge rule of ADR 0028).
 2. Konsist in `:architettura-test` (imports/packages/naming — `code-rules.md`).
 3. detekt (style, error handling, `!!`) with `allWarningsAsErrors`.
 4. ADR `enforced_by` checks — versioned POSIX `sh` scripts in `architettura-test/controlli-adr/` (`{check, from}` form,
@@ -173,7 +210,7 @@ allowed because it carries ids and intervals only, never an embedding.)*
   `ServizioModelli` gains the optional-model entry and `scaricaFacoltativo(id)` (ADR 0025 §4).
 - **R1 read-models per owning context** applies: `riassunto-vista` carries no queue position, and `stati-elaborazione`
   loses `posizioneInCoda`. The presenters join `PosizioniNellaCoda` (ADR 0023 §4).
-- **Composition R3** (`snastro.avvio.r3`, block `avvio-sintesi`) wires Sintesi on top of R2 (ADR 0021 §10).
+- **Composition R3** (`snastro.avvio.r3`, block `avvio-sintesi`) wires Sintesi on top of R2 (ADR 0021 §10). *(Superseded 2026-09-27 by § Composition, [ADR 0030](decisions/0030-composizione-unica-per-contesto.md): R0–R3 are no longer separate compositions.)*
 - **Schema:** `6.sqm` (6 → 7), Sintesi-owned tables `riassunto`, `riassunto_elemento`, `riassunto_fonte`,
   `impostazioni_sintesi` (ADR 0022).
 

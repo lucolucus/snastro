@@ -3,7 +3,7 @@ scope: global
 status: accepted
 supersedes: null
 closes_spike: null
-amended: 2026-09-26   # see "Amendment 2026-09-26 (ADR 0027)" (deny-list: `llm` → `llama-jni`); earlier: "Amendment 2026-09-25 (ADR 0021)" (enforced_by deny-list gains `llm`)
+amended: 2026-09-27   # see "Amendment (c) — 2026-09-27" (reads DEFERRED + query_only, ADR 0029). Earlier: "Amendment 2026-09-26 (ADR 0027)" (deny-list: `llm` → `llama-jni`); earlier: "Amendment 2026-09-25 (ADR 0021)" (enforced_by deny-list gains `llm`)
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0006-sql-confinato.sh
 ---
@@ -95,3 +95,15 @@ never created.
   `violante-sqlite-llama-jni`.
 - **Unchanged:** nothing else in this ADR.
 
+
+## Amendment (c) — 2026-09-27 — reads begin `BEGIN DEFERRED`, read-only ([ADR 0029](0029-lettura-coerente-deferred.md)) [user]
+- Amendment (b) now reads: every **write** transaction begins `BEGIN IMMEDIATE`. A read through the kernel port
+  `LetturaCoerente` begins `BEGIN DEFERRED`, followed by `PRAGMA query_only = 1`, which is reset before the connection
+  goes back.
+- `DriverSqliteImmediato` is **kept**. It gains a per-thread begin mode that defaults to IMMEDIATE, and only
+  `UnitaDiLavoroSql`'s outermost `inLettura` switches it.
+- A write inside a read fails deterministically (`SQLITE_READONLY`), never with `SQLITE_BUSY_SNAPSHOT`.
+- SQLDelight's `transaction`/`transactionWithResult` are called only inside `:persistenza` (CR-3b, ADR 0029
+  `enforced_by`). The after-commit WAL checkpoint goes through the `:persistenza` primitive `checkpointDopoCommit()`.
+- `UnitaDiLavoroSqlBeginImmediateTest` stays as it is.
+- Unchanged: the rest of this ADR.
