@@ -40,3 +40,5 @@
 2026-09-27T17:41:59Z	a4-supporto-avvio	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW
 2026-09-27T17:51:21Z	a4-supporto-avvio	verifier	result	cycle=0	tier=deep	model=opus	FAIL
 2026-09-27T17:51:21Z	a4-supporto-avvio	worker	dispatch	cycle=1	tier=standard	model=sonnet
+2026-09-27T22:30:31Z	a4-supporto-avvio	worker	result	cycle=1	tier=standard	model=sonnet	STALLED (connection lost; 2 probe mutations left in production code, reverted by composer)
+2026-09-27T22:30:31Z	a4-supporto-avvio	worker	dispatch	cycle=1	tier=standard	model=sonnet	resume (orphan, same cycle)
