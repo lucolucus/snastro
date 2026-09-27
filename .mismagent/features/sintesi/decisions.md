@@ -128,3 +128,16 @@
 - By: decided: worker; recorded: worker-composer
 - Docs: [pre-release](pre-release.md), [pre-R3-1 task](rework/pre-R3-1-1.md)
 - Revisit: read contention or SQLITE_BUSY in read-models, or a :persistenza read-transaction API exists.
+
+### D-0011 · avvio-sintesi composition choices
+- Meta: 2026-09-27; scope: block:avvio-sintesi; status: accepted
+- Question: how does R3 learn the running RiassuntoId, add queue sources, order subscribers and read the tab consistently?
+- Options: decorate the repository given to EseguiProssimoRiassunto (kept) vs change the pinned service; register Sintesi subscribers before R2's (kept) vs after.
+- Hypothesis: n/a — decided by ADR 0023, [carry-overs](carryover/avvio-sintesi.md)
+- Check: n/a — decided by ADR 0023, [carry-overs](carryover/avvio-sintesi.md)
+- Result: n/a — decided by ADR 0023, [carry-overs](carryover/avvio-sintesi.md)
+- Debate: verifier and code-review: subscriber order is not pinned and has no dependency; tab read in IMMEDIATE is the pre-R3-1 trade-off.
+- Decision: RiassuntoRepositoryConReclamo + per-claim EsecuzioniRiassunto; ContestoEstensione.fontiCoda seam; Sintesi subscribers first; tab read in one transaction; presenter hoisted per recording on S3's scope; GrafoR2 shape kept.
+- By: decided: worker; recorded: worker-composer
+- Docs: [pre-release](pre-release.md), [carry-overs](carryover/avvio-sintesi.md)
+- Revisit: EseguiProssimoRiassunto exposes the claimed id, or a subscriber gains a cross-context dependency.
