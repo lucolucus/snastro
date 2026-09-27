@@ -37,7 +37,10 @@ class EventiSintesiTest {
     fun `AC-S71 gli eventi sono data class di soli val che implementano EventoPubblicato`() {
         classi.forEach { evento ->
             assertTrue(evento.hasDataModifier, "${evento.name} non e' una data class")
-            assertTrue(evento.hasParentWithName("EventoPubblicato"), "${evento.name} non implementa EventoPubblicato")
+            // Per riflessione: hasParentWithName di Konsist rilegge l'intero progetto, .worktrees compresi (OOM).
+            val classe = Class.forName(checkNotNull(evento.fullyQualifiedName))
+            val implementa = EventoPubblicato::class.java.isAssignableFrom(classe)
+            assertTrue(implementa, "${evento.name} non implementa EventoPubblicato")
             assertTrue(evento.properties().none { it.isVar }, "${evento.name} ha una proprieta var")
             assertTrue(evento.primaryConstructor?.parameters.orEmpty().all { it.isVal }, "${evento.name} non val")
         }

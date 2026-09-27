@@ -2,6 +2,7 @@ package snastro.trascrizione.applicazione.eventi
 
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoClassDeclaration
+import snastro.kernel.EventoPubblicato
 import kotlin.test.assertTrue
 
 /** Declarations of the published events of Trascrizione (main source set of `..applicazione.eventi`). */
@@ -19,7 +20,10 @@ internal object FormaEventi {
     fun verificaEventoPubblicato(nome: String) {
         val evento = classi.single { it.name == nome }
         assertTrue(evento.hasDataModifier, "$nome non e' una data class")
-        assertTrue(evento.hasParentWithName("EventoPubblicato"), "$nome non implementa EventoPubblicato")
+        // Per riflessione: hasParentWithName di Konsist rilegge l'intero progetto, .worktrees compresi (OOM).
+        val classe = Class.forName(checkNotNull(evento.fullyQualifiedName))
+        val implementa = EventoPubblicato::class.java.isAssignableFrom(classe)
+        assertTrue(implementa, "$nome non implementa EventoPubblicato")
         assertTrue(evento.properties().none { it.isVar }, "$nome ha una proprieta var")
         val parametri = evento.primaryConstructor?.parameters.orEmpty()
         assertTrue(parametri.all { it.isVal }, "$nome ha un parametro non val")

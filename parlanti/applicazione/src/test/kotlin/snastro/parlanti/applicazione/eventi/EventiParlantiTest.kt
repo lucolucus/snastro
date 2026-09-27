@@ -112,7 +112,10 @@ class EventiParlantiTest {
         assertEquals(listOf("TipoParlanteVista"), classi.filter { it.hasEnumModifier }.map { it.name })
         eventi.forEach { evento ->
             assertTrue(evento.hasDataModifier, "${evento.name} non e' una data class")
-            assertTrue(evento.hasParentWithName("EventoPubblicato"), "${evento.name} non implementa EventoPubblicato")
+            // Per riflessione: hasParentWithName di Konsist rilegge l'intero progetto, .worktrees compresi (OOM).
+            val classe = Class.forName(checkNotNull(evento.fullyQualifiedName))
+            val implementa = EventoPubblicato::class.java.isAssignableFrom(classe)
+            assertTrue(implementa, "${evento.name} non implementa EventoPubblicato")
             assertTrue(evento.properties().none { it.isVar }, "${evento.name} ha una proprieta var")
             val parametri = evento.primaryConstructor?.parameters.orEmpty()
             assertTrue(parametri.all { it.isVal }, "${evento.name} ha un parametro non val")
