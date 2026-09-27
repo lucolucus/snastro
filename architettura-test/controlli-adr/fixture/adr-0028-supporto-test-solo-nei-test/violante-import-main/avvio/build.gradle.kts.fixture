@@ -1,0 +1,4 @@
+dependencies {
+    testRuntimeOnly( project( ":supporto-test" ) ) // helpers at runtime
+    // implementation(project(":supporto-test")) would ship it
+}

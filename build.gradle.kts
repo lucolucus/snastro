@@ -38,24 +38,24 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":progetto:dominio" to setOf(":kernel"),
     ":progetto:applicazione" to setOf(":progetto:dominio", ":kernel"),
     ":progetto:adattatori" to setOf(
-        ":progetto:applicazione", ":progetto:dominio", ":kernel", ":persistenza", ":audio",
+        ":progetto:applicazione", ":progetto:dominio", ":kernel", ":persistenza", ":audio", ":supporto",
     ),
     ":trascrizione:dominio" to setOf(":kernel"),
     ":trascrizione:applicazione" to setOf(":trascrizione:dominio", ":kernel"),
     ":trascrizione:adattatori" to setOf(
         ":trascrizione:applicazione", ":trascrizione:dominio", ":kernel", ":persistenza",
-        ":progetto:applicazione", ":audio", ":ml-sherpa",
+        ":progetto:applicazione", ":audio", ":ml-sherpa", ":supporto",
     ),
     ":parlanti:dominio" to setOf(":kernel"),
     ":parlanti:applicazione" to setOf(":parlanti:dominio", ":kernel"),
     ":parlanti:adattatori" to setOf(
         ":parlanti:applicazione", ":parlanti:dominio", ":kernel", ":persistenza",
-        ":progetto:applicazione", ":trascrizione:applicazione", ":audio", ":ml-sherpa",
+        ":progetto:applicazione", ":trascrizione:applicazione", ":audio", ":ml-sherpa", ":supporto",
     ),
     ":documento:applicazione" to setOf(":kernel"),
     ":documento:adattatori" to setOf(
         ":documento:applicazione", ":kernel", ":trascrizione:applicazione",
-        ":parlanti:applicazione", ":progetto:applicazione",
+        ":parlanti:applicazione", ":progetto:applicazione", ":supporto",
     ),
     // (2026-09-26, ADR 0027 §1) no :llm module is ever created: the ..ml adapter of ModelloLinguistico reaches
     // the standalone library :llama-jni. :sintesi:* never reaches :modelli (ADR 0021 §2, ADR 0025).
@@ -64,6 +64,7 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":sintesi:adattatori" to setOf(
         ":sintesi:applicazione", ":sintesi:dominio", ":kernel", ":persistenza",
         ":progetto:applicazione", ":trascrizione:applicazione", ":parlanti:applicazione", ":llama-jni",
+        ":supporto",
     ),
     ":persistenza" to setOf(":kernel"),
     ":audio" to setOf(":kernel"),
@@ -73,11 +74,21 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":llama-jni" to emptySet(),
     ":ui" to setOf(
         ":kernel", ":progetto:applicazione", ":trascrizione:applicazione",
-        ":parlanti:applicazione", ":documento:applicazione", ":sintesi:applicazione",
+        ":parlanti:applicazione", ":documento:applicazione", ":sintesi:applicazione", ":supporto",
     ),
+    // (2026-09-27, ADR 0028 §5) the domain-free technical libraries depend on nothing of snastro.
+    ":supporto" to emptySet(),
+    ":supporto-test" to emptySet(),
     ":avvio" to (allProjectPaths - ":avvio"),
     ":architettura-test" to (allProjectPaths - ":architettura-test"),
 )
+
+// (2026-09-27, ADR 0028 §5) Test-only rule, which overrides the table: an edge to :supporto-test passes from any
+// module except :llama-jni if and only if its configuration is one of these. testFixtures* stays forbidden until
+// M2/S5 (a testFixtures edge would ship :supporto-test inside the app through :avvio).
+val moduloSoloTest = ":supporto-test"
+val configurazioniSoloTest = setOf("testImplementation", "testRuntimeOnly")
+val moduliSenzaSupportoTest = setOf(":llama-jni")
 
 tasks.register("verificaDipendenzeModuli") {
     group = "verification"
@@ -97,9 +108,14 @@ tasks.register("verificaDipendenzeModuli") {
             sub.configurations.forEach { config ->
                 config.dependencies.withType(ProjectDependency::class.java).forEach { dep ->
                     val to = dep.path
+                    val consentito = if (to == moduloSoloTest) {
+                        from !in moduliSenzaSupportoTest && config.name in configurazioniSoloTest
+                    } else {
+                        to in allowed
+                    }
                     // `java-test-fixtures` wires an automatic self-dependency (a module's own
                     // `test` sourceSet seeing its own `testFixtures`) — reflexive, not a real edge.
-                    if (to != from && to !in allowed) {
+                    if (to != from && !consentito) {
                         violations += "$from -> $to (configuration '${config.name}')"
                     }
                 }

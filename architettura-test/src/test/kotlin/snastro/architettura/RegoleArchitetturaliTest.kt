@@ -9,6 +9,7 @@ import com.lemonappdev.konsist.api.ext.list.functions
 import com.lemonappdev.konsist.api.ext.list.interfaces
 import com.lemonappdev.konsist.api.ext.list.objects
 import com.lemonappdev.konsist.api.ext.list.properties
+import com.lemonappdev.konsist.api.provider.KoNameProvider
 import com.lemonappdev.konsist.api.verify.assertFalse
 import com.lemonappdev.konsist.api.verify.assertTrue
 import kotlin.test.Test
@@ -16,7 +17,8 @@ import kotlin.test.Test
 /**
  * Proiezione eseguibile delle regole meccaniche di `code-rules.md` CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
  * (il lint del gate), su tutti i contesti (Progetto, Trascrizione, Parlanti, Documento, Sintesi) e sui
- * moduli tecnici. Lo scope e il progetto intero, `.worktrees/` esclusa ([progetto]), letto una sola volta.
+ * moduli tecnici; CR-18 sulle librerie `:supporto` / `:supporto-test` (ADR 0028). Lo scope e il progetto intero,
+ * `.worktrees/` esclusa ([progetto]), letto una sola volta.
  * CR-6, CR-7, CR-9, CR-11 sono compiti di detekt e del compilatore (`build-logic`); CR-12 e
  * `verificaDipendenzeModuli` (`build.gradle.kts` di radice); CR-13 e il test di migrazione di
  * `:persistenza:test`. Gli script di `controlli-adr` degli ADR girano in [ControlliAdrTest].
@@ -75,12 +77,15 @@ class RegoleArchitetturaliTest {
         nomeImport == "snastro.ui" || nomeImport.startsWith("snastro.ui.")
 
     /** CR-1's allowance for a `snastro.*` import inside a `:ui` file: kernel, any `applicazione`
-     * module, `:ui` itself, or a context's `dominio` error hierarchy (never any other `dominio` type). */
+     * module, `:ui` itself, or a context's `dominio` error hierarchy (never any other `dominio` type).
+     * (2026-09-27, ADR 0028 §5) also the domain-free `snastro.supporto..`; `snastro.supporto.test` stays out of
+     * `src/main` and `src/testFixtures` by CR-18. */
     private fun importUiConsentito(nomeImport: String): Boolean =
         nomeImport.startsWith("snastro.kernel") ||
             nomeImport.contains(".applicazione") ||
             isPacchettoUi(nomeImport) ||
-            gerarchiaErroreDominio.matches(nomeImport)
+            gerarchiaErroreDominio.matches(nomeImport) ||
+            nomeImport.startsWith("snastro.supporto.")
 
     @Test
     fun `CR-1 ui importa solo kernel, i moduli applicazione, se stesso e le gerarchie errore del dominio`() {
@@ -116,6 +121,8 @@ class RegoleArchitetturaliTest {
             "snastro.trascrizione.dominio.ErroreTrascrizione",
             "snastro.trascrizione.dominio.ErroreTrascrizione.TrascrittoNonTrovato",
             "snastro.parlanti.dominio.ErroreParlanti.ParlanteNonTrovato",
+            "snastro.supporto.RitentaConBackoff",
+            "snastro.supporto.test.attendiFinche",
         )
         val vietati = listOf(
             "snastro.progetto.dominio.Progetto",
@@ -125,6 +132,7 @@ class RegoleArchitetturaliTest {
             "snastro.parlanti.dominio.Parlante",
             "snastro.progetto.adattatori.persistenza.RepositoryProgettoSqlite",
             "snastro.progetto.dominio.errore.QualcosaltroNonErrore",
+            "snastro.supportoaltro.Qualcosa",
         )
         val accettatiPerErrore = consentiti.filterNot { importUiConsentito(it) }
         val rifiutatiPerErrore = vietati.filter { importUiConsentito(it) }
@@ -473,6 +481,95 @@ class RegoleArchitetturaliTest {
             .assertTrue { file -> !file.text.contains("mockkStatic(") && !file.text.contains("mockkObject(") }
     }
 
+    // --- CR-18 - Shared technical libraries carry no domain (ADR 0028) ----------------------------
+
+    /**
+     * The ubiquitous-language tokens of `.mismagent/context-map.md` (the bounded contexts' canonical nouns: Progetto,
+     * Trascrizione, Parlanti, Documento, Sintesi). The list lives HERE only (CR-18b); a new context term amends it.
+     */
+    private val tokenUbiquitari = setOf(
+        "Progetto", "Registrazione", "Elaborazione", "Trascritto", "Voce", "Segmento", "Revisione",
+        "Parlante", "Impronta", "Attribuzione", "Documento", "Riassunto", "Fonte",
+    )
+
+    private fun nomeConTokenUbiquitario(nome: String): Boolean =
+        tokenUbiquitari.any { nome.contains(it, ignoreCase = true) }
+
+    /** ADR 0028 §2: `:supporto`'s public API, member-qualified. It must stay equal to the ADR (CR-18c). */
+    private val apiPubblicaSupporto = setOf(
+        "RitentaConBackoff",
+        "RitentaConBackoff.avvia",
+        "RitentaConBackoff.richiedi",
+        "Segnalazione",
+        "Segnalazione.segnala",
+        "gestoreErroriNonCatturati",
+        "figlioDi",
+        "catturaNonFatale",
+    )
+
+    @Test
+    fun `CR-18a i file di supporto non importano snastro fuori da snastro supporto`() {
+        supporto
+            .files
+            .assertTrue { file ->
+                val pkg = file.packagee?.name.orEmpty()
+                (pkg == "snastro.supporto" || pkg.startsWith("snastro.supporto.")) &&
+                    file.imports.none { it.name.startsWith("snastro.") && !it.name.startsWith("snastro.supporto.") }
+            }
+    }
+
+    @Test
+    fun `CR-18b nessuna dichiarazione di supporto contiene un termine del linguaggio ubiquitario`() {
+        val nomi = supporto.declarations(includeNested = true, includeLocal = true)
+            .mapNotNull { (it as? KoNameProvider)?.name }
+        val violazioni = nomi.filter { nomeConTokenUbiquitario(it) }
+        kotlin.test.assertTrue(violazioni.isEmpty(), "Termini del context-map in :supporto (CR-18b): $violazioni")
+    }
+
+    @Test
+    fun `CR-18b il predicato riconosce i termini del context-map e lascia passare i nomi tecnici`() {
+        kotlin.test.assertTrue(nomeConTokenUbiquitario("RitentaRegistrazione"))
+        kotlin.test.assertTrue(nomeConTokenUbiquitario("improntaCorrente"))
+        kotlin.test.assertTrue(apiPubblicaSupporto.none { nomeConTokenUbiquitario(it) })
+    }
+
+    @Test
+    fun `CR-18c l API pubblica di supporto e esattamente quella di ADR 0028`() {
+        kotlin.test.assertEquals(apiPubblicaSupporto, apiPubblica(supportoMain), "ADR 0028 §2 vs :supporto (CR-18c)")
+    }
+
+    /** Public top-level declarations plus the public members of public types, by declared names (no supertype walk). */
+    private fun apiPubblica(scope: KoScope): Set<String> {
+        val file = scope.files
+        val tipi = file.flatMap { it.classes() }.filter { it.hasPublicOrDefaultModifier }
+            .map { Triple(it.name, it.functions(includeNested = false), it.properties(includeNested = false)) } +
+            file.flatMap { it.interfaces() }.filter { it.hasPublicOrDefaultModifier }
+                .map { Triple(it.name, it.functions(includeNested = false), it.properties(includeNested = false)) } +
+            file.flatMap { it.objects() }.filter { it.hasPublicOrDefaultModifier }
+                .map { Triple(it.name, it.functions(includeNested = false), it.properties(includeNested = false)) }
+        val membri = tipi.flatMap { (tipo, funzioni, proprieta) ->
+            funzioni.filter { it.hasPublicOrDefaultModifier }.map { "$tipo.${it.name}" } +
+                proprieta.filter { it.hasPublicOrDefaultModifier }.map { "$tipo.${it.name}" }
+        }
+        val radice = file.flatMap { f ->
+            f.functions(includeNested = false).filter { it.hasPublicOrDefaultModifier }.map { it.name } +
+                f.properties(includeNested = false).filter { it.hasPublicOrDefaultModifier }.map { it.name } +
+                f.typeAliases.filter { it.hasPublicOrDefaultModifier }.map { it.name }
+        }
+        return (tipi.map { it.first } + membri + radice).toSet()
+    }
+
+    @Test
+    fun `CR-18 nessun import di snastro supporto test in src main o src testFixtures`() {
+        progetto
+            .files
+            .filter { file ->
+                val percorso = file.path.replace('\\', '/')
+                "/src/main/" in percorso || "/src/testFixtures/" in percorso
+            }
+            .assertTrue { file -> file.imports.none { it.name.startsWith("snastro.supporto.test") } }
+    }
+
     private companion object {
         /** La radice del progetto: `:architettura-test` gira con la propria cartella come `user.dir`. */
         val radice: java.io.File = java.io.File(System.getProperty("user.dir")).parentFile
@@ -492,6 +589,20 @@ class RegoleArchitetturaliTest {
          * lo scope parte dalle cartelle di radice, cosi i worktree annidati non vengono nemmeno letti
          * (`scopeFromProject` li analizzerebbe tutti prima di qualunque filtro).
          */
+        /** Only `./supporto` and `./supporto-test` (CR-18a/b), build output excluded: never reads outside them. */
+        val supporto: KoScope by lazy { scopeDi("supporto", "supporto-test") }
+
+        /** `:supporto`'s main sources only: its public API (CR-18c). */
+        val supportoMain: KoScope by lazy { scopeDi("supporto/src/main") }
+
+        private fun scopeDi(vararg cartelle: String): KoScope =
+            Konsist.scopeFromExternalDirectories(cartelle.map { java.io.File(radice, it).absolutePath })
+                .slice { file ->
+                    java.io.File(file.path).relativeTo(radice).invariantSeparatorsPath
+                        .split('/')
+                        .none { it in segmentiEsclusi }
+                }
+
         val progetto: KoScope by lazy {
             val cartelle = radice.listFiles { f -> f.isDirectory && f.name !in cartelleEscluse }.orEmpty()
             Konsist.scopeFromExternalDirectories(cartelle.map { it.absolutePath })
