@@ -77,7 +77,7 @@ class RitrascriviR2Test {
             diarizzatore.turni = AmbienteR2.TRE_VOCI // ignores k: the re-run finds 3 Voci anyway
             diarizzatore.barriera = barriera
 
-            ritrascrivi(s2, s.x, persone = "2")
+            ritrascrivi(it, s2, s.x, persone = "2")
 
             attendiFinche(timeout = 10.seconds, messaggio = "S2 'Ritrascrizione in corso'") {
                 val stato = riga(s2, s.x)?.elaborazione
@@ -130,7 +130,7 @@ class RitrascriviR2Test {
             val prima = Istantanea.di(it, s.x)
             diarizzatore.fallisci = true
 
-            ritrascrivi(s2, s.x, persone = "2")
+            ritrascrivi(it, s2, s.x, persone = "2")
 
             attendiFinche(timeout = 10.seconds, messaggio = "S2 'Ritrascrizione non riuscita'") {
                 riga(s2, s.x)?.ritrascrizioneFallita != null
@@ -162,17 +162,20 @@ class RitrascriviR2Test {
                 it.r2.r1.statiElaborazione(listOf(z)).single().fase == FaseElaborazione.DIARIZZAZIONE
             }
 
-            ritrascrivi(s2, s.x, persone = "")
+            ritrascrivi(it, s2, s.x, persone = "")
+            // `!operazioneInCorso` too: the row can already show the queued re-run (a Cambiamento-driven reload)
+            // while the confirmation's own command is still completing — 'Annulla' is then a no-op by design (M3).
             attendiFinche(timeout = 10.seconds, messaggio = "S2 'Ritrascrizione in coda (1)' annullabile") {
                 val r = riga(s2, s.x)
-                r?.elaborazione == StatoElaborazioneRiga.InAttesa(1, ritrascrizione = true) && r.annullabile
+                r?.elaborazione == StatoElaborazioneRiga.InAttesa(1, ritrascrizione = true) && r.annullabile &&
+                    !r.operazioneInCorso
             }
             // The row opens S3 (built on navigation, as in ContenutoAppR2): read-only on the old transcript.
             val s3 = presenterS3(it, s.x)
             attendiFinche(timeout = 10.seconds, messaggio = "S3 in sola lettura") { datiS3(s3)?.soloLettura == true }
             assertEquals(2, datiS3(s3)?.segmenti?.size)
 
-            s2.annullaElaborazione(s.x)
+            sulThreadUi(it) { s2.annullaElaborazione(s.x) }
 
             attendiFinche(timeout = 10.seconds, messaggio = "S2 'Completata' + 'Ritrascrivi', S3 modificabile") {
                 val r = riga(s2, s.x)
@@ -308,8 +311,10 @@ class RitrascriviR2Test {
         assertEquals(Esito.Ok(Unit), comando(ambiente, ComandoVoce.Conferma(voce(y, 1), mario)))
         assertEquals(2, ParlanteRepositorySql(ambiente.contesto.database).impronteDiRegistrazione(x).size)
         assertEquals(2, ambiente.r2.letture.parlantiDelProgetto().size)
-        attendiFinche(timeout = 10.seconds, messaggio = "Documento di X con i Nomi") {
-            documento(ambiente, x)?.contains("**Mario**") == true
+        // Both Documento rewrites of X must have landed (Nuovo -> 'Mario', Salta -> 'Ospite del ...'): the
+        // after-commit writer is asynchronous, and AC-459/AC-479 take their byte-level baseline right after this.
+        attendiFinche(timeout = 10.seconds, messaggio = "Documento di X con Mario e l'Ospite") {
+            documento(ambiente, x)?.let { d -> "**Mario**" in d && "**Ospite del " in d } == true
         }
         return Scenario(x, y, mario)
     }
@@ -317,18 +322,28 @@ class RitrascriviR2Test {
     private fun comando(ambiente: AmbienteR2, c: ComandoVoce): Esito<Unit>? =
         runBlocking { ambiente.r2.comandi.esegui(c) }
 
-    /** S2 'Ritrascrivi': the field, the button, then the confirmation (AC-449). */
-    private fun ritrascrivi(s2: RegistrazioniPresenter, id: RegistrazioneId, persone: String) {
+    /**
+     * S2 'Ritrascrivi': the field, the button, then the confirmation (AC-449) — each user action on the UI
+     * thread, as the app does: the presenter's state is confined to it, and an action fired from the test
+     * thread could be overwritten by a reload merging on the UI thread at the same moment (the typed Numero
+     * di persone lost, the re-run sent with none).
+     */
+    private fun ritrascrivi(ambiente: AmbienteR2, s2: RegistrazioniPresenter, id: RegistrazioneId, persone: String) {
         attendiFinche(timeout = 10.seconds, messaggio = "'Ritrascrivi' offerto") {
             riga(s2, id)?.let { r -> r.ritrascriviDisponibile && !r.operazioneInCorso } == true
         }
-        s2.modificaNumeroPersone(id, persone)
-        s2.ritrascrivi(id)
-        attendiFinche(timeout = 10.seconds, messaggio = "conferma di 'Ritrascrivi'") {
-            riga(s2, id)?.confermaRitrascrivi == true
+        sulThreadUi(ambiente) {
+            s2.modificaNumeroPersone(id, persone)
+            s2.ritrascrivi(id)
         }
-        s2.confermaRitrascrivi(id)
+        attendiFinche(timeout = 10.seconds, messaggio = "conferma di 'Ritrascrivi' con '$persone'") {
+            riga(s2, id)?.let { r -> r.confermaRitrascrivi && r.numeroPersone == persone } == true
+        }
+        sulThreadUi(ambiente) { s2.confermaRitrascrivi(id) }
     }
+
+    /** Runs a user action on the presenters' UI thread (the app's `Dispatchers.Swing`), waiting for it to return. */
+    private fun sulThreadUi(ambiente: AmbienteR2, azione: () -> Unit) = runBlocking(ambiente.dispatcherUi) { azione() }
 
     private fun presenterS2(ambiente: AmbienteR2): RegistrazioniPresenter =
         costruisciRegistrazioniPresenterR2(ambiente.grafoR0, ambiente.collaboratori, ambiente.r2) {}
