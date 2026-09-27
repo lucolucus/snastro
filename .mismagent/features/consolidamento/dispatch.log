@@ -4,3 +4,6 @@
 2026-09-27T10:50:34Z	a0-supporto-moduli	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
 2026-09-27T10:51:59Z	b1-lettura-coerente-primitiva	worker	dispatch	cycle=0	tier=deep	model=opus
 2026-09-27T10:51:59Z	a1-supporto-test-adozione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-27T11:06:21Z	b1-lettura-coerente-primitiva	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-27T11:11:36Z	b1-lettura-coerente-primitiva	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-27T11:11:36Z	b1-lettura-coerente-primitiva	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
