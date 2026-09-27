@@ -2,6 +2,7 @@ package snastro.kernel
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class EsitoTest {
@@ -56,5 +57,27 @@ class EsitoTest {
         val ok: Esito<Int> = Esito.Ok(1)
         assertEquals(ok, ok.seErrore { visto = it })
         assertNull(visto)
+    }
+
+    @Test
+    fun `valoreOppureErrore restituisce il valore di Ok`() {
+        assertEquals(7, Esito.Ok(7).valoreOppureErrore { "mai" })
+    }
+
+    @Test
+    fun `valoreOppureErrore su Errore lancia IllegalStateException con il messaggio`() {
+        val errore: Esito<Int> = Esito.Errore(primo)
+
+        val eccezione = assertFailsWith<IllegalStateException> { errore.valoreOppureErrore { "corrotto" } }
+
+        assertEquals("corrotto", eccezione.message)
+    }
+
+    @Test
+    fun `ignoraEsito accetta Ok ed Errore ma richiede un motivo`() {
+        Esito.Ok(1).ignoraEsito("riprovato alla prossima apertura")
+        Esito.Errore(primo).ignoraEsito("riprovato alla prossima apertura")
+
+        assertFailsWith<IllegalArgumentException> { Esito.Ok(1).ignoraEsito(" ") }
     }
 }

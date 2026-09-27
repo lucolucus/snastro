@@ -8,6 +8,7 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.VoceRef
 import snastro.kernel.poi
+import snastro.kernel.valoreOppureErrore
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
@@ -120,10 +121,7 @@ public class SaltaVoceServizio(
 
     /** The generated guest text is never blank; a rejection here would be a programmer error. */
     private fun nomeValido(testo: String): Nome =
-        when (val esito = Nome.di(testo)) {
-            is Esito.Ok -> esito.valore
-            is Esito.Errore -> error("Nome generato per l'ospite vuoto: \"$testo\"")
-        }
+        Nome.di(testo).valoreOppureErrore { "Nome generato per l'ospite vuoto: \"$testo\"" }
 
     private companion object {
         val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)

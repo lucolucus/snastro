@@ -2,6 +2,7 @@ package snastro.progetto.applicazione.comandi
 
 import snastro.kernel.Esito
 import snastro.kernel.UnitaDiLavoro
+import snastro.kernel.ignoraEsito
 import snastro.kernel.poi
 import snastro.progetto.applicazione.porte.ArchivioAudio
 import snastro.progetto.applicazione.porte.EliminazioniInSospeso
@@ -22,13 +23,12 @@ public class CompletaEliminazioniRegistrazioniServizio(
     public fun esegui(ignored: CompletaEliminazioniRegistrazioni): Esito<Unit> {
         for (e in inSospeso.elenco()) {
             archivio.scarta(e.riferimentoAudio)
-            // An Errore keeps the row pending: retried at the next project open (the port's contract).
             derivati.pulisci(e).poi {
                 uow.inTransazione {
                     inSospeso.concludi(e.registrazioneId)
                     Esito.Ok(Unit)
                 }
-            }
+            }.ignoraEsito("un Errore lascia la riga in sospeso: riprovata alla prossima apertura (ADR 0020 §4)")
         }
         return Esito.Ok(Unit)
     }

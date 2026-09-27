@@ -4,6 +4,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.valoreOppureErrore
 import snastro.persistenza.SnastroDatabase
 import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.Azione
@@ -28,9 +29,11 @@ internal fun inDominio(db: SnastroDatabase, riga: RiassuntoRiga): Riassunto {
     return Riassunto.ricostituisci(
         id = RiassuntoId(riga.id),
         registrazioneId = RegistrazioneId(riga.registrazione_id),
-        argomento = riga.argomento?.let { Argomento.di(it).dalDatabase("argomento invalido nel database: $it") },
+        argomento = riga.argomento?.let { a ->
+            Argomento.di(a).valoreOppureErrore { "argomento invalido nel database: $a" }
+        },
         lunghezzaMassima = LunghezzaMassimaParole.di(riga.lunghezza_massima_parole.toInt())
-            .dalDatabase("lunghezza_massima_parole fuori intervallo: ${riga.lunghezza_massima_parole}"),
+            .valoreOppureErrore { "lunghezza_massima_parole fuori intervallo: ${riga.lunghezza_massima_parole}" },
         richiestoAlle = Instant.ofEpochMilli(riga.richiesto_alle),
         stato = StatoRiassunto.valueOf(riga.stato.uppercase()),
         avviatoAlle = riga.avviato_alle?.let(Instant::ofEpochMilli),

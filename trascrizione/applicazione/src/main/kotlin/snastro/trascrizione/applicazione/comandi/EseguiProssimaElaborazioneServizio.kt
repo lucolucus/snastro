@@ -86,10 +86,11 @@ public class EseguiProssimaElaborazioneServizio(
     public fun esegui(comando: EseguiProssimaElaborazione): Esito<RisultatoAvanzamento> {
         ultimaTentata = null
         val esito = uow.inTransazione { avviaLaPiuVecchia(comando.esclusi, comando.nonDopo) }
-        if (esito is Esito.Errore) {
-            return Esito.Ok(RisultatoAvanzamento.AvvioRifiutato(checkNotNull(ultimaTentata), esito.errore))
+        val elaborazione = when (esito) {
+            is Esito.Errore ->
+                return Esito.Ok(RisultatoAvanzamento.AvvioRifiutato(checkNotNull(ultimaTentata), esito.errore))
+            is Esito.Ok -> esito.valore ?: return Esito.Ok(RisultatoAvanzamento.NessunElemento) // AC-68
         }
-        val elaborazione = (esito as Esito.Ok).valore ?: return Esito.Ok(RisultatoAvanzamento.NessunElemento) // AC-68
         eseguiSu(elaborazione) // may still escape raw (AC-312) — ultimaTentata is already set for the caller
         return Esito.Ok(RisultatoAvanzamento.Avviata(elaborazione.id))
     }
