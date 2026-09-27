@@ -3,10 +3,9 @@ package snastro.avvio.r2
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runInterruptible
+import snastro.avvio.gestoreErrori
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -16,6 +15,7 @@ import snastro.parlanti.applicazione.comandi.ObiettivoAttribuzione
 import snastro.parlanti.applicazione.comandi.SaltaVoce
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.dominio.TipoParlante
+import snastro.supporto.figlioDi
 import snastro.ui.registrazione.ComandiVoce
 import snastro.ui.registrazione.ComandoVoce
 import snastro.ui.registrazione.ErroreComandoVoce
@@ -28,7 +28,7 @@ import java.util.logging.Logger
 
 /**
  * [ComandiVoce] of the open project (ADR 0017 §3, AC-418/AC-419/AC-420): every card command runs in
- * ITS OWN child of [progetto] — a [SupervisorJob], so one failing command never cancels another nor the
+ * ITS OWN child of [progetto] ([figlioDi], AC-C56), so one failing command never cancels another nor the
  * project's other workers — never in the S3 screen's scope: leaving S3 does not cancel it (AC-415),
  * closing the project does (the session scope is [progetto]'s parent, `CollaboratoriR2.ferma` joins it).
  *
@@ -50,7 +50,7 @@ internal class ComandiVoceProgetto(
     private val esecutore: suspend (ComandoVoce) -> Esito<Unit>,
     private val esecutoreFrase: suspend (FraseRef, PassiNominaFrase) -> Esito<Unit> = { _, _ -> Esito.Ok(Unit) },
 ) : ComandiVoce {
-    private val scope = CoroutineScope(progetto.coroutineContext + SupervisorJob(progetto.coroutineContext[Job]))
+    private val scope = figlioDi(progetto, gestore = gestoreErrori) // AC-C56
     private val voci = LavoriPerChiave<VoceRef>(scope, clock)
     private val frasi = LavoriPerChiave<FraseRef>(scope, clock)
     override val stato: StateFlow<Map<VoceRef, StatoComando>> = voci.stato

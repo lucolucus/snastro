@@ -2,17 +2,17 @@ package snastro.avvio.r2
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import snastro.avvio.ContestoEstensione
 import snastro.avvio.EstensioneSessione
 import snastro.avvio.ProgettoEsteso
+import snastro.avvio.gestoreErrori
 import snastro.avvio.r1.CollaboratoriR1
 import snastro.avvio.r1.EstensioneR1
+import snastro.avvio.segnalazioneApp
 import snastro.documento.adattatori.porte.LettoreNomiDaParlanti
 import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione
 import snastro.documento.adattatori.porte.ScrittoreDocumentoFile
@@ -59,7 +59,7 @@ import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioni
 import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioniServizio
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
-import snastro.supporto.Segnalazione
+import snastro.supporto.figlioDi
 import snastro.trascrizione.adattatori.eventi.AbbonatoEliminazioneRegistrazione
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
@@ -140,8 +140,10 @@ internal class EstensioneR2(
 
         val collaboratoriR1 = r1.apri(contesto) as CollaboratoriR1
 
-        val lavoro = SupervisorJob(contesto.scope.coroutineContext[Job])
-        val scope = CoroutineScope(contesto.scope.coroutineContext + lavoro + io + registraFallimenti)
+        // AC-C56 (figlioDi): the per-project R2 job — its own CoroutineExceptionHandler is the app's ONE
+        // gestoreErroriNonCatturati (AC-C55), not the local registraFallimenti it replaces.
+        val scope = figlioDi(contesto.scope, io, gestoreErrori)
+        val lavoro = checkNotNull(scope.coroutineContext[Job]) { "figlioDi restituisce sempre uno scope con un Job" }
         val riallinea = RiallineaImpronteServizio(
             uow,
             porte.voci,
@@ -154,10 +156,8 @@ internal class EstensioneR2(
             dispatcher,
             riallinea,
             scope,
-            // JUL-backed (ADR 0028 §2): :supporto never touches JUL. Wired here until a4 unifies every
-            // Segnalazione behind one gestoreErroriNonCatturati-style collaborator (same pattern as
-            // EstensioneR1/AbbonatoDocumentoEventi, a2-ritenta-documento).
-            Segnalazione { messaggio, causa -> log.log(Level.WARNING, messaggio, causa) },
+            // AC-C54: the ONE JUL-backed Segnalazione of `:avvio` — the a3 local lambda is gone.
+            segnalazioneApp,
         )
         avviaRiallineamentoIniziale(
             scope,
@@ -298,11 +298,6 @@ internal class EstensioneR2(
 
     private companion object {
         val log: Logger = Logger.getLogger(EstensioneR2::class.java.name)
-
-        /** Last resort of the R2 job: anything uncaught (an `Error`) is logged — siblings go on (SupervisorJob). */
-        val registraFallimenti = CoroutineExceptionHandler { _, e ->
-            log.log(Level.SEVERE, "lavoro dei Parlanti terminato da un errore", e)
-        }
     }
 }
 

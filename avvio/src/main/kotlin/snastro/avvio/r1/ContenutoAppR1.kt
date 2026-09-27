@@ -4,12 +4,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import snastro.avvio.CollaboratoriProgettoAperto
 import snastro.avvio.GrafoR0
+import snastro.avvio.gestoreErrori
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.figlioDi
 import snastro.ui.ShellPresenter
 import snastro.ui.modelli.ModelliPresenter
 import snastro.ui.modelli.ModelliRoute
@@ -78,9 +78,7 @@ private fun SchermataRegistrazioneR1(
     r1: CollaboratoriR1,
     id: RegistrazioneId,
 ) {
-    val scopeS3 = remember(id) {
-        CoroutineScope(collaboratori.scope.coroutineContext + SupervisorJob(collaboratori.scope.coroutineContext[Job]))
-    }
+    val scopeS3 = remember(id) { figlioDi(collaboratori.scope, gestore = gestoreErrori) } // AC-C56
     DisposableEffect(scopeS3) { onDispose { scopeS3.cancel() } }
     val presenter = remember(id) { costruisciRegistrazionePresenterR1(grafo, collaboratori, r1, id, scopeS3) }
     RegistrazioneRoute(presenter)

@@ -3,9 +3,12 @@ package snastro.avvio
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import org.junit.jupiter.api.io.TempDir
 import snastro.audio.RiproduttoreWav
 import snastro.kernel.GeneratoreIdFinto
@@ -17,6 +20,7 @@ import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.dominio.Registrazione
+import snastro.supporto.test.attendiFinche
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ErroreSessione
 import java.nio.channels.FileChannel
@@ -27,6 +31,9 @@ import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.logging.Handler
+import java.util.logging.LogRecord
+import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -285,6 +292,60 @@ class SessioneProgettoImplChiudiTest {
         val riaperta = SessioneProgettoImpl(RegistroProgettiFinta(), GeneratoreIdFinto(), orologio, scopeDiProva())
         riaperta.apri(cartella.resolve("Prova.snastro").toString()).atteso() // lock rilasciato, db leggibile
         riaperta.chiudi()
+    }
+
+    // --- AC-C55/AC-C56 (ADR 0028 §2, figlioDi + gestoreErroriNonCatturati) ----------------------------
+
+    @Test
+    fun `AC-C55 AC-C56 un errore non catturato per-progetto e segnalato una volta, scope e fratelli sopravvivono`() {
+        val catturati = mutableListOf<LogRecord>()
+        val spia = object : Handler() {
+            override fun publish(record: LogRecord) {
+                catturati += record
+            }
+
+            override fun flush() = Unit
+            override fun close() = Unit
+        }
+        val logger = Logger.getLogger("snastro").apply { addHandler(spia) }
+        try {
+            lateinit var contesto: ContestoEstensione
+            lateinit var jobFratello: Job
+            val fratelloAttendeAncora = CompletableDeferred<Unit>()
+            val sessione = SessioneProgettoImpl(
+                registro = RegistroProgettiFinta(),
+                generatoreId = GeneratoreIdFinto(),
+                clock = orologio,
+                scopeGenitore = scopeDiProva(),
+                estensione = { c ->
+                    contesto = c
+                    // Un coroutine per-progetto guasto (fault-injected after-commit job) e uno FRATELLO,
+                    // sullo STESSO scope figlioDi: solo il primo deve fallire.
+                    c.scope.launch { error("guasto iniettato") }
+                    jobFratello = c.scope.launch { fratelloAttendeAncora.await() }
+                    object : ProgettoEsteso {
+                        override val aggiornamenti = AggiornamentiVistaFinta()
+
+                        override fun ferma(poi: () -> Unit) = poi()
+                    }
+                },
+            )
+
+            sessione.crea(cartella.toString(), "Prova").atteso()
+
+            attendiFinche(messaggio = "l'errore iniettato e' stato segnalato una volta") { catturati.isNotEmpty() }
+            assertEquals(1, catturati.size, "segnalato esattamente una volta, mai per ogni retry o duplicato")
+            assertTrue(contesto.scope.isActive, "AC-C55: lo scope del progetto sopravvive all'errore di un suo figlio")
+            assertTrue(jobFratello.isActive, "AC-C55: il job fratello non e' cancellato dal guasto del suo vicino")
+
+            fratelloAttendeAncora.complete(Unit)
+            attendiFinche(messaggio = "il job fratello termina pulito") { jobFratello.isCompleted }
+            assertFalse(jobFratello.isCancelled, "il job fratello completa normalmente, mai cancellato")
+
+            sessione.chiudi()
+        } finally {
+            logger.removeHandler(spia)
+        }
     }
 
     /** True while another channel of this JVM holds `.lock` (tryLock then throws OverlappingFileLockException). */

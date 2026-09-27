@@ -2,8 +2,6 @@ package snastro.avvio
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +33,7 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.SondaAudio
 import snastro.progetto.applicazione.porte.VoceRegistro
+import snastro.supporto.figlioDi
 import snastro.ui.AggiornamentiVista
 import snastro.ui.Cambiamento
 import snastro.ui.ErroreSessione
@@ -318,10 +317,9 @@ internal class SessioneProgettoImpl(
         val chiudiDb = contesto.chiudiDb
         val registrazioni = seams.costruisciRegistrazioni(db)
         val progetti = ProgettoRepositorySql(db)
-        // H2: uno scope FIGLIO di scopeGenitore (stesso dispatcher, un SupervisorJob proprio) —
-        // cancellato in chiudi(), mai l'app-wide scopeGenitore stesso.
-        val scopeSessione =
-            CoroutineScope(scopeGenitore.coroutineContext + SupervisorJob(scopeGenitore.coroutineContext[Job]))
+        // H2: uno scope FIGLIO di scopeGenitore (stesso dispatcher, un SupervisorJob proprio, AC-C56 figlioDi) —
+        // cancellato in chiudi(), mai l'app-wide scopeGenitore stesso. AC-C55: la SUA ONE gestoreErroriNonCatturati.
+        val scopeSessione = figlioDi(scopeGenitore, gestore = gestoreErrori)
         val aggiungiServizio = AggiungiRegistrazioneServizio(
             dispatcher.unitaDiLavoro,
             generatoreId,

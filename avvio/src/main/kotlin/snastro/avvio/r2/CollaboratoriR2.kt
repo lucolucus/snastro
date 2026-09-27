@@ -2,12 +2,12 @@ package snastro.avvio.r2
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import snastro.avvio.ProgettoEsteso
+import snastro.avvio.gestoreErrori
 import snastro.avvio.r1.CollaboratoriR1
 import snastro.kernel.Esito
 import snastro.kernel.EstrattoRef
@@ -23,6 +23,7 @@ import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
+import snastro.supporto.figlioDi
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.ui.AggiornamentiVista
@@ -87,9 +88,15 @@ internal class CollaboratoriR2(
     fun avviaElaborazione(comando: AvviaElaborazione): Esito<Unit> =
         r1.avviaElaborazione(comando).also { if (it is Esito.Ok) somiglianza.scarta(comando.registrazioneId) }
 
-    /** S3's own scope over [genitore]'s context (its UI dispatcher), a CHILD of [lavoro]: [ferma] joins it. */
+    /**
+     * S3's own scope over [genitore]'s context (its UI dispatcher), a CHILD of [lavoro] — never of
+     * [genitore]'s own Job: [ferma] joins [lavoro], so this must cancel WITH it, whatever [genitore]'s own
+     * (e.g. the S3 screen's transient) lifecycle does. [figlioDi] (AC-C56) always parents its new
+     * `SupervisorJob` to its `genitore` argument's CURRENT Job — so that argument here is [genitore]'s
+     * context with its Job element replaced by [lavoro], never [genitore] itself.
+     */
     fun scopeSchermata(genitore: CoroutineScope): CoroutineScope =
-        CoroutineScope(genitore.coroutineContext + SupervisorJob(lavoro))
+        figlioDi(CoroutineScope(genitore.coroutineContext + lavoro), gestore = gestoreErrori)
 
     /**
      * AC-420 / ADR 0017 §3 point 6, called by `SessioneProgettoImpl.chiudi` after the session scope was

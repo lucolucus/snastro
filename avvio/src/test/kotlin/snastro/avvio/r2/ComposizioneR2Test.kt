@@ -212,9 +212,9 @@ class ComposizioneR2Test {
                 registro.svuota()
                 it.r2.r1.revisione.dividiVoce.esegui(DividiVoce(id, VoceId(1), setOf(SegmentoId(3)))).atteso()
                 attendiFinche(timeout = 10.seconds, messaggio = "fallimento dopo commit nel log") {
-                    // a3-ritenta-parlanti: the retry's own Segnalazione now reports the failure
-                    // (RitentaConBackoff), logged through the same EstensioneR2 JUL-backed lambda as the
-                    // startup failure above.
+                    // a4-supporto-avvio: the retry's own Segnalazione now reports the failure
+                    // (RitentaConBackoff) through the app's ONE JUL-backed Segnalazione (AC-C54), no longer
+                    // EstensioneR2's own per-class logger — RegistroLog.da follows either identity.
                     registro.da(EstensioneR2::class.java)
                 }
                 attendiFinche(timeout = 10.seconds, messaggio = "S2/S3 informati della Revisione") {
@@ -313,7 +313,11 @@ class ComposizioneR2Test {
 
     /** Captures WARNING records of the `snastro.avvio` loggers while in use. */
     private class RegistroLog : Handler(), AutoCloseable {
-        private val radice = Logger.getLogger("snastro.avvio")
+        // "snastro" (not "snastro.avvio"): a4-supporto-avvio's ONE Segnalazione (AC-C54) logs directly on
+        // "snastro" — a record logged there never propagates DOWN to "snastro.avvio"'s own handlers, only UP
+        // from a descendant logger. Attaching at the top catches both a per-class logger (propagates up) and
+        // the shared Segnalazione (logs there directly).
+        private val radice = Logger.getLogger("snastro")
         private val record = CopyOnWriteArrayList<LogRecord>()
 
         init {
@@ -322,7 +326,9 @@ class ComposizioneR2Test {
 
         fun svuota() = record.clear()
 
-        fun da(classe: Class<*>): Boolean = record.any { it.loggerName == classe.name && it.level == Level.WARNING }
+        /** [classe]'s own per-class logger, OR the app's ONE shared Segnalazione (AC-C54, loggerName "snastro"). */
+        fun da(classe: Class<*>): Boolean =
+            record.any { it.level == Level.WARNING && (it.loggerName == classe.name || it.loggerName == "snastro") }
 
         override fun publish(r: LogRecord) {
             record += r

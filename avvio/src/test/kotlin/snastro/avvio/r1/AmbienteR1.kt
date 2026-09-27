@@ -6,9 +6,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import snastro.avvio.CollaboratoriProgettoAperto
+import snastro.avvio.ContestoEstensione
+import snastro.avvio.FonteCoda
 import snastro.avvio.SessioneProgettoImpl
 import snastro.avvio.SessioneProgettoSeams
 import snastro.avvio.orologioApp
+import snastro.documento.applicazione.porte.LettoreNomi
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -38,6 +41,7 @@ import java.util.concurrent.TimeUnit
  * FFmpeg probe ([SondaAudioFinta]) and decoder ([DecodificatoreAudioFinta]) and the ML Finte — so the
  * end-to-end ACs run in the gate, without natives or models.
  */
+@Suppress("LongParameterList") // one parameter per faked/injected collaborator, mirrors EstensioneR1's own
 internal class AmbienteR1(
     radice: Path,
     diarizzatore: Diarizzatore = DiarizzatoreFinta(),
@@ -46,6 +50,10 @@ internal class AmbienteR1(
     adattatoriMl: () -> AdattatoriMl = {
         AdattatoriMl(diarizzatore, riconoscitore, VadFinta(), rilasciaDopoElaborazione)
     },
+    /** Rework cycle 1, #4 (AC-C54): extra sources added to the shared queue ALONGSIDE the real Elaborazione one. */
+    fontiCoda: List<FonteCoda> = emptyList(),
+    /** Rework cycle 1, #2 (AC-C55): lets a test fault-inject the Documento worker's own after-commit job. */
+    lettoreNomi: (ContestoEstensione) -> LettoreNomi = { LettoreNomiVuoto },
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
@@ -72,14 +80,17 @@ internal class AmbienteR1(
                 SondaAudioFinta(mapOf(sorgente.toString() to InfoAudio(DURATA_MS, LocalDate.parse("2026-01-01"))))
             },
         ),
-        estensione = EstensioneR1(
-            io = Dispatchers.IO,
-            clock = orologioApp(),
-            generatoreId = GeneratoreIdFinto(),
-            adattatoriMl = adattatoriMl,
-            modelliPronti = { true },
-            decodificatore = { RegistraDecodifiche(DecodificatoreAudioFinta(sorgenti), decodificate) },
-        ),
+        estensione = { contesto ->
+            EstensioneR1(
+                io = Dispatchers.IO,
+                clock = orologioApp(),
+                generatoreId = GeneratoreIdFinto(),
+                adattatoriMl = adattatoriMl,
+                modelliPronti = { true },
+                decodificatore = { RegistraDecodifiche(DecodificatoreAudioFinta(sorgenti), decodificate) },
+                lettoreNomi = lettoreNomi,
+            ).apri(contesto.conFontiCoda(fontiCoda))
+        },
     )
 
     val progetto: ProgettoAperto = sessione.crea(radice.resolve("progetti").toString(), "Prova").atteso()
