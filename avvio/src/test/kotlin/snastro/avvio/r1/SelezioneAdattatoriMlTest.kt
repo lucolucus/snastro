@@ -5,6 +5,7 @@ import snastro.ml.MotoreSherpa
 import snastro.modelli.CatalogoDiarizzazione
 import snastro.modelli.ProvisioningModelli
 import snastro.modelli.VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8
+import snastro.modelli.VOCE_CATALOGO_MODELLO_LINGUISTICO
 import snastro.modelli.VOCE_CATALOGO_VAD_SILERO
 import snastro.trascrizione.adattatori.ml.DiarizzatoreSherpa
 import snastro.trascrizione.adattatori.ml.RiconoscitoreParlatoSherpa
@@ -31,8 +32,8 @@ class SelezioneAdattatoriMlTest {
     }
 
     @Test
-    fun `REALI il catalogo di S5 contiene i cinque modelli che la pipeline legge`() {
-        val ids = SelezioneAdattatoriMl.catalogo(SceltaMl.REALI).voci.map { it.id }
+    fun `REALI il catalogo contiene i cinque modelli della pipeline e il modello linguistico facoltativo`() {
+        val voci = SelezioneAdattatoriMl.catalogo(SceltaMl.REALI).voci
 
         val attesi = listOf(
             VOCE_CATALOGO_VAD_SILERO,
@@ -41,7 +42,9 @@ class SelezioneAdattatoriMlTest {
             CatalogoDiarizzazione.embeddingTitanetSmall,
             VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8,
         )
-        assertEquals(attesi.map { it.id }, ids)
+        assertEquals(attesi.map { it.id }, voci.filter { it.obbligatoria }.map { it.id })
+        // AC-S155 (ADR 0026 §8): without it the Riassunto tab's "Scarica il modello" names an unknown id.
+        assertEquals(listOf(VOCE_CATALOGO_MODELLO_LINGUISTICO), voci.filterNot { it.obbligatoria })
     }
 
     @Test

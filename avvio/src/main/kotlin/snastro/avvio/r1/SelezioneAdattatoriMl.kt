@@ -8,6 +8,7 @@ import snastro.modelli.CatalogoDiarizzazione
 import snastro.modelli.CatalogoModelli
 import snastro.modelli.ProvisioningModelli
 import snastro.modelli.VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8
+import snastro.modelli.VOCE_CATALOGO_MODELLO_LINGUISTICO
 import snastro.modelli.VOCE_CATALOGO_VAD_SILERO
 import snastro.modelli.VoceCatalogo
 import snastro.trascrizione.adattatori.ml.DiarizzatoreSherpa
@@ -30,7 +31,8 @@ import java.nio.file.Path
  * [MotoreSherpa] of the app (native load + process-wide Mutex, ADR 0016 §4), their files resolved
  * inside each model's installed directory `ProvisioningModelli.percorso(id)` (ADR 0008 (c)); the
  * catalogue holds those five entries, so S5's 'Scarica' installs exactly what the pipeline reads, and
- * the queue waits until it has (AC-235). [SceltaMl.FINTE] forces the Finte and an EMPTY catalogue: the
+ * the queue waits until it has (AC-235) — plus the OPTIONAL Sintesi LLM entry (ADR 0026 §8), which
+ * neither S5's onboarding nor the queue waits for. [SceltaMl.FINTE] forces the Finte and an EMPTY catalogue: the
  * `--smoke` run (headless, no natives, no models, AC-351) and the gate's tests.
  *
  * Swapping a model = its catalogue entry (a new id, ADR 0008 (c)) + the one line of its port below.
@@ -47,7 +49,10 @@ internal object SelezioneAdattatoriMl {
         SceltaMl.REALI -> CatalogoModelli(
             listOf(VOCE_CATALOGO_VAD_SILERO) +
                 CatalogoDiarizzazione.voci +
-                VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8,
+                VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8 +
+                // ADR 0026 §8: OPTIONAL (obbligatoria = false) — the queue's pronti() and onboarding ignore it;
+                // the Riassunto tab downloads it on request (ADR 0025).
+                VOCE_CATALOGO_MODELLO_LINGUISTICO,
         )
     }
 

@@ -86,7 +86,7 @@ internal class SessioneProgettoImpl(
     private val clock: Clock,
     private val scopeGenitore: CoroutineScope,
     private val seams: SessioneProgettoSeams = SessioneProgettoSeams(),
-    private val estensione: EstensioneSessione? = null,
+    internal val estensione: EstensioneSessione? = null,
 ) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
     override val corrente: StateFlow<ProgettoAperto?> = _corrente.asStateFlow()

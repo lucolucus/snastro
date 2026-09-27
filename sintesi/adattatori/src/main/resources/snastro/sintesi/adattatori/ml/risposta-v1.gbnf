@@ -1,0 +1,16 @@
+# Answer schema v1 of ModelloLinguisticoLlama as a BOUNDED GBNF (ADR 0026 §5; provisional until spike
+# qualita-riassunto's ADR). Bounds: every list <= 6 items, every fonti <= 6 ids, ids [1-9][0-9]{0,5}, compact
+# whitespace. Together with max_tokens they turn a degenerate enumeration into a finite answer.
+root ::= "{" ws "\"sommario\":" ws string "," ws "\"decisioni\":" ws elenco-el "," ws "\"questioni_aperte\":" ws elenco-el "," ws "\"azioni\":" ws elenco-az "," ws "\"punti_chiave\":" ws elenco-pc ws "}"
+elenco-el ::= "[" ( el ( "," ws el ){0,5} )? "]"
+elenco-az ::= "[" ( az ( "," ws az ){0,5} )? "]"
+elenco-pc ::= "[" ( pc ( "," ws pc ){0,5} )? "]"
+el ::= "{\"testo\":" ws string ",\"fonti\":" ws fonti "}"
+az ::= "{\"testo\":" ws string ",\"fonti\":" ws fonti ",\"responsabile\":" ws voce "}"
+pc ::= "{\"testo\":" ws string ",\"fonti\":" ws fonti ",\"parlante\":" ws voce "}"
+fonti ::= "[" ( intero ( "," ws intero ){0,5} )? "]"
+voce ::= intero | "null"
+intero ::= [1-9] [0-9]{0,5}
+string ::= "\"" char* "\""
+char ::= [^"\\\x7F\x00-\x1F] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
+ws ::= | " "
