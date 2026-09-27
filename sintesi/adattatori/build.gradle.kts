@@ -1,3 +1,6 @@
+import org.gradle.api.tasks.testing.Test
+import org.gradle.process.CommandLineArgumentProvider
+
 plugins {
     id("snastro.kotlin-jvm")
 }
@@ -54,4 +57,34 @@ dependencies {
     // contract test, a real FILE one for the AC-S113 CAS race (BEGIN IMMEDIATE only serialises a file DB).
     // repository-sql-sintesi
     testImplementation(testFixtures(project(":persistenza")))
+
+    // ..ml: ModelloLinguisticoLlama over the standalone llama.cpp binding (ADR 0026, ADR 0027 §7). The gate only
+    // compiles against its Kotlin API and runs the adapter over fakes of its interfaces: no native, no model.
+    implementation(project(":llama-jni"))
+}
+
+// Opt-in (@Tag("modelli"), never in `check`): ModelloLinguisticoContratto against the REAL adapter over the real
+// llama.cpp natives and Qwen3.5 9B (AC-S152). The natives are the library's own output (:llama-jni:assembleNatives,
+// macOS arm64 only), handed through snastro.llm.native.path like :avvio does; the GGUF comes from the environment
+// variable SNASTRO_MODELLO_LLM (a local verified copy, never committed; ADR 0026 §8). Aggregated by the root
+// `modelliTest`.
+// Only macOS arm64 is wired (D-0007): on any other host :llama-jni:assembleNatives itself fails with its message.
+val nativiLlama = project(":llama-jni").layout.buildDirectory.dir("natives/macos-arm64")
+tasks.register<Test>("modelliTest") {
+    group = "verification"
+    description = "Opt-in: ModelloLinguisticoContratto on the real llama.cpp adapter with Qwen3.5 9B (AC-S152)."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("modelli")
+    }
+    dependsOn(":llama-jni:assembleNatives")
+    outputs.upToDateWhen { false }
+    testLogging {
+        events("passed", "failed", "skipped")
+        showStandardStreams = true
+    }
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf("-Dsnastro.llm.native.path=${nativiLlama.get().asFile.absolutePath}")
+    }
 }

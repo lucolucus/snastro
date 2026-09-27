@@ -57,13 +57,13 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
         ":documento:applicazione", ":kernel", ":trascrizione:applicazione",
         ":parlanti:applicazione", ":progetto:applicazione",
     ),
-    // (2026-09-26, ADR 0021 §2) NO :llm edge yet: :llm does not exist as a module until the
-    // adapter block that spike `runtime-llm-in-app` unblocks creates it.
+    // (2026-09-26, ADR 0027 §1) no :llm module is ever created: the ..ml adapter of ModelloLinguistico reaches
+    // the standalone library :llama-jni. :sintesi:* never reaches :modelli (ADR 0021 §2, ADR 0025).
     ":sintesi:dominio" to setOf(":kernel"),
     ":sintesi:applicazione" to setOf(":sintesi:dominio", ":kernel"),
     ":sintesi:adattatori" to setOf(
         ":sintesi:applicazione", ":sintesi:dominio", ":kernel", ":persistenza",
-        ":progetto:applicazione", ":trascrizione:applicazione", ":parlanti:applicazione",
+        ":progetto:applicazione", ":trascrizione:applicazione", ":parlanti:applicazione", ":llama-jni",
     ),
     ":persistenza" to setOf(":kernel"),
     ":audio" to setOf(":kernel"),
