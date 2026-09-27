@@ -48,5 +48,8 @@ include(
     ":llama-jni",
     ":ui",
     ":avvio",
+    // (2026-09-27, ADR 0028) the domain-free technical libraries: no snastro dependency.
+    ":supporto",
+    ":supporto-test",
     ":architettura-test",
 )
