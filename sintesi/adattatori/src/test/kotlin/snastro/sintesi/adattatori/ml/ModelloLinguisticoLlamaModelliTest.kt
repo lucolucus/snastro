@@ -1,12 +1,21 @@
 package snastro.sintesi.adattatori.ml
 
 import org.junit.jupiter.api.Tag
+import org.junit.jupiter.api.Test
+import snastro.kernel.Esito
+import snastro.kernel.erroreAtteso
+import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguisticoContratto
 import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.test.assertTrue
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.TimeSource
 
 /**
  * AC-S152 (opt-in, `./gradlew :sintesi:adattatori:modelliTest`): [ModelloLinguisticoContratto] against the REAL
@@ -30,7 +39,42 @@ class ModelloLinguisticoLlamaModelliTest : ModelloLinguisticoContratto() {
     override fun richiesta(): RichiestaRiassunto =
         RichiestaRiassunto(ingresso = INGRESSO_ATTUALE, argomento = null, lunghezzaMassimaParole = LUNGHEZZA_MASSIMA)
 
+    @Test
+    fun `AC-S152 annullato vero a meta generazione restituisce Annullato entro 10 s rilascio incluso`() {
+        val annulla = AtomicBoolean(false)
+        val chiamata = CompletableFuture.supplyAsync { modello().riassumi(richiesta()) { annulla.get() } }
+
+        val esito = annullaDopo(chiamata) { annulla.set(true) }
+
+        esito.first.erroreAtteso<ErroreApplicazioneSintesi.Annullato>()
+        assertTrue(esito.second <= limiteAnnullamento, "annullamento in ${esito.second}")
+    }
+
+    @Test
+    fun `AC-S152 il thread interrotto a meta generazione restituisce Annullato entro 10 s rilascio incluso`() {
+        val chiamata = CompletableFuture<Esito<*>>()
+        val lavoratore = Thread { chiamata.complete(modello().riassumi(richiesta()) { false }) }
+        lavoratore.start()
+
+        val esito = annullaDopo(chiamata) { lavoratore.interrupt() }
+
+        esito.first.erroreAtteso<ErroreApplicazioneSintesi.Annullato>()
+        assertTrue(esito.second <= limiteAnnullamento, "annullamento in ${esito.second}")
+    }
+
+    /** Waits [ATTESA_PRIMA_DI_ANNULLARE_MS] (model open, generation under way), cancels, times the return. */
+    private fun <T : Esito<*>> annullaDopo(chiamata: CompletableFuture<T>, annulla: () -> Unit): Pair<T, Duration> {
+        Thread.sleep(ATTESA_PRIMA_DI_ANNULLARE_MS)
+        check(!chiamata.isDone) { "la generazione e finita prima dell'annullamento: ${chiamata.get()}" }
+        annulla()
+        val da = TimeSource.Monotonic.markNow()
+        val esito = chiamata.get(limiteAnnullamento.inWholeMilliseconds * 2, TimeUnit.MILLISECONDS)
+        return esito to da.elapsedNow().also { println("annullamento restituito in $it") }
+    }
+
     private companion object {
+        const val ATTESA_PRIMA_DI_ANNULLARE_MS = 4_000L
+
         const val VARIABILE_MODELLO = "SNASTRO_MODELLO_LLM"
         const val PROPRIETA_NATIVI = "snastro.llm.native.path"
 
