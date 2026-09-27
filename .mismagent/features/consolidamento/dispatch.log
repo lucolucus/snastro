@@ -44,3 +44,4 @@
 2026-09-27T22:30:31Z	a4-supporto-avvio	worker	dispatch	cycle=1	tier=standard	model=sonnet	resume (orphan, same cycle)
 2026-09-27T22:59:56Z	a4-supporto-avvio	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW
 2026-09-27T23:10:12Z	a4-supporto-avvio	verifier	result	cycle=1	tier=deep	model=opus	PASS
+2026-09-27T23:10:56Z	c1-porte-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
