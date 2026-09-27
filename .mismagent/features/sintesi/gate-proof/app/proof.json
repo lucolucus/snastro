@@ -11,7 +11,8 @@
     "build-logic/*.kts",
     "config/detekt/**",
     "architettura-test/controlli-adr/**",
-    "architettura-test/src/**"
+    "architettura-test/src/**",
+    "llama-jni/config/**"
   ],
-  "gate_hash": "3f558411e0f687d8ad9abb35d70a53bb1f780235fab655c371dca915c806af04"
+  "gate_hash": "92654a1b64eed865ffd98140953937d1fb8def9f66be6f790f191bc557821d3f"
 }
