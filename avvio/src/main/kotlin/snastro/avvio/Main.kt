@@ -21,11 +21,10 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import snastro.avvio.r1.SceltaMl
-import snastro.avvio.r1.servizioModelliReali
-import snastro.avvio.r2.ContenutoAppR2
-import snastro.avvio.r2.GrafoR2
-import snastro.avvio.r2.costruisciGrafoR2
-import snastro.avvio.r2.primaRegistrazioneCompletata
+import snastro.avvio.r3.ContenutoAppR3
+import snastro.avvio.r3.costruisciGrafoR3
+import snastro.avvio.r3.modelliReali
+import snastro.avvio.r3.primaRegistrazioneCompletataR3
 import snastro.kernel.Esito
 import snastro.ui.DestinazioneShell
 import snastro.ui.ShellPresenter
@@ -54,16 +53,17 @@ private const val ATTESA_SMOKE_PASSO_MS = 20L
 internal val SEZIONI_SHELL_R0: Set<DestinazioneShell> = setOf(DestinazioneShell.REGISTRAZIONI)
 
 /**
- * Composition root R2 (release Parlanti, avvio-parlanti): the R0 graph ([costruisciGrafoR0]) EXTENDED by
- * R1's, itself EXTENDED by R2's ([costruisciGrafoR2]) — S1, S2 with the Trascrizione sources and the
- * identification badge, S3 with the Voci panel and the Revisione UI, S5, and the shell's Parlanti section
- * (S4). `run` binding (profile): opens the real window. `--smoke <fixture-dir>` binding (AC-237, AC-351,
- * AC-357): opens the fixture project offscreen and saves S1, S2 (badge), S3 (Voci panel), S4 and S5 to
- * `avvio/build/smoke/`, exits 0 — headless, on the ML Finte ([SceltaMl.FINTE]): no natives, no models.
+ * Composition root R3 (release Sintesi, avvio-sintesi): the R0 graph ([costruisciGrafoR0]) EXTENDED by
+ * R1's, R2's, then R3's ([costruisciGrafoR3]) — S1, S2 with the Trascrizione sources and the
+ * identification badge, S3 with the Voci panel, the Revisione UI and the Riassunto tab, S5, and the shell's
+ * Parlanti section (S4). `run` binding (profile): opens the real window. `--smoke <fixture-dir>` binding (AC-237,
+ * AC-351, AC-357, AC-S151): opens the fixture project offscreen and saves S1, S2 (badge), S3 (Voci panel), S3 with
+ * the Riassunto tab selected, S4 and S5 to `avvio/build/smoke/`, exits 0 — headless, on the ML Finte
+ * ([SceltaMl.FINTE]): no natives, no models.
  *
- * R0 alone ([ContenutoApp] over [costruisciGrafoR0] without extension) and R1 (`ContenutoAppR1` over
- * `costruisciGrafoR1`) are kept as they are: they are what the R0/R1-mode tests prove still behaves as
- * released (AC-350, AC-355/AC-356).
+ * R0 alone ([ContenutoApp] over [costruisciGrafoR0] without extension), R1 (`ContenutoAppR1`) and R2
+ * (`ContenutoAppR2` over `costruisciGrafoR2`) are kept as they are: they are what the R0/R1/R2-mode tests prove
+ * still behaves as released (AC-350, AC-355/AC-356, AC-S143).
  */
 fun main(args: Array<String>) {
     val smokeIndex = args.indexOf("--smoke")
@@ -77,7 +77,7 @@ fun main(args: Array<String>) {
     // DIRECTORIES; must be set before any FileDialog is realized (SceltaCartellaFileDialog, below).
     System.setProperty("apple.awt.fileDialogForDirectories", "true")
 
-    val grafo = costruisciGrafoR2()
+    val grafo = costruisciGrafoR3()
     application {
         var finestra by remember { mutableStateOf<ComposeWindow?>(null) }
         val esci = {
@@ -91,7 +91,7 @@ fun main(args: Array<String>) {
         Window(onCloseRequest = esci, title = "snastro") {
             finestra = window
             val sceltaCartella = remember { SceltaCartellaFileDialog(window) }
-            ContenutoAppR2(grafo, sceltaCartella)
+            ContenutoAppR3(grafo, sceltaCartella)
         }
     }
 }
@@ -151,9 +151,10 @@ internal fun costruisciRegistrazioniPresenter(
 )
 
 /**
- * AC-237 + AC-351 + AC-357: S1, S2 (with the identification badge), then S3 of the fixture's first
- * COMPLETATA Registrazione with its Voci panel — reached through S2's own row click, the real wiring —
- * then S4 through the shell's Parlanti section, then S5 through the sidebar footer, over the REAL model catalogue on
+ * AC-237 + AC-351 + AC-357 + AC-S151: S1, S2 (with the identification badge), then S3 of the fixture's first
+ * COMPLETATA Registrazione with its Voci panel — reached through S2's own row click, the real wiring — and with
+ * its Riassunto tab selected (the fixture's pronto Riassunto), then S4 through the shell's Parlanti section,
+ * then S5 through the sidebar footer, over the REAL model catalogue on
  * the empty isolated cache (fix-batch-16 LOW-1: the entries missing, 'Scarica'). Isolated registry and
  * model cache, pipeline and print extractor on the ML Finte: nothing of the developer's own machine is
  * read or written, no native is loaded, nothing is downloaded.
@@ -164,11 +165,12 @@ internal fun eseguiSmoke(fixtureDir: String) {
     // ne' collidere con l'elenco dei progetti recenti dello sviluppatore che lo esegue.
     val cartellaRegistroSmoke = Files.createTempDirectory("snastro-smoke-registro")
     val cartellaModelliSmoke = Files.createTempDirectory("snastro-smoke-modelli")
-    val grafoFinte = costruisciGrafoR2(cartellaRegistroSmoke, SceltaMl.FINTE, cartellaModelliSmoke)
     // fix-batch-16 LOW-1: S5 over the REAL catalogue on the empty throwaway cache ('Mancanti', 'Scarica') —
     // building it loads and downloads nothing; the pipeline and the print extractor stay on the Finte.
-    val modelliReali = servizioModelliReali(cartellaModelliSmoke)
-    val grafo = GrafoR2(grafoFinte.r0, modelliReali, grafoFinte.apriEsterno)
+    // Carry-over 4 (avvio-sintesi): the SAME holder feeds the Riassunto tab and DisponibilitaModelloLinguistico.
+    val modelli = modelliReali(cartellaModelliSmoke)
+    val modelliReali = modelli.servizio
+    val grafo = costruisciGrafoR3(cartellaRegistroSmoke, SceltaMl.FINTE, cartellaModelliSmoke, modelli)
     val outputDir = File("build/smoke").apply { mkdirs() }
 
     try {
@@ -176,7 +178,7 @@ internal fun eseguiSmoke(fixtureDir: String) {
             // The smoke script never exercises S1's folder pickers (it opens the fixture project
             // directly through `sessione.apri`, below) — a `SceltaCartella` that always "cancels" is
             // enough; a real `java.awt.FileDialog` has no owner window in this OFFSCREEN test harness.
-            setContent { ContenutoAppR2(grafo, SceltaCartella { null }) }
+            setContent { ContenutoAppR3(grafo, SceltaCartella { null }) }
 
             attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
             salvaSchermata(outputDir, "s1")
@@ -189,7 +191,7 @@ internal fun eseguiSmoke(fixtureDir: String) {
             // item away (rework cycle 1, HIGH #9: navigation is the sidebar, not a standalone top bar).
             attendi { esisteTag("shell-nav-registrazioni") }
             onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
-            val completata = checkNotNull(grafo.primaRegistrazioneCompletata()) {
+            val completata = checkNotNull(grafo.primaRegistrazioneCompletataR3()) {
                 "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
             }
             // AC-357: the badge — the fixture's Trascritto has 2 Voci, 1 of them named.
@@ -200,6 +202,11 @@ internal fun eseguiSmoke(fixtureDir: String) {
             // AC-402/AC-405: the Voci panel, Voce 1 named after its Parlante, Voce 2 still to identify.
             attendi { esisteTag("registrazione-lista") && esisteTag("voci-pannello") && esisteTag("voce-1-nome") }
             salvaSchermata(outputDir, "s3")
+
+            // AC-S151: the Riassunto tab selected, the fixture's pronto Riassunto shown.
+            onNodeWithTag("scheda-1").performClick()
+            attendi { esisteTag("riassunto-contenuto") }
+            salvaSchermata(outputDir, "s3-riassunto")
 
             onAllNodesWithText(etichetta(DestinazioneShell.PARLANTI))[0].performClick()
             attendi { esisteTag("parlanti-lista") }

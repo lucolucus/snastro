@@ -75,15 +75,6 @@ internal fun componentiR1(
     return ComponentiR1(estensione, servizioModelli, motore, provisioning)
 }
 
-/**
- * S5's port over the REAL model catalogue ([SceltaMl.REALI]) on [cartellaModelli] — the `--smoke` S5
- * (fix-batch-16 LOW-1) over an empty throwaway cache: building it loads and downloads nothing.
- */
-internal fun servizioModelliReali(cartellaModelli: Path): ServizioModelli {
-    val catalogo = SelezioneAdattatoriMl.catalogo(SceltaMl.REALI)
-    return ServizioModelliProvisioning.di(catalogo, ProvisioningModelli(catalogo, cartellaModelli))
-}
-
 /** The R1 graph: R0's own ([costruisciGrafoR0]) extended with [componentiR1]; `--smoke` passes throwaway folders. */
 internal fun costruisciGrafoR1(
     cartellaRegistro: Path = cartellaDatiRegistroProgettiReale(),

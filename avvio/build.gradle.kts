@@ -42,6 +42,9 @@ dependencies {
     // R3 (modello-facoltativo-avvio): DisponibilitaModelloLinguisticoAvvio implements Sintesi's
     // consumer-owned port (snastro.avvio.r3) — ADR 0021 §2 already allows `:avvio` -> every module.
     implementation(project(":sintesi:applicazione"))
+    // R3 composition (avvio-sintesi, package snastro.avvio.r3): the Sintesi SQL repositories, the cross-context read
+    // ports and the two synchronous subscribers (ADR 0021 §10, ADR 0024).
+    implementation(project(":sintesi:adattatori"))
     // The ML Finte (DiarizzatoreFinta / RiconoscitoreParlatoFinta / VadFinta) are the pipeline's
     // adapters until diarizzatore-sherpa / riconoscitore-sherpa / vad-silero wire themselves into
     // SelezioneAdattatoriMl ("Finte until the ML blocks land", manifest) — and stay the forced choice of

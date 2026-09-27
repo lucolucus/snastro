@@ -24,6 +24,8 @@ import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazionePresenter
 import snastro.ui.registrazione.RegistrazioneRoute
+import snastro.ui.registrazione.SelezioneSchedaS3
+import snastro.ui.registrazione.SorgenteRiassuntoS3
 import snastro.ui.registrazione.SorgentiParlanti
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.registrazioni.RegistrazioniRoute
@@ -141,13 +143,18 @@ internal fun costruisciRegistrazioniPresenterR2(
  * Revisione UI; plus
  * the latest run's state of [id] and the project's AggiornamentiVista (ADR 0018 Amendment (b) §2): READ-ONLY
  * while a re-run is queued or running, editable again on the Cambiamento that ends it (AC-461).
+ * R3 (`snastro.avvio.r3.ContenutoAppR3`) also passes the Riassunto tab ([riassunto], ADR 0021 §10) and the ONE
+ * per-window [selezioneSchedaS3] (AC-S121); both `null` here in R2 — no tab (AC-S119).
  */
+@Suppress("LongParameterList") // one parameter per S3 source
 internal fun costruisciRegistrazionePresenterR2(
     grafo: GrafoR2,
     collaboratori: CollaboratoriProgettoAperto,
     r2: CollaboratoriR2,
     id: RegistrazioneId,
     scope: CoroutineScope,
+    riassunto: SorgenteRiassuntoS3? = null,
+    selezioneSchedaS3: SelezioneSchedaS3? = null,
 ): RegistrazionePresenter = RegistrazionePresenter(
     scope = scope,
     io = grafo.r0.io,
@@ -173,6 +180,8 @@ internal fun costruisciRegistrazionePresenterR2(
     ),
     stati = { r2.r1.statiElaborazione(listOf(id)).firstOrNull() },
     aggiornamenti = collaboratori.aggiornamentiVista,
+    riassunto = riassunto,
+    selezioneSchedaS3 = selezioneSchedaS3,
 )
 
 /** S4 · Parlanti del Progetto on the project's session scope (as S2, H2). */

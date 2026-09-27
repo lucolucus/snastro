@@ -52,11 +52,17 @@ class GrafoR0Test {
     }
 
     @Test
-    fun `AC-350 fuori dai pacchetti r1 e r2 avvio src main non importa i contesti delle release successive`() {
+    fun `AC-350 fuori dai pacchetti r1, r2 e r3 avvio src main non importa i contesti delle release successive`() {
         val radice = File("src/main/kotlin")
-        val estensioni = listOf(File(radice, "snastro/avvio/r1"), File(radice, "snastro/avvio/r2"))
-        val proibiti =
-            listOf("snastro.trascrizione", "snastro.documento", "snastro.modelli", "snastro.ml", "snastro.parlanti")
+        val estensioni = listOf("r1", "r2", "r3").map { File(radice, "snastro/avvio/$it") }
+        val proibiti = listOf(
+            "snastro.trascrizione",
+            "snastro.documento",
+            "snastro.modelli",
+            "snastro.ml",
+            "snastro.parlanti",
+            "snastro.sintesi", // avvio-sintesi: R3 lives in snastro.avvio.r3
+        )
         val fileR0 = radice.walkTopDown()
             .filter { file -> file.isFile && file.extension == "kt" && estensioni.none { file.startsWith(it) } }
             .toList()

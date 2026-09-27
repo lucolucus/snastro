@@ -5,11 +5,9 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.r1.attendiFinche
-import snastro.avvio.r1.drenaEccezioniEstraneeCoroutineTest
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta
@@ -30,10 +28,6 @@ private const val DIMENSIONE_TOTALE = 6_200_000_000L
 class ContenutoAppR2FooterModelloTest {
     @TempDir
     lateinit var radice: Path
-
-    /** Decision D-0008: see [drenaEccezioniEstraneeCoroutineTest] (foreign leaks logged, not rethrown). */
-    @BeforeEach
-    fun drenaEccezioniEstranee() = drenaEccezioniEstraneeCoroutineTest()
 
     @Test
     fun `AC-S163 sul grafo R2 costruito il piede mostra la riga solo durante InDownload`() =
