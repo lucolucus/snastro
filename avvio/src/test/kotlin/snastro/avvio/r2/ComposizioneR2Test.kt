@@ -212,7 +212,10 @@ class ComposizioneR2Test {
                 registro.svuota()
                 it.r2.r1.revisione.dividiVoce.esegui(DividiVoce(id, VoceId(1), setOf(SegmentoId(3)))).atteso()
                 attendiFinche(timeout = 10.seconds, messaggio = "fallimento dopo commit nel log") {
-                    registro.da(EstrattoreImprontaConLog::class.java)
+                    // a3-ritenta-parlanti: the retry's own Segnalazione now reports the failure
+                    // (RitentaConBackoff), logged through the same EstensioneR2 JUL-backed lambda as the
+                    // startup failure above.
+                    registro.da(EstensioneR2::class.java)
                 }
                 attendiFinche(timeout = 10.seconds, messaggio = "S2/S3 informati della Revisione") {
                     Cambiamento(id) in cambiamenti

@@ -1,38 +1,38 @@
 package snastro.parlanti.adattatori.eventi
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.comandi.RiallineaImpronte
 import snastro.parlanti.applicazione.comandi.RiallineaImpronteServizio
+import snastro.supporto.RitentaConBackoff
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * `AbbonatoDopoCommit` (ADR 0012) that keeps every Registrazione's print rows fresh after a
- * Trascrizione Revisione (block `abbonato-riallineamento-impronte`, AC-304..AC-307; ADR 0012
- * Amendment (b) point 3, ADR 0017 §4): [VociUnite]/[VoceDivisa]/[SegmentoRiassegnato] each enqueue a
- * [RiallineaImpronte] for their `registrazioneId`, run only AFTER the publishing command's
- * transaction committed, never on a rollback — same discipline as `AbbonatoDocumentoEventi`
- * (`:documento:adattatori`): coalesced per [RegistrazioneId] on a single background coroutine (at
- * most one run in flight and one queued per key, AC-306), a failed run (`Esito.Errore` OR a thrown
- * exception — [RiallineaImpronteServizio.esegui] lets a decode/extraction exception propagate so the
- * caller retries, ADR 0017 §1.2/§1.5, AC-301) is retried with an exponential backoff capped at
- * [ritardoMassimo] and reset to [ritardoIniziale] after a fully successful pass, without ever
- * busy-looping ([ciclo] only ever suspends, on [Channel.receive] or [delay]). [RiallineaImpronteServizio]
- * itself is idempotent (INV-15's compare-and-set), so a retried run never touches the Revisione already
- * committed (AC-307) — and the next project opening realigns everything again anyway
- * (`RiallineaTutteLeImpronte`, `avvio-composizione`), so a retry that never succeeds still self-heals.
+ * Trascrizione Revisione (block `abbonato-riallineamento-impronte`, AC-304..AC-307; retry mechanics
+ * reworked by `a3-ritenta-parlanti`, ADR 0028 §7.4, AC-C50..C53): [VociUnite]/[VoceDivisa]/
+ * [SegmentoRiassegnato] each enqueue a [RiallineaImpronte] for their `registrazioneId`, run only
+ * AFTER the publishing command's transaction committed, never on a rollback — its background work
+ * is exactly ONE [RitentaConBackoff] (AC-C50: no private conflated loop, backoff or `runCatching`
+ * here — [ritenta] is the only place that catches [esegui]'s exceptions), keyed by [RegistrazioneId]
+ * so several Registrazioni are retried independently (AC-C51: one failing key never blocks another's
+ * progress). A failed run — [Esito.Errore] or a thrown exception — is reported through the injected
+ * [Segnalazione] (key + cause) and retried with an exponential backoff, and its later success reports
+ * the recovery once (AC-C51); an [Error] escapes to [scope]'s handler instead of being retried, and
+ * the worker's own cancellation stops it with no report ([RitentaConBackoff], AC-C53).
+ * [RiallineaImpronteServizio] itself is idempotent (INV-15's compare-and-set), so a retried run never
+ * touches the Revisione already committed (AC-307) — and the next project opening realigns everything
+ * again anyway (`RiallineaTutteLeImpronte`, `avvio-composizione`), so a retry that never succeeds
+ * still self-heals.
  *
  * Registers itself on [dispatcher] in `init`. This is a plain component: wiring it into the app's
  * composition (registering it at startup, before the first command) is `avvio-parlanti`'s job, not
@@ -43,15 +43,15 @@ public class AbbonatoRiallineamentoImpronte(
     dispatcher: DispatcherEventiInMemoria,
     private val riallinea: RiallineaImpronteServizio,
     scope: CoroutineScope,
-    private val ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
-    private val ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
+    segnalazione: Segnalazione,
+    ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
+    ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
 ) {
-    private val pendenti: MutableSet<RegistrazioneId> = ConcurrentHashMap.newKeySet()
-    private val segnale = Channel<Unit>(Channel.CONFLATED)
+    private val ritenta = RitentaConBackoff<RegistrazioneId>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     init {
         dispatcher.registraDopoCommit { evento -> ricevi(evento) }
-        scope.launch { ciclo() }
+        ritenta.avvia(scope)
     }
 
     private fun ricevi(evento: EventoPubblicato) {
@@ -61,49 +61,11 @@ public class AbbonatoRiallineamentoImpronte(
             is SegmentoRiassegnato -> evento.registrazioneId
             else -> return
         }
-        pendenti += registrazioneId
-        segnale.trySend(Unit)
+        ritenta.richiedi(registrazioneId)
     }
 
-    /** Never busy: suspends on [Channel.receive] when idle, on [delay] while backing off. */
-    private suspend fun ciclo() {
-        var ritardo = ritardoIniziale
-        while (true) {
-            if (pendenti.isEmpty()) {
-                segnale.receive()
-                continue
-            }
-            if (elaboraLotto()) {
-                ritardo = ritardoIniziale
-            } else {
-                delay(ritardo)
-                ritardo = (ritardo * 2).coerceAtMost(ritardoMassimo)
-            }
-        }
-    }
-
-    /** One pass over every currently queued Registrazione; a failed one is re-queued for the next pass. */
-    private fun elaboraLotto(): Boolean {
-        var tutteOk = true
-        for (id in drena()) {
-            if (fallita(id)) {
-                pendenti += id
-                tutteOk = false
-            }
-        }
-        return tutteOk
-    }
-
-    /** `true` on an `Esito.Errore` OR a propagated exception (AC-301, ADR 0017 §1.5) — never swallowed. */
-    private fun fallita(id: RegistrazioneId): Boolean =
-        runCatching { riallinea.esegui(RiallineaImpronte(id)) }
-            .fold(onSuccess = { it is Esito.Errore }, onFailure = { true })
-
-    private fun drena(): Set<RegistrazioneId> {
-        val lotto = pendenti.toSet()
-        pendenti.removeAll(lotto)
-        return lotto
-    }
+    /** `true` = done, `false` = retry (ADR 0028 §2); [ritenta] is the only catch, never here (AC-C50). */
+    private suspend fun esegui(id: RegistrazioneId): Boolean = riallinea.esegui(RiallineaImpronte(id)) is Esito.Ok
 
     private companion object {
         val RITARDO_INIZIALE_DEFAULT: Duration = 500.milliseconds

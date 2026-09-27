@@ -59,6 +59,7 @@ import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioni
 import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioniServizio
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.adattatori.eventi.AbbonatoEliminazioneRegistrazione
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
@@ -145,11 +146,19 @@ internal class EstensioneR2(
             uow,
             porte.voci,
             porte.parlanti,
-            DecodificatoreAudioConLog(decodificatore),
-            EstrattoreImprontaConLog(ml.estrattore),
+            decodificatore,
+            ml.estrattore,
             dispatcher,
         )
-        AbbonatoRiallineamentoImpronte(dispatcher, riallinea, scope)
+        AbbonatoRiallineamentoImpronte(
+            dispatcher,
+            riallinea,
+            scope,
+            // JUL-backed (ADR 0028 §2): :supporto never touches JUL. Wired here until a4 unifies every
+            // Segnalazione behind one gestoreErroriNonCatturati-style collaborator (same pattern as
+            // EstensioneR1/AbbonatoDocumentoEventi, a2-ritenta-documento).
+            Segnalazione { messaggio, causa -> log.log(Level.WARNING, messaggio, causa) },
+        )
         avviaRiallineamentoIniziale(
             scope,
             collaboratoriR1,

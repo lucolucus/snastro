@@ -67,6 +67,10 @@ dependencies {
     // AbbonatoRiallineamentoImpronte's background coalescing/retry coroutine (ADR 0012).
     implementation(libs.kotlinx.coroutines.core)
 
+    // RitentaConBackoff / Segnalazione (ADR 0028 §7.4): AbbonatoRiallineamentoImpronte's retry mechanics
+    // (a3-ritenta-parlanti).
+    implementation(project(":supporto"))
+
     // The ports' contracts + fakes (ParlanteRepositoryContratto, AttribuzioneRepositoryContratto,
     // LettoreRegistrazioneContratto, LettoreVociContratto, ConfrontoImpronteContratto,
     // DecodificatoreAudioContratto, Ambiente* / Seme*, the port Finte) — D1/D2: this module's adapter
