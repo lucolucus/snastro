@@ -1,0 +1,4 @@
+package snastro.sintesi.applicazione
+
+import java.io.File
+class V(val f: File)

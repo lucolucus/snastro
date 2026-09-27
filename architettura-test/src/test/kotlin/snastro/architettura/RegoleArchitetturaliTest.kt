@@ -1,6 +1,7 @@
 package snastro.architettura
 
 import com.lemonappdev.konsist.api.Konsist
+import com.lemonappdev.konsist.api.container.KoScope
 import com.lemonappdev.konsist.api.declaration.KoFileDeclaration
 import com.lemonappdev.konsist.api.declaration.KoParentDeclaration
 import com.lemonappdev.konsist.api.ext.list.classes
@@ -13,11 +14,12 @@ import com.lemonappdev.konsist.api.verify.assertTrue
 import kotlin.test.Test
 
 /**
- * Executable projection of `code-rules.md`'s mechanical rules CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
- * (the gate lint). Vacuously green at wave 0 (no domain code yet, `strict = false` default on every
- * Konsist assertion) — real coverage begins the moment an owner block adds source under a module.
- * CR-6, CR-7, CR-9, CR-11 are detekt/compiler jobs (`build-logic`); CR-12, CR-13 are
- * `verificaDipendenzeModuli` / `verifySqlDelightMigration` (root `build.gradle.kts`).
+ * Proiezione eseguibile delle regole meccaniche di `code-rules.md` CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
+ * (il lint del gate), su tutti i contesti (Progetto, Trascrizione, Parlanti, Documento, Sintesi) e sui
+ * moduli tecnici. Lo scope e il progetto intero, `.worktrees/` esclusa ([progetto]), letto una sola volta.
+ * CR-6, CR-7, CR-9, CR-11 sono compiti di detekt e del compilatore (`build-logic`); CR-12 e
+ * `verificaDipendenzeModuli` (`build.gradle.kts` di radice); CR-13 e il test di migrazione di
+ * `:persistenza:test`. Gli script di `controlli-adr` degli ADR girano in [ControlliAdrTest].
  */
 class RegoleArchitetturaliTest {
     private val contesti = setOf("progetto", "trascrizione", "parlanti", "documento", "sintesi")
@@ -45,7 +47,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-1 nessun contesto importa il dominio o gli adattatori di un altro contesto`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .assertTrue { file ->
                 val pkgFile = file.packagee?.name ?: return@assertTrue true
@@ -82,7 +84,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-1 ui importa solo kernel, i moduli applicazione, se stesso e le gerarchie errore del dominio`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { file ->
                 val pkg = file.packagee?.name ?: return@filter false
@@ -96,10 +98,9 @@ class RegoleArchitetturaliTest {
     }
 
     /**
-     * Direct unit test of the predicate above (no fixture files needed — `:ui` stays untouched at
-     * wave 0/fix-batch-10). Verifies BOTH directions stay live: the two new allowances accept their
-     * cases, and a `dominio` type that is NOT an error hierarchy (e.g. an aggregate root) is still
-     * rejected — i.e. the rule can still go red.
+     * Direct unit test of the predicate above (no fixture files needed). Verifies BOTH directions stay
+     * live: the two allowances accept their cases, and a `dominio` type that is NOT an error hierarchy
+     * (e.g. an aggregate root) is still rejected — i.e. the rule can still go red.
      */
     @Test
     fun `CR-1 il predicato di importazione ui accetta le nuove eccezioni e rifiuta il resto del dominio`() {
@@ -140,7 +141,7 @@ class RegoleArchitetturaliTest {
             "app.cash.sqldelight", "org.sqlite", "androidx.compose", "org.jetbrains.compose",
             "com.k2fsa", "org.bytedeco", "io.ktor", "okhttp3",
         )
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { it.isStratoInterno() }
             .assertTrue { file -> file.imports.none { imp -> importVietati.any { imp.name.startsWith(it) } } }
@@ -163,7 +164,7 @@ class RegoleArchitetturaliTest {
                 pkg == "snastro.modelli" || pkg.startsWith("snastro.modelli.")
             },
         )
-        Konsist.scopeFromProject()
+        progetto
             .files
             .assertTrue { file ->
                 val pkg = file.packagee?.name ?: return@assertTrue true
@@ -176,10 +177,12 @@ class RegoleArchitetturaliTest {
     // --- CR-4 - Aggregates are encapsulated, never `data class` -----------------------------
 
     /**
-     * The aggregate roots, verbatim from `.mismagent/features/trascrizione-con-parlanti/tactical-model.md`
-     * (the `(root)` rows: Progetto, Registrazione — § Progetto; Elaborazione, Trascritto — § Trascrizione;
-     * Parlante, Attribuzione — § Parlanti; Documento has none). CR-4 bans `data class` for these only:
-     * VOs, events and error members MUST be `data class` (CR-5). A feature adding a root amends this list.
+     * The aggregate roots, verbatim from the features' tactical models (the `(root)` rows):
+     * `.mismagent/features/trascrizione-con-parlanti/tactical-model.md` — Progetto, Registrazione (§ Progetto);
+     * Elaborazione, Trascritto (§ Trascrizione); Parlante, Attribuzione (§ Parlanti); Documento has none —
+     * and `.mismagent/features/sintesi/tactical-model.md` — Riassunto, LunghezzaMassimaRiassunto (§ Sintesi).
+     * CR-4 bans `data class` for these only: VOs, events and error members MUST be `data class` (CR-5).
+     * A feature adding a root amends this list.
      */
     private val radiciAggregato = setOf(
         "Progetto",
@@ -194,7 +197,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-4 le radici di aggregato del dominio non sono data class`() {
-        Konsist.scopeFromProject()
+        progetto
             .classes()
             .filter { it.resideInPackage("..dominio..") && it.name in radiciAggregato }
             .assertFalse { it.hasDataModifier }
@@ -202,7 +205,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-4 il dominio non espone proprieta var pubbliche`() {
-        Konsist.scopeFromProject()
+        progetto
             .properties()
             .filter { it.resideInPackage("..dominio..") }
             .assertFalse { it.isVar && it.hasPublicOrDefaultModifier }
@@ -216,7 +219,7 @@ class RegoleArchitetturaliTest {
             "Array", "FloatArray", "ByteArray", "IntArray", "DoubleArray", "LongArray", "ShortArray",
             "CharArray", "BooleanArray",
         )
-        Konsist.scopeFromProject()
+        progetto
             .classes()
             .filter { it.hasDataModifier }
             .flatMap { it.properties() }
@@ -225,7 +228,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-5 nessuna data class espone una proprieta var`() {
-        Konsist.scopeFromProject()
+        progetto
             .classes()
             .filter { it.hasDataModifier }
             .flatMap { it.properties() }
@@ -241,7 +244,7 @@ class RegoleArchitetturaliTest {
 
     /** (name, direct parent names, direct + indirect parent names) of every class, object and interface. */
     private fun tipiConGenitori(): List<Triple<String, List<String>, List<String>>> {
-        val scope = Konsist.scopeFromProject()
+        val scope = progetto
         fun riga(nome: String, diretti: List<KoParentDeclaration>, tutti: List<KoParentDeclaration>) =
             Triple(nome, diretti.map { nomeSemplice(it.name) }, tutti.map { nomeSemplice(it.name) })
         return scope.classes().map { riga(it.name, it.parents(), it.parents(indirectParents = true)) } +
@@ -260,7 +263,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-8 ogni sottotipo diretto di ErroreDominio e un interfaccia sealed Errore-Contesto`() {
-        val scope = Konsist.scopeFromProject()
+        val scope = progetto
         fun diretto(genitori: List<KoParentDeclaration>) = genitori.any { nomeSemplice(it.name) == "ErroreDominio" }
         val classiDirette = scope.classes().filter { diretto(it.parents()) }.map { it.name }
         val oggettiDiretti = scope.objects().filter { diretto(it.parents()) }.map { it.name }
@@ -304,7 +307,7 @@ class RegoleArchitetturaliTest {
     /** Names only (not the declarations): sidesteps the lack of Kotlin intersection types across
      * the five unrelated Konsist declaration interfaces (classes/interfaces/objects/functions/properties). */
     private fun nomiDichiarazioniCanoniche(): List<String> {
-        val scope = Konsist.scopeFromProject()
+        val scope = progetto
         return buildList {
             addAll(scope.classes().filter { isCanonicalPackage(it::resideInPackage) }.map { it.name })
             addAll(scope.interfaces().filter { isCanonicalPackage(it::resideInPackage) }.map { it.name })
@@ -340,7 +343,7 @@ class RegoleArchitetturaliTest {
             Regex("""\bSystem\.currentTimeMillis\("""),
             Regex("""\bSystem\.nanoTime\("""),
         )
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { it.isStratoInterno() }
             .assertTrue { file -> pattern.none { it.containsMatchIn(file.text) } }
@@ -381,7 +384,7 @@ class RegoleArchitetturaliTest {
     /** Opting in (any form: FQN, multi-marker, markerClass, @file:) only in persistence adapters. */
     @Test
     fun `CR-15 RicostituzioneDaPersistenza compare solo negli adattatori di persistenza`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { !it.isRegolaArchitetturale() && optInRicostituzione.containsMatchIn(it.codice()) }
             .assertTrue { it.isAdattatorePersistenza() }
@@ -389,13 +392,13 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-15 RicostituzioneDaPersistenza non si aggira con alias o opzioni del compilatore`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { !it.isRegolaArchitetturale() }
             .assertFalse { aliasRicostituzione.containsMatchIn(it.codice()) }
         val radice = java.io.File(System.getProperty("user.dir")).parentFile
         val buildConOptIn = radice.walkTopDown()
-            .onEnter { it.name !in setOf("build", ".gradle", ".git", ".mismagent") }
+            .onEnter { it.name !in setOf("build", ".gradle", ".git", ".mismagent", ".worktrees") }
             .filter { it.isFile && it.name.endsWith(".gradle.kts") }
             .filter { it.readText().contains("RicostituzioneDaPersistenza") }
             .toList()
@@ -405,7 +408,7 @@ class RegoleArchitetturaliTest {
     /** Outside persistence adapters and its declaration, the marker only MARKS `dominio` `fun ricostituisci`. */
     @Test
     fun `CR-15 l annotazione RicostituzioneDaPersistenza marca solo i ricostituisci del dominio`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filterNot { it.isRegolaArchitetturale() || it.isAdattatorePersistenza() }
             .filterNot { it.isDichiarazioneRicostituzione() }
@@ -422,7 +425,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-15 ogni ricostituisci del dominio porta RicostituzioneDaPersistenza`() {
-        Konsist.scopeFromProject()
+        progetto
             .functions()
             .filter { it.name == "ricostituisci" && it.resideInPackage("..dominio..") }
             .assertTrue { f -> f.annotations.any { nomeSemplice(it.name) == "RicostituzioneDaPersistenza" } }
@@ -432,7 +435,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-16 i servizi comando espongono solo esegui e ritornano Esito`() {
-        Konsist.scopeFromProject()
+        progetto
             .classes()
             .filter { it.resideInPackage("..applicazione.comandi..") && it.hasNameEndingWith("Servizio") }
             .assertTrue { servizio ->
@@ -448,7 +451,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-17 nessun import mockk in testFixtures`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { it.path.contains("src${'/'}testFixtures${'/'}") }
             .assertTrue { file -> file.imports.none { it.name.startsWith("io.mockk") } }
@@ -456,7 +459,7 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-17 nessun import mockk nelle classi Contratto`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { file -> file.classes().any { it.hasNameEndingWith("Contratto") } }
             .assertTrue { file -> file.imports.none { it.name.startsWith("io.mockk") } }
@@ -464,9 +467,39 @@ class RegoleArchitetturaliTest {
 
     @Test
     fun `CR-17 nessun mockkStatic o mockkObject in nessun file`() {
-        Konsist.scopeFromProject()
+        progetto
             .files
             .filter { !it.isRegolaArchitetturale() }
             .assertTrue { file -> !file.text.contains("mockkStatic(") && !file.text.contains("mockkObject(") }
+    }
+
+    private companion object {
+        /** La radice del progetto: `:architettura-test` gira con la propria cartella come `user.dir`. */
+        val radice: java.io.File = java.io.File(System.getProperty("user.dir")).parentFile
+
+        /**
+         * Cartelle in radice che non sono sorgenti di QUESTO albero: `.worktrees` (i worktree git di altri
+         * rami, copie intere del progetto) e, come fa gia `scopeFromProject`, `.gradle` e `build`.
+         */
+        val cartelleEscluse = setOf(".worktrees", ".gradle", "build")
+
+        /** Segmenti di percorso esclusi a ogni profondita, come in `scopeFromProject` (output di build). */
+        val segmentiEsclusi = setOf("build", "target", "buildSrc")
+
+        /**
+         * Il progetto analizzato UNA volta per l'intera classe (JUnit crea un'istanza per test): ogni
+         * regola filtra lo stesso scope. Stessi file di `Konsist.scopeFromProject()`, tranne `.worktrees`:
+         * lo scope parte dalle cartelle di radice, cosi i worktree annidati non vengono nemmeno letti
+         * (`scopeFromProject` li analizzerebbe tutti prima di qualunque filtro).
+         */
+        val progetto: KoScope by lazy {
+            val cartelle = radice.listFiles { f -> f.isDirectory && f.name !in cartelleEscluse }.orEmpty()
+            Konsist.scopeFromExternalDirectories(cartelle.map { it.absolutePath })
+                .slice { file ->
+                    java.io.File(file.path).relativeTo(radice).invariantSeparatorsPath
+                        .split('/')
+                        .none { it in segmentiEsclusi }
+                }
+        }
     }
 }

@@ -1,0 +1,3 @@
+package snastro.sintesi.applicazione.politiche
+
+fun f(c: snastro.kernel.CampioniAudio) = c

@@ -1,0 +1,3 @@
+package snastro.avvio
+
+val m = javax.sound.sampled.AudioSystem.getMixerInfo()
