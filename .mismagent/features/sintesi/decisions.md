@@ -141,3 +141,16 @@
 - By: decided: worker; recorded: worker-composer
 - Docs: [pre-release](pre-release.md), [carry-overs](carryover/avvio-sintesi.md)
 - Revisit: EseguiProssimoRiassunto exposes the claimed id, or a subscriber gains a cross-context dependency.
+
+### D-0012 · llama adapter: spike prompt, own JSON reader
+- Meta: 2026-09-27; scope: block:modello-linguistico-llama; status: accepted
+- Question: which prompt, grammar, sampling, JSON reader and location policy does the real llama adapter use?
+- Options: spike prompt/grammar/sampling (kept, min_p dropped) vs new tuning; own JsonMinimo (kept) vs kotlinx-serialization.
+- Hypothesis: n/a — decided by ADR 0026, [spike evidence](spikes/runtime-llm-in-app.md)
+- Check: n/a — decided by ADR 0026, [spike evidence](spikes/runtime-llm-in-app.md)
+- Result: n/a — decided by ADR 0026, [spike evidence](spikes/runtime-llm-in-app.md)
+- Debate: reviewers: bare V<n> rewrite too eager; cold-open cancel breaches 10 s (ADR gap); both MED in pre-release.
+- Decision: spike prompt + grammar, temp 0.2 seed 42; JsonMinimo; speaker forms rewritten to {V<n>}; locations read per run; REALI binds llama, FINTE keeps the placeholder. Benchmark 122 s at 19.8k tokens.
+- By: decided: worker; recorded: worker-composer
+- Docs: [pre-release](pre-release.md), [ADR 0026](../../decisions/0026-runtime-llm-jni-llama.md)
+- Revisit: the qualita-riassunto or filtro-fuori-tema ADR lands, or another module needs JSON.

@@ -1,0 +1,7 @@
+{
+  "id": "modello-linguistico-llama",
+  "sha": "61283b5a8f3d2fba68a3efb05eb71d8d09aa88cb",
+  "merge": "a6aff4f7959dcd8e7f47414ec96cb3c422f34388",
+  "integration": "integration/sintesi",
+  "at": "2026-09-27T01:04:23Z"
+}
