@@ -28,6 +28,7 @@ object ScrittoreRegistroFiglio {
         val scadenza = System.nanoTime() + TimeUnit.SECONDS.toNanos(ATTESA_MASSIMA_SECONDI)
         while (!Files.exists(via)) {
             if (System.nanoTime() > scadenza) kotlin.system.exitProcess(USCITA_TIMEOUT)
+            // real time is the subject: this is a SEPARATE JVM polling a file the parent test process writes.
             Thread.sleep(PAUSA_MILLIS)
         }
         (0 until quante).forEach { i ->

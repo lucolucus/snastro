@@ -2,6 +2,7 @@ package snastro.audio
 
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.io.TempDir
+import snastro.supporto.test.attendiFinche
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -51,9 +52,9 @@ class RiproduttoreWavTest {
 
         RiproduttoreWav().use { r ->
             r.riproduci(wav, intervalli, daMs = 0)
-            val fermo = attendiFinche(TIMEOUT_MS) { !r.inRiproduzione() }
-
-            assertTrue(fermo, "la riproduzione doveva fermarsi da sola alla fine dell'ultimo intervallo")
+            attendiFinche(messaggio = "la riproduzione si ferma da sola alla fine dell'ultimo intervallo") {
+                !r.inRiproduzione()
+            }
             assertEquals(durataSequenza, r.posizioneMs())
         }
     }
@@ -66,6 +67,7 @@ class RiproduttoreWavTest {
 
         RiproduttoreWav().use { r ->
             r.riproduci(wav, intervalli = null, daMs = 0)
+            // real time is the subject: the real audio line's own playback position must actually advance.
             Thread.sleep(ATTESA_IN_RIPRODUZIONE_MS)
             r.pausa()
 
@@ -74,18 +76,7 @@ class RiproduttoreWavTest {
         }
     }
 
-    private fun attendiFinche(timeoutMs: Long, condizione: () -> Boolean): Boolean {
-        val scadenza = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < scadenza) {
-            if (condizione()) return true
-            Thread.sleep(ATTESA_POLLING_MS)
-        }
-        return condizione()
-    }
-
     private companion object {
-        const val TIMEOUT_MS = 5_000L
-        const val ATTESA_POLLING_MS = 20L
         const val ATTESA_IN_RIPRODUZIONE_MS = 300L
     }
 }

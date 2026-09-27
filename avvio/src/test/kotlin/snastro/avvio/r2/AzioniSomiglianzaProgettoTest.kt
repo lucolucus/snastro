@@ -7,7 +7,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.Esito
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
@@ -16,6 +15,7 @@ import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.PianoRiassegnazione
 import snastro.parlanti.applicazione.letture.SpostamentoProposto
 import snastro.parlanti.dominio.ErroreParlanti
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
@@ -35,6 +35,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 private val REG = RegistrazioneId("id-1")
 
@@ -93,7 +94,7 @@ class AzioniSomiglianzaProgettoTest {
 
     private fun AzioniSomiglianzaProgetto.inAnteprima(): AzioniSomiglianzaProgetto {
         calcola(REG)
-        attendiFinche(messaggio = "anteprima") { stato.value[REG] is StatoSomiglianza.Anteprima }
+        attendiFinche(timeout = 10.seconds, messaggio = "anteprima") { stato.value[REG] is StatoSomiglianza.Anteprima }
         return this
     }
 
@@ -109,10 +110,14 @@ class AzioniSomiglianzaProgettoTest {
             Esito.Ok(piano.copy(registrazioneId = id))
         }
         p.calcola(REG)
-        attendiFinche(messaggio = "avanzamento") { (p.stato.value[REG] as? StatoSomiglianza.InCorso)?.fatti == 1 }
+        attendiFinche(timeout = 10.seconds, messaggio = "avanzamento") {
+            (p.stato.value[REG] as? StatoSomiglianza.InCorso)?.fatti == 1
+        }
         p.calcola(REG)
         via.countDown()
-        attendiFinche(messaggio = "anteprima") { p.stato.value[REG] is StatoSomiglianza.Anteprima }
+        attendiFinche(timeout = 10.seconds, messaggio = "anteprima") {
+            p.stato.value[REG] is StatoSomiglianza.Anteprima
+        }
         p.calcola(REG)
         assertEquals(1, chiamate.get())
         assertEquals(
@@ -130,7 +135,7 @@ class AzioniSomiglianzaProgettoTest {
         val interrotto = AtomicBoolean(false)
         val p = porta { _, _ ->
             try {
-                Thread.sleep(10_000)
+                Thread.sleep(10_000) // real time is the subject: stands in for slow work that annulla must interrupt.
             } catch (e: InterruptedException) {
                 interrotto.set(true)
                 throw e
@@ -138,10 +143,11 @@ class AzioniSomiglianzaProgettoTest {
             Esito.Ok(piano)
         }
         p.calcola(REG)
-        attendiFinche(messaggio = "in corso") { p.stato.value[REG] is StatoSomiglianza.InCorso }
+        attendiFinche(timeout = 10.seconds, messaggio = "in corso") { p.stato.value[REG] is StatoSomiglianza.InCorso }
+        // real time is the subject: lets the fake work actually enter its own blocking sleep before annulla races it.
         Thread.sleep(50)
         p.annulla(REG)
-        attendiFinche(messaggio = "interruzione") { interrotto.get() }
+        attendiFinche(timeout = 10.seconds, messaggio = "interruzione") { interrotto.get() }
         assertNull(p.stato.value[REG])
         p.applica(REG)
         assertTrue(applicati.isEmpty())
@@ -156,7 +162,7 @@ class AzioniSomiglianzaProgettoTest {
         }.inAnteprima()
         p.applica(REG)
         p.applica(REG)
-        attendiFinche(messaggio = "esito") { p.stato.value[REG] is StatoSomiglianza.Esito }
+        attendiFinche(timeout = 10.seconds, messaggio = "esito") { p.stato.value[REG] is StatoSomiglianza.Esito }
         assertEquals(StatoSomiglianza.Esito(3, 1), p.stato.value[REG])
         assertEquals(1, calcoli.get())
         val atteso = piano.spostamenti.map { SpostamentoSegmento(it.segmentoId, it.da, it.a, it.intervallo) }
@@ -170,19 +176,21 @@ class AzioniSomiglianzaProgettoTest {
         esitoApplica = Esito.Errore(ErroreTrascrizione.TrascrittoCambiato(REG))
         val p = porta { _, _ -> Esito.Ok(piano) }.inAnteprima()
         p.applica(REG)
-        attendiFinche(messaggio = "errore") { p.stato.value[REG] is StatoSomiglianza.Errore }
+        attendiFinche(timeout = 10.seconds, messaggio = "errore") { p.stato.value[REG] is StatoSomiglianza.Errore }
         assertEquals(StatoSomiglianza.Errore(ErroreSomiglianzaUi.TrascrittoCambiato), p.stato.value[REG])
         p.applica(REG)
         assertEquals(1, applicati.size)
 
         val pochi = porta { id, _ -> Esito.Errore(ErroreParlanti.RiferimentiInsufficienti(id)) }
         pochi.calcola(REG)
-        attendiFinche(messaggio = "riferimenti") { pochi.stato.value[REG] is StatoSomiglianza.Errore }
+        attendiFinche(timeout = 10.seconds, messaggio = "riferimenti") {
+            pochi.stato.value[REG] is StatoSomiglianza.Errore
+        }
         assertEquals(StatoSomiglianza.Errore(ErroreSomiglianzaUi.RiferimentiInsufficienti), pochi.stato.value[REG])
 
         val rotto = porta { id, _ -> Esito.Errore(ErroreParlanti.TrascrittoNonTrovato(id)) }
         rotto.calcola(REG)
-        attendiFinche(messaggio = "altro") { rotto.stato.value[REG] is StatoSomiglianza.Errore }
+        attendiFinche(timeout = 10.seconds, messaggio = "altro") { rotto.stato.value[REG] is StatoSomiglianza.Errore }
         assertIs<ErroreSomiglianzaUi.Altro>((rotto.stato.value[REG] as StatoSomiglianza.Errore).errore)
     }
 
@@ -210,6 +218,7 @@ class AzioniSomiglianzaProgettoTest {
                 Esito.Ok(piano)
             } else {
                 try {
+                    // real time is the subject: stands in for slow work that closing the progetto must interrupt.
                     Thread.sleep(10_000)
                 } catch (e: InterruptedException) {
                     interrotto.set(true)
@@ -220,7 +229,8 @@ class AzioniSomiglianzaProgettoTest {
         }.inAnteprima()
         val altra = RegistrazioneId("id-2")
         p.calcola(altra)
-        attendiFinche(messaggio = "in corso") { p.stato.value[altra] is StatoSomiglianza.InCorso }
+        attendiFinche(timeout = 10.seconds, messaggio = "in corso") { p.stato.value[altra] is StatoSomiglianza.InCorso }
+        // real time is the subject: lets the fake work actually enter its own blocking sleep before cancel races it.
         Thread.sleep(50)
         progetto.cancel()
         runBlocking { checkNotNull(progetto.coroutineContext[Job]).join() }

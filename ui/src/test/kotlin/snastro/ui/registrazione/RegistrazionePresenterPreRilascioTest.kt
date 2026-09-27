@@ -16,6 +16,7 @@ import snastro.kernel.EstrattoRef
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -168,7 +169,7 @@ class RegistrazionePresenterPreRilascioTest {
                 lettore = fake,
                 apriEsterno = ApriEsternoFinta(),
             )
-            attendi { presenter.stato.value is RegistrazioneUiStato.Dati }
+            attendiFinche(messaggio = "presenter con Dati") { presenter.stato.value is RegistrazioneUiStato.Dati }
 
             presenter.azioni.riproduciSegmento(SegmentoId(1))
             assertTrue(entrataPlay.await(5, TimeUnit.SECONDS), "il play non e entrato in riproduciDa")
@@ -178,10 +179,10 @@ class RegistrazionePresenterPreRilascioTest {
             presenter.azioni.pausa()
             viaLiberaPlay.countDown()
 
-            attendi { chiamate == listOf("play", "pausa") }
+            attendiFinche(messaggio = "play poi pausa, in ordine") { chiamate == listOf("play", "pausa") }
             // HIGH: the final state must be paused — a lost pause (play winning late, or the two
             // racing) would leave `inRiproduzione = true` here.
-            attendi {
+            attendiFinche(messaggio = "barra Pronto e non in riproduzione") {
                 val barra = (presenter.stato.value as? RegistrazioneUiStato.Dati)?.barra
                 barra is LettoreUiStato.Pronto && !barra.inRiproduzione
             }
@@ -189,16 +190,6 @@ class RegistrazionePresenterPreRilascioTest {
         } finally {
             eseguitori.shutdownNow()
         }
-    }
-
-    /** Polls (real wall-clock, no virtual time here — a real dispatcher backs this test). */
-    private fun attendi(timeoutMs: Long = 5_000, condizione: () -> Boolean) {
-        val scadenza = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
-        while (System.nanoTime() < scadenza) {
-            if (condizione()) return
-            Thread.sleep(10)
-        }
-        error("timeout in attesa della condizione")
     }
 
     @Test

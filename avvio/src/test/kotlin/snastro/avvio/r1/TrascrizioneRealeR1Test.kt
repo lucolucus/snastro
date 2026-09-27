@@ -17,6 +17,7 @@ import snastro.modelli.VOCE_CATALOGO_VAD_SILERO
 import snastro.modelli.VoceCatalogo
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.ui.modelli.StatoModelli
@@ -27,6 +28,8 @@ import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Opt-in (`@Tag("modelli")`, `./gradlew :avvio:modelliTest`): the R1 composition END TO END over the
@@ -67,7 +70,7 @@ class TrascrizioneRealeR1Test {
 
             r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
 
-            attendiFinche(timeoutMs = TIMEOUT_MS, messaggio = "Elaborazione reale conclusa") {
+            attendiFinche(timeout = TIMEOUT_MS.milliseconds, messaggio = "Elaborazione reale conclusa") {
                 r1.statiElaborazione(listOf(id)).single().stato in setOf(
                     StatoElaborazioneVista.COMPLETATA,
                     StatoElaborazioneVista.FALLITA,
@@ -79,7 +82,9 @@ class TrascrizioneRealeR1Test {
             assertTrue(vista.segmenti.any { it.testo.isNotBlank() }, "nessun testo riconosciuto: $vista")
             assertTrue(vista.voci.all { it.etichetta.startsWith("Voce ") })
             val documenti = Path.of(progetto.percorso).resolve("documenti")
-            attendiFinche(messaggio = "Documento scritto") { documenti.listDirectoryEntries("*.md").isNotEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento scritto") {
+                documenti.listDirectoryEntries("*.md").isNotEmpty()
+            }
             println("Documento:\n" + documenti.listDirectoryEntries("*.md").single().readText())
         } finally {
             sessione.chiudi()

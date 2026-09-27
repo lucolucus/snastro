@@ -7,12 +7,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
+import snastro.supporto.test.attendiFinche
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta
 import snastro.ui.modelli.StatoModelloFacoltativo
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.seconds
 
 private const val PIEDE_MODELLO = "shell-piede-modello-linguistico"
 private const val MODELLO_ID = "llm-prova"
@@ -39,7 +40,7 @@ class ContenutoAppR2FooterModelloTest {
 
                 setContent { ContenutoAppR2(grafo, sceltaCartella = { null }) }
 
-                attendiFinche(messaggio = "piede senza riga (NonInstallato)") {
+                attendiFinche(timeout = 10.seconds, messaggio = "piede senza riga (NonInstallato)") {
                     waitForIdle()
                     onAllNodesWithTag(PIEDE_MODELLO, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
                 }
@@ -48,7 +49,7 @@ class ContenutoAppR2FooterModelloTest {
                     MODELLO_ID,
                     StatoModelloFacoltativo.InDownload(1_000_000_000, DIMENSIONE_TOTALE),
                 )
-                attendiFinche(messaggio = "piede con la riga (InDownload)") {
+                attendiFinche(timeout = 10.seconds, messaggio = "piede con la riga (InDownload)") {
                     waitForIdle()
                     onAllNodesWithTag(PIEDE_MODELLO, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
                 }
@@ -58,7 +59,7 @@ class ContenutoAppR2FooterModelloTest {
                     MODELLO_ID,
                     StatoModelloFacoltativo.Errore(ErroreServizioModelli.ReteAssente),
                 )
-                attendiFinche(messaggio = "piede senza riga (Errore, era visibile)") {
+                attendiFinche(timeout = 10.seconds, messaggio = "piede senza riga (Errore, era visibile)") {
                     waitForIdle()
                     onAllNodesWithTag(PIEDE_MODELLO, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
                 }
@@ -67,13 +68,13 @@ class ContenutoAppR2FooterModelloTest {
                     MODELLO_ID,
                     StatoModelloFacoltativo.InDownload(4_000_000_000, DIMENSIONE_TOTALE),
                 )
-                attendiFinche(messaggio = "piede con la riga di nuovo (InDownload)") {
+                attendiFinche(timeout = 10.seconds, messaggio = "piede con la riga di nuovo (InDownload)") {
                     waitForIdle()
                     onAllNodesWithTag(PIEDE_MODELLO, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
                 }
 
                 servizio.emettiFacoltativo(MODELLO_ID, StatoModelloFacoltativo.Installato)
-                attendiFinche(messaggio = "piede senza riga (Installato, era visibile)") {
+                attendiFinche(timeout = 10.seconds, messaggio = "piede senza riga (Installato, era visibile)") {
                     waitForIdle()
                     onAllNodesWithTag(PIEDE_MODELLO, useUnmergedTree = true).fetchSemanticsNodes().isEmpty()
                 }

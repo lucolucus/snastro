@@ -5,6 +5,7 @@ import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore
@@ -25,6 +26,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotSame
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * fix-batch-16: closing a project while its Elaborazione runs, over the REAL R1 composition
@@ -63,13 +65,13 @@ class ChiusuraProgettoR1Test {
             )
 
             diarizzatore.fine.countDown() // the native call returns (interrupt flag still set)
-            attendiFinche(messaggio = "fine del lavoratore orfano") { r1.coda.lavoro.isCompleted }
-            attendiFinche(messaggio = "lock rilasciato alla fine del lavoratore") {
+            attendiFinche(timeout = 10.seconds, messaggio = "fine del lavoratore orfano") { r1.coda.lavoro.isCompleted }
+            attendiFinche(timeout = 10.seconds, messaggio = "lock rilasciato alla fine del lavoratore") {
                 ambiente.sessione.apri(percorso) is Esito.Ok
             }
 
             assertEquals(0, riconoscitore.chiamate, "l'Allineatore si ferma prima del primo pezzo ASR")
-            attendiFinche(messaggio = "recupero dell'in_corso interrotto") {
+            attendiFinche(timeout = 10.seconds, messaggio = "recupero dell'in_corso interrotto") {
                 ambiente.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.FALLITA
             }
             assertEquals("interrotta", ambiente.r1.statiElaborazione(listOf(id)).single().motivoFallimento)

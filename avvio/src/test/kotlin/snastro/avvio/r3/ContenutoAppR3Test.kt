@@ -15,11 +15,12 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.test.attendiFinche
 import snastro.ui.DestinazioneShell
 import snastro.ui.testi.etichetta
 import java.nio.file.Path
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The R3 app content ([ContenutoAppR3]) on the BUILT R3 graph ([AmbienteR3]): S3 carries the Riassunto tab (AC-S119
@@ -75,7 +76,7 @@ class ContenutoAppR3Test {
         onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
     private fun ComposeUiTest.attendi(messaggio: String, condizione: () -> Boolean) =
-        attendiFinche(messaggio = messaggio) {
+        attendiFinche(timeout = 10.seconds, messaggio = messaggio) {
             waitForIdle()
             condizione()
         }

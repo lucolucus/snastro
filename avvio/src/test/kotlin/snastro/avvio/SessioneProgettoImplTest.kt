@@ -13,6 +13,7 @@ import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.VoceRegistro
+import snastro.supporto.test.attendiFinche
 import snastro.ui.ErroreSessione
 import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoContratto
@@ -31,6 +32,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * D2 (consumer-driven contract, real-on-real) + the block's own AC-238/239/240/263..265/347/349.
@@ -54,12 +56,6 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
     /** Every test scope is a standalone `SupervisorJob` — nothing outlives one test's own assertions. */
     private fun scopeDiProva(): CoroutineScope = CoroutineScope(SupervisorJob())
 
-    private fun attendi(timeoutMs: Long = 2_000, condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < scadenza && !condizione()) Thread.sleep(10)
-        assertTrue(condizione(), "condizione non soddisfatta entro ${timeoutMs}ms")
-    }
-
     // --- AC-239 ------------------------------------------------------------------------------
 
     @Test
@@ -76,7 +72,9 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         assertTrue(Files.isRegularFile(cartellaProgetto.resolve("progetto.db")))
         assertTrue(Files.exists(cartellaProgetto.resolve(".lock")))
         assertEquals(cartellaProgetto.toAbsolutePath().normalize().toString(), progetto.percorso)
-        attendi { registro.elenco().any { it.percorso == progetto.percorso } }
+        attendiFinche(timeout = 10.seconds, messaggio = "il progetto registrato nel registro dopo crea") {
+            registro.elenco().any { it.percorso == progetto.percorso }
+        }
     }
 
     // --- AC-263/AC-264 -------------------------------------------------------------------------
@@ -148,8 +146,12 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         // the resulting filesystem state is not guaranteed to be visible the instant the call returns on
         // every OS/filesystem — a bounded poll, same pattern as this file's other eventually-consistent
         // checks (`attendi`), not an immediate assert.
-        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-wal")) }
-        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-shm")) }
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-wal rimosso dopo chiudi") {
+            Files.notExists(cartellaProgetto.resolve("progetto.db-wal"))
+        }
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-shm rimosso dopo chiudi") {
+            Files.notExists(cartellaProgetto.resolve("progetto.db-shm"))
+        }
     }
 
     @Test
@@ -162,8 +164,12 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val errore = con().apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
 
         assertEquals(ErroreSessione.CartellaNonValida, errore)
-        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-wal")) }
-        attendi { Files.notExists(cartellaProgetto.resolve("progetto.db-shm")) }
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-wal rimosso dopo il fallimento") {
+            Files.notExists(cartellaProgetto.resolve("progetto.db-wal"))
+        }
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-shm rimosso dopo il fallimento") {
+            Files.notExists(cartellaProgetto.resolve("progetto.db-shm"))
+        }
     }
 
     // --- AC-240 ------------------------------------------------------------------------------
@@ -173,11 +179,16 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val registro = RegistroProgettiFinta()
         val sessione = nuovaSessione(registro = registro)
         val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
-        attendi { registro.elenco().any { it.percorso == progetto.percorso } } // la registra di crea
+        // la registra di crea
+        attendiFinche(timeout = 10.seconds, messaggio = "il progetto registrato nel registro dopo crea") {
+            registro.elenco().any { it.percorso == progetto.percorso }
+        }
 
         sessione.chiudi()
 
-        attendi { registro.elenco().firstOrNull { it.percorso == progetto.percorso }?.ultimaAttivita == ORA }
+        attendiFinche(timeout = 10.seconds, messaggio = "ultimaAttivita aggiornata a ORA dopo chiudi") {
+            registro.elenco().firstOrNull { it.percorso == progetto.percorso }?.ultimaAttivita == ORA
+        }
         val voce = registro.elenco().first { it.percorso == progetto.percorso }
         assertEquals(0, voce.numRegistrazioni)
     }
@@ -190,6 +201,7 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val ordine: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
         override fun elenco(): List<VoceRegistro> = emptyList()
         override fun registra(v: VoceRegistro) {
+            // deliberatamente lenta: prova che l'ordine regge anche se registra e' piu lenta di aggiorna
             Thread.sleep(80)
             ordine += "registra"
         }
@@ -207,7 +219,9 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         sessione.crea(cartella.toString(), "Prova").atteso()
         sessione.chiudi()
 
-        attendi(timeoutMs = 3_000) { registro.ordine.size >= 2 }
+        attendiFinche(timeout = 10.seconds, messaggio = "registra e aggiorna eseguiti (registro lento)") {
+            registro.ordine.size >= 2
+        }
         assertEquals(listOf("registra", "aggiorna"), registro.ordine.toList())
     }
 
@@ -313,7 +327,9 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
 
         assertEquals(nuovaPosizione.toAbsolutePath().normalize().toString(), riaperto.percorso)
         assertEquals(creato.progettoId, riaperto.progettoId)
-        attendi { registro.elenco().any { it.percorso == riaperto.percorso } }
+        attendiFinche(timeout = 10.seconds, messaggio = "il progetto ri-registrato con il nuovo percorso") {
+            registro.elenco().any { it.percorso == riaperto.percorso }
+        }
     }
 
     @Test

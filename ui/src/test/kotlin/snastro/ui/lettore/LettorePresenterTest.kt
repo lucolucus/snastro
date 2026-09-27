@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import snastro.kernel.EstrattoRef
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.test.attendiFinche
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE
 import java.util.concurrent.CountDownLatch
@@ -338,8 +339,10 @@ class LettorePresenterTest {
 
             // L471c: A's late throw (of a request already superseded when it started) must never
             // surface as Caricamento/Errore — only B's own success is ever applied.
-            val statoFinale = attendiStato(presenter) { it is LettoreUiStato.Pronto }
-            val pronto = assertIs<LettoreUiStato.Pronto>(statoFinale)
+            attendiFinche(messaggio = "Pronto (mai il tardivo guasto di A)") {
+                presenter.stato.value is LettoreUiStato.Pronto
+            }
+            val pronto = assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
             assertEquals(0, pronto.posizioneMs)
             assertEquals(idB, fake.stato.value.registrazioneId)
         } finally {
@@ -394,36 +397,23 @@ class LettorePresenterTest {
             // without a lane, B's job would be free to enter `riproduciDa` concurrently with A's; give the
             // thread pool a generous window to schedule it before releasing A.
             presenter.riproduci(idB, 0)
+            // real time is the subject: gives the real thread pool a generous window to (wrongly) schedule
+            // B concurrently with A before releasing A, without which the race could never be exercised.
             Thread.sleep(300)
             viaLiberaA.countDown()
 
-            val statoFinale = attendiStato(presenter) { it is LettoreUiStato.Pronto }
+            attendiFinche(messaggio = "Pronto") { presenter.stato.value is LettoreUiStato.Pronto }
             assertEquals(
                 false,
                 eseguitoInConcorrenza.get(),
                 "riproduciDa(B) e entrato mentre riproduciDa(A) era ancora in corso",
             )
-            val pronto = assertIs<LettoreUiStato.Pronto>(statoFinale)
+            val pronto = assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
             assertEquals(0, pronto.posizioneMs)
             // the port itself must end up reflecting B, never A's late completion "winning" the race.
             assertEquals(idB, fake.stato.value.registrazioneId)
         } finally {
             eseguitori.shutdownNow()
         }
-    }
-
-    /** Polls (real wall-clock, no virtual time here — see the HIGH-1 test) until [condizione] holds. */
-    private fun attendiStato(
-        presenter: LettorePresenter,
-        timeoutMs: Long = 5_000,
-        condizione: (LettoreUiStato) -> Boolean,
-    ): LettoreUiStato {
-        val scadenza = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMs)
-        while (System.nanoTime() < scadenza) {
-            val attuale = presenter.stato.value
-            if (condizione(attuale)) return attuale
-            Thread.sleep(10)
-        }
-        error("timeout in attesa dello stato atteso; ultimo stato: ${presenter.stato.value}")
     }
 }

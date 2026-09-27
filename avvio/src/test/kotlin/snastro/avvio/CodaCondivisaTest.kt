@@ -1,15 +1,13 @@
 package snastro.avvio
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.Timeout
+import snastro.supporto.test.conScopeDiProva
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -38,7 +36,6 @@ class CodaCondivisaTest {
     @Test
     fun `AC-233 il recupero gira prima di ogni tentativo di avanzamento`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         // teste() offre una testa UNA SOLA volta (poi null, "esaurita"): prossima() la trova comunque
         // priva di esito (Nessuno, il caso di questo test) — consistente, mai una fuga senza fine di
@@ -46,7 +43,7 @@ class CodaCondivisaTest {
         val giaOfferta = AtomicBoolean(false)
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -69,18 +66,16 @@ class CodaCondivisaTest {
 
         assertEquals("recupera", ordine.first(), "il recupero precede qualunque tentativo di avanzamento")
         assertTrue(ordine.contains("esegui"))
-        scope.cancel()
     }
 
     @Test
     fun `AC-234 con due in attesa la seconda parte da sola dopo che la prima e terminale`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val rimanenti = ArrayDeque(listOf("uno", "due"))
         val completate = mutableListOf<String>()
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -108,18 +103,16 @@ class CodaCondivisaTest {
         runCurrent()
 
         assertEquals(listOf("uno", "due"), completate, "la seconda parte solo dopo che la prima e' conclusa")
-        scope.cancel()
     }
 
     @Test
     fun `AC-235 con i modelli mancanti la coda resta in attesa finche non diventano pronti`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         var pronti = false
         val chiamate = AtomicInteger(0)
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -146,20 +139,18 @@ class CodaCondivisaTest {
         advanceTimeBy(2_000)
         runCurrent()
         assertTrue(chiamate.get() > 0, "la coda riparte da sola quando i modelli diventano pronti")
-        scope.cancel()
     }
 
     @Test
     fun `AC-312 un escape non ferma il worker che ritenta e riesce`() = runTest {
         for (guasto in listOf<Throwable>(OutOfMemoryError("di prova"), InterruptedException("di prova"))) {
             val dispatcher = StandardTestDispatcher(testScheduler)
-            val scope = CoroutineScope(dispatcher)
             val primaVolta = AtomicBoolean(true)
             val completate = mutableListOf<String>()
             val recuperi = AtomicInteger(0)
 
             CodaCondivisa(
-                scope = scope,
+                scope = backgroundScope,
                 fonti = listOf(
                     FonteCoda(
                         tipo = TipoElementoCoda.ELABORAZIONE,
@@ -188,7 +179,6 @@ class CodaCondivisaTest {
 
             assertEquals(listOf("id-1"), completate, "il ritentativo dopo l'escape riesce")
             assertEquals(2, recuperi.get(), "il recupero dell'avvio (AC-233) piu' quello dopo l'escape (AC-312)")
-            scope.cancel()
             Thread.interrupted() // pulisce il flag per l'iterazione/test successivo
         }
     }
@@ -196,13 +186,12 @@ class CodaCondivisaTest {
     @Test
     fun `AC-313 un avvio sempre rifiutato viene escluso dopo 3 tentativi, la seconda parte`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val tentativi = AtomicInteger(0)
         val completate = mutableListOf<String>()
         val bloccate = mutableListOf<String>()
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -240,19 +229,17 @@ class CodaCondivisaTest {
         assertEquals(3, tentativi.get(), "tentativi limitati, non gira a vuoto")
         assertEquals(listOf("vecchia"), bloccate, "segnalato esattamente una volta")
         assertEquals(listOf("recente"), completate, "gli altri elementi proseguono")
-        scope.cancel()
     }
 
     @Test
     fun `AC-313 rework item 2 - gli escape contano come i rifiuti ed escludono dopo 3 tentativi`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val tentativi = AtomicInteger(0)
         val completate = mutableListOf<String>()
         val bloccate = mutableListOf<String>()
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -290,17 +277,15 @@ class CodaCondivisaTest {
         assertEquals(3, tentativi.get(), "tre escape, poi esclusa")
         assertEquals(listOf("vecchia"), bloccate)
         assertEquals(listOf("recente"), completate, "gli altri elementi proseguono")
-        scope.cancel()
     }
 
     @Test
     fun `AC-313 i tentativi sono distanziati da un back off crescente, mai a distanza zero`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val istanti = mutableListOf<Long>()
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -329,17 +314,16 @@ class CodaCondivisaTest {
         val distanze = istanti.zipWithNext { a, b -> b - a }
         assertTrue(distanze.all { it > 0 }, "mai un tentativo a distanza zero")
         assertTrue(distanze[1] > distanze[0], "il back-off cresce: ${distanze[0]} poi ${distanze[1]}")
-        scope.cancel()
     }
 
     @Test
-    fun `AC-314 due richieste concorrenti di avanzamento non eseguono mai due elementi insieme`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `AC-314 due richieste concorrenti di avanzamento non eseguono mai due elementi insieme`() = conScopeDiProva { scope ->
         val dentro = CountDownLatch(1)
         val procedi = CountDownLatch(1)
         val primaVolta = AtomicBoolean(true)
         val concorrenti = AtomicInteger(0)
         val massimoConcorrenti = AtomicInteger(0)
-        val scope = CoroutineScope(Dispatchers.Default + Job())
 
         val coda = CodaCondivisa(
             scope = scope,
@@ -384,10 +368,10 @@ class CodaCondivisaTest {
     }
 
     @Test
-    fun `rework item 3 - ferma e attendi interrompe una chiamata bloccata e il worker termina`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `rework item 3 - ferma e attendi interrompe una chiamata bloccata e il worker termina`() = conScopeDiProva { scope ->
         val bloccato = CountDownLatch(1)
         val maiSbloccato = CountDownLatch(1) // mai contato: la chiamata resta bloccata finche' non e' interrotta
-        val scope = CoroutineScope(Dispatchers.Default + Job())
 
         val coda = CodaCondivisa(
             scope = scope,
@@ -415,11 +399,11 @@ class CodaCondivisaTest {
     }
 
     @Test
-    fun `rework 2 FAIL 1 - fermaEAttendi chiama l interrompi della fonte in corso prima dell interruzione`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `rework 2 FAIL 1 - fermaEAttendi chiama l interrompi della fonte in corso prima dell interruzione`() = conScopeDiProva { scope ->
         val bloccato = CountDownLatch(1)
         val maiSbloccato = CountDownLatch(1) // mai contato: la chiamata resta bloccata finche' non e' interrotta
         val interrotte = AtomicInteger(0)
-        val scope = CoroutineScope(Dispatchers.Default + Job())
 
         val coda = CodaCondivisa(
             scope = scope,
@@ -449,9 +433,9 @@ class CodaCondivisaTest {
     }
 
     @Test
-    fun `rework 2 FAIL 1 - fermaEAttendi non chiama nessun interrompi quando la coda e inattiva`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `rework 2 FAIL 1 - fermaEAttendi non chiama nessun interrompi quando la coda e inattiva`() = conScopeDiProva { scope ->
         val interrotte = AtomicInteger(0)
-        val scope = CoroutineScope(Dispatchers.Default + Job())
 
         val coda = CodaCondivisa(
             scope = scope,
@@ -475,11 +459,11 @@ class CodaCondivisaTest {
     }
 
     @Test
-    fun `rework item 4 - dopo un InterruptedException il flag viene pulito sul thread reale, non lasciato`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `rework item 4 - dopo un InterruptedException il flag viene pulito sul thread reale, non lasciato`() = conScopeDiProva { scope ->
         val primaVolta = AtomicBoolean(true)
         val flagAllaSeconda = AtomicReference<Boolean>()
         val seconda = CountDownLatch(1)
-        val scope = CoroutineScope(Dispatchers.Default + Job())
 
         CodaCondivisa(
             scope = scope,
@@ -509,11 +493,10 @@ class CodaCondivisaTest {
     @Timeout(value = 10, threadMode = Timeout.ThreadMode.SEPARATE_THREAD) // senza il limite non finirebbe mai (spin)
     fun `rework 2 MED - la rivalutazione immediata e limitata a una, poi la coda torna al poll`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val chiamateProssima = AtomicInteger(0)
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -534,19 +517,17 @@ class CodaCondivisaTest {
         runCurrent() // NESSUN advanceTimeBy: se la rivalutazione immediata non fosse limitata, questo non finirebbe mai
 
         assertEquals(2, chiamateProssima.get(), "un tentativo iniziale + UNA sola rivalutazione, poi il poll")
-        scope.cancel()
     }
 
     @Test
     fun `rework 2 MED - una lettura di picco che lancia una volta e trattata come una fuga`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val recuperi = AtomicInteger(0)
         val completate = mutableListOf<String>()
         val primaVolta = AtomicBoolean(true)
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(
                 FonteCoda(
                     tipo = TipoElementoCoda.ELABORAZIONE,
@@ -570,6 +551,5 @@ class CodaCondivisaTest {
 
         assertEquals(listOf("id-1"), completate, "dopo la lettura sfuggita la coda riprende e drena l'elemento")
         assertEquals(2, recuperi.get(), "il recupero dell'avvio (AC-233) piu' quello dopo la lettura sfuggita")
-        scope.cancel()
     }
 }

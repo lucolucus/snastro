@@ -6,6 +6,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
+import snastro.supporto.test.attendiFinche
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
 import snastro.ui.lettore.LettoreAudio
@@ -85,10 +86,13 @@ class RegistrazioniPresenterConcorrenzaTest {
                 aggiornamenti = aggiornamenti,
                 clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             )
-            attendiFinche { presenter.stato.value is RegistrazioniUiStato.Dati } // initial load, chiamata #1
+            // initial load, chiamata #1
+            attendiFinche(messaggio = "Dati dopo il caricamento iniziale") {
+                presenter.stato.value is RegistrazioniUiStato.Dati
+            }
 
             lettoreReale.riproduciDa(REG_1, 0)
-            attendiFinche {
+            attendiFinche(messaggio = "riga in InRiproduzione") {
                 (presenter.stato.value as? RegistrazioniUiStato.Dati)
                     ?.righe?.singleOrNull()?.riproduzione == StatoRiproduzioneRiga.InRiproduzione
             }
@@ -163,10 +167,14 @@ class RegistrazioniPresenterConcorrenzaTest {
             // A background refresh (R15), NEWER than the still-in-flight initial load, resolves FIRST
             // (it never blocks) and fails — while the OLDER call has not produced a result yet at all.
             aggiornamenti.emetti(Cambiamento(REG_1)) // chiamata #2
-            attendiFinche { presenter.stato.value is RegistrazioniUiStato.Errore }
+            attendiFinche(messaggio = "Errore dal refresh piu nuovo") {
+                presenter.stato.value is RegistrazioniUiStato.Errore
+            }
 
             viaLibera.countDown() // release the OLDER (initial) load: it now succeeds
-            attendiFinche { presenter.stato.value is RegistrazioniUiStato.Dati }
+            attendiFinche(messaggio = "Dati dal caricamento iniziale, piu vecchio") {
+                presenter.stato.value is RegistrazioniUiStato.Dati
+            }
 
             // L485b: the older success is APPLIED (not dropped just because a newer attempt already
             // started and failed) — the presenter leaves the M5 Errore screen once real data is in.
@@ -181,17 +189,7 @@ class RegistrazioniPresenterConcorrenzaTest {
         }
     }
 
-    private fun attendiFinche(condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + ATTESA_S * MS_PER_S
-        while (!condizione()) {
-            check(System.currentTimeMillis() < scadenza) { "timeout in attesa dello stato atteso" }
-            Thread.sleep(PASSO_MS)
-        }
-    }
-
     private companion object {
         const val ATTESA_S = 5L
-        const val MS_PER_S = 1_000L
-        const val PASSO_MS = 10L
     }
 }

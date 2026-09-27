@@ -3,7 +3,6 @@ package snastro.avvio.r2
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
@@ -21,6 +20,7 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
@@ -45,6 +45,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 private val ANNA = floatArrayOf(1f, 0f, 0f)
 private val MARCO = floatArrayOf(0f, 1f, 0f)
@@ -146,7 +147,7 @@ class SomiglianzaR2Test {
 
     private fun calcola(a: AmbienteR2, id: RegistrazioneId): StatoSomiglianza {
         a.r2.somiglianza.calcola(id)
-        attendiFinche(messaggio = "fine del confronto") {
+        attendiFinche(timeout = 10.seconds, messaggio = "fine del confronto") {
             val s = a.r2.somiglianza.stato.value[id]
             s != null && s !is StatoSomiglianza.InCorso
         }
@@ -155,7 +156,7 @@ class SomiglianzaR2Test {
 
     private fun applica(a: AmbienteR2, id: RegistrazioneId): StatoSomiglianza {
         a.r2.somiglianza.applica(id)
-        attendiFinche(messaggio = "fine dell'applicazione") {
+        attendiFinche(timeout = 10.seconds, messaggio = "fine dell'applicazione") {
             val s = a.r2.somiglianza.stato.value[id]
             s is StatoSomiglianza.Esito || s is StatoSomiglianza.Errore
         }
@@ -206,10 +207,13 @@ class SomiglianzaR2Test {
             val attribuzioni = AttribuzioneRepositorySql(a.contesto.database).diRegistrazione(id)
             assertEquals(listOf(1, 2, 4), attribuzioni.map { it.voceRef.voceId.numero }.sorted(), "Luca tiene Voce 4")
 
-            attendiFinche(messaggio = "Documento rigenerato") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento rigenerato") {
                 documento(a, id)?.let { d -> d.split("**Anna**").size - 1 == 4 && "**Voce 3**" in d } == true
             }
-            attendiFinche(messaggio = "RiallineaImpronte dopo il commit") { riallineate.isNotEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "RiallineaImpronte dopo il commit") {
+                riallineate.isNotEmpty()
+            }
+            // real time is the subject: lets the coalescing window close, then checks no SECOND run happened.
             Thread.sleep(ATTESA_COALESCENZA_MS)
             assertEquals(1, riallineate.size, "un solo riallineamento per il batch")
             confermaLucaERicalcola(a, id)
@@ -261,6 +265,7 @@ class SomiglianzaR2Test {
             assertTrue(calcola(a, id) is StatoSomiglianza.Anteprima)
             a.r2.somiglianza.annulla(id)
             a.r2.somiglianza.applica(id)
+            // real time is the subject: the coalescing window must actually close before checking nothing survives it.
             Thread.sleep(ATTESA_COALESCENZA_MS)
             assertNull(a.r2.somiglianza.stato.value[id])
             assertEquals(prima, righe(a, id))
@@ -314,7 +319,9 @@ class SomiglianzaR2Test {
             assertEquals(attribuzione.parlanteId, dariano.parlanteId)
             val repoParlanti = ParlanteRepositorySql(a.contesto.database, a.contesto.lettura)
             assertEquals(1, repoParlanti.impronteDiRegistrazione(id).size)
-            attendiFinche(messaggio = "Documento con Dario") { documento(a, id)?.contains("**Dario**") == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento con Dario") {
+                documento(a, id)?.contains("**Dario**") == true
+            }
 
             val prima = AttribuzioneRepositorySql(a.contesto.database).diRegistrazione(id).size
             val parlanti = a.r2.letture.parlantiDelProgetto().size
@@ -334,10 +341,11 @@ class SomiglianzaR2Test {
             a.trascrivi(id)
             val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
             a.scope.launch { a.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
+            // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
             Thread.sleep(ATTESA_COALESCENZA_MS)
             cambiamenti.clear()
             a.r2.confermaSegmento(ConfermaSegmento(id, SegmentoId(1), confermato = true)).atteso()
-            attendiFinche(messaggio = "Cambiamento") { Cambiamento(id) in cambiamenti }
+            attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento") { Cambiamento(id) in cambiamenti }
         }
     }
 

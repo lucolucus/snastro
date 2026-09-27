@@ -24,4 +24,7 @@ fun classificatoreFfmpeg(): String {
 dependencies {
     implementation(libs.bytedeco.javacv)
     implementation(variantOf(libs.bytedeco.ffmpeg) { classifier(classificatoreFfmpeg()) })
+
+    // attendiFinche (ADR 0028 §5, test-only edge): the one polling wait RiproduttoreWavTest goes through.
+    testImplementation(project(":supporto-test"))
 }

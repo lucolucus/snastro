@@ -14,7 +14,6 @@ import snastro.avvio.SessioneProgettoSeams
 import snastro.avvio.orologioApp
 import snastro.avvio.r1.AdattatoriMl
 import snastro.avvio.r1.EstensioneR1
-import snastro.avvio.r1.attendiFinche
 import snastro.avvio.r2.AdattatoriParlanti
 import snastro.avvio.r2.AmbienteR2
 import snastro.avvio.r2.EstensioneR2
@@ -45,6 +44,7 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.dominio.Riassunto
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
@@ -59,12 +59,14 @@ import snastro.ui.modelli.ServizioModelliFinta
 import snastro.ui.modelli.StatoModelli
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Clock
 import java.time.LocalDate
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreParlantiFinta
 
 /**
@@ -81,6 +83,9 @@ internal class AmbienteR3(
         DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
     val diarizzatore: DiarizzatoreScriptato = DiarizzatoreScriptato(),
     estrattore: EstrattoreImpronta = EstrattoreImprontaFinta(),
+    // Shared by every sub-estensione so richiestoAlle/avviatoAlle stay comparable across r1/r2/r3 (AC-S146):
+    // a test that must guarantee ordering injects an OrologioFinto and calls avanza() instead of Thread.sleep.
+    private val clock: Clock = orologioApp(),
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
@@ -102,7 +107,7 @@ internal class AmbienteR3(
     private val estensioneR2 = EstensioneR2(
         r1 = EstensioneR1(
             io = Dispatchers.IO,
-            clock = orologioApp(),
+            clock = clock,
             generatoreId = GeneratoreIdFinto(),
             adattatoriMl = { AdattatoriMl(diarizzatore, RiconoscitoreParlatoFinta(), VadFinta()) },
             modelliPronti = { true },
@@ -110,7 +115,7 @@ internal class AmbienteR3(
             lettoreNomi = ::lettoreNomiDaParlanti,
         ),
         io = Dispatchers.IO,
-        clock = orologioApp(),
+        clock = clock,
         generatoreId = GeneratoreIdUuid(),
         adattatori = { AdattatoriParlanti(estrattore, { DecodificatoreParlantiFinta() }, proposte = true) },
     )
@@ -120,7 +125,7 @@ internal class AmbienteR3(
             sincroniPrimaDiR2 = contaSincroni(contesto)
             estensioneR2.apri(contesto)
         },
-        clock = orologioApp(),
+        clock = clock,
         generatoreId = GeneratoreIdUuid(),
         modello = modello,
         disponibilita = disponibilita,
@@ -129,7 +134,7 @@ internal class AmbienteR3(
     val sessione = SessioneProgettoImpl(
         registro = RegistroProgettiFinta(),
         generatoreId = GeneratoreIdFinto(),
-        clock = orologioApp(),
+        clock = clock,
         scopeGenitore = scope,
         seams = SessioneProgettoSeams(
             sondaAudio = {
@@ -154,7 +159,7 @@ internal class AmbienteR3(
             GrafoR0(
                 scope = scope,
                 io = dispatcherIo,
-                clock = orologioApp(),
+                clock = clock,
                 sessione = sessione,
                 elencoProgetti = ElencoProgetti(RegistroProgettiFinta()),
                 cartellaProgettiPredefinita = progetto.percorso,
@@ -170,7 +175,9 @@ internal class AmbienteR3(
         val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
         sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS
         avviaElaborazione(id)
-        attendiFinche(messaggio = "elaborazione completata") { stato(id) == StatoElaborazioneVista.COMPLETATA }
+        attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+            stato(id) == StatoElaborazioneVista.COMPLETATA
+        }
         return id
     }
 
@@ -189,7 +196,9 @@ internal class AmbienteR3(
     fun diRegistrazione(id: RegistrazioneId): List<Riassunto> = riassunti.diRegistrazione(id)
 
     fun attendiPronto(id: RegistrazioneId) =
-        attendiFinche(messaggio = "Riassunto pronto") { diRegistrazione(id).singleOrNull()?.pronto == true }
+        attendiFinche(timeout = 10.seconds, messaggio = "Riassunto pronto") {
+            diRegistrazione(id).singleOrNull()?.pronto == true
+        }
 
     override fun close() {
         modello.sblocca()
