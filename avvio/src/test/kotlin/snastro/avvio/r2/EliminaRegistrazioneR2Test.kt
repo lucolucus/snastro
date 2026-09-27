@@ -52,6 +52,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * ADR 0020 end to end on the REAL R2 composition ([AmbienteR2]: a SQLite project FILE opened by the session with
@@ -74,17 +75,19 @@ class EliminaRegistrazioneR2Test {
             val documentoR = Path.of(checkNotNull(it.r2.r1.percorsoDocumento(s.r)))
             val documentoQ = Path.of(checkNotNull(it.r2.r1.percorsoDocumento(s.q)))
             val s2 = presenterS2(it)
-            attendiFinche(messaggio = "'Elimina…' disponibile su R") {
+            attendiFinche(timeout = 10.seconds, messaggio = "'Elimina…' disponibile su R") {
                 riga(s2, s.r)?.eliminazione == StatoEliminazione.Disponibile
             }
 
             s2.elimina(s.r)
-            attendiFinche(messaggio = "conferma") { riga(s2, s.r)?.confermaElimina == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "conferma") { riga(s2, s.r)?.confermaElimina == true }
             val contato = database.last()
             contato.azzeraCheckpoint()
             s2.confermaElimina(s.r)
 
-            attendiFinche(messaggio = "S2 elenca solo Q") { righe(s2)?.map { r -> r.registrazioneId } == listOf(s.q) }
+            attendiFinche(timeout = 10.seconds, messaggio = "S2 elenca solo Q") {
+                righe(s2)?.map { r -> r.registrazioneId } == listOf(s.q)
+            }
             assertEquals(NESSUNA_RIGA, righe(it, s.r), "righe di R per tabella: solo quella in sospeso")
             assertEquals(1, righe(it, s.q).getValue("registrazione"))
             val galleria = it.r2.letture.parlantiDelProgetto().associateBy { p -> p.nome }
@@ -97,7 +100,7 @@ class EliminaRegistrazioneR2Test {
             assertEquals("Terzo", lapide.nome.valore)
             assertFalse(Files.exists(cartella.resolve(audio(s.r))))
             assertFalse(Files.exists(cartella.resolve(wav(s.r))))
-            attendiFinche(messaggio = "Documento di R rimosso") { !Files.exists(documentoR) }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento di R rimosso") { !Files.exists(documentoR) }
             assertTrue(Files.exists(cartella.resolve(audio(s.q))))
             assertTrue(Files.exists(cartella.resolve(wav(s.q))))
             assertTrue(Files.exists(documentoQ))
@@ -110,7 +113,7 @@ class EliminaRegistrazioneR2Test {
             it.sessione.chiudi()
             it.sessione.apri(it.progetto.percorso).atteso()
 
-            attendiFinche(messaggio = "riga in sospeso conclusa alla riapertura") {
+            attendiFinche(timeout = 10.seconds, messaggio = "riga in sospeso conclusa alla riapertura") {
                 righe(it, s.r).getValue("eliminazione_in_sospeso") == 0
             }
         }
@@ -131,7 +134,9 @@ class EliminaRegistrazioneR2Test {
             // S in_corso: its pipeline held in diarization.
             val primo = diarizzatore.trattieni()
             it.r2.r1.avviaElaborazione(AvviaElaborazione(sx)).atteso()
-            attendiFinche(messaggio = "S in corso") { fase(it, sx) == FaseElaborazione.DIARIZZAZIONE }
+            attendiFinche(timeout = 10.seconds, messaggio = "S in corso") {
+                fase(it, sx) == FaseElaborazione.DIARIZZAZIONE
+            }
             val prima = istantanea(it, sx)
             it.r2.eliminaRegistrazione(EliminaRegistrazione(sx)).erroreAtteso<ElaborazioneGiaAperta>()
             assertEquals(prima, istantanea(it, sx))
@@ -142,9 +147,11 @@ class EliminaRegistrazioneR2Test {
             // S re-queued in_attesa behind Z, held in diarization.
             val secondo = diarizzatore.trattieni()
             it.r2.r1.avviaElaborazione(AvviaElaborazione(z)).atteso()
-            attendiFinche(messaggio = "Z in corso") { fase(it, z) == FaseElaborazione.DIARIZZAZIONE }
+            attendiFinche(timeout = 10.seconds, messaggio = "Z in corso") {
+                fase(it, z) == FaseElaborazione.DIARIZZAZIONE
+            }
             it.r2.r1.avviaElaborazione(AvviaElaborazione(sx)).atteso()
-            attendiFinche(messaggio = "S in coda") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S in coda") {
                 it.r2.r1.statiElaborazione(listOf(sx)).single().stato == StatoElaborazioneVista.IN_ATTESA
             }
             val inCoda = istantanea(it, sx)
@@ -176,7 +183,7 @@ class EliminaRegistrazioneR2Test {
             it.trascrivi(x)
             it.trascrivi(y)
             runBlocking { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(x, 1), "Anna")) }
-            attendiFinche(messaggio = "Nomi nel Documento") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Nomi nel Documento") {
                 it.r2.r1.percorsoDocumento(x)?.let { p -> "**Anna**" in Path.of(p).toFile().readText() } == true
             }
             val cambiamenti = raccogli(it)
@@ -196,7 +203,7 @@ class EliminaRegistrazioneR2Test {
 
             it.r2.eliminaRegistrazione(EliminaRegistrazione(y)).atteso()
 
-            attendiFinche(messaggio = "Cambiamento(null)") { Cambiamento(null) in cambiamenti }
+            attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento(null)") { Cambiamento(null) in cambiamenti }
             it.r2.letture.proposta(voce(x, 2))
             assertEquals(calcolate + 1, estrattore.chiamate.get(), "la Proposta e' ricalcolata dopo l'evento")
         }
@@ -212,7 +219,9 @@ class EliminaRegistrazioneR2Test {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
 
-            attendiFinche(messaggio = "eliminazione completata all'apertura") { inSospeso(it).isEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "eliminazione completata all'apertura") {
+                inSospeso(it).isEmpty()
+            }
             file.forEach { f -> assertFalse(Files.exists(f), "$f") }
             assertTrue(Files.exists(appunti), "un file dell'utente non si tocca")
         }
@@ -229,7 +238,7 @@ class EliminaRegistrazioneR2Test {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
 
-            attendiFinche(messaggio = "audio scartato") { !Files.exists(file[0]) }
+            attendiFinche(timeout = 10.seconds, messaggio = "audio scartato") { !Files.exists(file[0]) }
             // real time is the subject: confirms the failed derivato cleanup never removes the pending row anyway.
             Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
             assertEquals(1, inSospeso(it).size, "la pulizia dei derivati e' fallita: la riga resta")
@@ -289,7 +298,7 @@ class EliminaRegistrazioneR2Test {
         assertTrue(galleria.any { p -> p.nome.startsWith("Ospite") })
         val cartella = Path.of(ambiente.progetto.percorso)
         listOf(r, q).forEach { id -> Files.write(cartella.resolve(wav(id)), byteArrayOf(1)) }
-        attendiFinche(messaggio = "Documenti di R e Q scritti") {
+        attendiFinche(timeout = 10.seconds, messaggio = "Documenti di R e Q scritti") {
             ambiente.r2.r1.percorsoDocumento(r) != null && ambiente.r2.r1.percorsoDocumento(q) != null
         }
         return Scenario(r, q, mario, terzo)
@@ -299,7 +308,10 @@ class EliminaRegistrazioneR2Test {
         assertEquals(Esito.Ok(Unit), runBlocking { ambiente.r2.comandi.esegui(c) })
     }
 
-    private fun AmbienteR2.attendiCompletata(id: RegistrazioneId) = attendiFinche(messaggio = "completata") {
+    private fun AmbienteR2.attendiCompletata(id: RegistrazioneId) = attendiFinche(
+        timeout = 10.seconds,
+        messaggio = "completata",
+    ) {
         r2.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA
     }
 

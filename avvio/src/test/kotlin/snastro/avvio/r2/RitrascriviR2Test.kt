@@ -49,6 +49,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * ADR 0018 + Amendment (b) end-to-end on the REAL R2 composition ([AmbienteR2]: SQLite project folder,
@@ -70,7 +71,7 @@ class RitrascriviR2Test {
             val s = prepara(it)
             val s2 = presenterS2(it)
             val s3 = presenterS3(it, s.x)
-            attendiFinche(messaggio = "S3 modificabile") { datiS3(s3)?.soloLettura == false }
+            attendiFinche(timeout = 10.seconds, messaggio = "S3 modificabile") { datiS3(s3)?.soloLettura == false }
             val documentoPrima = documento(it, s.x)
             val barriera = CountDownLatch(1)
             diarizzatore.turni = AmbienteR2.TRE_VOCI // ignores k: the re-run finds 3 Voci anyway
@@ -78,18 +79,23 @@ class RitrascriviR2Test {
 
             ritrascrivi(s2, s.x, persone = "2")
 
-            attendiFinche(messaggio = "S2 'Ritrascrizione in corso'") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S2 'Ritrascrizione in corso'") {
                 val stato = riga(s2, s.x)?.elaborazione
                 stato is StatoElaborazioneRiga.InCorso && stato.ritrascrizione
             }
-            attendiFinche(messaggio = "S3 in sola lettura sul vecchio Trascritto") { datiS3(s3)?.soloLettura == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "S3 in sola lettura sul vecchio Trascritto") {
+                datiS3(s3)?.soloLettura == true
+            }
             assertEquals(2, datiS3(s3)?.segmenti?.size, "il vecchio Trascritto resta visibile")
             assertEquals(2, it.r2.r1.trascritto(s.x)?.voci?.size)
             assertEquals(2, AttribuzioneRepositorySql(it.contesto.database).diRegistrazione(s.x).size)
 
             barriera.countDown()
 
-            attendiFinche(messaggio = "S2 'Completata' con il badge '3 voci · 3 da identificare'") {
+            attendiFinche(
+                timeout = 10.seconds,
+                messaggio = "S2 'Completata' con il badge '3 voci · 3 da identificare'",
+            ) {
                 val r = riga(s2, s.x)
                 r?.elaborazione == StatoElaborazioneRiga.Completata && r.identificazione == IdentificazioneRiga(3, 3)
             }
@@ -103,14 +109,14 @@ class RitrascriviR2Test {
             assertEquals(s.mario, attribuzioni.diRegistrazione(s.y).single().parlanteId)
             assertEquals(1, parlanti.impronteDiRegistrazione(s.y).size, "la sua impronta altrove resta")
             assertEquals(3, it.r2.r1.trascritto(s.x)?.voci?.size)
-            attendiFinche(messaggio = "Documento riscritto con Voce 1..3") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento riscritto con Voce 1..3") {
                 documento(it, s.x)?.contains("**Voce 3**") == true
             }
             val nuovo = documento(it, s.x).orEmpty()
             assertFalse("Mario" in nuovo || "Ospite" in nuovo, "solo etichette 'Voce n': $nuovo")
             assertTrue((1..3).all { n -> "**Voce $n**" in nuovo })
             assertNotEquals(documentoPrima, nuovo)
-            attendiFinche(messaggio = "S3 ricaricato sulla nuova generazione, modificabile") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S3 ricaricato sulla nuova generazione, modificabile") {
                 datiS3(s3)?.let { d -> !d.soloLettura && d.segmenti.size == 3 } == true
             }
         }
@@ -126,7 +132,7 @@ class RitrascriviR2Test {
 
             ritrascrivi(s2, s.x, persone = "2")
 
-            attendiFinche(messaggio = "S2 'Ritrascrizione non riuscita'") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S2 'Ritrascrizione non riuscita'") {
                 riga(s2, s.x)?.ritrascrizioneFallita != null
             }
             val r = checkNotNull(riga(s2, s.x))
@@ -152,30 +158,30 @@ class RitrascriviR2Test {
             val barriera = CountDownLatch(1)
             diarizzatore.barriera = barriera
             it.r2.r1.avviaElaborazione(AvviaElaborazione(z)).atteso()
-            attendiFinche(messaggio = "Z in corso") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Z in corso") {
                 it.r2.r1.statiElaborazione(listOf(z)).single().fase == FaseElaborazione.DIARIZZAZIONE
             }
 
             ritrascrivi(s2, s.x, persone = "")
-            attendiFinche(messaggio = "S2 'Ritrascrizione in coda (1)' annullabile") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S2 'Ritrascrizione in coda (1)' annullabile") {
                 val r = riga(s2, s.x)
                 r?.elaborazione == StatoElaborazioneRiga.InAttesa(1, ritrascrizione = true) && r.annullabile
             }
             // The row opens S3 (built on navigation, as in ContenutoAppR2): read-only on the old transcript.
             val s3 = presenterS3(it, s.x)
-            attendiFinche(messaggio = "S3 in sola lettura") { datiS3(s3)?.soloLettura == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "S3 in sola lettura") { datiS3(s3)?.soloLettura == true }
             assertEquals(2, datiS3(s3)?.segmenti?.size)
 
             s2.annullaElaborazione(s.x)
 
-            attendiFinche(messaggio = "S2 'Completata' + 'Ritrascrivi', S3 modificabile") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S2 'Completata' + 'Ritrascrivi', S3 modificabile") {
                 val r = riga(s2, s.x)
                 r?.elaborazione == StatoElaborazioneRiga.Completata && r.ritrascriviDisponibile &&
                     !r.operazioneInCorso && datiS3(s3)?.soloLettura == false
             }
             Istantanea.di(it, s.x).confronta(prima)
             barriera.countDown()
-            attendiFinche(messaggio = "Z completata") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Z completata") {
                 it.r2.r1.statiElaborazione(listOf(z)).single().stato == StatoElaborazioneVista.COMPLETATA
             }
             assertEquals(emptyList(), pubblicati.filterIsInstance<TrascrittoSostituito>())
@@ -204,7 +210,7 @@ class RitrascriviR2Test {
 
             it.r2.r1.avviaElaborazione(AvviaElaborazione(s.x)).atteso()
 
-            attendiFinche(messaggio = "completamento rifiutato e compensato") {
+            attendiFinche(timeout = 10.seconds, messaggio = "completamento rifiutato e compensato") {
                 it.r2.r1.statiElaborazione(listOf(s.x)).single().stato == StatoElaborazioneVista.FALLITA
             }
             assertEquals(0, vistaNellaTransazione, "la purga e' gia' avvenuta, dentro la transazione")
@@ -228,7 +234,9 @@ class RitrascriviR2Test {
             it.trascrivi(x)
             it.trascrivi(y)
             runBlocking { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(y, 1), "Anna")) }
-            attendiFinche(messaggio = "ParlanteCreato consegnato") { documento(it, y)?.contains("**Anna**") == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "ParlanteCreato consegnato") {
+                documento(it, y)?.contains("**Anna**") == true
+            }
             val cambiamenti = raccogli(it)
             it.r2.letture.proposta(voce(x, 2))
             it.r2.letture.proposta(voce(x, 2))
@@ -247,7 +255,7 @@ class RitrascriviR2Test {
 
             dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(TrascrittoSostituito(x))) }.atteso()
 
-            attendiFinche(messaggio = "Cambiamento(null)") { Cambiamento(null) in cambiamenti }
+            attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento(null)") { Cambiamento(null) in cambiamenti }
             it.r2.letture.proposta(voce(x, 2))
             assertEquals(calcolate + 1, estrattore.chiamate.get(), "la Proposta e' ricalcolata dopo l'evento")
         }
@@ -274,7 +282,7 @@ class RitrascriviR2Test {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
 
-            attendiFinche(messaggio = "ritrascrizione in coda eseguita all'apertura") {
+            attendiFinche(timeout = 10.seconds, messaggio = "ritrascrizione in coda eseguita all'apertura") {
                 ElaborazioneRepositorySql(it.contesto.database).trova(rerun)?.completata == true
             }
             // Same Voce numbers in the new generation: without the purge Anna would silently re-attach.
@@ -300,7 +308,9 @@ class RitrascriviR2Test {
         assertEquals(Esito.Ok(Unit), comando(ambiente, ComandoVoce.Conferma(voce(y, 1), mario)))
         assertEquals(2, ParlanteRepositorySql(ambiente.contesto.database).impronteDiRegistrazione(x).size)
         assertEquals(2, ambiente.r2.letture.parlantiDelProgetto().size)
-        attendiFinche(messaggio = "Documento di X con i Nomi") { documento(ambiente, x)?.contains("**Mario**") == true }
+        attendiFinche(timeout = 10.seconds, messaggio = "Documento di X con i Nomi") {
+            documento(ambiente, x)?.contains("**Mario**") == true
+        }
         return Scenario(x, y, mario)
     }
 
@@ -309,12 +319,14 @@ class RitrascriviR2Test {
 
     /** S2 'Ritrascrivi': the field, the button, then the confirmation (AC-449). */
     private fun ritrascrivi(s2: RegistrazioniPresenter, id: RegistrazioneId, persone: String) {
-        attendiFinche(messaggio = "'Ritrascrivi' offerto") {
+        attendiFinche(timeout = 10.seconds, messaggio = "'Ritrascrivi' offerto") {
             riga(s2, id)?.let { r -> r.ritrascriviDisponibile && !r.operazioneInCorso } == true
         }
         s2.modificaNumeroPersone(id, persone)
         s2.ritrascrivi(id)
-        attendiFinche(messaggio = "conferma di 'Ritrascrivi'") { riga(s2, id)?.confermaRitrascrivi == true }
+        attendiFinche(timeout = 10.seconds, messaggio = "conferma di 'Ritrascrivi'") {
+            riga(s2, id)?.confermaRitrascrivi == true
+        }
         s2.confermaRitrascrivi(id)
     }
 

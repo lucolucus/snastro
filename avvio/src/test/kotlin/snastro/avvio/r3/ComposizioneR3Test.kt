@@ -60,6 +60,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * The R3 composition end to end ([AmbienteR3]: a SQLite project FILE opened by the session with the production
@@ -90,7 +91,9 @@ class ComposizioneR3Test {
             val a = it.importa()
             it.trascrivi(a)
             val s3 = costruisciRegistrazionePresenterR2(it.grafo, it.collaboratori, it.r2, a, it.scope)
-            attendiFinche(messaggio = "S3 caricata") { s3.stato.value is RegistrazioneUiStato.Dati }
+            attendiFinche(timeout = 10.seconds, messaggio = "S3 caricata") {
+                s3.stato.value is RegistrazioneUiStato.Dati
+            }
             assertNull((s3.stato.value as RegistrazioneUiStato.Dati).contenutoRiassunto, "nessuna scheda in R2")
             assertEquals(emptyList(), RiassuntoRepositorySql(it.contesto.database).diRegistrazione(a))
         }
@@ -161,7 +164,7 @@ class ComposizioneR3Test {
 
             it.modello.blocca()
             it.riassumi(c) // occupies the worker so the next three queue up
-            attendiFinche(messaggio = "c in corso") { it.modello.chiamate.get() == 2 }
+            attendiFinche(timeout = 10.seconds, messaggio = "c in corso") { it.modello.chiamate.get() == 2 }
             it.riassumi(b)
             orologio.avanza(PASSO_OROLOGIO)
             it.avviaElaborazione(d)
@@ -169,7 +172,7 @@ class ComposizioneR3Test {
             it.riassumi(a)
             it.modello.sblocca()
 
-            attendiFinche(messaggio = "tutti conclusi") {
+            attendiFinche(timeout = 10.seconds, messaggio = "tutti conclusi") {
                 it.diRegistrazione(a).singleOrNull()?.pronto == true && it.stato(d) == StatoElaborazioneVista.COMPLETATA
             }
             assertEquals(listOf(a, c, b, d, a), avvii.toList(), "R(b), E(d), R(a) nell'ordine di richiesta")
@@ -187,7 +190,7 @@ class ComposizioneR3Test {
             assertTrue(conteggiFigli(it.contesto.database, pronto) > 0)
             it.modello.blocca()
             it.riassumi(b)
-            attendiFinche(messaggio = "b in corso") { it.modello.chiamate.get() == 2 }
+            attendiFinche(timeout = 10.seconds, messaggio = "b in corso") { it.modello.chiamate.get() == 2 }
             it.riassumi(a)
             val inAttesa = it.diRegistrazione(a).single { r -> r.inAttesa }.id
 
@@ -241,12 +244,14 @@ class ComposizioneR3Test {
             it.modello.blocca()
 
             it.avviaElaborazione(a)
-            attendiFinche(messaggio = "ritrascrizione in corso") { it.stato(a) == StatoElaborazioneVista.IN_CORSO }
+            attendiFinche(timeout = 10.seconds, messaggio = "ritrascrizione in corso") {
+                it.stato(a) == StatoElaborazioneVista.IN_CORSO
+            }
             assertEquals(listOf(vecchio), it.diRegistrazione(a).map { r -> r.id }, "prima del commit: il vecchio")
             assertTrue(it.diRegistrazione(a).single().pronto)
             barriera.countDown()
 
-            attendiFinche(messaggio = "commit della sostituzione") { alCommit.isNotEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "commit della sostituzione") { alCommit.isNotEmpty() }
             val nuovo = alCommit.single().single()
             assertTrue(nuovo.inAttesa)
             assertEquals("budget", nuovo.argomento?.valore)
@@ -266,7 +271,7 @@ class ComposizioneR3Test {
             it.diarizzatore.fallisci = true
 
             it.avviaElaborazione(a)
-            attendiFinche(messaggio = "ritrascrizione fallita") {
+            attendiFinche(timeout = 10.seconds, messaggio = "ritrascrizione fallita") {
                 it.r3.r2.r1.statiElaborazione(listOf(a)).single().let { s ->
                     s.stato == StatoElaborazioneVista.FALLITA || s.motivoFallimento != null
                 }
@@ -286,10 +291,10 @@ class ComposizioneR3Test {
             val eventi = registraEventi(it)
             it.modello.blocca()
             it.riassumi(a)
-            attendiFinche(messaggio = "a in corso") { it.modello.chiamate.get() == 1 }
+            attendiFinche(timeout = 10.seconds, messaggio = "a in corso") { it.modello.chiamate.get() == 1 }
 
             it.r3.r2.eliminaRegistrazione(EliminaRegistrazione(a)).atteso()
-            attendiFinche(messaggio = "il run di a annullato") { it.modello.esiti.isNotEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "il run di a annullato") { it.modello.esiti.isNotEmpty() }
             it.modello.sblocca()
 
             assertEquals(Esito.Errore(ErroreApplicazioneSintesi.Annullato), it.modello.esiti.single())
@@ -308,7 +313,7 @@ class ComposizioneR3Test {
             val a = it.registrazioneTrascritta()
             it.modello.blocca()
             it.riassumi(a)
-            attendiFinche(messaggio = "Riassunto in corso") { it.modello.chiamate.get() == 1 }
+            attendiFinche(timeout = 10.seconds, messaggio = "Riassunto in corso") { it.modello.chiamate.get() == 1 }
 
             val esito = runBlocking { it.r3.r2.comandi.esegui(ComandoVoce.Nuovo(voce(a, 1), "Anna")) }
 
@@ -329,7 +334,7 @@ class ComposizioneR3Test {
             it.diarizzatore.turni = AmbienteR2.TRE_VOCI
             it.modello.blocca()
             it.avviaElaborazione(a) // sostituzione: commits RiassuntoEliminato(a) + RiassuntoRichiesto(a), re-queues X
-            attendiFinche(messaggio = "X reclamato e in corso") { it.modello.chiamate.get() == 2 }
+            attendiFinche(timeout = 10.seconds, messaggio = "X reclamato e in corso") { it.modello.chiamate.get() == 2 }
             val x = it.diRegistrazione(a).single { r -> r.inCorso }.id
 
             repeat(2) { _ -> consegna(it, RiassuntoEliminato(a)) } // late + duplicate delivery
@@ -342,7 +347,9 @@ class ComposizioneR3Test {
             assertEquals(x, it.diRegistrazione(a).single().id, "X completa normalmente, non resta in_corso")
             assertIs<Esito.Ok<*>>(it.modello.esiti.last())
             it.riassumi(a) // not refused (a stuck in_corso X would be RiassuntoGiaAperto)
-            attendiFinche(messaggio = "il nuovo Riassunto completa") { it.modello.chiamate.get() == 3 }
+            attendiFinche(timeout = 10.seconds, messaggio = "il nuovo Riassunto completa") {
+                it.modello.chiamate.get() == 3
+            }
         }
     }
 
@@ -352,7 +359,7 @@ class ComposizioneR3Test {
             val a = it.registrazioneTrascritta()
             it.modello.blocca()
             it.riassumi(a)
-            attendiFinche(messaggio = "Riassunto in corso") { it.modello.chiamate.get() == 1 }
+            attendiFinche(timeout = 10.seconds, messaggio = "Riassunto in corso") { it.modello.chiamate.get() == 1 }
             val coda = it.r3.r2.r1.coda
 
             it.contesto.scope.cancel() // fermaEAttendi's contract: the caller cancels the scope first

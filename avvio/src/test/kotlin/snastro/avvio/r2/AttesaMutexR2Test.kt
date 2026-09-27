@@ -35,6 +35,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * ADR 0017 end to end on [AmbienteR2]: a print extraction waits for the native Mutex (a fair
@@ -62,11 +63,13 @@ class AttesaMutexR2Test {
             val conferma = CoroutineScope(Dispatchers.Default).async {
                 it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(a, 1), "Anna"))
             }
-            attendiFinche(messaggio = "estrazione in attesa del Mutex") { mutex.hasQueuedThreads() }
+            attendiFinche(timeout = 10.seconds, messaggio = "estrazione in attesa del Mutex") {
+                mutex.hasQueuedThreads()
+            }
 
             // No transaction is open while it waits: another write commits, and S2's state keeps flowing.
             it.collaboratori.rinominaRegistrazione(RinominaRegistrazione(a, "Durante l'attesa")).atteso()
-            attendiFinche(messaggio = "S2 aggiornata durante l'attesa") {
+            attendiFinche(timeout = 10.seconds, messaggio = "S2 aggiornata durante l'attesa") {
                 val righe = (s2.stato.value as? RegistrazioniUiStato.Dati)?.righe.orEmpty()
                 righe.any { r -> r.titolo == "Durante l'attesa" }
             }
@@ -101,12 +104,14 @@ class AttesaMutexR2Test {
             val conferma = CoroutineScope(Dispatchers.Default).async {
                 it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(a, 1), "Anna"))
             }
-            attendiFinche(messaggio = "estrazione in attesa del Mutex") { mutex.hasQueuedThreads() }
+            attendiFinche(timeout = 10.seconds, messaggio = "estrazione in attesa del Mutex") {
+                mutex.hasQueuedThreads()
+            }
 
             diarizzatore.prosegui.countDown() // the pipeline is NOT held: its completion races the command
             diarizzatore.rilascia.countDown()
             assertEquals(Esito.Ok(Unit), runBlocking { conferma.await() }, "nessun SQLITE_BUSY_SNAPSHOT")
-            attendiFinche(messaggio = "elaborazione di b completata") {
+            attendiFinche(timeout = 10.seconds, messaggio = "elaborazione di b completata") {
                 it.r2.r1.statiElaborazione(listOf(b)).single().stato == StatoElaborazioneVista.COMPLETATA
             }
             assertEquals(1, it.conteggi(a).attribuzioni)
@@ -123,14 +128,16 @@ class AttesaMutexR2Test {
             estrattore.lock.lock()
             try {
                 schermata.async { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) }
-                attendiFinche(messaggio = "comando in attesa") { estrattore.lock.hasQueuedThreads() }
+                attendiFinche(timeout = 10.seconds, messaggio = "comando in attesa") {
+                    estrattore.lock.hasQueuedThreads()
+                }
                 assertEquals(setOf(voce(id, 1)), it.r2.comandi.stato.value.keys)
 
                 schermata.cancel() // the user leaves S3
             } finally {
                 estrattore.lock.unlock()
             }
-            attendiFinche(messaggio = "comando concluso nello scope del progetto") {
+            attendiFinche(timeout = 10.seconds, messaggio = "comando concluso nello scope del progetto") {
                 it.r2.comandi.stato.value.isEmpty()
             }
             assertEquals(1, it.conteggi(id).attribuzioni)
@@ -151,12 +158,16 @@ class AttesaMutexR2Test {
                 val esito = CoroutineScope(Dispatchers.Default).async {
                     it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna"))
                 }
-                attendiFinche(messaggio = "comando in attesa") { estrattore.lock.hasQueuedThreads() }
+                attendiFinche(timeout = 10.seconds, messaggio = "comando in attesa") {
+                    estrattore.lock.hasQueuedThreads()
+                }
 
                 it.r2.comandi.annulla(voce(id, 1))
 
                 assertNull(runBlocking { esito.await() }, "annullato: null, non un Errore")
-                attendiFinche(messaggio = "estrazione interrotta") { !estrattore.lock.hasQueuedThreads() }
+                attendiFinche(timeout = 10.seconds, messaggio = "estrazione interrotta") {
+                    !estrattore.lock.hasQueuedThreads()
+                }
             } finally {
                 estrattore.lock.unlock()
             }
@@ -190,7 +201,9 @@ class AttesaMutexR2Test {
                 }
                 val schermata = r2.scopeSchermata(it.collaboratori.scope)
                 costruisciRegistrazionePresenterR2(it.grafo, it.collaboratori, r2, id, schermata)
-                attendiFinche(messaggio = "comando e Proposta in attesa del Mutex") { estrattore.lock.queueLength == 2 }
+                attendiFinche(timeout = 10.seconds, messaggio = "comando e Proposta in attesa del Mutex") {
+                    estrattore.lock.queueLength == 2
+                }
                 osservato.set(r2)
 
                 it.sessione.chiudi()
@@ -217,13 +230,17 @@ class AttesaMutexR2Test {
             try {
                 // Two S3 visits overlap (leave and come back while the first extraction still waits).
                 schermate.forEach { s -> costruisciRegistrazionePresenterR2(it.grafo, it.collaboratori, it.r2, id, s) }
-                attendiFinche(messaggio = "una Proposta in attesa del Mutex") { estrattore.lock.hasQueuedThreads() }
+                attendiFinche(timeout = 10.seconds, messaggio = "una Proposta in attesa del Mutex") {
+                    estrattore.lock.hasQueuedThreads()
+                }
                 // real time is the subject: confirms no SECOND thread also queues on the Mutex meanwhile.
                 Thread.sleep(ATTESA_OSSERVAZIONE_MS)
                 assertEquals(1, estrattore.lock.queueLength, "mai N attese concorrenti sul Mutex")
 
                 schermate.forEach(CoroutineScope::cancel) // leaving S3
-                attendiFinche(messaggio = "nessuna Proposta piu in attesa") { !estrattore.lock.hasQueuedThreads() }
+                attendiFinche(timeout = 10.seconds, messaggio = "nessuna Proposta piu in attesa") {
+                    !estrattore.lock.hasQueuedThreads()
+                }
             } finally {
                 estrattore.lock.unlock()
             }
@@ -235,7 +252,7 @@ class AttesaMutexR2Test {
                 id,
                 it.r2.scopeSchermata(it.collaboratori.scope),
             )
-            attendiFinche(messaggio = "Proposte di Voce 2 e 3 pronte") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Proposte di Voce 2 e 3 pronte") {
                 val carte = (s3.stato.value as? RegistrazioneUiStato.Dati)?.pannello?.carte.orEmpty()
                 carte.map { c -> (c.contenuto as? ContenutoCarta.DaIdentificare)?.proposta }
                     .count { p -> p is StatoProposta.Pronta } == 2

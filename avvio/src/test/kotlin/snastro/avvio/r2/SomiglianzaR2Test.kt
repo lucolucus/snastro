@@ -45,6 +45,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 private val ANNA = floatArrayOf(1f, 0f, 0f)
 private val MARCO = floatArrayOf(0f, 1f, 0f)
@@ -146,7 +147,7 @@ class SomiglianzaR2Test {
 
     private fun calcola(a: AmbienteR2, id: RegistrazioneId): StatoSomiglianza {
         a.r2.somiglianza.calcola(id)
-        attendiFinche(messaggio = "fine del confronto") {
+        attendiFinche(timeout = 10.seconds, messaggio = "fine del confronto") {
             val s = a.r2.somiglianza.stato.value[id]
             s != null && s !is StatoSomiglianza.InCorso
         }
@@ -155,7 +156,7 @@ class SomiglianzaR2Test {
 
     private fun applica(a: AmbienteR2, id: RegistrazioneId): StatoSomiglianza {
         a.r2.somiglianza.applica(id)
-        attendiFinche(messaggio = "fine dell'applicazione") {
+        attendiFinche(timeout = 10.seconds, messaggio = "fine dell'applicazione") {
             val s = a.r2.somiglianza.stato.value[id]
             s is StatoSomiglianza.Esito || s is StatoSomiglianza.Errore
         }
@@ -206,10 +207,12 @@ class SomiglianzaR2Test {
             val attribuzioni = AttribuzioneRepositorySql(a.contesto.database).diRegistrazione(id)
             assertEquals(listOf(1, 2, 4), attribuzioni.map { it.voceRef.voceId.numero }.sorted(), "Luca tiene Voce 4")
 
-            attendiFinche(messaggio = "Documento rigenerato") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento rigenerato") {
                 documento(a, id)?.let { d -> d.split("**Anna**").size - 1 == 4 && "**Voce 3**" in d } == true
             }
-            attendiFinche(messaggio = "RiallineaImpronte dopo il commit") { riallineate.isNotEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "RiallineaImpronte dopo il commit") {
+                riallineate.isNotEmpty()
+            }
             // real time is the subject: lets the coalescing window close, then checks no SECOND run happened.
             Thread.sleep(ATTESA_COALESCENZA_MS)
             assertEquals(1, riallineate.size, "un solo riallineamento per il batch")
@@ -315,7 +318,9 @@ class SomiglianzaR2Test {
             val dariano = a.r2.letture.parlantiDelProgetto().single { it.nome == "Dario" }
             assertEquals(attribuzione.parlanteId, dariano.parlanteId)
             assertEquals(1, ParlanteRepositorySql(a.contesto.database).impronteDiRegistrazione(id).size)
-            attendiFinche(messaggio = "Documento con Dario") { documento(a, id)?.contains("**Dario**") == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento con Dario") {
+                documento(a, id)?.contains("**Dario**") == true
+            }
 
             val prima = AttribuzioneRepositorySql(a.contesto.database).diRegistrazione(id).size
             val parlanti = a.r2.letture.parlantiDelProgetto().size
@@ -339,7 +344,7 @@ class SomiglianzaR2Test {
             Thread.sleep(ATTESA_COALESCENZA_MS)
             cambiamenti.clear()
             a.r2.confermaSegmento(ConfermaSegmento(id, SegmentoId(1), confermato = true)).atteso()
-            attendiFinche(messaggio = "Cambiamento") { Cambiamento(id) in cambiamenti }
+            attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento") { Cambiamento(id) in cambiamenti }
         }
     }
 

@@ -592,6 +592,16 @@ class RegistrazioneSomiglianzaTest {
         attendiFinche(timeout = timeout, messaggio = "somiglianza in Esito") {
             a.somiglianza.stato.value[REG] is StatoSomiglianza.Esito
         }
+        // L713b (rework cycle 1): the raw port state above turns Esito on `io` before SomiglianzaVoci's
+        // OWN mirror (its `scope.launch { porta.stato.collect { ... } } }` on `ui`) catches up — and
+        // nominaFrase's guard reads that mirror's `modificheBloccate` (StatoVoci.kt), not the port
+        // directly. Waiting for the PUBLISHED pannello (proof the mirror already processed Esito) closes
+        // the race that let a stale 'aperta' silently no-op nominaFrase and hang the next wait forever —
+        // never a slower machine, so a longer timeout could not have fixed it.
+        attendiFinche(timeout = timeout, messaggio = "pannello in FaseSomiglianza.Esito") {
+            val dati = presenter.stato.value as? RegistrazioneUiStato.Dati
+            dati?.pannello?.somiglianza?.fase is FaseSomiglianza.Esito
+        }
         withContext(ui) {
             presenter.azioni.selezionaSegmento(SegmentoId(5))
             presenter.azioni.nominaFrase(ObiettivoNome.Esistente(MARCO.parlanteId))

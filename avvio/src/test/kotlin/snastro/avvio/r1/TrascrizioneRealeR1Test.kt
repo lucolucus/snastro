@@ -29,6 +29,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Opt-in (`@Tag("modelli")`, `./gradlew :avvio:modelliTest`): the R1 composition END TO END over the
@@ -81,7 +82,9 @@ class TrascrizioneRealeR1Test {
             assertTrue(vista.segmenti.any { it.testo.isNotBlank() }, "nessun testo riconosciuto: $vista")
             assertTrue(vista.voci.all { it.etichetta.startsWith("Voce ") })
             val documenti = Path.of(progetto.percorso).resolve("documenti")
-            attendiFinche(messaggio = "Documento scritto") { documenti.listDirectoryEntries("*.md").isNotEmpty() }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento scritto") {
+                documenti.listDirectoryEntries("*.md").isNotEmpty()
+            }
             println("Documento:\n" + documenti.listDirectoryEntries("*.md").single().readText())
         } finally {
             sessione.chiudi()

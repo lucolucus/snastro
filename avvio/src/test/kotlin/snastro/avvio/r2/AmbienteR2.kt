@@ -58,6 +58,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
+import kotlin.time.Duration.Companion.seconds
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreParlantiFinta
 
 /**
@@ -143,7 +144,7 @@ internal class AmbienteR2(
      * waited for: a background worker of that opening may ask before `apri` has even returned.
      */
     fun progettoEsteso(indice: Int): CollaboratoriR2 {
-        attendiFinche(messaggio = "apertura n. $indice") { estesi.size > indice }
+        attendiFinche(timeout = 10.seconds, messaggio = "apertura n. $indice") { estesi.size > indice }
         return estesi[indice]
     }
 
@@ -176,7 +177,7 @@ internal class AmbienteR2(
     /** 'Trascrivi' through R1's own command, then waits until its Trascritto is there. */
     fun trascrivi(id: RegistrazioneId) {
         r2.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
-        attendiFinche(messaggio = "elaborazione completata") {
+        attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
             r2.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA
         }
     }

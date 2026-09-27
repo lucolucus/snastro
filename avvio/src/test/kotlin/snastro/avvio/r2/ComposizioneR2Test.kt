@@ -41,6 +41,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * End-to-end ACs of the R2 composition on [AmbienteR2] (real SessioneProgettoImpl + EstensioneR2 over a
@@ -57,13 +58,17 @@ class ComposizioneR2Test {
             it.trascrivi(id)
 
             assertEquals(Esito.Ok(Unit), runBlocking { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) })
-            attendiFinche(messaggio = "Documento con il Nome") { documento(it)?.contains("**Anna**") == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento con il Nome") {
+                documento(it)?.contains("**Anna**") == true
+            }
             assertTrue(documento(it).orEmpty().contains("**Voce 2**"), "una Voce senza Parlante resta 'Voce n'")
 
             // S4's command, over eventi.unitaDiLavoro: its ParlanteRinominato reaches the Documento after commit.
             val anna = it.r2.letture.parlantiDelProgetto().single().parlanteId
             it.r2.comandiParlante.rinomina(RinominaParlante(anna, "Bea")).atteso()
-            attendiFinche(messaggio = "Documento rinominato") { documento(it)?.contains("**Bea**") == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento rinominato") {
+                documento(it)?.contains("**Bea**") == true
+            }
         }
     }
 
@@ -108,7 +113,7 @@ class ComposizioneR2Test {
 
             it.r2.r1.revisione.dividiVoce.esegui(DividiVoce(id, VoceId(1), setOf(SegmentoId(3)))).atteso()
 
-            attendiFinche(messaggio = "impronta riallineata alla nuova sorgente della Voce") {
+            attendiFinche(timeout = 10.seconds, messaggio = "impronta riallineata alla nuova sorgente della Voce") {
                 parlanti.impronteDiRegistrazione(id).single().sorgente == "0-1000"
             }
         }
@@ -121,7 +126,9 @@ class ComposizioneR2Test {
             val id = it.importa()
             it.trascrivi(id)
             runBlocking { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) }
-            attendiFinche(messaggio = "Documento con il Nome") { documento(it)?.contains("**Anna**") == true }
+            attendiFinche(timeout = 10.seconds, messaggio = "Documento con il Nome") {
+                documento(it)?.contains("**Anna**") == true
+            }
             val cambiamenti = raccogli(it)
             it.r2.letture.proposta(voce(id, 2))
             it.r2.letture.proposta(voce(id, 2))
@@ -132,7 +139,9 @@ class ComposizioneR2Test {
             val dispatcher = it.contesto.dispatcher
             dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ImpronteRiallineate(id))) }.atteso()
 
-            attendiFinche(messaggio = "Cambiamento della Registrazione") { Cambiamento(id) in cambiamenti }
+            attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento della Registrazione") {
+                Cambiamento(id) in cambiamenti
+            }
             it.r2.letture.proposta(voce(id, 2))
             assertEquals(primaDellEvento + 1, estrattore.chiamate.get(), "la Proposta e ricalcolata dopo l'evento")
             // real time is the subject: confirms the Documento is NOT rewritten by a change that never touches it.
@@ -156,15 +165,17 @@ class ComposizioneR2Test {
 
                 it.sessione.apri(percorso).atteso() // returns while the realignment waits
 
-                attendiFinche(messaggio = "riallineamento in attesa del Mutex") { estrattore.lock.hasQueuedThreads() }
+                attendiFinche(timeout = 10.seconds, messaggio = "riallineamento in attesa del Mutex") {
+                    estrattore.lock.hasQueuedThreads()
+                }
                 val presenter = costruisciRegistrazioniPresenterR2(it.grafoR0, it.collaboratori, it.r2) {}
-                attendiFinche(messaggio = "S2 usabile durante il riallineamento") {
+                attendiFinche(timeout = 10.seconds, messaggio = "S2 usabile durante il riallineamento") {
                     presenter.stato.value is RegistrazioniUiStato.Dati
                 }
             } finally {
                 estrattore.lock.unlock()
             }
-            attendiFinche(messaggio = "impronta riallineata al modello corrente") {
+            attendiFinche(timeout = 10.seconds, messaggio = "impronta riallineata al modello corrente") {
                 val riga = ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(id).single()
                 riga.modello == "altro-modello"
             }
@@ -188,7 +199,9 @@ class ComposizioneR2Test {
                 it.sessione.apri(percorso).atteso()
 
                 // At open: RiallineaTutteLeImpronte throws → logged; the R2 scope is alive.
-                attendiFinche(messaggio = "fallimento all'apertura nel log") { registro.da(EstensioneR2::class.java) }
+                attendiFinche(timeout = 10.seconds, messaggio = "fallimento all'apertura nel log") {
+                    registro.da(EstensioneR2::class.java)
+                }
                 estrattore.fallisci = false
                 val esito = runBlocking { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 2), "Bea")) }
                 assertEquals(Esito.Ok(Unit), esito, "lo scope dei Parlanti e ancora vivo")
@@ -198,11 +211,13 @@ class ComposizioneR2Test {
                 val cambiamenti = raccogli(it)
                 registro.svuota()
                 it.r2.r1.revisione.dividiVoce.esegui(DividiVoce(id, VoceId(1), setOf(SegmentoId(3)))).atteso()
-                attendiFinche(messaggio = "fallimento dopo commit nel log") {
+                attendiFinche(timeout = 10.seconds, messaggio = "fallimento dopo commit nel log") {
                     registro.da(EstrattoreImprontaConLog::class.java)
                 }
-                attendiFinche(messaggio = "S2/S3 informati della Revisione") { Cambiamento(id) in cambiamenti }
-                attendiFinche(messaggio = "Documento rigenerato con la nuova Voce") {
+                attendiFinche(timeout = 10.seconds, messaggio = "S2/S3 informati della Revisione") {
+                    Cambiamento(id) in cambiamenti
+                }
+                attendiFinche(timeout = 10.seconds, messaggio = "Documento rigenerato con la nuova Voce") {
                     documentoIn(Path.of(percorso))?.contains("**Voce 3**") == true
                 }
             }
@@ -230,7 +245,7 @@ class ComposizioneR2Test {
         AmbienteR2(radice.resolve("ter").also(Files::createDirectories), estrattore = titanet).use {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
-            attendiFinche(messaggio = "impronta riderivata al modello reale") {
+            attendiFinche(timeout = 10.seconds, messaggio = "impronta riderivata al modello reale") {
                 val riga = ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(id).single()
                 riga.modello == CatalogoDiarizzazione.embeddingTitanetSmall.id
             }
@@ -245,7 +260,7 @@ class ComposizioneR2Test {
 
             it.sessione.chiudi()
 
-            attendiFinche(messaggio = "rilascio alla chiusura") { rilasci.get() == 1 }
+            attendiFinche(timeout = 10.seconds, messaggio = "rilascio alla chiusura") { rilasci.get() == 1 }
         }
         assertEquals(1, rilasci.get())
     }

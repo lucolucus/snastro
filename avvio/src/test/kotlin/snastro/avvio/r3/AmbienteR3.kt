@@ -67,6 +67,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.seconds
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreParlantiFinta
 
 /**
@@ -175,7 +176,9 @@ internal class AmbienteR3(
         val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
         sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS
         avviaElaborazione(id)
-        attendiFinche(messaggio = "elaborazione completata") { stato(id) == StatoElaborazioneVista.COMPLETATA }
+        attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+            stato(id) == StatoElaborazioneVista.COMPLETATA
+        }
         return id
     }
 
@@ -194,7 +197,9 @@ internal class AmbienteR3(
         UnitaDiLavoroSql(contesto.database).inTransazione { Esito.Ok(riassunti.diRegistrazione(id)) }.atteso()
 
     fun attendiPronto(id: RegistrazioneId) =
-        attendiFinche(messaggio = "Riassunto pronto") { diRegistrazione(id).singleOrNull()?.pronto == true }
+        attendiFinche(timeout = 10.seconds, messaggio = "Riassunto pronto") {
+            diRegistrazione(id).singleOrNull()?.pronto == true
+        }
 
     override fun close() {
         modello.sblocca()

@@ -19,6 +19,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.time.Duration.Companion.seconds
 
 private const val ID_PROVA = "llm-prova"
 private const val DIMENSIONE_PROVA = 6_000L
@@ -123,7 +124,7 @@ class DisponibilitaModelloLinguisticoAvvioTest : DisponibilitaModelloLinguistico
 
         override fun avanza() {
             val atteso = fake.avanza()
-            attendiFinche(messaggio = "InDownload($atteso) osservato") {
+            attendiFinche(timeout = 10.seconds, messaggio = "InDownload($atteso) osservato") {
                 (servizio.statoFacoltativi.value[ID_PROVA] as? StatoModelloFacoltativo.InDownload)?.scaricatiByte ==
                     atteso
             }

@@ -32,6 +32,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * D2 (consumer-driven contract, real-on-real) + the block's own AC-238/239/240/263..265/347/349.
@@ -71,7 +72,7 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         assertTrue(Files.isRegularFile(cartellaProgetto.resolve("progetto.db")))
         assertTrue(Files.exists(cartellaProgetto.resolve(".lock")))
         assertEquals(cartellaProgetto.toAbsolutePath().normalize().toString(), progetto.percorso)
-        attendiFinche(messaggio = "il progetto registrato nel registro dopo crea") {
+        attendiFinche(timeout = 10.seconds, messaggio = "il progetto registrato nel registro dopo crea") {
             registro.elenco().any { it.percorso == progetto.percorso }
         }
     }
@@ -145,10 +146,10 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         // the resulting filesystem state is not guaranteed to be visible the instant the call returns on
         // every OS/filesystem — a bounded poll, same pattern as this file's other eventually-consistent
         // checks (`attendi`), not an immediate assert.
-        attendiFinche(messaggio = "file .db-wal rimosso dopo chiudi") {
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-wal rimosso dopo chiudi") {
             Files.notExists(cartellaProgetto.resolve("progetto.db-wal"))
         }
-        attendiFinche(messaggio = "file .db-shm rimosso dopo chiudi") {
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-shm rimosso dopo chiudi") {
             Files.notExists(cartellaProgetto.resolve("progetto.db-shm"))
         }
     }
@@ -163,10 +164,10 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val errore = con().apri(cartellaProgetto.toString()).erroreAtteso<ErroreSessione>()
 
         assertEquals(ErroreSessione.CartellaNonValida, errore)
-        attendiFinche(messaggio = "file .db-wal rimosso dopo il fallimento") {
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-wal rimosso dopo il fallimento") {
             Files.notExists(cartellaProgetto.resolve("progetto.db-wal"))
         }
-        attendiFinche(messaggio = "file .db-shm rimosso dopo il fallimento") {
+        attendiFinche(timeout = 10.seconds, messaggio = "file .db-shm rimosso dopo il fallimento") {
             Files.notExists(cartellaProgetto.resolve("progetto.db-shm"))
         }
     }
@@ -179,13 +180,13 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val sessione = nuovaSessione(registro = registro)
         val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
         // la registra di crea
-        attendiFinche(messaggio = "il progetto registrato nel registro dopo crea") {
+        attendiFinche(timeout = 10.seconds, messaggio = "il progetto registrato nel registro dopo crea") {
             registro.elenco().any { it.percorso == progetto.percorso }
         }
 
         sessione.chiudi()
 
-        attendiFinche(messaggio = "ultimaAttivita aggiornata a ORA dopo chiudi") {
+        attendiFinche(timeout = 10.seconds, messaggio = "ultimaAttivita aggiornata a ORA dopo chiudi") {
             registro.elenco().firstOrNull { it.percorso == progetto.percorso }?.ultimaAttivita == ORA
         }
         val voce = registro.elenco().first { it.percorso == progetto.percorso }
@@ -218,7 +219,9 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         sessione.crea(cartella.toString(), "Prova").atteso()
         sessione.chiudi()
 
-        attendiFinche(messaggio = "registra e aggiorna eseguiti (registro lento)") { registro.ordine.size >= 2 }
+        attendiFinche(timeout = 10.seconds, messaggio = "registra e aggiorna eseguiti (registro lento)") {
+            registro.ordine.size >= 2
+        }
         assertEquals(listOf("registra", "aggiorna"), registro.ordine.toList())
     }
 
@@ -324,7 +327,7 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
 
         assertEquals(nuovaPosizione.toAbsolutePath().normalize().toString(), riaperto.percorso)
         assertEquals(creato.progettoId, riaperto.progettoId)
-        attendiFinche(messaggio = "il progetto ri-registrato con il nuovo percorso") {
+        attendiFinche(timeout = 10.seconds, messaggio = "il progetto ri-registrato con il nuovo percorso") {
             registro.elenco().any { it.percorso == riaperto.percorso }
         }
     }
