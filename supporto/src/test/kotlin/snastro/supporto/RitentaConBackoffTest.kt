@@ -1,24 +1,30 @@
 package snastro.supporto
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /** AC-C5..AC-C8: [RitentaConBackoff] on virtual time only (runTest + StandardTestDispatcher). */
@@ -172,14 +178,16 @@ class RitentaConBackoffTest {
     }
 
     @Test
-    fun `AC-C8 una CancellationException ferma il lavoratore senza segnalare`() = runTest {
+    fun `AC-C8 la cancellazione del proprio scope ferma il lavoratore senza segnalare`() = runTest {
         val sfuggiti = mutableListOf<Throwable>()
         var esecuzioni = 0
+        val scope = scopeCancellabile(sfuggiti)
         val lavoratore = lavoratore {
             esecuzioni++
+            scope.cancel() // il lavoratore osserva la cancellazione del PROPRIO scope, non uno straniero
             throw CancellationException("stop")
         }
-        val job = lavoratore.avvia(scopeCancellabile(sfuggiti))
+        val job = lavoratore.avvia(scope)
 
         lavoratore.richiedi("k")
         advanceUntilIdle()
@@ -191,6 +199,63 @@ class RitentaConBackoffTest {
         assertTrue(segnalazioni.tutte.isEmpty())
         assertTrue(sfuggiti.isEmpty())
     }
+
+    // --- AC-C91: a FOREIGN CancellationException (the worker's own scope stays active) is a failure --------
+
+    @Test
+    fun `AC-C91 un timeout interno a lavoro e un fallimento segnalato e ritentato, non un arresto`() = runTest {
+        var tentativi = 0
+        val lavoratore = lavoratore {
+            tentativi++
+            if (tentativi == 1) withTimeout(1.milliseconds) { delay(1.hours) }
+            true
+        }
+        lavoratore.avvia(backgroundScope)
+
+        lavoratore.richiedi("k")
+        avanzaTutto()
+
+        assertEquals(2, tentativi, "il primo tentativo scade (timeout straniero), il ritento riesce")
+        val righe = segnalazioni.tutte
+        assertEquals(2, righe.size, "un fallimento (causa il timeout) + un recupero: $righe")
+        assertIs<TimeoutCancellationException>(righe.first().causa)
+        assertTrue("riuscito" in righe.last().messaggio)
+
+        lavoratore.richiedi("k2")
+        avanzaTutto()
+
+        assertEquals(3, tentativi, "il lavoratore e ancora vivo: una chiave richiesta dopo gira")
+    }
+
+    @Test
+    fun `AC-C91 attendere un Deferred gia cancellato e un fallimento segnalato e ritentato, non un arresto`() =
+        runTest {
+            var tentativi = 0
+            val lavoratore = lavoratore {
+                tentativi++
+                if (tentativi == 1) {
+                    val differito = CompletableDeferred<Unit>()
+                    differito.cancel()
+                    differito.await() // CancellationException straniera: non e' il lavoratore a cancellarsi
+                }
+                true
+            }
+            lavoratore.avvia(backgroundScope)
+
+            lavoratore.richiedi("k")
+            avanzaTutto()
+
+            assertEquals(2, tentativi, "il primo tentativo fallisce (Deferred straniero), il ritento riesce")
+            val righe = segnalazioni.tutte
+            assertEquals(2, righe.size, "un fallimento (causa il Deferred cancellato) + un recupero: $righe")
+            assertIs<CancellationException>(righe.first().causa)
+            assertTrue("riuscito" in righe.last().messaggio)
+
+            lavoratore.richiedi("k2")
+            avanzaTutto()
+
+            assertEquals(3, tentativi, "il lavoratore e ancora vivo: una chiave richiesta dopo gira")
+        }
 
     @Test
     fun `AC-C8 il sorgente non usa runCatching`() {

@@ -19,6 +19,7 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.adattatori.audio.DecodificatoreAudioFfmpeg
 import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
@@ -42,6 +43,7 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
@@ -160,6 +162,9 @@ internal class EstensioneR1(
                 ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
             ),
             CoroutineScope(contesto.scope.coroutineContext + lavoro + io),
+            // JUL-backed (ADR 0028 §2): :supporto never touches JUL. Wired here until a4 unifies every
+            // Segnalazione behind one gestoreErroriNonCatturati-style collaborator.
+            Segnalazione { messaggio, causa -> log.log(Level.WARNING, messaggio, causa) },
         )
         return lavoro
     }

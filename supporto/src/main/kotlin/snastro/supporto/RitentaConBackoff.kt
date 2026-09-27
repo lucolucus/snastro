@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
+import kotlin.coroutines.coroutineContext
 import kotlin.time.Duration
 
 /**
@@ -17,8 +18,11 @@ import kotlin.time.Duration
  *   the cause (null for false), then retried after a bounded exponential backoff: [attesaIniziale],
  *   doubling up to [attesaMassima]. A failed key is retried until it succeeds or the scope is cancelled;
  *   its recovery is reported once.
- * - [CancellationException] and every [Error] are rethrown, never reported as a retry: an [Error] escapes
- *   the worker to its scope's `CoroutineExceptionHandler`.
+ * - Every [Error] is rethrown, never reported as a retry: it escapes the worker to its scope's
+ *   `CoroutineExceptionHandler`. A [CancellationException] is rethrown ONLY when the worker's own coroutine is
+ *   no longer active (its own scope/[Job] was cancelled): a FOREIGN one raised inside [lavoro] — `withTimeout`
+ *   expiring, `await` on an already-cancelled [kotlinx.coroutines.Deferred] — is a failure like any other,
+ *   reported and retried (a2, ADR 0028 §7.3 step 3).
  *
  * Runs are sequential, on the scope given to [avvia].
  */
@@ -78,7 +82,10 @@ public class RitentaConBackoff<K>(
         try {
             if (lavoro(chiave)) null else Fallimento(null)
         } catch (e: CancellationException) {
-            throw e
+            // AC-C91: the worker's OWN cancellation (its Job no longer active) must still stop the worker; a
+            // FOREIGN one (raised inside lavoro while this Job is still active — withTimeout, await on an
+            // already-cancelled Deferred) is a failure, not a rethrow.
+            if (coroutineContext[Job]?.isActive == true) Fallimento(e) else throw e
         } catch (e: Exception) {
             Fallimento(e)
         }

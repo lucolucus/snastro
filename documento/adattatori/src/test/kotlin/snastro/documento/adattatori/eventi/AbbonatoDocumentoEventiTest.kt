@@ -1,12 +1,16 @@
 package snastro.documento.adattatori.eventi
 
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.documento.applicazione.porte.LettoreNomiFinta
@@ -33,21 +37,35 @@ import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.supporto.RitentaConBackoff
+import snastro.supporto.Segnalazione
+import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.conScopeDiProva
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import java.io.IOException
 import java.time.LocalDate
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.max
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
- * Tests of [AbbonatoDocumentoEventi]: AC-182..186 and AC-186bis (rename, manifest delta
- * `2026-09-24-rinomina-documento.md`). Virtual time only ([StandardTestDispatcher] +
- * [TestCoroutineScheduler], `advanceUntilIdle`) — no real sleeps.
+ * Tests of [AbbonatoDocumentoEventi]: AC-182..186, AC-186bis (rename, manifest delta
+ * `2026-09-24-rinomina-documento.md`) and AC-C45..C49/AC-C92 (its retry mechanics on [RitentaConBackoff],
+ * `a2-ritenta-documento`). Virtual time only ([StandardTestDispatcher] + [TestCoroutineScheduler],
+ * `advanceUntilIdle`) — no real sleeps — except AC-C92, a genuine concurrency probe on real threads
+ * ([conScopeDiProva], per `lessons-by-block-type.md`: a concurrency AC needs real racers, not virtual time).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AbbonatoDocumentoEventiTest {
@@ -62,12 +80,14 @@ class AbbonatoDocumentoEventiTest {
         trascritti: Map<RegistrazioneId, TrascrittoTesto> = emptyMap(),
         nomi: LettoreNomiFinta = LettoreNomiFinta(),
         val scrittore: ScrittoreDocumento = ScrittoreDocumentoFinta(),
+        val segnalazioni: SegnalazioniRegistrate = SegnalazioniRegistrate(),
     ) {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         private val politica = RigenerazioneDocumentoPolitica(LettoreTrascrittoFinta(trascritti), nomi, scrittore)
 
         init {
-            AbbonatoDocumentoEventi(dispatcher, politica, CoroutineScope(StandardTestDispatcher(scheduler)))
+            val scope = CoroutineScope(StandardTestDispatcher(scheduler))
+            AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
         }
 
         fun commit(evento: EventoPubblicato) {
@@ -184,7 +204,8 @@ class AbbonatoDocumentoEventiTest {
         val scrittore = ScrittoreDocumentoFinta()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
-        AbbonatoDocumentoEventi(dispatcher, politica, CoroutineScope(StandardTestDispatcher(testScheduler)))
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
         advanceUntilIdle() // startup sweep settles (no fault armed yet)
         val prima = scrittore.operazioni.size
 
@@ -345,16 +366,104 @@ class AbbonatoDocumentoEventiTest {
         assertEquals(prima, ambiente.operazioni().size)
     }
 
-    // --- stop on scope cancellation --------------------------------------------------------------
+    // --- AC-C45 (structural): one RitentaConBackoff, one sealed key with exactly three cases -----------
+
+    /**
+     * By REFLECTION, never by reading the module's own source text: ADR 0010's `enforced_by` forbids any
+     * file-reading call under `documento/`, including test sources (the check has no main-vs-test
+     * exception), so a `File(...).readText()` structural assertion — legitimate in `:supporto`'s own
+     * `RitentaConBackoffTest` — would trip it here. The absence of the old hand-rolled channel/backoff/
+     * `runCatching` is instead proven by the diff itself and by every behavioural AC below staying green
+     * (AC-C46..C49/AC-C92/C94) on the NEW single-worker design.
+     */
+    @Test
+    fun `AC-C45 AbbonatoDocumentoEventi ha un solo RitentaConBackoff e una chiave sigillata a tre casi`() {
+        val chiave = AbbonatoDocumentoEventi::class.java.declaredClasses.single { it.simpleName == "Chiave" }
+        val casi = chiave.declaredClasses.filter { it != chiave && chiave.isAssignableFrom(it) }
+
+        assertEquals(setOf("PerRegistrazione", "PerParlante", "Sweep"), casi.map { it.simpleName }.toSet())
+        val campiRitentaConBackoff = AbbonatoDocumentoEventi::class.java.declaredFields
+            .count { it.type == RitentaConBackoff::class.java }
+        assertEquals(1, campiRitentaConBackoff, "un solo campo RitentaConBackoff: le tre specie lo condividono")
+    }
+
+    // --- AC-C46/AC-C47: a poisoned unit never blocks another's own progress ---------------------------
 
     @Test
-    fun `il worker si ferma quando lo scope e cancellato`() = runTest {
+    fun `AC-C46 una Registrazione che fallisce per sempre non blocca la rigenerazione di un altra`() = runTest {
+        val poisoned = REG_1
+        val altra = RegistrazioneId("reg-c46-altra")
+        val trascritti = mapOf(
+            poisoned to unTrascritto(poisoned, titolo = "X"),
+            altra to unTrascritto(altra, titolo = "Y"),
+        )
+        val lettore = LettoreCheLanciaPer(poisoned, LettoreTrascrittoFinta(trascritti))
+        val scrittore = ScrittoreDocumentoFinta()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
+        val segnalazioni = SegnalazioniRegistrate()
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
+        advanceTimeBy(1.seconds)
+        runCurrent() // lo sweep di avvio: puo' fallire su poisoned, irrilevante qui
+
+        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(poisoned))) }
+        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra))) }
+        advanceTimeBy(10.seconds)
+        runCurrent()
+
+        assertTrue(scrittore.documenti.containsKey("2026-09-12 Y.md"), "altra e' rigenerata nonostante X fallisca")
+        assertFalse(scrittore.documenti.containsKey("2026-09-12 X.md"))
+        val righeX = segnalazioni.tutte.filter { poisoned.valore in it.messaggio }
+        assertTrue(righeX.size >= 2, "un report per ogni tentativo fallito di X, mai uno solo: $righeX")
+        assertTrue(righeX.all { it.causa is IllegalStateException }, "$righeX")
+
+        // poisoned ritenta per sempre: senza cancellare lo scope qui, il drain automatico di fine-runTest
+        // continuerebbe ad avanzare il tempo virtuale all'infinito inseguendo un lavoro che non finisce mai.
+        scope.cancel()
+    }
+
+    @Test
+    fun `AC-C47 lo sweep di avvio non si ferma a una Registrazione avvelenata`() = runTest {
+        val poisoned = REG_1
+        val altra = RegistrazioneId("reg-c47-altra")
+        val lettore = LettoreCheLanciaPer(poisoned, LettoreTrascrittoFinta(mapOf(poisoned to unTrascritto(poisoned))))
+        val scrittore = ScrittoreDocumentoFinta()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+        advanceTimeBy(1.seconds)
+        runCurrent() // lo sweep di avvio fallisce subito su poisoned e continua a ritentare in background
+
+        // "Meanwhile": altra diventa nota solo ora (la sua Elaborazione completa dopo l'avvio) — lo sweep,
+        // bloccato a ritentare poisoned, non deve impedire la SUA rigenerazione (guidata dall'evento).
+        lettore.aggiungi(altra, unTrascritto(altra, titolo = "Y"))
+        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra))) }
+        advanceTimeBy(5.seconds)
+        runCurrent()
+
+        assertTrue(
+            scrittore.documenti.containsKey("2026-09-12 Y.md"),
+            "altra e' rigenerata nonostante lo sweep avveleni su X",
+        )
+
+        // poisoned ritenta per sempre: senza cancellare lo scope qui, il drain automatico di fine-runTest
+        // continuerebbe ad avanzare il tempo virtuale all'infinito inseguendo un lavoro che non finisce mai.
+        scope.cancel()
+    }
+
+    // --- AC-C48: scope cancellation stops the loop; an Error escapes instead of being retried --------
+
+    @Test
+    fun `AC-C48 il worker si ferma quando lo scope e cancellato, senza segnalare ne rigenerare oltre`() = runTest {
         val scrittore = ScrittoreDocumentoFinta()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val trascritti = LettoreTrascrittoFinta(mapOf(REG_1 to unTrascritto(REG_1)))
         val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
+        val segnalazioni = SegnalazioniRegistrate()
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, scope)
+        AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
         advanceUntilIdle() // sweep di avvio
         val primaDellaCancellazione = scrittore.operazioni.size
 
@@ -366,6 +475,135 @@ class AbbonatoDocumentoEventiTest {
         advanceUntilIdle()
 
         assertEquals(primaDellaCancellazione, scrittore.operazioni.size)
+        assertTrue(segnalazioni.tutte.isEmpty(), "nessuna segnalazione: ${segnalazioni.tutte}")
+    }
+
+    @Test
+    fun `AC-C48 un Error nella rigenerazione esce verso il gestore dello scope invece di essere ritentato`() =
+        runTest {
+            val scrittore = ScrittoreCheLanciaUnErrore()
+            val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+            val trascritti = LettoreTrascrittoFinta(mapOf(REG_1 to unTrascritto(REG_1)))
+            val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
+            val segnalazioni = SegnalazioniRegistrate()
+            val sfuggiti = mutableListOf<Throwable>()
+            val scope = CoroutineScope(
+                StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, e -> sfuggiti += e },
+            )
+            AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
+            advanceUntilIdle()
+
+            assertEquals(1, scrittore.tentativi, "un solo tentativo: l'Error non e' un ritento")
+            assertTrue(segnalazioni.tutte.isEmpty(), "un Error non e' segnalato come fallimento: ${segnalazioni.tutte}")
+            assertEquals(1, sfuggiti.size)
+            assertIs<OutOfMemoryError>(sfuggiti.single())
+            assertTrue(scope.coroutineContext[Job]?.isCancelled == true)
+        }
+
+    // --- AC-C92: the three unit kinds share ONE RitentaConBackoff, never run together ------------------
+
+    @Test
+    @Suppress("MaxLineLength", "MaximumLineLength") // the test name alone crosses 120 columns
+    fun `AC-C92 le tre specie di lavoro non girano mai insieme, condividono un solo RitentaConBackoff`() =
+        conScopeDiProva { scope ->
+            val dentro = CountDownLatch(1)
+            val procedi = CountDownLatch(1)
+            val primaVolta = AtomicBoolean(true)
+            val concorrenti = AtomicInteger(0)
+            val massimoConcorrenti = AtomicInteger(0)
+            val chiamate = AtomicInteger(0)
+            val scrittore = object : ScrittoreDocumento {
+                override fun scrivi(nomeFile: String, markdown: String) {
+                    chiamate.incrementAndGet()
+                    val n = concorrenti.incrementAndGet()
+                    massimoConcorrenti.updateAndGet { max(it, n) }
+                    if (primaVolta.compareAndSet(true, false)) {
+                        dentro.countDown()
+                        assertTrue(procedi.await(10, TimeUnit.SECONDS), "il test avrebbe dovuto sbloccare in tempo")
+                    }
+                    concorrenti.decrementAndGet()
+                }
+
+                override fun rimuovi(nomeFile: String) = Unit
+            }
+            val reg2 = RegistrazioneId("reg-c92-2")
+            val trascritti = LettoreTrascrittoFinta(
+                mapOf(REG_1 to unTrascritto(REG_1), reg2 to unTrascritto(reg2, titolo = "Due")),
+            )
+            val nomi = LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco"))
+            val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+            val politica = RigenerazioneDocumentoPolitica(trascritti, nomi, scrittore)
+            AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+
+            assertTrue(dentro.await(10, TimeUnit.SECONDS), "lo sweep di avvio avrebbe dovuto partire")
+
+            // Richieste "nel frattempo": una per Registrazione (reg2) e una per Parlante — restano in coda,
+            // proprio perche' condividono l'UNICA istanza di RitentaConBackoff (sequenziale).
+            dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(reg2))) }
+            dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(dispatcher.pubblica(ParlanteRinominato(PARLANTE, "Marco Rossi")))
+            }
+            // 1 = solo lo sweep, gia' bloccato: ne' reg2 ne' PerParlante partono finche' non e' sbloccato.
+            assertEquals(1, concorrenti.get(), "nessuna delle due gira finche' lo sweep e' bloccato")
+
+            procedi.countDown()
+            attendiFinche(messaggio = "le tre unita' avrebbero dovuto completarsi: ${chiamate.get()} chiamate") {
+                chiamate.get() >= 4 // sweep: reg-1 + reg2, poi PerRegistrazione(reg2) e PerParlante(PARLANTE) su reg-1
+            }
+
+            assertEquals(1, massimoConcorrenti.get(), "mai piu' di un'unita' di lavoro in volo insieme (AC-C92)")
+        }
+
+    // --- AC-C94: a failure merged concurrently is retried ONCE with both precedenti fused ------------
+
+    @Test
+    fun `AC-C94 un guasto durante il tentativo si ritenta una sola volta con entrambi i precedenti fusi`() = runTest {
+        val vecchiaData = LocalDate.of(2026, 9, 19)
+        val nuovaData = LocalDate.of(2026, 9, 20)
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val finta = ScrittoreDocumentoFinta()
+        var primoTentativo = true
+        val scrittore = object : ScrittoreDocumento by finta {
+            override fun scrivi(nomeFile: String, markdown: String) {
+                if (primoTentativo) {
+                    primoTentativo = false
+                    // Arriva ANCHE la rinomina, DURANTE questo tentativo (che sta per fallire): si fonde nel
+                    // payload gia' fallito quando viene rimesso in coda (AC-C94, primaArrivata).
+                    dispatcher.unitaDiLavoro.inTransazione {
+                        val evento =
+                            RegistrazioneRinominata(REG_1, precedente = "Titolo Vecchio", nuovo = "Titolo Nuovo")
+                        Esito.Ok(dispatcher.pubblica(evento))
+                    }
+                    throw IOException("guasto simulato")
+                }
+                finta.scrivi(nomeFile, markdown)
+            }
+        }
+        // Lo sweep di avvio non trova nulla (nessun test-inquinamento): la Rigenerazione qui e' guidata SOLO
+        // dall'evento DataRegistrazioneModificata, come l'AC descrive.
+        val trascritti = object : LettoreTrascritto {
+            override fun trascritto(id: RegistrazioneId) =
+                if (id == REG_1) unTrascritto(REG_1, titolo = "Titolo Nuovo", data = nuovaData) else null
+
+            override fun registrazioniConTrascritto(): List<RegistrazioneId> = emptyList()
+        }
+        val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+        advanceUntilIdle() // sweep di avvio: non trova nulla
+
+        dispatcher.unitaDiLavoro.inTransazione {
+            val evento = DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData)
+            Esito.Ok(dispatcher.pubblica(evento))
+        }
+        advanceUntilIdle()
+
+        val scritture = finta.operazioni.count { it is ScrittoreDocumentoFinta.Operazione.Scritto }
+        assertEquals(1, scritture, "ritentato una sola volta")
+        val vecchioFile = ScrittoreDocumentoFinta.Operazione.Rimosso("2026-09-19 Titolo Vecchio.md")
+        assertTrue(finta.operazioni.contains(vecchioFile))
+        assertTrue(finta.documenti.containsKey("2026-09-20 Titolo Nuovo.md"))
+        assertFalse(finta.documenti.containsKey("2026-09-19 Titolo Vecchio.md"))
     }
 
     // --- helpers ----------------------------------------------------------------------------------
@@ -412,6 +650,30 @@ class AbbonatoDocumentoEventiTest {
     }
 
     /**
+     * [LettoreTrascritto] that always throws for [poison] (a PERMANENT guasto — unlike [LettoreCheLancia]'s
+     * bounded one). [aggiungi] grows the rest on the fly: a test can simulate a Registrazione becoming known
+     * only AFTER construction (AC-C47's "meanwhile").
+     */
+    private class LettoreCheLanciaPer(
+        private val poison: RegistrazioneId,
+        private val delegato: LettoreTrascritto,
+    ) : LettoreTrascritto {
+        private val extra = ConcurrentHashMap<RegistrazioneId, TrascrittoTesto>()
+
+        fun aggiungi(id: RegistrazioneId, trascritto: TrascrittoTesto) {
+            extra[id] = trascritto
+        }
+
+        override fun trascritto(id: RegistrazioneId): TrascrittoTesto? {
+            if (id == poison) error("guasto permanente per $id")
+            return extra[id] ?: delegato.trascritto(id)
+        }
+
+        override fun registrazioniConTrascritto(): List<RegistrazioneId> =
+            delegato.registrazioniConTrascritto() + extra.keys
+    }
+
+    /**
      * [ScrittoreDocumento] that fails the next `n` calls to [scrivi] (armed by
      * [fallisciProssimeScritture]), then succeeds.
      */
@@ -436,6 +698,32 @@ class AbbonatoDocumentoEventiTest {
 
         override fun rimuovi(nomeFile: String) {
             scritti.remove(nomeFile)
+        }
+    }
+
+    /** [ScrittoreDocumento] whose first [scrivi] throws a real [Error] (AC-C48): never a retry candidate. */
+    private class ScrittoreCheLanciaUnErrore : ScrittoreDocumento {
+        var tentativi = 0
+            private set
+
+        override fun scrivi(nomeFile: String, markdown: String) {
+            tentativi++
+            throw OutOfMemoryError("finto")
+        }
+
+        override fun rimuovi(nomeFile: String) = Unit
+    }
+
+    /** A recording [Segnalazione] for the tests (thread-safe: AC-C92 requests it from real threads). */
+    private class SegnalazioniRegistrate : Segnalazione {
+        data class Riga(val messaggio: String, val causa: Throwable?)
+
+        private val righe = mutableListOf<Riga>()
+
+        val tutte: List<Riga> get() = synchronized(righe) { righe.toList() }
+
+        override fun segnala(messaggio: String, causa: Throwable?) {
+            synchronized(righe) { righe += Riga(messaggio, causa) }
         }
     }
 

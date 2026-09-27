@@ -29,6 +29,7 @@ import snastro.kernel.VoceId
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import java.io.IOException
 import java.time.LocalDate
@@ -59,7 +60,12 @@ class AbbonatoDocumentoEliminazioneTest {
                 override fun registrazioniConTrascritto() = trascritti.keys.toList()
             }
             val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
-            AbbonatoDocumentoEventi(dispatcher, politica, CoroutineScope(StandardTestDispatcher(scheduler)))
+            AbbonatoDocumentoEventi(
+                dispatcher,
+                politica,
+                CoroutineScope(StandardTestDispatcher(scheduler)),
+                Segnalazione { _, _ -> },
+            )
         }
 
         fun commit(evento: EventoPubblicato, esito: Esito<Unit> = Esito.Ok(Unit)) {

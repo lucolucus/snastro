@@ -63,6 +63,9 @@ dependencies {
     implementation(testFixtures(project(":parlanti:applicazione")))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
+    // Segnalazione (ADR 0028 §7.3 step 3): the JUL-backed implementation EstensioneR1 injects into
+    // AbbonatoDocumentoEventi, until a4 unifies every wiring site behind one.
+    implementation(project(":supporto"))
 
     testImplementation(testFixtures(project(":kernel")))
     testImplementation(testFixtures(project(":persistenza")))
