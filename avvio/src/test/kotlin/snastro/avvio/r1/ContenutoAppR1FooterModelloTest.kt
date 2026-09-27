@@ -11,6 +11,7 @@ import snastro.avvio.GrafoR0
 import snastro.avvio.orologioApp
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
+import snastro.supporto.test.attendiFinche
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta

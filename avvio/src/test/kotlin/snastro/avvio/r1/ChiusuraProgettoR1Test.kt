@@ -5,6 +5,7 @@ import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore

@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.audio.RiproduttoreWav
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.supporto.test.attendiFinche
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -46,12 +47,6 @@ class LettoreAudioRealeSorveglianzaTest {
         lettore.riproduciDa(id, 0)
         assertTrue(lettore.stato.value.inRiproduzione)
 
-        attendi { !lettore.stato.value.inRiproduzione }
-    }
-
-    private fun attendi(timeoutMs: Long = 2_000, condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < scadenza && !condizione()) Thread.sleep(10)
-        assertTrue(condizione(), "condizione non soddisfatta entro ${timeoutMs}ms")
+        attendiFinche(messaggio = "inRiproduzione torna false da sola") { !lettore.stato.value.inRiproduzione }
     }
 }

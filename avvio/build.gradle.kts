@@ -72,6 +72,9 @@ dependencies {
     testImplementation(testFixtures(project(":sintesi:applicazione")))
     testImplementation(project(":progetto:dominio"))
     testImplementation(libs.kotlinx.coroutines.test) // CodaElaborazioniTest: StandardTestDispatcher (dev-architecture #dipendenze-test)
+    // attendiFinche/OrologioFinto/conScopeDiProva (ADR 0028 §5, test-only edge): the one polling wait,
+    // the fake Clock and the cancelled-in-finally scope every test in this module now goes through.
+    testImplementation(project(":supporto-test"))
 }
 
 // ADR 0027 §3 / ADR 0016 §3 (AC-S156): the llama.cpp natives are the library's ONE native output

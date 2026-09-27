@@ -7,7 +7,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
+import snastro.supporto.test.attendiFinche
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta

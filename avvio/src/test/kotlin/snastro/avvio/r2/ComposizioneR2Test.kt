@@ -3,7 +3,6 @@ package snastro.avvio.r2
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
@@ -19,6 +18,7 @@ import snastro.parlanti.applicazione.comandi.RinominaParlante
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.eventi.VociUnite
@@ -135,6 +135,7 @@ class ComposizioneR2Test {
             attendiFinche(messaggio = "Cambiamento della Registrazione") { Cambiamento(id) in cambiamenti }
             it.r2.letture.proposta(voce(id, 2))
             assertEquals(primaDellEvento + 1, estrattore.chiamate.get(), "la Proposta e ricalcolata dopo l'evento")
+            // real time is the subject: confirms the Documento is NOT rewritten by a change that never touches it.
             Thread.sleep(ATTESA_NESSUNA_RIGENERAZIONE_MS)
             assertEquals(scritto, file.getLastModifiedTime(), "le impronte non cambiano il Documento")
         }
@@ -266,6 +267,7 @@ class ComposizioneR2Test {
     private fun raccogli(ambiente: AmbienteR2): MutableList<Cambiamento> {
         val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
         ambiente.scope.launch { ambiente.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
+        // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
         Thread.sleep(ATTESA_REPLAY_MS)
         cambiamenti.clear()
         return cambiamenti

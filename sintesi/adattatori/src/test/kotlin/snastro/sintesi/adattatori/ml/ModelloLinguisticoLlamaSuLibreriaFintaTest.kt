@@ -26,6 +26,7 @@ class ModelloLinguisticoLlamaSuLibreriaFintaTest : ModelloLinguisticoContratto()
         val backend = BackendFinto(genera = { _, cancel ->
             var passi = 0
             while (passi < PASSI_DI_GENERAZIONE && !cancel()) {
+                // real time is the subject: simulates slow generation so a real cancel can land mid-run.
                 Thread.sleep(PASSO_MS)
                 passi++
             }

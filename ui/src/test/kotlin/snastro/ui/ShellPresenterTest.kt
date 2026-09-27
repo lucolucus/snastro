@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
+import snastro.supporto.test.attendiFinche
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 import java.util.concurrent.Callable
@@ -302,7 +303,7 @@ class ShellPresenterTest {
         try {
             val presenter = ShellPresenter(scope, esecutoreIo.asCoroutineDispatcher(), sessione, OGNI_SEZIONE)
             scope.launch { presenter.crea("/tmp", "Riunione") }
-            attendiFinche { presenter.stato.value is ShellUiStato.ConProgetto }
+            attendiFinche(messaggio = "ConProgetto dopo crea") { presenter.stato.value is ShellUiStato.ConProgetto }
 
             scope.launch { presenter.chiudi() } // from the UI thread, like the view's click
             assertTrue(sessione.chiudiIniziato.await(ATTESA_S, TimeUnit.SECONDS))
@@ -313,7 +314,9 @@ class ShellPresenterTest {
             assertEquals(ShellUiStato.Caricamento, statoLettoDallaUi.get(ATTESA_UI_MS, TimeUnit.MILLISECONDS))
 
             sessione.sblocca.countDown()
-            attendiFinche { presenter.stato.value == ShellUiStato.SenzaProgetto() }
+            attendiFinche(messaggio = "SenzaProgetto dopo chiudi") {
+                presenter.stato.value == ShellUiStato.SenzaProgetto()
+            }
         } finally {
             sessione.sblocca.countDown()
             scope.cancel()
@@ -342,18 +345,8 @@ class ShellPresenterTest {
         assertEquals(ShellUiStato.SenzaProgetto(erroreApertura = MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
     }
 
-    private fun attendiFinche(condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + ATTESA_S * MS_PER_S
-        while (!condizione()) {
-            check(System.currentTimeMillis() < scadenza) { "timeout in attesa dello stato atteso" }
-            Thread.sleep(PASSO_MS)
-        }
-    }
-
     private companion object {
         const val ATTESA_S = 5L
         const val ATTESA_UI_MS = 1_000L
-        const val MS_PER_S = 1_000L
-        const val PASSO_MS = 10L
     }
 }

@@ -25,6 +25,9 @@ dependencies {
     testImplementation(compose.desktop.uiTestJUnit4)
     // RegistroProgettiFinta — ElencoProgetti's own dependency fake (ProgettiPresenterTest, AC-192/193/198).
     testImplementation(testFixtures(project(":progetto:applicazione")))
+    // attendiFinche/conScopeDiProva (ADR 0028 §5, test-only edge): the one polling wait and the
+    // cancelled-in-finally scope every real-thread presenter test in this module now goes through.
+    testImplementation(project(":supporto-test"))
 
     // GeneratoreIdFinto + Esito test helpers (atteso/erroreAtteso), used by testFixtures (SessioneProgettoFinta) and tests alike.
     testFixturesApi(testFixtures(project(":kernel")))

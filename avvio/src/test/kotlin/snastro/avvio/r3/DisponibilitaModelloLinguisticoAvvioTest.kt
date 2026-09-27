@@ -12,6 +12,7 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoContratto
 import snastro.sintesi.applicazione.porte.MotivoDownload
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.supporto.test.attendiFinche
 import snastro.ui.modelli.ErroreServizioModelli
 import snastro.ui.modelli.StatoModelloFacoltativo
 import java.util.concurrent.LinkedBlockingQueue
@@ -120,7 +121,13 @@ class DisponibilitaModelloLinguisticoAvvioTest : DisponibilitaModelloLinguistico
             fake.attendiPartenza()
         }
 
-        override fun avanza() = attendiScaricati(fake.avanza())
+        override fun avanza() {
+            val atteso = fake.avanza()
+            attendiFinche(messaggio = "InDownload($atteso) osservato") {
+                (servizio.statoFacoltativi.value[ID_PROVA] as? StatoModelloFacoltativo.InDownload)?.scaricatiByte ==
+                    atteso
+            }
+        }
 
         override fun completa() {
             fake.completa()
@@ -155,16 +162,6 @@ class DisponibilitaModelloLinguisticoAvvioTest : DisponibilitaModelloLinguistico
             MotivoDownload.FileNonIntegro -> ErroreModelli.HashNonValido(ID_PROVA)
             MotivoDownload.SpazioInsufficiente -> ErroreModelli.SpazioInsufficiente(DIMENSIONE_PROVA)
             MotivoDownload.ScritturaFallita -> ErroreModelli.ScritturaFallita("disco pieno")
-        }
-
-        private fun attendiScaricati(atteso: Long) {
-            val scadenza = System.currentTimeMillis() + TIMEOUT_MS
-            while (System.currentTimeMillis() < scadenza) {
-                val s = servizio.statoFacoltativi.value[ID_PROVA]
-                if (s is StatoModelloFacoltativo.InDownload && s.scaricatiByte == atteso) return
-                Thread.sleep(5)
-            }
-            error("InDownload($atteso) non osservato in tempo: ${servizio.statoFacoltativi.value[ID_PROVA]}")
         }
     }
 }

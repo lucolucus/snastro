@@ -3,6 +3,7 @@ package snastro.modelli
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
 import java.net.InetSocketAddress
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -20,14 +21,16 @@ internal class ServerLocaleDiProva : AutoCloseable {
     private val rifiuta416 = mutableSetOf<String>()
     private val ignoraRange = mutableSetOf<String>()
     private val sospesi = mutableMapOf<String, Int>()
-    private val contatoreRichieste = mutableMapOf<String, Int>()
+
+    // Every request runs on its own thread (KDoc above): concurrent requests to the same percorso must
+    // never race a read-then-write increment — ConcurrentHashMap.merge makes it atomic (AC-C86).
+    private val contatoreRichieste = ConcurrentHashMap<String, Int>()
 
     /** Bytes actually written by the server on the last request it answered (assertions on resume). */
     var byteServitiUltimaRichiesta: Int = 0
         private set
 
     /** How many requests [percorso] received so far (AC-S27: an optional entry's URL gets zero). */
-    @Synchronized
     fun richiesteA(percorso: String): Int = contatoreRichieste[percorso] ?: 0
 
     private val executor = Executors.newCachedThreadPool { azione ->
@@ -77,9 +80,8 @@ internal class ServerLocaleDiProva : AutoCloseable {
         executor.awaitTermination(1, TimeUnit.SECONDS)
     }
 
-    @Synchronized
     private fun contaRichiesta(percorso: String) {
-        contatoreRichieste[percorso] = (contatoreRichieste[percorso] ?: 0) + 1
+        contatoreRichieste.merge(percorso, 1, Int::plus)
     }
 
     private fun gestisci(scambio: HttpExchange) {

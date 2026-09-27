@@ -1,16 +1,13 @@
 package snastro.avvio
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.test.conScopeDiProva
 import java.time.Instant
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -34,7 +31,6 @@ class CodaCondivisaMultiSorgenteTest {
     @Test
     fun `AC-S56 FIFO stretta tra E e R, E1 R2 E3 R4 girano in questo ordine`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         val e = sorgenteFinta(TipoElementoCoda.ELABORAZIONE, ordine)
         val r = sorgenteFinta(TipoElementoCoda.RIASSUNTO, ordine)
@@ -43,25 +39,31 @@ class CodaCondivisaMultiSorgenteTest {
         e.aggiungi("e3", "reg-e3", t(3))
         r.aggiungi("r4", "reg-r4", t(4))
 
-        CodaCondivisa(scope = scope, fonti = listOf(e.fonte(), r.fonte()), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(
+            scope = backgroundScope,
+            fonti = listOf(e.fonte(), r.fonte()),
+            dispatcherSingoloThread = dispatcher,
+        )
         advanceTimeBy(10_000)
         runCurrent()
 
         assertEquals(listOf("e1", "r2", "e3", "r4"), ordine)
-        scope.cancel()
     }
 
     @Test
     fun `AC-S56 un elemento aggiunto mentre un altro gira prende il suo posto per istante`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         val e = sorgenteFinta(TipoElementoCoda.ELABORAZIONE, ordine)
         val r = sorgenteFinta(TipoElementoCoda.RIASSUNTO, ordine)
         e.aggiungi("e1", "reg-e1", t(1))
         r.aggiungi("r4", "reg-r4", t(4))
 
-        CodaCondivisa(scope = scope, fonti = listOf(e.fonte(), r.fonte()), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(
+            scope = backgroundScope,
+            fonti = listOf(e.fonte(), r.fonte()),
+            dispatcherSingoloThread = dispatcher,
+        )
         runCurrent() // il primo tentativo e' immediato (nessun advanceTimeBy): gira solo e1, r4 resta in attesa
         assertEquals(listOf("e1"), ordine)
 
@@ -70,13 +72,11 @@ class CodaCondivisaMultiSorgenteTest {
         runCurrent()
 
         assertEquals(listOf("e1", "e2", "r4"), ordine, "e2 prende il suo posto per istante, non va in coda dopo r4")
-        scope.cancel()
     }
 
     @Test
     fun `AC-S57 a parita di millisecondo l Elaborazione gira prima del Riassunto`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         val e = sorgenteFinta(TipoElementoCoda.ELABORAZIONE, ordine)
         val r = sorgenteFinta(TipoElementoCoda.RIASSUNTO, ordine)
@@ -84,16 +84,20 @@ class CodaCondivisaMultiSorgenteTest {
         r.aggiungi("r1", "reg-r1", stessoIstante)
         e.aggiungi("e1", "reg-e1", stessoIstante)
 
-        CodaCondivisa(scope = scope, fonti = listOf(e.fonte(), r.fonte()), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(
+            scope = backgroundScope,
+            fonti = listOf(e.fonte(), r.fonte()),
+            dispatcherSingoloThread = dispatcher,
+        )
         advanceTimeBy(5_000)
         runCurrent()
 
         assertEquals(listOf("e1", "r1"), ordine, "a parita' di istante l'Elaborazione (ordinal 0) precede il Riassunto")
-        scope.cancel()
     }
 
     @Test
-    fun `carry-over 2 - a parita di istante la posizione conta prima l Elaborazione poi il Riassunto`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `carry-over 2 - a parita di istante la posizione conta prima l Elaborazione poi il Riassunto`() = conScopeDiProva { scope ->
         val stessoIstante = t(1)
         val eFonte = FonteCoda(
             tipo = TipoElementoCoda.ELABORAZIONE,
@@ -111,7 +115,6 @@ class CodaCondivisaMultiSorgenteTest {
             recupera = {},
             trattenuta = { false },
         )
-        val scope = CoroutineScope(SupervisorJob())
         val coda = CodaCondivisa(scope = scope, fonti = listOf(eFonte, rFonte))
         scope.cancel() // solo istantanea() e' esercitato qui: il worker non serve
         coda.fermaEAttendi(1_000)
@@ -126,7 +129,6 @@ class CodaCondivisaMultiSorgenteTest {
     @Test
     fun `AC-S58 il limite passato alla claim e l istante della testa dell altra fonte, null se vuota`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val limitiE = mutableListOf<Instant?>()
         val limitiR = mutableListOf<Instant?>()
         val avviate = mutableListOf<String>()
@@ -167,20 +169,18 @@ class CodaCondivisaMultiSorgenteTest {
             trattenuta = { false },
         )
 
-        CodaCondivisa(scope = scope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(scope = backgroundScope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
         advanceTimeBy(10_000)
         runCurrent()
 
         assertEquals(listOf("e1", "r2"), avviate)
         assertEquals(listOf<Instant?>(t(2)), limitiE, "la claim di E riceve nonDopo = la testa di R")
         assertEquals(listOf<Instant?>(null), limitiR, "la claim di R riceve primaDi = null: E e' ormai vuota")
-        scope.cancel()
     }
 
     @Test
     fun `rework FAIL 5 - AC-S57 due elementi della stessa specie a parita di istante mantengono ordine`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         val stessoIstante = t(1)
         var unoPresente = true
@@ -213,7 +213,7 @@ class CodaCondivisaMultiSorgenteTest {
             trattenuta = { false },
         )
 
-        CodaCondivisa(scope = scope, fonti = listOf(fonteUno, fonteDue), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(scope = backgroundScope, fonti = listOf(fonteUno, fonteDue), dispatcherSingoloThread = dispatcher)
         advanceTimeBy(5_000)
         runCurrent()
 
@@ -222,13 +222,11 @@ class CodaCondivisaMultiSorgenteTest {
             ordine,
             "a parita' di istante e di specie, l'id decide: \"id-a\" prima di \"id-b\"",
         )
-        scope.cancel()
     }
 
     @Test
     fun `rework FAIL 2 - AC-S58 R prima di E non vuota riceve comunque il limite dalla testa di E`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val limitiR = mutableListOf<Instant?>()
         var r1Presente = true
         val eFonte = FonteCoda(
@@ -253,7 +251,7 @@ class CodaCondivisaMultiSorgenteTest {
             trattenuta = { false },
         )
 
-        CodaCondivisa(scope = scope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(scope = backgroundScope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
         runCurrent()
 
         assertEquals(
@@ -261,13 +259,11 @@ class CodaCondivisaMultiSorgenteTest {
             limitiR,
             "R parte prima (t1<t2, gira per prima) ma riceve comunque primaDi = la testa di E, mai null",
         )
-        scope.cancel()
     }
 
     @Test
     fun `rework FAIL 3 - AC-S59 con due fonti, la testa di E sparisce e R in attesa gira al suo turno`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         val vistaE = AtomicInteger(0)
         val eFonte = FonteCoda(
@@ -291,17 +287,15 @@ class CodaCondivisaMultiSorgenteTest {
             trattenuta = { false },
         )
 
-        CodaCondivisa(scope = scope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(scope = backgroundScope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
         runCurrent() // nessun advanceTimeBy: la rivalutazione dopo Nessuno e' immediata (AC-S59)
 
         assertEquals(listOf("r2"), ordine, "r2 gira SUBITO al suo turno dopo la rivalutazione, mai scavalcato")
-        scope.cancel()
     }
 
     @Test
     fun `rework FAIL 4 - AC-S61 un id bloccato su R viene escluso solo li, l id omonimo su E continua`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val tentativiR = AtomicInteger(0)
         val bloccate = mutableListOf<String>()
         val eAvviata = AtomicBoolean(false)
@@ -313,7 +307,7 @@ class CodaCondivisaMultiSorgenteTest {
         val rFonte = fonteRConDupBloccatoERecente(tentativiR, recenteAvviata)
 
         CodaCondivisa(
-            scope = scope,
+            scope = backgroundScope,
             fonti = listOf(eFonte, rFonte),
             segnalaBloccato = { bloccate += it },
             dispatcherSingoloThread = dispatcher,
@@ -325,7 +319,6 @@ class CodaCondivisaMultiSorgenteTest {
         assertEquals(listOf("dup"), bloccate, "segnalato una volta sola, per la fonte R")
         assertTrue(eAvviata.get(), "l'id \"dup\" su E non e' toccato dall'esclusione di \"dup\" su R")
         assertTrue(recenteAvviata.get(), "gli altri elementi di R continuano a scorrere dopo l'esclusione")
-        scope.cancel()
     }
 
     @Test
@@ -334,7 +327,6 @@ class CodaCondivisaMultiSorgenteTest {
         val dettoTeste = AtomicInteger(0)
         val dettoProssima = AtomicInteger(0)
         val ordine = mutableListOf<String>()
-        val scope = CoroutineScope(dispatcher)
 
         val eFonte = FonteCoda(
             tipo = TipoElementoCoda.ELABORAZIONE,
@@ -360,17 +352,15 @@ class CodaCondivisaMultiSorgenteTest {
             trattenuta = { false },
         )
 
-        CodaCondivisa(scope = scope, fonti = listOf(eFonte), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(scope = backgroundScope, fonti = listOf(eFonte), dispatcherSingoloThread = dispatcher)
         runCurrent() // NESSUN advanceTimeBy: la rivalutazione e' immediata, non un poll a 1s
 
         assertEquals(listOf("e2"), ordine, "il prossimo elemento gira SUBITO, senza aspettare il poll")
-        scope.cancel()
     }
 
     @Test
     fun `AC-S60 in attesa dei modelli tutta la coda resta ferma, anche un Riassunto dietro`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val ordine = mutableListOf<String>()
         val e = sorgenteFinta(TipoElementoCoda.ELABORAZIONE, ordine)
         val r = sorgenteFinta(TipoElementoCoda.RIASSUNTO, ordine)
@@ -378,7 +368,11 @@ class CodaCondivisaMultiSorgenteTest {
         r.aggiungi("r2", "reg-r2", t(2))
         e.pronta = false
 
-        CodaCondivisa(scope = scope, fonti = listOf(e.fonte(), r.fonte()), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(
+            scope = backgroundScope,
+            fonti = listOf(e.fonte(), r.fonte()),
+            dispatcherSingoloThread = dispatcher,
+        )
         advanceTimeBy(5_000)
         runCurrent()
         assertEquals(emptyList(), ordine, "niente gira, nemmeno il Riassunto dietro la testa trattenuta")
@@ -387,7 +381,6 @@ class CodaCondivisaMultiSorgenteTest {
         advanceTimeBy(2_000)
         runCurrent()
         assertEquals(listOf("e1", "r2"), ordine, "la coda riparte da sola, in ordine, quando i modelli sono pronti")
-        scope.cancel()
     }
 
     // AC-S60's second half ("a Riassunto head is never held for the LLM model") is a WIRING choice, not
@@ -399,7 +392,6 @@ class CodaCondivisaMultiSorgenteTest {
     @Test
     fun `AC-S61 il recupero gira per ogni fonte, all avvio e di nuovo dopo una fuga di una sola`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val scope = CoroutineScope(dispatcher)
         val recuperi = mutableListOf<String>()
         val primaVolta = AtomicBoolean(true)
         val eFonte = FonteCoda(
@@ -425,20 +417,19 @@ class CodaCondivisaMultiSorgenteTest {
             trattenuta = { false },
         )
 
-        CodaCondivisa(scope = scope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
+        CodaCondivisa(scope = backgroundScope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
         advanceTimeBy(5_000)
         runCurrent()
 
         assertEquals(listOf("E", "R", "E", "R"), recuperi, "all'avvio, poi ENTRAMBE dopo la fuga di E, non solo E")
-        scope.cancel()
     }
 
     @Test
-    fun `AC-S63 annullaInCorso chiama annulla solo se tipo e registrazioneId corrispondono al corrente`() {
+    @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
+    fun `AC-S63 annullaInCorso chiama annulla solo se tipo e registrazioneId corrispondono al corrente`() = conScopeDiProva { scope ->
         val dentro = CountDownLatch(1)
         val procedi = CountDownLatch(1)
         val annullati = mutableListOf<String>()
-        val scope = CoroutineScope(Dispatchers.Default + Job())
 
         val eFonte = FonteCoda(
             tipo = TipoElementoCoda.ELABORAZIONE,

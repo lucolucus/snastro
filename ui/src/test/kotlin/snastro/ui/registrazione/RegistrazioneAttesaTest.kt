@@ -14,6 +14,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import snastro.parlanti.applicazione.letture.PropostaVista
+import snastro.supporto.test.attendiFinche
 import java.time.Clock
 import java.util.Collections
 import java.util.concurrent.CountDownLatch
@@ -25,10 +26,6 @@ import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.fail
-
-private const val TENTATIVI = 400
-private const val PAUSA_MS = 5L
 
 private fun pool(nome: String, thread: Int): ExecutorCoroutineDispatcher =
     Executors.newFixedThreadPool(thread) { r -> Thread(r, nome).apply { isDaemon = true } }.asCoroutineDispatcher()
@@ -40,21 +37,12 @@ private fun pool(nome: String, thread: Int): ExecutorCoroutineDispatcher =
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioneAttesaTest {
-    private fun TestScope.attendi(condizione: () -> Boolean) {
-        repeat(TENTATIVI) {
+    /** Pumps the virtual scheduler on every poll: [io]'s blocking reads run on REAL threads regardless. */
+    private fun TestScope.attendi(messaggio: String, condizione: () -> Boolean) {
+        attendiFinche(messaggio = messaggio) {
             runCurrent()
-            if (condizione()) return
-            Thread.sleep(PAUSA_MS)
+            condizione()
         }
-        fail("condizione non raggiunta")
-    }
-
-    private fun attendiReale(condizione: () -> Boolean) {
-        repeat(TENTATIVI) {
-            if (condizione()) return
-            Thread.sleep(PAUSA_MS)
-        }
-        fail("condizione non raggiunta")
     }
 
     private fun RegistrazionePresenter.carta(voce: snastro.kernel.VoceId): CartaVoce? =
@@ -71,7 +59,9 @@ class RegistrazioneAttesaTest {
                 PropostaVista(it.voceId, listOf(unCandidato()))
             }
             val presenter = a.presenter(CoroutineScope(StandardTestDispatcher(testScheduler)), io)
-            attendi { presenter.carta(V1)?.contenuto is ContenutoCarta.DaIdentificare }
+            attendi(messaggio = "carta V1 DaIdentificare") {
+                presenter.carta(V1)?.contenuto is ContenutoCarta.DaIdentificare
+            }
             val carta = { assertIs<ContenutoCarta.DaIdentificare>(presenter.carta(V1)?.contenuto) }
             assertEquals(StatoProposta.Caricamento, carta().proposta)
 
@@ -83,8 +73,8 @@ class RegistrazioneAttesaTest {
             assertFalse(presenter.carta(V1)?.confermaAbilitata == true)
 
             presenter.azioni.salta(V1)
-            attendi { a.comandi.eseguiti.isNotEmpty() }
-            attendi { presenter.carta(V1)?.contenuto is ContenutoCarta.Attribuita }
+            attendi(messaggio = "comando salta eseguito") { a.comandi.eseguiti.isNotEmpty() }
+            attendi(messaggio = "carta V1 Attribuita") { presenter.carta(V1)?.contenuto is ContenutoCarta.Attribuita }
             mutex.countDown()
             io.close()
         }
@@ -102,11 +92,11 @@ class RegistrazioneAttesaTest {
         }
         val schermata = CoroutineScope(ui)
         val presenter = a.presenter(schermata, io)
-        attendiReale {
+        attendiFinche(messaggio = "carta V1 con proposta Pronta") {
             (presenter.carta(V1)?.contenuto as? ContenutoCarta.DaIdentificare)?.proposta is StatoProposta.Pronta
         }
         withContext(ui) { presenter.azioni.conferma(V1) }
-        attendiReale { a.comandi.eseguiti.isNotEmpty() }
+        attendiFinche(messaggio = "comando conferma eseguito") { a.comandi.eseguiti.isNotEmpty() }
 
         val main = Thread.currentThread()
         val usati = a.comandi.thread + threadProposta

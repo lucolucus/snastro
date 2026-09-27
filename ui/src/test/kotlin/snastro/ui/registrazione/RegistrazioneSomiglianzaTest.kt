@@ -21,6 +21,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.dominio.ErroreParlanti
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
@@ -43,7 +44,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.fail
+import kotlin.time.Duration.Companion.seconds
 
 private const val SOGLIA = RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS
 private val V4 = VoceId(4)
@@ -561,6 +562,10 @@ class RegistrazioneSomiglianzaTest {
 
     @Test
     fun `AC-536 calcola, applica e nominaFrase non girano mai sul thread UI`() = runBlocking {
+        // L713a: this test failed once on a full run at a 2s budget under load (dispatch.log,
+        // "timing-flaky") — attendiFinche's own elapsed-time timeout (never a fixed retry count) with a
+        // generous ceiling replaces the old budget loop.
+        val timeout = 10.seconds
         val ui = pool("ui-test")
         val io = pool("io-test")
         val a = AmbienteVoci(
@@ -572,20 +577,26 @@ class RegistrazioneSomiglianzaTest {
         a.somiglianza.gruppi = GRUPPI
         val schermata = CoroutineScope(ui)
         val presenter = a.presenter(schermata, io)
-        attendi { (presenter.stato.value as? RegistrazioneUiStato.Dati)?.pannello?.somiglianza?.abilitato == true }
+        attendiFinche(timeout = timeout, messaggio = "pannello somiglianza abilitato") {
+            (presenter.stato.value as? RegistrazioneUiStato.Dati)?.pannello?.somiglianza?.abilitato == true
+        }
         withContext(ui) { presenter.azioni.calcolaSomiglianza() }
-        attendi { a.somiglianza.stato.value[REG] is StatoSomiglianza.Anteprima }
-        attendi {
+        attendiFinche(timeout = timeout, messaggio = "somiglianza in Anteprima") {
+            a.somiglianza.stato.value[REG] is StatoSomiglianza.Anteprima
+        }
+        attendiFinche(timeout = timeout, messaggio = "pannello in FaseSomiglianza.Anteprima") {
             val dati = presenter.stato.value as? RegistrazioneUiStato.Dati
             dati?.pannello?.somiglianza?.fase is FaseSomiglianza.Anteprima
         }
         withContext(ui) { presenter.azioni.applicaSomiglianza() }
-        attendi { a.somiglianza.stato.value[REG] is StatoSomiglianza.Esito }
+        attendiFinche(timeout = timeout, messaggio = "somiglianza in Esito") {
+            a.somiglianza.stato.value[REG] is StatoSomiglianza.Esito
+        }
         withContext(ui) {
             presenter.azioni.selezionaSegmento(SegmentoId(5))
             presenter.azioni.nominaFrase(ObiettivoNome.Esistente(MARCO.parlanteId))
         }
-        attendi { a.comandi.frasi.isNotEmpty() }
+        attendiFinche(timeout = timeout, messaggio = "comando nominaFrase eseguito") { a.comandi.frasi.isNotEmpty() }
         val usati = a.somiglianza.thread + a.comandi.thread
         assertTrue(a.somiglianza.thread.size >= 2)
         usati.forEach {
@@ -602,20 +613,4 @@ class RegistrazioneSomiglianzaTest {
 
     private fun pool(nome: String): ExecutorCoroutineDispatcher =
         Executors.newFixedThreadPool(2) { r -> Thread(r, nome).apply { isDaemon = true } }.asCoroutineDispatcher()
-
-    private fun attendi(condizione: () -> Boolean) {
-        repeat(TENTATIVI) {
-            if (condizione()) return
-            Thread.sleep(PAUSA_MS)
-        }
-        fail("condizione non raggiunta")
-    }
-
-    private companion object {
-        // L713a: AC-536 (this test) failed once on a full run at the old 2 s budget (200 * 10ms) under
-        // load, green on rerun (dispatch.log, "timing-flaky"). 1000 * 10ms = a 10 s deadline — robust
-        // against a loaded machine, still bounded so a genuine regression fails the test, not hangs it.
-        const val TENTATIVI = 1_000
-        const val PAUSA_MS = 10L
-    }
 }

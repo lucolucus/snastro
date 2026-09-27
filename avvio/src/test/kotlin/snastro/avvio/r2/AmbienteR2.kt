@@ -14,7 +14,6 @@ import snastro.avvio.SessioneProgettoSeams
 import snastro.avvio.orologioApp
 import snastro.avvio.r1.AdattatoriMl
 import snastro.avvio.r1.EstensioneR1
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.CampioniAudio
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.GeneratoreIdUuid
@@ -37,6 +36,7 @@ import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta

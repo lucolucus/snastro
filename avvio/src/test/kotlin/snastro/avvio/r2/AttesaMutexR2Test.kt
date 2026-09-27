@@ -7,13 +7,13 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.atteso
 import snastro.persistenza.DatabaseProgetto
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore
@@ -218,6 +218,7 @@ class AttesaMutexR2Test {
                 // Two S3 visits overlap (leave and come back while the first extraction still waits).
                 schermate.forEach { s -> costruisciRegistrazionePresenterR2(it.grafo, it.collaboratori, it.r2, id, s) }
                 attendiFinche(messaggio = "una Proposta in attesa del Mutex") { estrattore.lock.hasQueuedThreads() }
+                // real time is the subject: confirms no SECOND thread also queues on the Mutex meanwhile.
                 Thread.sleep(ATTESA_OSSERVAZIONE_MS)
                 assertEquals(1, estrattore.lock.queueLength, "mai N attese concorrenti sul Mutex")
 

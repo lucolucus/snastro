@@ -4,7 +4,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.TipoElementoCoda
-import snastro.avvio.r1.attendiFinche
 import snastro.avvio.r2.AmbienteR2
 import snastro.avvio.r2.EstrattoreConMutex
 import snastro.avvio.r2.costruisciRegistrazionePresenterR2
@@ -36,6 +35,8 @@ import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.MotivoFallimento
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.supporto.test.OrologioFinto
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
@@ -58,6 +59,7 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * The R3 composition end to end ([AmbienteR3]: a SQLite project FILE opened by the session with the production
@@ -141,7 +143,10 @@ class ComposizioneR3Test {
 
     @Test
     fun `AC-S146 Riassumi fino al pronto mostrato, e due Riassunti e un'Elaborazione in ordine di richiesta`() {
-        AmbienteR3(radice).use {
+        // OrologioFinto (never a real sleep): richiestoAlle/avviatoAlle are persisted at ms precision, so an
+        // exact avanza() between the three requests below guarantees the FIFO order deterministically.
+        val orologio = OrologioFinto(Instant.now())
+        AmbienteR3(radice, clock = orologio).use {
             val a = it.registrazioneTrascritta()
             val b = it.registrazioneTrascritta()
             val c = it.registrazioneTrascritta()
@@ -158,9 +163,9 @@ class ComposizioneR3Test {
             it.riassumi(c) // occupies the worker so the next three queue up
             attendiFinche(messaggio = "c in corso") { it.modello.chiamate.get() == 2 }
             it.riassumi(b)
-            Thread.sleep(PAUSA_MS)
+            orologio.avanza(PASSO_OROLOGIO)
             it.avviaElaborazione(d)
-            Thread.sleep(PAUSA_MS)
+            orologio.avanza(PASSO_OROLOGIO)
             it.riassumi(a)
             it.modello.sblocca()
 
@@ -328,6 +333,8 @@ class ComposizioneR3Test {
             val x = it.diRegistrazione(a).single { r -> r.inCorso }.id
 
             repeat(2) { _ -> consegna(it, RiassuntoEliminato(a)) } // late + duplicate delivery
+            // Real time is the subject here: gives the late/duplicate delivery above a chance to (wrongly)
+            // race the still-blocked model before sblocca — no observable signal exists for "nothing raced".
             Thread.sleep(PAUSA_MS)
             it.modello.sblocca()
 
@@ -430,6 +437,10 @@ class ComposizioneR3Test {
         const val PAUSA_MS = 20L
         const val TIMEOUT_STOP_MS = 5_000L
         const val NANO_PER_MS = 1_000_000L
+
+        // richiestoAlle/avviatoAlle round-trip the SQL repositories at ms precision (AC-S146): one ms is
+        // already enough to separate them deterministically via OrologioFinto.avanza, never a real sleep.
+        val PASSO_OROLOGIO = 1.milliseconds
 
         val BOZZA = BozzaRiassunto(
             sommario = "{V1} apre la riunione.",

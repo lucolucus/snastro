@@ -64,6 +64,7 @@ class ModelloLinguisticoLlamaModelliTest : ModelloLinguisticoContratto() {
 
     /** Waits [ATTESA_PRIMA_DI_ANNULLARE_MS] (model open, generation under way), cancels, times the return. */
     private fun <T : Esito<*>> annullaDopo(chiamata: CompletableFuture<T>, annulla: () -> Unit): Pair<T, Duration> {
+        // real time is the subject: the REAL model must actually be mid-generation before we time the cancel.
         Thread.sleep(ATTESA_PRIMA_DI_ANNULLARE_MS)
         check(!chiamata.isDone) { "la generazione e finita prima dell'annullamento: ${chiamata.get()}" }
         annulla()

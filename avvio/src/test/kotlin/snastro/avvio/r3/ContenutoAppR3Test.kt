@@ -15,8 +15,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.test.attendiFinche
 import snastro.ui.DestinazioneShell
 import snastro.ui.testi.etichetta
 import java.nio.file.Path

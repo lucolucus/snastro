@@ -347,8 +347,19 @@ class ProvisioningModelliTest {
         val voce = unaVoceServita("a", contenuto)
         val provisioning = ProvisioningModelli(CatalogoModelli(listOf(voce)), cartella)
         val esecutore = Executors.newFixedThreadPool(2)
+        // Un via libera comune (come AC-S29): entrambe le chiamate entrano in scarica() nello stesso
+        // istante, cosi' il test coglie la corsa se il lucchetto sparisse (senza barriera i due thread
+        // potrebbero non sovrapporsi mai, e il test passerebbe anche senza serializzazione).
+        val viaLibera = CyclicBarrier(2)
         try {
-            val futures = (1..2).map { esecutore.submit(Callable { provisioning.scarica { _, _, _ -> } }) }
+            val futures = (1..2).map {
+                esecutore.submit(
+                    Callable {
+                        viaLibera.await(10, TimeUnit.SECONDS)
+                        provisioning.scarica { _, _, _ -> }
+                    },
+                )
+            }
             val risultati = futures.map { it.get(10, TimeUnit.SECONDS) }
 
             risultati.forEach { it.atteso() }
@@ -357,6 +368,15 @@ class ProvisioningModelliTest {
         }
         assertTrue(provisioning.pronti())
         assertContentEquals(contenuto, Files.readAllBytes(provisioning.percorso("a").resolve("peso.bin")))
+        // La prova della serializzazione: il lucchetto rivaluta mancanti() dentro la sezione critica, cosi'
+        // la seconda chiamata trova "a" gia' installata e non tocca piu' la rete — una sola richiesta in
+        // tutto. Senza lucchetto (rimosso a scopo di verifica) entrambe vedrebbero "a" mancante prima che
+        // l'altra finisca, ed entrambe scaricherebbero.
+        assertEquals(
+            1,
+            server.richiesteA(voce.url.percorsoDaUrl()),
+            "il lucchetto serializza le due chiamate: la seconda trova gia' installato, zero richieste in piu'",
+        )
     }
 
     @Test

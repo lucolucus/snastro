@@ -4,7 +4,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.orologioApp
-import snastro.avvio.r1.attendiFinche
 import snastro.documento.applicazione.letture.Documento
 import snastro.kernel.CampioniAudio
 import snastro.kernel.ErroreDiProva
@@ -27,6 +26,7 @@ import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.EliminazioneInSospeso
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
@@ -188,6 +188,7 @@ class EliminaRegistrazioneR2Test {
                 dispatcher.pubblica(eliminataDi(it, y))
                 Esito.Errore(ErroreDiProva.Fallito("rollback"))
             }
+            // real time is the subject: confirms nothing is EVER delivered on a rolled-back transaction.
             Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
             assertFalse(Cambiamento(null) in cambiamenti, "mai consegnato su rollback")
             it.r2.letture.proposta(voce(x, 2))
@@ -229,6 +230,7 @@ class EliminaRegistrazioneR2Test {
             it.sessione.apri(percorso).atteso()
 
             attendiFinche(messaggio = "audio scartato") { !Files.exists(file[0]) }
+            // real time is the subject: confirms the failed derivato cleanup never removes the pending row anyway.
             Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
             assertEquals(1, inSospeso(it).size, "la pulizia dei derivati e' fallita: la riga resta")
         }
@@ -348,6 +350,7 @@ class EliminaRegistrazioneR2Test {
     private fun raccogli(ambiente: AmbienteR2): MutableList<Cambiamento> {
         val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
         ambiente.scope.launch { ambiente.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
+        // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
         Thread.sleep(ATTESA_REPLAY_MS)
         cambiamenti.clear()
         return cambiamenti

@@ -122,14 +122,3 @@ private class RegistraDecodifiche(
         delegato.decodifica(id, sorgente)
     }
 }
-
-/** Polls [condizione] (never a fixed sleep as the assertion itself) until true or [timeoutMs] elapses. */
-internal fun attendiFinche(timeoutMs: Long = 10_000, messaggio: String = "condizione", condizione: () -> Boolean) {
-    val scadenza = System.currentTimeMillis() + timeoutMs
-    while (!condizione()) {
-        check(System.currentTimeMillis() < scadenza) { "timeout in attesa di: $messaggio" }
-        Thread.sleep(PASSO_ATTESA_MS)
-    }
-}
-
-private const val PASSO_ATTESA_MS = 20L

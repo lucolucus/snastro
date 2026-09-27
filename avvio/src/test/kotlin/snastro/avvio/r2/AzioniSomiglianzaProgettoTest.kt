@@ -7,7 +7,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.Esito
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
@@ -16,6 +15,7 @@ import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.PianoRiassegnazione
 import snastro.parlanti.applicazione.letture.SpostamentoProposto
 import snastro.parlanti.dominio.ErroreParlanti
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
@@ -130,7 +130,7 @@ class AzioniSomiglianzaProgettoTest {
         val interrotto = AtomicBoolean(false)
         val p = porta { _, _ ->
             try {
-                Thread.sleep(10_000)
+                Thread.sleep(10_000) // real time is the subject: stands in for slow work that annulla must interrupt.
             } catch (e: InterruptedException) {
                 interrotto.set(true)
                 throw e
@@ -139,6 +139,7 @@ class AzioniSomiglianzaProgettoTest {
         }
         p.calcola(REG)
         attendiFinche(messaggio = "in corso") { p.stato.value[REG] is StatoSomiglianza.InCorso }
+        // real time is the subject: lets the fake work actually enter its own blocking sleep before annulla races it.
         Thread.sleep(50)
         p.annulla(REG)
         attendiFinche(messaggio = "interruzione") { interrotto.get() }
@@ -210,6 +211,7 @@ class AzioniSomiglianzaProgettoTest {
                 Esito.Ok(piano)
             } else {
                 try {
+                    // real time is the subject: stands in for slow work that closing the progetto must interrupt.
                     Thread.sleep(10_000)
                 } catch (e: InterruptedException) {
                     interrotto.set(true)
@@ -221,6 +223,7 @@ class AzioniSomiglianzaProgettoTest {
         val altra = RegistrazioneId("id-2")
         p.calcola(altra)
         attendiFinche(messaggio = "in corso") { p.stato.value[altra] is StatoSomiglianza.InCorso }
+        // real time is the subject: lets the fake work actually enter its own blocking sleep before cancel races it.
         Thread.sleep(50)
         progetto.cancel()
         runBlocking { checkNotNull(progetto.coroutineContext[Job]).join() }

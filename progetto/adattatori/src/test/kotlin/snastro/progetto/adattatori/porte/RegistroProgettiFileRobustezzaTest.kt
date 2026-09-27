@@ -387,6 +387,7 @@ class RegistroProgettiFileRobustezzaTest {
             while (!Files.exists(pronto)) {
                 assertTrue(figlio.isAlive, "il figlio e uscito prima di essere pronto: ${logFiglio()}")
                 assertTrue(System.nanoTime() < scadenza, "il figlio non e diventato pronto in tempo")
+                // real time is the subject: polls a REAL separate JVM's own readiness file on disk.
                 Thread.sleep(10)
             }
 

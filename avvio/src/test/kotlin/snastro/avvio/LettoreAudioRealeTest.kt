@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.supporto.test.attendiFinche
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreAudioContratto
 import java.nio.file.Files
@@ -12,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * D2 (real-on-real): [LettoreAudioReale] over the REAL [snastro.audio.RiproduttoreWav] (native
@@ -84,13 +86,9 @@ class LettoreAudioRealeTest : LettoreAudioContratto() {
         lettore.riproduciDa(registrazioneId, 0)
         assertTrue(lettore.stato.value.inRiproduzione, "la riproduzione deve partire")
 
-        attendi(timeoutMs = DURATA_WAV_PROVA_MS * 5) { !lettore.stato.value.inRiproduzione }
-    }
-
-    private fun attendi(timeoutMs: Long, condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < scadenza && !condizione()) Thread.sleep(20)
-        assertTrue(condizione(), "condizione non soddisfatta entro ${timeoutMs}ms")
+        attendiFinche(timeout = (DURATA_WAV_PROVA_MS * 5).milliseconds, messaggio = "fine della riproduzione reale") {
+            !lettore.stato.value.inRiproduzione
+        }
     }
 
     private companion object {

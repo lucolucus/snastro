@@ -129,7 +129,7 @@ class BenchmarkRiassuntoTest {
         private val campionatore = thread(isDaemon = true, name = "picco-rss") {
             while (attivo) {
                 massimo.accumulateAndGet(rss(), ::maxOf)
-                Thread.sleep(250)
+                Thread.sleep(250) // real time is the subject: a periodic real-clock RSS sampler.
             }
         }
         val massimoKb: Long get() = massimo.get()

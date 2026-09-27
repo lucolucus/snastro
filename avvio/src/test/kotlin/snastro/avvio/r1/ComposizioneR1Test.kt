@@ -15,6 +15,7 @@ import snastro.kernel.atteso
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
@@ -115,7 +116,9 @@ class ComposizioneR1Test {
 
             it.r1.avviaElaborazione(AvviaElaborazione(id, numeroPersone = 3)).atteso()
 
-            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+            attendiFinche(messaggio = "elaborazione completata") {
+                it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA
+            }
             assertEquals(listOf(NumeroPersone.di(3).atteso()), diarizzatore.numeroPersoneRicevuti)
         }
     }
@@ -126,7 +129,9 @@ class ComposizioneR1Test {
         AmbienteR1(radice, riconoscitore = riconoscitore, rilasciaDopoElaborazione = riconoscitore::close).use {
             val id = it.importa()
             it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+            attendiFinche(messaggio = "elaborazione completata") {
+                it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA
+            }
 
             attendiFinche(messaggio = "un rilascio per l'Elaborazione terminata") { riconoscitore.chiusure == 1 }
             assertTrue(riconoscitore.chiamate > 0, "il riconoscitore deve essere stato usato prima del rilascio")
@@ -155,7 +160,7 @@ class ComposizioneR1Test {
         AmbienteR1(radice, dueVoci).use {
             val id = it.importa()
             it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche { it.r1.percorsoDocumento(id) != null }
+            attendiFinche(messaggio = "Documento scritto") { it.r1.percorsoDocumento(id) != null }
             val grafo = GrafoR1(grafoR0Di(it), ServizioModelliFinta(StatoModelli.Pronti), ApriEsternoFinta())
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
 
@@ -221,7 +226,9 @@ class ComposizioneR1Test {
         AmbienteR1(radice).use {
             val id = it.importa()
             it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+            attendiFinche(messaggio = "elaborazione completata") {
+                it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA
+            }
             val presenter = costruisciRegistrazioniPresenterR1(grafoR0Di(it), it.collaboratori, it.r1) {}
 
             attendiFinche(messaggio = "riga completata in S2") {
@@ -239,7 +246,9 @@ class ComposizioneR1Test {
         AmbienteR1(radice, diarizzatore).use {
             val id = it.importa()
             it.r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche { it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA }
+            attendiFinche(messaggio = "elaborazione completata") {
+                it.r1.statiElaborazione(listOf(id)).single().stato == StatoElaborazioneVista.COMPLETATA
+            }
             val grafo = GrafoR1(grafoR0Di(it), ServizioModelliFinta(StatoModelli.Pronti), ApriEsternoFinta())
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
             val presenter = costruisciRegistrazionePresenterR1(grafo, it.collaboratori, it.r1, id, scopeS3)
@@ -292,7 +301,9 @@ class ComposizioneR1Test {
         val r1 = ambiente.r1
         val percorso = ambiente.progetto.percorso
         r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
-        attendiFinche { r1.statiElaborazione(listOf(id)).single().fase == FaseElaborazione.DIARIZZAZIONE }
+        attendiFinche(messaggio = "Z in DIARIZZAZIONE") {
+            r1.statiElaborazione(listOf(id)).single().fase == FaseElaborazione.DIARIZZAZIONE
+        }
 
         ambiente.close()
 

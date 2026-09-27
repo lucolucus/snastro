@@ -3,7 +3,6 @@ package snastro.avvio.r2
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
-import snastro.avvio.r1.attendiFinche
 import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.CampioniAudio
 import snastro.kernel.ElaborazioneId
@@ -17,6 +16,7 @@ import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
@@ -239,6 +239,7 @@ class RitrascriviR2Test {
                 dispatcher.pubblica(TrascrittoSostituito(x))
                 Esito.Errore(ErroreDiProva.Fallito("rollback"))
             }
+            // real time is the subject: confirms nothing is EVER delivered on a rolled-back transaction.
             Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
             assertFalse(Cambiamento(null) in cambiamenti, "mai consegnato su rollback")
             it.r2.letture.proposta(voce(x, 2))
@@ -348,6 +349,7 @@ class RitrascriviR2Test {
         prima: Istantanea,
         entro: Long = ATTESA_NESSUN_EFFETTO_MS,
     ) {
+        // real time is the subject (see KDoc above): samples the invariant throughout the window instead of once.
         val scadenza = System.currentTimeMillis() + entro
         do {
             Istantanea.di(ambiente, id).confronta(prima)
@@ -359,6 +361,7 @@ class RitrascriviR2Test {
     private fun raccogli(ambiente: AmbienteR2): MutableList<Cambiamento> {
         val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
         ambiente.scope.launch { ambiente.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
+        // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
         Thread.sleep(ATTESA_REPLAY_MS)
         cambiamenti.clear()
         return cambiamenti

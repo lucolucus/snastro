@@ -17,6 +17,7 @@ import snastro.modelli.VOCE_CATALOGO_VAD_SILERO
 import snastro.modelli.VoceCatalogo
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
+import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.ui.modelli.StatoModelli
@@ -27,6 +28,7 @@ import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Opt-in (`@Tag("modelli")`, `./gradlew :avvio:modelliTest`): the R1 composition END TO END over the
@@ -67,7 +69,7 @@ class TrascrizioneRealeR1Test {
 
             r1.avviaElaborazione(AvviaElaborazione(id)).atteso()
 
-            attendiFinche(timeoutMs = TIMEOUT_MS, messaggio = "Elaborazione reale conclusa") {
+            attendiFinche(timeout = TIMEOUT_MS.milliseconds, messaggio = "Elaborazione reale conclusa") {
                 r1.statiElaborazione(listOf(id)).single().stato in setOf(
                     StatoElaborazioneVista.COMPLETATA,
                     StatoElaborazioneVista.FALLITA,
