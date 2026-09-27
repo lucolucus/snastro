@@ -27,3 +27,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: worker/a0-supporto-moduli; recorded: worker-composer
 - Docs: [ADR 0028](../../decisions/0028-librerie-tecniche-supporto.md), [code-rules](../../code-rules.md)
 - Revisit: :supporto gains a declaration :ui must not see.
+
+### D-0003 · a0/b1/b2 review proofs re-recorded
+- Meta: 2026-09-27; scope: feature; status: accepted
+- Question: MM status flagged stale_review_proof on a0, b1, b2 (integrated): their spec_hash changed after review with no code change.
+- Options: 1 re-record the proofs on the current spec (kept); 2 re-review the three blocks.
+- Hypothesis: formal drift only: a0/b2 activated their own ADR 0028/0029 checks, and delta 2 re-worded the supporto-api pin.
+- Check: git diff of the reviewed heads vs integration shows no code change for these blocks; the ADR edits were part of the reviewed diffs.
+- Result: proofs re-recorded — [a0](review-proof/a0-supporto-moduli.json), [b1](review-proof/b1-lettura-coerente-primitiva.json), [b2](review-proof/b2-lettura-coerente-migrazione.json)
+- Debate: none.
+- Decision: re-record the three review proofs on the current spec_hash, same reviewed SHAs.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [building-blocks.yaml](building-blocks.yaml)
+- Revisit: a block's code changes after integration, or a pin change alters an integrated block's contract.
