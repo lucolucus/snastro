@@ -2,11 +2,17 @@ package snastro.parlanti.adattatori.eventi
 
 import io.mockk.spyk
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.CampioniAudio
 import snastro.kernel.DispatcherEventiInMemoria
@@ -25,6 +31,7 @@ import snastro.kernel.atteso
 import snastro.parlanti.applicazione.comandi.RiallineaImpronte
 import snastro.parlanti.applicazione.comandi.RiallineaImpronteServizio
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
+import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
@@ -37,17 +44,26 @@ import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.SorgenteImpronta
 import snastro.parlanti.dominio.TipoParlante
+import snastro.supporto.RitentaConBackoff
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
- * Tests of [AbbonatoRiallineamentoImpronte]: AC-304..AC-307. Virtual time only
- * ([StandardTestDispatcher] + [TestCoroutineScheduler], `advanceUntilIdle`) — no real sleeps.
+ * Tests of [AbbonatoRiallineamentoImpronte]: AC-304..AC-307 (behaviour, unchanged) and AC-C50..AC-C53
+ * (its retry mechanics on [RitentaConBackoff], `a3-ritenta-parlanti`). Virtual time only
+ * ([StandardTestDispatcher] + [TestCoroutineScheduler], `advanceUntilIdle`) — no real sleeps: every
+ * fault injected below is bounded (a finite number of failures), so no test relies on cancelling a
+ * never-converging key to escape a hanging `advanceUntilIdle`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AbbonatoRiallineamentoImpronteTest {
@@ -55,13 +71,18 @@ class AbbonatoRiallineamentoImpronteTest {
     /**
      * One test's wiring: a real [DispatcherEventiInMemoria] over [ParlanteRepositoryFinta] (the
      * `Ripristinabile` "in-memory database", `UnitaDiLavoroFinta`), a real [RiallineaImpronteServizio]
-     * over [voci]/[estrattore], and the [AbbonatoRiallineamentoImpronte] under test (self-registering,
-     * discarded) — all sharing [scheduler]'s virtual clock.
+     * over [voci]/[estrattore]/[decodificatore], and the [AbbonatoRiallineamentoImpronte] under test
+     * (self-registering, discarded) — all sharing [scheduler]'s virtual clock and reporting through
+     * [segnalazioni].
      */
+    @Suppress("LongParameterList") // one parameter per collaborator these tests vary (AC-304..AC-307/AC-C50..C53)
     private class Ambiente(
         scheduler: TestCoroutineScheduler,
         voci: Map<RegistrazioneId, List<VoceVista>> = emptyMap(),
         estrattore: EstrattoreImpronta? = null,
+        decodificatore: DecodificatoreAudio? = null,
+        val segnalazioni: SegnalazioniRegistrate = SegnalazioniRegistrate(),
+        gestore: CoroutineExceptionHandler? = null,
         decoratore: (RiallineaImpronteServizio) -> RiallineaImpronteServizio = { it },
     ) {
         val parlanti = ParlanteRepositoryFinta()
@@ -72,14 +93,15 @@ class AbbonatoRiallineamentoImpronteTest {
                 dispatcher.unitaDiLavoro,
                 LettoreVociFinta(voci),
                 parlanti,
-                DecodificatoreAudioFinta(unitaDiLavoro = transazioni),
+                decodificatore ?: DecodificatoreAudioFinta(unitaDiLavoro = transazioni),
                 estrattore ?: EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
                 dispatcher,
             ),
         )
+        val scope = CoroutineScope(StandardTestDispatcher(scheduler) + (gestore ?: EmptyCoroutineContext))
 
         init {
-            AbbonatoRiallineamentoImpronte(dispatcher, riallinea, CoroutineScope(StandardTestDispatcher(scheduler)))
+            AbbonatoRiallineamentoImpronte(dispatcher, riallinea, scope, segnalazioni)
         }
 
         fun commit(evento: EventoPubblicato): Esito<Unit> = dispatcher.unitaDiLavoro.inTransazione {
@@ -92,16 +114,16 @@ class AbbonatoRiallineamentoImpronteTest {
             Esito.Errore(ErroreDiProva.Fallito("boom"))
         }
 
-        /** Seeds a Parlante with one STALE print row for `VoceRef(REG, voce)`. */
-        fun seminaStale(id: String, voce: Int): ParlanteId {
+        /** Seeds a Parlante with one STALE print row for `VoceRef(registrazioneId, voce)`. */
+        fun seminaStale(id: String, voce: Int, registrazioneId: RegistrazioneId = REG): ParlanteId {
             val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
-            p.registraImpronta(VoceRef(REG, VoceId(voce)), VECCHIA, "0-1000", MODELLO).atteso()
+            p.registraImpronta(VoceRef(registrazioneId, VoceId(voce)), VECCHIA, "0-1000", MODELLO).atteso()
             parlanti.salva(p).atteso()
             return p.id
         }
 
-        fun impronta(id: ParlanteId, voce: Int = 1): ImprontaVocale =
-            assertNotNull(parlanti.trova(id)).impronte.single { it.voceRef == VoceRef(REG, VoceId(voce)) }
+        fun impronta(id: ParlanteId, voce: Int = 1, registrazioneId: RegistrazioneId = REG): ImprontaVocale =
+            assertNotNull(parlanti.trova(id)).impronte.single { it.voceRef == VoceRef(registrazioneId, VoceId(voce)) }
     }
 
     // --- AC-304 (after-commit timing + translation) --------------------------------------------
@@ -191,6 +213,134 @@ class AbbonatoRiallineamentoImpronteTest {
         assertEquals(chiave(NUOVI), ambiente.impronta(id).sorgente, "converge al successo")
     }
 
+    // --- AC-C50 (structural): one RitentaConBackoff, no private channel/loop/backoff ------------------
+
+    /**
+     * By REFLECTION, never by reading the module's own source text (`lessons-by-block-type.md`: a
+     * source-text check would trip an ADR that bans file reads in the module's own tree). The absence
+     * of the old hand-rolled channel/backoff/`runCatching` is proven here structurally, and by every
+     * behavioural AC below staying green (AC-C51..C53) on the single-`RitentaConBackoff` design.
+     */
+    @Test
+    fun `AC-C50 AbbonatoRiallineamentoImpronte ha un solo RitentaConBackoff e nessun canale privato`() {
+        val campi = AbbonatoRiallineamentoImpronte::class.java.declaredFields
+        val ritentaConBackoff = campi.count { it.type == RitentaConBackoff::class.java }
+        assertEquals(1, ritentaConBackoff, "un solo campo RitentaConBackoff: nessun loop/backoff proprio")
+        assertTrue(
+            campi.none { Channel::class.java.isAssignableFrom(it.type) },
+            "nessun canale privato: il coalescing/segnale e' interamente dentro RitentaConBackoff",
+        )
+    }
+
+    // --- AC-C51 (a failing key is reported and retried; its recovery is reported once; another key
+    // is unaffected) --------------------------------------------------------------------------------
+
+    @Test
+    fun `AC-C51 un fallimento di K e segnalato e ritentato, la ripresa e segnalata, K2 non ne risente`() = runTest {
+        val k1 = REG
+        val k2 = RegistrazioneId("registrazione-c51-2")
+        val guasto = DecodificatoreConGuastoPer(k1)
+        guasto.fallisciProssimeVolte(2)
+        val ambiente = Ambiente(
+            testScheduler,
+            voci = mapOf(
+                k1 to listOf(unaVoce(1, NUOVI, registrazioneId = k1)),
+                k2 to listOf(unaVoce(1, NUOVI, registrazioneId = k2)),
+            ),
+            decodificatore = guasto,
+        )
+        val id1 = ambiente.seminaStale("Marco", 1, registrazioneId = k1)
+        val id2 = ambiente.seminaStale("Luca", 1, registrazioneId = k2)
+
+        // K1 richiesto per primo, poi K2: stesso lotto, nessun advance tra i due commit.
+        ambiente.commit(VociUnite(k1, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(k2, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        advanceUntilIdle()
+
+        assertEquals(
+            chiave(NUOVI),
+            ambiente.impronta(id2, registrazioneId = k2).sorgente,
+            "K2 e' processato nello stesso lotto, nonostante K1 fallisca prima di lui",
+        )
+        assertEquals(chiave(NUOVI), ambiente.impronta(id1, registrazioneId = k1).sorgente, "K1 converge dopo i retry")
+
+        val righeK1 = ambiente.segnalazioni.tutte.filter { k1.valore in it.messaggio }
+        assertEquals(3, righeK1.size, "2 fallimenti + 1 ripresa, uno per tentativo: $righeK1")
+        assertTrue(righeK1.dropLast(1).all { it.causa is IllegalStateException }, "$righeK1")
+        assertNull(righeK1.last().causa, "l'ultimo report e' la ripresa, senza causa: ${righeK1.last()}")
+        assertTrue("riuscito" in righeK1.last().messaggio, "l'ultimo report e' una ripresa: ${righeK1.last()}")
+        assertTrue(
+            ambiente.segnalazioni.tutte.none { k2.valore in it.messaggio },
+            "K2 non fallisce mai: nessun report per lui",
+        )
+    }
+
+    // --- AC-C52 (the retired PorteImprontaConLog's failure is now reported by the Segnalazione) -----
+
+    @Test
+    fun `AC-C52 il fallimento dell EstrattoreImpronta e riportato dalla Segnalazione`() = runTest {
+        val guasto = EstrattoreConGuasti()
+        guasto.fallisciProssimeEstrazioni(1)
+        val ambiente = Ambiente(testScheduler, voci = mapOf(REG to listOf(unaVoce(1, NUOVI))), estrattore = guasto)
+        val id = ambiente.seminaStale("Marco", 1)
+
+        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        advanceUntilIdle()
+
+        val righe = ambiente.segnalazioni.tutte.filter { REG.valore in it.messaggio }
+        assertTrue(righe.isNotEmpty(), "il fallimento dell'estrazione e' riportato dalla Segnalazione: $righe")
+        assertIs<IllegalStateException>(righe.first().causa)
+        assertEquals(chiave(NUOVI), ambiente.impronta(id).sorgente, "e converge comunque al successo")
+    }
+
+    // --- AC-C53 (worker cancellation: no report; an Error escapes instead of being retried) ---------
+
+    @Test
+    fun `AC-C53 il worker si ferma quando lo scope e cancellato, senza segnalare ne rigenerare oltre`() = runTest {
+        val ambiente = Ambiente(testScheduler, voci = mapOf(REG to listOf(unaVoce(1, NUOVI))))
+        val id = ambiente.seminaStale("Marco", 1)
+        advanceUntilIdle()
+
+        ambiente.scope.cancel()
+        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        advanceUntilIdle()
+
+        assertEquals(VECCHIA, ambiente.impronta(id).impronta, "nessun riallineamento dopo la cancellazione")
+        assertTrue(ambiente.segnalazioni.tutte.isEmpty(), "nessuna segnalazione dopo la cancellazione")
+    }
+
+    @Test
+    fun `AC-C53 un Error nel riallineamento esce verso il gestore dello scope invece di essere ritentato`() =
+        runTest {
+            val estrattore = EstrattoreCheLanciaUnErrore()
+            val sfuggiti = mutableListOf<Throwable>()
+            val ambiente = Ambiente(
+                testScheduler,
+                voci = mapOf(REG to listOf(unaVoce(1, NUOVI))),
+                estrattore = estrattore,
+                gestore = CoroutineExceptionHandler { _, e -> sfuggiti += e },
+            )
+            ambiente.seminaStale("Marco", 1)
+
+            try {
+                ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+                // Tempo LIMITATO, mai una advanceUntilIdle: se l'Error fosse per errore ritentato (regressione
+                // verso un runCatching), l'estrattore lo rilancerebbe all'infinito e non convergerebbe mai.
+                advanceTimeBy(60.seconds)
+                runCurrent()
+
+                assertEquals(1, estrattore.tentativi, "un solo tentativo: l'Error non e' un ritento")
+                assertTrue(ambiente.segnalazioni.tutte.isEmpty(), "un Error non e' segnalato come fallimento")
+                assertEquals(1, sfuggiti.size)
+                assertIs<OutOfMemoryError>(sfuggiti.single())
+                assertTrue(ambiente.scope.coroutineContext[Job]?.isCancelled == true)
+            } finally {
+                // Se la regressione sopra si fosse verificata, il worker ritenterebbe all'infinito: senza
+                // questo cancel il drain automatico di fine-runTest inseguirebbe un lavoro che non finisce mai.
+                ambiente.scope.cancel()
+            }
+        }
+
     // --- helpers ----------------------------------------------------------------------------------
 
     /** [EstrattoreImpronta] that fails the next `n` calls to [estrai] with an exception, then succeeds. */
@@ -215,8 +365,54 @@ class AbbonatoRiallineamentoImpronteTest {
         }
     }
 
-    private fun unaVoce(voce: Int, intervalli: List<IntervalloMs>): VoceVista =
-        VoceVista(VoceRef(REG, VoceId(voce)), intervalli)
+    /** [EstrattoreImpronta] whose every [estrai] throws a real [Error] (AC-C53): never a retry candidate. */
+    private class EstrattoreCheLanciaUnErrore(
+        private val reale: EstrattoreImpronta = EstrattoreImprontaFinta(),
+    ) : EstrattoreImpronta by reale {
+        var tentativi = 0
+            private set
+
+        override fun estrai(c: CampioniAudio): Impronta {
+            tentativi++
+            throw OutOfMemoryError("finto")
+        }
+    }
+
+    /** [DecodificatoreAudio] that fails the next `n` calls to [campioni] for [bersaglio], then delegates. */
+    private class DecodificatoreConGuastoPer(
+        private val bersaglio: RegistrazioneId,
+        private val reale: DecodificatoreAudio = DecodificatoreAudioFinta(),
+    ) : DecodificatoreAudio {
+        private var guastiRimanenti = 0
+
+        fun fallisciProssimeVolte(n: Int) {
+            guastiRimanenti = n
+        }
+
+        override fun campioni(id: RegistrazioneId, intervalli: List<IntervalloMs>): CampioniAudio {
+            if (id == bersaglio && guastiRimanenti > 0) {
+                guastiRimanenti--
+                error("guasto simulato per ${id.valore}")
+            }
+            return reale.campioni(id, intervalli)
+        }
+    }
+
+    /** A recording [Segnalazione] for the tests. */
+    private class SegnalazioniRegistrate : Segnalazione {
+        data class Riga(val messaggio: String, val causa: Throwable?)
+
+        private val righe = mutableListOf<Riga>()
+
+        val tutte: List<Riga> get() = righe.toList()
+
+        override fun segnala(messaggio: String, causa: Throwable?) {
+            righe += Riga(messaggio, causa)
+        }
+    }
+
+    private fun unaVoce(voce: Int, intervalli: List<IntervalloMs>, registrazioneId: RegistrazioneId = REG): VoceVista =
+        VoceVista(VoceRef(registrazioneId, VoceId(voce)), intervalli)
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
