@@ -20,8 +20,17 @@ import java.sql.SQLException
  * replaces the three transaction statements, so the outermost transaction starts with
  * `BEGIN IMMEDIATE`: the write lock is taken up front (waiting up to busy_timeout), never upgraded
  * from a read snapshot later. SQLDelight never calls [beginTransaction] for a nested transaction.
+ *
+ * ADR 0029 §3 / ADR 0006 Amendment (c): the begin mode is per thread and IMMEDIATE by default, so every
+ * write path is byte-identical. Only [UnitaDiLavoroSql]'s outermost read asks, through [conInizioDeferred],
+ * for `BEGIN DEFERRED`: the next BEGIN on that thread consumes the request, and it is reset in `finally`
+ * whatever happens. [osserva] sees every transaction statement right before it runs (tests: trace and
+ * fault injection); production passes nothing.
  */
-internal class DriverSqliteImmediato(private val base: JdbcSqliteDriver) : JdbcDriver() {
+internal class DriverSqliteImmediato(
+    private val base: JdbcSqliteDriver,
+    private val osserva: (String) -> Unit = {},
+) : JdbcDriver() {
     override fun getConnection(): Connection = base.getConnection()
 
     override fun closeConnection(connection: Connection) = base.closeConnection(connection)
@@ -33,14 +42,17 @@ internal class DriverSqliteImmediato(private val base: JdbcSqliteDriver) : JdbcD
         }
 
     /**
-     * Unlike a DEFERRED `BEGIN`, `BEGIN IMMEDIATE` CAN fail (write lock still busy after busy_timeout).
+     * `BEGIN IMMEDIATE` CAN fail (write lock still busy after busy_timeout), and so can any `BEGIN`.
      * SQLDelight has already stored the new transaction in this thread's slot by then and never clears
      * it on that path: left there, every later "transaction" on this (pooled) thread would look nested
-     * and run in autocommit. Clearing it (outermost only, so `null`) also closes the connection.
+     * and run in autocommit. Clearing it (outermost only, so `null`) also closes the connection. Both
+     * modes go through here.
      */
     override fun Connection.beginTransaction() {
+        val deferred = inizioDeferred.get()
+        inizioDeferred.set(false)
         try {
-            esegui("BEGIN IMMEDIATE TRANSACTION")
+            esegui(if (deferred) "BEGIN DEFERRED TRANSACTION" else "BEGIN IMMEDIATE TRANSACTION")
         } catch (e: SQLException) {
             transaction = null
             throw e
@@ -62,6 +74,21 @@ internal class DriverSqliteImmediato(private val base: JdbcSqliteDriver) : JdbcD
     override fun close() = base.close()
 
     private fun Connection.esegui(sql: String) {
+        osserva(sql)
         prepareStatement(sql).use { it.execute() }
+    }
+
+    internal companion object {
+        private val inizioDeferred: ThreadLocal<Boolean> = ThreadLocal.withInitial { false }
+
+        /** Runs [blocco] with this thread's next outermost BEGIN as `BEGIN DEFERRED`; back to IMMEDIATE after. */
+        internal fun <T> conInizioDeferred(blocco: () -> T): T {
+            inizioDeferred.set(true)
+            try {
+                return blocco()
+            } finally {
+                inizioDeferred.set(false)
+            }
+        }
     }
 }

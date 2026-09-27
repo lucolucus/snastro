@@ -1,0 +1,15 @@
+-- ADR 0029: the connection-level switches of UnitaDiLavoroSql's read transaction (LetturaCoerente) and the
+-- after-commit checkpoint primitive (checkpointDopoCommit). Queries only: no schema here (CR-13).
+
+-- Set right after the outermost read's BEGIN DEFERRED: any write then fails with SQLITE_READONLY.
+attivaSolaLettura:
+PRAGMA query_only = 1;
+
+-- Reset before the read transaction ends, whatever its outcome (ADR 0029 §2.7: no leak).
+disattivaSolaLettura:
+PRAGMA query_only = 0;
+
+-- ADR 0009 / ADR 0020: merges the WAL into progetto.db and truncates it. Cannot run inside a transaction —
+-- only ever called from an afterCommit hook (checkpointDopoCommit).
+walCheckpointTruncate:
+PRAGMA wal_checkpoint(TRUNCATE);
