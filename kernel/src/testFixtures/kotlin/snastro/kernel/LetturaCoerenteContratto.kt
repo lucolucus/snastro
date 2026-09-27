@@ -54,7 +54,11 @@ public abstract class LetturaCoerenteContratto {
         }.atteso()
 
         assertEquals(setOf("prima"), visti)
-        assertEquals(listOf("dopo", "prima"), a.effetti().sorted(), "la lettura annidata non rende la transazione di sola lettura")
+        assertEquals(
+            listOf("dopo", "prima"),
+            a.effetti().sorted(),
+            "la lettura annidata non rende la transazione di sola lettura",
+        )
     }
 
     @Test

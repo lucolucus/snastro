@@ -192,7 +192,7 @@ class LetturaCoerenteSqlSoloTest {
     }
 
     @Test
-    fun `AC-C25 un BEGIN DEFERRED fallito azzera il modo e libera lo slot e la transazione dopo apre BEGIN IMMEDIATE`() {
+    fun `AC-C25 un BEGIN DEFERRED fallito azzera il modo, libera lo slot e poi si apre BEGIN IMMEDIATE`() {
         val guasta = AtomicReference(true)
         val sql = DatabaseTracciato(cartella) {
             if (it.startsWith("BEGIN DEFERRED") && guasta.getAndSet(false)) throw SQLException("guasto iniettato")
