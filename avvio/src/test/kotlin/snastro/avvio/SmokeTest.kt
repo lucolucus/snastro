@@ -120,7 +120,7 @@ class SmokeTest {
             SegmentoIniziale(0, IntervalloMs(9_500, 12_000), "Perfetto, partiamo dal primo."),
         )
         val trascritto = Trascritto.crea(registrazioneId, durataMs = 60_000, segmenti = segmenti).atteso()
-        TrascrittoRepositorySql(db.database).salva(trascritto.aggregato)
+        TrascrittoRepositorySql(db.database, UnitaDiLavoroSql(db.database)).salva(trascritto.aggregato)
 
         // AC-357: Voce 1 is 'Anna' (S2 badge '2 voci · 1 da identificare', S3 Nome, one S4 row).
         confermaAttribuzione(db.database, registrazioni).esegui(
@@ -129,9 +129,9 @@ class SmokeTest {
 
         // AC-S151: a pronto Riassunto of it (Sintesi's own SQL repository and root transitions), so the smoke
         // captures S3 with the Riassunto tab selected and its content shown.
-        val riassunti = RiassuntoRepositorySql(db.database)
-        val riassunto = unRiassunto("fixture-riassunto", registrazioneId, argomento = "punto sul progetto").conAvvio()
         val uow = UnitaDiLavoroSql(db.database)
+        val riassunti = RiassuntoRepositorySql(db.database, uow)
+        val riassunto = unRiassunto("fixture-riassunto", registrazioneId, argomento = "punto sul progetto").conAvvio()
         uow.inTransazione { riassunti.salva(riassunto) }.atteso()
         riassunto.conCompletamento(BOZZA_FIXTURE, unaStruttura(1 to 1, 2 to 2, 3 to 1))
         uow.inTransazione { riassunti.concludi(riassunto).mappa { } }.atteso()
@@ -142,13 +142,14 @@ class SmokeTest {
         database: SnastroDatabase,
         registrazioni: RegistrazioneRepositorySql,
     ): ConfermaAttribuzioneServizio {
-        val eventi = DispatcherEventiInMemoria(UnitaDiLavoroSql(database))
+        val unitaDiLavoroSql = UnitaDiLavoroSql(database)
+        val eventi = DispatcherEventiInMemoria(unitaDiLavoroSql)
         return ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
             LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
-            LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database))),
-            ParlanteRepositorySql(database),
+            LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database, unitaDiLavoroSql))),
+            ParlanteRepositorySql(database, unitaDiLavoroSql),
             AttribuzioneRepositorySql(database),
             DecodificatoreAudioFinta(),
             EstrattoreImprontaFinta(),

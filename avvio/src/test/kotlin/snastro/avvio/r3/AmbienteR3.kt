@@ -28,7 +28,6 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.atteso
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
-import snastro.persistenza.UnitaDiLavoroSql
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.InfoAudio
@@ -153,7 +152,7 @@ internal class AmbienteR3(
     val collaboratori: CollaboratoriProgettoAperto get() = checkNotNull(sessione.collaboratoriCorrenti())
     val r3: CollaboratoriR3 get() = collaboratori.estensione as CollaboratoriR3
     val contesto: ContestoEstensione get() = contesti.last()
-    val riassunti: RiassuntoRepositorySql get() = RiassuntoRepositorySql(contesto.database)
+    val riassunti: RiassuntoRepositorySql get() = RiassuntoRepositorySql(contesto.database, contesto.lettura)
 
     val grafo: GrafoR2
         get() = GrafoR2(
@@ -192,9 +191,9 @@ internal class AmbienteR3(
         r3.riassumi(id, argomento).atteso()
     }
 
-    /** In ONE read transaction (a consistent snapshot while the worker may be completing a Riassunto). */
-    fun diRegistrazione(id: RegistrazioneId): List<Riassunto> =
-        UnitaDiLavoroSql(contesto.database).inTransazione { Esito.Ok(riassunti.diRegistrazione(id)) }.atteso()
+    /** ADR 0029 §5: [RiassuntoRepositorySql.diRegistrazione] already reads the root and its children from ONE
+     * snapshot (a consistent read while the worker may be completing a Riassunto) — no wrap needed here. */
+    fun diRegistrazione(id: RegistrazioneId): List<Riassunto> = riassunti.diRegistrazione(id)
 
     fun attendiPronto(id: RegistrazioneId) =
         attendiFinche(timeout = 10.seconds, messaggio = "Riassunto pronto") {

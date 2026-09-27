@@ -27,4 +27,5 @@ dependencies {
     testFixturesImplementation(libs.sqlite.jdbc)
 
     testImplementation(testFixtures(project(":kernel")))
+    testImplementation(project(":supporto-test"))
 }

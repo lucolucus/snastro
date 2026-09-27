@@ -49,7 +49,7 @@ class RiassuntoRepositorySqlConcorrenzaTest {
         try {
             val db = database.database
             val uow = UnitaDiLavoroSql(db)
-            val repo = RiassuntoRepositorySql(db)
+            val repo = RiassuntoRepositorySql(db, uow)
             val esiti = mutableMapOf<String, Int>()
 
             repeat(RIPETIZIONI) { giro ->

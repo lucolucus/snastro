@@ -85,9 +85,10 @@ class AbbonatoEliminazioneRegistrazioneTest {
     @Test
     fun `AC-612 INV-28 su SQLite un Elaborazione in attesa veta la RegistrazioneEliminata e nessuna riga cambia`() {
         val db = databaseInMemoria().seminato(listOf(R))
+        val uow = UnitaDiLavoroSql(db)
         val elaborazioniSql = ElaborazioneRepositorySql(db)
-        val trascrittiSql = TrascrittoRepositorySql(db)
-        val sql = DispatcherEventiInMemoria(UnitaDiLavoroSql(db)).also {
+        val trascrittiSql = TrascrittoRepositorySql(db, uow)
+        val sql = DispatcherEventiInMemoria(uow).also {
             val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql)
             AbbonatoEliminazioneRegistrazione(it, politica)
         }

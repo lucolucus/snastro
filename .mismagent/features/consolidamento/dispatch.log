@@ -2,3 +2,27 @@
 2026-09-27T10:43:33Z	a0-supporto-moduli	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
 2026-09-27T10:50:34Z	a0-supporto-moduli	verifier	result	cycle=0	tier=deep	model=opus	PASS
 2026-09-27T10:50:34Z	a0-supporto-moduli	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
+2026-09-27T10:51:59Z	b1-lettura-coerente-primitiva	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-27T10:51:59Z	a1-supporto-test-adozione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-27T11:06:21Z	b1-lettura-coerente-primitiva	worker	result	cycle=0	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-27T11:11:36Z	b1-lettura-coerente-primitiva	verifier	result	cycle=0	tier=deep	model=opus	PASS
+2026-09-27T11:11:36Z	b1-lettura-coerente-primitiva	code-review	result	cycle=0	tier=deep	model=opus	APPROVE
+2026-09-27T11:12:40Z	b2-lettura-coerente-migrazione	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-27T12:02:08Z	a1-supporto-test-adozione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-27T12:20:17Z	a1-supporto-test-adozione	verifier	result	cycle=0	tier=standard	model=sonnet	FAIL
+2026-09-27T12:20:17Z	a1-supporto-test-adozione	worker	dispatch	cycle=1	tier=standard	model=sonnet
+2026-09-27T12:31:06Z	b2-lettura-coerente-migrazione	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-27T12:37:32Z	b2-lettura-coerente-migrazione	verifier	result	cycle=0	tier=deep	model=opus	FAIL
+2026-09-27T12:37:32Z	b2-lettura-coerente-migrazione	code-review	result	cycle=0	tier=deep	model=opus	CHANGES
+2026-09-27T12:37:32Z	b2-lettura-coerente-migrazione	worker	dispatch	cycle=1	tier=standard	model=sonnet
+2026-09-27T12:53:02Z	b2-lettura-coerente-migrazione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-27T13:03:04Z	b2-lettura-coerente-migrazione	verifier	result	cycle=1	tier=deep	model=opus	FAIL
+2026-09-27T13:03:04Z	b2-lettura-coerente-migrazione	code-review	result	cycle=1	tier=deep	model=opus	CHANGES
+2026-09-27T13:03:04Z	b2-lettura-coerente-migrazione	worker	dispatch	cycle=2	tier=deep	model=opus
+2026-09-27T13:05:07Z	b2-lettura-coerente-migrazione	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-27T13:07:29Z	a1-supporto-test-adozione	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW (own evidence: AC-C42 16/20)
+2026-09-27T13:07:29Z	a1-supporto-test-adozione	worker	dispatch	cycle=2	tier=deep	model=opus
+2026-09-27T13:08:49Z	b2-lettura-coerente-migrazione	verifier	result	cycle=2	tier=deep	model=opus	PASS
+2026-09-27T13:47:54Z	a1-supporto-test-adozione	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW
+2026-09-27T13:59:44Z	a1-supporto-test-adozione	verifier	result	cycle=2	tier=deep	model=opus	PASS
+2026-09-27T14:00:11Z	a1-supporto-test-adozione	worker	dispatch	cycle=2	tier=standard	model=sonnet	merge-conflict resolution (not a quality rework)

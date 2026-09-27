@@ -1,0 +1,9 @@
+package snastro.persistenza
+
+class UnitaDiLavoroSql(private val db: SnastroDatabase) {
+    fun scrivi() {
+        db.transaction {
+            // the only place allowed to call SQLDelight's transaction directly
+        }
+    }
+}

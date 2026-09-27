@@ -1,6 +1,7 @@
 package snastro.sintesi.applicazione.letture
 
 import snastro.kernel.Esito
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
@@ -22,27 +23,31 @@ import snastro.sintesi.dominio.StrutturaTrascritto
 import snastro.sintesi.dominio.TestoConVoci
 
 /**
- * Read-model `vista-riassunto` (AC-S102..S108, ADR 0021 §3, ADR 0023 §4): builds [RiassuntoVista] for
- * one Registrazione with no side effect, never calling
+ * Read-model `vista-riassunto` (AC-S102..S108, ADR 0021 §3, ADR 0023 §4, ADR 0029 §5/AC-C32): builds
+ * [RiassuntoVista] for one Registrazione with no side effect, never calling
  * [snastro.sintesi.applicazione.porte.ModelloLinguistico]. `null` when [trascritti] has no Trascritto
  * for it (the tab is not offered). Names for display are joined from [nomi] at read time (INV-S5): a
- * rename never invalidates a stored Riassunto.
+ * rename never invalidates a stored Riassunto. [di] reads the Segmenti (through [trascritti]) and the
+ * Riassunto rows (through [riassunti]) from ONE [lettura] snapshot — never a row read before a
+ * concurrent completion commits and its elements after (a stale reconstitution would throw): this
+ * read-model owns the snapshot, no composition root wraps it (dev-architecture-app.md#repository).
  */
 public class RiassuntoVisteLettura(
+    private val lettura: LetturaCoerente,
     private val riassunti: RiassuntoRepository,
     private val trascritti: LettoreTrascritto,
     private val nomi: LettoreNomi,
     private val disponibilitaModello: DisponibilitaModelloLinguistico,
 ) {
-    public fun di(r: RegistrazioneId): RiassuntoVista? {
-        val segmenti = trascritti.segmenti(r) ?: return null
+    public fun di(r: RegistrazioneId): RiassuntoVista? = lettura.inLettura {
+        val segmenti = trascritti.segmenti(r) ?: return@inLettura null
         val correnti = segmenti.associateBy { it.segmentoId }
         val nomiVoci = nomi.nomi(r)
         val righe = riassunti.diRegistrazione(r)
         val pronto = unicoOSseNessuno(righe.filter { it.pronto }, r, "pronto")
         val nonPronto = unicoOSseNessuno(righe.filterNot { it.pronto }, r, "non pronto")
 
-        return RiassuntoVista(
+        RiassuntoVista(
             registrazioneId = r,
             modello = statoModelloVista(disponibilitaModello.stato()),
             richiestaAperta = nonPronto?.takeIf { it.aperto }?.let(::richiestaApertaVista),

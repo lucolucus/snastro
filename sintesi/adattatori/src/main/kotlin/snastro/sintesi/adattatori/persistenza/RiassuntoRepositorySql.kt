@@ -3,6 +3,7 @@ package snastro.sintesi.adattatori.persistenza
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import snastro.kernel.Esito
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
@@ -45,19 +46,33 @@ import snastro.sintesi.dominio.TestoConVoci
  * `UnitaDiLavoro` (`UnitaDiLavoroSql`) opens every transaction `BEGIN IMMEDIATE`
  * (`persistenza/AperturaDatabase.kt`), so the re-read here is authoritative — proven under a real race
  * in `RiassuntoRepositorySqlConcorrenzaTest` (AC-S113); `databaseInMemoria()` never contends.
+ *
+ * [trova]/[diRegistrazione]/[inAttesa]/[inCorso] read the root row and its children from ONE [lettura]
+ * snapshot (ADR 0029 §5, AC-C30): never the root outside it, so a completion committing between the root
+ * SELECT and the children's can never pair an OLD root with NEW children or the reverse (AC-C31).
+ * `concludi` stays a write (`BEGIN IMMEDIATE`, via the caller's `UnitaDiLavoro`), never [lettura].
  */
-public class RiassuntoRepositorySql(private val db: SnastroDatabase) : RiassuntoRepository {
-    override fun trova(id: RiassuntoId): Riassunto? =
+public class RiassuntoRepositorySql(
+    private val db: SnastroDatabase,
+    private val lettura: LetturaCoerente,
+) : RiassuntoRepository {
+    /** ADR 0029 §5/ADR 0022 §4: the root row and its children (elementi/fonti, via [inDominio]) from ONE
+     * snapshot — never the root outside it (AC-C30). */
+    override fun trova(id: RiassuntoId): Riassunto? = lettura.inLettura {
         db.riassuntoQueries.trovaPerId(id.valore).executeAsOneOrNull()?.let { inDominio(db, it) }
+    }
 
-    override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> =
+    override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> = lettura.inLettura {
         db.riassuntoQueries.trovaDiRegistrazione(r.valore).executeAsList().map { inDominio(db, it) }
+    }
 
-    override fun inAttesa(): List<Riassunto> =
+    override fun inAttesa(): List<Riassunto> = lettura.inLettura {
         db.riassuntoQueries.trovaInAttesa().executeAsList().map { inDominio(db, it) }
+    }
 
-    override fun inCorso(): List<Riassunto> =
+    override fun inCorso(): List<Riassunto> = lettura.inLettura {
         db.riassuntoQueries.trovaInCorso().executeAsList().map { inDominio(db, it) }
+    }
 
     override fun salva(r: Riassunto): Esito<Unit> = try {
         if (db.riassuntoQueries.trovaPerId(r.id.valore).executeAsOneOrNull() == null) {

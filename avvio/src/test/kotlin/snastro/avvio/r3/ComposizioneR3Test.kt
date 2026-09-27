@@ -95,7 +95,8 @@ class ComposizioneR3Test {
                 s3.stato.value is RegistrazioneUiStato.Dati
             }
             assertNull((s3.stato.value as RegistrazioneUiStato.Dati).contenutoRiassunto, "nessuna scheda in R2")
-            assertEquals(emptyList(), RiassuntoRepositorySql(it.contesto.database).diRegistrazione(a))
+            val riassunti = RiassuntoRepositorySql(it.contesto.database, it.contesto.lettura)
+            assertEquals(emptyList(), riassunti.diRegistrazione(a))
         }
         val r1r2 = listOf("r1", "r2").flatMap { d ->
             File("src/main/kotlin/snastro/avvio/$d").walkTopDown()
@@ -115,8 +116,9 @@ class ComposizioneR3Test {
             val interrotto = unRiassunto("interrotto", a).conAvvio()
             val daFare = unRiassunto("da-fare", b)
             conDatabase(cartella) { db ->
-                val repo = RiassuntoRepositorySql(db)
-                UnitaDiLavoroSql(db).inTransazione { repo.salva(interrotto).also { repo.salva(daFare) } }.atteso()
+                val uow = UnitaDiLavoroSql(db)
+                val repo = RiassuntoRepositorySql(db, uow)
+                uow.inTransazione { repo.salva(interrotto).also { repo.salva(daFare) } }.atteso()
                 ElaborazioneRepositorySql(db).salva(
                     unaElaborazione(
                         StatoElaborazione.IN_CORSO,
@@ -210,7 +212,7 @@ class ComposizioneR3Test {
             val a = it.importa()
             it.trascrivi(a)
             val db = it.contesto.database
-            val repo = RiassuntoRepositorySql(db)
+            val repo = RiassuntoRepositorySql(db, it.contesto.lettura)
             val r = unRiassunto("pronto", a).conAvvio()
             UnitaDiLavoroSql(db).inTransazione { repo.salva(r) }.atteso()
             r.conCompletamento(BOZZA, unaStruttura(1 to 1, 2 to 2))
@@ -375,6 +377,17 @@ class ComposizioneR3Test {
     }
 
     @Test
+    fun `AC-C35 contesto lettura e la stessa istanza a cui il dispatcher delega`() {
+        AmbienteR3(radice).use {
+            val visto = it.contesto.dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(it.contesto.lettura.inLettura { 1 })
+            }.atteso()
+
+            assertEquals(1, visto, "la inLettura annidata deve UNIRSI alla transazione, non aprirne una propria")
+        }
+    }
+
+    @Test
     fun `LettoreNomi su SQL reale - il run etichetta la Voce col Nome attuale e la vista segue una rinomina`() {
         AmbienteR3(radice).use {
             val a = it.registrazioneTrascritta()
@@ -385,7 +398,8 @@ class ComposizioneR3Test {
 
             assertTrue("Anna" in it.modello.richieste.single().ingresso, "la legenda nomina Voce 1 'Anna'")
             assertEquals(listOf("Anna"), nomiNelSommario(it, a))
-            val anna = ParlanteRepositorySql(it.contesto.database).delProgetto(it.progetto.progettoId).single().id
+            val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
+            val anna = parlanti.delProgetto(it.progetto.progettoId).single().id
             it.r3.r2.comandiParlante.rinomina(RinominaParlante(anna, "Annamaria")).atteso()
             assertEquals(listOf("Annamaria"), nomiNelSommario(it, a), "INV-S5: i nomi si leggono, mai salvati")
         }

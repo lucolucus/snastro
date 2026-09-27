@@ -44,14 +44,15 @@ public fun apriDatabaseProgetto(cartella: File): DatabaseProgetto {
  * one physical connection open at that instant. The explicit `PRAGMA secure_delete = ON` afterwards
  * re-asserts it on that same connection and — since `SQLiteConfig` has no dedicated secure_delete
  * setter, only the generic, non-greppable `setPragma` — is what ADR 0009's presence rule greps for.
- * Every transaction starts with `BEGIN IMMEDIATE` (the write lock acquired upfront) — enforced by
+ * Every write transaction starts with `BEGIN IMMEDIATE` (the write lock acquired upfront; a
+ * `LetturaCoerente` read begins `BEGIN DEFERRED` + `query_only`, ADR 0029) — enforced by
  * [DriverSqliteImmediato], NOT by `TransactionMode.IMMEDIATE`: SQLDelight's own `BEGIN TRANSACTION`
  * bypasses sqlite-jdbc's transaction mode (fix-batch-17), which is kept only for any plain-JDBC
  * `setAutoCommit(false)` path. With `busy_timeout`, a concurrent writer (RiallineaImpronte, the
  * Elaborazione queue, a Parlanti command) WAITS for the single writer's lock instead of failing on
  * the upgrade from a stale WAL read snapshot to a write lock (`SQLITE_BUSY_SNAPSHOT`).
  */
-internal fun driverSqlite(url: String): JdbcDriver {
+internal fun driverSqlite(url: String, osserva: (String) -> Unit = {}): JdbcDriver {
     val config = SQLiteConfig().apply {
         enforceForeignKeys(true)
         setJournalMode(SQLiteConfig.JournalMode.WAL)
@@ -59,7 +60,7 @@ internal fun driverSqlite(url: String): JdbcDriver {
         setTransactionMode(SQLiteConfig.TransactionMode.IMMEDIATE)
         setBusyTimeout(BUSY_TIMEOUT_MS)
     }
-    val driver = DriverSqliteImmediato(JdbcSqliteDriver(url, config.toProperties()))
+    val driver = DriverSqliteImmediato(JdbcSqliteDriver(url, config.toProperties()), osserva)
     driver.execute(null, "PRAGMA secure_delete = ON", 0)
     return driver
 }

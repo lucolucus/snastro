@@ -185,10 +185,11 @@ internal class AmbienteR2(
     /** Parlanti rows of the open project, read straight from its database. */
     fun conteggi(id: RegistrazioneId): Conteggi {
         val db = contesto.database
+        val parlanti = ParlanteRepositorySql(db, contesto.lettura)
         return Conteggi(
-            parlanti = ParlanteRepositorySql(db).delProgetto(progetto.progettoId).size,
+            parlanti = parlanti.delProgetto(progetto.progettoId).size,
             attribuzioni = AttribuzioneRepositorySql(db).diRegistrazione(id).size,
-            impronte = ParlanteRepositorySql(db).impronteDelProgetto(progetto.progettoId).size,
+            impronte = parlanti.impronteDelProgetto(progetto.progettoId).size,
         )
     }
 

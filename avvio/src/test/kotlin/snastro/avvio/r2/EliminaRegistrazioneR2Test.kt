@@ -94,8 +94,9 @@ class EliminaRegistrazioneR2Test {
             assertEquals(setOf("Mario", "Terzo"), galleria.keys, "l'Ospite non esiste piu'")
             assertEquals(1, galleria.getValue("Mario").numImpronte)
             assertEquals(1, galleria.getValue("Mario").numRegistrazioni)
-            assertEquals(1, ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(s.q).size)
-            val lapide = checkNotNull(ParlanteRepositorySql(it.contesto.database).trova(s.terzo))
+            val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
+            assertEquals(1, parlanti.impronteDiRegistrazione(s.q).size)
+            val lapide = checkNotNull(parlanti.trova(s.terzo))
             assertTrue(lapide.eliminato, "la lapide resta eliminata")
             assertEquals("Terzo", lapide.nome.valore)
             assertFalse(Files.exists(cartella.resolve(audio(s.r))))
@@ -328,7 +329,8 @@ class EliminaRegistrazioneR2Test {
      */
     private fun righe(ambiente: AmbienteR2, id: RegistrazioneId): Map<String, Int> {
         val db = ambiente.contesto.database
-        val trascritto = TrascrittoRepositorySql(db).trova(id)
+        val lettura = ambiente.contesto.lettura
+        val trascritto = TrascrittoRepositorySql(db, lettura).trova(id)
         return mapOf(
             "registrazione" to listOfNotNull(RegistrazioneRepositorySql(db).trova(id)).size,
             "elaborazione" to ElaborazioneRepositorySql(db).diRegistrazione(id).size,
@@ -336,7 +338,7 @@ class EliminaRegistrazioneR2Test {
             "voce" to (trascritto?.voci?.size ?: 0),
             "segmento" to (trascritto?.segmenti?.size ?: 0),
             "attribuzione" to AttribuzioneRepositorySql(db).diRegistrazione(id).size,
-            "impronta_vocale" to ParlanteRepositorySql(db).impronteDiRegistrazione(id).size,
+            "impronta_vocale" to ParlanteRepositorySql(db, lettura).impronteDiRegistrazione(id).size,
             "eliminazione_in_sospeso" to inSospeso(ambiente).count { e -> e.registrazioneId == id },
         )
     }

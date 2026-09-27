@@ -34,8 +34,8 @@ import kotlin.test.assertEquals
 class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     private val driver = DriverContato(driverInMemoria())
     private val db = SnastroDatabase(driver).seminato()
-    private val repo = ParlanteRepositorySql(db)
     private val uow = UnitaDiLavoroSql(db)
+    private val repo = ParlanteRepositorySql(db, uow)
 
     @Test
     fun `AC-622 un Parlante attivo che perde un impronta registra 1 checkpoint dopo il commit`() {

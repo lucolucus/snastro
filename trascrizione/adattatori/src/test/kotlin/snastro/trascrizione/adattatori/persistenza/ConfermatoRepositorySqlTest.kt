@@ -5,6 +5,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.persistenza.SnastroDatabase
+import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
@@ -13,7 +14,7 @@ import kotlin.test.assertEquals
 /** REWORK ADR 0019 §3 of [TrascrittoRepositorySql]: `segmento.confermato` is written and read back (AC-522). */
 class ConfermatoRepositorySqlTest {
     private val db = databaseInMemoria().seminato()
-    private val repo = TrascrittoRepositorySql(db)
+    private val repo = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
 
     @Test
     fun `AC-522 un Trascritto con flag misti e salvato e riletto identico`() {

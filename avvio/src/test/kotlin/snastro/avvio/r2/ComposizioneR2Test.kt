@@ -108,7 +108,7 @@ class ComposizioneR2Test {
             val id = it.importa()
             it.trascrivi(id)
             runBlocking { it.r2.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) }
-            val parlanti = ParlanteRepositorySql(it.contesto.database)
+            val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
             assertEquals("0-1000,2000-3000", parlanti.impronteDiRegistrazione(id).single().sorgente)
 
             it.r2.r1.revisione.dividiVoce.esegui(DividiVoce(id, VoceId(1), setOf(SegmentoId(3)))).atteso()
@@ -176,8 +176,8 @@ class ComposizioneR2Test {
                 estrattore.lock.unlock()
             }
             attendiFinche(timeout = 10.seconds, messaggio = "impronta riallineata al modello corrente") {
-                val riga = ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(id).single()
-                riga.modello == "altro-modello"
+                val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
+                parlanti.impronteDiRegistrazione(id).single().modello == "altro-modello"
             }
             assertEquals(true, recuperoGiaConcluso, "dopo RecuperaElaborazioniInterrotte")
             assertTrue(estrattore.thread.none { t -> t.name == AmbienteR2.THREAD_UI }, "mai sul thread della UI")
@@ -246,9 +246,20 @@ class ComposizioneR2Test {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
             attendiFinche(timeout = 10.seconds, messaggio = "impronta riderivata al modello reale") {
-                val riga = ParlanteRepositorySql(it.contesto.database).impronteDiRegistrazione(id).single()
-                riga.modello == CatalogoDiarizzazione.embeddingTitanetSmall.id
+                val parlanti = ParlanteRepositorySql(it.contesto.database, it.contesto.lettura)
+                parlanti.impronteDiRegistrazione(id).single().modello == CatalogoDiarizzazione.embeddingTitanetSmall.id
             }
+        }
+    }
+
+    @Test
+    fun `AC-C35 contesto lettura e la stessa istanza a cui il dispatcher delega`() {
+        AmbienteR2(radice).use {
+            val visto = it.contesto.dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(it.contesto.lettura.inLettura { 1 })
+            }.atteso()
+
+            assertEquals(1, visto, "la inLettura annidata deve UNIRSI alla transazione, non aprirne una propria")
         }
     }
 

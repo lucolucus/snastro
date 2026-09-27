@@ -167,7 +167,7 @@ class SomiglianzaR2Test {
     private fun righe(a: AmbienteR2, id: RegistrazioneId): Triple<Any, Any, Any> = Triple(
         segmenti(a, id),
         AttribuzioneRepositorySql(a.contesto.database).diRegistrazione(id).map { it.voceRef to it.parlanteId },
-        ParlanteRepositorySql(a.contesto.database).impronteDiRegistrazione(id).size,
+        ParlanteRepositorySql(a.contesto.database, a.contesto.lettura).impronteDiRegistrazione(id).size,
     )
 
     private fun documento(a: AmbienteR2, id: RegistrazioneId): String? =
@@ -317,7 +317,8 @@ class SomiglianzaR2Test {
             assertEquals(nuova, attribuzione.voceRef.voceId)
             val dariano = a.r2.letture.parlantiDelProgetto().single { it.nome == "Dario" }
             assertEquals(attribuzione.parlanteId, dariano.parlanteId)
-            assertEquals(1, ParlanteRepositorySql(a.contesto.database).impronteDiRegistrazione(id).size)
+            val repoParlanti = ParlanteRepositorySql(a.contesto.database, a.contesto.lettura)
+            assertEquals(1, repoParlanti.impronteDiRegistrazione(id).size)
             attendiFinche(timeout = 10.seconds, messaggio = "Documento con Dario") {
                 documento(a, id)?.contains("**Dario**") == true
             }
