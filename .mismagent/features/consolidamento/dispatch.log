@@ -37,3 +37,6 @@
 2026-09-27T16:36:28Z	a3-ritenta-parlanti	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW
 2026-09-27T16:47:45Z	a3-ritenta-parlanti	verifier	result	cycle=0	tier=standard	model=sonnet	PASS
 2026-09-27T16:48:29Z	a4-supporto-avvio	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-27T17:41:59Z	a4-supporto-avvio	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-27T17:51:21Z	a4-supporto-avvio	verifier	result	cycle=0	tier=deep	model=opus	FAIL
+2026-09-27T17:51:21Z	a4-supporto-avvio	worker	dispatch	cycle=1	tier=standard	model=sonnet
