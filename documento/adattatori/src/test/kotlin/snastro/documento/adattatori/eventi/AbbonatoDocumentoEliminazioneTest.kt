@@ -63,6 +63,7 @@ class AbbonatoDocumentoEliminazioneTest {
             AbbonatoDocumentoEventi(
                 dispatcher,
                 politica,
+                lettore::registrazioniConTrascritto,
                 CoroutineScope(StandardTestDispatcher(scheduler)),
                 Segnalazione { _, _ -> },
             )
@@ -170,6 +171,22 @@ class AbbonatoDocumentoEliminazioneTest {
             throw IOException("guasto durante la scrittura")
         }
 
+        ambiente.commit(ElaborazioneCompletata(REG))
+        advanceUntilIdle()
+
+        assertEquals(listOf(Rimosso(NOME)), ambiente.operazioni().drop(prima))
+    }
+
+    @Test
+    fun `AC-C93 un aggiornamento fuso DOPO una rimozione pendente non la ritrasforma in scrittura`() = runTest {
+        val ambiente = Ambiente(testScheduler)
+        advanceUntilIdle() // lo sweep di avvio scrive REG una prima volta
+        val prima = ambiente.operazioni().size
+
+        // La rimozione e' GIA' pendente quando l'aggiornamento si fonde nella STESSA chiave, prima che il
+        // worker giri: primaArrivata deve tenere l'eliminata della voce gia' pendente (prioritaria), mai quella
+        // del nuovo evento (altra, che qui e' null) — altrimenti la rimozione tornerebbe una scrittura.
+        ambiente.commit(eliminata())
         ambiente.commit(ElaborazioneCompletata(REG))
         advanceUntilIdle()
 

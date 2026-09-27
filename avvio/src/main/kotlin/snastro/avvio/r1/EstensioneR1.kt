@@ -154,13 +154,17 @@ internal class EstensioneR1(
         catalogo: CatalogoRegistrazioni,
     ): Job {
         val lavoro = SupervisorJob(contesto.scope.coroutineContext[Job])
+        val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo)
         AbbonatoDocumentoEventi(
             contesto.dispatcher,
             RigenerazioneDocumentoPolitica(
-                LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo),
+                lettoreTrascritto,
                 lettoreNomi(contesto),
                 ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
             ),
+            // AC-C47: the startup sweep lists ids itself, so a poisoned Registrazione's retries never block or
+            // re-run every other one (never through RigenerazioneDocumentoPolitica's all-or-nothing fold).
+            lettoreTrascritto::registrazioniConTrascritto,
             CoroutineScope(contesto.scope.coroutineContext + lavoro + io),
             // JUL-backed (ADR 0028 §2): :supporto never touches JUL. Wired here until a4 unifies every
             // Segnalazione behind one gestoreErroriNonCatturati-style collaborator.

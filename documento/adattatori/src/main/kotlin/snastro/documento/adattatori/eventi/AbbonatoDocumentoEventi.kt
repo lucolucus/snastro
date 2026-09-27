@@ -3,7 +3,6 @@ package snastro.documento.adattatori.eventi
 import kotlinx.coroutines.CoroutineScope
 import snastro.documento.applicazione.letture.Documento
 import snastro.documento.applicazione.politiche.RigeneraDocumento
-import snastro.documento.applicazione.politiche.RigeneraTuttiIDocumenti
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
@@ -50,7 +49,11 @@ import kotlin.time.Duration.Companion.seconds
  * [RitentaConBackoff] never lets one key's backoff wait hold up another's turn. A unit that THROWS (e.g. a
  * Trascritto read failing its rebuild, D-0008) is retried the same way: [ritenta] is the only place that catches
  * it (never here), and rethrows every [Error] and the worker's OWN cancellation (AC-C48). The startup sweep
- * (AC-185, [RigeneraTuttiIDocumenti], ADR 0012 R4) is requested once, in `init`.
+ * (AC-185, ADR 0012 R4) is requested once, in `init`: it only LISTS the ids from [registrazioniConTrascritto] and
+ * fans them into their OWN [Chiave.PerRegistrazione] via [accoda] (AC-C47) — unlike
+ * [RigenerazioneDocumentoPolitica.esegui] of `RigeneraTuttiIDocumenti` (AC-157), whose fold is reserved for a
+ * caller that wants exactly that all-or-nothing stop, the sweep here must NOT let one poisoned Registrazione's
+ * retries block or re-run every other one every 30 s.
  *
  * **Deletion** (ADR 0020 §3, AC-624/AC-C93). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
  * per-[RegistrazioneId] key: merged into a pending entry it replaces the regeneration (a removal, once
@@ -67,9 +70,19 @@ import kotlin.time.Duration.Companion.seconds
  * still-registered [dispatcher] subscription then has nothing left to hand work to, since the whole
  * `DispatcherEventiInMemoria` is discarded with the closed Progetto.
  */
+// one parameter per collaborator: dispatcher, politica, the sweep's id lister (AC-C47), scope, segnalazione, 2
+// backoff durations.
+@Suppress("LongParameterList")
 public class AbbonatoDocumentoEventi(
     dispatcher: DispatcherEventiInMemoria,
     private val politica: RigenerazioneDocumentoPolitica,
+    /**
+     * The startup sweep's own id lister (AC-C47) — e.g. `LettoreTrascritto::registrazioniConTrascritto` bound at
+     * the `:avvio` wiring site to the SAME `LettoreTrascritto` instance given to [politica]: injected here (never
+     * read off [politica], which keeps its `LettoreTrascritto` private) so the sweep can list ids WITHOUT going
+     * through [RigenerazioneDocumentoPolitica]'s all-or-nothing `RigeneraTuttiIDocumenti` fold (AC-157).
+     */
+    private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
     scope: CoroutineScope,
     segnalazione: Segnalazione,
     ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
@@ -150,9 +163,19 @@ public class AbbonatoDocumentoEventi(
 
     /** The job [ritenta] runs per [chiave]: true = done, false = retry (ADR 0028 §2). [ritenta] is the only catch. */
     private suspend fun esegui(chiave: Chiave): Boolean = when (chiave) {
-        Chiave.Sweep -> politica.esegui(RigeneraTuttiIDocumenti) is Esito.Ok
+        Chiave.Sweep -> avviaSweep()
         is Chiave.PerParlante -> politica.perParlanteRinominato(chiave.id) is Esito.Ok
         is Chiave.PerRegistrazione -> eseguiRegistrazione(chiave.id)
+    }
+
+    /**
+     * AC-C47: only LISTS the ids and fans each into its OWN [Chiave.PerRegistrazione] (same as an event would),
+     * so a poisoned Registrazione's own retries never block, nor keep re-running, any other one — this call
+     * itself never writes anything and is always "done" (the listing is the only thing that can fail here).
+     */
+    private fun avviaSweep(): Boolean {
+        registrazioniConTrascritto().forEach { accoda(it, LavoroPendente()) }
+        return true
     }
 
     /**

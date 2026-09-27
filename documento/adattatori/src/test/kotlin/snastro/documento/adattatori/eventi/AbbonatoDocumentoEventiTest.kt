@@ -83,11 +83,12 @@ class AbbonatoDocumentoEventiTest {
         val segnalazioni: SegnalazioniRegistrate = SegnalazioniRegistrate(),
     ) {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
-        private val politica = RigenerazioneDocumentoPolitica(LettoreTrascrittoFinta(trascritti), nomi, scrittore)
+        private val lettore = LettoreTrascrittoFinta(trascritti)
+        private val politica = RigenerazioneDocumentoPolitica(lettore, nomi, scrittore)
 
         init {
             val scope = CoroutineScope(StandardTestDispatcher(scheduler))
-            AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
+            AbbonatoDocumentoEventi(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
         }
 
         fun commit(evento: EventoPubblicato) {
@@ -205,7 +206,13 @@ class AbbonatoDocumentoEventiTest {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+        AbbonatoDocumentoEventi(
+            dispatcher,
+            politica,
+            lettore::registrazioniConTrascritto,
+            scope,
+            Segnalazione { _, _ -> },
+        )
         advanceUntilIdle() // startup sweep settles (no fault armed yet)
         val prima = scrittore.operazioni.size
 
@@ -403,7 +410,7 @@ class AbbonatoDocumentoEventiTest {
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val segnalazioni = SegnalazioniRegistrate()
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
+        AbbonatoDocumentoEventi(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
         advanceTimeBy(1.seconds)
         runCurrent() // lo sweep di avvio: puo' fallire su poisoned, irrilevante qui
 
@@ -424,15 +431,70 @@ class AbbonatoDocumentoEventiTest {
     }
 
     @Test
-    fun `AC-C47 lo sweep di avvio non si ferma a una Registrazione avvelenata`() = runTest {
+    fun `AC-C47 lo sweep in fan-out, X avvelenata gia nota all avvio non impedisce ne riscrive Y`() = runTest {
         val poisoned = REG_1
         val altra = RegistrazioneId("reg-c47-altra")
+        // Entrambe note GIA' all'avvio, nello STESSO elenco dello sweep, X PRIMA di Y: lo sweep deve accodare
+        // ciascuna nella propria Chiave.PerRegistrazione (non ripiegare sul fold tutto-o-niente della policy,
+        // che si fermerebbe alla prima e non arriverebbe mai a Y).
+        val trascritti = mapOf(
+            poisoned to unTrascritto(poisoned, titolo = "X"),
+            altra to unTrascritto(altra, titolo = "Y"),
+        )
+        val lettore = LettoreCheLanciaPer(poisoned, LettoreTrascrittoFinta(trascritti))
+        val scrittore = ScrittoreDocumentoFinta()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
+        val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+        AbbonatoDocumentoEventi(
+            dispatcher,
+            politica,
+            lettore::registrazioniConTrascritto,
+            scope,
+            Segnalazione { _, _ -> },
+        )
+
+        try {
+            advanceTimeBy(120.seconds) // molti ritenti VIRTUALI di X: mai un busy loop reale, ne una advanceUntilIdle
+            runCurrent() // (X ritenta per sempre: un advanceUntilIdle qui non terminerebbe mai)
+
+            assertTrue(
+                scrittore.documenti.containsKey("2026-09-12 Y.md"),
+                "Y e' scritta nonostante lo sweep avveleni su X",
+            )
+            assertFalse(scrittore.documenti.containsKey("2026-09-12 X.md"), "X resta avvelenata, mai scritta")
+            val scrittureY = scrittore.operazioni.count {
+                it == ScrittoreDocumentoFinta.Operazione.Scritto("2026-09-12 Y.md")
+            }
+            assertEquals(
+                1,
+                scrittureY,
+                "i ritenti di X (una Chiave separata, un backoff separato) non riscrivono mai Y",
+            )
+        } finally {
+            // poisoned ritenta per sempre: senza cancellare lo scope qui (anche su un'asserzione fallita), il
+            // drain automatico di fine-runTest continuerebbe ad avanzare il tempo virtuale all'infinito
+            // inseguendo un lavoro che non finisce mai (lessons-by-block-type.md: fail, non hang, il gate).
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `AC-C47 lo sweep avvelenato non impedisce una Registrazione nota solo dopo, via evento`() = runTest {
+        val poisoned = REG_1
+        val altra = RegistrazioneId("reg-c47-altra-evento")
         val lettore = LettoreCheLanciaPer(poisoned, LettoreTrascrittoFinta(mapOf(poisoned to unTrascritto(poisoned))))
         val scrittore = ScrittoreDocumentoFinta()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+        AbbonatoDocumentoEventi(
+            dispatcher,
+            politica,
+            lettore::registrazioniConTrascritto,
+            scope,
+            Segnalazione { _, _ -> },
+        )
         advanceTimeBy(1.seconds)
         runCurrent() // lo sweep di avvio fallisce subito su poisoned e continua a ritentare in background
 
@@ -463,7 +525,7 @@ class AbbonatoDocumentoEventiTest {
         val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
         val segnalazioni = SegnalazioniRegistrate()
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
+        AbbonatoDocumentoEventi(dispatcher, politica, trascritti::registrazioniConTrascritto, scope, segnalazioni)
         advanceUntilIdle() // sweep di avvio
         val primaDellaCancellazione = scrittore.operazioni.size
 
@@ -490,7 +552,7 @@ class AbbonatoDocumentoEventiTest {
             val scope = CoroutineScope(
                 StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, e -> sfuggiti += e },
             )
-            AbbonatoDocumentoEventi(dispatcher, politica, scope, segnalazioni)
+            AbbonatoDocumentoEventi(dispatcher, politica, trascritti::registrazioniConTrascritto, scope, segnalazioni)
             advanceUntilIdle()
 
             assertEquals(1, scrittore.tentativi, "un solo tentativo: l'Error non e' un ritento")
@@ -533,22 +595,33 @@ class AbbonatoDocumentoEventiTest {
             val nomi = LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco"))
             val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
             val politica = RigenerazioneDocumentoPolitica(trascritti, nomi, scrittore)
-            AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+            AbbonatoDocumentoEventi(
+                dispatcher,
+                politica,
+                trascritti::registrazioniConTrascritto,
+                scope,
+                Segnalazione { _, _ -> },
+            )
 
-            assertTrue(dentro.await(10, TimeUnit.SECONDS), "lo sweep di avvio avrebbe dovuto partire")
+            // Lo sweep stesso non scrive (AC-C47: lista soltanto e fa il fan-out); e' la SUA prima unita' fanned-out
+            // (PerRegistrazione(reg-1)) a bloccarsi qui.
+            assertTrue(dentro.await(10, TimeUnit.SECONDS), "il fan-out dello sweep avrebbe dovuto partire")
 
-            // Richieste "nel frattempo": una per Registrazione (reg2) e una per Parlante — restano in coda,
+            // Richieste "nel frattempo": reg2 e' GIA' pendente (accodata dal fan-out dello sweep, non ancora
+            // girata) e si fonde nella stessa chiave; PerParlante e' tutta nuova. Entrambe restano in coda,
             // proprio perche' condividono l'UNICA istanza di RitentaConBackoff (sequenziale).
             dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(reg2))) }
             dispatcher.unitaDiLavoro.inTransazione {
                 Esito.Ok(dispatcher.pubblica(ParlanteRinominato(PARLANTE, "Marco Rossi")))
             }
-            // 1 = solo lo sweep, gia' bloccato: ne' reg2 ne' PerParlante partono finche' non e' sbloccato.
-            assertEquals(1, concorrenti.get(), "nessuna delle due gira finche' lo sweep e' bloccato")
+            // 1 = solo reg-1, gia' bloccato: ne' reg2 ne' PerParlante partono finche' non e' sbloccato.
+            assertEquals(1, concorrenti.get(), "nessuna delle due gira finche' reg-1 e' bloccata")
 
             procedi.countDown()
             attendiFinche(messaggio = "le tre unita' avrebbero dovuto completarsi: ${chiamate.get()} chiamate") {
-                chiamate.get() >= 4 // sweep: reg-1 + reg2, poi PerRegistrazione(reg2) e PerParlante(PARLANTE) su reg-1
+                // fan-out dello sweep: reg-1 (bloccata sopra) + reg2 (fusa con l'evento, UNA sola scrittura),
+                // poi PerParlante(PARLANTE) su reg-1: 3 scritture totali, mai piu' di 4 (nessuna duplicata).
+                chiamate.get() >= 3
             }
 
             assertEquals(1, massimoConcorrenti.get(), "mai piu' di un'unita' di lavoro in volo insieme (AC-C92)")
@@ -589,7 +662,13 @@ class AbbonatoDocumentoEventiTest {
         }
         val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, scope, Segnalazione { _, _ -> })
+        AbbonatoDocumentoEventi(
+            dispatcher,
+            politica,
+            trascritti::registrazioniConTrascritto,
+            scope,
+            Segnalazione { _, _ -> },
+        )
         advanceUntilIdle() // sweep di avvio: non trova nulla
 
         dispatcher.unitaDiLavoro.inTransazione {
