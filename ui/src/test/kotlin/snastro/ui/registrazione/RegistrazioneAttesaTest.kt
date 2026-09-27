@@ -112,7 +112,8 @@ class RegistrazioneAttesaTest {
         val usati = a.comandi.thread + threadProposta
         assertTrue(a.comandi.thread.isNotEmpty() && threadProposta.isNotEmpty())
         usati.forEach {
-            assertEquals("io-test", it.name)
+            // Prefisso, non uguaglianza: in modalita debug delle coroutine il thread si chiama "io-test @coroutine#N".
+            assertTrue(it.name.startsWith("io-test"), "thread inatteso: ${it.name}")
             assertNotEquals(main, it)
         }
         schermata.cancel()

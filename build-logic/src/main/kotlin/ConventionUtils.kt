@@ -73,5 +73,11 @@ internal fun Project.configureTesting() {
             // dedicated `:ui:renderCheck` task.
             excludeTags("modelli", "render")
         }
+        // Timeout di default per ogni test e metodo di ciclo di vita del gate: un'attesa sbagliata
+        // (un ordine mancato, uno scope mai cancellato) fa fallire il test invece di bloccare il gate.
+        // 60 s lasciano ampio margine al test piu lento (circa 10 s); un `@Timeout` esplicito prevale.
+        // Disattivato sotto debugger. Solo `test`: `modelliTest` e `renderCheck` restano senza limite.
+        systemProperty("junit.jupiter.execution.timeout.default", "60 s")
+        systemProperty("junit.jupiter.execution.timeout.mode", "disabled_on_debug")
     }
 }
