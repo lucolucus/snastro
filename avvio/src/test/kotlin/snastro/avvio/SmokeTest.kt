@@ -11,6 +11,7 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.mappa
 import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
 import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto
@@ -29,6 +30,13 @@ import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.dominio.NomeProgetto
 import snastro.progetto.dominio.Progetto
 import snastro.progetto.dominio.Registrazione
+import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
+import snastro.sintesi.applicazione.porte.conAvvio
+import snastro.sintesi.applicazione.porte.conCompletamento
+import snastro.sintesi.applicazione.porte.unRiassunto
+import snastro.sintesi.applicazione.porte.unaStruttura
+import snastro.sintesi.dominio.BozzaElemento
+import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
@@ -47,7 +55,8 @@ import kotlin.test.assertTrue
  * AC-237 + AC-351 + AC-357: `--smoke <fixture-dir>` opens the fixture project (>=1 Registrazione already
  * imported, one of them with a completed Trascritto whose Voce 1 is named 'Anna') and saves S1, S2 (the
  * smoke waits for the identification badge '2 voci · 1 da identificare'), S3 (the Voci panel, Voce 1's
- * Nome shown), S4 (the shell's Parlanti section) and S5 — headless, on the ML Finte: no sherpa natives,
+ * Nome shown), S3 with the Riassunto tab selected (AC-S151: the fixture's pronto Riassunto), S4 (the shell's
+ * Parlanti section) and S5 — headless, on the ML Finte: no sherpa natives,
  * no models. fix-batch-16 LOW-1: S5 renders the REAL catalogue over an empty cache ('Mancanti',
  * 'Scarica'). The fixture here is built DIRECTLY via the SQL repositories + domain factories (never
  * `AggiungiRegistrazioneServizio`'s real FFmpeg probe/copy pipeline — this proves the smoke MECHANISM,
@@ -59,7 +68,7 @@ class SmokeTest {
     lateinit var cartella: Path
 
     @Test
-    fun `AC-237 AC-351 AC-357 smoke apre il progetto fixture e salva S1, S2, S3, S4 e S5, senza nativi`() {
+    fun `AC-237 AC-351 AC-357 AC-S151 smoke salva S1, S2, S3, S3 Riassunto, S4 e S5 del fixture, senza nativi`() {
         val cartellaFixture = cartella.resolve("Fixture.snastro")
         costruisciProgettoFixture(cartellaFixture)
         SCHERMATE.forEach { Files.deleteIfExists(Path.of("build/smoke/$it.png")) }
@@ -117,6 +126,15 @@ class SmokeTest {
         confermaAttribuzione(db.database, registrazioni).esegui(
             ConfermaAttribuzione(VoceRef(registrazioneId, VoceId(1)), ObiettivoAttribuzione.NuovoParlante("Anna")),
         ).atteso()
+
+        // AC-S151: a pronto Riassunto of it (Sintesi's own SQL repository and root transitions), so the smoke
+        // captures S3 with the Riassunto tab selected and its content shown.
+        val riassunti = RiassuntoRepositorySql(db.database)
+        val riassunto = unRiassunto("fixture-riassunto", registrazioneId, argomento = "punto sul progetto").conAvvio()
+        val uow = UnitaDiLavoroSql(db.database)
+        uow.inTransazione { riassunti.salva(riassunto) }.atteso()
+        riassunto.conCompletamento(BOZZA_FIXTURE, unaStruttura(1 to 1, 2 to 2, 3 to 1))
+        uow.inTransazione { riassunti.concludi(riassunto).mappa { } }.atteso()
         db.chiudi()
     }
 
@@ -139,6 +157,14 @@ class SmokeTest {
     }
 
     private companion object {
-        val SCHERMATE = listOf("s1", "s2", "s3", "s4", "s5")
+        val SCHERMATE = listOf("s1", "s2", "s3", "s3-riassunto", "s4", "s5")
+
+        val BOZZA_FIXTURE = BozzaRiassunto(
+            sommario = "{V1} apre la riunione e {V2} porta due aggiornamenti.",
+            decisioni = listOf(BozzaElemento("Si parte dal primo aggiornamento.", listOf(3), null)),
+            questioniAperte = listOf(BozzaElemento("Il secondo aggiornamento resta da discutere.", listOf(2), null)),
+            azioni = listOf(BozzaElemento("{V2} presenta il primo aggiornamento.", listOf(2), 2)),
+            puntiChiave = listOf(BozzaElemento("Il punto sul progetto.", listOf(1), 1)),
+        )
     }
 }

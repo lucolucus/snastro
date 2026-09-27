@@ -64,8 +64,9 @@ import java.util.logging.Logger
  *   model (nor its release) with the next project's own worker.
  * - The Documento reads names from [lettoreNomi]: [LettoreNomiVuoto] in R1 ('Voce n', AC-356: no
  *   `:parlanti` class); R2 (`snastro.avvio.r2.EstensioneR2`) passes `LettoreNomiDaParlanti` (AC-359).
- * - The [CodaCondivisa] is built LAST, with only the Elaborazione source bound (ADR 0023, R0–R2
- *   behaviour unchanged): its construction runs `RecuperaElaborazioniInterrotte`
+ * - The [CodaCondivisa] is built LAST, with the Elaborazione source plus the context's
+ *   [ContestoEstensione.fontiCoda] (ADR 0023: none in R0–R2, behaviour unchanged; R3 adds the Riassunto one):
+ *   its construction runs `RecuperaElaborazioniInterrotte`
  *   strictly before its worker picks any FIFO head (AC-233), and only after every after-commit
  *   subscriber above is registered (a recovered `fallita` still refreshes S2 and the Documento). Its
  *   first recovery completes [CollaboratoriR1.recuperoConcluso] — what R2's `RiallineaTutteLeImpronte`
@@ -116,7 +117,7 @@ internal class EstensioneR1(
                     recupera = recuperoElaborazioni(recupera, recuperoConcluso),
                     modelliPronti = modelliPronti,
                 ),
-            ),
+            ) + contesto.fontiCoda, // ADR 0023 §1: R3 adds the Riassunto source; R0–R2 none (behaviour unchanged)
             segnalaBloccato = { id -> log.warning("elaborazione $id esclusa dalla coda") },
         )
 

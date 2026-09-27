@@ -38,7 +38,25 @@ internal class ContestoEstensione(
     val registrazioni: RegistrazioneRepository,
     /** The project's ONE player (R0's): R2 pauses it when the Registrazione it holds is deleted (ADR 0020 §3). */
     val lettoreAudio: LettoreAudio,
-)
+    /**
+     * ADR 0023 §1: the shared queue's sources BEYOND the Elaborazione one R1 always binds — empty in R0–R2;
+     * R3 (`snastro.avvio.r3.EstensioneR3`) adds the Riassunto source through [conFontiCoda].
+     */
+    val fontiCoda: List<FonteCoda> = emptyList(),
+) {
+    /** This same context, with [fonti] added to the shared queue R1 builds over it. */
+    fun conFontiCoda(fonti: List<FonteCoda>): ContestoEstensione =
+        ContestoEstensione(
+            progettoId,
+            cartella,
+            database,
+            dispatcher,
+            scope,
+            registrazioni,
+            lettoreAudio,
+            fontiCoda + fonti,
+        )
+}
 
 /** The extension's per-project state, as far as R0's own lifecycle needs to know it. */
 internal interface ProgettoEsteso {

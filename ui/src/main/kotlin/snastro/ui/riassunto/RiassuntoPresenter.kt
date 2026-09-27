@@ -71,6 +71,8 @@ class RiassuntoPresenter(
     private val servizioModelli: ServizioModelli,
     aggiornamenti: AggiornamentiVista,
     private val clock: Clock,
+    /** The optional catalogue entry 'Scarica il modello' downloads — injected by the composition (avvio-sintesi). */
+    private val idModelloLinguistico: String = ID_MODELLO_LINGUISTICO,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -210,7 +212,7 @@ class RiassuntoPresenter(
     private fun scaricaModello() {
         scope.launch {
             try {
-                withContext(io) { servizioModelli.scaricaFacoltativo(ID_MODELLO_LINGUISTICO) }
+                withContext(io) { servizioModelli.scaricaFacoltativo(idModelloLinguistico) }
             } catch (e: CancellationException) {
                 throw e
             } catch (
@@ -280,7 +282,7 @@ class RiassuntoPresenter(
     )
 
     private companion object {
-        /** ADR 0026 §8: the ONE optional catalogue entry v1 has (the Sintesi LLM). */
+        /** ADR 0026 §8: the ONE optional catalogue entry v1 has (the Sintesi LLM); [idModelloLinguistico]'s default. */
         const val ID_MODELLO_LINGUISTICO: String = "llm-qwen3.5-9b-q4_k_m"
     }
 }

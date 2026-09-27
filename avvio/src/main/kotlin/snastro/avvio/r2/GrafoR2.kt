@@ -11,9 +11,8 @@ import snastro.avvio.r1.SceltaMl
 import snastro.avvio.r1.SelezioneAdattatoriMl
 import snastro.avvio.r1.componentiR1
 import snastro.kernel.GeneratoreIdUuid
-import snastro.kernel.RegistrazioneId
 import snastro.modelli.CartellaCacheModelli
-import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
+import snastro.modelli.ProvisioningModelli
 import snastro.ui.ApriEsterno
 import snastro.ui.DestinazioneShell
 import snastro.ui.modelli.ServizioModelli
@@ -34,8 +33,15 @@ internal class GrafoR2(
     val apriEsterno: ApriEsterno,
 )
 
-/** The app-wide R2 pieces handed to the R0 graph: the per-project extension and S5's port. */
-internal class ComponentiR2(val estensione: EstensioneR2, val servizioModelli: ServizioModelli)
+/**
+ * The app-wide R2 pieces handed to the R0 graph: the per-project extension and S5's port — plus the app's ONE
+ * [provisioning] behind it, which R3 reads for the optional model's `installata` (ADR 0025 §4).
+ */
+internal class ComponentiR2(
+    val estensione: EstensioneR2,
+    val servizioModelli: ServizioModelli,
+    val provisioning: ProvisioningModelli,
+)
 
 /**
  * R1's app-wide components ([componentiR1]: ONE `MotoreSherpa`, the model catalogue, S5) with the Documento
@@ -56,7 +62,7 @@ internal fun componentiR2(
         generatoreId = GeneratoreIdUuid(),
         adattatori = { SelezioneAdattatoriMl.adattatoriParlanti(scelta, r1.motore, r1.provisioning) },
     )
-    return ComponentiR2(estensione, r1.servizioModelli)
+    return ComponentiR2(estensione, r1.servizioModelli, r1.provisioning)
 }
 
 /** The R2 graph (the app's): R0's own ([costruisciGrafoR0]) extended with [componentiR2]. */
@@ -73,12 +79,4 @@ internal fun costruisciGrafoR2(
         servizioModelli = componenti.servizioModelli,
         apriEsterno = ApriEsternoDesktop(),
     )
-}
-
-/** The open project's first Registrazione whose Elaborazione is COMPLETATA, or `null` (the `--smoke` S3 target). */
-internal fun GrafoR2.primaRegistrazioneCompletata(): RegistrazioneId? {
-    val collaboratori = r0.sessione.collaboratoriCorrenti()
-    val r2 = collaboratori?.estensione as? CollaboratoriR2 ?: return null
-    val ids = collaboratori.registrazioni().map { it.registrazioneId }
-    return r2.r1.statiElaborazione(ids).firstOrNull { it.stato == StatoElaborazioneVista.COMPLETATA }?.registrazioneId
 }
