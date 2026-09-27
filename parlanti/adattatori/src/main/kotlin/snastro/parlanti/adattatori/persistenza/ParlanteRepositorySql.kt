@@ -3,6 +3,7 @@ package snastro.parlanti.adattatori.persistenza
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import snastro.kernel.Esito
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -21,6 +22,7 @@ import snastro.parlanti.dominio.TipoParlante
 import snastro.persistenza.MetadatiDelProgetto
 import snastro.persistenza.MetadatiDiRegistrazione
 import snastro.persistenza.SnastroDatabase
+import snastro.persistenza.checkpointDopoCommit
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import migrations.Impronta_vocale as ImprontaVocaleRiga
@@ -44,19 +46,27 @@ import migrations.Parlante as ParlanteRiga
  * R23 (ADR 0009 amendment, widened by ADR 0020 §3, AC-622): `PRAGMA wal_checkpoint(TRUNCATE)` cannot
  * run inside a transaction — every [salva] that removed at least one stored print (an `eliminato`
  * [Parlante], [INV-15] moves, [INV-21], [INV-25], ADR 0018 / 0020 purges) and every [rimuovi]
- * registers ONE checkpoint on a SQLDelight `afterCommit` hook. Nested inside the caller's [snastro.kernel.UnitaDiLavoro]
- * transaction, SQLDelight defers `afterCommit` hooks of a nested transaction to the OUTERMOST one
- * (`Transacter.kt`), so the checkpoint only ever runs once that transaction has actually committed.
+ * registers ONE checkpoint through `:persistenza`'s [checkpointDopoCommit] (ADR 0029 §3), which joins
+ * the caller's [snastro.kernel.UnitaDiLavoro] transaction; SQLDelight defers `afterCommit` hooks of a
+ * nested transaction to the OUTERMOST one (`Transacter.kt`), so the checkpoint only ever runs once
+ * that transaction has actually committed.
+ *
+ * [trova]/[delProgetto] read the root row and its prints from ONE [lettura] snapshot (ADR 0029 §5,
+ * AC-C30/C31): never the root outside it.
  */
-public class ParlanteRepositorySql(private val db: SnastroDatabase) : ParlanteRepository {
-    override fun trova(id: ParlanteId): Parlante? {
-        val riga = db.parlanteQueries.trovaPerId(id.valore).executeAsOneOrNull() ?: return null
-        return riga.inDominio(impronteDi(db, id))
+public class ParlanteRepositorySql(
+    private val db: SnastroDatabase,
+    private val lettura: LetturaCoerente,
+) : ParlanteRepository {
+    override fun trova(id: ParlanteId): Parlante? = lettura.inLettura {
+        val riga = db.parlanteQueries.trovaPerId(id.valore).executeAsOneOrNull() ?: return@inLettura null
+        riga.inDominio(impronteDi(db, id))
     }
 
-    override fun delProgetto(id: ProgettoId): List<Parlante> =
+    override fun delProgetto(id: ProgettoId): List<Parlante> = lettura.inLettura {
         db.parlanteQueries.trovaDelProgetto(id.valore).executeAsList()
             .map { it.inDominio(impronteDi(db, ParlanteId(it.id))) }
+    }
 
     override fun nomeAttivoInUso(progettoId: ProgettoId, nome: Nome, escluso: ParlanteId?): Boolean =
         db.parlanteQueries.contaAttivoConNome(progettoId.valore, nome.normalizzato, escluso?.valore)
@@ -69,19 +79,14 @@ public class ParlanteRepositorySql(private val db: SnastroDatabase) : ParlanteRe
             if (ex.resultCode != SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE) throw ex
             return Esito.Errore(NomeGiaInUso(p.nome.valore))
         }
-        if (sostituisciImpronte(db, p)) checkpointDopoCommit()
+        if (sostituisciImpronte(db, p)) db.checkpointDopoCommit()
         return Esito.Ok(Unit)
     }
 
     override fun rimuovi(id: ParlanteId) {
         db.improntaVocaleQueries.eliminaDiParlante(id.valore)
         db.parlanteQueries.rimuovi(id.valore)
-        checkpointDopoCommit()
-    }
-
-    /** One checkpoint per removal (user Q-1, 2026-09-25): no per-transaction dedup. Dropped on rollback. */
-    private fun checkpointDopoCommit() {
-        db.transaction { afterCommit { db.parlanteQueries.walCheckpointTruncate() } }
+        db.checkpointDopoCommit()
     }
 
     override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> =

@@ -94,6 +94,10 @@ dependencies {
     // Ripristinabile / UnitaDiLavoroFinta / ErroreDiProva / Esito test helpers.
     testImplementation(testFixtures(project(":kernel")))
 
+    // attendiFinche (ADR 0028 §3, the only polling wait of the tests) — AC-C31's latch-driven concurrency case
+    // (ParlanteRepositorySqlTest).
+    testImplementation(project(":supporto-test"))
+
     // AbbonatoRiallineamentoImpronteTest: virtual time (StandardTestDispatcher/runTest, no real
     // sleeps — dev-architecture-app.md#test) to drive the coalescing/backoff coroutine deterministically.
     testImplementation(libs.kotlinx.coroutines.test)

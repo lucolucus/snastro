@@ -61,7 +61,7 @@ class RitrascriviRepositorySqlTest {
     @Test
     fun `AC-444 salva di un nuovo Trascritto sopra uno esistente lascia solo il nuovo`() {
         val db = databaseInMemoria().seminato()
-        val repo = TrascrittoRepositorySql(db)
+        val repo = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
         repo.salva(VECCHIO)
         assertEquals(6 to 40, repo.trova(R)?.let { it.prossimaVoce to it.prossimoSegmento })
 
@@ -87,8 +87,8 @@ class RitrascriviRepositorySqlTest {
         val database = apriDatabaseProgetto(cartella)
         try {
             val db = database.database.seminato()
-            val repo = TrascrittoRepositorySql(db)
             val uow = UnitaDiLavoroSql(db)
+            val repo = TrascrittoRepositorySql(db, uow)
             uow.inTransazione { Esito.Ok(repo.salva(VECCHIO)) }.atteso()
             val url = "jdbc:sqlite:${File(cartella, "progetto.db").absolutePath}"
             ATTRIBUZIONE_SU_VOCE_5.forEach { eseguiJdbc(url, it) }
@@ -112,11 +112,12 @@ class RitrascriviRepositorySqlTest {
     @Test
     fun `AC-445 la stessa sostituzione con le righe della Voce 5 cancellate prima fa COMMIT`() {
         val (db, driver) = databaseConDriver()
-        val repo = TrascrittoRepositorySql(db)
+        val uow = UnitaDiLavoroSql(db)
+        val repo = TrascrittoRepositorySql(db, uow)
         repo.salva(VECCHIO)
         seminaAttribuzioneSuVoce5(driver)
 
-        UnitaDiLavoroSql(db).inTransazione {
+        uow.inTransazione {
             driver.execute(null, "DELETE FROM attribuzione WHERE registrazione_id = '${R.valore}'", 0)
             repo.salva(NUOVO)
             Esito.Ok(Unit)

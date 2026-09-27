@@ -5,14 +5,13 @@ supersedes: null   # partial, amended in place with dated pointers here: ADR 001
 closes_spike: null
 decided: 2026-09-27 · user (post-R3 design review, analysis §2.4 X1/X2, §6.2; B1 = a SEPARATE kernel port [user, deviating from the architect's recommendation]; B2–B5 as recommended) · architect (port and contract shape, block split)
 enforced_by:
-  # PLANNED (not yet an entry: ControlliAdrTest requires the script to exist): block b2-lettura-coerente-migrazione adds
-  #   - check: architettura-test/controlli-adr/adr-0029-transazioni-solo-in-persistenza.sh
-  #     from: b2-lettura-coerente-migrazione
-    # FAIL if a `transaction {`, `transaction(`, `transactionWithResult` call (SQLDelight's Transacter API) appears in any
-    # */src/main outside persistenza/ (comment lines stripped). Red on the tree until b2 (TrascrittoRepositorySql:37,
-    # ParlanteRepositorySql:84) — hence `from`.
-  # Pending delivery (block b2-lettura-coerente-migrazione): script + red-green fixtures, validated via bash -c.
-  # Konsist half: code-rules.md CR-3b (in-loop). The read-only guarantee itself is proven by LetturaCoerenteContratto, not grepped.
+  - check: architettura-test/controlli-adr/adr-0029-transazioni-solo-in-persistenza.sh
+    from: b2-lettura-coerente-migrazione
+    # FAILs if a `transaction {`, `transaction(`, `transactionWithResult` call (SQLDelight's Transacter API) appears
+    # under any */src/main outside the top-level persistenza/ directory (comment lines stripped) — red-green
+    # fixtures in controlli-adr/fixture/adr-0029-transazioni-solo-in-persistenza/, validated via ControlliAdrTest.
+  # Konsist half: code-rules.md CR-3b (RegoleArchitetturaliTest, in-loop, package-scoped). The read-only guarantee
+  # itself is proven by LetturaCoerenteContratto, not grepped.
 ---
 # 0029 — Consistent reads: the kernel port `LetturaCoerente`, BEGIN DEFERRED + read-only, snapshot for multi-table reads
 

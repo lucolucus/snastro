@@ -23,9 +23,9 @@ import kotlin.test.assertEquals
  */
 class EliminazioneRegistrazioneSqlTest {
     private val db = databaseInMemoria().seminato(listOf(R, ALTRA))
-    private val trascritti = TrascrittoRepositorySql(db)
-    private val elaborazioni = ElaborazioneRepositorySql(db)
     private val uow = UnitaDiLavoroSql(db)
+    private val trascritti = TrascrittoRepositorySql(db, uow)
+    private val elaborazioni = ElaborazioneRepositorySql(db)
 
     init {
         for (r in listOf(R, ALTRA)) {

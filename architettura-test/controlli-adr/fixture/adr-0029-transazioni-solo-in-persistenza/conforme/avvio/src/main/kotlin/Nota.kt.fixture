@@ -1,0 +1,4 @@
+package snastro.avvio
+
+// db.transaction { } — a comment mentioning the forbidden call is never a real call.
+class Nota

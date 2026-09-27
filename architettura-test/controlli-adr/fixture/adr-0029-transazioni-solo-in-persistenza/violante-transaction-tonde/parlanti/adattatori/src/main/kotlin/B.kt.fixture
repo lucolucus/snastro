@@ -1,0 +1,7 @@
+package snastro.parlanti.adattatori.persistenza
+
+class B(private val db: SnastroDatabase) {
+    fun scrivi() {
+        db.transaction(noEnclosing = true) { }
+    }
+}

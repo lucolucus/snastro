@@ -47,11 +47,22 @@ public class UnitaDiLavoroSql(private val db: SnastroDatabase) : UnitaDiLavoro, 
         }
     }
 
+    /**
+     * pre-release b1#16: `noEnclosing = true` is SQLDelight's OWN guard against joining a transaction this
+     * [Stato] does not know about (a raw `db.transaction { }`, or a SECOND [UnitaDiLavoroSql] on the SAME
+     * [db] — e.g. two instances built over one project's database): with no enclosing transaction it behaves
+     * exactly as before; nested under one unknown to [stato] it throws [IllegalStateException] AT ONCE,
+     * before [DriverSqliteImmediato.beginTransaction] ever runs — so the pending DEFERRED request
+     * [DriverSqliteImmediato.conInizioDeferred] set is never left stranded on this thread for a later,
+     * unrelated outermost `BEGIN` to consume (which would silently turn a write DEFERRED and risk
+     * `SQLITE_BUSY_SNAPSHOT`): [DriverSqliteImmediato.conInizioDeferred]'s own `finally` resets it, right
+     * there, before this call ever returns.
+     */
     private fun <T> letturaEsterna(stato: Stato, blocco: () -> T): T {
         stato.modo = Modo.LETTURA
         try {
             return DriverSqliteImmediato.conInizioDeferred {
-                db.transactionWithResult {
+                db.transactionWithResult(noEnclosing = true) {
                     db.transazioneQueries.attivaSolaLettura()
                     try {
                         annidataInLettura(stato, blocco)

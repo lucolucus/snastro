@@ -48,7 +48,7 @@ class RiallineaTutteLeImpronteServizioTest {
             EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
             eventi,
         )
-        return RiallineaTutteLeImpronteServizio(eventi.unitaDiLavoro, parlanti, riallinea)
+        return RiallineaTutteLeImpronteServizio(transazioni, parlanti, riallinea)
     }
 
     /** A Parlante of [progetto] holding one STALE print on Voce 1 of each of [registrazioni]. */

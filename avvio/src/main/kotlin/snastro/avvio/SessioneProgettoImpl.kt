@@ -14,6 +14,7 @@ import snastro.audio.RiproduttoreWav
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.ProgettoId
 import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SchemaProgettoRifiutatoException
@@ -145,7 +146,8 @@ internal class SessioneProgettoImpl(
             rilasciaLock(lockCartella)
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
-        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db.database))
+        val uow = UnitaDiLavoroSql(db.database)
+        val dispatcher = DispatcherEventiInMemoria(uow)
         val progetti = ProgettoRepositorySql(db.database)
         val esitoCrea = CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
             .esegui(CreaProgetto(nomeProgetto))
@@ -166,7 +168,7 @@ internal class SessioneProgettoImpl(
         return apriGrafo(
             cartella,
             lockCartella,
-            ContestoDatabase(db.database, dispatcher, { seams.chiudiDatabase(db) }),
+            ContestoDatabase(db.database, dispatcher, uow, { seams.chiudiDatabase(db) }),
             progetto.id,
             progetto.nome.valore,
         )
@@ -212,11 +214,12 @@ internal class SessioneProgettoImpl(
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
-        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(db.database))
+        val uow = UnitaDiLavoroSql(db.database)
+        val dispatcher = DispatcherEventiInMemoria(uow)
         return apriGrafo(
             cartella,
             lockCartella,
-            ContestoDatabase(db.database, dispatcher, { seams.chiudiDatabase(db) }),
+            ContestoDatabase(db.database, dispatcher, uow, { seams.chiudiDatabase(db) }),
             progetto.id,
             progetto.nome.valore,
         )
@@ -309,7 +312,10 @@ internal class SessioneProgettoImpl(
         progettoId: ProgettoId,
         nomeProgetto: String,
     ): Esito<ProgettoAperto> {
-        val (db, dispatcher, chiudiDb) = contesto
+        val db = contesto.db
+        val dispatcher = contesto.dispatcher
+        val lettura = contesto.lettura
+        val chiudiDb = contesto.chiudiDb
         val registrazioni = seams.costruisciRegistrazioni(db)
         val progetti = ProgettoRepositorySql(db)
         // H2: uno scope FIGLIO di scopeGenitore (stesso dispatcher, un SupervisorJob proprio) —
@@ -336,7 +342,16 @@ internal class SessioneProgettoImpl(
         )
         val progettoEsteso = try {
             estensione?.apri(
-                ContestoEstensione(progettoId, cartella, db, dispatcher, scopeSessione, registrazioni, lettoreAudio),
+                ContestoEstensione(
+                    progettoId,
+                    cartella,
+                    db,
+                    dispatcher,
+                    lettura,
+                    scopeSessione,
+                    registrazioni,
+                    lettoreAudio,
+                ),
             )
         } catch (e: CancellationException) {
             scopeSessione.cancel()
@@ -396,6 +411,8 @@ internal class SessioneProgettoImpl(
 private data class ContestoDatabase(
     val db: SnastroDatabase,
     val dispatcher: DispatcherEventiInMemoria,
+    /** AC-C35: the SAME `UnitaDiLavoroSql` [dispatcher] delegates to, exposed as the project's [LetturaCoerente]. */
+    val lettura: LetturaCoerente,
     val chiudiDb: () -> Unit,
 )
 

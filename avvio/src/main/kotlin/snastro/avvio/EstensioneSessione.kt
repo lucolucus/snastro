@@ -2,6 +2,7 @@ package snastro.avvio
 
 import kotlinx.coroutines.CoroutineScope
 import snastro.kernel.DispatcherEventiInMemoria
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.ProgettoId
 import snastro.persistenza.SnastroDatabase
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
@@ -33,6 +34,12 @@ internal class ContestoEstensione(
     val cartella: Path,
     val database: SnastroDatabase,
     val dispatcher: DispatcherEventiInMemoria,
+    /**
+     * ADR 0029 §3/§5, AC-C35: the SAME instance as the `UnitaDiLavoroSql` [dispatcher] delegates to — never a
+     * second one over [database]. Read-models and repositories that only read receive this, never a
+     * `UnitaDiLavoro` (dev-architecture-app.md#repository).
+     */
+    val lettura: LetturaCoerente,
     /** The session's own child scope — cancelled by [SessioneProgettoImpl.chiudi] BEFORE [ProgettoEsteso.ferma]. */
     val scope: CoroutineScope,
     val registrazioni: RegistrazioneRepository,
@@ -51,6 +58,7 @@ internal class ContestoEstensione(
             cartella,
             database,
             dispatcher,
+            lettura,
             scope,
             registrazioni,
             lettoreAudio,

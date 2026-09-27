@@ -11,6 +11,7 @@ import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
+import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.persistenza.seminaTrascrittoDiProva
 import snastro.persistenza.seminaVoceDiProva
@@ -47,7 +48,7 @@ class ParlanteRepositorySqlCheckpointTest {
             db.seminaTrascrittoDiProva(registrazioneId = "registrazione-1")
             db.seminaVoceDiProva(registrazioneId = "registrazione-1", numero = 1L)
 
-            val repo = ParlanteRepositorySql(db)
+            val repo = ParlanteRepositorySql(db, UnitaDiLavoroSql(db))
             val progettoId = ProgettoId("progetto-1")
             val voceRef = VoceRef(RegistrazioneId("registrazione-1"), VoceId(1))
             val p = Parlante.crea(
