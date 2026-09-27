@@ -5,12 +5,14 @@ supersedes: null   # partial, amended in place with dated pointers here: archite
 closes_spike: null
 decided: 2026-09-27 · user (post-R3 design review, analysis §2.4 X5/X8/X9/X11, §2.7 T1/T2, §6.5; every option as recommended: A1–A5) · architect (contents of the first cut, check names)
 enforced_by:
-  - check: architettura-test/controlli-adr/adr-0028-supporto-senza-progetti.sh
-    from: a0-supporto-moduli
+  # PLANNED (not yet an entry: ControlliAdrTest requires the script to exist): block a0-supporto-moduli adds
+  #   - check: architettura-test/controlli-adr/adr-0028-supporto-senza-progetti.sh
+  #     from: a0-supporto-moduli
     # FAIL if supporto/build.gradle.kts or supporto-test/build.gradle.kts contains `project(`, `rootProject`, `rootDir` or `../`
     # (comment lines stripped). The two modules reach no snastro module; the convention plugins stay allowed.
-  - check: architettura-test/controlli-adr/adr-0028-supporto-test-solo-nei-test.sh
-    from: a0-supporto-moduli
+  # PLANNED (not yet an entry: ControlliAdrTest requires the script to exist): block a0-supporto-moduli adds
+  #   - check: architettura-test/controlli-adr/adr-0028-supporto-test-solo-nei-test.sh
+  #     from: a0-supporto-moduli
     # FAIL if (1) any */build.gradle.kts names `:supporto-test` on a line whose configuration is not
     # testImplementation / testRuntimeOnly (testFixtures* included in the FAIL set until block m2-testfixtures-fuori-da-avvio
     # is integrated — then this clause is relaxed by a dated amendment here), or (2) any `import snastro.supporto.test`
