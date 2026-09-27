@@ -27,6 +27,9 @@ dependencies {
     // AbbonatoDocumentoEventi's background coalescing/retry coroutine (ADR 0012).
     implementation(libs.kotlinx.coroutines.core)
 
+    // RitentaConBackoff + Segnalazione (ADR 0028 §7.3 step 3): AbbonatoDocumentoEventi's single retry worker.
+    implementation(project(":supporto"))
+
     // ScrittoreDocumentoContratto, LettoreTrascrittoContratto + AmbienteLettoreTrascritto + Seme*/​*Coniato (testFixtures) — D2:
     // this module's adapter test extends the port contract (dev-architecture-app.md#porta-contratto).
     testImplementation(testFixtures(project(":documento:applicazione")))
@@ -58,4 +61,7 @@ dependencies {
     // AbbonatoDocumentoEventiTest: virtual time (StandardTestDispatcher/runTest, no real sleeps —
     // dev-architecture-app.md#test) to drive the coalescing/backoff coroutine deterministically.
     testImplementation(libs.kotlinx.coroutines.test)
+
+    // conScopeDiProva + attendiFinche (ADR 0028 §3): AC-C92's real-thread concurrency probe (test-only edge).
+    testImplementation(project(":supporto-test"))
 }

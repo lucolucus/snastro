@@ -29,6 +29,7 @@ import snastro.kernel.VoceId
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import java.io.IOException
 import java.time.LocalDate
@@ -59,7 +60,13 @@ class AbbonatoDocumentoEliminazioneTest {
                 override fun registrazioniConTrascritto() = trascritti.keys.toList()
             }
             val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
-            AbbonatoDocumentoEventi(dispatcher, politica, CoroutineScope(StandardTestDispatcher(scheduler)))
+            AbbonatoDocumentoEventi(
+                dispatcher,
+                politica,
+                lettore::registrazioniConTrascritto,
+                CoroutineScope(StandardTestDispatcher(scheduler)),
+                Segnalazione { _, _ -> },
+            )
         }
 
         fun commit(evento: EventoPubblicato, esito: Esito<Unit> = Esito.Ok(Unit)) {
@@ -164,6 +171,22 @@ class AbbonatoDocumentoEliminazioneTest {
             throw IOException("guasto durante la scrittura")
         }
 
+        ambiente.commit(ElaborazioneCompletata(REG))
+        advanceUntilIdle()
+
+        assertEquals(listOf(Rimosso(NOME)), ambiente.operazioni().drop(prima))
+    }
+
+    @Test
+    fun `AC-C93 un aggiornamento fuso DOPO una rimozione pendente non la ritrasforma in scrittura`() = runTest {
+        val ambiente = Ambiente(testScheduler)
+        advanceUntilIdle() // lo sweep di avvio scrive REG una prima volta
+        val prima = ambiente.operazioni().size
+
+        // La rimozione e' GIA' pendente quando l'aggiornamento si fonde nella STESSA chiave, prima che il
+        // worker giri: primaArrivata deve tenere l'eliminata della voce gia' pendente (prioritaria), mai quella
+        // del nuovo evento (altra, che qui e' null) — altrimenti la rimozione tornerebbe una scrittura.
+        ambiente.commit(eliminata())
         ambiente.commit(ElaborazioneCompletata(REG))
         advanceUntilIdle()
 

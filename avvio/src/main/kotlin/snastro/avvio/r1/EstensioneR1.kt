@@ -19,6 +19,7 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.adattatori.audio.DecodificatoreAudioFfmpeg
 import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
@@ -42,6 +43,7 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
+import java.util.logging.Level
 import java.util.logging.Logger
 
 /**
@@ -152,14 +154,21 @@ internal class EstensioneR1(
         catalogo: CatalogoRegistrazioni,
     ): Job {
         val lavoro = SupervisorJob(contesto.scope.coroutineContext[Job])
+        val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo)
         AbbonatoDocumentoEventi(
             contesto.dispatcher,
             RigenerazioneDocumentoPolitica(
-                LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo),
+                lettoreTrascritto,
                 lettoreNomi(contesto),
                 ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
             ),
+            // AC-C47: the startup sweep lists ids itself, so a poisoned Registrazione's retries never block or
+            // re-run every other one (never through RigenerazioneDocumentoPolitica's all-or-nothing fold).
+            lettoreTrascritto::registrazioniConTrascritto,
             CoroutineScope(contesto.scope.coroutineContext + lavoro + io),
+            // JUL-backed (ADR 0028 §2): :supporto never touches JUL. Wired here until a4 unifies every
+            // Segnalazione behind one gestoreErroriNonCatturati-style collaborator.
+            Segnalazione { messaggio, causa -> log.log(Level.WARNING, messaggio, causa) },
         )
         return lavoro
     }

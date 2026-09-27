@@ -1,12 +1,8 @@
 package snastro.documento.adattatori.eventi
 
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import snastro.documento.applicazione.letture.Documento
 import snastro.documento.applicazione.politiche.RigeneraDocumento
-import snastro.documento.applicazione.politiche.RigeneraTuttiIDocumenti
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
@@ -19,62 +15,89 @@ import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.supporto.RitentaConBackoff
+import snastro.supporto.Segnalazione
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
  * `AbbonatoDopoCommit` (ADR 0012) that keeps every Registrazione's `Documento` up to date
- * (block `abbonato-documento`, `:documento:adattatori..eventi`, AC-182..186, AC-186bis — manifest
- * delta `2026-09-24-rinomina-documento.md`).
+ * (block `abbonato-documento`, `:documento:adattatori..eventi`, AC-182..186, AC-186bis; retry
+ * mechanics reworked by `a2-ritenta-documento`, ADR 0028 §7.3 step 3, AC-C45..C49, AC-C91..C94).
  *
  * Registers itself on [dispatcher] in `init`: [DispatcherEventiInMemoria.registraDopoCommit] calls
  * [ricevi] only AFTER the publishing command's transaction committed, never on rollback (AC-182) —
  * a rolled-back command publishes nothing, so nothing is ever enqueued.
  *
  * [ricevi] translates each event 1:1 into a [RigenerazioneDocumentoPolitica] call (mirroring the
- * policy's own KDoc), but does not call it on the committing thread: the call is enqueued, keyed by
- * [RegistrazioneId] ([pendenti]) or, for the two Parlanti events whose effect spans every
- * Registrazione attributed to a Parlante, by [ParlanteId] ([pendentiParlante]); a single background
- * coroutine — launched as a child of [scope] — drains the queues. Several events for the SAME key
- * piling up before the coroutine catches up collapse into ONE regeneration (AC-183): both maps hold
- * at most one entry per key, merged by [primaArrivata]. A write failure is retried with an
- * exponential backoff, capped at [ritardoMassimo] and reset to [ritardoIniziale] after a fully
- * successful pass — never a busy loop ([ciclo] only ever suspends, on [Channel.receive] or [delay]),
- * never dropped (AC-184). A unit that THROWS (e.g. a Trascritto read failing its rebuild) is retried the same way
- * and never escapes [ciclo] (D-0008). The startup sweep (AC-185, [RigeneraTuttiIDocumenti], ADR 0012 R4) is
- * queued the same way in `init` ([rigeneraTutte] starts `true`), so a startup failure is retried
- * exactly like any other unit of work.
+ * policy's own KDoc), but does not call it on the committing thread: the unit of work is enqueued and run by
+ * [ritenta], ONE [RitentaConBackoff] shared by its three unit kinds ([Chiave]) — so they stay
+ * serialized (AC-C92) — keyed by [RegistrazioneId] ([pendenti]) or, for the two Parlanti events whose effect
+ * spans every Registrazione attributed to a Parlante, by [ParlanteId]. Several events for the SAME
+ * [RegistrazioneId] piling up before their run collapse into ONE regeneration (AC-183): [pendenti] holds at
+ * most one entry per key, merged by [primaArrivata]; [RitentaConBackoff] itself coalesces KEYS only, so this
+ * per-key payload stays here. A failed unit is reported through [segnalazione] and retried with backoff, never
+ * silently, never dropped (AC-184, AC-C46): a poisoned Registrazione's failure never blocks another
+ * Registrazione's, nor the startup sweep's, own progress (AC-C47) — each is its own [Chiave], and
+ * [RitentaConBackoff] never lets one key's backoff wait hold up another's turn. A unit that THROWS (e.g. a
+ * Trascritto read failing its rebuild, D-0008) is retried the same way: [ritenta] is the only place that catches
+ * it (never here), and rethrows every [Error] and the worker's OWN cancellation (AC-C48). The startup sweep
+ * (AC-185, ADR 0012 R4) is requested once, in `init`: it only LISTS the ids from [registrazioniConTrascritto] and
+ * fans them into their OWN [Chiave.PerRegistrazione] via [accoda] (AC-C47) — unlike
+ * [RigenerazioneDocumentoPolitica.esegui] of `RigeneraTuttiIDocumenti` (AC-157), whose fold is reserved for a
+ * caller that wants exactly that all-or-nothing stop, the sweep here must NOT let one poisoned Registrazione's
+ * retries block or re-run every other one every 30 s.
  *
- * **Deletion** (ADR 0020 §3, AC-624). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
+ * **Deletion** (ADR 0020 §3, AC-624/AC-C93). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
  * per-[RegistrazioneId] key: merged into a pending entry it replaces the regeneration (a removal, once
  * queued, is never turned back into a write), and that entry's unflushed precedenti become the
- * `nomiPrecedenti` removed as well. Because the single [ciclo] drains one pass at a time, a
+ * `nomiPrecedenti` removed as well. Because [ritenta] runs one [Chiave.PerRegistrazione] at a time, a
  * Rigenerazione of that key already in flight when the event arrives completes FIRST — even when it
- * fails and is re-queued, it merges behind the removal without resurrecting the write — and the
- * removal runs on the next pass, retried with the same backoff. Never on rollback (after-commit only).
+ * fails and is re-queued, it merges behind the removal without resurrecting the write (AC-C94) — and the
+ * removal runs next, retried with the same backoff. Never on rollback (after-commit only).
  *
  * **Stopping.** This class exposes no `ferma`/`stop`: like every other per-Progetto background
  * worker in this codebase (`:avvio`'s `CollaboratoriProgettoAperto`), it is a plain
  * structured-concurrency child of [scope] — cancelling [scope] (`:avvio`, on closing the Progetto)
- * cancels [ciclo] at its next suspension point; the still-registered [dispatcher] subscription then
- * has nothing left to hand work to, since the whole `DispatcherEventiInMemoria` is discarded with
- * the closed Progetto.
+ * stops [ritenta] at its next suspension point, with no report and no further regeneration (AC-C48); the
+ * still-registered [dispatcher] subscription then has nothing left to hand work to, since the whole
+ * `DispatcherEventiInMemoria` is discarded with the closed Progetto.
  */
+// one parameter per collaborator: dispatcher, politica, the sweep's id lister (AC-C47), scope, segnalazione, 2
+// backoff durations.
+@Suppress("LongParameterList")
 public class AbbonatoDocumentoEventi(
     dispatcher: DispatcherEventiInMemoria,
     private val politica: RigenerazioneDocumentoPolitica,
+    /**
+     * The startup sweep's own id lister (AC-C47) — e.g. `LettoreTrascritto::registrazioniConTrascritto` bound at
+     * the `:avvio` wiring site to the SAME `LettoreTrascritto` instance given to [politica]: injected here (never
+     * read off [politica], which keeps its `LettoreTrascritto` private) so the sweep can list ids WITHOUT going
+     * through [RigenerazioneDocumentoPolitica]'s all-or-nothing `RigeneraTuttiIDocumenti` fold (AC-157).
+     */
+    private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
     scope: CoroutineScope,
-    private val ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
-    private val ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
+    segnalazione: Segnalazione,
+    ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
+    ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
 ) {
+    /**
+     * The single unit of Documento background work (AC-C45): exactly three cases, minted only here, never by
+     * [RitentaConBackoff] (it coalesces by `equals`, which a `data class`/`data object` gives for free).
+     */
+    private sealed class Chiave {
+        data class PerRegistrazione(val id: RegistrazioneId) : Chiave()
+        data class PerParlante(val id: ParlanteId) : Chiave()
+        data object Sweep : Chiave()
+    }
+
     /**
      * One Registrazione's coalesced pending work: the EARLIEST unflushed precedente of each kind
      * (date, titolo) — never overwritten by a later one of the same kind, because it is the name
@@ -101,14 +124,13 @@ public class AbbonatoDocumentoEventi(
         }
     }
 
-    private val rigeneraTutte = AtomicBoolean(true) // AC-185: queued once, at construction
     private val pendenti = ConcurrentHashMap<RegistrazioneId, LavoroPendente>()
-    private val pendentiParlante: MutableSet<ParlanteId> = ConcurrentHashMap.newKeySet()
-    private val segnale = Channel<Unit>(Channel.CONFLATED)
+    private val ritenta = RitentaConBackoff<Chiave>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     init {
         dispatcher.registraDopoCommit { evento -> ricevi(evento) }
-        scope.launch { ciclo() }
+        ritenta.avvia(scope)
+        ritenta.richiedi(Chiave.Sweep) // AC-185: queued once, at construction
     }
 
     private fun ricevi(evento: EventoPubblicato) {
@@ -126,8 +148,8 @@ public class AbbonatoDocumentoEventi(
                 val eliminata = Eliminata(evento.dataRegistrazione, evento.titolo)
                 accoda(evento.registrazioneId, LavoroPendente(eliminata = eliminata))
             }
-            is ParlanteRinominato -> accodaParlante(evento.parlanteId)
-            is ParlantePromosso -> if (evento.nomeCambiato) accodaParlante(evento.parlanteId)
+            is ParlanteRinominato -> ritenta.richiedi(Chiave.PerParlante(evento.parlanteId))
+            is ParlantePromosso -> if (evento.nomeCambiato) ritenta.richiedi(Chiave.PerParlante(evento.parlanteId))
             // ParlanteEliminato (AC-186: nessun cambio al Documento, INV-24 lo risolve comunque via
             // LettoreNomi) ed ogni altro evento pubblicato non rilevante per il Documento.
             else -> Unit
@@ -136,53 +158,44 @@ public class AbbonatoDocumentoEventi(
 
     private fun accoda(id: RegistrazioneId, lavoro: LavoroPendente) {
         pendenti.merge(id, lavoro, ::primaArrivata)
-        segnale.trySend(Unit)
+        ritenta.richiedi(Chiave.PerRegistrazione(id))
     }
 
-    private fun accodaParlante(parlanteId: ParlanteId) {
-        pendentiParlante += parlanteId
-        segnale.trySend(Unit)
+    /** The job [ritenta] runs per [chiave]: true = done, false = retry (ADR 0028 §2). [ritenta] is the only catch. */
+    private suspend fun esegui(chiave: Chiave): Boolean = when (chiave) {
+        Chiave.Sweep -> avviaSweep()
+        is Chiave.PerParlante -> politica.perParlanteRinominato(chiave.id) is Esito.Ok
+        is Chiave.PerRegistrazione -> eseguiRegistrazione(chiave.id)
     }
 
-    /** Never busy: suspends on [Channel.receive] when idle, on [delay] while backing off. */
-    private suspend fun ciclo() {
-        var ritardo = ritardoIniziale
-        while (true) {
-            if (!haLavoro()) {
-                segnale.receive()
-                continue
-            }
-            if (elaboraLotto()) {
-                ritardo = ritardoIniziale
-            } else {
-                delay(ritardo)
-                ritardo = (ritardo * 2).coerceAtMost(ritardoMassimo)
-            }
-        }
+    /**
+     * AC-C47: only LISTS the ids and fans each into its OWN [Chiave.PerRegistrazione] (same as an event would),
+     * so a poisoned Registrazione's own retries never block, nor keep re-running, any other one — this call
+     * itself never writes anything and is always "done" (the listing is the only thing that can fail here).
+     */
+    private fun avviaSweep(): Boolean {
+        registrazioniConTrascritto().forEach { accoda(it, LavoroPendente()) }
+        return true
     }
 
-    private fun haLavoro(): Boolean = rigeneraTutte.get() || pendenti.isNotEmpty() || pendentiParlante.isNotEmpty()
-
-    /** One pass over every currently queued unit of work; a failed unit is re-queued for the next pass. */
-    private fun elaboraLotto(): Boolean {
-        var tutteOk = true
-        if (rigeneraTutte.compareAndSet(true, false) && fallito { politica.esegui(RigeneraTuttiIDocumenti) }) {
-            rigeneraTutte.set(true)
-            tutteOk = false
-        }
-        for ((id, lavoro) in drenaRegistrazioni()) {
-            if (fallito { eseguiLavoro(id, lavoro) }) {
+    /**
+     * Drains [pendenti]'s entry for [id] and runs it. A key requested (and re-drained into an empty
+     * [LavoroPendente]-less state) by a run started meanwhile has nothing left to do here: `true`, done. On
+     * failure — thrown or [Esito.Errore] — the drained payload is merged BACK, itself `prioritaria` over
+     * whatever a concurrent event merged in while this ran (AC-C94): the key is re-requested only through
+     * [ritenta]'s own retry, never a second loop.
+     */
+    private fun eseguiRegistrazione(id: RegistrazioneId): Boolean {
+        val lavoro = pendenti.remove(id) ?: return true
+        var esito: Esito<Unit>? = null
+        try {
+            esito = eseguiLavoro(id, lavoro)
+        } finally {
+            if (esito !is Esito.Ok) {
                 pendenti.merge(id, lavoro) { accumulato, fallito -> primaArrivata(fallito, accumulato) }
-                tutteOk = false
             }
         }
-        for (parlanteId in drenaParlanti()) {
-            if (fallito { politica.perParlanteRinominato(parlanteId) }) {
-                pendentiParlante += parlanteId
-                tutteOk = false
-            }
-        }
-        return tutteOk
+        return esito is Esito.Ok
     }
 
     private fun eseguiLavoro(id: RegistrazioneId, lavoro: LavoroPendente): Esito<Unit> = when {
@@ -194,18 +207,6 @@ public class AbbonatoDocumentoEventi(
         lavoro.dataPrecedente != null -> politica.perDataRegistrazioneModificata(id, lavoro.dataPrecedente)
         lavoro.titoloPrecedente != null -> politica.perRegistrazioneRinominata(id, lavoro.titoloPrecedente)
         else -> politica.esegui(RigeneraDocumento(id))
-    }
-
-    private fun drenaRegistrazioni(): Map<RegistrazioneId, LavoroPendente> {
-        val lotto = mutableMapOf<RegistrazioneId, LavoroPendente>()
-        for (id in pendenti.keys.toList()) pendenti.remove(id)?.let { lotto[id] = it }
-        return lotto
-    }
-
-    private fun drenaParlanti(): Set<ParlanteId> {
-        val lotto = pendentiParlante.toSet()
-        pendentiParlante.removeAll(lotto)
-        return lotto
     }
 
     /**
@@ -226,11 +227,3 @@ public class AbbonatoDocumentoEventi(
         val RITARDO_MASSIMO_DEFAULT: Duration = 30.seconds
     }
 }
-
-/**
- * `true` on an [Esito.Errore] OR a thrown exception (D-0008, as `AbbonatoRiallineamentoImpronte`): an exception must
- * never escape `AbbonatoDocumentoEventi.ciclo` — it would kill the only coroutine draining the queue for the whole
- * session — so the unit is re-queued and retried with the same backoff, never swallowed.
- */
-private inline fun fallito(unita: () -> Esito<Unit>): Boolean =
-    runCatching(unita).fold(onSuccess = { it is Esito.Errore }, onFailure = { true })
