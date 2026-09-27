@@ -363,6 +363,17 @@ class ComposizioneR3Test {
     }
 
     @Test
+    fun `AC-C35 contesto lettura e la stessa istanza a cui il dispatcher delega`() {
+        AmbienteR3(radice).use {
+            val visto = it.contesto.dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(it.contesto.lettura.inLettura { 1 })
+            }.atteso()
+
+            assertEquals(1, visto, "la inLettura annidata deve UNIRSI alla transazione, non aprirne una propria")
+        }
+    }
+
+    @Test
     fun `LettoreNomi su SQL reale - il run etichetta la Voce col Nome attuale e la vista segue una rinomina`() {
         AmbienteR3(radice).use {
             val a = it.registrazioneTrascritta()

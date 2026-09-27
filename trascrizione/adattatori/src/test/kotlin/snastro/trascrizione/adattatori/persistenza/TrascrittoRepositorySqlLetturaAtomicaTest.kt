@@ -26,6 +26,8 @@ import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * ADR 0029 §5, AC-C28/C31/C36: [TrascrittoRepositorySql.trova] reads `trascritto` (the counters) and `segmento`
@@ -72,6 +74,74 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
             val dopo = assertNotNull(TrascrittoRepositorySql(scrittore, uowScrittore).trova(R))
             assertEquals(4, dopo.prossimaVoce, "la Revisione e committata comunque dopo la lettura")
             assertEquals(3, dopo.voci.size, "una nuova lettura vede la Voce in piu della Revisione")
+        } finally {
+            reale.chiudi()
+        }
+    }
+
+    /**
+     * ADR 0029 §5, AC-C28: called OUTSIDE any unit of work, [TrascrittoRepositorySql.trova] opens the outermost
+     * `BEGIN DEFERRED` read (rule 1) — it never queues behind a writer's uncommitted `BEGIN IMMEDIATE`, unlike the
+     * raw `db.transactionWithResult` it replaced (D-0008/CR-3b). The writer takes the write lock BEFORE the reader
+     * starts (latch-driven, no sleep): the OLD `TrascrittoRepositorySql.trova` (a plain `transactionWithResult`,
+     * itself `BEGIN IMMEDIATE`) would queue behind it up to `busy_timeout` (5 s) or throw `SQLITE_BUSY`; this
+     * discriminates because [TrascrittoRepositorySqlLetturaAtomicaTest]'s own AC-C31 case (reader parked FIRST,
+     * writer committing after) passes even with that old, IMMEDIATE `trova` — a throwaway revert to a raw
+     * `db.transactionWithResult` in [TrascrittoRepositorySql.trova] makes this case fail (queues past 1 s / BUSY),
+     * confirmed manually and never committed.
+     */
+    @Test
+    fun `AC-C28 trova non attende uno scrittore con BEGIN IMMEDIATE non committato preso prima`(
+        @TempDir cartella: File,
+    ) {
+        val reale = apriDatabaseProgetto(cartella)
+        try {
+            val driverReale = driverDi(reale)
+            val scrittore = SnastroDatabase(driverReale)
+            predisponi(scrittore)
+            val uowScrittore = UnitaDiLavoroSql(scrittore)
+            TrascrittoRepositorySql(scrittore, uowScrittore)
+                .salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = R))
+
+            val lockPreso = CountDownLatch(1)
+            val rilascia = CountDownLatch(1)
+            val scrittoreThread = thread(name = "scrittore-immediate-non-committato") {
+                uowScrittore.inTransazione {
+                    scrittore.trascrittoQueries.aggiornaContatori(
+                        prossimaVoce = 99L,
+                        prossimoSegmento = 99L,
+                        registrazioneId = R.valore,
+                    )
+                    lockPreso.countDown()
+                    rilascia.await()
+                    Esito.Ok(Unit)
+                }
+            }
+            try {
+                attendiFinche(messaggio = "lo scrittore deve tenere il BEGIN IMMEDIATE non committato") {
+                    lockPreso.count == 0L
+                }
+
+                val db = SnastroDatabase(driverReale)
+                val lettore = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
+                val letto = AtomicReference<Trascritto?>()
+                val guasto = AtomicReference<Throwable>()
+                val lettura = thread(name = "lettore-deferred") {
+                    runCatching { lettore.trova(R) }.onSuccess(letto::set).onFailure(guasto::set)
+                }
+
+                attendiFinche(1.seconds, messaggio = "trova deve tornare ben prima del busy_timeout di 5 s") {
+                    letto.get() != null || guasto.get() != null
+                }
+                lettura.join(ATTESA_FINE_MS)
+
+                assertNull(guasto.get(), "nessun SQLITE_BUSY / attesa dello scrittore: ${guasto.get()}")
+                val trovato = assertNotNull(letto.get())
+                assertEquals(3, trovato.prossimaVoce, "l'ultimo COMMITTATO, mai la scrittura in corso non confermata")
+            } finally {
+                rilascia.countDown()
+                scrittoreThread.join(ATTESA_FINE_MS)
+            }
         } finally {
             reale.chiudi()
         }

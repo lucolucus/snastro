@@ -237,6 +237,17 @@ class ComposizioneR2Test {
     }
 
     @Test
+    fun `AC-C35 contesto lettura e la stessa istanza a cui il dispatcher delega`() {
+        AmbienteR2(radice).use {
+            val visto = it.contesto.dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(it.contesto.lettura.inLettura { 1 })
+            }.atteso()
+
+            assertEquals(1, visto, "la inLettura annidata deve UNIRSI alla transazione, non aprirne una propria")
+        }
+    }
+
+    @Test
     fun `AC-492 chiudere il progetto rilascia una volta il modello delle impronte, a lavori fermati`() {
         val rilasci = AtomicInteger()
         AmbienteR2(radice, rilasciaMl = { rilasci.incrementAndGet() }).use {
