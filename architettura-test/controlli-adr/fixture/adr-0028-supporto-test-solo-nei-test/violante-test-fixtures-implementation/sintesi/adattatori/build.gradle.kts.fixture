@@ -1,0 +1,4 @@
+dependencies {
+    implementation(project(":supporto"))
+    testImplementation(project(":supporto-test"))
+}

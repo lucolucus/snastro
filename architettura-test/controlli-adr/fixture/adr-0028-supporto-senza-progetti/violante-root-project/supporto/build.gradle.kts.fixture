@@ -1,0 +1,10 @@
+plugins {
+    id("snastro.kotlin-jvm")
+    id("snastro.explicit-api")
+}
+
+dependencies {
+    implementation(rootProject.files("libs/x.jar"))
+    // no project(":kernel"): ADR 0028 §1
+    api(libs.kotlinx.coroutines.core)
+}

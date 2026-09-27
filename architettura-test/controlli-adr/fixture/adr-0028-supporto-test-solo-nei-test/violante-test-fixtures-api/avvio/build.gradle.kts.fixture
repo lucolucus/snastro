@@ -1,0 +1,3 @@
+dependencies {
+    testFixturesApi(project(":supporto-test"))
+}

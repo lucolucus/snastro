@@ -1,0 +1,10 @@
+plugins {
+    id("snastro.kotlin-jvm")
+    id("snastro.explicit-api")
+}
+
+dependencies {
+    api(libs.kotlin.test)
+    api(libs.junit.jupiter)
+    api(libs.kotlinx.coroutines.test)
+}

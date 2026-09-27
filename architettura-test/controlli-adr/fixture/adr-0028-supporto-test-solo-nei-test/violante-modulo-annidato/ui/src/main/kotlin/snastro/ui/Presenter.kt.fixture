@@ -1,0 +1,8 @@
+package snastro.ui
+
+// import snastro.supporto.test.attendiFinche is forbidden here
+/*
+ * import snastro.supporto.test.OrologioFinto
+ */
+import snastro.supporto.RitentaConBackoff
+import snastro.supporto.testo.Altro

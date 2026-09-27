@@ -1,0 +1,4 @@
+val allowedModuleEdges = mapOf(
+    ":supporto-test" to emptySet(),
+)
+val moduloSoloTest = ":supporto-test"
