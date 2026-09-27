@@ -62,7 +62,7 @@ internal class EstensioneR3(
     private val r2: EstensioneSessione,
     private val clock: Clock,
     private val generatoreId: GeneratoreId,
-    private val modello: ModelloLinguistico,
+    internal val modello: ModelloLinguistico,
     private val disponibilita: DisponibilitaModelloLinguistico,
 ) : EstensioneSessione {
     @Suppress("LongMethod") // linear wiring, one statement per collaborator

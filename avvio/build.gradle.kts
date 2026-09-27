@@ -45,6 +45,9 @@ dependencies {
     // R3 composition (avvio-sintesi, package snastro.avvio.r3): the Sintesi SQL repositories, the cross-context read
     // ports and the two synchronous subscribers (ADR 0021 §10, ADR 0024).
     implementation(project(":sintesi:adattatori"))
+    // modello-linguistico-llama: ModelloLinguisticoLlama's constructor names the library's types (its default
+    // `caricaLibreria = LlamaJni::load`); the composition root reaches every module (ADR 0027 §1).
+    implementation(project(":llama-jni"))
     // The ML Finte (DiarizzatoreFinta / RiconoscitoreParlatoFinta / VadFinta) are the pipeline's
     // adapters until diarizzatore-sherpa / riconoscitore-sherpa / vad-silero wire themselves into
     // SelezioneAdattatoriMl ("Finte until the ML blocks land", manifest) — and stay the forced choice of
@@ -71,6 +74,21 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test) // CodaElaborazioniTest: StandardTestDispatcher (dev-architecture #dipendenze-test)
 }
 
+// ADR 0027 §3 / ADR 0016 §3 (AC-S156): the llama.cpp natives are the library's ONE native output
+// (:llama-jni:assembleNatives: libllamajni + libllama + libggml*, built outside the gate) copied next to sherpa's two
+// libs in appResourcesRootDir/<os-arch>/, where the app resolves them through compose.application.resources.dir
+// (snastro.avvio.r3.cartellaNativiLlama). Only macOS arm64 is wired (D-0007): elsewhere assembleNatives fails with
+// its own message. After scaricaNativiSherpa, which empties that folder first. Never a dependency of `check`.
+val cartellaNativiApp = layout.buildDirectory.dir("risorse-app/macos-arm64")
+val copiaNativiLlama = tasks.register<Copy>("copiaNativiLlama") {
+    group = "build setup"
+    description = "Copies :llama-jni:assembleNatives into appResourcesRootDir/macos-arm64/ (ADR 0027 §3). Never part of check."
+    dependsOn(":llama-jni:assembleNatives")
+    mustRunAfter(":scaricaNativiSherpa")
+    from(project(":llama-jni").layout.buildDirectory.dir("natives/macos-arm64"))
+    into(cartellaNativiApp)
+}
+
 compose.desktop {
     application {
         mainClass = "snastro.avvio.MainKt"
@@ -87,6 +105,7 @@ compose.desktop {
 // validation also requires this edge for prepareAppResources, which reads appResourcesRootDir.
 tasks.matching { it.name in setOf("run", "createDistributable", "prepareAppResources") }.configureEach {
     dependsOn(":scaricaNativiSherpa")
+    dependsOn(copiaNativiLlama)
 }
 
 // Opt-in (@Tag("modelli"), never in `check`): the R1 composition end to end over the REAL sherpa-onnx
@@ -102,8 +121,49 @@ tasks.register<Test>("modelliTest") {
     useJUnitPlatform {
         includeTags("modelli")
     }
-    dependsOn(scaricaNativiSherpa)
+    dependsOn(scaricaNativiSherpa, copiaNativiLlama)
     jvmArgumentProviders += CommandLineArgumentProvider {
-        listOf("-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}")
+        listOf(
+            "-Dsherpa_onnx.native.path=${scaricaNativiSherpa.get().outputs.files.singleFile.absolutePath}",
+            "-Dsnastro.llm.native.path=${cartellaNativiApp.get().asFile.absolutePath}",
+        )
+    }
+}
+
+// The benchmark (below) is its own opt-in task: the gate's `test` never runs it.
+tasks.named<Test>("test") {
+    useJUnitPlatform {
+        excludeTags("benchmark")
+    }
+}
+
+// AC-S153 (ADR 0026 §6), opt-in, NEVER in `check`: `./gradlew benchmarkRiassunto -Pcampione=<Documento .md>
+// [-Pmodello=<gguf>]` — one Riassunto of a real 60-minute Registrazione through the real service + the real
+// llama.cpp adapter; prints load / prefill / generation / release, tokens and peak RSS; fails above 600 s.
+tasks.register<Test>("benchmarkRiassunto") {
+    group = "verification"
+    description = "Opt-in NFR benchmark of a Riassunto (ADR 0026 §6, -Pcampione=<Documento .md> [-Pmodello=<gguf>])."
+    testClassesDirs = sourceSets["test"].output.classesDirs
+    classpath = sourceSets["test"].runtimeClasspath
+    useJUnitPlatform {
+        includeTags("benchmark")
+    }
+    dependsOn(scaricaNativiSherpa, copiaNativiLlama)
+    outputs.upToDateWhen { false }
+    testLogging {
+        events("passed", "failed")
+        showStandardStreams = true
+    }
+    val campione = providers.gradleProperty("campione")
+    val modello = providers.gradleProperty("modello")
+    doFirst {
+        if (!campione.isPresent) throw GradleException("benchmarkRiassunto needs -Pcampione=<path to a Documento .md>")
+    }
+    jvmArgumentProviders += CommandLineArgumentProvider {
+        listOf(
+            "-Dsnastro.benchmark.campione=${campione.orNull.orEmpty()}",
+            "-Dsnastro.benchmark.modello=${modello.orNull.orEmpty()}",
+            "-Dsnastro.llm.native.path=${cartellaNativiApp.get().asFile.absolutePath}",
+        )
     }
 }

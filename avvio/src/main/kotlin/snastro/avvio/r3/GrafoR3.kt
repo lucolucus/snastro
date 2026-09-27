@@ -15,17 +15,18 @@ import snastro.kernel.GeneratoreIdUuid
 import snastro.kernel.RegistrazioneId
 import snastro.modelli.CartellaCacheModelli
 import snastro.modelli.ProvisioningModelli
+import snastro.modelli.VOCE_CATALOGO_MODELLO_LINGUISTICO
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.ui.modelli.ServizioModelli
 import java.nio.file.Path
 
-/** ADR 0026 §8: the catalogue id of the ONE optional model v1 has (the Sintesi LLM). */
-internal const val ID_MODELLO_LINGUISTICO: String = "llm-qwen3.5-9b-q4_k_m"
+/** ADR 0026 §8: the catalogue id of the ONE optional model v1 has (the Sintesi LLM) — from the catalogue itself. */
+internal val ID_MODELLO_LINGUISTICO: String = VOCE_CATALOGO_MODELLO_LINGUISTICO.id
 
-/** ADR 0026 §8: its `dimensioneByte` — what `NonInstallato` shows until the catalogue entry lands. */
-internal const val DIMENSIONE_MODELLO_LINGUISTICO_BYTE: Long = 6_169_341_984L
+/** ADR 0026 §8: its `dimensioneByte` — what `NonInstallato` shows. */
+internal val DIMENSIONE_MODELLO_LINGUISTICO_BYTE: Long = VOCE_CATALOGO_MODELLO_LINGUISTICO.dimensioneByte
 
 /**
  * The app's model state holder (models are per user, not per project): S5's and the Riassunto tab's
@@ -55,21 +56,22 @@ internal fun modelliReali(cartellaModelli: Path): ModelliApp {
  * The R3 (Sintesi) graph — the app's: R0's own ([costruisciGrafoR0]) extended with [EstensioneR3] over R2's
  * components ([componentiR2]). The graph's shape is R2's ([GrafoR2]); only the per-project extension grows.
  * [modelli] is `null` in the app (the models of [scelta], R1's own holder); `--smoke` passes [modelliReali] so S5,
- * the tab and [DisponibilitaModelloLinguistico] all read that ONE swapped holder. [modello] is the
- * [ModelloLinguisticoNonDisponibile] placeholder until `modello-linguistico-llama` binds the real adapter.
+ * the tab and [DisponibilitaModelloLinguistico] all read that ONE swapped holder. [modello] defaults to
+ * [modelloLinguisticoR3] of [scelta]: the real llama.cpp adapter, or the placeholder under the Finte.
  */
 internal fun costruisciGrafoR3(
     cartellaRegistro: Path = cartellaDatiRegistroProgettiReale(),
     scelta: SceltaMl = SceltaMl.daSistema(),
     cartellaModelli: Path = CartellaCacheModelli.risolvi(),
     modelli: ModelliApp? = null,
-    modello: ModelloLinguistico = ModelloLinguisticoNonDisponibile,
+    modello: ModelloLinguistico? = null,
 ): GrafoR2 {
     val io: CoroutineDispatcher = Dispatchers.IO
     val clock = orologioApp()
     val r2 = componentiR2(scelta, cartellaModelli, io, clock)
     val modelliApp = modelli ?: ModelliApp(r2.servizioModelli, r2.provisioning::installata)
-    val estensione = EstensioneR3(r2.estensione, clock, GeneratoreIdUuid(), modello, modelliApp.disponibilita)
+    val llm = modello ?: modelloLinguisticoR3(scelta, r2.provisioning)
+    val estensione = EstensioneR3(r2.estensione, clock, GeneratoreIdUuid(), llm, modelliApp.disponibilita)
     return GrafoR2(
         r0 = costruisciGrafoR0(cartellaRegistro, io, clock, estensione),
         servizioModelli = modelliApp.servizio,
