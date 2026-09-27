@@ -15,15 +15,19 @@ import snastro.persistenza.databaseInMemoria
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
+import kotlin.test.assertSame
 
 /**
  * ADR 0029 §2 rule 2/6, AC-C29: [TrascrittoRepositorySql.trova] called INSIDE a command's
  * [snastro.kernel.UnitaDiLavoro.inTransazione] on the SAME [UnitaDiLavoroSql] instance JOINS that transaction
  * (rule 2) — it sees the unit's own uncommitted writes, never a snapshot from before them — and, if it throws,
- * the exception dooms the whole enclosing unit end to end (rule 6): nothing of it is committed, not even an
- * earlier [TrascrittoRepositorySql.salva] in the same block.
+ * the read itself dooms the whole enclosing unit (rule 6, contract case 7) EVEN WHEN the outer block catches the
+ * exception and returns [Esito.Ok]: the unit still ends without committing (an [IllegalStateException] whose cause
+ * is the read's fault), so nothing of it is committed, not even an earlier [TrascrittoRepositorySql.salva] in the
+ * same block. The doom case catches the fault inside the block on purpose: were the exception to escape, the
+ * rollback would come from the escaping exception alone and the read's own doom would go untested.
  */
 class TrascrittoRepositorySqlTrovaInTransazioneTest {
     @Test
@@ -43,7 +47,7 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
     }
 
     @Test
-    fun `AC-C29 una trova che lancia dentro inTransazione condanna l'intera unita, nulla resta committato`() {
+    fun `AC-C29 una trova che lancia dentro inTransazione condanna l'unita anche se il blocco la cattura e rende Ok`() {
         val config = SQLiteConfig().apply { enforceForeignKeys(true) }
         val driverReale = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY, config.toProperties())
         SnastroDatabase.Schema.create(driverReale)
@@ -54,17 +58,22 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
         val repo = TrascrittoRepositorySql(db, uow)
 
         driver.armato = true
+        var catturataDalBlocco: Throwable? = null
         val esito = runCatching {
             uow.inTransazione {
                 repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = R))
-                repo.trova(R) // guasto iniettato: lancia dentro l'inLettura annidata
+                // guasto iniettato nell'inLettura annidata: il blocco lo CATTURA e prosegue come se nulla fosse
+                catturataDalBlocco = runCatching { repo.trova(R) }.exceptionOrNull()
                 Esito.Ok(Unit)
             }
         }
         driver.armato = false
 
-        val causa = esito.exceptionOrNull()
-        assertTrue(causa?.message == "guasto di prova iniettato (AC-C29)", "deve propagare IL guasto iniettato: $causa")
+        assertEquals(GUASTO, catturataDalBlocco?.message, "la trova annidata deve lanciare IL guasto iniettato")
+        val fine = esito.exceptionOrNull()
+        assertIs<IllegalStateException>(fine, "l'unita non committa pur col blocco che rende Ok: $fine")
+        assertEquals("una transazione annidata e fallita con un'eccezione: rollback", fine.message)
+        assertSame(catturataDalBlocco, fine.cause, "la causa del rollback e il guasto della lettura annidata")
         assertNull(repo.trova(R), "l'intera unita e annullata: nemmeno la salva precedente nello stesso blocco resta")
     }
 
@@ -94,12 +103,13 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
             parameters: Int,
             binders: (SqlPreparedStatement.() -> Unit)?,
         ): QueryResult<R> {
-            if (armato && "FROM segmento" in sql) error("guasto di prova iniettato (AC-C29)")
+            if (armato && "FROM segmento" in sql) error(GUASTO)
             return delegato.executeQuery(identifier, sql, mapper, parameters, binders)
         }
     }
 
     private companion object {
         val R = RegistrazioneId("registrazione-1")
+        const val GUASTO = "guasto di prova iniettato (AC-C29)"
     }
 }
