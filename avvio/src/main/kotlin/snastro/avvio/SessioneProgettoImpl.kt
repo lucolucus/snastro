@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.merge
 import snastro.audio.RiproduttoreWav
+import snastro.avvio.porte.PorteProgetto
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
@@ -21,7 +22,6 @@ import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.adattatori.audio.ArchivioAudioFile
 import snastro.progetto.adattatori.audio.SondaAudioFfmpeg
-import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
@@ -147,13 +147,14 @@ internal class SessioneProgettoImpl(
         }
         val uow = UnitaDiLavoroSql(db.database)
         val dispatcher = DispatcherEventiInMemoria(uow)
-        val progetti = ProgettoRepositorySql(db.database)
-        val esitoCrea = CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
+        val registrazioni = seams.costruisciRegistrazioni(db.database)
+        val porte = PorteProgetto(db.database, uow, registrazioni)
+        val esitoCrea = CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, porte.progetti, dispatcher)
             .esegui(CreaProgetto(nomeProgetto))
         if (esitoCrea is Esito.Errore) {
             // H3: CreaProgetto puo' fallire (es. NomeProgettoVuoto tramite NomeProgetto.di, o
             // ProgettoGiaPresente in teoria) — mai un lock trattenuto, ne' un database aperto lasciato
-            // indietro (item fix-batch-12 #2), o un IllegalStateException da `progetti.trova() ?:
+            // indietro (item fix-batch-12 #2), o un IllegalStateException da `porte.progetti.trova() ?:
             // error(...)` sotto. fix-batch-13: un chiudiDb che lancia (es. checkpoint fallito) non deve
             // mai mascherare esitoCrea con un'eccezione propria.
             rilasciaLock(lockCartella)
@@ -162,12 +163,12 @@ internal class SessioneProgettoImpl(
             }
             return esitoCrea
         }
-        val progetto = progetti.trova() ?: error("CreaProgetto non ha creato il Progetto")
+        val progetto = porte.progetti.trova() ?: error("CreaProgetto non ha creato il Progetto")
 
         return apriGrafo(
             cartella,
             lockCartella,
-            ContestoDatabase(db.database, dispatcher, uow, { seams.chiudiDatabase(db) }),
+            ContestoDatabase(db.database, dispatcher, uow, registrazioni, porte, { seams.chiudiDatabase(db) }),
             progetto.id,
             progetto.nome.valore,
         )
@@ -201,8 +202,11 @@ internal class SessioneProgettoImpl(
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
-        val progetti = ProgettoRepositorySql(db.database)
-        val progetto = progetti.trova()
+        val uow = UnitaDiLavoroSql(db.database)
+        val dispatcher = DispatcherEventiInMemoria(uow)
+        val registrazioni = seams.costruisciRegistrazioni(db.database)
+        val porte = PorteProgetto(db.database, uow, registrazioni)
+        val progetto = porte.progetti.trova()
         if (progetto == null) {
             rilasciaLock(lockCartella)
             // fix-batch-12 #2: mai un database aperto lasciato indietro su un fallimento. fix-batch-13:
@@ -213,12 +217,10 @@ internal class SessioneProgettoImpl(
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
-        val uow = UnitaDiLavoroSql(db.database)
-        val dispatcher = DispatcherEventiInMemoria(uow)
         return apriGrafo(
             cartella,
             lockCartella,
-            ContestoDatabase(db.database, dispatcher, uow, { seams.chiudiDatabase(db) }),
+            ContestoDatabase(db.database, dispatcher, uow, registrazioni, porte, { seams.chiudiDatabase(db) }),
             progetto.id,
             progetto.nome.valore,
         )
@@ -315,8 +317,8 @@ internal class SessioneProgettoImpl(
         val dispatcher = contesto.dispatcher
         val lettura = contesto.lettura
         val chiudiDb = contesto.chiudiDb
-        val registrazioni = seams.costruisciRegistrazioni(db)
-        val progetti = ProgettoRepositorySql(db)
+        val registrazioni = contesto.registrazioni
+        val porte = contesto.porte
         // H2: uno scope FIGLIO di scopeGenitore (stesso dispatcher, un SupervisorJob proprio, AC-C56 figlioDi) —
         // cancellato in chiudi(), mai l'app-wide scopeGenitore stesso. AC-C55: la SUA ONE gestoreErroriNonCatturati.
         val scopeSessione = figlioDi(scopeGenitore, gestore = gestoreErrori)
@@ -324,7 +326,7 @@ internal class SessioneProgettoImpl(
             dispatcher.unitaDiLavoro,
             generatoreId,
             clock,
-            progetti,
+            porte.progetti,
             registrazioni,
             seams.sondaAudio(),
             ArchivioAudioFile(cartella),
@@ -349,6 +351,7 @@ internal class SessioneProgettoImpl(
                     scopeSessione,
                     registrazioni,
                     lettoreAudio,
+                    porte,
                 ),
             )
         } catch (e: CancellationException) {
@@ -411,6 +414,10 @@ private data class ContestoDatabase(
     val dispatcher: DispatcherEventiInMemoria,
     /** AC-C35: the SAME `UnitaDiLavoroSql` [dispatcher] delegates to, exposed as the project's [LetturaCoerente]. */
     val lettura: LetturaCoerente,
+    val registrazioni: RegistrazioneRepository,
+    /** ADR 0030 §1: every SQL repository of this project, built ONCE (AC-C60/AC-C61) — `crea`/`apri` build it
+     * right after opening the database, so it also serves their own early `porte.progetti` lookup. */
+    val porte: PorteProgetto,
     val chiudiDb: () -> Unit,
 )
 

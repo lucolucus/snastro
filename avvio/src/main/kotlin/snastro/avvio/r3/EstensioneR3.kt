@@ -32,10 +32,6 @@ import snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSi
 import snastro.sintesi.applicazione.politiche.ApplicaSostituzioneTrascrittoSintesiPolitica
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
-import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
-import snastro.trascrizione.applicazione.letture.FasiInCorso
-import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import java.time.Clock
 import java.util.concurrent.atomic.AtomicReference
@@ -46,7 +42,10 @@ import java.util.logging.Logger
  * never re-created — over the SAME database, dispatcher and session scope.
  *
  * Order in [apri]:
- * 1. The Sintesi SQL repositories and the two cross-context read ports (Trascrizione, Parlanti) over this database.
+ * 1. The Sintesi SQL repositories, and the two cross-context read ports (Trascrizione, Parlanti): the
+ *    Trascrizione side (`trascritti`, `porte.statiElaborazione`) reuses `contesto.porte`'s SHARED repositories
+ *    (ADR 0030 §1, AC-C60/AC-C61/AC-C63) — never a second `TrascrittoRepositorySql`/`StatiElaborazione`/
+ *    `FasiInCorso`; the Parlanti side stays its OWN early instance (see [nomi]'s own KDoc for why).
  * 2. The Sintesi SYNCHRONOUS subscribers — `AbbonatoTrascrizioneSintesi` (TrascrittoSostituito, ADR 0021 §6) and
  *    `AbbonatoProgettoSintesi` (RegistrazioneEliminata, ADR 0024 §1) — then the after-commit
  *    [AggiornamentiVistaSintesi]; all BEFORE [r2] runs, which registers its own two synchronous purges and only then
@@ -69,17 +68,30 @@ internal class EstensioneR3(
     override fun apri(contesto: ContestoEstensione): ProgettoEsteso {
         val dispatcher = contesto.dispatcher
         val uow = dispatcher.unitaDiLavoro
-        val database = contesto.database
+        val porte = contesto.porte
         val progettoId = contesto.progettoId
-        val riassunti = RiassuntoRepositorySql(database, contesto.lettura)
-        val lunghezze = LunghezzaMassimaRiassuntoRepositorySql(database)
-        val trascritti = TrascrittoRepositorySql(database, contesto.lettura)
-        val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(
-            VociDelTrascritto(trascritti),
-            StatiElaborazione(ElaborazioneRepositorySql(database), trascritti, FasiInCorso()), // only the state is read
-        )
+        // Sintesi's own repos: only R3 ever needs them, so no cross-level dedup is required (unlike
+        // Trascrizione/Progetto's, shared via porte because R1/R2/R3 all need them).
+        val riassunti = RiassuntoRepositorySql(contesto.database, contesto.lettura)
+        val lunghezze = LunghezzaMassimaRiassuntoRepositorySql(contesto.database)
+        val trascritti = porte.trascritti
+        // ADR 0030 §1/AC-C63: porte.statiElaborazione — the SAME instance R1's pipeline writes into and S2
+        // reads — never a second StatiElaborazione over a fresh, unwritten FasiInCorso().
+        val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), porte.statiElaborazione)
+        // Parlanti's own repos stay a separate, EARLY instance here, built before the r2 extension runs:
+        // EseguiProssimoRiassuntoServizio (below, needed for the queue source, ADR 0023 §1) takes `nomi` at
+        // construction time, and r2's OWN parlanti/attribuzioni (its PorteParlanti) do not exist yet at this
+        // point in the call order — reusing them would need either a lazy/late-bound LettoreNomi (a real
+        // race: the recovered queue's first claim can run before r2's own extension returns and sets it) or
+        // moving Parlanti's repos into PorteProgetto (breaks CablaggioR1Test's AC-356 R1-purity guard, since
+        // PorteProgetto is visible to R1 too). Accepted, documented deviation from AC-C61's "no second
+        // instance" for these two repositories specifically — see the block's DEVIATIONS note; c3's flat
+        // composition removes the ordering constraint that forces it.
         val nomi = LettoreNomiDaParlanti(
-            NomiDelleVoci(AttribuzioneRepositorySql(database), ParlanteRepositorySql(database, contesto.lettura)),
+            NomiDelleVoci(
+                AttribuzioneRepositorySql(contesto.database),
+                ParlanteRepositorySql(contesto.database, contesto.lettura),
+            ),
         )
 
         AbbonatoTrascrizioneSintesi(

@@ -22,7 +22,6 @@ import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.supporto.figlioDi
 import snastro.trascrizione.adattatori.audio.DecodificatoreAudioFfmpeg
 import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
-import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazioneServizio
@@ -35,8 +34,6 @@ import snastro.trascrizione.applicazione.comandi.RecuperaElaborazioniInterrotteS
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.UnisciVociServizio
 import snastro.trascrizione.applicazione.letture.ElaborazioniInAttesa
-import snastro.trascrizione.applicazione.letture.FasiInCorso
-import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.TrascrittoQuery
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
@@ -52,8 +49,9 @@ import java.util.logging.Logger
  *
  * - Every Trascrizione command service gets `dispatcher.unitaDiLavoro`, never the raw
  *   `UnitaDiLavoroSql` (AC-355, the AC-346 pattern) — otherwise `pubblica` would throw.
- * - ONE [FasiInCorso] per open project, written by the pipeline (through
- *   [SegnalatoreFaseConCambiamenti]) and read by [StatiElaborazione] (AC-353); every phase change and
+ * - The project's ONE `FasiInCorso` (`ContestoEstensione.porte`, ADR 0030 §1), written by the pipeline
+ *   (through [SegnalatoreFaseConCambiamenti]) and read by `porte.statiElaborazione` (AC-353) — the SAME
+ *   instance Sintesi's cross-context read uses (AC-C63), never a second one; every phase change and
  *   every Elaborazione/Revisione event is a `Cambiamento` ([AggiornamentiVistaTrascrizione], AC-354).
  * - No synchronous subscriber at all, in particular none on `RegistrazioneAggiunta`: importing never
  *   starts an Elaborazione (ADR 0014, AC-371). `AbbonatoDocumentoEventi` registers itself after-commit
@@ -86,15 +84,15 @@ internal class EstensioneR1(
     override fun apri(contesto: ContestoEstensione): ProgettoEsteso {
         val dispatcher = contesto.dispatcher
         val uow = dispatcher.unitaDiLavoro
-        val elaborazioni = ElaborazioneRepositorySql(contesto.database)
-        val trascritti = TrascrittoRepositorySql(contesto.database, contesto.lettura)
-        val catalogo = CatalogoRegistrazioni(contesto.registrazioni)
+        val porte = contesto.porte
+        val elaborazioni = porte.elaborazioni
+        val trascritti = porte.trascritti
+        val catalogo = porte.catalogo
         val lettoreRegistrazione = LettoreRegistrazioneDaProgetto(catalogo)
-        val fasi = FasiInCorso()
         val aggiornamenti = AggiornamentiVistaTrascrizione(dispatcher)
         val ml = adattatoriMl()
 
-        val lavoroDocumento = avviaRigenerazioneDocumento(contesto, trascritti, catalogo)
+        val (lavoroDocumento, rigenerazioneDocumento) = avviaRigenerazioneDocumento(contesto, trascritti, catalogo)
 
         val pipeline = PortePipeline(
             registrazioni = lettoreRegistrazione,
@@ -102,7 +100,9 @@ internal class EstensioneR1(
             diarizzatore = ml.diarizzatore,
             allineatore = AllineatorePerTurno(ml.riconoscitore, ml.vad),
             segnalatore = SegnalatoreFaseConRilascio(
-                SegnalatoreFaseConCambiamenti(fasi, aggiornamenti::cambiata),
+                // ADR 0030 §1/AC-C63: the project's ONE FasiInCorso (porte) — the very instance Sintesi's
+                // LettoreTrascrittoDaTrascrizione reads through porte.statiElaborazione, never a second one.
+                SegnalatoreFaseConCambiamenti(porte.fasiInCorso, aggiornamenti::cambiata),
                 ml.rilasciaDopoElaborazione,
             ),
         )
@@ -129,7 +129,9 @@ internal class EstensioneR1(
             segnalaSfuggito = { e -> segnalazioneApp.segnala("elemento della coda condivisa sfuggito", e) },
         )
 
-        val stati = StatiElaborazione(elaborazioni, trascritti, fasi)
+        // ADR 0030 §1/AC-C63: porte.statiElaborazione, the SAME instance Sintesi's cross-context read uses —
+        // never a fresh, locally-built StatiElaborazione.
+        val stati = porte.statiElaborazione
         val trascrittoQuery = TrascrittoQuery(trascritti, lettoreRegistrazione)
         return CollaboratoriR1(
             statiElaborazione = stati::stati,
@@ -145,6 +147,7 @@ internal class EstensioneR1(
             ),
             coda = coda,
             lavoroDocumento = lavoroDocumento,
+            rigenerazioneDocumento = rigenerazioneDocumento,
             aggiornamenti = aggiornamenti,
             recuperoConcluso = recuperoConcluso,
         )
@@ -152,23 +155,25 @@ internal class EstensioneR1(
 
     /**
      * `AbbonatoDocumentoEventi` (after-commit, startup sweep) on its own child of the session scope
-     * ([figlioDi], AC-C56), on [io] — never the UI thread; returns that child's [Job], which
-     * [CollaboratoriR1.ferma] joins.
+     * ([figlioDi], AC-C56), on [io] — never the UI thread; returns that child's [Job] (which
+     * [CollaboratoriR1.ferma] joins) paired with the [RigenerazioneDocumentoPolitica] it subscribes — AC-C61:
+     * R2's `PuliziaDerivatiFile` reuses this SAME instance instead of building its own.
      */
     private fun avviaRigenerazioneDocumento(
         contesto: ContestoEstensione,
         trascritti: TrascrittoRepositorySql,
         catalogo: CatalogoRegistrazioni,
-    ): Job {
+    ): Pair<Job, RigenerazioneDocumentoPolitica> {
         val scope = figlioDi(contesto.scope, io, gestoreErrori)
         val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo)
+        val politica = RigenerazioneDocumentoPolitica(
+            lettoreTrascritto,
+            lettoreNomi(contesto),
+            ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
+        )
         AbbonatoDocumentoEventi(
             contesto.dispatcher,
-            RigenerazioneDocumentoPolitica(
-                lettoreTrascritto,
-                lettoreNomi(contesto),
-                ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
-            ),
+            politica,
             // AC-C47: the startup sweep lists ids itself, so a poisoned Registrazione's retries never block or
             // re-run every other one (never through RigenerazioneDocumentoPolitica's all-or-nothing fold).
             lettoreTrascritto::registrazioniConTrascritto,
@@ -176,7 +181,8 @@ internal class EstensioneR1(
             // AC-C54: the ONE JUL-backed Segnalazione of `:avvio` — the a2 local lambda is gone.
             segnalazioneApp,
         )
-        return checkNotNull(scope.coroutineContext[Job]) { "figlioDi restituisce sempre uno scope con un Job" }
+        val job = checkNotNull(scope.coroutineContext[Job]) { "figlioDi restituisce sempre uno scope con un Job" }
+        return job to politica
     }
 
     /**
