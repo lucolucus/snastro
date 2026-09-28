@@ -35,9 +35,10 @@ import kotlin.test.assertTrue
  * **R1 retargeting (avvio-composizione, carry-over 6).** R1 lives in the same module, so the static
  * guard is now SCOPED TO THE R0 GRAPH: every R1 file lives in package `snastro.avvio.r1`
  * (`avvio/src/main/kotlin/snastro/avvio/r1/`), every R2 file in `snastro.avvio.r2` (avvio-parlanti), and
- * nothing OUTSIDE them may import `snastro.trascrizione`, `snastro.documento`, `snastro.modelli`,
- * `snastro.ml` or `snastro.parlanti` — the R0 graph reaches R1 only through the
- * type-neutral `EstensioneSessione` hook. The behavioral half is kept in R0 MODE: [costruisciGrafoR0]
+ * nothing OUTSIDE them (and, since `c1-porte-progetto`/ADR 0030 §1, `snastro.avvio.porte` —
+ * `PorteProgetto`, common to R1/R2/R3, built before any of them runs) may import `snastro.trascrizione`,
+ * `snastro.documento`, `snastro.modelli`, `snastro.ml` or `snastro.parlanti` — the R0 graph reaches R1
+ * only through the type-neutral `EstensioneSessione` hook. The behavioral half is kept in R0 MODE: [costruisciGrafoR0]
  * without an extension builds no extension at all, and `RegistrazioniPresenter` built through R0's
  * own [costruisciRegistrazioniPresenter] never carries an `elaborazione` state. The dynamic half —
  * after a REAL `AggiungiRegistrazione` no `elaborazione` row exists — needs real FFmpeg and lives in
@@ -54,7 +55,10 @@ class GrafoR0Test {
     @Test
     fun `AC-350 fuori dai pacchetti r1, r2 e r3 avvio src main non importa i contesti delle release successive`() {
         val radice = File("src/main/kotlin")
-        val estensioni = listOf("r1", "r2", "r3").map { File(radice, "snastro/avvio/$it") }
+        // c1-porte-progetto (ADR 0030 §1): "porte" (PorteProgetto) is common to R1/R2/R3, built before any of
+        // them runs — it necessarily imports every context's repository to build each ONCE, so it joins the
+        // exemption alongside r1/r2/r3, never the bare R0 graph.
+        val estensioni = listOf("r1", "r2", "r3", "porte").map { File(radice, "snastro/avvio/$it") }
         val proibiti = listOf(
             "snastro.trascrizione",
             "snastro.documento",

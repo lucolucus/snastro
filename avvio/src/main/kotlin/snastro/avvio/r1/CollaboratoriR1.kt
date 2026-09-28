@@ -6,6 +6,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 import snastro.avvio.CodaCondivisa
 import snastro.avvio.ProgettoEsteso
+import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
@@ -35,6 +36,9 @@ internal class CollaboratoriR1(
     val revisione: ComandiRevisione,
     val coda: CodaCondivisa,
     private val lavoroDocumento: Job,
+    /** AC-C61 (ADR 0030 §1): the SAME instance R2's `PuliziaDerivatiFile` reuses for the eliminated-Registrazione
+     * cleanup path, instead of building its own. */
+    val rigenerazioneDocumento: RigenerazioneDocumentoPolitica,
     override val aggiornamenti: AggiornamentiVista,
     val recuperoConcluso: Deferred<Unit>,
 ) : ProgettoEsteso {

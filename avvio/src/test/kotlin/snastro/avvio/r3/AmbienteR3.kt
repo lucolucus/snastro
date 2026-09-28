@@ -168,13 +168,23 @@ internal class AmbienteR3(
             ApriEsternoFinta(),
         )
 
-    /** Imports the test source through the REAL AggiungiRegistrazione and transcribes it; returns the NEW one. */
-    fun registrazioneTrascritta(): RegistrazioneId {
+    /**
+     * Imports [sorgente] through the REAL AggiungiRegistrazione and starts its Elaborazione — WITHOUT waiting
+     * for it: the caller drives (or holds, via [diarizzatore]'s `barriera`) the run. [registrazioneTrascritta]
+     * is this plus waiting for completion.
+     */
+    fun importaEAvvia(): RegistrazioneId {
         val prima = collaboratori.registrazioni().map { it.registrazioneId }.toSet()
         collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(sorgente.toString())).atteso()
         val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
         sorgenti[RiferimentoAudio("audio/${id.valore}.wav")] = DURATA_MS
         avviaElaborazione(id)
+        return id
+    }
+
+    /** Imports the test source through the REAL AggiungiRegistrazione and transcribes it; returns the NEW one. */
+    fun registrazioneTrascritta(): RegistrazioneId {
+        val id = importaEAvvia()
         attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
             stato(id) == StatoElaborazioneVista.COMPLETATA
         }

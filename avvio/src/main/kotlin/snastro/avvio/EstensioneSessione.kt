@@ -1,6 +1,7 @@
 package snastro.avvio
 
 import kotlinx.coroutines.CoroutineScope
+import snastro.avvio.porte.PorteProgetto
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.ProgettoId
@@ -46,6 +47,11 @@ internal class ContestoEstensione(
     /** The project's ONE player (R0's): R2 pauses it when the Registrazione it holds is deleted (ADR 0020 §3). */
     val lettoreAudio: LettoreAudio,
     /**
+     * ADR 0030 §1, AC-C60/AC-C61: every SQL repository of this open project, built ONCE by
+     * `SessioneProgettoImpl` — R1/R2/R3 take theirs from here instead of building their own.
+     */
+    val porte: PorteProgetto,
+    /**
      * ADR 0023 §1: the shared queue's sources BEYOND the Elaborazione one R1 always binds — empty in R0–R2;
      * R3 (`snastro.avvio.r3.EstensioneR3`) adds the Riassunto source through [conFontiCoda].
      */
@@ -62,6 +68,7 @@ internal class ContestoEstensione(
             scope,
             registrazioni,
             lettoreAudio,
+            porte,
             fontiCoda + fonti,
         )
 }

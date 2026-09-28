@@ -10,13 +10,11 @@ import snastro.avvio.ContestoEstensione
 import snastro.avvio.EstensioneSessione
 import snastro.avvio.ProgettoEsteso
 import snastro.avvio.gestoreErrori
+import snastro.avvio.porte.PorteProgetto
 import snastro.avvio.r1.CollaboratoriR1
 import snastro.avvio.r1.EstensioneR1
 import snastro.avvio.segnalazioneApp
 import snastro.documento.adattatori.porte.LettoreNomiDaParlanti
-import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione
-import snastro.documento.adattatori.porte.ScrittoreDocumentoFile
-import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.LetturaCoerente
@@ -58,11 +56,8 @@ import snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql
 import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioni
 import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioniServizio
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
-import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.supporto.figlioDi
 import snastro.trascrizione.adattatori.eventi.AbbonatoEliminazioneRegistrazione
-import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmentiServizio
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
@@ -107,7 +102,8 @@ internal class EstensioneR2(
     override fun apri(contesto: ContestoEstensione): ProgettoEsteso {
         val dispatcher = contesto.dispatcher
         val uow = dispatcher.unitaDiLavoro
-        val porte = PorteParlanti(contesto.database, contesto.lettura, CatalogoRegistrazioni(contesto.registrazioni))
+        val repos = contesto.porte
+        val porte = PorteParlanti(repos, contesto.database, contesto.lettura)
         val ml = adattatori()
         val decodificatore = ml.decodificatore(contesto.cartella)
         val estrattoAudio = EstrattoAudio(porte.voci)
@@ -123,10 +119,10 @@ internal class EstensioneR2(
             ),
         )
         val aggiornamenti = AggiornamentiVistaParlanti(dispatcher, proposte)
-        val trascritti = TrascrittoRepositorySql(contesto.database, contesto.lettura)
+        val trascritti = repos.trascritti
         AbbonatoEliminazioneRegistrazione(
             dispatcher,
-            ApplicaEliminazioneRegistrazionePolitica(ElaborazioneRepositorySql(contesto.database), trascritti),
+            ApplicaEliminazioneRegistrazionePolitica(repos.elaborazioni, trascritti),
         )
         AbbonatoRevisioneParlanti(
             dispatcher,
@@ -167,7 +163,13 @@ internal class EstensioneR2(
         )
         completaEliminazioni(
             scope,
-            CompletaEliminazioniRegistrazioniServizio(uow, inSospeso, archivio, puliziaDerivati(contesto)),
+            // AC-C61 (ADR 0030 §1): R1's own RigenerazioneDocumentoPolitica, reused (===) — never a second one.
+            CompletaEliminazioniRegistrazioniServizio(
+                uow,
+                inSospeso,
+                archivio,
+                PuliziaDerivatiFile(contesto.cartella, collaboratoriR1.rigenerazioneDocumento),
+            ),
         )
 
         val conferma = ConfermaAttribuzioneServizio(
@@ -301,33 +303,26 @@ internal class EstensioneR2(
     }
 }
 
-/** The Parlanti ports of one project database (stateless adapters over it). */
-private class PorteParlanti(database: SnastroDatabase, lettura: LetturaCoerente, catalogo: CatalogoRegistrazioni) {
+/**
+ * The Parlanti ports of one project database (ADR 0030 §1, AC-C60/AC-C61): [parlanti]/[attribuzioni] are R2's
+ * own ONE instance each per open project; [voci]/[registrazione] reuse [PorteProgetto]'s shared Trascrizione/
+ * Progetto repositories instead of building a THIRD `TrascrittoRepositorySql`.
+ */
+private class PorteParlanti(porte: PorteProgetto, database: SnastroDatabase, lettura: LetturaCoerente) {
     val parlanti = ParlanteRepositorySql(database, lettura)
     val attribuzioni = AttribuzioneRepositorySql(database)
-    val voci = LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database, lettura)))
-    val registrazione = LettoreRegistrazionePerParlanti(catalogo)
+    val voci = LettoreVociDaTrascrizione(VociDelTrascritto(porte.trascritti))
+    val registrazione = LettoreRegistrazionePerParlanti(porte.catalogo)
 }
 
 /**
- * AC-633: the derived-files cleanup of [contesto]'s folder; its Documento removal is a
- * [RigenerazioneDocumentoPolitica] over the same `documenti/` R1's Documento worker writes (stateless: only its
- * `perRegistrazioneEliminata` runs here, which never reads the Trascritto).
+ * The Documento's Nomi from [parlanti]/[attribuzioni] — what R2 hands R1 (as its `lettoreNomi` factory,
+ * bound once at app-launch, AC-359) in place of 'Voce n'. Its own [ParlanteRepositorySql]/
+ * [AttribuzioneRepositorySql] cannot reuse [CollaboratoriR2]'s (built by a LATER `apri()` call than this
+ * factory's binding) — an accepted, pre-existing duplication (2 Parlanti-repo instances per open project
+ * instead of 5 Trascritto-repo ones), left to c3's flat composition where `lettoreNomi` stops being an
+ * app-launch-bound factory.
  */
-private fun puliziaDerivati(contesto: ContestoEstensione): PuliziaDerivatiFile {
-    val database = contesto.database
-    val documento = RigenerazioneDocumentoPolitica(
-        LettoreTrascrittoDaTrascrizione(
-            VociDelTrascritto(TrascrittoRepositorySql(database, contesto.lettura)),
-            CatalogoRegistrazioni(contesto.registrazioni),
-        ),
-        lettoreNomiDaParlanti(contesto),
-        ScrittoreDocumentoFile(contesto.cartella.resolve("documenti")),
-    )
-    return PuliziaDerivatiFile(contesto.cartella, documento)
-}
-
-/** The Documento's Nomi from the Parlanti of [contesto]'s database — what R2 hands R1 in place of 'Voce n'. */
 internal fun lettoreNomiDaParlanti(contesto: ContestoEstensione): LettoreNomiDaParlanti {
     val database = contesto.database
     val parlanti = ParlanteRepositorySql(database, contesto.lettura)
