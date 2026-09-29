@@ -7,7 +7,6 @@ package snastro.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -42,7 +41,7 @@ import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CHIUDI_PROGETTO
-import snastro.ui.testi.ETICHETTA_MODELLI_E_LICENZE
+import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import snastro.ui.testi.ETICHETTA_TUTTO_IN_LOCALE
 import snastro.ui.testi.etichetta
 
@@ -51,14 +50,13 @@ private val ALTEZZA_VOCE_NAV = 34.dp
 private val PADDING_ORIZZONTALE_PROGETTO = 10.dp
 private val PADDING_VERTICALE_PROGETTO = 8.dp
 private val PADDING_ORIZZONTALE_VOCE = 10.dp
-private val PADDING_PIEDE = 10.dp
 
 /**
  * Thin view of the app shell (RC-2): only renders [stato] and forwards [azioni]'s events. `contenuto`
  * hosts the screen of the selected section (or S1 when no Progetto is open) — later `ui` blocks plug
  * their real screens into these slots. AC-572: window `ground`, a 232dp sidebar with the project
  * selector + nav + footer, content on `surface` (each plugged-in screen supplies its own padding).
- * [modelliSelezionati] (rework cycle 2): the composition root's S5 is on screen — the footer is then the
+ * [impostazioniSelezionate] (rework cycle 2): the composition root's S5 is on screen — the footer is then the
  * highlighted place, no nav item is, and any nav click leaves S5 (via [onRegistrazioniSelezionata]).
  * [statoModelloLinguisticoPiede] (AC-S33, ADR 0025): the optional model's download line, already
  * formatted by `snastro.ui.modelli.ModelliPresenter.etichettaModelloLinguisticoPiede` — `null` renders
@@ -76,10 +74,10 @@ fun SchermataShell(
     contenutoSenzaProgetto: @Composable () -> Unit = {},
     contenuto: @Composable (ShellUiStato.ConProgetto) -> Unit = {},
     onRegistrazioniSelezionata: (() -> Unit)? = null,
-    onModelliELicenze: (() -> Unit)? = null,
-    modelliSelezionati: Boolean = false,
+    onImpostazioni: (() -> Unit)? = null,
+    impostazioniSelezionate: Boolean = false,
     statoModelloLinguisticoPiede: String? = null,
-    scuro: Boolean = isSystemInDarkTheme(),
+    scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
 ) {
     SnastroTema(scuro = scuro, riduciMovimento = riduciMovimento) {
@@ -101,8 +99,8 @@ fun SchermataShell(
                                 stato = stato,
                                 azioni = azioni,
                                 onRegistrazioniSelezionata = onRegistrazioniSelezionata,
-                                onModelliELicenze = onModelliELicenze,
-                                modelliSelezionati = modelliSelezionati,
+                                onImpostazioni = onImpostazioni,
+                                impostazioniSelezionate = impostazioniSelezionate,
                                 statoModelloLinguisticoPiede = statoModelloLinguisticoPiede,
                                 modifier = Modifier.width(SnastroMisure.sidebar).fillMaxHeight(),
                             )
@@ -171,8 +169,8 @@ private fun NavigazioneShell(
     stato: ShellUiStato.ConProgetto,
     azioni: AzioniShell,
     onRegistrazioniSelezionata: (() -> Unit)?,
-    onModelliELicenze: (() -> Unit)?,
-    modelliSelezionati: Boolean,
+    onImpostazioni: (() -> Unit)?,
+    impostazioniSelezionate: Boolean,
     statoModelloLinguisticoPiede: String?,
     modifier: Modifier = Modifier,
 ) {
@@ -189,14 +187,14 @@ private fun NavigazioneShell(
             val giaSelezionata = destinazione == stato.destinazioneSelezionata
             VoceNavigazione(
                 destinazione = destinazione,
-                selezionata = giaSelezionata && !modelliSelezionati,
+                selezionata = giaSelezionata && !impostazioniSelezionate,
                 onClick = {
                     azioni.seleziona(destinazione)
                     // Re-clicking the ALREADY-selected 'Registrazioni' item goes back to its own top, and
                     // ANY nav click out of S5 leaves S5 for good (no hidden S5 left behind for the next
                     // 'Registrazioni' click) — switching INTO Registrazioni from Parlanti otherwise
                     // preserves the place it was left at (the shell's own "keeps where the user was").
-                    val tornaAllElenco = modelliSelezionati ||
+                    val tornaAllElenco = impostazioniSelezionate ||
                         (destinazione == DestinazioneShell.REGISTRAZIONI && giaSelezionata)
                     if (tornaAllElenco) onRegistrazioniSelezionata?.invoke()
                 },
@@ -204,8 +202,8 @@ private fun NavigazioneShell(
         }
         Spacer(modifier = Modifier.weight(1f))
         PiedeSidebar(
-            onModelliELicenze = onModelliELicenze,
-            selezionato = modelliSelezionati,
+            onImpostazioni = onImpostazioni,
+            selezionato = impostazioniSelezionate,
             statoModelloLinguisticoPiede = statoModelloLinguisticoPiede,
         )
     }
@@ -281,61 +279,70 @@ private fun VoceNavigazione(destinazione: DestinazioneShell, selezionata: Boolea
 }
 
 /**
- * AC-572/rework cycle 2 (MED #3): when [onModelliELicenze] is wired the footer IS the S5 entry point and
- * says so — 'Modelli e licenze' (Cube, caption `inkMuted`) over a 'Tutto in locale' second line (a neutral
- * privacy line, no readiness claim the shell state cannot back); [selezionato] gives it the nav item's
- * active style while S5 is shown. Unwired (no S5) it is just the privacy line.
- * [statoModelloLinguisticoPiede] (AC-S33, ADR 0025): a third line, only while the optional model is
- * downloading — never for `NonInstallato`/`Installato` (the mapping to `null` already excludes those,
- * see [SchermataShell]'s KDoc), placed above the privacy line so the actionable/changing text stays
- * next to the S5 entry point it belongs to.
+ * The sidebar's footer (AC-572, reworked for Impostazioni): the Impostazioni entry, styled as a nav item so it is
+ * found at a glance (S5 is its 'Modelli e licenze' section; [selezionato] gives it the active style while
+ * Impostazioni is shown), then the 'Tutto in locale' privacy line (no readiness claim the shell state cannot back).
+ * Unwired ([onImpostazioni] `null`) it is just the privacy line. [statoModelloLinguisticoPiede] (AC-S33, ADR 0025):
+ * a line ABOVE the entry, only while the optional model is downloading — never for `NonInstallato`/`Installato`
+ * (the mapping to `null` already excludes those, see [SchermataShell]'s KDoc).
  */
 @Composable
 private fun PiedeSidebar(
-    onModelliELicenze: (() -> Unit)?,
+    onImpostazioni: (() -> Unit)?,
     selezionato: Boolean,
     statoModelloLinguisticoPiede: String? = null,
 ) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
     val forma = RoundedCornerShape(SnastroMisure.radiusControl)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(forma)
-            .let { if (selezionato) it.background(colori.raised, forma).border(1.dp, colori.line, forma) else it }
-            .let { if (onModelliELicenze != null) it.clickable(onClick = onModelliELicenze) else it }
-            .padding(PADDING_PIEDE)
-            .testTag("shell-piede"),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
-    ) {
-        IconaSn(
-            Icona.Cube,
-            descrizione = null,
-            tinta = if (selezionato) colori.accentInk else colori.inkMuted,
-            dimensione = SnastroMisure.iconS,
-        )
-        Column {
-            if (onModelliELicenze != null) {
+    Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space2)) {
+        if (statoModelloLinguisticoPiede != null) {
+            Text(
+                text = statoModelloLinguisticoPiede,
+                style = tipografia.caption,
+                color = colori.inkMuted,
+                modifier = Modifier.padding(horizontal = PADDING_ORIZZONTALE_VOCE)
+                    .testTag("shell-piede-modello-linguistico"),
+            )
+        }
+        if (onImpostazioni != null) {
+            // The Impostazioni entry: the SAME chrome as a nav item (VoceNavigazione), so it reads as a place to go.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(ALTEZZA_VOCE_NAV)
+                    .clip(forma)
+                    .let {
+                        if (selezionato) it.background(colori.raised, forma).border(1.dp, colori.line, forma) else it
+                    }
+                    .clickable(onClick = onImpostazioni)
+                    .padding(horizontal = PADDING_ORIZZONTALE_VOCE)
+                    .testTag("shell-piede"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
+            ) {
+                IconaSn(
+                    Icona.Settings,
+                    descrizione = null,
+                    tinta = if (selezionato) colori.accentInk else colori.inkMuted,
+                    dimensione = SnastroMisure.iconM,
+                )
                 Text(
-                    text = ETICHETTA_MODELLI_E_LICENZE,
-                    style = tipografia.caption.copy(
+                    text = ETICHETTA_IMPOSTAZIONI,
+                    style = tipografia.body.copy(
                         fontWeight = if (selezionato) FontWeight.SemiBold else FontWeight.Normal,
                     ),
-                    color = if (selezionato) colori.ink else colori.inkMuted,
+                    color = colori.ink,
                 )
             }
-            if (statoModelloLinguisticoPiede != null) {
-                Text(
-                    text = statoModelloLinguisticoPiede,
-                    style = tipografia.caption,
-                    color = colori.inkMuted,
-                    modifier = Modifier.testTag("shell-piede-modello-linguistico"),
-                )
-            }
-            Text(text = ETICHETTA_TUTTO_IN_LOCALE, style = tipografia.caption, color = colori.inkMuted)
         }
+        Text(
+            text = ETICHETTA_TUTTO_IN_LOCALE,
+            style = tipografia.caption,
+            color = colori.inkFaint,
+            modifier = Modifier.padding(horizontal = PADDING_ORIZZONTALE_VOCE)
+                .let { if (onImpostazioni == null) it.testTag("shell-piede") else it },
+        )
     }
 }
 

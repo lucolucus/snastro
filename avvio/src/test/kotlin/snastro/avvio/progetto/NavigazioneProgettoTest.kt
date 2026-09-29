@@ -90,7 +90,7 @@ class NavigazioneProgettoTest {
                         navigazione = navigazione,
                         elenco = { Text(S2) },
                         registrazione = { Text("S3") },
-                        modelli = { Text(S5) },
+                        impostazioni = { Text(S5) },
                         parlanti = { Text(S4) },
                     )
                 },
@@ -122,7 +122,7 @@ class NavigazioneProgettoTest {
                         navigazione = navigazione,
                         elenco = { Text(S2) },
                         registrazione = { Text("S3") },
-                        modelli = { Text(S5) },
+                        impostazioni = { Text(S5) },
                         parlanti = { Text(S4) },
                     )
                 },

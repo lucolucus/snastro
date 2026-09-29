@@ -20,6 +20,7 @@ import snastro.modelli.CartellaCacheModelli
 import snastro.modelli.CatalogoModelli
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.ui.ApriEsterno
+import snastro.ui.impostazioni.PreferenzeApp
 import snastro.ui.modelli.ServizioModelli
 import java.nio.file.Path
 import java.time.Clock
@@ -30,7 +31,8 @@ import java.time.Duration
  * wiring, all in `:avvio`). [scope] is a single presenter scope on `Dispatchers.Swing` with a `SupervisorJob` — one
  * presenter's failure never kills another's collectors. [io] is the ONE background dispatcher. [clock] ticks at
  * millisecond precision: the SQL adapters store epoch millis, a finer clock would break save/read equality.
- * [servizioModelli] is S5's port (models are per user), [apriEsterno] what S3 uses for the Documento.
+ * [servizioModelli] is S5's port (models are per user), [apriEsterno] what S3 uses for the Documento, [preferenze]
+ * the app-wide Impostazioni (theme, folder of new projects).
  */
 @Suppress("LongParameterList") // one parameter per app-wide collaborator of the screens
 internal class Grafo(
@@ -42,6 +44,7 @@ internal class Grafo(
     val cartellaProgettiPredefinita: String,
     val servizioModelli: ServizioModelli,
     val apriEsterno: ApriEsterno,
+    val preferenze: PreferenzeApp,
 )
 
 /** The real per-OS, per-user app-data folder (AC-348) — `main()`'s own binding. */
@@ -100,5 +103,6 @@ internal fun costruisciGrafo(
         cartellaProgettiPredefinita = cartellaProgettiPredefinitaReale(),
         servizioModelli = modelli.servizio,
         apriEsterno = ApriEsternoDesktop(),
+        preferenze = preferenzeAppFile(cartellaRegistro),
     )
 }

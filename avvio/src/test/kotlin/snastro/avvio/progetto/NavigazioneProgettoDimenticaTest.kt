@@ -48,11 +48,11 @@ class NavigazioneProgettoDimenticaTest {
     fun `AC-632 S5 aperto da S3 della Registrazione eliminata torna all elenco, non a S3`() {
         val navigazione = NavigazioneProgetto(shell.azioni, SchermataR1.Registrazioni)
         navigazione.apriRegistrazione(R)
-        navigazione.apriModelli()
+        navigazione.apriImpostazioni()
 
         navigazione.dimentica(R)
 
-        assertEquals(SchermataR1.Modelli, navigazione.schermata, "S5 resta dov'e'")
+        assertEquals(SchermataR1.Impostazioni, navigazione.schermata, "S5 resta dov'e'")
         navigazione.tornaAllElenco()
         assertEquals(SchermataR1.Registrazioni, navigazione.schermata)
     }
@@ -61,7 +61,7 @@ class NavigazioneProgettoDimenticaTest {
     fun `AC-632 S5 aperto da S3 di un altra Registrazione torna a quella S3`() {
         val navigazione = NavigazioneProgetto(shell.azioni, SchermataR1.Registrazioni)
         navigazione.apriRegistrazione(ALTRA)
-        navigazione.apriModelli()
+        navigazione.apriImpostazioni()
 
         navigazione.dimentica(R)
 

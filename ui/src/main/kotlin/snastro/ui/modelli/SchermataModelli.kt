@@ -1,7 +1,6 @@
 package snastro.ui.modelli
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +32,7 @@ import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.temaScuro
 import snastro.ui.testi.ETICHETTA_DOWNLOAD_NON_RIUSCITO
 import snastro.ui.testi.ETICHETTA_LICENZE
 import snastro.ui.testi.ETICHETTA_RIPROVA
@@ -52,7 +52,7 @@ private val ALTEZZA_BARRA: Dp = 6.dp
 fun SchermataModelli(
     stato: ModelliUiStato,
     azioni: AzioniModelli,
-    scuro: Boolean = isSystemInDarkTheme(),
+    scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
 ) {
     SnastroTema(scuro = scuro, riduciMovimento = riduciMovimento) {

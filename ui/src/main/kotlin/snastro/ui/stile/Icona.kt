@@ -1,7 +1,7 @@
 package snastro.ui.stile
 
 /**
- * AC-558: the 29 icons of `UI/design-system/icone/`, one entry per SVG resource under
+ * AC-558: the 31 icons of `UI/design-system/icone/`, one entry per SVG resource under
  * `resources/icone/` (24px grid, 1.75 stroke, rounded ends — Play/Pause are filled).
  */
 public enum class Icona(internal val file: String) {
@@ -23,6 +23,7 @@ public enum class Icona(internal val file: String) {
     Close("close.svg"),
     ChevronDown("chevron-down.svg"),
     ChevronRight("chevron-right.svg"),
+    ChevronLeft("chevron-left.svg"),
     Alert("alert.svg"),
     Retry("retry.svg"),
     Clock("clock.svg"),
@@ -34,4 +35,5 @@ public enum class Icona(internal val file: String) {
     Cube("cube.svg"),
     More("more.svg"),
     Reel("reel.svg"),
+    Settings("settings.svg"),
 }

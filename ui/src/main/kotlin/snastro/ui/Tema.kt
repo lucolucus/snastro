@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.unit.Dp
+import snastro.ui.impostazioni.LocalTemaApp
+import snastro.ui.impostazioni.TemaApp
 import snastro.ui.stile.ColoriChiari
 import snastro.ui.stile.ColoriScuri
 import snastro.ui.stile.LocalRiduciMovimento
@@ -20,7 +22,8 @@ import snastro.ui.stile.tipografiaMaterial
 
 /**
  * The one theme every screen wraps itself in (rule 11: what every screen shares). AC-552: follows
- * the macOS theme by default ([isSystemInDarkTheme]), provides [LocalSnastroColori] /
+ * the macOS theme by default ([temaScuro]: [isSystemInDarkTheme] unless Impostazioni pins one), provides
+ * [LocalSnastroColori] /
  * [LocalSnastroTipografia] (the Snastro design system, `snastro.ui.stile` — this block's body,
  * ADR 0001/0002), and maps them onto [MaterialTheme]'s `ColorScheme`/`Typography` (README
  * §'Implementazione in Compose') so Material components (`Icon`, `Surface`, …) stay legible too.
@@ -40,7 +43,7 @@ import snastro.ui.stile.tipografiaMaterial
  */
 @Composable
 fun SnastroTema(
-    scuro: Boolean = isSystemInDarkTheme(),
+    scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
@@ -59,4 +62,12 @@ fun SnastroTema(
             content = content,
         )
     }
+}
+
+/** Whether the screens render dark: the Impostazioni choice ([LocalTemaApp]), or macOS's own when it is `SISTEMA`. */
+@Composable
+fun temaScuro(): Boolean = when (LocalTemaApp.current) {
+    TemaApp.SISTEMA -> isSystemInDarkTheme()
+    TemaApp.CHIARO -> false
+    TemaApp.SCURO -> true
 }

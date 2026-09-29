@@ -10,6 +10,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.mappa
 import snastro.sintesi.dominio.Argomento
 import snastro.ui.ShellPresenter
+import snastro.ui.impostazioni.ImpostazioniPresenter
+import snastro.ui.impostazioni.LunghezzaRiassuntoPresenter
 import snastro.ui.modelli.ModelliPresenter
 import snastro.ui.parlanti.ParlantiPresenter
 import snastro.ui.progetti.ProgettiPresenter
@@ -34,6 +36,21 @@ internal fun costruisciShellPresenter(grafo: Grafo): ShellPresenter =
 /** S1: the recent projects. */
 internal fun costruisciProgettiPresenter(grafo: Grafo): ProgettiPresenter =
     ProgettiPresenter(grafo.scope, grafo.io, grafo.elencoProgetti, grafo.sessione)
+
+/** Impostazioni (app-wide part, one per window): theme and folder of new projects, over [Grafo.preferenze]. */
+internal fun costruisciImpostazioniPresenter(grafo: Grafo): ImpostazioniPresenter =
+    ImpostazioniPresenter(grafo.scope, grafo.io, grafo.preferenze, grafo.cartellaProgettiPredefinita)
+
+/** Impostazioni › Riassunto of the open project, on its session scope: the same read-model/command as the tab. */
+internal fun costruisciLunghezzaRiassuntoPresenter(
+    grafo: Grafo,
+    collaboratori: CollaboratoriProgetto,
+): LunghezzaRiassuntoPresenter = LunghezzaRiassuntoPresenter(
+    scope = collaboratori.scope,
+    io = grafo.io,
+    leggi = collaboratori.sintesi.impostazioni,
+    modifica = collaboratori.sintesi.modificaLunghezzaMassima,
+)
 
 /** S5 (and the sidebar footer's model line, AC-S163). */
 internal fun costruisciModelliPresenter(grafo: Grafo): ModelliPresenter =

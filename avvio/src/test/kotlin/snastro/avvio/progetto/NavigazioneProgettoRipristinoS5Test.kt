@@ -59,7 +59,7 @@ class NavigazioneProgettoRipristinoS5Test {
                             )
                         },
                         registrazione = { Text(S3) },
-                        modelli = { Text(S5) },
+                        impostazioni = { Text(S5) },
                         parlanti = { Text(S4) },
                     )
                 },

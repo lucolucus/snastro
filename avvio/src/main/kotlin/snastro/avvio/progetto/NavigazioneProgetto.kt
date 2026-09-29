@@ -21,7 +21,7 @@ import snastro.ui.ShellUiStato
 /**
  * The open project's place inside the Registrazioni section (S2 list, S3 of one Registrazione, S5), as
  * Compose observable state — the composition root's own navigation (rework cycle 2,
- * HIGH #1). S5 is reached from the sidebar footer from ANY section: [apriModelli] also selects the
+ * HIGH #1). S5 is reached from the sidebar footer from ANY section: [apriImpostazioni] also selects the
  * Registrazioni section (which hosts S5), so the footer never "does nothing" from Parlanti.
  */
 @Stable
@@ -30,9 +30,9 @@ internal class NavigazioneProgetto(private val azioni: AzioniShell, iniziale: Sc
         private set
 
     // L755e: the place S5 was opened FROM (S2's list, or S3 of one Registrazione) — `null` when S5 is
-    // not showing. Remembered ONLY while `schermata == Modelli`, so a redundant re-click of the
-    // footer while already on S5 never overwrites it with `Modelli` itself.
-    private var primaDiModelli: SchermataR1? = null
+    // not showing. Remembered ONLY while `schermata == Impostazioni`, so a redundant re-click of the
+    // footer while already on S5 never overwrites it with `Impostazioni` itself.
+    private var primaDiImpostazioni: SchermataR1? = null
 
     fun apriRegistrazione(id: RegistrazioneId) {
         schermata = SchermataR1.Registrazione(id)
@@ -41,22 +41,22 @@ internal class NavigazioneProgetto(private val azioni: AzioniShell, iniziale: Sc
     /**
      * The sidebar's reset hook, fired for TWO distinct reasons (`SchermataShell`'s own wiring):
      * re-clicking the ALREADY-selected 'Registrazioni' item (always the list's own top, regardless of
-     * S5), or leaving S5 via ANY nav click (L755e: restores [primaDiModelli] — S2 or S3, whichever S5
+     * S5), or leaving S5 via ANY nav click (L755e: restores [primaDiImpostazioni] — S2 or S3, whichever S5
      * was opened from — instead of forcing the list every time, which silently dropped a S3 place).
      */
     fun tornaAllElenco() {
-        schermata = if (schermata == SchermataR1.Modelli) {
-            primaDiModelli ?: SchermataR1.Registrazioni
+        schermata = if (schermata == SchermataR1.Impostazioni) {
+            primaDiImpostazioni ?: SchermataR1.Registrazioni
         } else {
             SchermataR1.Registrazioni
         }
-        primaDiModelli = null
+        primaDiImpostazioni = null
     }
 
-    fun apriModelli() {
-        if (schermata != SchermataR1.Modelli) primaDiModelli = schermata
+    fun apriImpostazioni() {
+        if (schermata != SchermataR1.Impostazioni) primaDiImpostazioni = schermata
         azioni.seleziona(DestinazioneShell.REGISTRAZIONI)
-        schermata = SchermataR1.Modelli
+        schermata = SchermataR1.Impostazioni
     }
 
     /**
@@ -67,14 +67,14 @@ internal class NavigazioneProgetto(private val azioni: AzioniShell, iniziale: Sc
     fun dimentica(id: RegistrazioneId) {
         val posto = SchermataR1.Registrazione(id)
         if (schermata == posto) schermata = SchermataR1.Registrazioni
-        if (primaDiModelli == posto) primaDiModelli = SchermataR1.Registrazioni
+        if (primaDiImpostazioni == posto) primaDiImpostazioni = SchermataR1.Registrazioni
     }
 
     /** True while S5 is on screen — the sidebar then highlights its footer, no nav item. */
-    fun modelliMostrati(stato: ShellUiStato): Boolean =
+    fun impostazioniMostrate(stato: ShellUiStato): Boolean =
         stato is ShellUiStato.ConProgetto &&
             stato.destinazioneSelezionata == DestinazioneShell.REGISTRAZIONI &&
-            schermata == SchermataR1.Modelli
+            schermata == SchermataR1.Impostazioni
 }
 
 /**
@@ -89,7 +89,7 @@ internal fun ContenutoProgetto(
     navigazione: NavigazioneProgetto,
     elenco: @Composable () -> Unit,
     registrazione: @Composable (RegistrazioneId) -> Unit,
-    modelli: @Composable () -> Unit,
+    impostazioni: @Composable () -> Unit,
     parlanti: @Composable () -> Unit,
 ) {
     if (conProgetto.destinazioneSelezionata == DestinazioneShell.PARLANTI) {
@@ -100,7 +100,7 @@ internal fun ContenutoProgetto(
         when (val s = navigazione.schermata) {
             SchermataR1.Registrazioni -> elenco()
             is SchermataR1.Registrazione -> registrazione(s.id)
-            SchermataR1.Modelli -> modelli()
+            SchermataR1.Impostazioni -> impostazioni()
         }
     }
 }
@@ -133,8 +133,8 @@ internal fun ShellProgetto(
         contenutoSenzaProgetto = contenutoSenzaProgetto,
         contenuto = { conProgetto -> contenuto(conProgetto, navigazione) },
         onRegistrazioniSelezionata = navigazione::tornaAllElenco,
-        onModelliELicenze = navigazione::apriModelli,
-        modelliSelezionati = navigazione.modelliMostrati(stato),
+        onImpostazioni = navigazione::apriImpostazioni,
+        impostazioniSelezionate = navigazione.impostazioniMostrate(stato),
         statoModelloLinguisticoPiede = etichettaModello,
     )
 }

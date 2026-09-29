@@ -11,7 +11,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import snastro.kernel.ProgettoId
 import snastro.ui.testi.ETICHETTA_CHIUDI_PROGETTO
-import snastro.ui.testi.ETICHETTA_MODELLI_E_LICENZE
+import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import snastro.ui.testi.ETICHETTA_TUTTO_IN_LOCALE
 import kotlin.test.assertEquals
 
@@ -61,14 +61,14 @@ class ShellSelettoreProgettoTest {
                 stato = ShellUiStato.ConProgetto(PROGETTO_PROVA, OGNI_SEZIONE, DestinazioneShell.REGISTRAZIONI),
                 azioni = AzioniShell(apri = {}, crea = { _, _ -> }, chiudi = {}, chiudiErrore = {}, seleziona = {}),
                 contenuto = { Text("Contenuto della sezione selezionata") },
-                onModelliELicenze = { navigazioni++ },
+                onImpostazioni = { navigazioni++ },
                 riduciMovimento = true,
             )
         }
 
         onNodeWithText(ETICHETTA_TUTTO_IN_LOCALE).assertIsDisplayed()
         onNodeWithText("Modelli pronti", substring = true).assertDoesNotExist()
-        onNodeWithText(ETICHETTA_MODELLI_E_LICENZE).assertIsDisplayed()
+        onNodeWithText(ETICHETTA_IMPOSTAZIONI).assertIsDisplayed()
 
         onNodeWithTag("shell-piede").performClick()
         assertEquals(1, navigazioni)

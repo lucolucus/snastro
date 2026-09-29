@@ -51,6 +51,18 @@ private val UN_PROGETTO = ProgettoVista(
     ultimaAttivita = Instant.parse("2026-09-23T10:15:30Z"),
 )
 
+private val PIU_PROGETTI = listOf(
+    UN_PROGETTO,
+    UN_PROGETTO.copy(
+        progettoId = ProgettoId("id-2"),
+        nome = "Riunione team settimanale con un nome davvero lungo",
+        numRegistrazioni = 7,
+    ),
+    UN_PROGETTO.copy(progettoId = ProgettoId("id-3"), nome = "Intervista Via Roquel", numRegistrazioni = 1),
+    UN_PROGETTO.copy(progettoId = ProgettoId("id-4"), nome = "Lezioni di storia", numRegistrazioni = 12),
+    UN_PROGETTO.copy(progettoId = ProgettoId("id-5"), nome = "Podcast", numRegistrazioni = 0),
+)
+
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): every [ProgettiUiStato] fixture at both sizes, both
  * themes — sizing/overflow/contrast/state-rendering (AC-192/193/194/195/196/197/198/573).
@@ -173,6 +185,66 @@ class ProgettiRenderCheckTest {
     fun `L530d un errore di caricamento dell elenco e mostrato con Riprova a 1024x640 (scuro)`() =
         verificaErroreElenco(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
+    @Test
+    fun `griglia con piu progetti e Impostazioni a 1280x800`() = verificaGriglia(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `griglia con piu progetti e Impostazioni a 1024x640`() =
+        verificaGriglia(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
+
+    @Test
+    fun `griglia con piu progetti e Impostazioni a 1280x800 (scuro)`() =
+        verificaGriglia(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX, scuro = true)
+
+    @Test
+    fun `griglia con piu progetti e Impostazioni a 1024x640 (scuro)`() =
+        verificaGriglia(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    @Test
+    fun `pannello Nuovo progetto a 1280x800`() = verificaPannello(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `pannello Nuovo progetto a 1024x640 (scuro)`() =
+        verificaPannello(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    private fun verificaGriglia(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataProgetti(
+                    stato = ProgettiUiStato.Dati(progetti = PIU_PROGETTI),
+                    azioni = AZIONI_VUOTE,
+                    cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
+                    onImpostazioni = {},
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("progetti-nuovo").assertIsDisplayed()
+            onNodeWithTag("progetti-impostazioni").assertIsDisplayed()
+            onNodeWithText(PIU_PROGETTI.first().nome).assertIsDisplayed()
+            catturaPng("progetti-griglia", width, height, scuro)
+        }
+
+    private fun verificaPannello(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            setContent {
+                SchermataProgetti(
+                    stato = ProgettiUiStato.Dati(progetti = PIU_PROGETTI),
+                    azioni = AZIONI_VUOTE,
+                    cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
+                    onImpostazioni = {},
+                    nuovoProgettoAperto = true,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("progetti-pannello-nuovo").assertIsDisplayed()
+            onNodeWithTag("progetti-campo-nome").assertIsDisplayed()
+            catturaPng("progetti-pannello-nuovo", width, height, scuro)
+        }
+
     private fun verificaCaricamento(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
             setContent {
@@ -235,6 +307,7 @@ class ProgettiRenderCheckTest {
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
                     sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
+                    nuovoProgettoAperto = true,
                     scuro = scuro,
                     riduciMovimento = true,
                 )

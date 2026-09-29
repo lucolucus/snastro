@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -71,6 +70,7 @@ import snastro.ui.stile.SchedeSn
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.temaScuro
 import snastro.ui.testi.DESCRIZIONE_SELEZIONA_FRASE
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
@@ -118,7 +118,7 @@ private const val LARGHEZZA_SCHELETRO_DISPARI = 0.55f
 fun SchermataRegistrazione(
     stato: RegistrazioneUiStato,
     azioni: AzioniRegistrazione,
-    scuro: Boolean = isSystemInDarkTheme(),
+    scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
 ) {
     SnastroTema(scuro = scuro, riduciMovimento = riduciMovimento) {

@@ -31,6 +31,7 @@ class SchermataProgettiCartellaPredefinitaTest {
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = predefinita,
                     sceltaCartella = SceltaCartellaFinta(),
+                    nuovoProgettoAperto = true,
                 )
             }
 

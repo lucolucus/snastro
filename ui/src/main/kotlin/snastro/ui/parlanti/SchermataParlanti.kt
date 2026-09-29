@@ -6,7 +6,6 @@ package snastro.ui.parlanti
 
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +64,7 @@ import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.temaScuro
 import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
@@ -98,7 +98,7 @@ private val SPESSORE_SOTTOLINEATURA = 1.5.dp // L742c
 fun SchermataParlanti(
     stato: ParlantiUiStato,
     azioni: AzioniParlanti,
-    scuro: Boolean = isSystemInDarkTheme(),
+    scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
 ) {
     SnastroTema(scuro = scuro, riduciMovimento = riduciMovimento) {

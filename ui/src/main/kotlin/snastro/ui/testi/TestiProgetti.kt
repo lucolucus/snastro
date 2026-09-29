@@ -14,3 +14,16 @@ const val ETICHETTA_ERRORE_CARICAMENTO_PROGETTI: String = "Impossibile caricare 
 
 /** AC-198: "N registrazioni", singular for exactly one. */
 fun etichettaRegistrazioni(numero: Int): String = if (numero == 1) "1 registrazione" else "$numero registrazioni"
+
+/** The home header's brand line, over the "Progetti" title. */
+const val ETICHETTA_SNASTRO: String = "snastro"
+
+/** The "Nuovo progetto" card's second line. */
+const val DESCRIZIONE_NUOVO_PROGETTO: String = "Una cartella per le tue registrazioni"
+
+/** The home header's subtitle: how many projects, and the privacy line. */
+fun sottotitoloProgetti(numero: Int): String = when (numero) {
+    0 -> "Tutto in locale, sul tuo Mac"
+    1 -> "1 progetto · tutto in locale"
+    else -> "$numero progetti · tutto in locale"
+}

@@ -211,6 +211,7 @@ internal class AmbienteProgetto(
         cartellaProgettiPredefinita = progetto.percorso,
         servizioModelli = servizioModelli,
         apriEsterno = ApriEsternoFinta(),
+        preferenze = PreferenzeAppFinta(),
     )
 
     /** Imports the test source through the REAL AggiungiRegistrazione; returns the NEW Registrazione. */

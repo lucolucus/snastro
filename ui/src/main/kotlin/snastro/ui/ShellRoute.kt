@@ -6,9 +6,9 @@ import androidx.compose.runtime.getValue
 
 /**
  * One-line composition entry point (dev-architecture `#presenter`): collects [presenter]'s state.
- * [onRegistrazioniSelezionata]/[onModelliELicenze] (rework cycle 1, HIGH #9): optional hooks the
+ * [onRegistrazioniSelezionata]/[onImpostazioni] (rework cycle 1, HIGH #9): optional hooks the
  * composition root wires to its own S5/sub-section navigation — the shell state has no such section.
- * [modelliSelezionati] (rework cycle 2): the composition root's S5 is on screen — see [SchermataShell].
+ * [impostazioniSelezionate] (rework cycle 2): the composition root's S5 is on screen — see [SchermataShell].
  * [statoModelloLinguisticoPiede] (AC-S33, ADR 0025): the composition root passes
  * `snastro.ui.modelli.ModelliPresenter.etichettaModelloLinguisticoPiede`'s collected value here — this
  * route has no `ServizioModelli` of its own (RC-1: the shell state has no such section either).
@@ -20,8 +20,8 @@ fun ShellRoute(
     contenutoSenzaProgetto: @Composable () -> Unit = {},
     contenuto: @Composable (ShellUiStato.ConProgetto) -> Unit = {},
     onRegistrazioniSelezionata: (() -> Unit)? = null,
-    onModelliELicenze: (() -> Unit)? = null,
-    modelliSelezionati: Boolean = false,
+    onImpostazioni: (() -> Unit)? = null,
+    impostazioniSelezionate: Boolean = false,
     statoModelloLinguisticoPiede: String? = null,
 ) {
     val stato by presenter.stato.collectAsState()
@@ -31,8 +31,8 @@ fun ShellRoute(
         contenutoSenzaProgetto = contenutoSenzaProgetto,
         contenuto = contenuto,
         onRegistrazioniSelezionata = onRegistrazioniSelezionata,
-        onModelliELicenze = onModelliELicenze,
-        modelliSelezionati = modelliSelezionati,
+        onImpostazioni = onImpostazioni,
+        impostazioniSelezionate = impostazioniSelezionate,
         statoModelloLinguisticoPiede = statoModelloLinguisticoPiede,
     )
 }

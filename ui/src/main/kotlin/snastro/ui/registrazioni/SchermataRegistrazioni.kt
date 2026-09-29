@@ -12,7 +12,6 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -90,6 +89,7 @@ import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
+import snastro.ui.temaScuro
 import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
@@ -152,7 +152,7 @@ private val FORMATO_DATA_MODIFICABILE: DateTimeFormatter =
 fun SchermataRegistrazioni(
     stato: RegistrazioniUiStato,
     azioni: AzioniRegistrazioni,
-    scuro: Boolean = isSystemInDarkTheme(),
+    scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
 ) {
     SchermataRegistrazioni(stato, azioni, scuro, riduciMovimento, dragIniziale = false)

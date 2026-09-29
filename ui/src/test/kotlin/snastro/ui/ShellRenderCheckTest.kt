@@ -13,7 +13,7 @@ import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.ProgettoId
-import snastro.ui.testi.ETICHETTA_MODELLI_E_LICENZE
+import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import java.io.File
 import javax.imageio.ImageIO
 
@@ -276,8 +276,8 @@ class ShellRenderCheckTest {
                     stato = ShellUiStato.ConProgetto(PROGETTO_PROVA, sezioni, DestinazioneShell.REGISTRAZIONI),
                     azioni = AZIONI_VUOTE,
                     contenuto = { Text("Contenuto della sezione selezionata") },
-                    onModelliELicenze = {},
-                    modelliSelezionati = modelli,
+                    onImpostazioni = {},
+                    impostazioniSelezionate = modelli,
                     statoModelloLinguisticoPiede = statoModelloLinguisticoPiede,
                     scuro = scuro,
                     riduciMovimento = true,
@@ -286,14 +286,14 @@ class ShellRenderCheckTest {
             onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
             onNodeWithText("Registrazioni").assertIsDisplayed()
             onNodeWithText("Contenuto della sezione selezionata").assertIsDisplayed()
-            onNodeWithText(ETICHETTA_MODELLI_E_LICENZE).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_IMPOSTAZIONI).assertIsDisplayed()
             if (conParlanti) {
                 onNodeWithText("Parlanti").assertIsDisplayed()
             } else {
                 onNodeWithText("Parlanti").assertDoesNotExist()
             }
             // AC-S33/AC-S35: the optional-model line is opt-in and never clipped when present; absent
-            // entirely (not just blank) when there is nothing to show. `onModelliELicenze` above makes
+            // entirely (not just blank) when there is nothing to show. `onImpostazioni` above makes
             // the whole footer row a single merged semantics node (like the progress bar in
             // ModelliRenderCheckTest), so the child's own tag needs the unmerged tree.
             if (statoModelloLinguisticoPiede != null) {

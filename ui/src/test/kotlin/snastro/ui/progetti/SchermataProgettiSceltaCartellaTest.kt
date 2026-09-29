@@ -36,6 +36,7 @@ class SchermataProgettiSceltaCartellaTest {
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = "/tmp/iniziale",
                     sceltaCartella = sceltaCartella,
+                    nuovoProgettoAperto = true,
                 )
             }
 
@@ -55,6 +56,7 @@ class SchermataProgettiSceltaCartellaTest {
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = "/tmp/iniziale",
                     sceltaCartella = sceltaCartella,
+                    nuovoProgettoAperto = true,
                 )
             }
 

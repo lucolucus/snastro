@@ -70,6 +70,13 @@ internal fun eseguiSmoke(fixtureDir: String) {
             attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
             salvaSchermata(outputDir, "s1")
 
+            // Impostazioni, full-window from S1's header, and back.
+            onNodeWithTag("progetti-impostazioni").performClick()
+            attendi { esisteTag("impostazioni-tema") }
+            salvaSchermata(outputDir, "impostazioni")
+            onNodeWithTag("impostazioni-indietro").performClick()
+            attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
+
             val esito = grafo.sessione.apri(fixtureDir)
             check(esito is Esito.Ok) { "smoke: impossibile aprire il progetto fixture '$fixtureDir': $esito" }
 
@@ -99,9 +106,10 @@ internal fun eseguiSmoke(fixtureDir: String) {
             attendi { esisteTag("parlanti-lista") }
             salvaSchermata(outputDir, "s4")
 
-            // Rework cycle 2 (HIGH #1): S5 ('Modelli e licenze') is reached from the sidebar's own footer
-            // row from ANY section — straight from Parlanti here.
+            // Rework cycle 2 (HIGH #1): Impostazioni (S5 is its 'Modelli e licenze' section) is reached from the
+            // sidebar's own footer row from ANY section — straight from Parlanti here.
             onNodeWithTag("shell-piede").performClick()
+            onNodeWithTag("impostazioni-sezione-modelli").performClick()
             // AC-556: `licenze()` now also lists the bundled fonts, so it is no longer the model count —
             // the actual missing-models number comes from `StatoModelli.Mancanti` itself.
             val numeroModelliMancanti = (modelliReali.stato.value as StatoModelli.Mancanti).numero

@@ -6,11 +6,17 @@ import androidx.compose.runtime.getValue
 
 /**
  * One-line composition entry point (dev-architecture `#presenter`): collects [presenter]'s state.
- * [cartellaGenitorePredefinita] (ADR 0010) is `:avvio`'s own injected default, forwarded unchanged;
- * [sceltaCartella] (L464d) is `:avvio`'s window-owned folder picker, forwarded unchanged too.
+ * [cartellaGenitorePredefinita] (ADR 0010, or the folder saved in Impostazioni) is `:avvio`'s own injected default,
+ * forwarded unchanged; [sceltaCartella] (L464d) is `:avvio`'s window-owned folder picker, forwarded unchanged too;
+ * [onImpostazioni] opens the Impostazioni screen.
  */
 @Composable
-fun ProgettiRoute(presenter: ProgettiPresenter, cartellaGenitorePredefinita: String, sceltaCartella: SceltaCartella) {
+fun ProgettiRoute(
+    presenter: ProgettiPresenter,
+    cartellaGenitorePredefinita: String,
+    sceltaCartella: SceltaCartella,
+    onImpostazioni: (() -> Unit)? = null,
+) {
     val stato by presenter.stato.collectAsState()
-    SchermataProgetti(stato, presenter.azioni, cartellaGenitorePredefinita, sceltaCartella)
+    SchermataProgetti(stato, presenter.azioni, cartellaGenitorePredefinita, sceltaCartella, onImpostazioni)
 }
