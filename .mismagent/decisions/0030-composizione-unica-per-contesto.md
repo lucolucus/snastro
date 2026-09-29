@@ -4,6 +4,7 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0021 §10 (the release composition R3 → the single composition), ADR 0024 §4 (release split; subscriber order declared — closes pending user decision 5), ADR 0020 (R2 wording, by pointer from 0024), architecture.md (:avvio row, "Composition R3" / R1-read-model amendment lines, new § Composition), dev-architecture-app.md (§10 composition)
 closes_spike: null
 decided: 2026-09-27 · user (post-R3 design review, analysis §2.3 R1–R4, §2.4 X4, §6.1; C1–C5 as recommended; the release METHOD is unchanged) · architect (target shape, AC table, block split)
+amended: 2026-09-29   # dated note, §1: the queue↔Sintesi cycle break let c3 drop the sintesi-pinned FonteCoda.annulla/CodaCondivisa.annullaInCorso for EsecuzioniRiassunto.annulla via ModuloSintesi (consolidamento D-0006, supersedes sintesi D-0005's 7th field; full note ADR 0023 §5). Also §2: the synchronous-subscriber order changed earlier in the feature (Sintesi→Trascrizione→Parlanti to Sintesi→Parlanti→Trascrizione) before this ADR declared it; "exactly today's effective order" names the order AT this decision, not one that never changed. Harmless (correctness never depended on it). Source: pre-release triage B75/B76.
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0030-composizione-unica.sh
     from: c3-composizione-piatta
@@ -81,6 +82,12 @@ release no longer survives as a separate code composition.
 - **Presenters.** Once the flat composition lands, their optional collaborators become mandatory (U1). A missed
   wiring then fails to compile instead of hiding a function.
 
+*(Dated note 2026-09-29, consolidamento D-0006 [user]: the queue↔Sintesi cycle break above (step 4, the
+`Campanello` handle) is what let c3 drop the sintesi-pinned `FonteCoda.annulla` field and
+`CodaCondivisa.annullaInCorso` — the best-effort `Riassunto` cancel is now `EsecuzioniRiassunto.annulla`,
+called by `ModuloSintesi` directly, never through the queue. Supersedes the 7th `FonteCoda` field of sintesi
+D-0005. Full note: [ADR 0023](0023-coda-condivisa-elaborazioni-riassunti.md) §5.)*
+
 ### 2. Synchronous-subscriber order: declared, unchanged [user C2 — closes pending decision 5]
 The list in `apriProgetto` is **Sintesi → Parlanti → Trascrizione**, exactly today's effective order (Sintesi's
 `TrascrittoSostituito` and `RegistrazioneEliminata` subscribers first, then Parlanti's purges, then Trascrizione's
@@ -91,6 +98,11 @@ veto/purge).
   ADR.
 - AC-S143 asserts the declared list directly.
 - ADR 0024 §4 carries the dated note.
+
+*(Dated note 2026-09-29, pre-release triage B76 [harmless]: "exactly today's effective order" names the order AT
+the time of this decision, not one that never changed — the `RegistrazioneEliminata` order was earlier
+**Sintesi → Trascrizione → Parlanti** in the feature's history and became **Sintesi → Parlanti → Trascrizione**
+before this ADR declared it. Correctness never depended on it, as stated above.)*
 
 ### 3. The ACs asserted on R0/R1/R2 graphs [user C4]
 | AC (current test) | Fate |

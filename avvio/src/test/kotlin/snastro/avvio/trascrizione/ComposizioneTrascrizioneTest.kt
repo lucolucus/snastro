@@ -80,19 +80,22 @@ class ComposizioneTrascrizioneTest {
 
     @Test
     fun `AC-371 dopo un import nessuna Elaborazione esiste, la vista da NON_AVVIATA e S2 mostra Trascrivi`() {
-        val ambiente = AmbienteProgetto(radice)
-        val id = ambiente.importa()
-        val presenter = costruisciRegistrazioniPresenter(ambiente.grafo(), ambiente.collaboratori) {}
+        // B79 pre-release triage, 2026-09-29: `.use { }` (the file's own idiom elsewhere) instead of a bare
+        // `ambiente.close()` mid-body — a failing assertion above used to skip close() and leak the scope/executor.
+        val (percorsoProgetto, id) = AmbienteProgetto(radice).use { ambiente ->
+            val id = ambiente.importa()
+            val presenter = costruisciRegistrazioniPresenter(ambiente.grafo(), ambiente.collaboratori) {}
 
-        assertEquals(StatoElaborazioneVista.NON_AVVIATA, ambiente.stato(id))
-        attendiFinche(timeout = 10.seconds, messaggio = "riga NON_AVVIATA in S2") {
-            rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.NonAvviata
+            assertEquals(StatoElaborazioneVista.NON_AVVIATA, ambiente.stato(id))
+            attendiFinche(timeout = 10.seconds, messaggio = "riga NON_AVVIATA in S2") {
+                rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.NonAvviata
+            }
+            Thread.sleep(ATTESA_NESSUN_AVVIO_MS) // la coda gira ogni secondo: nulla deve comparire nel frattempo
+            assertEquals(StatoElaborazioneVista.NON_AVVIATA, ambiente.stato(id))
+            ambiente.progetto.percorso to id
         }
-        Thread.sleep(ATTESA_NESSUN_AVVIO_MS) // la coda gira ogni secondo: nulla deve comparire nel frattempo
-        assertEquals(StatoElaborazioneVista.NON_AVVIATA, ambiente.stato(id))
-        ambiente.close()
 
-        val db = apriDatabaseProgetto(Path.of(ambiente.progetto.percorso).toFile())
+        val db = apriDatabaseProgetto(Path.of(percorsoProgetto).toFile())
         val righe = ElaborazioneRepositorySql(db.database).diRegistrazione(id)
         db.chiudi()
         assertTrue(righe.isEmpty(), "l'import non deve creare alcuna Elaborazione (ADR 0014): $righe")

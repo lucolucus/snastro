@@ -45,10 +45,6 @@ public class RigenerazioneDocumentoPolitica(
         return scriviERimuoviSePrecedente(vista.nomeFile, vista.markdown, c.nomeFilePrecedente)
     }
 
-    /** AC-158: every Registrazione with a Trascritto, regenerated unconditionally (ADR 0012 R4). */
-    public fun esegui(ignored: RigeneraTuttiIDocumenti): Esito<Unit> =
-        rigeneraOgnuna(trascritti.registrazioniConTrascritto())
-
     /**
      * `DataRegistrazioneModificata` (AC-155, AC-327): the OLD file is computed from [precedente] and
      * the Registrazione's CURRENT titolo (unchanged by a date edit), with the same pure

@@ -81,9 +81,10 @@ import kotlin.coroutines.coroutineContext
  *
  * **[fermaEAttendi] (D-0006, AC-S63 stop half).** Keeps the existing two-step contract (the caller
  * cancels the scope given to [avvia] first): it calls the CURRENTLY running item's source [FonteCoda.interrompi]
- * (unconditional — unlike [annulla][FonteCoda.annulla], no `(tipo, registrazioneId)` match is needed,
- * because only one item can ever be running) before/while [runInterruptible] interrupts whatever call
- * is mid-flight. With nothing running, no source's `interrompi` is called.
+ * (unconditional — no `(tipo, registrazioneId)` match is needed, because only one item can ever be running;
+ * unlike the best-effort cancel above, which DOES match by id but, since ADR 0030, is the running source's own
+ * business, not a queue field) before/while [runInterruptible] interrupts whatever call is mid-flight. With
+ * nothing running, no source's `interrompi` is called.
  *
  * **A throwing peek is handled like an escape (MED, user-approved 2026-09-26).** [FonteCoda.teste] and
  * [FonteCoda.trattenuta] are read inside [eseguiProtetto] too (not just [FonteCoda.prossima]): a source
@@ -346,8 +347,10 @@ internal data class ElementoInCoda(val id: String, val registrazioneId: String, 
  *
  * [interrompi] (D-0006, accepted pin extension, additive/backward-compatible, default no-op): the STOP
  * channel — [CodaCondivisa.fermaEAttendi] calls it, UNCONDITIONALLY, on whichever source's item is
- * currently running, before/while it interrupts the worker. Unlike [annulla] it takes no
- * `registrazioneId`: only one item can ever be running, so there is nothing to match.
+ * currently running, before/while it interrupts the worker. It takes no `registrazioneId`: only one
+ * item can ever be running, so there is nothing to match (unlike the best-effort cancel, which since
+ * ADR 0030 is the running source's own business, not a field here — B79 pre-release triage,
+ * 2026-09-29: the retired `annulla` field DID take one).
  */
 @Suppress("LongParameterList") // one parameter per collaborator (mirrors CodaCondivisa's own constructor)
 internal class FonteCoda(

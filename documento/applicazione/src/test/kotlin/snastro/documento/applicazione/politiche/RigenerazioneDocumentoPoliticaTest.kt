@@ -22,9 +22,13 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Tests of [RigenerazioneDocumentoPolitica]: AC-153..158, AC-327 and AC-155bis (rename, since
+ * Tests of [RigenerazioneDocumentoPolitica]: AC-153..157, AC-327 and AC-155bis (rename, since
  * fix-batch-11 — a Registrazione can be renamed, [snastro.progetto.applicazione.eventi]
- * `RegistrazioneRinominata`, which must behave like a date change on `nomeFile`).
+ * `RegistrazioneRinominata`, which must behave like a date change on `nomeFile`). AC-158 (every
+ * Registrazione with a Trascritto regenerated at startup) is exercised on its real path — the
+ * `AbbonatoDocumentoEventi` fan-out sweep, `documento:adattatori`'s own AC-185 — since the
+ * `RigeneraTuttiIDocumenti` fold this file used to test it through was retired as dead code (B51
+ * pre-release triage, 2026-09-29).
  */
 class RigenerazioneDocumentoPoliticaTest {
     // --- AC-623: perRegistrazioneEliminata (ADR 0020 §3-§4), remove-only ------------------------
@@ -342,36 +346,32 @@ class RigenerazioneDocumentoPoliticaTest {
         assertTrue(scrittore.documenti.containsKey("2026-09-20 Riunione.md"))
     }
 
+    // B51 (pre-release triage, 2026-09-29): `RigeneraTuttiIDocumenti` and this class's `esegui` overload for it
+    // were dead in production since the AC-C47 startup-sweep fan-out (`ModuloDocumento`/`AbbonatoDocumentoEventi`
+    // list ids themselves; only these two tests still called it) and are retired. Both exercised
+    // `rigeneraOgnuna`'s fold (stop on first error / regenerate every id), shared code also reached by
+    // `perParlanteRinominato` below — the "regenerate every match" case is already covered by
+    // `AC-156 ParlanteRinominato rigenera tutte e sole le Registrazioni con un'Attribuzione a P` above; the
+    // "stop at the first write error" case is preserved here through that same still-alive entry point.
     @Test
-    fun `AC-157 RigeneraTuttiIDocumenti propaga un errore di scrittura e si ferma`() {
+    fun `AC-156 ParlanteRinominato propaga un errore di scrittura e si ferma alla prima Registrazione`() {
         val prima = RegistrazioneId("prima")
         val seconda = RegistrazioneId("seconda")
         val trascritti = LettoreTrascrittoFinta(
             mapOf(prima to unTrascritto(prima, titolo = "Prima"), seconda to unTrascritto(seconda, titolo = "Seconda")),
+        )
+        val nomi = LettoreNomiFinta(
+            attribuzioni = mapOf(VoceRef(prima, VoceId(1)) to PARLANTE, VoceRef(seconda, VoceId(1)) to PARLANTE),
+            nomiParlanti = mapOf(PARLANTE to "Marco Rossi"),
         )
         val scrittore = ScrittoreDocumentoFinta()
         scrittore.fallisciAllaProssimaScrittura()
-        val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
+        val politica = RigenerazioneDocumentoPolitica(trascritti, nomi, scrittore)
 
-        val esito = politica.esegui(RigeneraTuttiIDocumenti)
+        val esito = politica.perParlanteRinominato(PARLANTE)
 
         esito.erroreAtteso<ErroreApplicazioneDocumento.ScritturaFallita>()
         assertTrue(scrittore.documenti.isEmpty())
-    }
-
-    @Test
-    fun `AC-158 RigeneraTuttiIDocumenti rigenera ogni Registrazione con Trascritto`() {
-        val prima = RegistrazioneId("prima")
-        val seconda = RegistrazioneId("seconda")
-        val trascritti = LettoreTrascrittoFinta(
-            mapOf(prima to unTrascritto(prima, titolo = "Prima"), seconda to unTrascritto(seconda, titolo = "Seconda")),
-        )
-        val scrittore = ScrittoreDocumentoFinta()
-        val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
-
-        politica.esegui(RigeneraTuttiIDocumenti).atteso()
-
-        assertEquals(setOf("2026-09-12 Prima.md", "2026-09-12 Seconda.md"), scrittore.documenti.keys)
     }
 
     private companion object {
