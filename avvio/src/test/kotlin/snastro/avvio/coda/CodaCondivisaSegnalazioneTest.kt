@@ -28,7 +28,7 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class CodaCondivisaSegnalazioneTest {
     @Test
-    fun `AC-C57 un RuntimeException e segnalato una volta via segnalaSfuggito, la coda prosegue con il successivo`() =
+    fun `AC-C57 un RuntimeException e segnalato una volta via segnalaSfuggito, il ritentativo su id-1 riesce`() =
         runTest {
             val dispatcher = StandardTestDispatcher(testScheduler)
             val segnalati = mutableListOf<Throwable>()
@@ -59,8 +59,57 @@ class CodaCondivisaSegnalazioneTest {
 
             assertEquals(1, segnalati.size, "segnalato esattamente una volta")
             assertTrue(segnalati.single() is RuntimeException)
-            assertEquals(listOf("id-1"), completate, "la coda prosegue con l'elemento successivo (AC-S61)")
+            // B62: RICLAMA lo stesso id-1 (nessun secondo elemento qui) — la coda RITENTA lo stesso elemento dopo
+            // la fuga e riesce; "prosegue con il successivo" e' provato a parte, sotto, con un vero secondo id.
+            assertEquals(listOf("id-1"), completate, "il ritentativo sullo STESSO id-1 (non ancora escluso) riesce")
         }
+
+    @Test
+    fun `B62 AC-C57 dopo la fuga su id-1 e il suo ritentativo riuscito, la coda prosegue con id-2`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val segnalati = mutableListOf<Throwable>()
+        val completate = mutableListOf<String>()
+        val primaVolta = AtomicBoolean(true)
+        val rimanenti = ArrayDeque(listOf("id-1", "id-2"))
+
+        codaAvviata(
+            scope = backgroundScope,
+            fonti = listOf(
+                FonteCoda(
+                    tipo = TipoElementoCoda.ELABORAZIONE,
+                    teste = { esclusi ->
+                        rimanenti.firstOrNull { it !in esclusi }?.let { ElementoInCoda(it, "reg-$it", Instant.EPOCH) }
+                    },
+                    prossima = { esclusi, _ ->
+                        val id = rimanenti.firstOrNull { it !in esclusi }
+                        if (id == null) {
+                            RisultatoTentativo.Nessuno
+                        } else {
+                            if (id == "id-1" && primaVolta.compareAndSet(true, false)) lanciaRuntimeExceptionDiProva()
+                            rimanenti.remove(id)
+                            completate += id
+                            RisultatoTentativo.Avviata(id)
+                        }
+                    },
+                    ultimaTentata = { "id-1" },
+                    recupera = {},
+                    trattenuta = { false },
+                ),
+            ),
+            segnalaSfuggito = { segnalati += it },
+            dispatcherSingoloThread = dispatcher,
+        )
+        advanceTimeBy(3_000)
+        runCurrent()
+
+        assertEquals(1, segnalati.size, "segnalato esattamente una volta")
+        assertTrue(segnalati.single() is RuntimeException)
+        assertEquals(
+            listOf("id-1", "id-2"),
+            completate,
+            "un VERO elemento successivo (id-2, mai visto da id-1) gira dopo il ritentativo riuscito (AC-S61)",
+        )
+    }
 
     @Test
     fun `AC-C57 uno StackOverflowError non e ingoiato, e segnalato al gestore, la coda si ferma`() = runTest {

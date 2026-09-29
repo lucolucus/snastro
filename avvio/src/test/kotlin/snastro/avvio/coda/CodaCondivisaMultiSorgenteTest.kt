@@ -292,6 +292,38 @@ class CodaCondivisaMultiSorgenteTest {
     }
 
     @Test
+    fun `A124 - AC-S59 con due fonti, la testa di R sparisce e E in attesa gira al suo turno`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val ordine = mutableListOf<String>()
+        val vistaR = AtomicInteger(0)
+        val rFonte = FonteCoda(
+            tipo = TipoElementoCoda.RIASSUNTO,
+            // il picco la vede una sola volta (r1-sparito, t1 < t2 di E): poi e' davvero sparita per sempre
+            teste = { if (vistaR.getAndIncrement() == 0) ElementoInCoda("r1-sparito", "reg-r1", t(1)) else null },
+            prossima = { _, _ -> RisultatoTentativo.Nessuno }, // la claim non trova piu' nulla: era gia' sparita
+            ultimaTentata = { null },
+            recupera = {},
+            trattenuta = { false },
+        )
+        val eFonte = FonteCoda(
+            tipo = TipoElementoCoda.ELABORAZIONE,
+            teste = { esclusi -> if ("e2" in esclusi) null else ElementoInCoda("e2", "reg-e2", t(2)) },
+            prossima = { _, _ ->
+                ordine += "e2"
+                RisultatoTentativo.Avviata("e2")
+            },
+            ultimaTentata = { null },
+            recupera = {},
+            trattenuta = { false },
+        )
+
+        codaAvviata(scope = backgroundScope, fonti = listOf(eFonte, rFonte), dispatcherSingoloThread = dispatcher)
+        runCurrent() // nessun advanceTimeBy: la rivalutazione dopo Nessuno e' immediata (AC-S59)
+
+        assertEquals(listOf("e2"), ordine, "e2 gira SUBITO al suo turno dopo la rivalutazione, mai scavalcato")
+    }
+
+    @Test
     fun `rework FAIL 4 - AC-S61 un id bloccato su R viene escluso solo li, l id omonimo su E continua`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val tentativiR = AtomicInteger(0)

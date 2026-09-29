@@ -11,6 +11,7 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
+import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
@@ -99,6 +100,59 @@ class EseguiProssimaElaborazioneNonDopoTest {
         val rimasta = elaborazioni.diRegistrazione(nuova).single()
         assertTrue(rimasta.inAttesa, "la nuova testa non e stata rivendicata")
         assertEquals(pubblicatiDopoAnnullamento, eventi.pubblicati.size, "nessun nuovo evento dalla rivendicazione")
+    }
+
+    @Test
+    fun `A37 il vincolo nonDopo e verificato mentre la transazione e gia aperta, sulla testa letta ora`() {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val uowFinta = UnitaDiLavoroFinta(elaborazioni, TrascrittoRepositoryFinta())
+        val eventi = DispatcherEventiFinta(uowFinta)
+        val servizio = servizio(elaborazioni, eventi)
+        elaborazioni.salva(unaInAttesa(REGISTRAZIONE, CREATA_ALLE)).atteso()
+        var transazioneApertaAllaLettura: Boolean? = null
+        val elaborazioniOsservate = object : ElaborazioneRepository by elaborazioni {
+            override fun inAttesa(): List<Elaborazione> {
+                transazioneApertaAllaLettura = uowFinta.transazioneAperta // A37: leggo ORA, non prima/fuori
+                return elaborazioni.inAttesa()
+            }
+        }
+        val servizioOsservato = EseguiProssimaElaborazioneServizio(
+            uowFinta,
+            OROLOGIO,
+            elaborazioniOsservate,
+            TrascrittoRepositoryFinta(),
+            pipeline(),
+            eventi,
+        )
+
+        val risultato =
+            servizioOsservato.esegui(EseguiProssimaElaborazione(nonDopo = CREATA_ALLE.minusMillis(1))).atteso()
+
+        assertEquals(RisultatoAvanzamento.NessunElemento, risultato, "il vincolo rifiuta la testa appena letta")
+        assertEquals(true, transazioneApertaAllaLettura, "la lettura che il vincolo usa avviene DENTRO la transazione")
+        assertTrue(servizio.esegui(EseguiProssimaElaborazione(nonDopo = null)).atteso() is RisultatoAvanzamento.Avviata)
+    }
+
+    @Test
+    fun `A38 esclusi e nonDopo combinati - il vincolo si applica dopo l esclusione, non alla testa saltata`() {
+        val elaborazioni = ElaborazioneRepositoryFinta()
+        val servizio = servizio(elaborazioni)
+        val idEsclusa = ElaborazioneId("elab-esclusa")
+        val registrazioneEsclusa = RegistrazioneId("registrazione-esclusa")
+        elaborazioni.salva(
+            Elaborazione.accoda(idEsclusa, registrazioneEsclusa, CREATA_ALLE, numeroPersone = null).aggregato,
+        ).atteso()
+        val creataCandidata = CREATA_ALLE.plusSeconds(10) // dopo la esclusa: sarebbe la vera testa FIFO grezza
+        elaborazioni.salva(unaInAttesa(REGISTRAZIONE, creataCandidata)).atteso()
+
+        // esclusi salta idEsclusa (la testa FIFO grezza, la piu' vecchia): il vincolo nonDopo — inclusivo, AC-S21 —
+        // si applica alla testa SUCCESSIVA (ID), non a quella saltata.
+        val risultato = servizio.esegui(
+            EseguiProssimaElaborazione(esclusi = setOf(idEsclusa), nonDopo = creataCandidata),
+        ).atteso()
+
+        assertEquals(RisultatoAvanzamento.Avviata(ID), risultato, "la testa dopo l'esclusione e' rivendicata")
+        assertTrue(checkNotNull(elaborazioni.trova(idEsclusa)).inAttesa, "la testa esclusa non e' toccata")
     }
 
     private fun servizio(

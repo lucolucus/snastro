@@ -1,6 +1,8 @@
 package snastro.avvio.sintesi
 
 import snastro.avvio.coda.ElementoInCoda
+import snastro.avvio.coda.FonteCoda
+import snastro.avvio.coda.FonteCodaContratto
 import snastro.avvio.coda.RisultatoTentativo
 import snastro.avvio.coda.TipoElementoCoda
 import snastro.kernel.DispatcherEventiFinta
@@ -13,6 +15,7 @@ import snastro.kernel.VoceId
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
+import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.applicazione.porte.LettoreNomiFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
@@ -39,7 +42,7 @@ import kotlin.test.assertTrue
  * and the per-run flag of AC-S161/AC-S162 (D-0004/D-0006) at the source's own seam — with AC-S63's match (only the
  * RUNNING Riassunto of the deleted Registrazione), which ADR 0030 moved from the queue into this per-run state.
  */
-class FonteCodaRiassuntoTest {
+internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
     private val repo = RiassuntoRepositoryFinta()
     private val uowFinta = UnitaDiLavoroFinta(repo)
     private val eventi = DispatcherEventiFinta(uowFinta)
@@ -78,6 +81,13 @@ class FonteCodaRiassuntoTest {
         repo.salva(unRiassunto("C", R3, richiestoAlle = T3))
     }
 
+    /** [FonteCodaContratto] (A122): ESATTAMENTE A poi B, strettamente in ordine — sulla vera [fonteCodaRiassunto]. */
+    override fun conDue(): FonteCoda {
+        repo.salva(unRiassunto("A", R1, richiestoAlle = T1))
+        repo.salva(unRiassunto("B", R2, richiestoAlle = T2))
+        return fonte
+    }
+
     @Test
     fun `teste onora esclusi nell'ordine FIFO, e una fonte Riassunto non trattiene mai la coda`() {
         semina()
@@ -99,6 +109,29 @@ class FonteCodaRiassuntoTest {
         assertEquals(RisultatoTentativo.Avviata("A"), fonte.prossima(emptySet(), null))
         assertEquals(RisultatoTentativo.Avviata("C"), fonte.prossima(emptySet(), null))
         assertEquals(RisultatoTentativo.Nessuno, fonte.prossima(emptySet(), null))
+    }
+
+    @Test
+    fun `A182 un errore di reclamo prima del salva rifiuta la testa attuale invece di sparire come Nessuno`() {
+        semina()
+        // esegui fallisce PRIMA che il servizio reale salvi in_corso (mai passa per esecuzioni.reclamato): esattamente
+        // lo scenario del claim rifiutato prima del salva — ultimoReclamato resta null.
+        val fonteConErroreDiClaim = fonteCodaRiassunto(
+            RiassuntiInAttesa(repo),
+            esegui = { Esito.Errore(ErroreApplicazioneSintesi.ErroreRuntime("guasto di prova")) },
+            recupera = {},
+            esecuzioni,
+        )
+        assertNull(esecuzioni.ultimoReclamato, "nessun reclamo salvato prima dell'errore")
+
+        val risultato = fonteConErroreDiClaim.prossima(emptySet(), null)
+
+        assertEquals(
+            RisultatoTentativo.Rifiutata("A"),
+            risultato,
+            "la testa attuale (A) e' rifiutata, non sparisce come Nessuno — altrimenti una testa avvelenata " +
+                "gira la coda intera per sempre (AC-S61)",
+        )
     }
 
     @Test

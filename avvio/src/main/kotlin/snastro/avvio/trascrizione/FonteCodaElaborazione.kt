@@ -45,6 +45,8 @@ internal fun fonteCodaElaborazione(
     ultimaTentata = { servizio.ultimaTentata?.valore },
     recupera = recupera,
     trattenuta = { !modelliPronti() },
+    // A124: un'unica lettura (ElaborazioniInAttesa.elenco gia' la offre), non N ri-letture di CodaCondivisa.istantanea
+    tutti = { elenco.elenco().map { ElementoInCoda(it.elaborazioneId, it.registrazioneId.valore, it.creataAlle) } },
 )
 
 /**

@@ -2,10 +2,12 @@ package snastro.avvio.coda
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.Timeout
 import snastro.supporto.test.conScopeDiProva
 import java.time.Instant
@@ -402,7 +404,7 @@ class CodaCondivisaTest {
 
     @Test
     @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
-    fun `rework 2 FAIL 1 - fermaEAttendi chiama l interrompi della fonte in corso prima dell interruzione`() = conScopeDiProva { scope ->
+    fun `A120 - fermaEAttendi chiama l interrompi anche quando il worker ha gia sgombrato inCorso da solo`() = conScopeDiProva { scope ->
         val bloccato = CountDownLatch(1)
         val maiSbloccato = CountDownLatch(1) // mai contato: la chiamata resta bloccata finche' non e' interrotta
         val interrotte = AtomicInteger(0)
@@ -427,8 +429,15 @@ class CodaCondivisaTest {
         )
         assertTrue(bloccato.await(10, TimeUnit.SECONDS), "la chiamata bloccante avrebbe dovuto partire")
 
-        scope.cancel() // passo 1: annulla lo scope
-        val fermato = coda.fermaEAttendi(10_000) // passo 2: attende con un timeout
+        scope.cancel() // passo 1: annulla lo scope — puo' gia' interrompere da solo il thread bloccato
+        // A120 (MED, non a intermittenza): attende che il worker abbia GIA' finito di sgombrare `inCorso` PRIMA
+        // di chiamare fermaEAttendi, invece di sperare che il thread di test vinca la corsa contro l'interrupt
+        // innescato da scope.cancel() — cosi' la corsa che il rework aveva lasciato aperta e' SEMPRE nel caso
+        // peggiore: senza il fix (A120) questo legge 0 interrompi in modo ripetibile, non a intermittenza.
+        val giaTerminato = runBlocking { withTimeoutOrNull(10_000) { coda.lavoro.join() } != null }
+        assertTrue(giaTerminato, "il worker avrebbe dovuto terminare da solo, prima ancora di fermaEAttendi")
+
+        val fermato = coda.fermaEAttendi(10_000) // passo 2: attende con un timeout (gia' terminato, torna subito)
 
         assertTrue(fermato, "il worker termina perche' runInterruptible interrompe il thread bloccato")
         assertEquals(1, interrotte.get(), "l'interrompi della fonte IN CORSO e' chiamato esattamente una volta")
