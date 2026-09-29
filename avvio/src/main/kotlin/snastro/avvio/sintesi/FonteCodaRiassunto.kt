@@ -28,26 +28,35 @@ internal fun fonteCodaRiassunto(
     esegui: (EseguiProssimoRiassunto) -> Esito<RisultatoRiassunto>,
     recupera: () -> Unit,
     esecuzioni: EsecuzioniRiassunto,
-): FonteCoda = FonteCoda(
-    tipo = TipoElementoCoda.RIASSUNTO,
-    teste = { esclusi ->
-        elenco.elenco().firstOrNull { it.riassuntoId !in esclusi }
-            ?.let { ElementoInCoda(it.riassuntoId, it.registrazioneId.valore, it.richiestoAlle) }
-    },
-    prossima = { esclusi, limite ->
-        val esito = esecuzioni.perRun { esegui(EseguiProssimoRiassunto(esclusi, primaDi = limite)) }
-        when (esito) {
-            is Esito.Ok -> when (val r = esito.valore) {
-                RisultatoRiassunto.Nessuno -> RisultatoTentativo.Nessuno
-                is RisultatoRiassunto.Avviato -> RisultatoTentativo.Avviata(r.id.valore)
+): FonteCoda {
+    fun tutti(): List<ElementoInCoda> =
+        elenco.elenco().map { ElementoInCoda(it.riassuntoId, it.registrazioneId.valore, it.richiestoAlle) }
+    fun testaAttuale(esclusi: Set<String>) = elenco.elenco().firstOrNull { it.riassuntoId !in esclusi }
+    return FonteCoda(
+        tipo = TipoElementoCoda.RIASSUNTO,
+        teste = { esclusi ->
+            testaAttuale(esclusi)?.let { ElementoInCoda(it.riassuntoId, it.registrazioneId.valore, it.richiestoAlle) }
+        },
+        prossima = { esclusi, limite ->
+            val esito = esecuzioni.perRun { esegui(EseguiProssimoRiassunto(esclusi, primaDi = limite)) }
+            when (esito) {
+                is Esito.Ok -> when (val r = esito.valore) {
+                    RisultatoRiassunto.Nessuno -> RisultatoTentativo.Nessuno
+                    is RisultatoRiassunto.Avviato -> RisultatoTentativo.Avviata(r.id.valore)
+                }
+                // the claim (or completion) transaction failed: its head (if one was saved) counts toward its
+                // exclusion; an Errore reached BEFORE salva(in_corso) leaves ultimoReclamato null — fall back to
+                // the CURRENT head itself (A182: otherwise a poison head is never excluded and spins the whole
+                // queue forever, contradicting AC-S61).
+                is Esito.Errore ->
+                    (esecuzioni.ultimoReclamato ?: testaAttuale(esclusi)?.riassuntoId)
+                        ?.let(RisultatoTentativo::Rifiutata) ?: RisultatoTentativo.Nessuno
             }
-            // the claim (or completion) transaction failed: its head (if one was saved) counts toward its exclusion
-            is Esito.Errore ->
-                esecuzioni.ultimoReclamato?.let(RisultatoTentativo::Rifiutata) ?: RisultatoTentativo.Nessuno
-        }
-    },
-    ultimaTentata = { esecuzioni.ultimoReclamato },
-    recupera = recupera,
-    trattenuta = { false },
-    interrompi = esecuzioni::interrompi,
-)
+        },
+        ultimaTentata = { esecuzioni.ultimoReclamato },
+        recupera = recupera,
+        trattenuta = { false },
+        interrompi = esecuzioni::interrompi,
+        tutti = ::tutti, // A124: un'unica lettura (RiassuntiInAttesa.elenco gia' la offre), non N ri-letture
+    )
+}

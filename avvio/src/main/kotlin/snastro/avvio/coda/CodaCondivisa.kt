@@ -63,12 +63,14 @@ import kotlin.coroutines.coroutineContext
  * escapes a run (AC-S61) — never only the source that escaped, since an escaped run could have left
  * either kind's row `in_corso`.
  *
- * **[istantanea] ([PosizioniNellaCoda]).** No source exposes a bulk listing: positions are computed by
- * calling [FonteCoda.teste] REPEATEDLY per source, growing a LOCAL exclusion set with each returned id
- * until it answers `null` — the same "oldest eligible, excluding…" contract [FonteCoda.teste] already
- * has for the tick, reused here as a cursor. This never touches the per-source STUCK-exclusion set (a
- * stuck item is still `in_attesa` and still counted, matching the pre-ADR-0023 `StatiElaborazione`
- * behaviour). The resulting items, of both kinds, are ranked by the SAME total order and numbered from 1.
+ * **[istantanea] ([PosizioniNellaCoda]).** Positions are computed from [FonteCoda.tutti] per source — ONE full
+ * listing (A124: a real source answers it with a single query, e.g. `RiassuntiInAttesa.elenco`/
+ * `ElaborazioniInAttesa.elenco`, never N re-reads); a source that offers no cheaper listing falls back to
+ * [enumeraViaTeste], driving [FonteCoda.teste] to exhaustion but BOUNDED (A122: stops the moment `teste` offers
+ * an id already seen, instead of spinning forever/OOM when a source's `teste` ignores its own exclusion set).
+ * This never touches the per-source STUCK-exclusion set (a stuck item is still `in_attesa` and still counted,
+ * matching the pre-ADR-0023 `StatiElaborazione` behaviour). The resulting items, of both kinds, are ranked by
+ * the SAME total order and numbered from 1.
  *
  * **Best-effort cancellation (ADR 0023 §5, D-0005).** Since ADR 0030 it is the running source's own business: the
  * Riassunto source's per-run state (`EsecuzioniRiassunto`) matches the deleted Registrazione against the item it is
@@ -84,7 +86,9 @@ import kotlin.coroutines.coroutineContext
  * (unconditional — no `(tipo, registrazioneId)` match is needed, because only one item can ever be running;
  * unlike the best-effort cancel above, which DOES match by id but, since ADR 0030, is the running source's own
  * business, not a queue field) before/while [runInterruptible] interrupts whatever call is mid-flight. With
- * nothing running, no source's `interrompi` is called.
+ * nothing running, no source's `interrompi` is called. After a cancel (A120), "running" can already have
+ * FINISHED — `interrompi` is still called on its source; both real implementations are no-ops when nothing
+ * of theirs is in flight, so this is harmless.
  *
  * **A throwing peek is handled like an escape (MED, user-approved 2026-09-26).** [FonteCoda.teste] and
  * [FonteCoda.trattenuta] are read inside [eseguiProtetto] too (not just [FonteCoda.prossima]): a source
@@ -177,6 +181,13 @@ internal class CodaCondivisa(
      * before/while [runInterruptible] interrupts whatever call is mid-flight; with nothing running, no source's
      * `interrompi` is called. Waits for [lavoro] to finish unwinding up to [timeoutMs]. Returns `true` if
      * it finished in time.
+     *
+     * **A120 (MED, fixed).** The caller already cancelled the scope BEFORE calling this, so [provaAvanzare]'s
+     * own cancellation-triggered unwind can race this method's read of [inCorso] on the calling thread. [inCorso]
+     * is only cleared on a NORMAL (non-cancelling) completion — never mid-shutdown — so this read always still
+     * sees the source that was running, however late the worker's own `finally` runs relative to it. That
+     * item can already have FINISHED by then — `interrompi` is called on it anyway; both real implementations
+     * (`EsecuzioniRiassunto`, Elaborazione's default no-op) do nothing when nothing of theirs is in flight.
      */
     fun fermaEAttendi(timeoutMs: Long = TIMEOUT_STOP_MS): Boolean {
         inCorso?.let { fonte ->
@@ -193,7 +204,7 @@ internal class CodaCondivisa(
      * (an `in_corso` one is never returned by [FonteCoda.teste] in the first place).
      */
     override fun istantanea(): PosizioniCoda {
-        val tutti = fonti.flatMap { fonte -> enumeraTutti(fonte).map { Voce(fonte.tipo, it) } }
+        val tutti = fonti.flatMap { fonte -> fonte.tutti().map { Voce(fonte.tipo, it) } }
             .sortedWith(compareBy({ it.elemento.istante }, { it.tipo.ordinal }, { it.elemento.id }))
         val elaborazioni = mutableMapOf<RegistrazioneId, Int>()
         val riassunti = mutableMapOf<RegistrazioneId, Int>()
@@ -202,17 +213,6 @@ internal class CodaCondivisa(
             mappa[RegistrazioneId(voce.elemento.registrazioneId)] = indice + 1
         }
         return PosizioniCoda(elaborazioni, riassunti)
-    }
-
-    private fun enumeraTutti(fonte: FonteCoda): List<ElementoInCoda> {
-        val risultato = mutableListOf<ElementoInCoda>()
-        val visti = mutableSetOf<String>()
-        while (true) {
-            val prossimo = fonte.teste(visti) ?: break
-            risultato += prossimo
-            visti += prossimo.id
-        }
-        return risultato
     }
 
     private suspend fun provaAvanzare() {
@@ -235,7 +235,7 @@ internal class CodaCondivisa(
         val risultato = try {
             eseguiProtetto { fonteScelta.prossima(esclusi.getValue(fonteScelta).toSet(), limite) }
         } finally {
-            inCorso = null
+            liberaInCorsoSeAttivo()
         }
         when (risultato) {
             is RisultatoProtetto.Sfuggito -> {
@@ -262,6 +262,17 @@ internal class CodaCondivisa(
                 is RisultatoTentativo.Rifiutata -> gestisciFallimento(fonteScelta, esito.id)
             }
         }
+    }
+
+    /**
+     * A120 (MED, fixed): NON svuota [inCorso] durante uno spegnimento reale (coroutineContext non piu' attivo) —
+     * altrimenti [fermaEAttendi] (sul thread del chiamante, DOPO che il chiamante ha gia' cancellato lo scope,
+     * D-0006) puo' leggere [inCorso] gia' a null e saltare l'interrompi della fonte, un rifiuto solo raro/a
+     * intermittenza (il test dedicato forza SEMPRE questo ordine). Sui percorsi normali (Concluso, o Sfuggito
+     * non-shutdown) il contesto e' ancora attivo: il comportamento resta quello di sempre.
+     */
+    private suspend fun liberaInCorsoSeAttivo() {
+        if (coroutineContext.isActive) inCorso = null
     }
 
     /**
@@ -350,7 +361,16 @@ internal data class ElementoInCoda(val id: String, val registrazioneId: String, 
  * currently running, before/while it interrupts the worker. It takes no `registrazioneId`: only one
  * item can ever be running, so there is nothing to match (unlike the best-effort cancel, which since
  * ADR 0030 is the running source's own business, not a field here — B79 pre-release triage,
- * 2026-09-29: the retired `annulla` field DID take one).
+ * 2026-09-29: the retired `annulla` field DID take one). After a cancel (A120), this can be a source
+ * whose item already finished — both real implementations no-op when nothing of theirs is in flight,
+ * so this is harmless.
+ *
+ * [tutti] (A122/A124, accepted pin extension, additive/backward-compatible): ONE full, ordered listing of every
+ * `in_attesa` item, used by [CodaCondivisa.istantanea] instead of driving [teste] to exhaustion. Defaults to
+ * [enumeraViaTeste] (bounded: a source whose [teste] ignores `esclusi` stops instead of spinning forever/OOM,
+ * A122) — a real source SHOULD override it with its own single-query listing (already available as `elenco()`
+ * on both `RiassuntiInAttesa`/`ElaborazioniInAttesa`) for a true one-shot, consistent snapshot instead of one
+ * repeated re-read per item (A124).
  */
 @Suppress("LongParameterList") // one parameter per collaborator (mirrors CodaCondivisa's own constructor)
 internal class FonteCoda(
@@ -361,7 +381,26 @@ internal class FonteCoda(
     val recupera: () -> Unit,
     val trattenuta: () -> Boolean,
     val interrompi: () -> Unit = {},
+    val tutti: () -> List<ElementoInCoda> = { enumeraViaTeste(teste) },
 )
+
+/**
+ * The bounded fallback listing (A122): drives [teste] to exhaustion, growing its own exclusion set — but STOPS
+ * the moment [teste] offers an id already seen, instead of looping forever (a source whose [teste] ignores
+ * `esclusi` would otherwise spin the caller's thread to OOM, e.g. [CodaCondivisa.istantanea] on the UI's io
+ * thread).
+ */
+internal fun enumeraViaTeste(teste: (esclusi: Set<String>) -> ElementoInCoda?): List<ElementoInCoda> {
+    val risultato = mutableListOf<ElementoInCoda>()
+    val visti = mutableSetOf<String>()
+    while (true) {
+        val prossimo = teste(visti)
+        // A122: si ferma se e' esaurita, O se teste ha ignorato esclusi e ha ri-offerto un id gia' visto
+        if (prossimo == null || !visti.add(prossimo.id)) break
+        risultato += prossimo
+    }
+    return risultato
+}
 
 /**
  * Outcome of one [FonteCoda.prossima] attempt, over PRIMITIVE ids only (never a context's own type).

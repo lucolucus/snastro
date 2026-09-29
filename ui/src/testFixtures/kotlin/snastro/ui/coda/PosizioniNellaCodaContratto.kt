@@ -43,6 +43,19 @@ abstract class PosizioniNellaCodaContratto {
     }
 
     @Test
+    fun `A32 la registrazione in corso su un tipo non toglie la sua posizione in attesa sull altro tipo`() {
+        // stessa registrazioneId nei DUE stati (in_corso su E, in_attesa su R): un'implementazione che
+        // escludesse "non contato" per registrazioneId invece che per (fonte, id) la perderebbe per errore.
+        val scenario = ScenarioCoda(
+            inAttesa = listOf(unRiassunto("r-1")),
+            inCorso = unaElaborazione("r-1"),
+        )
+        val istantanea = con(scenario).istantanea()
+        assertEquals(emptyMap(), istantanea.elaborazioni, "l'Elaborazione in corso non e' mai contata")
+        assertEquals(mapOf(RegistrazioneId("r-1") to 1), istantanea.riassunti, "il Riassunto in attesa e' 1o")
+    }
+
+    @Test
     fun `la stessa registrazione ha una posizione distinta per ciascun tipo`() {
         val scenario = ScenarioCoda(listOf(unaElaborazione("r-1"), unRiassunto("r-1")))
         val istantanea = con(scenario).istantanea()

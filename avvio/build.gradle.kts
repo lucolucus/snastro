@@ -7,6 +7,10 @@ plugins {
 dependencies {
     implementation(compose.desktop.currentOs)
     implementation(compose.material3)
+    // The Compose compiler plugin runs on every source set of this module; testFixtures needs the
+    // runtime on its classpath even though it declares no `@Composable` (build-logic snastro.compose-desktop,
+    // same as `:ui` — A122's FonteCodaContratto is the first real file in avvio/src/testFixtures).
+    testFixturesImplementation(compose.desktop.currentOs)
 
     // Headless offscreen rendering for `--smoke` (no display needed, full-agentic dev machine):
     // the only vetted Compose Desktop mechanism for this is the ui-test harness (JetBrains ships
