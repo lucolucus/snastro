@@ -145,7 +145,20 @@ class RiassuntoPresenter(
                 if (istante != null) {
                     while (true) {
                         delay(PASSO_TICK_MS)
-                        aggiornaDati { it.copy(richiesta = RichiestaUi.InCorso(trascorsoMs(istante))) }
+                        val trascorso = trascorsoMs(istante)
+                        // Finding #159 rework 2 (regression, MED): a tick that resumes just before
+                        // `collectLatest` processes a NEW `_avviatoIl` (e.g. a reload that completes
+                        // right at the tick boundary) must not stamp InCorso onto a Dati that has
+                        // already moved on to `pronto`/`fallito` — both `richiesta` and `avviatoIl`
+                        // read FRESH here (after the clock read above), never the `istante` this
+                        // loop iteration merely captured.
+                        aggiornaDati {
+                            if (it.richiesta is RichiestaUi.InCorso && _avviatoIl.value == istante) {
+                                it.copy(richiesta = RichiestaUi.InCorso(trascorso))
+                            } else {
+                                it
+                            }
+                        }
                     }
                 }
             }

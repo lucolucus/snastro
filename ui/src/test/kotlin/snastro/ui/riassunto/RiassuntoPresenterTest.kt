@@ -2,6 +2,8 @@ package snastro.ui.riassunto
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -26,6 +28,7 @@ import snastro.sintesi.applicazione.letture.StatoModelloVista
 import snastro.sintesi.applicazione.letture.VoceVista
 import snastro.sintesi.applicazione.porte.MotivoDownload
 import snastro.sintesi.dominio.ErroreSintesi
+import snastro.supporto.test.attendiFinche
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
 import snastro.ui.coda.PosizioniCoda
@@ -35,6 +38,9 @@ import java.time.Clock
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZoneOffset
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -49,6 +55,39 @@ private class OrologioFinto(var istante: Instant) : Clock() {
     override fun getZone(): ZoneId = ZoneOffset.UTC
     override fun withZone(zone: ZoneId?): Clock = this
     override fun instant(): Instant = istante
+}
+
+/**
+ * Pre-release finding #159 rework 2 (regression): a [Clock] whose [instant] can be ARMED to pause,
+ * with real [CountDownLatch]es, the FIRST caller that reaches it after arming — right where the
+ * ticker's own tick reads the clock to build its write, AFTER `delay` resumed but BEFORE the write
+ * itself lands. Real thread identity is the actual subject here (same rationale as
+ * `StatoVociRicaricaTest`'s own L665a): this is the only way to force the EXACT interleaving the
+ * regression describes, deterministically rather than by sleep-timing luck.
+ */
+private class OrologioConCancello(@Volatile var istante: Instant) : Clock() {
+    @Volatile private var armato = false
+    private val raggiunto = CountDownLatch(1)
+    private val rilascio = CountDownLatch(1)
+    override fun getZone(): ZoneId = ZoneOffset.UTC
+    override fun withZone(zone: ZoneId?): Clock = this
+    override fun instant(): Instant {
+        if (armato) {
+            raggiunto.countDown()
+            check(rilascio.await(5, TimeUnit.SECONDS)) { "timeout in attesa del rilascio del cancello" }
+        }
+        return istante
+    }
+
+    /** Test-only: the NEXT [instant] call blocks until [rilascia]. */
+    fun arma() {
+        armato = true
+    }
+
+    /** Blocks until a caller has reached the (armed) gate. */
+    fun attendiRaggiunto() = check(raggiunto.await(5, TimeUnit.SECONDS)) { "il cancello non e' stato raggiunto" }
+
+    fun rilascia() = rilascio.countDown()
 }
 
 /**
@@ -126,7 +165,7 @@ private class ServizioModelliSpia(private val delegato: ServizioModelliFinta = S
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiassuntoPresenterTest {
-    private class Ambiente(scope: TestScope) {
+    private class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         val coroutineScope = CoroutineScope(dispatcher)
 
@@ -178,7 +217,7 @@ class RiassuntoPresenterTest {
             clock = orologio,
             idModelloLinguistico = ID_MODELLO_LINGUISTICO,
             dimensioneModelloLinguisticoByte = 6_169_341_984,
-            limiteCaratteriArgomento = 200,
+            limiteCaratteriArgomento = limiteCaratteriArgomento,
         )
     }
 
@@ -189,8 +228,11 @@ class RiassuntoPresenterTest {
      * fixed by cancelling [Ambiente.coroutineScope] in a `finally`, unconditionally, rather than
      * relying on `backgroundScope`'s own, less predictable interaction with [runCurrent]/[advanceTimeBy]).
      */
-    private fun eseguiTest(corpo: suspend TestScope.(Ambiente) -> Unit) = runTest {
-        val a = Ambiente(this)
+    private fun eseguiTest(
+        limiteCaratteriArgomento: Int = 200,
+        corpo: suspend TestScope.(Ambiente) -> Unit,
+    ) = runTest {
+        val a = Ambiente(this, limiteCaratteriArgomento)
         try {
             corpo(a)
         } finally {
@@ -506,6 +548,25 @@ class RiassuntoPresenterTest {
         assertNull(dati.argomento.errore)
     }
 
+    // Pre-release finding #148, rework 2 (verifier FAIL at c020b93a): every OTHER test injects the
+    // SAME value (200) the domain actually uses, so a regression that silently ignores
+    // `limiteCaratteriArgomento` and hardcodes 200 back stays green everywhere else. A NON-200
+    // limit is the only way to prove the parameter is genuinely load-bearing — proven red on a
+    // throwaway copy with the literal 200 restored in TestiRiassunto/RiassuntoPresenter.
+    @Test
+    fun `AC-S137 rework 2 un limite iniettato diverso da 200 guida contatore errore e blocco`() =
+        eseguiTest(limiteCaratteriArgomento = 10) { a ->
+            runCurrent()
+            a.presenter.azioni.cambiaArgomento("  ${"x".repeat(11)}  ")
+            val dati = dati(a.presenter)
+            assertEquals("11/10", dati.argomento.contatore)
+            assertEquals("Al massimo 10 caratteri.", dati.argomento.errore)
+
+            a.presenter.azioni.riassumi()
+            runCurrent()
+            assertTrue(a.chiamateRiassumi.isEmpty(), "Riassumi non doveva essere inviato oltre il limite iniettato")
+        }
+
     @Test
     fun `AC-S138 Cambia poi un valore fuori intervallo mostra l errore e non invia il comando`() = eseguiTest { a ->
         runCurrent()
@@ -641,5 +702,64 @@ class RiassuntoPresenterTest {
         val esito: Esito<Unit> = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
         val errore = esito.erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
         assertEquals(REG_1, errore.registrazioneId)
+    }
+
+    /**
+     * Pre-release finding #159, rework 2 (verifier FAIL at c020b93a): the ticker's tick can resume
+     * from `delay` and be part-way through building its own write (reading the clock) exactly when a
+     * reload lands and moves `Dati` on to `pronto`/`fallito` — real threads + [OrologioConCancello]
+     * force this EXACT interleaving deterministically (real thread identity IS the subject, same
+     * rationale as `StatoVociRicaricaTest`'s own L665a), rather than guessing at sleep timings.
+     */
+    @Test
+    fun `AC-S159 rework 2 un tick in volo non scrive InCorso su un Dati gia ricaricato al bordo`() {
+        val eseguitori = Executors.newFixedThreadPool(4)
+        val ioReale = eseguitori.asCoroutineDispatcher()
+        val scopeReale = CoroutineScope(SupervisorJob() + ioReale)
+        try {
+            val orologio = OrologioConCancello(ISTANTE_0)
+            var vistaCorrente: RiassuntoVista? = unaVista(richiestaAperta = RichiestaApertaVista.InCorso(ISTANTE_0))
+            val aggiornamenti = AggiornamentiVistaFinta()
+            val presenter = RiassuntoPresenter(
+                scope = scopeReale,
+                io = ioReale,
+                registrazioneId = REG_1,
+                vista = { vistaCorrente },
+                impostazioni = { unaImpostazioni() },
+                posizioni = { PosizioniCoda.VUOTA },
+                riassumiCmd = { Esito.Ok(Unit) },
+                modificaLunghezzaMassimaCmd = { Esito.Ok(Unit) },
+                servizioModelli = ServizioModelliFinta(),
+                aggiornamenti = aggiornamenti,
+                clock = orologio,
+                idModelloLinguistico = ID_MODELLO_LINGUISTICO,
+                dimensioneModelloLinguisticoByte = 1,
+                limiteCaratteriArgomento = 200,
+            )
+            attendiFinche(messaggio = "il primo caricamento non e' arrivato a in_corso") {
+                (presenter.stato.value as? RiassuntoUiStato.Dati)?.areaAzione is AreaAzione.InCorso
+            }
+            // Arm the gate: the tick due in ~1s will resume from `delay`, then block right where it
+            // reads the clock to build its own write — BEFORE that write lands.
+            orologio.arma()
+            orologio.attendiRaggiunto()
+            // Land a full reload to `pronto` while the tick waits at the gate.
+            vistaCorrente = unaVista(mostrato = unMostrato())
+            aggiornamenti.emetti(Cambiamento(REG_1))
+            attendiFinche(messaggio = "la ricarica non si e' conclusa pronto") {
+                (presenter.stato.value as? RiassuntoUiStato.Dati)?.areaAzione is AreaAzione.Azionabile
+            }
+            // Release the stale tick — on the OLD (unguarded) code this now clobbers the fresh state.
+            orologio.rilascia()
+            Thread.sleep(300)
+            val dati = presenter.stato.value as RiassuntoUiStato.Dati
+            assertIs<AreaAzione.Azionabile>(
+                dati.areaAzione,
+                "un tick in volo ha scritto InCorso su un Dati gia ricaricato",
+            )
+        } finally {
+            scopeReale.cancel()
+            eseguitori.shutdownNow()
+        }
     }
 }
