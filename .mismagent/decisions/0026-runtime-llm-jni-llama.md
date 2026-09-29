@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0004 (System.load admits ./llm/), ADR 0021 §4 (input line) and §5 (LimiteIngresso, deferred items), ADR 0025 §5 (catalogue values); infra-notes (Local LLM, Riassunto NFR); context-map (spike closed, budget line)
 closes_spike: runtime-llm-in-app
 decided: 2026-09-26 · user (runtime, INV-S9 bound, calibrations), from spike evidence features/sintesi/spikes/runtime-llm-in-app.md
-amended: 2026-09-26   # "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
+amended: 2026-09-29   # dated note, §4: the 10 s Annullato bound counts from AFTER the model open completes; a cold first open (10.7-14.5 s) is not interruptible. Source: sintesi D-0014. Earlier: "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0026-llm-non-versionato.sh
   # the System.load admission (now ./llama-jni/, ADR 0027) is enforced by ADR 0004's own check (amended
@@ -112,6 +112,12 @@ Base URL: `https://github.com/ggml-org/llama.cpp/releases/download/b11195/<asset
   2048; 2–8 s is the envelope).
 - **Contract bound (ADR 0021 §4, `ModelloLinguisticoContratto` under `@Tag("modelli")`): `Errore(Annullato)`
   within 10 s** of `annullato()` becoming true or the thread being interrupted, release included.
+
+*(Dated note 2026-09-29, sintesi D-0014 [user]: the 10 s bound above counts from AFTER the model open
+(`openModel`) completes — a COLD first open measures 10.7–14.5 s (§3) and takes no cancel, so it is not
+interruptible; a cancel requested during that open is honoured only once the open returns and the run reaches
+a chunked prefill/generation cancel point. `AC-S152` and the opt-in `ModelloLinguisticoLlamaModelliTest` gate
+their cancel past the open, never during it.)*
 
 ### 5. Context budget, output bound, `LimiteIngresso` [user]
 - **Every generation is bounded twice (MANDATORY):**
