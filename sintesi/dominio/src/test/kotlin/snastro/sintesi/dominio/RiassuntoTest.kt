@@ -200,4 +200,20 @@ class RiassuntoTest {
         assertFalse(r.superato(StrutturaTrascritto.di(listOf(SegmentoId(9) to VoceId(9)))))
         assertNull(r.struttura)
     }
+
+    @Test
+    fun `A26 gli accessor delle liste restituiscono una copia, non la collezione interna`() {
+        val decisioni = mutableListOf(Decisione(testo("tiene"), setOf(SegmentoId(1))))
+        val contenuto = EsitoVerifica(null, decisioni, emptyList(), emptyList(), emptyList(), omessi = 0)
+        val r = Riassunto(
+            RiassuntoId("id-1"), RegistrazioneId("id-2"), null,
+            LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA).atteso(), RICHIESTO_ALLE,
+            StatoRiassunto.PRONTO, AVVIATO_ALLE, null, contenuto, "1:1",
+        )
+
+        val letta = r.decisioni
+        decisioni.add(Decisione(testo("aggiunta dopo la lettura"), setOf(SegmentoId(2))))
+
+        assertEquals(1, letta.size, "la lista gia letta non deve vedere una mutazione esterna successiva")
+    }
 }

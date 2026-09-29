@@ -46,7 +46,9 @@ internal class VerificaDelleFonti(private val struttura: StrutturaTrascritto) {
             omessi++
             return null
         }
-        return testoValido(elemento.testo)?.let { crea(it, fonti) }
+        // A29: a blank testo is "nothing drafted" like a blank Sommario (below) — dropped, not counted; only a
+        // malformed/invalid token (testoValido) is dropped AND counted.
+        return elemento.testo.takeIf { it.isNotBlank() }?.let { t -> testoValido(t)?.let { crea(it, fonti) } }
     }
 
     /** The decoded text if every token is well-formed and a Voce of the structure; else counts it and null. */
