@@ -15,8 +15,8 @@ import snastro.ui.AggiornamentiVista
 import java.time.Clock
 
 /**
- * The OPTIONAL R2 sources and commands of S3 (AC-402: absent in R1 → no Voci panel, no selection, no
- * Revisione UI). Plain function types over Published-Language values (CR-1), bound by `avvio-parlanti`:
+ * The Voci panel's sources and commands of S3 — the identification, selection and Revisione UI.
+ * Plain function types over Published-Language values (CR-1), bound by the single composition:
  * [identificazione] = `IdentificazioneVoci::voci` and [unioni] = `PropostaUnione::proposte` bound to the
  * open Registrazione, [parlantiAttivi] = `ParlantiAttivi::parlanti` bound to the open Progetto,
  * [proposta] = `Proposta::perVoce`, [estratto] = `EstrattoAudio::estratto`, the Revisione commands =
@@ -24,11 +24,11 @@ import java.time.Clock
  * (AC-417). [aggiornamenti] carries `ImpronteRiallineate` & co. as a [snastro.ui.Cambiamento] (AC-319);
  * [clock] times the pending threshold (AC-412/AC-415) on the same time line as [ComandiVoce.stato].
  *
- * ADR 0019 (optional, so every earlier composition stays as it was): [confermaSegmento] =
- * `ConfermaSegmentoServizio::esegui` ('Togli conferma'; `null` → not offered); [somiglianza] = the
- * per-project [AzioniSomiglianza] ('Riassegna per somiglianza'; `null` → no button).
+ * ADR 0019: [confermaSegmento] = `ConfermaSegmentoServizio::esegui` ('Togli conferma'); [somiglianza] =
+ * the per-project [AzioniSomiglianza] ('Riassegna per somiglianza'). ADR 0030 §1 (U1): every collaborator
+ * here is MANDATORY — the single composition always wires all of them.
  */
-@Suppress("LongParameterList") // one parameter per R2 read-model/command of S3
+@Suppress("LongParameterList") // one parameter per Voci-panel read-model/command of S3
 class SorgentiParlanti(
     val identificazione: () -> List<VoceIdentificata>,
     val proposta: (VoceRef) -> PropostaVista?,
@@ -41,6 +41,6 @@ class SorgentiParlanti(
     val riassegna: (RiassegnaSegmento) -> Esito<Unit>,
     val aggiornamenti: AggiornamentiVista,
     val clock: Clock,
-    val confermaSegmento: ((ConfermaSegmento) -> Esito<Unit>)? = null,
-    val somiglianza: AzioniSomiglianza? = null,
+    val confermaSegmento: (ConfermaSegmento) -> Esito<Unit>,
+    val somiglianza: AzioniSomiglianza,
 )

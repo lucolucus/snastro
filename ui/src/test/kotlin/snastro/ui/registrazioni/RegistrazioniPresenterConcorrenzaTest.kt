@@ -9,6 +9,7 @@ import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.supporto.test.attendiFinche
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreAudioFinta
 import java.time.Clock
@@ -85,6 +86,14 @@ class RegistrazioniPresenterConcorrenzaTest {
                 lettore = lettore,
                 aggiornamenti = aggiornamenti,
                 clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
+                statiElaborazione = { emptyList() },
+                avviaElaborazione = { error("non atteso in questo test") },
+                apriRegistrazione = { error("non atteso in questo test") },
+                identificazioni = { emptyList() },
+                ritrascrivi = { error("non atteso in questo test") },
+                annullaElaborazione = { error("non atteso in questo test") },
+                eliminaRegistrazione = { error("non atteso in questo test") },
+                posizioniNellaCoda = { PosizioniCoda.VUOTA },
             )
             // initial load, chiamata #1
             attendiFinche(messaggio = "Dati dopo il caricamento iniziale") {
@@ -160,6 +169,14 @@ class RegistrazioniPresenterConcorrenzaTest {
                 lettore = LettoreAudioFinta(),
                 aggiornamenti = aggiornamenti,
                 clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
+                statiElaborazione = { emptyList() },
+                avviaElaborazione = { error("non atteso in questo test") },
+                apriRegistrazione = { error("non atteso in questo test") },
+                identificazioni = { emptyList() },
+                ritrascrivi = { error("non atteso in questo test") },
+                annullaElaborazione = { error("non atteso in questo test") },
+                eliminaRegistrazione = { error("non atteso in questo test") },
+                posizioniNellaCoda = { PosizioniCoda.VUOTA },
             )
             // `init` already launched the initial load (chiamata #1); it is now blocked.
             assertTrue(ingresso.await(ATTESA_S, TimeUnit.SECONDS))

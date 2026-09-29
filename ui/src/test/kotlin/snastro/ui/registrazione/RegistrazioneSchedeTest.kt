@@ -1,5 +1,8 @@
 package snastro.ui.registrazione
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -13,6 +16,7 @@ import snastro.kernel.VoceId
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
+import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.stile.SegnoScheda
@@ -20,6 +24,7 @@ import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 private val REG_A = RegistrazioneId("id-a")
@@ -39,7 +44,7 @@ private fun unaSorgente(segno: MutableStateFlow<SegnoScheda?> = MutableStateFlow
     SorgenteRiassuntoS3(contenuto = {}, segno = { segno })
 
 /**
- * AC-S119..S122: the presenter half of the Riassunto tab — [RegistrazionePresenter]'s optional
+ * AC-S120..S122: the presenter half of the Riassunto tab — [RegistrazionePresenter]'s
  * [SorgenteRiassuntoS3]/[SelezioneSchedaS3] collaborators. AC-S123 (the banner precedence table) is a
  * pure predicate of [RegistrazioneUiStato.Dati], tested state-only in `RegistrazioneUiStatoTest`.
  */
@@ -49,18 +54,22 @@ class RegistrazioneSchedeTest {
     private fun presentatore(
         scope: TestScope,
         registrazioneId: RegistrazioneId = REG_A,
-        riassunto: SorgenteRiassuntoS3? = null,
-        selezioneSchedaS3: SelezioneSchedaS3? = null,
+        riassunto: SorgenteRiassuntoS3 = unaSorgente(),
+        selezioneSchedaS3: SelezioneSchedaS3 = SelezioneSchedaS3(),
     ): RegistrazionePresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
         return RegistrazionePresenter(
-            scope = CoroutineScope(dispatcher),
+            scope = scopeCoroutine,
             io = dispatcher,
             registrazioneId = registrazioneId,
             trascritto = { unaVista(registrazioneId) },
             documento = { null },
             lettore = LettoreAudioFinta(),
             apriEsterno = ApriEsternoFinta(),
+            parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
+            stati = { null },
+            aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = riassunto,
             selezioneSchedaS3 = selezioneSchedaS3,
         )
@@ -69,29 +78,48 @@ class RegistrazioneSchedeTest {
     private val RegistrazionePresenter.dati get() = assertIs<RegistrazioneUiStato.Dati>(stato.value)
 
     @Test
-    fun `AC-S119 senza SorgenteRiassuntoS3 non ce contenuto Riassunto e selezionaScheda non fa nulla`() = runTest {
-        val presenter = presentatore(this)
-        advanceUntilIdle()
-
-        assertNull(presenter.dati.contenutoRiassunto)
-        assertEquals(SchedaS3.TRASCRIZIONE, presenter.dati.schedaSelezionata)
-
-        presenter.azioni.selezionaScheda(SchedaS3.RIASSUNTO)
-        advanceUntilIdle()
-        assertEquals(SchedaS3.TRASCRIZIONE, presenter.dati.schedaSelezionata, "un no-op senza la sorgente (AC-S119)")
-    }
-
-    @Test
     fun `AC-S120 con la sorgente Trascrizione e selezionata di default e Riassunto mostra lo slot`() = runTest {
         val presenter = presentatore(this, riassunto = unaSorgente())
         advanceUntilIdle()
 
         assertEquals(SchedaS3.TRASCRIZIONE, presenter.dati.schedaSelezionata)
-        assertEquals(true, presenter.dati.contenutoRiassunto != null)
 
         presenter.azioni.selezionaScheda(SchedaS3.RIASSUNTO)
         advanceUntilIdle()
         assertEquals(SchedaS3.RIASSUNTO, presenter.dati.schedaSelezionata)
+    }
+
+    /** AC-S120: [RegistrazionePresenter.kt:171]'s `contenutoRiassunto = { riassunto.contenuto(registrazioneId) }`
+     * is not just non-null — it must actually DELEGATE to the injected [SorgenteRiassuntoS3.contenuto] with
+     * THIS presenter's `registrazioneId`. Fails if that line regresses to a different id or stops calling
+     * [SorgenteRiassuntoS3.contenuto] at all (composition is the only way to observe a `@Composable` value's
+     * effect, hence [runDesktopComposeUiTest]). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `AC-S120 il contenutoRiassunto pubblicato delega alla sorgente riassunto`() {
+        var idRicevuto: RegistrazioneId? = null
+        var contenuto: (@Composable () -> Unit)? = null
+        runTest {
+            val sorgente = SorgenteRiassuntoS3(
+                contenuto = { id -> idRicevuto = id },
+                segno = { MutableStateFlow(null) },
+            )
+            val presenter = presentatore(this, registrazioneId = REG_A, riassunto = sorgente)
+            advanceUntilIdle()
+            contenuto = presenter.dati.contenutoRiassunto
+        }
+        val slot = assertNotNull(contenuto, "RegistrazionePresenter deve pubblicare contenutoRiassunto (AC-S120)")
+
+        runDesktopComposeUiTest {
+            setContent { slot() }
+            waitForIdle()
+        }
+
+        assertEquals(
+            REG_A,
+            idRicevuto,
+            "contenutoRiassunto deve delegare a SorgenteRiassuntoS3.contenuto(registrazioneId)",
+        )
     }
 
     @Test

@@ -17,6 +17,6 @@ sealed interface BannerSchermata {
     /** AC-S123: the audio source is missing (same signal as [RegistrazioneUiStato.Dati.audioDisponibile]). */
     data object AudioMancante : BannerSchermata
 
-    /** AC-S123: at least one Voce of the R2 panel is still [ContenutoCarta.DaIdentificare]. */
+    /** AC-S123: at least one Voce of the Voci panel is still [ContenutoCarta.DaIdentificare]. */
     data class VociDaIdentificare(val numero: Int) : BannerSchermata
 }

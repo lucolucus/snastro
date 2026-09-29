@@ -36,9 +36,9 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * The R2 half of [RegistrazionePresenter] (schermata-registrazione-identificazione): the Voci panel, the
- * Nome labels, the selection toolbar and the Revisione commands. It exists only when [SorgentiParlanti]
- * are supplied (AC-402) and writes into the presenter's own [stato] — one screen, one state.
+ * The Voci-panel half of [RegistrazionePresenter]: the Voci panel, the Nome labels, the selection
+ * toolbar and the Revisione commands, over the mandatory [SorgentiParlanti] (ADR 0030 §1, U1) — writes
+ * into the presenter's own [stato], published only once the transcript is loaded (AC-402).
  *
  * Every field below is mutated only on [scope]'s (UI) dispatcher; every blocking read/command runs on
  * [io] (AC-417): the Proposte through `runInterruptible` (leaving S3 interrupts a waiting extraction,
@@ -74,7 +74,7 @@ internal class StatoVoci(
      * same presenter backstops ([invia], [eseguiRevisione], [nominaFrase]).
      */
     private val modificheBloccate: Boolean
-        get() = soloLettura || somiglianza?.aperta == true
+        get() = soloLettura || somiglianza.aperta
 
     /** AC-530: a Parlanti card command or a naming is pending for this Registrazione. */
     private val comandiPendenti: Boolean
@@ -105,18 +105,16 @@ internal class StatoVoci(
     private val soglieProgrammate = mutableSetOf<Pair<Any, Instant>>()
     private val inviiFrasi = mutableMapOf<SegmentoId, Instant>()
     private var frasiAltrove: Map<SegmentoId, Instant> = emptyMap()
-    private val somiglianza: SomiglianzaVoci? = sorgenti.somiglianza?.let { porta ->
-        SomiglianzaVoci(
-            porta,
-            scope,
-            io,
-            registrazioneId,
-            sorgenti.clock,
-            pubblica = ::pubblica,
-            dopoApplicazione = { if (vista != null) ricaricaDopoRevisione(azzeraSelezione = true) },
-            errore = ::impostaErrore,
-        )
-    }
+    private val somiglianza: SomiglianzaVoci = SomiglianzaVoci(
+        sorgenti.somiglianza,
+        scope,
+        io,
+        registrazioneId,
+        sorgenti.clock,
+        pubblica = ::pubblica,
+        dopoApplicazione = { if (vista != null) ricaricaDopoRevisione(azzeraSelezione = true) },
+        errore = ::impostaErrore,
+    )
     private val erroriCarta = mutableMapOf<VoceId, String>()
     private var selezione: Set<SegmentoId> = emptySet()
     private var revisioneInCorso = false
@@ -124,7 +122,7 @@ internal class StatoVoci(
     fun avvia() {
         scope.launch { sorgenti.comandi.stato.collect { mappa -> rifletti(mappa) } }
         scope.launch { sorgenti.comandi.statoFrasi.collect { mappa -> riflettiFrasi(mappa) } }
-        somiglianza?.avvia()
+        somiglianza.avvia()
         scope.launch {
             // AC-319: ImpronteRiallineate (& co.) reach S3 as a Cambiamento — the Proposte are re-read,
             // the selection is untouched.
@@ -495,19 +493,19 @@ internal class StatoVoci(
 
     /** AC-528: 'Togli conferma' → `ConfermaSegmento(false)` on the ONE selected, confirmed Segmento. */
     fun togliConferma() {
-        val conferma = sorgenti.confermaSegmento ?: return
         val menu = vista?.let(::barraDi)?.frase?.takeIf { it.abilitata && it.confermato } ?: return
         eseguiRevisione {
-            val esito = conferma(ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false))
+            val comando = ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false)
+            val esito = sorgenti.confermaSegmento(comando)
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }
 
-    fun calcolaSomiglianza() = somiglianza?.calcola()
+    fun calcolaSomiglianza() = somiglianza.calcola()
 
-    fun applicaSomiglianza() = somiglianza?.applica()
+    fun applicaSomiglianza() = somiglianza.applica()
 
-    fun annullaSomiglianza() = somiglianza?.annulla()
+    fun annullaSomiglianza() = somiglianza.annulla()
 
     private fun impostaErrore(messaggio: String) =
         stato.update { d -> if (d is RegistrazioneUiStato.Dati) d.copy(errore = messaggio) else d }
@@ -544,7 +542,7 @@ internal class StatoVoci(
                 )
             }
         }
-        somiglianza?.controllaSolaLettura(soloLettura)
+        somiglianza.controllaSolaLettura(soloLettura)
     }
 
     private fun etichetta(v: TrascrittoView, voceId: VoceId): String = etichettaDiVoce(v, voceId, nomeDi(voceId))
@@ -574,7 +572,7 @@ internal class StatoVoci(
             // AC-454: the merge banner's action disabled too — '▶ estratto' stays governed only by
             // estrattiDisponibili (audio availability), untouched by soloLettura.
             unioneAbilitata = !revisioneInCorso && !modificheBloccate,
-            somiglianza = somiglianza?.pannello(
+            somiglianza = somiglianza.pannello(
                 riferimentiDi(v, dati?.identificate.orEmpty(), dati?.attivi.orEmpty()),
                 bloccato = soloLettura || comandiPendenti || revisioneInCorso || dati == null,
             ) { etichetta(v, it) },
@@ -626,7 +624,6 @@ internal class StatoVoci(
         parlanti = dati?.attivi.orEmpty(),
         confermato = v.segmenti.find { it.segmentoId == segmento }?.confermato == true,
         abilitata = !revisioneInCorso && !modificheBloccate && dati != null && attesaFraseDi(segmento) == null,
-        togliConfermaDisponibile = sorgenti.confermaSegmento != null,
     )
 }
 

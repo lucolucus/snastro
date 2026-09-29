@@ -2,6 +2,7 @@ package snastro.ui.registrazione
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -51,9 +52,8 @@ private fun statoVista(stato: StatoElaborazioneVista) = StatoRegistrazioneVista(
 )
 
 /**
- * ADR 0018 Amendment (b) §2 (AC-452/453): the optional `stati` source — the read-only flag + banner
- * while a re-run is queued/running, and the reload on the Cambiamento a replacement publishes. AC-402
- * (no `stati` source, R1) stays covered, untouched, by `RegistrazionePresenterTest`.
+ * ADR 0018 Amendment (b) §2 (AC-452/453): the `stati` source — the read-only flag + banner while a
+ * re-run is queued/running, and the reload on the Cambiamento a replacement publishes.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioneRitrascriviTest {
@@ -61,28 +61,32 @@ class RegistrazioneRitrascriviTest {
     private fun presentatore(
         scope: TestScope,
         trascritto: () -> TrascrittoView? = { unaVista() },
-        stati: (() -> StatoRegistrazioneVista?)? = null,
-        aggiornamenti: AggiornamentiVistaFinta? = null,
+        stati: () -> StatoRegistrazioneVista? = { null },
+        aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
     ): RegistrazionePresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
         return RegistrazionePresenter(
-            scope = CoroutineScope(dispatcher),
+            scope = scopeCoroutine,
             io = dispatcher,
             registrazioneId = REG_1,
             trascritto = trascritto,
             documento = { null },
             lettore = LettoreAudioFinta(),
             apriEsterno = ApriEsternoFinta(),
+            parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
             stati = stati,
             aggiornamenti = aggiornamenti,
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
         )
     }
 
     private val RegistrazionePresenter.dati get() = assertIs<RegistrazioneUiStato.Dati>(stato.value)
 
     @Test
-    fun `AC-452 senza la sorgente stati la schermata non e mai in sola lettura`() = runTest {
-        val presenter = presentatore(this, stati = null)
+    fun `AC-452 quando la sorgente stati non restituisce nulla la schermata non e mai in sola lettura`() = runTest {
+        val presenter = presentatore(this, stati = { null })
         advanceUntilIdle()
 
         assertEquals(false, presenter.dati.soloLettura)
@@ -115,15 +119,20 @@ class RegistrazioneRitrascriviTest {
     fun `AC-452 lettura e riproduzione restano possibili in sola lettura`() = runTest {
         val lettore = LettoreAudioFinta()
         val dispatcher = StandardTestDispatcher(testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
         val presenter = RegistrazionePresenter(
-            scope = CoroutineScope(dispatcher),
+            scope = scopeCoroutine,
             io = dispatcher,
             registrazioneId = REG_1,
             trascritto = { unaVista() },
             documento = { "/progetti/demo.snastro/documenti/seduta.md" },
             lettore = lettore,
             apriEsterno = ApriEsternoFinta(),
+            parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
             stati = { statoVista(StatoElaborazioneVista.IN_CORSO) },
+            aggiornamenti = AggiornamentiVistaFinta(),
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
         )
         advanceUntilIdle()
 

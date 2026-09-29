@@ -106,7 +106,7 @@ internal fun MenuSn(expanded: Boolean, onDismissRequest: () -> Unit, content: @C
 }
 
 /**
- * Thin view of S3's Voci panel (R2, RC-2): renders [pannello] — every enabled/disabled decision is the
+ * Thin view of S3's Voci panel (RC-2): renders [pannello] — every enabled/disabled decision is the
  * presenter's ([CartaVoce.azioniAbilitate], [CartaVoce.confermaAbilitata], [PannelloVoci.estrattiDisponibili],
  * [PannelloVoci.unioneAbilitata]) — and forwards [azioni]. Only open/closed menus and the 'nuovo…' text
  * being typed are view-local. AC-584: the Riassunto tab is part B — [snastro.ui.stile.SchedeSn]

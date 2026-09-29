@@ -146,7 +146,7 @@ fun BarraLettore(
 /**
  * AC-579: [corsie] painted proportionally to [durataMs] (min 1dp wide — a Canvas, not one `Box` per
  * lane, so an overlapping/dense transcript never forces a relayout); no lane at all when [durataMs] is
- * unknown (S2 R0 context, no transcript). The played fraction and the knob are likewise omitted then —
+ * unknown (S2 with no transcript yet). The played fraction and the knob are likewise omitted then —
  * a static, unclickable scrubber (no seek in part A, [AzioniLettore] carries none yet).
  */
 @Composable

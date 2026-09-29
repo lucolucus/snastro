@@ -439,8 +439,8 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
                 Spacer(modifier = Modifier.width(SnastroMisure.space3))
                 ColonnaElaborazione(it, riga, azioni)
             }
-            // AC-625: the More menu itself renders only with the `eliminaRegistrazione` source (R2) —
-            // StatoEliminazione.Assente means no menu at all, keeping the row's plain AC-575 content.
+            // AC-625: StatoEliminazione.Assente (the presenter never produces it) means no menu at
+            // all, keeping the row's plain AC-575 content.
             if (riga.eliminazione != StatoEliminazione.Assente) {
                 Spacer(modifier = Modifier.width(SnastroMisure.space2))
                 MenuAzioniRegistrazione(riga, azioni)
@@ -868,11 +868,11 @@ internal fun String.aData(): LocalDate? =
     }
 
 /**
- * AC-204/AC-345 (R2, fetta Parlanti): the identification badge — "3 voci · 1 da identificare", or
+ * AC-204/AC-345 (fetta Parlanti): the identification badge — "3 voci · 1 da identificare", or
  * "3 voci" alone once every Voce is identified (AC-345, never "· 0 da identificare"). Absent
- * entirely when [RigaRegistrazione.identificazione] is `null` (R0/R1, or the source's row not yet
- * known/failed — [RegistrazioniPresenter] decides, this only renders what it is given). AC-575: no
- * literal coloured voice dots — [IdentificazioneRiga] carries only counts, no `VoceId`s to colour.
+ * entirely when [RigaRegistrazione.identificazione] is `null` (the row not yet known/failed —
+ * [RegistrazioniPresenter] decides, this only renders what it is given). AC-575: no literal coloured
+ * voice dots — [IdentificazioneRiga] carries only counts, no `VoceId`s to colour.
  */
 @Composable
 private fun BadgeIdentificazione(identificazione: IdentificazioneRiga, id: RegistrazioneId) {

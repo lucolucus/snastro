@@ -29,18 +29,13 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
 
 /**
- * State holder of S3 · Registrazione, READ-ONLY in R1 (RC-2, thin UI; AC-207/208/217/218). Joins
- * `trascritto-view` ([trascritto]) with the Documento's resolved path ([documento]) and reflects the
- * shared [lettore] (AC-208: which Segmento is currently playing; AC-217: the header audio bar disabled,
- * with a message, when the source is missing — clicking a Segmento then does nothing, the transcript
- * itself stays readable).
- *
- * AC-402: in R1 it is constructed with ONLY these four collaborators (plus [registrazioneId]/[scope]/[io])
- * — no Voci panel, no card, no merge banner, no selection, no '▶ estratto'. R2
- * (`schermata-registrazione-identificazione`) supplies the OPTIONAL [parlanti] ([SorgentiParlanti]):
- * the Voci panel, the Nome labels, the selection toolbar and the Revisione commands, all handled by
- * [StatoVoci] into this presenter's own [stato]. [SOGLIA_ATTESA_VISIBILE_MS] (ADR 0017 §3) is defined
- * here, once.
+ * State holder of S3 · Registrazione (RC-2, thin UI; AC-207/208/217/218). Joins `trascritto-view`
+ * ([trascritto]) with the Documento's resolved path ([documento]) and reflects the shared [lettore]
+ * (AC-208: which Segmento is currently playing; AC-217: the header audio bar disabled, with a message,
+ * when the source is missing — clicking a Segmento then does nothing, the transcript itself stays
+ * readable). [parlanti] ([SorgentiParlanti]) drives the Voci panel, the Nome labels, the selection
+ * toolbar and the Revisione commands, all handled by [StatoVoci] into this presenter's own [stato].
+ * [SOGLIA_ATTESA_VISIBILE_MS] (ADR 0017 §3) is defined here, once.
  *
  * Depends on `applicazione` through PLAIN FUNCTION TYPES ([trascritto]/[documento]) rather than the
  * concrete query classes, mirroring `RegistrazioniPresenter` (dev-architecture `#presenter`): `:avvio`
@@ -49,18 +44,18 @@ import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
  * presenter's own test doubles stay plain lambdas over Published-Language values, never a `*:dominio`
  * type (CR-1(b)).
  *
- * ADR 0018 (AC-452/453, optional [stati]/[aggiornamenti]): while the latest Elaborazione of
- * [registrazioneId] is `in_attesa`/`in_corso` (a re-run over the Trascritto shown here), the screen is
- * READ-ONLY — [RegistrazioneUiStato.Dati.soloLettura] + the banner. [aggiornamenti] (R15, `tec-shell-ui`)
- * reloads on the Cambiamento the replacement/cancellation publishes, so the read-only flag, the banner
- * and (on a replacement) the transcript itself stay current (AC-453). Both default to `null`: R1
- * (`avvio-composizione`) supplies neither, so a row is never read-only there.
+ * ADR 0018 (AC-452/453, [stati]/[aggiornamenti]): while the latest Elaborazione of [registrazioneId] is
+ * `in_attesa`/`in_corso` (a re-run over the Trascritto shown here), the screen is READ-ONLY —
+ * [RegistrazioneUiStato.Dati.soloLettura] + the banner. [aggiornamenti] (R15, `tec-shell-ui`) reloads on
+ * the Cambiamento the replacement/cancellation publishes, so the read-only flag, the banner and (on a
+ * replacement) the transcript itself stay current (AC-453).
  *
- * ADR 0021 (AC-S119..S123, optional [riassunto]/[selezioneSchedaS3]): `null` in R0/R1/R2 — no
- * Riassunto tab exists then, S3 stays exactly as before (`bannerSchermata` folds to the Ritrascrizione
- * case alone). `avvio-sintesi` (R3) supplies both: [riassunto] the tab content + its status mark,
- * [selezioneSchedaS3] the ONE per-window holder shared by every [RegistrazionePresenter] it builds, so
- * the selected tab survives navigating to another recording (AC-S121).
+ * ADR 0021 (AC-S119..S123, [riassunto]/[selezioneSchedaS3]): [riassunto] the Riassunto tab content + its
+ * status mark, [selezioneSchedaS3] the ONE per-window holder shared by every [RegistrazionePresenter] it
+ * builds, so the selected tab survives navigating to another recording (AC-S121).
+ *
+ * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
+ * wires all of them, so a missed wiring fails to compile instead of silently hiding a screen area.
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazionePresenter(
@@ -71,11 +66,11 @@ class RegistrazionePresenter(
     private val documento: () -> String?,
     private val lettore: LettoreAudio,
     private val apriEsterno: ApriEsterno,
-    private val parlanti: SorgentiParlanti? = null,
-    private val stati: (() -> StatoRegistrazioneVista?)? = null,
-    private val aggiornamenti: AggiornamentiVista? = null,
-    private val riassunto: SorgenteRiassuntoS3? = null,
-    private val selezioneSchedaS3: SelezioneSchedaS3? = null,
+    private val parlanti: SorgentiParlanti,
+    private val stati: () -> StatoRegistrazioneVista?,
+    private val aggiornamenti: AggiornamentiVista,
+    private val riassunto: SorgenteRiassuntoS3,
+    private val selezioneSchedaS3: SelezioneSchedaS3,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -104,11 +99,9 @@ class RegistrazionePresenter(
     // "we don't actually know yet", not a datum the view needs to carry.
     private var disponibilitaIncerta = false
 
-    // R2 (schermata-registrazione-identificazione): the Voci panel, the Nome labels, the selection
-    // toolbar and the Revisione commands — absent in R1 (AC-402), so nothing of it runs there.
-    private val voci: StatoVoci? = parlanti?.let { sorgenti ->
-        StatoVoci(sorgenti, scope, io, registrazioneId, trascritto, _stato) { v -> segmentiDi(v, lettore.stato.value) }
-    }
+    // The Voci panel, the Nome labels, the selection toolbar and the Revisione commands.
+    private val voci: StatoVoci =
+        StatoVoci(parlanti, scope, io, registrazioneId, trascritto, _stato) { v -> segmentiDi(v, lettore.stato.value) }
 
     // AC-S122: the Riassunto tab's own status mark — collected independently of `carica()` (it can tick
     // while a reload is not otherwise due) and kept here so a reload (`carica()`) never loses the latest
@@ -121,28 +114,24 @@ class RegistrazionePresenter(
         scope.launch { lettore.stato.collect { s -> rifletti(s) } }
         // AC-453: reloads on any Cambiamento of this Registrazione — the replacement/cancellation event
         // included (R15, same pattern as RegistrazioniPresenter/ParlantiPresenter).
-        aggiornamenti?.let { a ->
-            scope.launch {
-                a.cambiamenti.collect { c ->
-                    if (c.registrazioneId == null || c.registrazioneId == registrazioneId) carica()
-                }
+        scope.launch {
+            aggiornamenti.cambiamenti.collect { c ->
+                if (c.registrazioneId == null || c.registrazioneId == registrazioneId) carica()
             }
         }
-        riassunto?.let { r ->
-            scope.launch {
-                r.segno(registrazioneId).collect { segno ->
-                    segnoRiassuntoAttuale = segno
-                    aggiornaDati { it.copy(segnoRiassunto = segno) }
-                }
+        scope.launch {
+            riassunto.segno(registrazioneId).collect { segno ->
+                segnoRiassuntoAttuale = segno
+                aggiornaDati { it.copy(segnoRiassunto = segno) }
             }
         }
-        voci?.avvia()
+        voci.avvia()
     }
 
     private suspend fun carica() {
         try {
             // AC-453/455: a reload never keeps a selection or a panel from a previous generation.
-            voci?.deseleziona()
+            voci.deseleziona()
             val vista = withContext(io) { trascritto() }
             if (vista == null) {
                 _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
@@ -167,8 +156,8 @@ class RegistrazionePresenter(
             disponibilitaIncerta = disponibileEsito == null
             val disponibile = disponibileEsito ?: true
             val statoLettore = lettore.stato.value
-            val soloLettura = soloLetturaDi(withContext(io) { stati?.invoke() })
-            voci?.vista = vista
+            val soloLettura = soloLetturaDi(withContext(io) { stati() })
+            voci.vista = vista
             _stato.value = RegistrazioneUiStato.Dati(
                 titolo = vista.titolo,
                 dataRegistrazione = vista.dataRegistrazione,
@@ -179,11 +168,11 @@ class RegistrazionePresenter(
                 documentoPercorso = percorso,
                 soloLettura = soloLettura,
                 bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
-                contenutoRiassunto = riassunto?.let { r -> { r.contenuto(registrazioneId) } },
-                schedaSelezionata = selezioneSchedaS3?.scheda ?: SchedaS3.TRASCRIZIONE,
+                contenutoRiassunto = { riassunto.contenuto(registrazioneId) },
+                schedaSelezionata = selezioneSchedaS3.scheda,
                 segnoRiassunto = segnoRiassuntoAttuale,
             )
-            voci?.pubblica()
+            voci.pubblica()
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -193,7 +182,7 @@ class RegistrazionePresenter(
         ) {
             _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
         }
-        if (_stato.value is RegistrazioneUiStato.Dati) voci?.ricaricaParlanti()
+        if (_stato.value is RegistrazioneUiStato.Dati) voci.ricaricaParlanti()
     }
 
     // L573b: `documento()` degraded to `null` (same as it legitimately having none) — 'Apri documento'/
@@ -239,7 +228,7 @@ class RegistrazionePresenter(
             SegmentoRiga(
                 segmentoId = s.segmentoId,
                 voceId = s.voceId,
-                etichettaVoce = etichettaDiVoce(vista, s.voceId, voci?.nomeDi(s.voceId)),
+                etichettaVoce = etichettaDiVoce(vista, s.voceId, voci.nomeDi(s.voceId)),
                 inizioMs = s.inizioMs,
                 fineMs = s.fineMs,
                 testo = s.testo,
@@ -343,14 +332,12 @@ class RegistrazionePresenter(
 
     /** AC-403: '▶ estratto' of a Voce card — a no-op while the audio source is missing. */
     fun riproduciEstrattoVoce(voceId: VoceId) {
-        val sorgenti = parlanti ?: return
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
-        avviaLettore { sorgenti.estratto(VoceRef(registrazioneId, voceId))?.let(lettore::riproduciEstratto) }
+        avviaLettore { parlanti.estratto(VoceRef(registrazioneId, voceId))?.let(lettore::riproduciEstratto) }
     }
 
     /** AC-403: '▶' of a Candidato (its own past excerpt) — a no-op while the audio source is missing. */
     fun riproduciEstratto(estratto: EstrattoRef) {
-        if (parlanti == null) return
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
         avviaLettore { lettore.riproduciEstratto(estratto) }
     }
@@ -358,12 +345,9 @@ class RegistrazionePresenter(
     /** H1: dismisses the current inline `errore`, if any. */
     fun chiudiErrore() = aggiornaDati { it.copy(errore = null) }
 
-    /** AC-S120/S121: switches the centre-column tab, kept per window in [selezioneSchedaS3] (a no-op
-     * while [riassunto] is `null` — the whole action is a no-op then, since [AzioniRegistrazione]
-     * defaults it that way, but this guard keeps the presenter itself honest too). */
+    /** AC-S120/S121: switches the centre-column tab, kept per window in [selezioneSchedaS3]. */
     fun selezionaScheda(scheda: SchedaS3) {
-        if (riassunto == null) return
-        selezioneSchedaS3?.seleziona(scheda)
+        selezioneSchedaS3.seleziona(scheda)
         aggiornaDati { it.copy(schedaSelezionata = scheda) }
     }
 
@@ -380,25 +364,25 @@ class RegistrazionePresenter(
         mostraDocumentoNellaCartella = ::mostraDocumentoNellaCartella,
         chiudiErrore = ::chiudiErrore,
         riprova = ::riprova,
-        selezionaSegmento = { id -> voci?.selezionaSegmento(id) },
-        deseleziona = { voci?.deseleziona() },
-        dividiVoce = { voci?.dividiVoce() },
-        riassegnaA = { destinazione -> voci?.riassegnaA(destinazione) },
-        unisci = { sopravvive, rimossa -> voci?.unisci(sopravvive, rimossa) },
-        conferma = { voceId -> voci?.conferma(voceId) },
-        confermaParlante = { voceId, parlanteId -> voci?.confermaParlante(voceId, parlanteId) },
-        nuovoParlante = { voceId, nome, tipo -> voci?.nuovoParlante(voceId, nome, tipo) },
-        salta = { voceId -> voci?.salta(voceId) },
-        annullaComando = { voceId -> voci?.annulla(voceId) },
-        chiudiErroreVoce = { voceId -> voci?.chiudiErrore(voceId) },
+        selezionaSegmento = voci::selezionaSegmento,
+        deseleziona = voci::deseleziona,
+        dividiVoce = voci::dividiVoce,
+        riassegnaA = voci::riassegnaA,
+        unisci = voci::unisci,
+        conferma = voci::conferma,
+        confermaParlante = voci::confermaParlante,
+        nuovoParlante = voci::nuovoParlante,
+        salta = voci::salta,
+        annullaComando = voci::annulla,
+        chiudiErroreVoce = voci::chiudiErrore,
         riproduciEstrattoVoce = ::riproduciEstrattoVoce,
         riproduciEstratto = ::riproduciEstratto,
-        nominaFrase = { obiettivo -> voci?.nominaFrase(obiettivo) },
-        togliConferma = { voci?.togliConferma() },
-        annullaFrase = { segmento -> voci?.annullaFrase(segmento) },
-        calcolaSomiglianza = { voci?.calcolaSomiglianza() },
-        applicaSomiglianza = { voci?.applicaSomiglianza() },
-        annullaSomiglianza = { voci?.annullaSomiglianza() },
+        nominaFrase = voci::nominaFrase,
+        togliConferma = voci::togliConferma,
+        annullaFrase = voci::annullaFrase,
+        calcolaSomiglianza = voci::calcolaSomiglianza,
+        applicaSomiglianza = voci::applicaSomiglianza,
+        annullaSomiglianza = voci::annullaSomiglianza,
         selezionaScheda = ::selezionaScheda,
     )
 

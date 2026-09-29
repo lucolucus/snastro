@@ -43,6 +43,7 @@ import kotlin.test.assertNull
 
 private val REG_1 = RegistrazioneId("id-1")
 private val REG_2 = RegistrazioneId("id-2")
+private val REG_3 = RegistrazioneId("id-3")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 private val ORA_FISSA: Instant = Instant.parse("2026-09-23T10:00:00Z")
 
@@ -75,9 +76,9 @@ private fun statoVista(
 )
 
 /**
- * AC-342: the R0 variant is exercised by simply omitting `stati`/`avvia` from [presentatore] (their
- * defaults) — the same presenter class, constructed with fakes of `RegistrazioniDelProgetto`,
- * `AggiungiRegistrazione`, `ModificaDataRegistrazione` and [LettoreAudio] only.
+ * [RegistrazioniPresenter], constructed with fakes of every collaborator (ADR 0030 §1, U1: all
+ * mandatory) — `RegistrazioniDelProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`,
+ * [LettoreAudio] and the Trascrizione sources ([presentatore]'s `stati`/`avvia`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioniPresenterTest {
@@ -91,9 +92,9 @@ class RegistrazioniPresenterTest {
         lettore: LettoreAudio = LettoreAudioFinta(),
         aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
         clock: Clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
-        stati: ((List<RegistrazioneId>) -> List<StatoRegistrazioneVista>)? = null,
-        avvia: ((AvviaElaborazione) -> Esito<Unit>)? = null,
-        apriRegistrazione: (RegistrazioneId) -> Unit = {},
+        stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = { emptyList() },
+        avvia: (AvviaElaborazione) -> Esito<Unit> = { error("avviaElaborazione non atteso in questo test") },
+        apriRegistrazione: (RegistrazioneId) -> Unit = { error("apriRegistrazione non atteso in questo test") },
         posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
@@ -110,6 +111,10 @@ class RegistrazioniPresenterTest {
             statiElaborazione = stati,
             avviaElaborazione = avvia,
             apriRegistrazione = apriRegistrazione,
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { posizioni },
         )
     }
@@ -151,43 +156,6 @@ class RegistrazioniPresenterTest {
     // M5: a failure loading the initial catalog is covered below ("M5 un fallimento del caricamento
     // iniziale mostra uno stato Errore distinto") — it is now a distinct RegistrazioniUiStato.Errore,
     // never a Dati (which would show the misleading AC-199 empty-list message).
-
-    // --- AC-342: R0 variant, no Trascrizione sources -------------------------------------------
-
-    @Test
-    fun `AC-342 senza StatiElaborazione le righe non hanno colonna di stato`() = runTest {
-        val presenter = presentatore(this, registrazioni = { listOf(rigaVista(REG_1)) })
-        advanceUntilIdle()
-        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
-        assertNull(riga.elaborazione)
-    }
-
-    @Test
-    fun `AC-342 il click su una riga non apre S3 quando le sorgenti sono assenti`() = runTest {
-        var aperta: RegistrazioneId? = null
-        val presenter = presentatore(
-            this,
-            registrazioni = { listOf(rigaVista(REG_1)) },
-            apriRegistrazione = { aperta = it },
-        )
-        advanceUntilIdle()
-
-        presenter.azioni.apriRiga(REG_1)
-
-        assertNull(aperta)
-    }
-
-    @Test
-    fun `AC-342 avviaElaborazione senza il servizio R1 non fa nulla`() = runTest {
-        val presenter = presentatore(this, registrazioni = { listOf(rigaVista(REG_1)) })
-        advanceUntilIdle()
-
-        presenter.azioni.avviaElaborazione(REG_1) // `avvia` è `null` (R0)
-
-        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
-        assertEquals(false, riga.operazioneInCorso)
-        assertNull(riga.erroreRiga)
-    }
 
     // --- AC-343: per-row playback ----------------------------------------------------------------
 
@@ -420,7 +388,7 @@ class RegistrazioniPresenterTest {
         assertEquals(1, chiamate)
     }
 
-    // --- AC-203/AC-344 (R1): Trascrizione sources supplied --------------------------------------
+    // --- AC-203/AC-344: Trascrizione sources -----------------------------------------------------
 
     @Test
     fun `AC-203 NON_AVVIATA e mappata su NonAvviata`() = runTest {
@@ -512,6 +480,36 @@ class RegistrazioniPresenterTest {
         presenter.azioni.apriRiga(REG_1)
 
         assertEquals(REG_1, aperta)
+    }
+
+    @Test
+    fun `AC-342 il click su una riga non apre S3 quando il Trascritto non e disponibile`() = runTest {
+        var aperta: RegistrazioneId? = null
+        val presenter = presentatore(
+            this,
+            registrazioni = { listOf(rigaVista(REG_1), rigaVista(REG_2), rigaVista(REG_3)) },
+            // ADR 0018: NON_AVVIATA, and IN_ATTESA/FALLITA WITHOUT a Trascritto (numVoci left null here,
+            // so trascrittoDisponibile = false) never make a row apribile — the guard on
+            // `RegistrazioniPresenter.apriRiga` (`if (riga.trascrittoDisponibile) apriRegistrazione(id)`)
+            // must stay: this fails if that guard is removed (every click below would then set `aperta`).
+            stati = { ids ->
+                ids.map {
+                    when (it) {
+                        REG_1 -> statoVista(it, StatoElaborazioneVista.NON_AVVIATA)
+                        REG_2 -> statoVista(it, StatoElaborazioneVista.IN_ATTESA)
+                        else -> statoVista(it, StatoElaborazioneVista.FALLITA, motivoFallimento = "audio illeggibile")
+                    }
+                }
+            },
+            apriRegistrazione = { aperta = it },
+        )
+        advanceUntilIdle()
+
+        presenter.azioni.apriRiga(REG_1)
+        presenter.azioni.apriRiga(REG_2)
+        presenter.azioni.apriRiga(REG_3)
+
+        assertNull(aperta)
     }
 
     @Test

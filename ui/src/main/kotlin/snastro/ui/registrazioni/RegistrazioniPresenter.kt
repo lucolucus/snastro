@@ -42,14 +42,11 @@ import java.time.LocalDate
 
 /**
  * State holder of S2 · Registrazioni del Progetto (RC-2, thin UI): joins `registrazioni-del-progetto`
- * with `stati-elaborazione` by [RegistrazioneId] (R1, AC-342 — [statiElaborazione]/[avviaElaborazione]
- * are `null` in R0: no status column, no 'Trascrivi'/'Riprova', row click does nothing) and with
- * `identificazione-registrazioni` (R2, AC-204/AC-345 — [identificazioni] is `null` in R0/R1: no
- * badge; when supplied, a row's [RigaRegistrazione.identificazione] is built only once BOTH
- * `numVoci` (from `stati-elaborazione`, only ever known for `COMPLETATA`) and the Parlanti count are
- * known for that row — a missing entry (no Trascritto yet) or a failed read of the source leaves
- * just that badge absent, never a provisional or '0' count, without affecting the rest of the row),
- * keeps a
+ * with `stati-elaborazione` by [RegistrazioneId] (AC-342) and with `identificazione-registrazioni`
+ * (AC-204/AC-345 — a row's [RigaRegistrazione.identificazione] is built only once BOTH `numVoci` (from
+ * `stati-elaborazione`, only ever known for `COMPLETATA`) and the Parlanti count are known for that row
+ * — a missing entry (no Trascritto yet) or a failed read of the source leaves just that badge absent,
+ * never a provisional or '0' count, without affecting the rest of the row), keeps a
  * per-row reflection of the shared [LettoreAudio] (AC-343: [LettoreAudio.disponibile] is checked once
  * per refresh, [LettoreAudio.stato] is collected live so the play/pause control never goes stale) and
  * refreshes on [AggiornamentiVista] (R15) or after a successful import/`modificaData`/`rinomina`/
@@ -72,23 +69,23 @@ import java.time.LocalDate
  * `snastro.progetto.dominio.Registrazione`, off-limits here even from a test file, since the CR-1
  * Konsist rule scans by package, not by source set).
  *
- * ADR 0018 (R2 only, `ritrascrivi`/`annullaElaborazione` optional collaborators): [ritrascrivi] backs
- * 'Ritrascrivi' on a `Completata` row with a Trascritto (AC-448/449) — a NEW `Elaborazione` over the
- * existing one, the same underlying command as [avviaElaborazione] but a distinct, independently
- * supplied knob (`ElaborazioneGiaCompletata` no longer exists, ADR 0018 §1). [annullaElaborazione]
- * (R1+) backs 'Annulla' on a queued row (AC-475/476), no dialog: nothing is lost. Both default to
- * `null`, so a row shows neither control until `avvio-parlanti`/`avvio-composizione` supplies them —
- * `:avvio`'s own existing calls (named args) keep compiling unchanged.
+ * ADR 0018 ([ritrascrivi]/[annullaElaborazione]): [ritrascrivi] backs 'Ritrascrivi' on a `Completata`
+ * row with a Trascritto (AC-448/449) — a NEW `Elaborazione` over the existing one, the same underlying
+ * command as [avviaElaborazione] but a distinct, independently supplied knob (`ElaborazioneGiaCompletata`
+ * no longer exists, ADR 0018 §1). [annullaElaborazione] backs 'Annulla' on a queued row (AC-475/476), no
+ * dialog: nothing is lost.
  *
- * ADR 0020 §6 (R2 only, `eliminaRegistrazione` optional collaborator, like [ritrascrivi]): backs the
- * row's More menu — 'Elimina…' (AC-625/626/627/628) and, on the rows where [ritrascrivi] is also
- * offered, 'Ritrascrivi' too (AC-625 (b): the row's own button then folds into the menu). Defaults to
- * `null`, so no row shows a More menu until `avvio-parlanti` supplies it (R0/R1, AC-625).
+ * ADR 0020 §6 ([eliminaRegistrazione]): backs the row's More menu — 'Elimina…' (AC-625/626/627/628) and,
+ * on every row where [ritrascrivi] also applies, 'Ritrascrivi' too (AC-625 (b): the row's own button
+ * then folds into the menu).
  *
  * ADR 0023 §4 (block `avvio-coda-condivisa`, [posizioniNellaCoda]): the "In coda (n)"/"Ritrascrizione
  * in coda (n)" position on an `IN_ATTESA` row no longer comes from `StatoRegistrazioneVista` — it is
  * read from `:ui`'s `PosizioniNellaCoda` (the shared queue's owner, `:avvio`) and joined by
- * [RegistrazioneId], one snapshot per [costruisciRighe] call, `null`/absent meaning no position (0).
+ * [RegistrazioneId], one snapshot per [costruisciRighe] call, absent meaning no position (0).
+ *
+ * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
+ * wires all of them, so a missed wiring fails to compile instead of silently hiding a row's control.
  */
 @Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
 class RegistrazioniPresenter(
@@ -101,14 +98,14 @@ class RegistrazioniPresenter(
     private val lettore: LettoreAudio,
     private val aggiornamenti: AggiornamentiVista,
     private val clock: Clock,
-    private val statiElaborazione: ((List<RegistrazioneId>) -> List<StatoRegistrazioneVista>)? = null,
-    private val avviaElaborazione: ((AvviaElaborazione) -> Esito<Unit>)? = null,
-    private val apriRegistrazione: (RegistrazioneId) -> Unit = {},
-    private val identificazioni: ((List<RegistrazioneId>) -> List<ConteggioIdentificazione>)? = null,
-    private val ritrascrivi: ((AvviaElaborazione) -> Esito<Unit>)? = null,
-    private val annullaElaborazione: ((AnnullaElaborazione) -> Esito<Unit>)? = null,
-    private val eliminaRegistrazione: ((EliminaRegistrazione) -> Esito<Unit>)? = null,
-    private val posizioniNellaCoda: (() -> PosizioniCoda)? = null,
+    private val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
+    private val avviaElaborazione: (AvviaElaborazione) -> Esito<Unit>,
+    private val apriRegistrazione: (RegistrazioneId) -> Unit,
+    private val identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione>,
+    private val ritrascrivi: (AvviaElaborazione) -> Esito<Unit>,
+    private val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
+    private val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
+    private val posizioniNellaCoda: () -> PosizioniCoda,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -220,15 +217,15 @@ class RegistrazioniPresenter(
     private fun costruisciRighe(): List<RigaRegistrazione> {
         val progetto = registrazioni()
         val ids = progetto.map { it.registrazioneId }
-        val stati = statiElaborazione?.invoke(ids)?.associateBy { it.registrazioneId }
+        val stati = statiElaborazione(ids).associateBy { it.registrazioneId }
         val conteggiIdentificazione = conteggiIdentificazione(ids)
         // ADR 0023 §4 (sweep, block avvio-coda-condivisa): the queue position is no longer part of
         // StatoRegistrazioneVista — it is read from PosizioniNellaCoda (the shared queue's owner) and
         // joined here by registrazioneId, one snapshot shared by every row (mirrors AC-163's old intent).
-        val posizioni = posizioniNellaCoda?.invoke() ?: PosizioniCoda.VUOTA
+        val posizioni = posizioniNellaCoda()
         val statoLettore = lettore.stato.value
         return progetto.map { r ->
-            val vista = stati?.get(r.registrazioneId)
+            val vista = stati[r.registrazioneId]
             val elaborazioneRiga = vista?.let { elaborazioneDi(it, posizioni) }
             // AC-451: FALLITA over an existing Trascritto renders as Completata + this notice, whatever
             // the `ritrascrivi` source's presence — it reports a FACT, independent of the action's
@@ -251,19 +248,18 @@ class RegistrazioniPresenter(
                 identificazione = identificazioneDi(vista, conteggiIdentificazione[r.registrazioneId]),
                 trascrittoDisponibile = vista?.trascrittoDisponibile == true,
                 elaborazioneId = vista?.elaborazioneId,
-                ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata && ritrascrivi != null,
+                ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata,
                 ritrascrizioneFallita = ritrascrizioneFallita,
-                annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa && annullaElaborazione != null,
+                annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa,
                 eliminazione = eliminazioneDi(elaborazioneRiga),
             )
         }
     }
 
-    /** ADR 0020 §6/AC-625: [StatoEliminazione.Assente] without the optional source (R0/R1); otherwise
-     * disabled with its caption on an open Elaborazione (IN_ATTESA/IN_CORSO, plain or re-run) — every
-     * other state (no Elaborazione yet, FALLITA, Completata) is [StatoEliminazione.Disponibile]. */
+    /** ADR 0020 §6/AC-625: disabled with its caption on an open Elaborazione (IN_ATTESA/IN_CORSO, plain
+     * or re-run) — every other state (no Elaborazione yet, FALLITA, Completata) is
+     * [StatoEliminazione.Disponibile]. */
     private fun eliminazioneDi(elaborazione: StatoElaborazioneRiga?): StatoEliminazione = when {
-        eliminaRegistrazione == null -> StatoEliminazione.Assente
         elaborazione is StatoElaborazioneRiga.InAttesa ->
             StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA)
         elaborazione is StatoElaborazioneRiga.InCorso ->
@@ -271,23 +267,23 @@ class RegistrazioniPresenter(
         else -> StatoEliminazione.Disponibile
     }
 
-    /** AC-376 (FALLITA, unconditional) / AC-448 (Completata, only with the `ritrascrivi` source): the
-     * 'Numero di persone' field prefilled from the row's latest Elaborazione — empty otherwise. */
+    /** AC-376 (FALLITA) / AC-448 (Completata, `ritrascrivi` is always wired): the 'Numero di persone'
+     * field prefilled from the row's latest Elaborazione — empty otherwise. */
     private fun numeroPersonePrefillDi(v: StatoRegistrazioneVista?): String {
         val fallita = v?.stato == StatoElaborazioneVista.FALLITA
-        val completataConRitrascrivi = v?.stato == StatoElaborazioneVista.COMPLETATA && ritrascrivi != null
+        val completataConRitrascrivi = v?.stato == StatoElaborazioneVista.COMPLETATA
         return if (fallita || completataConRitrascrivi) v?.numeroPersone?.toString().orEmpty() else ""
     }
 
     /**
-     * AC-345: `null` — never a partial batch — when [identificazioni] is absent (R0/R1) or its read
-     * throws; a throw here is contained to this batch (never the outer [carica] catch of
-     * [costruisciRighe]'s OTHER sources), so a failing Parlanti source only costs every row its
-     * badge, the rest of each row (title, date, status, playback…) stays built from its own source.
+     * AC-345: an empty map — never a partial batch — when [identificazioni]'s read throws; a throw here
+     * is contained to this batch (never the outer [carica] catch of [costruisciRighe]'s OTHER sources),
+     * so a failing Parlanti source only costs every row its badge, the rest of each row (title, date,
+     * status, playback…) stays built from its own source.
      */
     private fun conteggiIdentificazione(ids: List<RegistrazioneId>): Map<RegistrazioneId, ConteggioIdentificazione> =
         try {
-            identificazioni?.invoke(ids)?.associateBy { it.registrazioneId }.orEmpty()
+            identificazioni(ids).associateBy { it.registrazioneId }
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -414,7 +410,7 @@ class RegistrazioniPresenter(
      * else → the inline [MESSAGGIO_NUMERO_PERSONE_NON_VALIDO] and NO command.
      */
     fun avviaElaborazione(id: RegistrazioneId) {
-        val comando = avviaElaborazione ?: return // R0/R1 without the source: the button isn't rendered either
+        val comando = avviaElaborazione
         val riga = rigaLibera(id) ?: return
         when (val campo = numeroPersoneCampo(riga.numeroPersone)) {
             NumeroPersoneCampo.NonValido ->
@@ -430,7 +426,6 @@ class RegistrazioniPresenter(
      * command right away.
      */
     fun ritrascrivi(id: RegistrazioneId) {
-        if (ritrascrivi == null) return // R0/R1 without the source: neither the field nor the button render
         val riga = rigaLibera(id) ?: return
         when (numeroPersoneCampo(riga.numeroPersone)) {
             NumeroPersoneCampo.NonValido ->
@@ -445,7 +440,7 @@ class RegistrazioniPresenter(
 
     /** AC-449: the confirmed 'Ritrascrivi' — exactly ONE `AvviaElaborazione` with the value [ritrascrivi] validated. */
     fun confermaRitrascrivi(id: RegistrazioneId) {
-        val comando = ritrascrivi ?: return
+        val comando = ritrascrivi
         val riga = rigaLibera(id)?.takeIf { it.confermaRitrascrivi } ?: return
         val numero = (numeroPersoneCampo(riga.numeroPersone) as? NumeroPersoneCampo.Valido)?.numero
         suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, numero)) } }
@@ -461,7 +456,7 @@ class RegistrazioniPresenter(
      * "it just reloads" — a message would refer to an Elaborazione the row no longer shows at all).
      */
     fun annullaElaborazione(id: RegistrazioneId) {
-        val comando = annullaElaborazione ?: return // R0, or R1/R2 without the source: no 'Annulla' rendered
+        val comando = annullaElaborazione
         val riga = rigaLibera(id) ?: return
         // ReturnCount (detekt): the third guard (a NonAvviata row has no elaborazioneId) is folded into
         // this `?.let` instead of a third `?: return`.
@@ -493,7 +488,6 @@ class RegistrazioniPresenter(
      * not only by the view's own disabled `DropdownMenuItem`).
      */
     fun elimina(id: RegistrazioneId) {
-        if (eliminaRegistrazione == null) return
         val riga = rigaLibera(id) ?: return
         // ReturnCount (detekt): the third guard (only StatoEliminazione.Disponibile opens the
         // confirmation) is folded into this `if`, like RegistrazioniPresenter.annullaElaborazione's own.
@@ -517,7 +511,7 @@ class RegistrazioniPresenter(
      * beyond the inline message, same as every other row command here).
      */
     fun confermaElimina(id: RegistrazioneId) {
-        val comando = eliminaRegistrazione ?: return
+        val comando = eliminaRegistrazione
         val riga = rigaLibera(id)?.takeIf { it.confermaElimina } ?: return
         val titolo = riga.titolo
         aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
@@ -654,7 +648,7 @@ class RegistrazioniPresenter(
 
     /** AC-203/AC-342/AC-450/AC-451 (ADR 0018): a row opens S3 iff a Trascritto exists — replacing
      * "iff COMPLETATA" — so a row mid re-run (`InAttesa`/`InCorso` with `ritrascrizione`) opens too, on
-     * the still-current old transcript; a click elsewhere (or in R0) is a no-op. */
+     * the still-current old transcript; a click on a row without one is a no-op. */
     fun apriRiga(id: RegistrazioneId) {
         val dati = _stato.value as? RegistrazioniUiStato.Dati ?: return
         val riga = dati.righe.find { it.registrazioneId == id } ?: return

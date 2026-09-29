@@ -46,32 +46,29 @@ sealed interface RegistrazioniUiStato {
 }
 
 /**
- * One row (AC-199..206, AC-342..344, AC-448..451/475/476). [elaborazione] is `null` when the
- * Trascrizione sources are not supplied to the presenter (R0 variant, AC-342): no status column, no
+ * One row (AC-199..206, AC-342..344, AC-448..451/475/476). [elaborazione] is `null` when
+ * `statiElaborazione` has no entry yet for this row (no Trascritto yet, AC-342): no status column, no
  * 'Trascrivi'/'Riprova', a row click does nothing. [operazioneInCorso] guards a second
  * `modificaData`/`avviaElaborazione`/`ritrascrivi`/`annullaElaborazione` on this row while one is in
  * flight (M3); [erroreRiga], when set, is a dismissible inline message for the last failed one (H1,
  * AC-206/AC-344 — "nulla cambia" beyond this). [numeroPersone] is the text of the optional 'Numero di
  * persone' field shown next to 'Trascrivi'/'Riprova'/'Ritrascrivi' (ADR 0014): presenter state only,
- * prefilled on a failed row from its Elaborazione (AC-376) or, with the `ritrascrivi` source supplied,
- * on a Completata row (AC-448), validated when the action fires (AC-375/AC-449).
+ * prefilled on a failed row from its Elaborazione (AC-376) or on a Completata row (AC-448), validated
+ * when the action fires (AC-375/AC-449).
  *
  * ADR 0018: [trascrittoDisponibile] backs the "a row opens S3 iff a Trascritto exists" rule (replacing
  * "iff COMPLETATA"); [elaborazioneId] is the id `annullaElaborazione` cancels (`null` only for
- * `NonAvviata`, AC-474); [ritrascriviDisponibile] is `true` only on a `Completata` row when the
- * `ritrascrivi` source is supplied (AC-448); [confermaRitrascrivi] shows the inline confirmation in
- * place of the field/button (AC-449, same style as S4's delete confirmation — never an AWT dialog);
- * [ritrascrizioneFallita] is the failed re-run's `motivoFallimento` on a `Completata` row (AC-451,
- * independent of whether `ritrascrivi` is supplied); [annullabile] is `true` only on an `InAttesa` row
- * when the `annullaElaborazione` source is supplied (AC-475).
+ * `NonAvviata`, AC-474); [ritrascriviDisponibile] is `true` only on a `Completata` row (AC-448);
+ * [confermaRitrascrivi] shows the inline confirmation in place of the field/button (AC-449, same style
+ * as S4's delete confirmation — never an AWT dialog); [ritrascrizioneFallita] is the failed re-run's
+ * `motivoFallimento` on a `Completata` row (AC-451); [annullabile] is `true` only on an `InAttesa` row
+ * (AC-475).
  *
- * ADR 0020 §6/AC-625: [eliminazione] drives the row's More menu — [StatoEliminazione.Assente] (the
- * `eliminaRegistrazione` source not supplied, R0/R1) renders NO menu at all, keeping the row's AC-575
- * content (including a plain row-level 'Ritrascrivi' button when [ritrascriviDisponibile]); otherwise
- * the menu holds 'Elimina…' (enabled/disabled per [StatoEliminazione]) and, when [ritrascriviDisponibile],
- * 'Ritrascrivi' too (AC-625 (b)) — the row's own 'Ritrascrivi' BUTTON is then folded into the menu, the
- * prefilled field stays on the row. [confermaElimina] replaces the row's own content with the inline
- * confirmation (AC-626), exactly like [confermaRitrascrivi].
+ * ADR 0020 §6/AC-625: [eliminazione] drives the row's More menu — the menu holds 'Elimina…'
+ * (enabled/disabled per [StatoEliminazione]) and, when [ritrascriviDisponibile], 'Ritrascrivi' too
+ * (AC-625 (b)) — the row's own 'Ritrascrivi' BUTTON is then folded into the menu, the prefilled field
+ * stays on the row. [confermaElimina] replaces the row's own content with the inline confirmation
+ * (AC-626), exactly like [confermaRitrascrivi].
  */
 @Suppress("LongParameterList") // one field per AC-199..206/342..344/448..451/475/476/625..629 datum of the row
 data class RigaRegistrazione(
@@ -96,9 +93,8 @@ data class RigaRegistrazione(
 )
 
 /**
- * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu. [Assente] — the
- * `eliminaRegistrazione` presenter source is not supplied (R0/R1) — means no More menu shows at all,
- * not just a hidden item.
+ * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu. [Assente] — the fixture/test default,
+ * never produced by the presenter itself — means no More menu shows at all, not just a hidden item.
  */
 sealed interface StatoEliminazione {
     /** NON_AVVIATA, FALLITA or Completata (with or without a failed re-run) — the item is enabled. */
@@ -107,18 +103,17 @@ sealed interface StatoEliminazione {
     /** An open Elaborazione (IN_ATTESA/IN_CORSO, plain or re-run) — disabled, [motivo] is its caption. */
     data class NonDisponibile(val motivo: String) : StatoEliminazione
 
-    /** The `eliminaRegistrazione` source is absent (R0/R1): no More menu on this row at all. */
+    /** The row's default before the presenter computes its real state: no More menu on this row at all. */
     data object Assente : StatoEliminazione
 }
 
 /**
- * AC-204/AC-345 (R2, Parlanti fetta): the identification badge, joining `numVoci`
+ * AC-204/AC-345 (Parlanti fetta): the identification badge, joining `numVoci`
  * ([StatoElaborazioneRiga] is only ever built from a [snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista]
  * whose `numVoci` is non-null for `COMPLETATA`) with `numVociDaIdentificare` from
- * `identificazione-registrazioni`. `null` — never a provisional or '0' count — when the identification
- * source is not supplied to the presenter (R0/R1), has no entry yet for this row (no Trascritto yet),
- * or failed to load; `numVociDaIdentificare == 0` still renders (just without the "da identificare"
- * clause, AC-345).
+ * `identificazione-registrazioni`. `null` — never a provisional or '0' count — when there is no entry
+ * yet for this row (no Trascritto yet) or the read failed; `numVociDaIdentificare == 0` still renders
+ * (just without the "da identificare" clause, AC-345).
  */
 data class IdentificazioneRiga(val numVoci: Int, val numVociDaIdentificare: Int)
 
@@ -134,7 +129,7 @@ sealed interface StatoRiproduzioneRiga {
     data object InRiproduzione : StatoRiproduzioneRiga
 }
 
-/** AC-203/AC-344 (R1, Trascrizione sources supplied): the row's processing state, joined from `stati-elaborazione`. */
+/** AC-203/AC-344: the row's processing state, joined from `stati-elaborazione`. */
 sealed interface StatoElaborazioneRiga {
     /** AC-344: no Elaborazione yet for this Registrazione — shows the 'Numero di persone' field + 'Trascrivi'. */
     data object NonAvviata : StatoElaborazioneRiga

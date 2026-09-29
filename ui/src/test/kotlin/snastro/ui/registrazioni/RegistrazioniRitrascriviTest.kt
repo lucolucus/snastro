@@ -81,7 +81,7 @@ private fun statiCon(
  * ADR 0018 (+ Amendment (b)): 'Ritrascrivi' over a Completata row (AC-448/449), the "Ritrascrizione
  * in coda/in corso" and "Ritrascrizione non riuscita" row states (AC-450/451), and 'Annulla' on a
  * queued row (AC-475/476) — [RegistrazioniPresenter.ritrascrivi]/[RegistrazioniPresenter.annullaElaborazione],
- * both optional (R1/R2), split from `RegistrazioniPresenterTest`.
+ * split from `RegistrazioniPresenterTest`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioniRitrascriviTest {
@@ -92,8 +92,6 @@ class RegistrazioniRitrascriviTest {
     private fun presentatore(
         scope: TestScope,
         stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
-        ritrascriviSupportato: Boolean = true,
-        annullaSupportato: Boolean = true,
         ritrascrivi: (AvviaElaborazione) -> Esito<Unit> = { Esito.Ok(Unit) },
         annulla: (AnnullaElaborazione) -> Esito<Unit> = { Esito.Ok(Unit) },
         posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
@@ -111,22 +109,17 @@ class RegistrazioniRitrascriviTest {
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione (Trascrivi/Riprova) non atteso in questo test") },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
+            identificazioni = { emptyList() },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { posizioni },
-            ritrascrivi = if (ritrascriviSupportato) {
-                { c ->
-                    avvii += c
-                    ritrascrivi(c)
-                }
-            } else {
-                null
+            ritrascrivi = { c ->
+                avvii += c
+                ritrascrivi(c)
             },
-            annullaElaborazione = if (annullaSupportato) {
-                { c ->
-                    annullamenti += c
-                    annulla(c)
-                }
-            } else {
-                null
+            annullaElaborazione = { c ->
+                annullamenti += c
+                annulla(c)
             },
         )
     }
@@ -151,20 +144,6 @@ class RegistrazioniRitrascriviTest {
     }
 
     @Test
-    fun `AC-448 Completata senza il servizio R2 non mostra ne campo ne pulsante`() = runTest {
-        val presenter = presentatore(
-            this,
-            ritrascriviSupportato = false,
-            stati = statiCon(StatoElaborazioneVista.COMPLETATA, trascrittoDisponibile = true, numeroPersone = 5),
-        )
-        advanceUntilIdle()
-
-        val riga = presenter.riga()
-        assertEquals(false, riga.ritrascriviDisponibile)
-        assertEquals("", riga.numeroPersone)
-    }
-
-    @Test
     fun `AC-448 la riga Completata apre S3`() = runTest {
         var aperta: RegistrazioneId? = null
         val dispatcher = StandardTestDispatcher(testScheduler)
@@ -180,6 +159,12 @@ class RegistrazioniRitrascriviTest {
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = statiCon(StatoElaborazioneVista.COMPLETATA, trascrittoDisponibile = true),
             apriRegistrazione = { aperta = it },
+            avviaElaborazione = { error("non atteso") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("non atteso") },
+            annullaElaborazione = { error("non atteso") },
+            eliminaRegistrazione = { error("non atteso") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
         )
         advanceUntilIdle()
 
@@ -399,18 +384,6 @@ class RegistrazioniRitrascriviTest {
     }
 
     // --- AC-475/476: 'Annulla' on a queued row -----------------------------------------------------
-
-    @Test
-    fun `AC-475 annullabile solo su IN_ATTESA e con la sorgente fornita`() = runTest {
-        val presenter = presentatore(
-            this,
-            annullaSupportato = false,
-            stati = statiCon(StatoElaborazioneVista.IN_ATTESA, trascrittoDisponibile = false),
-        )
-        advanceUntilIdle()
-
-        assertEquals(false, presenter.riga().annullabile)
-    }
 
     @Test
     fun `AC-475 Annulla invia esattamente un AnnullaElaborazione con l id della riga`() = runTest {

@@ -17,6 +17,7 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.messaggioPer
@@ -52,9 +53,9 @@ private fun statoVista(id: RegistrazioneId, stato: StatoElaborazioneVista, numer
     )
 
 /**
- * ADR 0014 (R1, Trascrizione sources supplied): the optional 'Numero di persone' field on the S2 row next to
- * 'Trascrivi' (NON_AVVIATA) and 'Riprova' (FALLITA) — presenter-side validation (AC-375), prefill on 'Riprova'
- * (AC-376), no automatic start after an import (AC-372), the command carrying the value (AC-344).
+ * ADR 0014: the optional 'Numero di persone' field on the S2 row next to 'Trascrivi' (NON_AVVIATA) and
+ * 'Riprova' (FALLITA) — presenter-side validation (AC-375), prefill on 'Riprova' (AC-376), no automatic
+ * start after an import (AC-372), the command carrying the value (AC-344).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioniNumeroPersoneTest {
@@ -85,6 +86,12 @@ class RegistrazioniNumeroPersoneTest {
                 comandi += c
                 avvia(c)
             },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
         )
     }
 

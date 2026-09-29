@@ -2,6 +2,7 @@ package snastro.ui.registrazione
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -12,6 +13,7 @@ import snastro.kernel.VoceId
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
+import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ApriEsterno
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.lettore.LettoreAudio
@@ -53,9 +55,9 @@ private fun unSegmento(
 ) = SegmentoTrascrittoView(segmentoId, voceId, inizioMs, fineMs, testo)
 
 /**
- * AC-402: every test below constructs [RegistrazionePresenter] with ONLY the four R1 collaborators —
- * fakes of `TrascrittoView` (the [trascritto] lambda), `Documento` ([documento]), [LettoreAudioFinta]
- * and [ApriEsternoFinta] — proving the presenter is fully green without any Parlanti source/command.
+ * AC-207/208/217/218: the base loading/playback/audio-bar/Documento behaviour of [RegistrazionePresenter]
+ * — every test below wires a real, inert [SorgentiParlanti] ([unaSorgentiParlantiInerte]) since none of
+ * them exercises the Voci panel; that half has its own file (`AmbienteVoci`-based tests).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazionePresenterTest {
@@ -69,14 +71,20 @@ class RegistrazionePresenterTest {
         apriEsterno: ApriEsterno = ApriEsternoFinta(),
     ): RegistrazionePresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
         return RegistrazionePresenter(
-            CoroutineScope(dispatcher),
-            dispatcher,
-            registrazioneId,
-            trascritto,
-            documento,
-            lettore,
-            apriEsterno,
+            scope = scopeCoroutine,
+            io = dispatcher,
+            registrazioneId = registrazioneId,
+            trascritto = trascritto,
+            documento = documento,
+            lettore = lettore,
+            apriEsterno = apriEsterno,
+            parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
+            stati = { null },
+            aggiornamenti = AggiornamentiVistaFinta(),
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
         )
     }
 

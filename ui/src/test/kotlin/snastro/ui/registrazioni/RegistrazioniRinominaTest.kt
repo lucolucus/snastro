@@ -12,6 +12,7 @@ import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.ui.AggiornamentiVistaFinta
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
@@ -51,6 +52,14 @@ class RegistrazioniRinominaTest {
             lettore = LettoreAudioFinta(),
             aggiornamenti = AggiornamentiVistaFinta(),
             clock = Clock.fixed(Instant.parse("2026-09-23T10:00:00Z"), ZoneOffset.UTC),
+            statiElaborazione = { emptyList() },
+            avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
         )
     }
 

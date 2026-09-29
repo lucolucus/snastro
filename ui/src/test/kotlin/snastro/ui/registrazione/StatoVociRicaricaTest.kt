@@ -83,6 +83,8 @@ class StatoVociRicaricaTest {
             riassegna = { Esito.Ok(Unit) },
             aggiornamenti = AggiornamentiVistaFinta(),
             clock = Clock.systemUTC(),
+            confermaSegmento = { Esito.Ok(Unit) },
+            somiglianza = AzioniSomiglianzaFinta(Clock.systemUTC()),
         )
     }
 
