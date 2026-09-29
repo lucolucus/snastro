@@ -12,6 +12,7 @@ import snastro.avvio.GrafoR0
 import snastro.avvio.SessioneProgettoImpl
 import snastro.avvio.SessioneProgettoSeams
 import snastro.avvio.orologioApp
+import snastro.avvio.porte.SondaCostruzioni
 import snastro.avvio.r1.AdattatoriMl
 import snastro.avvio.r1.EstensioneR1
 import snastro.avvio.r2.AdattatoriParlanti
@@ -19,6 +20,7 @@ import snastro.avvio.r2.AmbienteR2
 import snastro.avvio.r2.EstensioneR2
 import snastro.avvio.r2.GrafoR2
 import snastro.avvio.r2.lettoreNomiDaParlanti
+import snastro.avvio.r3.PorteProgettoSintesi.Companion.sintesi
 import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdFinto
@@ -147,12 +149,25 @@ internal class AmbienteR3(
         },
     )
 
-    val progetto: ProgettoAperto = sessione.crea(radice.resolve("progetti").toString(), "Prova").atteso()
+    private val apertura = SondaCostruzioni.durante {
+        sessione.crea(radice.resolve("progetti").toString(), "Prova").atteso()
+    }
+
+    val progetto: ProgettoAperto = apertura.first
+
+    /** AC-C60/AC-C61 (ADR 0030 §1): every constructor the project creation above ran, with its arguments. */
+    val costruzioniApertura: SondaCostruzioni.Costruzioni = apertura.second
+
+    /** Closes the project and opens it again (the `apri` path): what that open constructed. */
+    fun riapri(): SondaCostruzioni.Costruzioni {
+        sessione.chiudi()
+        return SondaCostruzioni.durante { sessione.apri(progetto.percorso).atteso() }.second
+    }
 
     val collaboratori: CollaboratoriProgettoAperto get() = checkNotNull(sessione.collaboratoriCorrenti())
     val r3: CollaboratoriR3 get() = collaboratori.estensione as CollaboratoriR3
     val contesto: ContestoEstensione get() = contesti.last()
-    val riassunti: RiassuntoRepositorySql get() = RiassuntoRepositorySql(contesto.database, contesto.lettura)
+    val riassunti: RiassuntoRepositorySql get() = contesto.porte.sintesi.riassunti
 
     val grafo: GrafoR2
         get() = GrafoR2(

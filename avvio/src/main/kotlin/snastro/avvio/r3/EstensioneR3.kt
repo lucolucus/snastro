@@ -6,16 +6,14 @@ import snastro.avvio.EstensioneSessione
 import snastro.avvio.ProgettoEsteso
 import snastro.avvio.TipoElementoCoda
 import snastro.avvio.r2.CollaboratoriR2
+import snastro.avvio.r2.PorteProgettoParlanti.Companion.parlanti
+import snastro.avvio.r3.PorteProgettoSintesi.Companion.sintesi
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.mappa
-import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
-import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.applicazione.letture.NomiDelleVoci
 import snastro.sintesi.adattatori.eventi.AbbonatoProgettoSintesi
 import snastro.sintesi.adattatori.eventi.AbbonatoTrascrizioneSintesi
-import snastro.sintesi.adattatori.persistenza.LunghezzaMassimaRiassuntoRepositorySql
-import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
 import snastro.sintesi.adattatori.porte.LettoreNomiDaParlanti
 import snastro.sintesi.adattatori.porte.LettoreTrascrittoDaTrascrizione
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
@@ -42,10 +40,9 @@ import java.util.logging.Logger
  * never re-created — over the SAME database, dispatcher and session scope.
  *
  * Order in [apri]:
- * 1. The Sintesi SQL repositories, and the two cross-context read ports (Trascrizione, Parlanti): the
- *    Trascrizione side (`trascritti`, `porte.statiElaborazione`) reuses `contesto.porte`'s SHARED repositories
- *    (ADR 0030 §1, AC-C60/AC-C61/AC-C63) — never a second `TrascrittoRepositorySql`/`StatiElaborazione`/
- *    `FasiInCorso`; the Parlanti side stays its OWN early instance (see [nomi]'s own KDoc for why).
+ * 1. The Sintesi SQL repositories and the two cross-context read ports (Trascrizione, Parlanti), all over
+ *    `contesto.porte`'s ONE instance of each repository and its ONE `StatiElaborazione` (ADR 0030 §1,
+ *    AC-C60/AC-C61/AC-C63): [PorteProgettoSintesi] and `PorteProgettoParlanti`, the parts `PorteProgetto` owns.
  * 2. The Sintesi SYNCHRONOUS subscribers — `AbbonatoTrascrizioneSintesi` (TrascrittoSostituito, ADR 0021 §6) and
  *    `AbbonatoProgettoSintesi` (RegistrazioneEliminata, ADR 0024 §1) — then the after-commit
  *    [AggiornamentiVistaSintesi]; all BEFORE [r2] runs, which registers its own two synchronous purges and only then
@@ -70,29 +67,15 @@ internal class EstensioneR3(
         val uow = dispatcher.unitaDiLavoro
         val porte = contesto.porte
         val progettoId = contesto.progettoId
-        // Sintesi's own repos: only R3 ever needs them, so no cross-level dedup is required (unlike
-        // Trascrizione/Progetto's, shared via porte because R1/R2/R3 all need them).
-        val riassunti = RiassuntoRepositorySql(contesto.database, contesto.lettura)
-        val lunghezze = LunghezzaMassimaRiassuntoRepositorySql(contesto.database)
+        val riassunti = porte.sintesi.riassunti
+        val lunghezze = porte.sintesi.lunghezze
         val trascritti = porte.trascritti
-        // ADR 0030 §1/AC-C63: porte.statiElaborazione — the SAME instance R1's pipeline writes into and S2
-        // reads — never a second StatiElaborazione over a fresh, unwritten FasiInCorso().
+        // ADR 0030 §1/AC-C63: porte.statiElaborazione, the SAME instance R1's pipeline writes into and S2 reads,
+        // never a second StatiElaborazione over a fresh, unwritten FasiInCorso().
         val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), porte.statiElaborazione)
-        // Parlanti's own repos stay a separate, EARLY instance here, built before the r2 extension runs:
-        // EseguiProssimoRiassuntoServizio (below, needed for the queue source, ADR 0023 §1) takes `nomi` at
-        // construction time, and r2's OWN parlanti/attribuzioni (its PorteParlanti) do not exist yet at this
-        // point in the call order — reusing them would need either a lazy/late-bound LettoreNomi (a real
-        // race: the recovered queue's first claim can run before r2's own extension returns and sets it) or
-        // moving Parlanti's repos into PorteProgetto (breaks CablaggioR1Test's AC-356 R1-purity guard, since
-        // PorteProgetto is visible to R1 too). Accepted, documented deviation from AC-C61's "no second
-        // instance" for these two repositories specifically — see the block's DEVIATIONS note; c3's flat
-        // composition removes the ordering constraint that forces it.
-        val nomi = LettoreNomiDaParlanti(
-            NomiDelleVoci(
-                AttribuzioneRepositorySql(contesto.database),
-                ParlanteRepositorySql(contesto.database, contesto.lettura),
-            ),
-        )
+        // AC-C61: the project's ONE Parlanti repositories (PorteProgettoParlanti, owned by porte), built on first use:
+        // here, before r2 runs; R1's Documento names and R2 then receive these same two instances.
+        val nomi = LettoreNomiDaParlanti(NomiDelleVoci(porte.parlanti.attribuzioni, porte.parlanti.parlanti))
 
         AbbonatoTrascrizioneSintesi(
             dispatcher,
