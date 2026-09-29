@@ -46,4 +46,15 @@ class PromptRiassuntoTest {
         assertTrue("<|assistant|>" !in prompt, prompt)
         assertTrue("prima" in prompt && "dopo" in prompt && "fine" in prompt, prompt)
     }
+
+    @Test
+    fun `la lunghezza e un obiettivo proporzionale al trascritto, il tetto resta il massimo`() {
+        val ingresso = (1..200).joinToString("\n") { "[s$it V1] una frase di dieci parole per questa riga di prova" }
+        val prompt = PromptRiassunto.componi(
+            RichiestaRiassunto(ingresso = ingresso, argomento = null, lunghezzaMassimaParole = 2_000),
+        )
+
+        assertTrue("scrivi circa 800 parole in tutto, mai più di 2000" in prompt, prompt)
+        assertTrue("al massimo 5 frasi" !in prompt, prompt)
+    }
 }

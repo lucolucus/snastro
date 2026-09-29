@@ -29,6 +29,7 @@ import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.dominio.LunghezzaMassimaParole
+import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import java.nio.file.Files
 import java.nio.file.Path
@@ -85,6 +86,8 @@ class BenchmarkRiassuntoTest {
         val avviato = eventi.single { it.first is RiassuntoAvviato }.second
         val pronto = eventi.singleOrNull { it.first is RiassuntoPronto }?.second
         val riassunto = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        val paroleTrascritto = segmenti.sumOf { parole(it.testo) }
+        val paroleRiassunto = parole(testoRiassunto(riassunto))
         val secondi = pronto?.let { (it - avviato) / NANOS_PER_SECONDO.toDouble() }
         println(
             """
@@ -94,11 +97,24 @@ class BenchmarkRiassuntoTest {
               misure: ${misure.singleOrNull()}
               elementi: decisioni ${riassunto.decisioni.size}, questioni ${riassunto.questioniAperte.size}, azioni ${riassunto.azioni.size}, punti chiave ${riassunto.puntiChiave.size}, omessi ${riassunto.omessi}
               picco RSS: ${picco.massimoKb / KB_PER_MB} MB
+              parole: trascritto $paroleTrascritto, riassunto $paroleRiassunto
             """.trimIndent(),
         )
+        println("--- riassunto ---\n${testoRiassunto(riassunto)}\n--- fine ---")
         assertTrue(riassunto.pronto, "il Riassunto non e pronto: ${riassunto.stato} ${riassunto.motivoFallimento}")
         assertTrue(checkNotNull(secondi) <= LIMITE_SECONDI, "RiassuntoAvviato -> RiassuntoPronto in $secondi s > 600 s")
     }
+
+    /** The Riassunto's text as the reader sees it (Sommario, then each list), for the word count and the print. */
+    private fun testoRiassunto(r: Riassunto): String = buildList {
+        r.sommario?.let { add(it.testo.codifica()) }
+        r.decisioni.forEach { add("[decisione] ${it.testo.codifica()}") }
+        r.questioniAperte.forEach { add("[questione] ${it.testo.codifica()}") }
+        r.azioni.forEach { add("[azione] ${it.testo.codifica()}") }
+        r.puntiChiave.forEach { add("[punto] ${it.testo.codifica()}") }
+    }.joinToString("\n")
+
+    private fun parole(testo: String): Int = testo.split(Regex("\\s+")).count { it.isNotBlank() }
 
     private fun fileModello(): Path {
         val esplicito = System.getProperty("snastro.benchmark.modello")?.takeIf { it.isNotBlank() }

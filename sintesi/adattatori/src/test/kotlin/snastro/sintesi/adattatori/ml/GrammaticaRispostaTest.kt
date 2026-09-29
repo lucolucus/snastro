@@ -6,7 +6,9 @@ import kotlin.test.assertTrue
 
 /** AC-S159: the bounds of the answer grammar (GBNF of schema v1, ADR 0026 §5), inside the gate. */
 class GrammaticaRispostaTest {
-    private val regole: Map<String, String> = GrammaticaRisposta.TESTO.lines()
+    private val regole: Map<String, String> = regoleDi(GrammaticaRisposta.per(6))
+
+    private fun regoleDi(grammatica: String): Map<String, String> = grammatica.lines()
         .filter { "::=" in it && !it.trimStart().startsWith("#") }
         .associate { it.substringBefore("::=").trim() to it.substringAfter("::=").trim() }
 
@@ -15,6 +17,14 @@ class GrammaticaRispostaTest {
         listOf("elenco-el" to "el", "elenco-az" to "az", "elenco-pc" to "pc").forEach { (lista, elemento) ->
             assertEquals("\"[\" ( $elemento ( \",\" ws $elemento ){0,5} )? \"]\"", regole.getValue(lista))
         }
+    }
+
+    @Test
+    fun `il tetto delle liste segue la richiesta`() {
+        val regole40 = regoleDi(GrammaticaRisposta.per(40))
+
+        assertEquals("\"[\" ( el ( \",\" ws el ){0,39} )? \"]\"", regole40.getValue("elenco-el"))
+        assertTrue("@" !in GrammaticaRisposta.per(12), "nessun segnaposto resta nella grammatica")
     }
 
     @Test

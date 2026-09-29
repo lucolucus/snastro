@@ -161,7 +161,7 @@ class ModelloLinguisticoLlamaTest {
 
         val opzioni = backend.opzioni.single()
         assertEquals(9_262, opzioni.maxTokens)
-        assertEquals(GrammaticaRisposta.TESTO, opzioni.grammar)
+        assertEquals(GrammaticaRisposta.per(MisuraRisposta.di(richiesta).massimoVoci), opzioni.grammar)
         assertEquals("root", opzioni.grammarRoot)
         assertTrue(opzioni.lazyGrammar)
     }

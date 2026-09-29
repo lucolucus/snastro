@@ -197,7 +197,7 @@ public class ModelloLinguisticoLlama(
 
         private fun opzioni(richiesta: RichiestaRiassunto) = GenerateOptions(
             maxTokens = maxTokens(richiesta.lunghezzaMassimaParole),
-            grammar = GrammaticaRisposta.TESTO,
+            grammar = GrammaticaRisposta.per(MisuraRisposta.di(richiesta).massimoVoci),
             lazyGrammar = true,
             sampling = CAMPIONAMENTO,
         )

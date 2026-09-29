@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0004 (System.load admits ./llm/), ADR 0021 §4 (input line) and §5 (LimiteIngresso, deferred items), ADR 0025 §5 (catalogue values); infra-notes (Local LLM, Riassunto NFR); context-map (spike closed, budget line)
 closes_spike: runtime-llm-in-app
 decided: 2026-09-26 · user (runtime, INV-S9 bound, calibrations), from spike evidence features/sintesi/spikes/runtime-llm-in-app.md
-amended: 2026-09-29   # dated note, §4: the 10 s Annullato bound counts from AFTER the model open completes; a cold first open (10.7-14.5 s) is not interruptible. Source: sintesi D-0014. Earlier: "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
+amended: 2026-09-30   # §5: length target + list bound per request (MisuraRisposta) [user]. Earlier 2026-09-29: dated note, §4: the 10 s Annullato bound counts from AFTER the model open completes; a cold first open (10.7-14.5 s) is not interruptible. Source: sintesi D-0014. Earlier: "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0026-llm-non-versionato.sh
   # the System.load admission (now ./llama-jni/, ADR 0027) is enforced by ADR 0004's own check (amended
@@ -120,6 +120,12 @@ a chunked prefill/generation cancel point. `AC-S152` and the opt-in `ModelloLing
 their cancel past the open, never during it.)*
 
 ### 5. Context budget, output bound, `LimiteIngresso` [user]
+> **Amended 2026-09-30 [user]: the length is a target, the list bound follows it.** User report: "the Riassunto
+> stays short" — measured on New Recording 4 (≈ 2 000 words): 635 words, every list exactly at the 6-item bound. The
+> prompt now asks for a TARGET of ≈ 40 % of the transcript's words (rounded to 50, at least 250, never above the cap)
+> with a Sommario of ≈ 30 % of it, and each list's grammar bound is one item per 60 target words, in **[6, 40]**
+> (`MisuraRisposta`, `GrammaticaRisposta.per`). `fonti` ≤ 6 and `max_tokens` (from the cap) are unchanged, so the
+> output is still bounded twice.
 > **Amended 2026-09-29 [user]: limits lifted, same model.** The word cap goes to **[300, 10 000]** (default 2000):
 > `max_tokens` at 10 000 = 35 512. `n_ctx` is no longer fixed: each run opens ⌈(estimate of the formatted prompt +
 > `max_tokens`) / 1024⌉ × 1024, never below 40 960 (inputs ≤ ≈ 1 h 10 open exactly as measured below) nor above the

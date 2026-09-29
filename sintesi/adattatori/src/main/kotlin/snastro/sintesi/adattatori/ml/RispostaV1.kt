@@ -41,7 +41,11 @@ internal object RispostaV1 {
         )
     }
 
-    /** Each element of the list [valore] (keys `testo`, `fonti` + [altre]), or `null` if one does not fit. */
+    /**
+     * Each element of the list [valore] (keys `testo`, `fonti` + [altre]), or `null` if one does not fit. An element
+     * whose text repeats an earlier one of the same list ([chiaveTesto]) is dropped (2026-09-30: with a larger list
+     * bound the model can loop, re-emitting the same items to fill it).
+     */
     private fun <T> elementi(
         valore: Any?,
         altre: Set<String>,
@@ -54,8 +58,15 @@ internal object RispostaV1 {
             val testo = campi["testo"] as? String ?: return null
             val fonti = (campi["fonti"] as? List<*>)?.map { intero(it) ?: return null } ?: return null
             val voce = altre.singleOrNull()?.let { chiave -> campi[chiave]?.let { intero(it) ?: return null } }
-            crea(VociNelTesto.canonico(testo, legenda), fonti, voce)
-        }
+            val canonico = VociNelTesto.canonico(testo, legenda)
+            chiaveTesto(canonico) to crea(canonico, fonti, voce)
+        }?.distinctBy { it.first }?.map { it.second }
+
+    /** Case, spacing and final punctuation do not make a different item. */
+    private fun chiaveTesto(testo: String): String =
+        testo.lowercase().replace(SPAZI, " ").trim().trimEnd('.', ';', '!', '?', ' ')
+
+    private val SPAZI = Regex("""\s+""")
 
     private fun intero(v: Any?): Int? = (v as? Long)?.takeIf { it in Int.MIN_VALUE..Int.MAX_VALUE }?.toInt()
 }

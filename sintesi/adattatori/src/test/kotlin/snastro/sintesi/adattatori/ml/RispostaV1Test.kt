@@ -39,6 +39,27 @@ class RispostaV1Test {
     }
 
     @Test
+    fun `una voce ripetuta nella stessa lista e scartata, anche con maiuscole spazi o punto finale diversi`() {
+        val r = RispostaV1.leggi(
+            """{"sommario":null,"decisioni":[],"questioni_aperte":[],"azioni":[
+                {"testo":"Preparare le carte.","fonti":[1],"responsabile":1},
+                {"testo":"Verificare la mappa","fonti":[2],"responsabile":2},
+                {"testo":"preparare  le carte","fonti":[3],"responsabile":1}],
+                "punti_chiave":[{"testo":"Preparare le carte.","fonti":[1],"parlante":null}]}""",
+            emptySet(),
+        )
+
+        assertEquals(
+            listOf(
+                AzioneRisposta("Preparare le carte.", listOf(1), 1),
+                AzioneRisposta("Verificare la mappa", listOf(2), 2),
+            ),
+            assertNotNull(r).azioni,
+        )
+        assertEquals(1, r.puntiChiave.size) // only within the same list
+    }
+
+    @Test
     fun `AC-S154 gli escape JSON sono decodificati`() {
         val r = RispostaV1.leggi(
             RISPOSTA_VALIDA.replace("Combattimento a turni.", """A \"turni\"\ncon \u00e8 e \\"""),
