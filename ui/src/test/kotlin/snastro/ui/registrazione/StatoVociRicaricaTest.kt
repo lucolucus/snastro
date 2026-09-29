@@ -41,6 +41,7 @@ private fun unoStatoVuoto(trascritto: TrascrittoView) = MutableStateFlow<Registr
         barra = LettoreUiStato.Inattivo,
         audioDisponibile = true,
         documentoPercorso = null,
+        contenutoRiassunto = {},
     ),
 )
 

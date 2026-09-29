@@ -138,6 +138,15 @@ class StileRenderCheckTest {
         onNodeWithText("In coda · 2").assertIsDisplayed()
     }
 
+    // Pre-release finding #152 (rework): [TipoChipStato.InCoda.posizione] can be `null` (the
+    // Riassunto tab's own queue, unlike S2's, may not know its position yet) — the chip falls back
+    // to the plain label instead of e.g. "In coda · null".
+    @Test
+    fun `AC-565 rework il testo di InCoda senza posizione nota`() = runDesktopComposeUiTest {
+        setContent { SnastroTema(riduciMovimento = true) { ChipStato(TipoChipStato.InCoda(null)) } }
+        onNodeWithText("In coda").assertIsDisplayed()
+    }
+
     @Test
     fun `AC-565 InCorso mostra la fase e il tempo trascorso in formato AC-557`() = runDesktopComposeUiTest {
         setContent {

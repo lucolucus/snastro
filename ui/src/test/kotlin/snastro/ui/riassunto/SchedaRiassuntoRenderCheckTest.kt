@@ -24,6 +24,8 @@ import snastro.sintesi.applicazione.letture.RiassuntoMostrato
 import snastro.sintesi.applicazione.letture.VoceVista
 import snastro.ui.SnastroTema
 import snastro.ui.stile.LocalSnastroColori
+import snastro.ui.stile.TAG_EMPTY_STATE
+import snastro.ui.stile.TAG_PALLINO_IN_CORSO
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.assertTrue
@@ -108,9 +110,9 @@ private fun statoNonDisponibile() = unDati(
     nonDisponibileTesto = "La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa).",
 )
 
-private fun statoInCoda() = unDati(richiesta = RichiestaUi.InAttesa("In coda · 2"))
+private fun statoInCoda() = unDati(richiesta = RichiestaUi.InAttesa(2))
 
-private fun statoInCorso() = unDati(richiesta = RichiestaUi.InCorso("Sto riassumendo… 1:12"))
+private fun statoInCorso() = unDati(richiesta = RichiestaUi.InCorso(72_000))
 
 /** AC-S140: a minimal shown Riassunto — content-order assertions (states 1/5/6/7 "con contenuto")
  * only need SOME content, not the rich AC-S140 fixture below. */
@@ -191,6 +193,11 @@ private fun statoInCorsoConContenuto() = statoInCorso().copy(contenuto = contenu
 /** AC-S139: a `Riassumi` answered with a race's `ErroreSintesi` — rendered inline, above the privacy line. */
 private fun statoConMessaggioErrore() = unDati(messaggioErrore = MESSAGGIO_ERRORE_RIASSUNTO_GIA_APERTO)
 
+/** Pre-release finding #155 (rework): `inAlto` (in_corso) + a shown Riassunto + a race's own inline
+ * error, all at once — the combination the bottom-fixed placement used to fail. */
+private fun statoInCorsoConContenutoEMessaggio() =
+    statoInCorsoConContenuto().copy(messaggioErrore = MESSAGGIO_ERRORE_RIASSUNTO_GIA_APERTO)
+
 /**
  * AC-S140: every state 1..12 at 1280×800/1024×640, light and a representative dark subset — a
  * `pronto` fixture with ≥ 12 Decisioni, 5 Fonti on one element, a 40-character Nome, an unattributed
@@ -219,9 +226,13 @@ class SchedaRiassuntoRenderCheckTest {
     fun `AC-S136 state 12 caricamento scuro a 1024x640`() =
         verifica("caricamento", RiassuntoUiStato.Caricamento, PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
 
+    // Pre-release finding #152 (rework, MED): state 1 used to be a plain Column, not the shared
+    // EmptyState pattern the ux-proposal names — this fails on the OLD code (no such tag existed).
     @Test
     fun `AC-S125 state 1 modello non installato a 1280x800`() =
-        verifica("modello-non-installato", statoModelloNonInstallato(), LARGA, ALTA)
+        verifica("modello-non-installato", statoModelloNonInstallato(), LARGA, ALTA) {
+            onNodeWithTag(TAG_EMPTY_STATE).assertIsDisplayed()
+        }
 
     @Test
     fun `AC-S125 state 1 modello non installato a 1024x640`() =
@@ -282,8 +293,12 @@ class SchedaRiassuntoRenderCheckTest {
     fun `AC-S127 state 3 download fallito scuro a 1024x640`() =
         verifica("download-fallito", statoDownloadFallito(), PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
 
+    // Pre-release finding #152 (rework, MED): state 4 too, ux row 4's own "EmptyState 'Nessun
+    // riassunto ancora.'".
     @Test
-    fun `AC-S128 state 4 nessun riassunto a 1280x800`() = verifica("nessun-riassunto", unDati(), LARGA, ALTA)
+    fun `AC-S128 state 4 nessun riassunto a 1280x800`() = verifica("nessun-riassunto", unDati(), LARGA, ALTA) {
+        onNodeWithTag(TAG_EMPTY_STATE).assertIsDisplayed()
+    }
 
     @Test
     fun `AC-S128 state 4 nessun riassunto a 1024x640`() =
@@ -328,8 +343,15 @@ class SchedaRiassuntoRenderCheckTest {
             PICCOLA_ALTA,
         ) { assertAreaSotto(TAG_NON_DISPONIBILE_TEST) }
 
+    // Pre-release finding #152 (rework, MED): state 6 used to be plain `Text` (its own font-metric
+    // height), not a real 24dp-tall pill [ChipStato] — the fixed chip height is what actually tells
+    // the two apart (the text itself, "In coda · 2", is identical either way).
     @Test
-    fun `AC-S130 state 6 in coda a 1280x800`() = verifica("in-coda", statoInCoda(), LARGA, ALTA)
+    fun `AC-S130 state 6 in coda a 1280x800`() = verifica("in-coda", statoInCoda(), LARGA, ALTA) {
+        onNodeWithText("In coda · 2").assertIsDisplayed()
+        val altezza = onNodeWithTag(TAG_IN_CODA_TEST).getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        assertTrue(altezza.value in 23f..25f, "state 6 non e' un vero StatusChip (alto $altezza, atteso 24dp)")
+    }
 
     @Test
     fun `AC-S130 state 6 in coda a 1024x640`() =
@@ -355,8 +377,12 @@ class SchedaRiassuntoRenderCheckTest {
             assertStatoSopra(TAG_IN_CODA_TEST)
         }
 
+    // Pre-release finding #152 (rework, MED): state 7 had NO pulsing dot at all — this tag only
+    // exists on [snastro.ui.stile.ChipStato]'s own InCorso dot, so it fails on the OLD plain-Text code.
     @Test
-    fun `AC-S131 state 7 in corso a 1280x800`() = verifica("in-corso", statoInCorso(), LARGA, ALTA)
+    fun `AC-S131 state 7 in corso a 1280x800`() = verifica("in-corso", statoInCorso(), LARGA, ALTA) {
+        onNodeWithTag(TAG_PALLINO_IN_CORSO, useUnmergedTree = true).assertIsDisplayed()
+    }
 
     @Test
     fun `AC-S131 state 7 in corso a 1024x640`() =
@@ -456,6 +482,20 @@ class SchedaRiassuntoRenderCheckTest {
     fun `AC-S139 un ErroreSintesi mostra il messaggio inline sopra la riga privacy a 1024x640`() =
         verifica("messaggio-errore", statoConMessaggioErrore(), PICCOLA_LARGA, PICCOLA_ALTA) {
             onNodeWithTag(TAG_MESSAGGIO_ERRORE_TEST).assertIsDisplayed()
+        }
+
+    // Pre-release finding #155 (rework, MED): on states 6/7/10 (`inAlto`) the inline error used to be
+    // fixed right before the privacy line — past a shown Riassunto's own content, below the fold.
+    // With a shown Riassunto present, it must now land ABOVE the content, next to the top status.
+    @Test
+    fun `AC-S131 rework un ErroreSintesi durante in_corso resta sopra il Riassunto mostrato, non sotto`() =
+        verifica("in-corso-messaggio-errore", statoInCorsoConContenutoEMessaggio(), LARGA, ALTA) {
+            val errore = onNodeWithTag(TAG_MESSAGGIO_ERRORE_TEST).getUnclippedBoundsInRoot()
+            val contenuto = onNodeWithTag(TAG_CONTENUTO_TEST).getUnclippedBoundsInRoot()
+            assertTrue(
+                errore.bottom <= contenuto.top,
+                "il messaggio d'errore deve restare sopra il Riassunto mostrato quando lo stato e' in alto",
+            )
         }
 
     /** AC-S129/AC-S125 (rework FAIL 2): the bottom-placed area never overlaps the content above it. */

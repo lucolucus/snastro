@@ -88,13 +88,15 @@ data class RigaRegistrazione(
     val confermaRitrascrivi: Boolean = false,
     val ritrascrizioneFallita: String? = null,
     val annullabile: Boolean = false,
-    val eliminazione: StatoEliminazione = StatoEliminazione.Assente,
+    val eliminazione: StatoEliminazione = StatoEliminazione.Disponibile,
     val confermaElimina: Boolean = false,
 )
 
 /**
- * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu. [Assente] — the fixture/test default,
- * never produced by the presenter itself — means no More menu shows at all, not just a hidden item.
+ * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu — ALWAYS one of these two (pre-release
+ * finding #83, rework: the sealed hierarchy used to carry a third `Assente` case the presenter never
+ * actually produced, `eliminazioneDi` mapping only ever to [Disponibile]/[NonDisponibile] — a
+ * release-flag leftover reachable only from a fixture, retired rather than kept "just in case").
  */
 sealed interface StatoEliminazione {
     /** NON_AVVIATA, FALLITA or Completata (with or without a failed re-run) — the item is enabled. */
@@ -102,9 +104,6 @@ sealed interface StatoEliminazione {
 
     /** An open Elaborazione (IN_ATTESA/IN_CORSO, plain or re-run) — disabled, [motivo] is its caption. */
     data class NonDisponibile(val motivo: String) : StatoEliminazione
-
-    /** The row's default before the presenter computes its real state: no More menu on this row at all. */
-    data object Assente : StatoEliminazione
 }
 
 /**

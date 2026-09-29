@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -18,9 +19,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 
 private val ALTEZZA_SCHEDA = 28.dp
@@ -48,13 +52,18 @@ public fun SchedeSn(
         shape = RoundedCornerShape(SnastroMisure.radiusControl),
         modifier = modifier.fillMaxWidth(),
     ) {
-        Row(modifier = Modifier.padding(PADDING_TRACCIA).fillMaxWidth()) {
+        // AC-116 (rework): a SINGLE tab has nothing to switch to — [interattiva] `false` then drops
+        // the Tab role/selectable/focus ring below, so it stops being a dead keyboard stop (the Voci
+        // panel's own one-tab header, `SchermataPannelloVoci.kt`, is this control's first such caller).
+        val interattiva = schede.size > 1
+        Row(modifier = Modifier.padding(PADDING_TRACCIA).fillMaxWidth().selectableGroup()) {
             schede.forEachIndexed { indice, testo ->
                 SchedaSn(
                     indice = indice,
                     testo = testo,
                     selezionata = indice == selezionata,
                     segno = segni[indice],
+                    interattiva = interattiva,
                     onClick = { onSeleziona(indice) },
                     modifier = Modifier.weight(1f).testTag("scheda-$indice"),
                 )
@@ -70,6 +79,7 @@ private fun SchedaSn(
     testo: String,
     selezionata: Boolean,
     segno: SegnoScheda?,
+    interattiva: Boolean,
     onClick: () -> Unit,
     modifier: Modifier,
 ) {
@@ -78,17 +88,36 @@ private fun SchedaSn(
     val focused by interazione.collectIsFocusedAsState()
     val sfondo = if (selezionata) colori.raised else Color.Transparent
     val testoColore = if (selezionata) colori.ink else colori.inkMuted
+    val forma = RoundedCornerShape(SnastroMisure.radiusControl)
     Surface(
+        // AC-115 (rework): the ring is drawn OUTSIDE the tab's own bounds (`anelloFocus` paints past
+        // them by design) so it must sit OUTSIDE the clip below, never covered by the raised
+        // neighbour's own shadow; the `clip(forma)` — applied BEFORE `selectable` — confines the
+        // ripple/indication [selectable] paints to the SAME rounded shape [Surface] itself uses,
+        // instead of the ripple bleeding past the corners as a full rectangle.
         modifier = modifier
-            .selectable(
-                selected = selezionata,
-                interactionSource = interazione,
-                indication = LocalIndication.current,
-                role = Role.Tab,
-                onClick = onClick,
+            .anelloFocus(colori.focus, focused, SnastroMisure.radiusControl)
+            .clip(forma)
+            .then(
+                // AC-116: no real selection with a single tab — plain, non-focusable chrome only.
+                if (interattiva) {
+                    Modifier.selectable(
+                        selected = selezionata,
+                        interactionSource = interazione,
+                        indication = LocalIndication.current,
+                        role = Role.Tab,
+                        onClick = onClick,
+                    )
+                } else {
+                    Modifier
+                },
             )
-            .anelloFocus(colori.focus, focused, SnastroMisure.radiusControl),
-        shape = RoundedCornerShape(SnastroMisure.radiusControl),
+            .then(
+                // AC-114 (rework): the queued/running mark is otherwise silent to a screen reader —
+                // the tab's own selectable semantics gain a stateDescription naming it.
+                if (segno != null) Modifier.semantics { stateDescription = descrizioneSegno(segno) } else Modifier,
+            ),
+        shape = forma,
         color = sfondo,
         contentColor = testoColore,
         shadowElevation = if (selezionata) 1.dp else 0.dp,
@@ -102,6 +131,12 @@ private fun SchedaSn(
             segno?.let { SegnoSchedaVista(it, testoColore, Modifier.testTag("scheda-$indice-segno")) }
         }
     }
+}
+
+/** AC-114 (rework): the [SegnoScheda] mark's own accessible name — never left to a colour/shape alone. */
+private fun descrizioneSegno(segno: SegnoScheda): String = when (segno) {
+    SegnoScheda.InAttesa -> "in coda"
+    SegnoScheda.InCorso -> "in corso"
 }
 
 @Composable

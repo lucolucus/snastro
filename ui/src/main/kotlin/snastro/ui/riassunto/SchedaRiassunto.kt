@@ -35,6 +35,8 @@ import snastro.kernel.VoceId
 import snastro.sintesi.applicazione.letture.VoceVista
 import snastro.ui.stile.BottoneSn
 import snastro.ui.stile.CampoSn
+import snastro.ui.stile.ChipStato
+import snastro.ui.stile.EmptyState
 import snastro.ui.stile.EtichettaVoce
 import snastro.ui.stile.GruppoFonti
 import snastro.ui.stile.Icona
@@ -42,12 +44,14 @@ import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
+import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.testi.AVVISO_SUPERATO
 import snastro.ui.testi.CAPTION_SALVATO
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_ARGOMENTO
 import snastro.ui.testi.ETICHETTA_CAMBIA
+import snastro.ui.testi.ETICHETTA_IN_CORSO
 import snastro.ui.testi.ETICHETTA_RIASSUMI
 import snastro.ui.testi.ETICHETTA_RIASSUMI_DI_NUOVO
 import snastro.ui.testi.ETICHETTA_RIPROVA
@@ -149,14 +153,21 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
             .testTag(TAG_RADICE),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
     ) {
-        if (inAlto) AreaAzioneVista(area, stato, azioni)
+        // AC-S139 (pre-release finding #155, rework, MED): [messaggioErrore] sits right after
+        // WHICHEVER area copy actually rendered — never fixed at the very bottom, past a long
+        // Riassunto — so on states 6/7/10 (`inAlto`) it lands near the TOP of this scrollable
+        // Column, never below the fold under the content that follows it.
+        if (inAlto) {
+            AreaAzioneVista(area, stato, azioni)
+            MessaggioErroreVista(stato.messaggioErrore)
+        }
         stato.contenuto?.let { contenuto ->
             if (contenuto.superato) AvvisoSuperato()
             SezioniContenuto(contenuto)
         }
-        if (!inAlto) AreaAzioneVista(area, stato, azioni)
-        stato.messaggioErrore?.let {
-            MessaggioTonale(it, LocalSnastroColori.current.danger, Icona.Alert, Modifier.testTag(TAG_MESSAGGIO_ERRORE))
+        if (!inAlto) {
+            AreaAzioneVista(area, stato, azioni)
+            MessaggioErroreVista(stato.messaggioErrore)
         }
         Text(
             text = PRIVACY_RIASSUNTO,
@@ -171,6 +182,13 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
  * any previously shown Riassunto — see [ContenutoTab]'s own KDoc for the full precedence. */
 private fun AreaAzione.inAlto(): Boolean =
     this is AreaAzione.InCoda || this is AreaAzione.InCorso || this is AreaAzione.Fallito
+
+@Composable
+private fun MessaggioErroreVista(messaggio: String?) {
+    messaggio?.let {
+        MessaggioTonale(it, LocalSnastroColori.current.danger, Icona.Alert, Modifier.testTag(TAG_MESSAGGIO_ERRORE))
+    }
+}
 
 /** AC-S133: a warning notice INSIDE the tab — never [snastro.ui.stile.BannerSn] (ux: "not a screen Banner"). */
 @Composable
@@ -301,19 +319,21 @@ private fun AreaAzioneVista(area: AreaAzione, stato: RiassuntoUiStato.Dati, azio
     }
 }
 
-/** AC-S125: state 1 — no Argomento field, no Riassumi (Q-S1 = download only). */
+/** AC-S125: state 1 — [EmptyState] (pre-release finding #152), no Argomento field, no Riassumi
+ * (Q-S1 = download only). */
 @Composable
 private fun AreaScaricaModello(area: AreaAzione.ScaricaModello, azioni: AzioniRiassunto) {
-    val colori = LocalSnastroColori.current
-    Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3)) {
-        Text(area.messaggio, style = LocalSnastroTipografia.current.body, color = colori.ink)
-        BottoneSn(
-            etichetta = area.etichettaBottone,
-            onClick = azioni.scaricaModello,
-            variante = VarianteBottone.Primario,
-            modifier = Modifier.testTag(TAG_SCARICA_MODELLO),
-        )
-    }
+    EmptyState(
+        messaggio = area.messaggio,
+        azione = {
+            BottoneSn(
+                etichetta = area.etichettaBottone,
+                onClick = azioni.scaricaModello,
+                variante = VarianteBottone.Primario,
+                modifier = Modifier.testTag(TAG_SCARICA_MODELLO),
+            )
+        },
+    )
 }
 
 /** AC-S126: state 2 — a determinate progress bar, nothing else actionable. */
@@ -359,23 +379,21 @@ private fun AreaDownloadFallito(area: AreaAzione.DownloadFallito, azioni: Azioni
     }
 }
 
-/** AC-S130: state 6 — queued chip; Argomento/Riassumi hidden; no Annulla. */
+/** AC-S130: state 6 — a real [StatusChip][ChipStato] (pre-release finding #152: was plain text),
+ * Argomento/Riassumi hidden, no Annulla. */
 @Composable
 private fun AreaInCoda(area: AreaAzione.InCoda) {
-    Text(
-        text = area.testo,
-        style = LocalSnastroTipografia.current.label,
-        color = LocalSnastroColori.current.inkMuted,
-        modifier = Modifier.testTag(TAG_IN_CODA),
-    )
+    ChipStato(TipoChipStato.InCoda(area.posizione), modifier = Modifier.testTag(TAG_IN_CODA))
 }
 
-/** AC-S131: state 7 — elapsed time (ticking) + the "circa 3 minuti" note. */
+/** AC-S131: state 7 — the SAME [ChipStato]/[TipoChipStato.InCorso] S2 already shows (AC-S46: no new
+ * type), so its pulsing dot comes for free (pre-release finding #152: was plain text, no dot) +
+ * the "circa 3 minuti" note. */
 @Composable
 private fun AreaInCorso(area: AreaAzione.InCorso) {
     val colori = LocalSnastroColori.current
     Column(modifier = Modifier.testTag(TAG_IN_CORSO)) {
-        Text(area.testo, style = LocalSnastroTipografia.current.label, color = colori.ink)
+        ChipStato(TipoChipStato.InCorso(ETICHETTA_IN_CORSO, area.trascorsoMs))
         Text(NOTA_DURATA_RIASSUNTO, style = LocalSnastroTipografia.current.caption, color = colori.inkMuted)
     }
 }
@@ -402,17 +420,12 @@ private fun AreaNonDisponibile(area: AreaAzione.NonDisponibile) {
     }
 }
 
-/** AC-S128/S132/S133/S137/S138: states 4/8/9 — Argomento + lunghezza massima + Riassumi/di nuovo. */
+/** AC-S128/S132/S133/S137/S138: states 4/8/9 — Argomento + lunghezza massima + Riassumi/di nuovo.
+ * State 4 ([!area.nuovo]) leads with [EmptyState] (pre-release finding #152, ux row 4). */
 @Composable
 private fun AreaAzionabile(area: AreaAzione.Azionabile, stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto) {
     Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3)) {
-        if (!area.nuovo) {
-            Text(
-                text = MESSAGGIO_NESSUN_RIASSUNTO,
-                style = LocalSnastroTipografia.current.body,
-                color = LocalSnastroColori.current.ink,
-            )
-        }
+        if (!area.nuovo) EmptyState(messaggio = MESSAGGIO_NESSUN_RIASSUNTO)
         FormRiassumi(stato, azioni, if (area.nuovo) ETICHETTA_RIASSUMI_DI_NUOVO else ETICHETTA_RIASSUMI)
     }
 }

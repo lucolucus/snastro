@@ -51,9 +51,10 @@ sealed interface RegistrazioneUiStato {
         val bannerRitrascrizione: String? = null,
         val bannerRitrascrizionePannello: String? = null,
         /** AC-S120: the Riassunto tab's own content, bound to this Registrazione by the presenter
-         * ([SorgenteRiassuntoS3.contenuto] partially applied) — `null` only in a fixture/test that does
-         * not build [Dati] through the presenter (the presenter itself always supplies it, ADR 0030 §1). */
-        val contenutoRiassunto: (@Composable () -> Unit)? = null,
+         * ([SorgenteRiassuntoS3.contenuto] partially applied). MANDATORY, never nullable — ADR 0030 §1,
+         * U1: the single composition always wires it, so a fixture/test builds one too (pre-release
+         * finding #83: a nullable field here was a release-flag leftover from before ADR 0030). */
+        val contenutoRiassunto: @Composable () -> Unit,
         /** AC-S121: which tab is shown, kept per window ([SelezioneSchedaS3]) — irrelevant while
          * [contenutoRiassunto] is `null` (no tabs to select between). */
         val schedaSelezionata: SchedaS3 = SchedaS3.TRASCRIZIONE,
@@ -71,7 +72,6 @@ sealed interface RegistrazioneUiStato {
             get() = when {
                 bannerRitrascrizione != null ->
                     BannerSchermata.Ritrascrizione(bannerRitrascrizione, bannerRitrascrizionePannello)
-                contenutoRiassunto == null -> null
                 !audioDisponibile -> BannerSchermata.AudioMancante
                 else ->
                     pannello?.carte

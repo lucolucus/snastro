@@ -55,7 +55,7 @@ class RiassuntoUiStatoTest {
         val modello = ModelloUi.NonInstallato("messaggio", "bottone")
         val dati = unDati(
             modello = modello,
-            richiesta = RichiestaUi.InAttesa("In coda"),
+            richiesta = RichiestaUi.InAttesa(null),
             fallimentoTesto = "fallito",
             nonDisponibileTesto = "non disponibile",
             contenuto = unContenuto(),
@@ -66,43 +66,52 @@ class RiassuntoUiStatoTest {
     @Test
     fun `AC-S126 modello in download vince su richiesta fallimento e non disponibile`() {
         val modello = ModelloUi.InDownload("testo", 0.5f)
-        val dati = unDati(modello = modello, richiesta = RichiestaUi.InAttesa("In coda"), fallimentoTesto = "fallito")
+        val dati = unDati(modello = modello, richiesta = RichiestaUi.InAttesa(null), fallimentoTesto = "fallito")
         assertEquals(AreaAzione.Scaricando("testo", 0.5f), dati.areaAzione)
     }
 
     @Test
     fun `AC-S127 download fallito vince su richiesta fallimento e non disponibile`() {
         val modello = ModelloUi.DownloadFallito("messaggio")
-        val dati = unDati(modello = modello, richiesta = RichiestaUi.InAttesa("In coda"), fallimentoTesto = "fallito")
+        val dati = unDati(modello = modello, richiesta = RichiestaUi.InAttesa(null), fallimentoTesto = "fallito")
         assertEquals(AreaAzione.DownloadFallito("messaggio"), dati.areaAzione)
     }
 
     @Test
     fun `AC-S130 in_attesa vince su fallimento e non disponibile`() {
         val dati = unDati(
-            richiesta = RichiestaUi.InAttesa("In coda · 2"),
+            richiesta = RichiestaUi.InAttesa(2),
             fallimentoTesto = "fallito",
             nonDisponibileTesto = "non disponibile",
         )
-        assertEquals(AreaAzione.InCoda("In coda · 2"), dati.areaAzione)
+        assertEquals(AreaAzione.InCoda(2), dati.areaAzione)
     }
 
     @Test
     fun `AC-S131 in_corso vince su fallimento e non disponibile`() {
         val dati = unDati(
-            richiesta = RichiestaUi.InCorso("Sto riassumendo… 1:12"),
+            richiesta = RichiestaUi.InCorso(72_000),
             fallimentoTesto = "fallito",
             nonDisponibileTesto = "non disponibile",
         )
-        assertEquals(AreaAzione.InCorso("Sto riassumendo… 1:12"), dati.areaAzione)
+        assertEquals(AreaAzione.InCorso(72_000), dati.areaAzione)
     }
 
+    // D-0014 (pre-release finding #156, rework, MED): NonDisponibile now outranks Fallito — an
+    // enabled "Riprova" the recording being unavailable makes certain to be refused would otherwise
+    // show instead of the disabled "Riassumi" + caption.
     @Test
-    fun `AC-S134 fallito vince su non disponibile`() {
+    fun `AC-S134 rework non disponibile vince su fallito`() {
         val dati = unDati(
             fallimentoTesto = "Il riassunto non è riuscito: interrotto.",
             nonDisponibileTesto = "non disponibile",
         )
+        assertEquals(AreaAzione.NonDisponibile("non disponibile"), dati.areaAzione)
+    }
+
+    @Test
+    fun `AC-S134 fallito quando non disponibile e assente`() {
+        val dati = unDati(fallimentoTesto = "Il riassunto non è riuscito: interrotto.")
         assertEquals(AreaAzione.Fallito("Il riassunto non è riuscito: interrotto."), dati.areaAzione)
     }
 

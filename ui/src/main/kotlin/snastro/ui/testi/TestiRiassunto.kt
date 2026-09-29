@@ -7,26 +7,20 @@ package snastro.ui.testi
 
 import snastro.sintesi.applicazione.letture.MotivoNonDisponibile
 import snastro.sintesi.applicazione.porte.MotivoDownload
-import snastro.ui.formattaDurata
 
 /**
  * The Riassunto tab's own labels, Italian (dev-architecture `#presenter`: UI strings live in
- * `snastro.ui.testi`). Sizes/limits pinned by the pack's literal texts (2026-09-26): the model is
- * 6,2 GB, the length limit is "oltre 1 h 10 circa" — both provisional until their spikes
- * (`runtime-llm-in-app`/`contesto-lungo`) recompute them; ONE place each, here.
+ * `snastro.ui.testi`). The length limit is "oltre 1 h 10 circa" — provisional until its spike
+ * (`contesto-lungo`) recomputes it.
+ *
+ * Pre-release findings #148/#149 (rework, MED): the model's byte size and the Argomento character
+ * bound both used to be `:ui`-local literals duplicating, respectively, the app's model catalogue
+ * and `:sintesi:dominio Argomento.MASSIMO_CARATTERI` — CR-1(b) still keeps that VO itself out of
+ * `:ui`, so both bounds are instead PARAMETERS here, threaded in by the caller (ultimately `:avvio`,
+ * the app's one source for each) rather than re-declared.
  */
-private const val BYTE_MODELLO_LINGUISTICO: Long = 6_169_341_984
-
-/**
- * AC-S125/S137: mirrors `:sintesi:dominio Argomento.MASSIMO_CARATTERI` — duplicated on purpose:
- * CR-1(b) lets `:ui` import a context's `dominio` ONLY for its `Errore<Contesto>` hierarchy, never a
- * plain VO, and no `:sintesi:applicazione` read-model carries this bound.
- */
-const val LIMITE_CARATTERI_ARGOMENTO: Int = 200
-
 const val ETICHETTA_ARGOMENTO: String = "Argomento (facoltativo)"
 const val PLACEHOLDER_ARGOMENTO: String = "Di cosa si parla, per lasciare fuori il resto"
-const val ERRORE_ARGOMENTO_TROPPO_LUNGO: String = "Al massimo 200 caratteri."
 
 const val MESSAGGIO_NESSUN_RIASSUNTO: String = "Nessun riassunto ancora."
 const val ETICHETTA_RIASSUMI: String = "Riassumi"
@@ -52,12 +46,13 @@ fun etichettaScaricaModello(dimensioneByte: Long): String =
 fun messaggioModelloInDownload(scaricatiByte: Long, totaliByte: Long): String =
     "Scarico il modello… ${formattaGigabyte(scaricatiByte)} di ${formattaGigabyte(totaliByte)} GB"
 
-/** AC-S127: one line per [MotivoDownload] — a plain enum, so the compiler already keeps this total. */
-fun messaggioDownloadFallito(motivo: MotivoDownload): String = when (motivo) {
+/** AC-S127: one line per [MotivoDownload] — a plain enum, so the compiler already keeps this total.
+ * [dimensioneModelloByte] is the app's own catalogue size (finding #149), never a local literal. */
+fun messaggioDownloadFallito(motivo: MotivoDownload, dimensioneModelloByte: Long): String = when (motivo) {
     MotivoDownload.ConnessioneInterrotta -> "La connessione si è interrotta."
     MotivoDownload.FileNonIntegro -> "Il file scaricato non è integro."
     MotivoDownload.SpazioInsufficiente ->
-        "Non c'è abbastanza spazio sul disco (servono ${formattaGigabyte(BYTE_MODELLO_LINGUISTICO)} GB)."
+        "Non c'è abbastanza spazio sul disco (servono ${formattaGigabyte(dimensioneModelloByte)} GB)."
     MotivoDownload.ScritturaFallita -> "Non è stato possibile salvare il modello sul disco."
 }
 
@@ -87,14 +82,15 @@ fun messaggioFallimento(codice: String): String {
     return "Il riassunto non è riuscito: $motivo."
 }
 
-/** AC-S130: 1-based; `null` = absent from the queue's snapshot ([snastro.ui.coda.PosizioniCoda] KDoc). */
-fun testoInCoda(posizione: Int?): String = if (posizione != null) "In coda · $posizione" else "In coda"
+/** AC-S131 (pre-release finding #152, rework): the fase label [ChipStato][snastro.ui.stile.ChipStato]
+ * shows for state 7 — [snastro.ui.stile.TipoChipStato.InCorso] renders it next to the elapsed time. */
+const val ETICHETTA_IN_CORSO: String = "Sto riassumendo"
 
-/** AC-S131: elapsed [formattaDurata] ("1:12" for 72 s) — the ticking text of the running status line. */
-fun testoInCorso(trascorsoMs: Long): String = "Sto riassumendo… ${formattaDurata(trascorsoMs)}"
+/** AC-S137: "n/200" — [limite] is [snastro.sintesi.dominio.Argomento.MASSIMO_CARATTERI] (finding #148). */
+fun contatoreArgomento(lunghezza: Int, limite: Int): String = "$lunghezza/$limite"
 
-/** AC-S137: "n/200". */
-fun contatoreArgomento(lunghezza: Int): String = "$lunghezza/$LIMITE_CARATTERI_ARGOMENTO"
+/** AC-S137: "Al massimo 200 caratteri." — [limite] as [contatoreArgomento]. */
+fun erroreArgomentoTroppoLungo(limite: Int): String = "Al massimo $limite caratteri."
 
 /** AC-S138: "Lunghezza massima: 2000 parole · vale per tutto il progetto" ("Cambia" is the view's own control). */
 fun testoLunghezzaMassima(parole: Int): String = "Lunghezza massima: $parole parole · vale per tutto il progetto"

@@ -201,6 +201,7 @@ private fun stato(
     soloLettura = soloLettura,
     bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
     bannerRitrascrizionePannello = bannerRitrascrizionePannello,
+    contenutoRiassunto = {},
 )
 
 /**
@@ -324,6 +325,11 @@ class RegistrazioneVociRenderCheckTest {
             "comando-in-corso",
             stato(pannello(listOf(CARTA_CANDIDATI.copy(inCorso = AttesaComando.IN_CORSO), CARTA_NESSUNA))),
         ) {
+            // Pre-release finding #83 (rework): the panel's own viewport shrank once the (now always
+            // mandatory) tab bar and a correctly-shown "da identificare" banner both take their real
+            // share of the screen above it — `performScrollToNode` is this file's own established
+            // idiom for that (AC-412/413 already does it).
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-in-corso"))
             onNodeWithTag("voce-2-in-corso").assertIsDisplayed()
             assertEquals(0, onAllNodes(hasText(ETICHETTA_ANNULLA)).fetchSemanticsNodes().size)
         }
@@ -420,6 +426,9 @@ class RegistrazioneVociRenderCheckTest {
             onNodeWithTag("registrazione-barra-selezione").assertIsDisplayed()
             onNodeWithTag("registrazione-riassegna").assertIsEnabled()
             onNodeWithTag("registrazione-dividi").assertIsEnabled()
+            // Pre-release finding #83 (rework): see AC-411's own note — the transcript list's
+            // viewport shrank too, now that the tab bar/banner both take their real share above it.
+            onNodeWithTag("registrazione-lista").performScrollToNode(hasTestTag("registrazione-seleziona-2"))
             onNodeWithTag("registrazione-seleziona-2").assertIsDisplayed()
         }
 
@@ -560,12 +569,17 @@ class RegistrazioneVociRenderCheckTest {
             ),
             azioni,
         ) {
-            onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
+            // Pre-release finding #83 (rework): see AC-411's own note — the panel/list viewport is now
+            // too short to keep BOTH row 1 and row 2 visible at once, so each is checked at its own
+            // scroll position (row 1 first, the list's own initial position; "registrazione-confermato-N"
+            // itself only exists once its row is actually composed).
             onNode(
                 hasContentDescription(TOOLTIP_FRASE_CONFERMATA) and hasTestTag("registrazione-confermato-1"),
                 useUnmergedTree = true,
             )
                 .assertIsDisplayed()
+            onNodeWithTag("registrazione-lista").performScrollToNode(hasTestTag("registrazione-seleziona-2"))
+            onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
             onNodeWithText(ETICHETTA_TOGLI_CONFERMA).assertIsEnabled().performClick()
         }
         assertEquals(true, tolta)
@@ -792,6 +806,8 @@ class RegistrazioneVociRenderCheckTest {
             ),
             scuro = true,
         ) {
+            // Pre-release finding #83 (rework): see AC-411's own note.
+            onNodeWithTag("registrazione-lista").performScrollToNode(hasTestTag("registrazione-seleziona-2"))
             onNodeWithTag("registrazione-confermato-2", useUnmergedTree = true).assertIsDisplayed()
         }
 
@@ -832,7 +848,11 @@ class RegistrazioneVociRenderCheckTest {
     @Test
     fun `AC-213 nuovoEvidenziato false rende E Nome Primario e Nuova persona Secondario`() =
         scena("ac213-conferma-primario", stato(pannello(listOf(CARTA_CANDIDATI)))) {
+            // Pre-release finding #83 (rework): see AC-411's own note — the card's own buttons can now
+            // sit below the panel's shrunken viewport, even the first one.
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-conferma"))
             assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-2-conferma"))
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-nuovo"))
             assertEquals(ColoriChiari.raised.toArgb(), coloreBottone("voce-2-nuovo"))
         }
 
@@ -848,6 +868,7 @@ class RegistrazioneVociRenderCheckTest {
         scena("ac213-un-solo-primario", stato(pannello(listOf(CARTA_CANDIDATI, CARTA_NESSUNA)))) {
             // voce-2 (first DaIdentificare card in list order, nuovoEvidenziato=false) keeps its own
             // Primario on 'conferma' — same assertion as the single-card case above.
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-2-conferma"))
             assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-2-conferma"))
             onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-3-nuovo"))
             // voce-3 is SECOND: even though its own nuovoEvidenziato=true would normally make 'nuovo'
@@ -858,6 +879,8 @@ class RegistrazioneVociRenderCheckTest {
     @Test
     fun `L761d aprire il modulo nuovo declassa il Primario della card, il Crea del modulo resta Primario`() =
         scena("l761d-crea-vs-primario-card", stato(pannello(listOf(CARTA_NESSUNA)))) {
+            // Pre-release finding #83 (rework): see AC-411's own note.
+            onNodeWithTag("voci-lista").performScrollToNode(hasTestTag("voce-3-nuovo"))
             assertEquals(ColoriChiari.accent.toArgb(), coloreBottone("voce-3-nuovo"))
             onNodeWithTag("voce-3-nuovo").performClick()
             onNodeWithTag("voce-3-modulo-nuovo").assertIsDisplayed()

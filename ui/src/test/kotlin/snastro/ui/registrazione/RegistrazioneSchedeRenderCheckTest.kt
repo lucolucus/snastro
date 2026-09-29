@@ -189,6 +189,44 @@ class RegistrazioneSchedeRenderCheckTest {
     fun `AC-S123 il banner di sola lettura vince su audio mancante e voci da identificare a 1024x640`() =
         verificaPrecedenzaRitrascrizione(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX)
 
+    // D-0014 (pre-release finding #180, rework, LOW): with Riassunto selected AND a Voci panel that
+    // WOULD otherwise show, the panel is hidden — the summary gets the full content area, nothing
+    // squeezed/clipped (also closes finding #128's own "right panel only Voci" gap: the fixture
+    // defaulted `pannello=null`, so this exact combination was never actually rendered before).
+    @Test
+    fun `AC-S120 rework scheda Riassunto selezionata nasconde il pannello Voci a 1280x800`() =
+        runDesktopComposeUiTest(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX) {
+            setContent {
+                SchermataRegistrazione(
+                    stato = unoStatoConSchede(schedaSelezionata = SchedaS3.RIASSUNTO, pannello = unPannello(2)),
+                    azioni = AZIONI_VUOTE,
+                    scuro = false,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag(TAG_CONTENUTO_RIASSUNTO).assertIsDisplayed()
+            onNodeWithTag("voci-pannello").assertDoesNotExist()
+            catturaPng("registrazione-schede-riassunto-pannello-nascosto", LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+        }
+
+    // AC-S120 "the right panel shows only Voci (no Riassunto tab there)": with Trascrizione selected,
+    // the panel stays exactly what it always was.
+    @Test
+    fun `AC-S120 rework scheda Trascrizione selezionata mostra ancora il pannello Voci a 1280x800`() =
+        runDesktopComposeUiTest(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX) {
+            setContent {
+                SchermataRegistrazione(
+                    stato = unoStatoConSchede(schedaSelezionata = SchedaS3.TRASCRIZIONE, pannello = unPannello(2)),
+                    azioni = AZIONI_VUOTE,
+                    scuro = false,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("voci-pannello").assertIsDisplayed()
+            onNodeWithText(ETICHETTA_SCHEDA_TRASCRIZIONE).assertIsDisplayed()
+            catturaPng("registrazione-schede-trascrizione-pannello", LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+        }
+
     @Test
     fun `AC-S123 le schede senza alcun banner a 1280x800`() =
         // Same fixture as AC-S120's default (Trascrizione selected, no condition true) — one state,
@@ -290,8 +328,11 @@ class RegistrazioneSchedeRenderCheckTest {
                 riduciMovimento = true,
             )
         }
-        // Exactly one screen Banner (AC-S123): the read-only one, never the other two.
+        // Exactly one screen Banner (AC-S123): the read-only one, never the other two (pre-release
+        // finding #128, rework: the absence of the other two was never actually asserted before).
         onNodeWithTag("registrazione-banner-ritrascrizione").assertIsDisplayed()
+        onNodeWithTag("registrazione-banner-audio-mancante").assertDoesNotExist()
+        onNodeWithTag("registrazione-banner-voci-da-identificare").assertDoesNotExist()
         catturaPng("registrazione-schede-precedenza-ritrascrizione", width, height)
     }
 

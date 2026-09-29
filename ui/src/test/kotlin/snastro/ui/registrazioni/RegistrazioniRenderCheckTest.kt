@@ -99,7 +99,7 @@ private fun unaRiga(
     confermaRitrascrivi: Boolean = false,
     ritrascrizioneFallita: String? = null,
     annullabile: Boolean = false,
-    eliminazione: StatoEliminazione = StatoEliminazione.Assente,
+    eliminazione: StatoEliminazione = StatoEliminazione.Disponibile,
     confermaElimina: Boolean = false,
 ) = RigaRegistrazione(
     registrazioneId = id,
@@ -981,8 +981,13 @@ class RegistrazioniRenderCheckTest {
             // ("Trascritta", not the former plain-text "Completata" — `ETICHETTA_COMPLETATA` retired).
             onNodeWithText("Trascritta").assertIsDisplayed()
             onNodeWithText(messaggioRitrascrizioneNonRiuscita("audio illeggibile")).assertIsDisplayed()
+            // Pre-release finding #83 (rework): the More menu is ALWAYS present now (never
+            // `StatoEliminazione.Assente`), so 'Ritrascrivi' lives there, never as its own row button.
+            onNodeWithTag("registrazioni-altre-azioni-${REG_1.valore}", useUnmergedTree = true).performClick()
             onNodeWithText(ETICHETTA_RITRASCRIVI).assertIsDisplayed()
-            catturaPng("registrazioni-ritrascrizione-non-riuscita", width, height, scuro)
+            // The menu opens its own Popup layer (a second semantics root) — same mechanism as
+            // `verificaMenuElimina` above, `catturaPngUltimaRadice` captures IT, not the window behind it.
+            catturaPngUltimaRadice("registrazioni-ritrascrizione-non-riuscita", width, height, scuro)
         }
 
     private fun verificaInCodaConAnnulla(width: Int, height: Int, scuro: Boolean = false) =

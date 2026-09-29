@@ -5,6 +5,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import androidx.compose.ui.unit.dp
 import snastro.ui.SnastroTema
@@ -65,50 +66,69 @@ class GruppoFontiTest {
     // gives it the FULL remaining main-axis space before the timecode is even measured — so once
     // `nome` needs to wrap, the timecode is left with near-zero space and Text wraps it one/two
     // characters per line (a tall, near-zero-width column) instead of staying one line — the PNGs
-    // show it as a stray ":"/"0" outside the pill. Both the AC's literal 40-character name and a
-    // longer (~77-character) real-world name, at both standard render-check window widths (AC-571:
-    // 1280 and 1024), so the fix doesn't depend on one particular screen size. A working chip keeps
-    // the timecode on ONE line ([SnastroTipografia.timecode]'s `lineHeight` is 16sp) and fully to
-    // the left of the pill's own right edge; the bug blows the timecode's height well past that.
+    // show it as a stray ":"/"0" outside the pill. A working chip keeps the timecode on ONE line
+    // ([SnastroTipografia.timecode]'s `lineHeight` is 16sp) and fully to the left of the pill's own
+    // right edge; the bug blows the timecode's height well past that.
+    //
+    // Rework 2 (pre-release finding #118, LOW): the container here is a FIXED 300dp width
+    // ([LARGHEZZA_CONTENITORE_STRETTO]) regardless of the outer test window — so, unlike a real
+    // render-check fixture (AC-571), checking both 1280 and 1024 windows proved nothing a single
+    // one didn't already; kept at 1280 only.
     @Test
-    fun `AC-S44 il timecode resta su una riga dentro il chip quando il nome va a capo - 40 caratteri, finestra 1280`() =
-        verificaTimecodeDentroIlChip(NOME_QUARANTA_CARATTERI, larghezzaFinestra = 1280, altezzaFinestra = 800)
+    fun `AC-S44 il timecode resta su una riga dentro il chip quando il nome va a capo - 40 caratteri`() =
+        verificaTimecodeDentroIlChip(NOME_QUARANTA_CARATTERI)
 
     @Test
-    fun `AC-S44 il timecode resta su una riga dentro il chip quando il nome va a capo - 40 caratteri, finestra 1024`() =
-        verificaTimecodeDentroIlChip(NOME_QUARANTA_CARATTERI, larghezzaFinestra = 1024, altezzaFinestra = 640)
+    fun `AC-S44 il timecode resta su una riga dentro il chip quando il nome va a capo - nome lungo`() =
+        verificaTimecodeDentroIlChip(NOME_LUNGO)
 
+    // Pre-release finding #118 (rework, LOW): the two tests above only proved the TIMECODE stays on
+    // one line — neither asserted the NAME itself actually wrapped onto more than one line (as
+    // opposed to, say, silently truncating). A single chip alone in the narrow container isolates
+    // this from the FIVE-chip wrap-to-a-new-ROW the first test in this file already covers.
     @Test
-    fun `AC-S44 il timecode resta su una riga dentro il chip quando il nome va a capo - nome lungo, finestra 1280`() =
-        verificaTimecodeDentroIlChip(NOME_LUNGO, larghezzaFinestra = 1280, altezzaFinestra = 800)
-
-    @Test
-    fun `AC-S44 il timecode resta su una riga dentro il chip quando il nome va a capo - nome lungo, finestra 1024`() =
-        verificaTimecodeDentroIlChip(NOME_LUNGO, larghezzaFinestra = 1024, altezzaFinestra = 640)
-
-    private fun verificaTimecodeDentroIlChip(nome: String, larghezzaFinestra: Int, altezzaFinestra: Int) =
-        runDesktopComposeUiTest(width = larghezzaFinestra, height = altezzaFinestra) {
-            setContent {
-                SnastroTema {
-                    GruppoFonti(
-                        fonti = listOf(FonteChipDati(1, nome, 3_725_000)),
-                        modifier = Modifier.width(LARGHEZZA_CONTENITORE_STRETTO),
-                    )
-                }
+    fun `AC-S44 rework il nome lungo va a capo su piu righe dentro il chip`() = runDesktopComposeUiTest(
+        width = 1280,
+        height = 800,
+    ) {
+        setContent {
+            SnastroTema {
+                GruppoFonti(
+                    fonti = listOf(FonteChipDati(1, NOME_LUNGO, 3_725_000)),
+                    modifier = Modifier.width(LARGHEZZA_CONTENITORE_STRETTO),
+                )
             }
-            val chip = onNodeWithTag("fonte-chip-0").getUnclippedBoundsInRoot()
-            val timecode = onNodeWithTag(TAG_FONTE_CHIP_TIMECODE).getUnclippedBoundsInRoot()
-            assertTrue(
-                timecode.right <= chip.right,
-                "il timecode (destra=${timecode.right}) esce dal chip (destra=${chip.right})",
-            )
-            val altezzaTimecode = timecode.bottom - timecode.top
-            assertTrue(
-                altezzaTimecode <= ALTEZZA_MASSIMA_TIMECODE_SU_UNA_RIGA,
-                "il timecode alto $altezzaTimecode non sta su una riga sola: " +
-                    "e' stato schiacciato in una colonna stretta invece di restare leggibile",
-            )
         }
+        val nome = onNodeWithText(NOME_LUNGO).getUnclippedBoundsInRoot()
+        val altezzaNome = nome.bottom - nome.top
+        assertTrue(
+            altezzaNome > ALTEZZA_MASSIMA_TIMECODE_SU_UNA_RIGA,
+            "il nome (alto $altezzaNome) non e' andato a capo su piu' righe come atteso in un contenitore stretto",
+        )
+    }
+
+    private fun verificaTimecodeDentroIlChip(nome: String) = runDesktopComposeUiTest(width = 1280, height = 800) {
+        setContent {
+            SnastroTema {
+                GruppoFonti(
+                    fonti = listOf(FonteChipDati(1, nome, 3_725_000)),
+                    modifier = Modifier.width(LARGHEZZA_CONTENITORE_STRETTO),
+                )
+            }
+        }
+        val chip = onNodeWithTag("fonte-chip-0").getUnclippedBoundsInRoot()
+        val timecode = onNodeWithTag(TAG_FONTE_CHIP_TIMECODE).getUnclippedBoundsInRoot()
+        assertTrue(
+            timecode.right <= chip.right,
+            "il timecode (destra=${timecode.right}) esce dal chip (destra=${chip.right})",
+        )
+        val altezzaTimecode = timecode.bottom - timecode.top
+        assertTrue(
+            altezzaTimecode <= ALTEZZA_MASSIMA_TIMECODE_SU_UNA_RIGA,
+            "il timecode alto $altezzaTimecode non sta su una riga sola: " +
+                "e' stato schiacciato in una colonna stretta invece di restare leggibile",
+        )
+    }
 }
 
 // [SnastroTipografia.timecode] has a 16sp lineHeight; a single rendered line is a few dp taller

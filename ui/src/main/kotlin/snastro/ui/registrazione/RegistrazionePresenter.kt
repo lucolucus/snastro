@@ -1,5 +1,6 @@
 package snastro.ui.registrazione
 
+import androidx.compose.runtime.Composable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -109,6 +110,12 @@ class RegistrazionePresenter(
     // `null` on every reload.
     private var segnoRiassuntoAttuale: SegnoScheda? = null
 
+    // Pre-release finding #130 (rework, LOW): `riassunto`/`registrazioneId` never change over this
+    // presenter's lifetime, so ONE lambda instance — never a fresh one per `carica()` — is correctly
+    // stable: `Dati.equals()` (and so the slot's own recomposition) used to see a NEW `contenutoRiassunto`
+    // on every reload even when nothing about the Riassunto tab itself changed.
+    private val contenutoRiassunto: @Composable () -> Unit = { riassunto.contenuto(registrazioneId) }
+
     init {
         scope.launch { carica() }
         scope.launch { lettore.stato.collect { s -> rifletti(s) } }
@@ -168,7 +175,7 @@ class RegistrazionePresenter(
                 documentoPercorso = percorso,
                 soloLettura = soloLettura,
                 bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
-                contenutoRiassunto = { riassunto.contenuto(registrazioneId) },
+                contenutoRiassunto = contenutoRiassunto,
                 schedaSelezionata = selezioneSchedaS3.scheda,
                 segnoRiassunto = segnoRiassuntoAttuale,
             )
