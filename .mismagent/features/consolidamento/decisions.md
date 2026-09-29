@@ -53,3 +53,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: worker-composer
 - Docs: [pre-release](pre-release.md)
 - Revisit: an OOM is observed in the field, or the app gains a crash-restart path.
+
+### D-0005 · AC-C65 partly deferred to c3
+- Meta: 2026-09-29; scope: block:c2-contenuto-app-base; status: accepted
+- Question: must c2 route R0's never-called ContenutoApp through the shared body and reduce ContenutoProgetto to one call site, as AC-C65 reads literally?
+- Options: rework c2 to the letter vs accept c2's scope and let c3 finish it (kept).
+- Hypothesis: n/a — decided by the user on c2's worker DECISIONS, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Check: n/a — decided by the user on c2's worker DECISIONS, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Result: n/a — decided by the user on c2's worker DECISIONS, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Debate: R0's ContenutoApp is dead code (neither main nor any test calls it); R1's body differs in shape from R2/R3; c3 retires R0–R2 as code.
+- Decision: c2 accepted: R0 keeps its body, ContenutoProgetto called from R1 and from the shared R2/R3 part; c3 deletes R0's ContenutoApp and leaves ONE ContenutoProgetto call site. Cost: two call sites until c3.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Revisit: c3 is re-scoped or dropped.

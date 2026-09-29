@@ -49,3 +49,5 @@
 2026-09-29T08:01:15Z	c1-porte-progetto	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED→user: one instance (rework)
 2026-09-29T08:23:29Z	c1-porte-progetto	verifier+code-review	result	cycle=1	tier=deep	model=opus	PASS/APPROVE; integrated
 2026-09-29T08:23:47Z	c2-contenuto-app-base	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-29T08:52:41Z	c2-contenuto-app-base	verifier	result	cycle=0	tier=deep	model=opus	PASS; integrated
+2026-09-29T08:52:42Z	c3-composizione-piatta	worker	dispatch	cycle=0	tier=deep	model=opus
