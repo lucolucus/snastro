@@ -57,7 +57,7 @@ class AbbonatoRevisioneParlantiTest {
             ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni),
     ): DispatcherEventiInMemoria {
         val dispatcher = DispatcherEventiInMemoria(transazioni)
-        AbbonatoRevisioneParlanti(dispatcher, politica, politicaSostituzione)
+        dispatcher.registraSincrono(AbbonatoRevisioneParlanti(politica, politicaSostituzione))
         return dispatcher
     }
 

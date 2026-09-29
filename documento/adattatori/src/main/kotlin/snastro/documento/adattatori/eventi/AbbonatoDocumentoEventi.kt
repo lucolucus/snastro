@@ -1,10 +1,11 @@
 package snastro.documento.adattatori.eventi
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import snastro.documento.applicazione.letture.Documento
 import snastro.documento.applicazione.politiche.RigeneraDocumento
 import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
-import snastro.kernel.DispatcherEventiInMemoria
+import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.ParlanteId
@@ -32,9 +33,10 @@ import kotlin.time.Duration.Companion.seconds
  * (block `abbonato-documento`, `:documento:adattatori..eventi`, AC-182..186, AC-186bis; retry
  * mechanics reworked by `a2-ritenta-documento`, ADR 0028 §7.3 step 3, AC-C45..C49, AC-C91..C94).
  *
- * Registers itself on [dispatcher] in `init`: [DispatcherEventiInMemoria.registraDopoCommit] calls
- * [ricevi] only AFTER the publishing command's transaction committed, never on rollback (AC-182) —
- * a rolled-back command publishes nothing, so nothing is ever enqueued.
+ * A plain [AbbonatoDopoCommit] VALUE (ADR 0030 §1, AC-C67): it never registers itself — the composition root
+ * (`:avvio`'s `ModuloDocumento`) registers it as an after-commit subscriber, so [ricevi] runs only AFTER the
+ * publishing command's transaction committed, never on rollback (AC-182): a rolled-back command publishes
+ * nothing, so nothing is ever enqueued. Constructing it launches nothing: the worker runs only from [avvia].
  *
  * [ricevi] translates each event 1:1 into a [RigenerazioneDocumentoPolitica] call (mirroring the
  * policy's own KDoc), but does not call it on the committing thread: the unit of work is enqueued and run by
@@ -53,7 +55,8 @@ import kotlin.time.Duration.Companion.seconds
  * fans them into their OWN [Chiave.PerRegistrazione] via [accoda] (AC-C47) — unlike
  * [RigenerazioneDocumentoPolitica.esegui] of `RigeneraTuttiIDocumenti` (AC-157), whose fold is reserved for a
  * caller that wants exactly that all-or-nothing stop, the sweep here must NOT let one poisoned Registrazione's
- * retries block or re-run every other one every 30 s.
+ * retries block or re-run every other one every 30 s. Requested at construction, it runs once [avvia] starts
+ * the worker.
  *
  * **Deletion** (ADR 0020 §3, AC-624/AC-C93). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
  * per-[RegistrazioneId] key: merged into a pending entry it replaces the regeneration (a removal, once
@@ -63,18 +66,13 @@ import kotlin.time.Duration.Companion.seconds
  * fails and is re-queued, it merges behind the removal without resurrecting the write (AC-C94) — and the
  * removal runs next, retried with the same backoff. Never on rollback (after-commit only).
  *
- * **Stopping.** This class exposes no `ferma`/`stop`: like every other per-Progetto background
- * worker in this codebase (`:avvio`'s `CollaboratoriProgettoAperto`), it is a plain
- * structured-concurrency child of [scope] — cancelling [scope] (`:avvio`, on closing the Progetto)
- * stops [ritenta] at its next suspension point, with no report and no further regeneration (AC-C48); the
- * still-registered [dispatcher] subscription then has nothing left to hand work to, since the whole
- * `DispatcherEventiInMemoria` is discarded with the closed Progetto.
+ * **Stopping.** This class exposes no `ferma`/`stop`: its worker is a plain structured-concurrency child of
+ * the scope given to [avvia] — cancelling that scope (`:avvio`, on closing the Progetto) stops [ritenta] at
+ * its next suspension point, with no report and no further regeneration (AC-C48); the still-registered
+ * subscription then has nothing left to hand work to, since the project's dispatcher is discarded with the
+ * closed Progetto.
  */
-// one parameter per collaborator: dispatcher, politica, the sweep's id lister (AC-C47), scope, segnalazione, 2
-// backoff durations.
-@Suppress("LongParameterList")
 public class AbbonatoDocumentoEventi(
-    dispatcher: DispatcherEventiInMemoria,
     private val politica: RigenerazioneDocumentoPolitica,
     /**
      * The startup sweep's own id lister (AC-C47) — e.g. `LettoreTrascritto::registrazioniConTrascritto` bound at
@@ -83,11 +81,10 @@ public class AbbonatoDocumentoEventi(
      * through [RigenerazioneDocumentoPolitica]'s all-or-nothing `RigeneraTuttiIDocumenti` fold (AC-157).
      */
     private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
-    scope: CoroutineScope,
     segnalazione: Segnalazione,
     ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
     ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
-) {
+) : AbbonatoDopoCommit {
     /**
      * The single unit of Documento background work (AC-C45): exactly three cases, minted only here, never by
      * [RitentaConBackoff] (it coalesces by `equals`, which a `data class`/`data object` gives for free).
@@ -128,12 +125,13 @@ public class AbbonatoDocumentoEventi(
     private val ritenta = RitentaConBackoff<Chiave>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     init {
-        dispatcher.registraDopoCommit { evento -> ricevi(evento) }
-        ritenta.avvia(scope)
-        ritenta.richiedi(Chiave.Sweep) // AC-185: queued once, at construction
+        ritenta.richiedi(Chiave.Sweep) // AC-185: queued once, at construction; it runs once [avvia] starts the worker
     }
 
-    private fun ricevi(evento: EventoPubblicato) {
+    /** Starts the worker on [scope] (AC-C67: nothing runs before); cancelling [scope] stops it (AC-C48). */
+    public fun avvia(scope: CoroutineScope): Job = ritenta.avvia(scope)
+
+    override fun ricevi(evento: EventoPubblicato) {
         when (evento) {
             is ElaborazioneCompletata -> accoda(evento.registrazioneId, LavoroPendente())
             is VociUnite -> accoda(evento.registrazioneId, LavoroPendente())

@@ -2,6 +2,8 @@ package snastro.sintesi.adattatori.eventi
 
 import io.mockk.spyk
 import io.mockk.verify
+import snastro.kernel.AbbonatoDopoCommit
+import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.CampioniAudio
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
@@ -57,11 +59,13 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 /**
- * [AbbonatoTrascrizioneSintesi] (AC-S115/AC-S116). Two groups on fakes prove the WIRING (registration
+ * [AbbonatoTrascrizioneSintesi] (AC-S115/AC-S116). Two groups on fakes prove the WIRING (the value's
  * shape, routing, transaction placement, doom) — the policy's own rule coverage is
  * [snastro.sintesi.applicazione.politiche.ApplicaSostituzioneTrascrittoSintesiPoliticaTest]'s job. The
  * last test is the carry-over end-to-end proof that AC-S96's own fake (one generation only) could not
@@ -70,13 +74,15 @@ import kotlin.test.assertTrue
  */
 class AbbonatoTrascrizioneSintesiTest {
     @Test
-    fun `AC-S115 il costruttore registra esattamente un abbonato sincrono e nessuno dopo commit`() {
+    fun `AC-S115 e un valore AbbonatoSincrono, mai dopo commit, e costruirlo non registra nulla`() {
         val a = unAmbiente()
         val dispatcher = spyk(DispatcherEventiInMemoria(a.transazioni))
 
-        AbbonatoTrascrizioneSintesi(dispatcher, politicaCon(a, dispatcher))
+        val abbonato: Any = AbbonatoTrascrizioneSintesi(politicaCon(a, dispatcher))
 
-        verify(exactly = 1) { dispatcher.registraSincrono(any()) }
+        assertIs<AbbonatoSincrono>(abbonato)
+        assertFalse(abbonato is AbbonatoDopoCommit)
+        verify(exactly = 0) { dispatcher.registraSincrono(any()) } // ADR 0030 §1, AC-C67: the composition registers
         verify(exactly = 0) { dispatcher.registraDopoCommit(any()) }
     }
 
@@ -85,7 +91,7 @@ class AbbonatoTrascrizioneSintesiTest {
         val a = unAmbiente()
         val dispatcher = DispatcherEventiInMemoria(a.transazioni)
         val politica = spyk(politicaCon(a, dispatcher))
-        AbbonatoTrascrizioneSintesi(dispatcher, politica)
+        dispatcher.registraSincrono(AbbonatoTrascrizioneSintesi(politica))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(ElaborazioneCompletata(REG))
@@ -103,7 +109,7 @@ class AbbonatoTrascrizioneSintesiTest {
         a.riassunti.salva(unRiassunto("vecchio", REG, argomento = "Tema")).atteso()
         val dispatcher = DispatcherEventiInMemoria(a.transazioni)
         val politica = spyk(politicaCon(a, dispatcher))
-        AbbonatoTrascrizioneSintesi(dispatcher, politica)
+        dispatcher.registraSincrono(AbbonatoTrascrizioneSintesi(politica))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(TrascrittoSostituito(REG))
@@ -127,7 +133,9 @@ class AbbonatoTrascrizioneSintesiTest {
             override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> =
                 Esito.Errore(ErroreSintesi.TrascrittoNonDisponibile(r))
         }
-        AbbonatoTrascrizioneSintesi(dispatcher, politicaCon(a, dispatcher, riassunti = riassuntiGuasti))
+        dispatcher.registraSincrono(
+            AbbonatoTrascrizioneSintesi(politicaCon(a, dispatcher, riassunti = riassuntiGuasti)),
+        )
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             a.riassunti.salva(unRiassunto("altra-reg", ALTRA)) // una scrittura della stessa transazione, prima del veto
@@ -258,7 +266,7 @@ class AbbonatoTrascrizioneSintesiTest {
                 DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
                 dispatcher,
             )
-            AbbonatoTrascrizioneSintesi(dispatcher, politica)
+            dispatcher.registraSincrono(AbbonatoTrascrizioneSintesi(politica))
         }
 
         fun aggiungiRegistrazione(): RegistrazioneId {

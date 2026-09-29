@@ -1,7 +1,6 @@
 package snastro.sintesi.adattatori.eventi
 
 import snastro.kernel.AbbonatoSincrono
-import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.sintesi.applicazione.politiche.ApplicaSostituzioneTrascrittoSintesiPolitica
@@ -14,25 +13,20 @@ import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
  * replaced the Trascritto — the same transaction ADR 0018 §2 already used to `salva` the new
  * Trascritto BEFORE publishing this event, which is what the policy relies on to read the NEW
  * generation, never the one being replaced. An [Esito.Errore] from the policy dooms and rolls the
- * whole completion back (`DispatcherEventiInMemoria`'s rule; ADR 0018 §6 then compensates it to
+ * whole completion back (the kernel dispatcher's rule; ADR 0018 §6 then compensates it to
  * `fallita`). Every other event is ignored (`Esito.Ok(Unit)`, no policy call).
  *
  * `:sintesi:applicazione` may not import Trascrizione's published events (`architecture.md` /
  * ADR 0021 §2 edges), so this translation lives here, mirroring Parlanti's own
  * `AbbonatoRevisioneParlanti` / Trascrizione's own `AbbonatoEliminazioneRegistrazione`.
  *
- * Registers itself on [dispatcher] in `init`; wiring it into the app's composition — before the first
- * command — is `avvio-sintesi`'s job (ADR 0021 §10), not this block's.
+ * A plain [AbbonatoSincrono] VALUE (ADR 0030 §1, AC-C67): it never registers itself. `:avvio`'s `ModuloSintesi`
+ * pairs it with `TrascrittoSostituito` and the composition root registers it before the first command.
  */
 public class AbbonatoTrascrizioneSintesi(
-    dispatcher: DispatcherEventiInMemoria,
     private val politica: ApplicaSostituzioneTrascrittoSintesiPolitica,
-) {
-    init {
-        dispatcher.registraSincrono(AbbonatoSincrono(::ricevi))
-    }
-
-    private fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
+) : AbbonatoSincrono {
+    override fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
         is TrascrittoSostituito -> politica.applica(evento.registrazioneId)
         else -> Esito.Ok(Unit)
     }

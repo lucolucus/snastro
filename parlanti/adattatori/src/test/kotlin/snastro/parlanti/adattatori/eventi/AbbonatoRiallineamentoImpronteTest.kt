@@ -8,6 +8,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.job
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import kotlinx.coroutines.test.advanceTimeBy
@@ -72,8 +73,8 @@ class AbbonatoRiallineamentoImpronteTest {
      * One test's wiring: a real [DispatcherEventiInMemoria] over [ParlanteRepositoryFinta] (the
      * `Ripristinabile` "in-memory database", `UnitaDiLavoroFinta`), a real [RiallineaImpronteServizio]
      * over [voci]/[estrattore]/[decodificatore], and the [AbbonatoRiallineamentoImpronte] under test
-     * (self-registering, discarded) — all sharing [scheduler]'s virtual clock and reporting through
-     * [segnalazioni].
+     * (registered as the composition registers it, then started) — all sharing [scheduler]'s virtual
+     * clock and reporting through [segnalazioni].
      */
     @Suppress("LongParameterList") // one parameter per collaborator these tests vary (AC-304..AC-307/AC-C50..C53)
     private class Ambiente(
@@ -101,7 +102,10 @@ class AbbonatoRiallineamentoImpronteTest {
         val scope = CoroutineScope(StandardTestDispatcher(scheduler) + (gestore ?: EmptyCoroutineContext))
 
         init {
-            AbbonatoRiallineamentoImpronte(dispatcher, riallinea, scope, segnalazioni)
+            // ADR 0030 §1 (AC-C67): a value the composition registers, whose worker starts only at avvia(scope).
+            val abbonato = AbbonatoRiallineamentoImpronte(riallinea, segnalazioni)
+            dispatcher.registraDopoCommit(abbonato)
+            abbonato.avvia(scope)
         }
 
         fun commit(evento: EventoPubblicato): Esito<Unit> = dispatcher.unitaDiLavoro.inTransazione {
@@ -127,6 +131,34 @@ class AbbonatoRiallineamentoImpronteTest {
     }
 
     // --- AC-304 (after-commit timing + translation) --------------------------------------------
+
+    @Test
+    fun `AC-C67 costruito non lancia alcun lavoro, una richiesta gira solo dopo avvia`() = runTest {
+        val parlanti = ParlanteRepositoryFinta()
+        val transazioni = UnitaDiLavoroFinta(parlanti)
+        val dispatcher = DispatcherEventiInMemoria(transazioni)
+        val riallinea = spyk(
+            RiallineaImpronteServizio(
+                dispatcher.unitaDiLavoro,
+                LettoreVociFinta(emptyMap()),
+                parlanti,
+                DecodificatoreAudioFinta(unitaDiLavoro = transazioni),
+                EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
+                dispatcher,
+            ),
+        )
+        val abbonato = AbbonatoRiallineamentoImpronte(riallinea, Segnalazione { _, _ -> })
+
+        abbonato.ricevi(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        runCurrent() // backgroundScope's own tasks: advanceUntilIdle ignores them
+        verify(exactly = 0) { riallinea.esegui(any()) }
+        assertTrue(backgroundScope.coroutineContext.job.children.none(), "nessun lavoro in corso prima di avvia")
+
+        abbonato.avvia(backgroundScope)
+        runCurrent() // backgroundScope's own tasks: advanceUntilIdle ignores them
+
+        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(REG)) }
+    }
 
     @Test
     fun `AC-304 VociUnite invoca RiallineaImpronte solo dopo il commit della Revisione`() = runTest {

@@ -167,16 +167,16 @@ internal class EstensioneR1(
             lettoreNomi(contesto),
             ScrittoreDocumentoFile(contesto.cartella.resolve(CARTELLA_DOCUMENTI)),
         )
-        AbbonatoDocumentoEventi(
-            contesto.dispatcher,
+        val abbonato = AbbonatoDocumentoEventi(
             politica,
             // AC-C47: the startup sweep lists ids itself, so a poisoned Registrazione's retries never block or
             // re-run every other one (never through RigenerazioneDocumentoPolitica's all-or-nothing fold).
             lettoreTrascritto::registrazioniConTrascritto,
-            scope,
             // AC-C54: the ONE JUL-backed Segnalazione of `:avvio` — the a2 local lambda is gone.
             segnalazioneApp,
         )
+        contesto.dispatcher.registraDopoCommit(abbonato)
+        abbonato.avvia(scope)
         val job = checkNotNull(scope.coroutineContext[Job]) { "figlioDi restituisce sempre uno scope con un Job" }
         return job to politica
     }

@@ -26,7 +26,9 @@ class CablaggioR1Test {
 
     @Test
     fun `AC-355 nessun abbonato sincrono e registrato, in particolare su RegistrazioneAggiunta`() {
-        assertEquals(emptyList(), righeCon("registraSincrono"))
+        // Since c3 (ADR 0030 §1) the adapters no longer register themselves: R2/R3 register theirs explicitly.
+        val fuoriDaR2 = sorgenti.filterNot { f -> listOf("r2", "r3").any { f.path.contains("snastro/avvio/$it/") } }
+        assertEquals(emptyList(), righeCon("registraSincrono", fuoriDaR2))
     }
 
     @Test

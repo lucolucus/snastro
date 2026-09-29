@@ -77,20 +77,23 @@ internal class EstensioneR3(
         // here, before r2 runs; R1's Documento names and R2 then receive these same two instances.
         val nomi = LettoreNomiDaParlanti(NomiDelleVoci(porte.parlanti.attribuzioni, porte.parlanti.parlanti))
 
-        AbbonatoTrascrizioneSintesi(
-            dispatcher,
-            ApplicaSostituzioneTrascrittoSintesiPolitica(
-                generatoreId,
-                clock,
-                progettoId,
-                riassunti,
-                lunghezze,
-                lettoreTrascritto,
-                disponibilita,
-                dispatcher,
+        dispatcher.registraSincrono(
+            AbbonatoTrascrizioneSintesi(
+                ApplicaSostituzioneTrascrittoSintesiPolitica(
+                    generatoreId,
+                    clock,
+                    progettoId,
+                    riassunti,
+                    lunghezze,
+                    lettoreTrascritto,
+                    disponibilita,
+                    dispatcher,
+                ),
             ),
         )
-        AbbonatoProgettoSintesi(dispatcher, ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
+        dispatcher.registraSincrono(
+            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher)),
+        )
 
         val coda = AtomicReference<CodaCondivisa?>(null)
         val aggiornamenti = AggiornamentiVistaSintesi(

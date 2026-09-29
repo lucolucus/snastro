@@ -1,7 +1,6 @@
 package snastro.parlanti.adattatori.eventi
 
 import snastro.kernel.AbbonatoSincrono
-import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
@@ -19,26 +18,21 @@ import snastro.trascrizione.applicazione.eventi.VociUnite
  * translates [VociUnite]/[VoceDivisa]/[SegmentoRiassegnato] 1:1 into an [ApplicaRevisionePolitica]
  * call, and [TrascrittoSostituito] into an [ApplicaSostituzioneTrascrittoPolitica] call — run INSIDE
  * the publishing command's transaction in both cases — an [Esito.Errore] from either policy dooms and
- * rolls back the whole transaction (the [DispatcherEventiInMemoria] rule). ADR 0020 §2 step 4 (AC-621):
+ * rolls back the whole transaction (the kernel dispatcher's rule). ADR 0020 §2 step 4 (AC-621):
  * Progetto's [RegistrazioneEliminata] is translated into the SAME [ApplicaSostituzioneTrascrittoPolitica]
  * call, inside the deleting transaction. `:parlanti:applicazione` may not import Trascrizione's or
  * Progetto's published events (`architecture.md` edges), so this translation lives here, mirroring
  * both policies' own KDoc.
  *
- * Registers itself on [dispatcher] in `init`. This is a plain component: wiring it into the app's
- * composition (registering it at startup, before the first command) is `avvio-parlanti`'s job, not
- * this block's.
+ * A plain [AbbonatoSincrono] VALUE (ADR 0030 §1, AC-C67): it never registers itself. The composition root
+ * (`:avvio`'s `ModuloParlanti`) pairs it with each event type it handles and registers it, in the declared
+ * order, before the first command.
  */
 public class AbbonatoRevisioneParlanti(
-    dispatcher: DispatcherEventiInMemoria,
     private val politica: ApplicaRevisionePolitica,
     private val politicaSostituzione: ApplicaSostituzioneTrascrittoPolitica,
-) {
-    init {
-        dispatcher.registraSincrono(AbbonatoSincrono(::ricevi))
-    }
-
-    private fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
+) : AbbonatoSincrono {
+    override fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
         is VociUnite -> politica.applicaVociUnite(evento.registrazioneId, evento.sopravvissuta, evento.rimossa)
         is VoceDivisa -> politica.applicaVoceDivisa(evento.registrazioneId, evento.origine)
         is SegmentoRiassegnato -> politica.applicaSegmentoRiassegnato(

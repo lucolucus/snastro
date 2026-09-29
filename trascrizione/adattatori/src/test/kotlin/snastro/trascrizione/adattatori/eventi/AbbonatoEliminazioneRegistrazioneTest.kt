@@ -41,7 +41,8 @@ class AbbonatoEliminazioneRegistrazioneTest {
     private val elaborazioni = ElaborazioneRepositoryContata(ElaborazioneRepositoryFinta())
     private val trascritti = TrascrittoRepositoryFinta()
     private val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(elaborazioni.delegato, trascritti)).also {
-        AbbonatoEliminazioneRegistrazione(it, ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti))
+        val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti)
+        it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica))
     }
 
     @Test
@@ -90,7 +91,7 @@ class AbbonatoEliminazioneRegistrazioneTest {
         val trascrittiSql = TrascrittoRepositorySql(db, uow)
         val sql = DispatcherEventiInMemoria(uow).also {
             val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql)
-            AbbonatoEliminazioneRegistrazione(it, politica)
+            it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica))
         }
         elaborazioniSql.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata"), R)).atteso()
         trascrittiSql.salva(unTrascritto(registrazioneId = R))

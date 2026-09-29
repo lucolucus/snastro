@@ -116,14 +116,14 @@ internal class EstensioneR2(
         )
         val aggiornamenti = AggiornamentiVistaParlanti(dispatcher, proposte)
         val trascritti = repos.trascritti
-        AbbonatoEliminazioneRegistrazione(
-            dispatcher,
-            ApplicaEliminazioneRegistrazionePolitica(repos.elaborazioni, trascritti),
+        dispatcher.registraSincrono(
+            AbbonatoEliminazioneRegistrazione(ApplicaEliminazioneRegistrazionePolitica(repos.elaborazioni, trascritti)),
         )
-        AbbonatoRevisioneParlanti(
-            dispatcher,
-            ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
-            ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
+        dispatcher.registraSincrono(
+            AbbonatoRevisioneParlanti(
+                ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
+                ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
+            ),
         )
 
         val archivio = ArchivioAudioFile(contesto.cartella)
@@ -144,13 +144,10 @@ internal class EstensioneR2(
             ml.estrattore,
             dispatcher,
         )
-        AbbonatoRiallineamentoImpronte(
-            dispatcher,
-            riallinea,
-            scope,
-            // AC-C54: the ONE JUL-backed Segnalazione of `:avvio` — the a3 local lambda is gone.
-            segnalazioneApp,
-        )
+        // AC-C54: the ONE JUL-backed Segnalazione of `:avvio` — the a3 local lambda is gone.
+        val riallineamento = AbbonatoRiallineamentoImpronte(riallinea, segnalazioneApp)
+        dispatcher.registraDopoCommit(riallineamento)
+        riallineamento.avvia(scope)
         avviaRiallineamentoIniziale(
             scope,
             collaboratoriR1,
