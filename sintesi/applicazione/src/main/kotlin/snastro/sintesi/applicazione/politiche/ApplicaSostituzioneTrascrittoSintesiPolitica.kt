@@ -20,6 +20,7 @@ import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.Riassumibilita
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.RiassuntoRichiestoDominio
 import snastro.sintesi.dominio.SegmentoIngresso
 import java.time.Clock
 
@@ -71,23 +72,32 @@ public class ApplicaSostituzioneTrascrittoSintesiPolitica(
      * recently removed Riassunto (by `richiestoAlle`, AC-S92); never `Errore` for a refused re-summary (AC-S95).
      */
     private fun riaccoda(registrazioneId: RegistrazioneId, rimossi: List<Riassunto>): Esito<Unit> {
-        val segmenti = trascritti.segmenti(registrazioneId)
-        val stimaToken = segmenti?.let { LimiteIngresso.stimaToken(ingressoDi(it)) }
+        // Unlike `esegui-riassunto`'s phase 2 (outside any transaction, a real race), this runs INSIDE the same
+        // completion transaction that just wrote the new Trascritto (ADR 0018 §2 order): a null read here is not
+        // a race but a broken structural precondition — fail loud (programmer error, ADR 0003) rather than
+        // silently skipping the re-summary as if it had been legitimately refused.
+        val segmenti = checkNotNull(trascritti.segmenti(registrazioneId)) {
+            "Trascritto assente per $registrazioneId nel riaccodo: violazione di ADR 0018 §2 " +
+                "(dovrebbe esistere per costruzione)"
+        }
         val idoneo = Riassumibilita.valuta(
             registrazioneId = registrazioneId,
             modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
-            trascrittoPresente = segmenti != null,
-            elaborazioneAperta = false, // structural: the only open run just completed (ADR 0018 §2 order)
-            riassuntoAperto = false, // structural: every Riassunto of r was just removed above
-            stimaToken = stimaToken,
+            trascrittoPresente = true, // garantito dal checkNotNull sopra
+            // elaborazioneAperta/riassuntoAperto: known false by the calling contract this class's own KDoc
+            // documents (the only open run just completed; every Riassunto of r was just removed above) — reading
+            // either through a port here would itself violate AC-S96 (this policy calls no such lookup).
+            elaborazioneAperta = false,
+            riassuntoAperto = false,
+            stimaToken = LimiteIngresso.stimaToken(ingressoDi(segmenti)),
         )
         if (idoneo !is Esito.Ok) return Esito.Ok(Unit) // AC-S95: refused re-summary, nothing created
-        val argomento: Argomento? = rimossi.maxBy { it.richiestoAlle }.argomento
+        val argomento: Argomento? = rimossi.maxWith(compareBy({ it.richiestoAlle }, { it.id.valore })).argomento
         val cap = lunghezzeMassime.trova(progettoId).parole
         val creato =
             Riassunto.richiedi(RiassuntoId(generatoreId.nuovo()), registrazioneId, argomento, cap, clock.instant())
         return riassunti.salva(creato.aggregato).poi {
-            eventi.pubblica(RiassuntoRichiesto(registrazioneId))
+            eventi.pubblica(creato.evento.pubblicato())
             Esito.Ok(Unit)
         }
     }
@@ -99,3 +109,5 @@ public class ApplicaSostituzioneTrascrittoSintesiPolitica(
         nomi = emptyMap(),
     )
 }
+
+private fun RiassuntoRichiestoDominio.pubblicato(): RiassuntoRichiesto = RiassuntoRichiesto(registrazioneId)

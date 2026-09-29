@@ -18,6 +18,7 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
+import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
 import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.MotivoDownload
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
@@ -196,21 +197,22 @@ class RiassumiServizioTest {
     @Test
     fun `AC-S80 le guardie sono lette con la transazione della UnitaDiLavoro aperta`() {
         val riassuntiReali = RiassuntoRepositoryFinta()
-        val lunghezze = LunghezzaMassimaRiassuntoRepositoryFinta()
-        val transazione = UnitaDiLavoroFinta(riassuntiReali, lunghezze)
+        val lunghezzeReali = LunghezzaMassimaRiassuntoRepositoryFinta()
+        val transazione = UnitaDiLavoroFinta(riassuntiReali, lunghezzeReali)
         val eventi = DispatcherEventiFinta(transazione)
         val trascrittiSpia = LettoreTrascrittoSpia(
             LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi()))),
             transazione,
         )
         val riassuntiSpia = RiassuntoRepositorySpia(riassuntiReali, transazione)
+        val lunghezzeSpia = LunghezzaMassimaRiassuntoRepositorySpia(lunghezzeReali, transazione)
         val servizio = RiassumiServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
             CLOCK,
             PROGETTO,
             riassuntiSpia,
-            lunghezze,
+            lunghezzeSpia,
             trascrittiSpia,
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventi,
@@ -222,12 +224,17 @@ class RiassumiServizioTest {
         assertTrue(trascrittiSpia.letture.all { it }, "${trascrittiSpia.letture}")
         assertTrue(riassuntiSpia.letture.isNotEmpty())
         assertTrue(riassuntiSpia.letture.all { it }, "${riassuntiSpia.letture}")
+        assertTrue(lunghezzeSpia.letture.isNotEmpty())
+        assertTrue(lunghezzeSpia.letture.all { it }, "${lunghezzeSpia.letture}")
     }
 
     @Test
-    fun `AC-S81 backstop, salva risponde RiassuntoGiaAperto, rollback e niente pubblicato`() {
+    fun `AC-S81 backstop, salva risponde RiassuntoGiaAperto, rollback e niente pubblicato, il fallito rimosso torna`() {
         val riassuntiReali = RiassuntoRepositoryFinta()
         val lunghezze = LunghezzaMassimaRiassuntoRepositoryFinta()
+        val fallito = unRiassunto("fallito-1", REGISTRAZIONE).conAvvio().conFallimento()
+        riassuntiReali.salva(fallito).atteso()
+        val fallitoPrima = fallito.statoOsservabile()
         val riassuntiGuasti = object : RiassuntoRepository by riassuntiReali {
             override fun salva(r: Riassunto): Esito<Unit> =
                 Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REGISTRAZIONE))
@@ -247,7 +254,11 @@ class RiassumiServizioTest {
 
         servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
 
-        assertEquals(emptyList(), riassuntiReali.diRegistrazione(REGISTRAZIONE))
+        // Il fallito era gia' stato rimosso da INV-S3 (crea()) prima che salva() fallisse: il rollback della
+        // transazione (non solo di rimuovi, gia' provato da INV-S3 sotto) deve restituirlo intatto.
+        val righe = riassuntiReali.diRegistrazione(REGISTRAZIONE)
+        assertEquals(listOf(fallito.id), righe.map { it.id })
+        assertEquals(fallitoPrima, righe.single().statoOsservabile())
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
@@ -329,6 +340,20 @@ class RiassumiServizioTest {
         override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> {
             letture += transazione.transazioneAperta
             return delega.diRegistrazione(r)
+        }
+    }
+
+    /** AC-S80: proves the cap guard's own read ([crea]'s [LunghezzaMassimaRiassuntoRepository.trova]) also runs
+     * with the transaction open — the two Spia above only cover [LettoreTrascritto] and [RiassuntoRepository]. */
+    private class LunghezzaMassimaRiassuntoRepositorySpia(
+        private val delega: LunghezzaMassimaRiassuntoRepository,
+        private val transazione: UnitaDiLavoroFinta,
+    ) : LunghezzaMassimaRiassuntoRepository by delega {
+        val letture = mutableListOf<Boolean>()
+
+        override fun trova(p: ProgettoId): LunghezzaMassimaRiassunto {
+            letture += transazione.transazioneAperta
+            return delega.trova(p)
         }
     }
 

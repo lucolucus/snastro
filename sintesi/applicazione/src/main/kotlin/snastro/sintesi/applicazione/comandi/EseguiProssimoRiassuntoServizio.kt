@@ -99,14 +99,16 @@ public class EseguiProssimoRiassuntoServizio(
         }
 
     /** AC-S84: no transaction is open here. AC-S87: [ModelloLinguistico] is skipped when not Installato. */
+    @Suppress("ReturnCount") // guard clauses (model unavailable / Trascritto vanished, INV-S8) — clearer than nesting
     private fun eseguiSulModello(riassunto: Riassunto): EsecuzioneModello {
         if (disponibilita.stato() !is StatoModelloLinguistico.Installato) {
             return EsecuzioneModello.Fallita(MotivoFallimento.MODELLO_NON_DISPONIBILE)
         }
         val registrazioneId = riassunto.registrazioneId
-        val segmenti = checkNotNull(trascritti.segmenti(registrazioneId)) {
-            "Trascritto assente per $registrazioneId a Riassunto in_corso"
-        }
+        // INV-S8-style race: the Trascritto can vanish between the claim and here (outside any transaction, e.g. a
+        // concurrent EliminaRegistrazione/sostituzione policy) — treated like a CAS=false, not a programmer error:
+        // nothing written, nothing published (the row itself is already gone or about to be, ADR 0022 §4).
+        val segmenti = trascritti.segmenti(registrazioneId) ?: return EsecuzioneModello.Annullata
         val struttura = StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })
         return when (val risposta = modello.riassumi(richiesta(riassunto, segmenti), annullato)) {
             is Esito.Ok -> EsecuzioneModello.Completata(risposta.valore.inBozza(), struttura)

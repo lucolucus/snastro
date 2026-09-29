@@ -135,6 +135,27 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
+    fun `AC-S83 esclusi e primaDi insieme, il vincolo primaDi si applica al primo candidato non escluso`() {
+        riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
+        riassunti.salva(unRiassunto("r2", REG2, richiestoAlle = T2)).atteso()
+        riassunti.salva(unRiassunto("r3", REG3, richiestoAlle = T3)).atteso()
+        val nonInstallato = DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.NonInstallato(1))
+
+        // r1 escluso: r2 e' il primo candidato, ma richiestoAlle=T2 non e' < primaDi=T2 (limite stretto): rifiutato
+        // — r3 (che rispetterebbe da solo il vincolo) non e' scansionato dopo quel rifiuto.
+        val rifiutato = servizio(disponibilita = nonInstallato)
+            .esegui(EseguiProssimoRiassunto(esclusi = setOf("r1"), primaDi = T2))
+        assertEquals(RisultatoRiassunto.Nessuno, rifiutato.atteso())
+        assertTrue(checkNotNull(riassunti.trova(RiassuntoId("r2"))).inAttesa, "r2 non claimato")
+        assertTrue(checkNotNull(riassunti.trova(RiassuntoId("r3"))).inAttesa, "r3 mai raggiunto")
+
+        // Stesso esclusi, primaDi ora oltre T2: r2 rispetta il vincolo e viene claimato.
+        val claimato = servizio(disponibilita = nonInstallato)
+            .esegui(EseguiProssimoRiassunto(esclusi = setOf("r1"), primaDi = T2.plusSeconds(1)))
+        assertEquals(RisultatoRiassunto.Avviato(RiassuntoId("r2")), claimato.atteso())
+    }
+
+    @Test
     fun `AC-S84 il modello e i lettori sono invocati fuori da ogni transazione`() {
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
         val trascrittiConGuardia =
@@ -156,8 +177,9 @@ class EseguiProssimoRiassuntoServizioTest {
             attribuzioni = mapOf(VoceRef(REG1, VoceId(1)) to "parlante-1"),
             nomiParlanti = mapOf("parlante-1" to "Anna"),
         )
-        // "Progetto changed to 2500 before the run": this service never re-reads that setting, only
-        // the Riassunto's own 1500.
+        // INV-S10: this service has no LunghezzaMassimaRiassuntoRepository collaborator at all (only
+        // ModificaLunghezzaMassimaRiassuntoServizio writes it) — it holds by construction, not by re-checking a
+        // scenario here; the cap it can send is only ever the Riassunto's OWN [parole], fixed at Riassumi time.
         riassunti.salva(unRiassunto("r1", REG1, argomento = "il combattimento", parole = 1500, richiestoAlle = T1))
             .atteso()
 
@@ -206,13 +228,15 @@ class EseguiProssimoRiassuntoServizioTest {
 
     @Test
     fun `AC-S87 modello non installato fallisce senza chiamare il modello`() {
-        val modelloSpia = spyk(ModelloLinguisticoFinto(transazioni))
+        // ModelloLinguisticoFinto already records `ultimaRichiesta` (null unless invoked, AC-S15): a recording
+        // fake, so a MockK spy is not the only alternative here (RC-9) and is dropped.
+        val modelloReale = ModelloLinguisticoFinto(transazioni)
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
         val nonInstallato = DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.NonInstallato(1))
 
-        servizio(disponibilita = nonInstallato, modello = modelloSpia).esegui(EseguiProssimoRiassunto()).atteso()
+        servizio(disponibilita = nonInstallato, modello = modelloReale).esegui(EseguiProssimoRiassunto()).atteso()
 
-        verify(exactly = 0) { modelloSpia.riassumi(any(), any()) }
+        assertNull(modelloReale.ultimaRichiesta, "il modello non e' mai stato chiamato")
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.fallito)
         assertEquals(MotivoFallimento.MODELLO_NON_DISPONIBILE, concluso.motivoFallimento)
@@ -231,6 +255,13 @@ class EseguiProssimoRiassuntoServizioTest {
         casi.forEachIndexed { indice, (errore, motivoAtteso) ->
             val reg = RegistrazioneId("registrazione-caso-$indice")
             val modelloCaso = ModelloLinguisticoFinto(transazioni).apply { fallisci(errore) }
+            // INV-S3: a pronto precedente of the SAME Registrazione, seeded for every case (not only
+            // RispostaNonValida, which the separate INV-S3 test below already covers on its own) — a failure
+            // never touches it, whatever the model's own error.
+            val precedente = unRiassunto("precedente-caso-$indice", reg, richiestoAlle = T0).conAvvio()
+                .conCompletamento(BOZZA_SOLO_SOMMARIO, unaStruttura(1 to 1))
+            riassunti.salva(precedente).atteso()
+            val precedentePrima = precedente.statoOsservabile()
             riassunti.salva(unRiassunto("r-caso-$indice", reg, richiestoAlle = T1)).atteso()
 
             servizio(trascritti = LettoreTrascrittoFinta(mapOf(reg to SEGMENTI)), modello = modelloCaso)
@@ -239,6 +270,11 @@ class EseguiProssimoRiassuntoServizioTest {
             val concluso = checkNotNull(riassunti.trova(RiassuntoId("r-caso-$indice")))
             assertEquals(motivoAtteso, concluso.motivoFallimento, "caso $errore")
             assertTrue(eventi.pubblicati.contains(RiassuntoFallito(reg, motivoAtteso.codice)), "evento caso $errore")
+            assertEquals(
+                precedentePrima,
+                checkNotNull(riassunti.trova(precedente.id)).statoOsservabile(),
+                "caso $errore: il pronto precedente resta byte-identico",
+            )
         }
     }
 
@@ -317,6 +353,20 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
+    fun `INV-S8 il Trascritto sparito dopo il claim e trattato come un CAS fallito, mai un throw`() {
+        riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
+
+        // Nessun Trascritto per REG1: come se fosse sparito tra il claim e l'esecuzione (una policy concorrente
+        // di eliminazione/sostituzione, fuori da ogni transazione qui). Prima del fix, checkNotNull lanciava.
+        servizio(trascritti = LettoreTrascrittoFinta()).esegui(EseguiProssimoRiassunto()).atteso()
+
+        val riassunto = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(riassunto.inCorso, "resta in_corso: nessuna conclusione scritta")
+        // Il claim pubblica comunque RiassuntoAvviato (AC-S83); solo la conclusione e' saltata, come Annullato.
+        assertEquals(listOf(RiassuntoAvviato(REG1)), eventi.pubblicati)
+    }
+
+    @Test
     fun `ADR 0003 un Errore di concludi si propaga da esegui e non pubblica la conclusione`() {
         val concludiGuasto = object : RiassuntoRepository by riassunti {
             override fun concludi(r: Riassunto): Esito<Boolean> = Esito.Errore(ErroreDiProva.Fallito("concludi"))
@@ -354,7 +404,7 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-S88 INV-S4 la struttura letta durante l esecuzione rende il Riassunto superato dopo una revisione`() {
+    fun `AC-S88 la struttura letta durante l esecuzione rende il Riassunto superato dopo una revisione`() {
         // The FIRST segmenti() call is what the run must use — the one where LettoreTrascritto still shows
         // the pre-Revisione assignment. A SECOND call (only a regression re-reading at completion would make
         // one) returns [dopoRevisione]: real Voci reassigned by a Revisione COMMITTED while this run was
@@ -373,12 +423,32 @@ class EseguiProssimoRiassuntoServizioTest {
         assertTrue(concluso.superato(strutturaCorrenteDelLettore))
     }
 
+    @Test
+    fun `AC-S88 la lettura della fase 2 e' quella corrente dopo il claim, non una vista precedente`() {
+        // The OTHER direction from the test above: the claim (phase 1) never calls LettoreTrascritto at all, so
+        // there is no earlier read to go stale — but nothing besides AC-S84's "outside a transaction" timing
+        // guard was locking that the run's OWN read reflects a Revisione committed after the claim, rather than
+        // some state assumed by construction. This asserts the stored struttura against that revised data itself.
+        val revisionata = SEGMENTI.map { if (it.voceId == VoceId(1)) it.copy(voceId = VoceId(3)) else it }
+        riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
+
+        servizio(trascritti = LettoreTrascrittoFinta(mapOf(REG1 to revisionata))).esegui(EseguiProssimoRiassunto())
+            .atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto)
+        val strutturaRivista = unaStruttura(1 to 3, 2 to 2, 3 to 3)
+        assertEquals(strutturaRivista.chiave, concluso.struttura, "il run vede la revisione, non uno stato precedente")
+    }
+
     private companion object {
         val REG1: RegistrazioneId = RegistrazioneId("registrazione-1")
         val REG2: RegistrazioneId = RegistrazioneId("registrazione-2")
+        val REG3: RegistrazioneId = RegistrazioneId("registrazione-3")
         val T0: Instant = Instant.parse("2026-09-26T09:00:00Z")
         val T1: Instant = Instant.parse("2026-09-26T10:00:00Z")
         val T2: Instant = Instant.parse("2026-09-26T11:00:00Z")
+        val T3: Instant = Instant.parse("2026-09-26T11:30:00Z")
         val ADESSO: Instant = Instant.parse("2026-09-26T12:00:00Z")
 
         /** Matches [ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA]: the Verifica keeps it whole (omessi = 0). */

@@ -185,7 +185,7 @@ private fun fontiVista(
 ): List<FonteVista> = fonti.map { id ->
     val segmento = checkNotNull(correnti[id]) { "Fonte $id assente dal Trascritto corrente di $r" }
     FonteVista(id.numero, voceVista(segmento.voceId, nomiVoci, r), segmento.intervallo.inizioMs)
-}.sortedBy { it.inizioMs }
+}.sortedWith(compareBy({ it.inizioMs }, { it.segmentoId })) // a parita' di inizioMs (Set order altrimenti instabile)
 
 private fun voceVista(voceId: VoceId, nomiVoci: Map<VoceRef, String>, r: RegistrazioneId): VoceVista =
     VoceVista(voceId.numero, "Voce ${voceId.numero}", nomiVoci[VoceRef(r, voceId)])

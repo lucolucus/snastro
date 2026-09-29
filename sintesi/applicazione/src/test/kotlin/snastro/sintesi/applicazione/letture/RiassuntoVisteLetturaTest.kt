@@ -27,9 +27,12 @@ import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.applicazione.porte.unaStruttura
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
+import snastro.sintesi.dominio.IngressoRiassunto
+import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.MotivoFallimento
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.SegmentoIngresso
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -140,11 +143,11 @@ class RiassuntoVisteLetturaTest {
     }
 
     @Test
-    fun `AC-S104 le Fonti sono ordinate per inizioMs corrente, le liste mantengono l'ordine memorizzato`() {
+    fun `AC-S104 le Fonti sono ordinate per inizioMs, ognuna con il voceId corrente, non tutte sulla stessa Voce`() {
         val segmenti = listOf(
-            unSegmentoSintesi(segmentoId = 1, voceId = 1, inizioMs = 5_000),
+            unSegmentoSintesi(segmentoId = 1, voceId = 3, inizioMs = 5_000),
             unSegmentoSintesi(segmentoId = 2, voceId = 1, inizioMs = 1_000),
-            unSegmentoSintesi(segmentoId = 3, voceId = 1, inizioMs = 3_000),
+            unSegmentoSintesi(segmentoId = 3, voceId = 2, inizioMs = 3_000),
         )
         val bozza = BozzaRiassunto(
             sommario = null,
@@ -156,7 +159,7 @@ class RiassuntoVisteLetturaTest {
             azioni = listOf(BozzaElemento("Un'azione fuori struttura.", listOf(99), null)), // fonte invalida: omessa
             puntiChiave = emptyList(),
         )
-        val struttura = unaStruttura(1 to 1, 2 to 1, 3 to 1)
+        val struttura = unaStruttura(1 to 3, 2 to 1, 3 to 2)
         val pronto = unRiassunto("r-1", REGISTRAZIONE, argomento = "budget", parole = 1_500).conAvvio()
             .conCompletamento(bozza, struttura)
         val a = unAmbiente(trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to segmenti)))
@@ -165,6 +168,11 @@ class RiassuntoVisteLetturaTest {
         val mostrato = checkNotNull(checkNotNull(a.lettura.di(REGISTRAZIONE)).mostrato)
 
         assertEquals(listOf(2, 3, 1), mostrato.decisioni[0].fonti.map { it.segmentoId }, "ordine per inizioMs")
+        assertEquals(
+            listOf(1, 2, 3),
+            mostrato.decisioni[0].fonti.map { it.voce.voceId },
+            "il voceId di ogni Fonte segue il Segmento corrente, non tutte la stessa Voce",
+        )
         assertEquals(listOf("Prima decisione.", "Seconda decisione."), mostrato.decisioni.map { it.testo.testoPiano() })
         assertEquals(1, mostrato.omessi)
         assertEquals("budget", mostrato.argomento)
@@ -207,6 +215,18 @@ class RiassuntoVisteLetturaTest {
         // Torna come prima: superato ridiventa false.
         val ripristinato = lettura(strutturaIniziale)
         assertEquals(false, checkNotNull(ripristinato.di(REGISTRAZIONE)).mostrato?.superato, "dopo il ripristino")
+
+        // Revisione: il Segmento 1, CITATO dalla Decisione, passa alla Voce 3 (non solo un non citato lo fa scattare).
+        val citatoRiassegnato = listOf(
+            unSegmentoSintesi(segmentoId = 1, voceId = 3),
+            unSegmentoSintesi(segmentoId = 2, voceId = 2),
+        )
+        val dopoRiassegnazioneCitata = lettura(citatoRiassegnato)
+        assertEquals(
+            true,
+            checkNotNull(dopoRiassegnazioneCitata.di(REGISTRAZIONE)).mostrato?.superato,
+            "riassegnazione di un Segmento citato dalla Decisione",
+        )
 
         // Un rename (nomi diversi) non tocca la struttura: superato resta false.
         val nomiConRename = LettoreNomiFinta(
@@ -303,6 +323,42 @@ class RiassuntoVisteLetturaTest {
     }
 
     @Test
+    fun `AC-S107 la stima senza nomi e' fissata al limite, un Nome lungo non la fa passare a NonDisponibile`() {
+        val voce = VoceId(1)
+        fun ingressoSenzaNomi(testo: String) = IngressoRiassunto.costruisci(
+            listOf(SegmentoIngresso(SegmentoId(1), voce, 0, testo)),
+            nomi = emptyMap(),
+        )
+        // Il piu' lungo testo il cui ingresso NAME-FREE resta esattamente a LIMITE_TOKEN (ricerca sulla formula
+        // pura, cosi' il confine resta esatto anche se il testo di contorno di IngressoRiassunto cambiasse).
+        var basso = 0
+        var alto = LimiteIngresso.LIMITE_TOKEN * 3
+        while (basso < alto) {
+            val meta = (basso + alto + 1) / 2
+            if (LimiteIngresso.stimaToken(ingressoSenzaNomi("a".repeat(meta))) <= LimiteIngresso.LIMITE_TOKEN) {
+                basso = meta
+            } else {
+                alto = meta - 1
+            }
+        }
+        val testoAlLimite = "a".repeat(basso)
+        check(LimiteIngresso.stimaToken(ingressoSenzaNomi(testoAlLimite)) == LimiteIngresso.LIMITE_TOKEN)
+
+        // Un Nome molto piu' lungo di "Voce 1": se la stima leggesse davvero i nomi (bug), sforerebbe il limite.
+        val nomeLungo = "Nome ".repeat(50).trim()
+        val segmentoAlLimite = unSegmentoSintesi(testo = testoAlLimite)
+        val a = unAmbiente(
+            trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(segmentoAlLimite))),
+            nomi = LettoreNomiFinta(
+                attribuzioni = mapOf(VoceRef(REGISTRAZIONE, voce) to "parlante-1"),
+                nomiParlanti = mapOf("parlante-1" to nomeLungo),
+            ),
+        )
+
+        assertEquals(DisponibilitaVista.Disponibile, checkNotNull(a.lettura.di(REGISTRAZIONE)).disponibilita)
+    }
+
+    @Test
     fun `AC-S108 modello rispecchia i 4 stati, argomentoPrecompilato segue il piu' recente tra fallito e pronto`() {
         listOf(
             StatoModelloLinguistico.NonInstallato(6_600_000_000L) to StatoModelloVista.NonInstallato(6_600_000_000L),
@@ -354,6 +410,24 @@ class RiassuntoVisteLetturaTest {
         ).conAvvio(T0.plusSeconds(61)).conFallimento()
         falliroPiuRecente.salva(fallitoNuovo).atteso()
         assertEquals("nuovo", argomentoPrecompilatoDi(falliroPiuRecente))
+
+        // Un fallito piu' vecchio del pronto: vince il pronto (il caso inverso, non solo "nessun fallito").
+        val prontoPiuRecente = RiassuntoRepositoryFinta()
+        val fallitoVecchio = unRiassunto(
+            "r-fallito-3",
+            REGISTRAZIONE,
+            argomento = "vecchio fallito",
+            richiestoAlle = T0,
+        ).conAvvio(T0.plusSeconds(1)).conFallimento()
+        prontoPiuRecente.salva(fallitoVecchio).atteso()
+        val prontoNuovo = unRiassunto(
+            "r-pronto-3",
+            REGISTRAZIONE,
+            argomento = "nuovo pronto",
+            richiestoAlle = T0.plusSeconds(60),
+        ).conAvvio(T0.plusSeconds(61)).conCompletamento(unaBozzaMinima(), unaStruttura(1 to 1))
+        prontoPiuRecente.salva(prontoNuovo).atteso()
+        assertEquals("nuovo pronto", argomentoPrecompilatoDi(prontoPiuRecente))
     }
 
     private fun unaBozzaMinima(): BozzaRiassunto = BozzaRiassunto(

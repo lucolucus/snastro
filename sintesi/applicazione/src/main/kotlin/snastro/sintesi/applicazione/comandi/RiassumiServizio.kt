@@ -20,6 +20,7 @@ import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.Riassumibilita
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.RiassuntoRichiestoDominio
 import snastro.sintesi.dominio.SegmentoIngresso
 import java.time.Clock
 
@@ -77,7 +78,7 @@ public class RiassumiServizio(
             val id = RiassuntoId(generatoreId.nuovo())
             val creato = Riassunto.richiedi(id, registrazioneId, argomento, cap, clock.instant())
             riassunti.salva(creato.aggregato).poi {
-                eventi.pubblica(RiassuntoRichiesto(registrazioneId))
+                eventi.pubblica(creato.evento.pubblicato())
                 Esito.Ok(id)
             }
         }
@@ -90,3 +91,5 @@ public class RiassumiServizio(
         nomi = emptyMap(),
     )
 }
+
+private fun RiassuntoRichiestoDominio.pubblicato(): RiassuntoRichiesto = RiassuntoRichiesto(registrazioneId)

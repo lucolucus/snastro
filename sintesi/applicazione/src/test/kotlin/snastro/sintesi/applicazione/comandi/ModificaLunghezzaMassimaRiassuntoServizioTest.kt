@@ -76,6 +76,27 @@ class ModificaLunghezzaMassimaRiassuntoServizioTest {
     }
 
     @Test
+    fun `AC-S91 299 e 2501 rifiutati non toccano un 1500 gia salvato, non solo la riga vuota PREDEFINITA`() {
+        // The test above only proves "nothing written" on an EMPTY row: it cannot tell a written PREDEFINITA
+        // apart from none at all. This seeds a real 1500 first and proves it survives each rejected value.
+        val a = unAmbiente()
+        a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, 1500)).atteso()
+
+        listOf(299, 2501).forEach { fuori ->
+            val errore = a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, fuori))
+                .erroreAtteso<ErroreSintesi.LunghezzaMassimaFuoriIntervallo>()
+
+            assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(fuori, 300, 2500), errore)
+            assertEquals(LunghezzaMassimaParole.di(1500).atteso(), a.lunghezze.trova(PROGETTO).parole, "$fuori")
+            assertEquals(
+                listOf(LunghezzaMassimaRiassuntoModificata(PROGETTO)),
+                a.eventi.pubblicati,
+                "$fuori: solo la pubblicazione del salvataggio iniziale",
+            )
+        }
+    }
+
+    @Test
     fun `INV-S10 un in_attesa un in_corso e un pronto mantengono il proprio tetto, il pronto resta non superato`() {
         val struttura = unaStruttura(1 to 1)
         val inAttesa = unRiassunto("r-attesa", REGISTRAZIONE_1, parole = 500)
