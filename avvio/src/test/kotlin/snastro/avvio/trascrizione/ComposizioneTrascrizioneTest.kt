@@ -423,6 +423,7 @@ class ComposizioneTrascrizioneTest {
     @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
     fun `AC-C58 un interrompi guasto durante lo spegnimento non impedisce di chiudere il database e rilasciare il lock`() {
         val bloccato = CountDownLatch(1)
+        val interrotta = CountDownLatch(1)
         val fonteGuasta = FonteCoda(
             // fermaEAttendi interrompe la FONTE in corso (non la prima del suo tipo): questa fonte aggiunta, accanto
             // alle vere Elaborazione e Riassunto dei moduli, e' davvero quella il cui interrompi guasto viene chiamato.
@@ -432,13 +433,19 @@ class ComposizioneTrascrizioneTest {
             },
             prossima = { _, _ ->
                 bloccato.countDown()
-                Thread.sleep(Long.MAX_VALUE) // mai raggiunto: runInterruptible interrompe il thread allo spegnimento
+                // Like an LLM's native call (ADR 0023 §5, AC-S162), this run IGNORES the interrupt: it ends only once
+                // interrompi flips its flag, so it is still "in corso" whenever fermaEAttendi reads it, however late
+                // the shutdown thread is scheduled. An interruptible fake ends on the scope's cancel instead (flaky).
+                attendiIgnorandoInterruzioni(interrotta)
                 RisultatoTentativo.Nessuno
             },
             ultimaTentata = { "guasta" },
             recupera = {},
             trattenuta = { false },
-            interrompi = { throw IllegalStateException("interrompi guasto") },
+            interrompi = {
+                interrotta.countDown() // il flag e' girato, POI il guasto
+                error("interrompi guasto") // IllegalStateException
+            },
         )
         val spia = SpiaSnastro()
         val ambiente = AmbienteProgetto(radice, fontiCoda = listOf(fonteGuasta))
@@ -446,11 +453,7 @@ class ComposizioneTrascrizioneTest {
         val progettoId = ambiente.progetto.progettoId
         assertTrue(bloccato.await(10, TimeUnit.SECONDS), "prossima deve essere partita e bloccata")
 
-        // sessione.chiudi() direttamente (non ambiente.close(), che cancella PRIMA lo scope genitore e attende
-        // fino a 5s lo spegnimento del suo esecutore: darebbe al worker tutto il tempo di sbloccarsi da solo,
-        // svuotando `corrente` prima ancora che fermaEAttendi lo legga) — la stessa successione stretta
-        // cancella-poi-fermaEAttendi di CodaCondivisaSegnalazioneTest, cosi' l'elemento e' ancora "in corso"
-        // quando fermaEAttendi chiama interrompi().
+        // sessione.chiudi() direttamente: lo spegnimento di produzione (cancel, poi ArrestoProgetto -> fermaEAttendi).
         spia.use { ambiente.sessione.chiudi() } // non deve lanciare, nonostante l'interrompi guasto (AC-C58)
 
         assertNull(ambiente.sessione.corrente.value)
@@ -548,7 +551,25 @@ class ComposizioneTrascrizioneTest {
         }
     }
 
+    /**
+     * AC-C58: waits for [segnale] like a native call would: deaf to the interrupt (restored on return, never lost),
+     * and bounded, so a regression that never calls `interrompi` fails the assertions instead of hanging the JVM.
+     */
+    private fun attendiIgnorandoInterruzioni(segnale: CountDownLatch) {
+        val scadenza = System.nanoTime() + TimeUnit.SECONDS.toNanos(ATTESA_INTERROMPI_S)
+        var interrotto = false
+        while (segnale.count > 0 && System.nanoTime() < scadenza) {
+            try {
+                segnale.await(scadenza - System.nanoTime(), TimeUnit.NANOSECONDS)
+            } catch (ignored: InterruptedException) {
+                interrotto = true
+            }
+        }
+        if (interrotto) Thread.currentThread().interrupt()
+    }
+
     private companion object {
+        const val ATTESA_INTERROMPI_S = 20L
         const val ATTESA_NESSUN_AVVIO_MS = 1_500L
         const val ABBONATO_DOCUMENTO = "snastro.documento.adattatori.eventi.AbbonatoDocumentoEventi"
     }
