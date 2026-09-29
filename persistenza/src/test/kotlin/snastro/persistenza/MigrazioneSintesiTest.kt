@@ -151,6 +151,19 @@ class MigrazioneSintesiTest {
         }
     }
 
+    /** A47: the CHECK (`6.sqm:42`) admits voce_id only for `azione`/`punto_chiave` — AC-S39 above only ever
+     * exercised `decisione`; `questione_aperta` was never proven, even though the same CHECK covers it. */
+    @Test
+    fun `AC-S39 CHECK rifiuta un voce_id su un elemento questione_aperta`() {
+        val db = databaseInMemoria()
+        val registrazioneId = db.seminaProgettoERegistrazione()
+        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+
+        assertFailsWith<SQLException> {
+            db.riassuntoElementoQueries.inserisci("r-1", "questione_aperta", 0L, "testo", 1L)
+        }
+    }
+
     @Test
     fun `AC-S39 riassunto_fonte rifiuta una seconda riga con la stessa chiave`() {
         val db = databaseInMemoria()

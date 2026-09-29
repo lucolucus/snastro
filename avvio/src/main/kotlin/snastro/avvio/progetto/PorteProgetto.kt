@@ -73,7 +73,7 @@ internal class PorteProgetto(
     val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Documento's and Sintesi's readers. */
-    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti)
+    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 

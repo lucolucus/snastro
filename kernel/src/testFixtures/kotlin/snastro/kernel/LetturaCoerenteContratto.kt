@@ -5,6 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertSame
 
 /**
@@ -131,6 +132,31 @@ public abstract class LetturaCoerenteContratto {
         a.confermati("dopo")
 
         assertEquals(listOf("dopo"), a.effetti())
+    }
+
+    /**
+     * B22: rule 2 ("`inLettura` nested in `inTransazione` JOINS it... opens nothing") means [modo] never
+     * becomes `LETTURA` here, so this further `inTransazione` does NOT hit rule 4's guard (AC-C18, an
+     * OUTERMOST `inLettura`) — it is accepted like any other nested write. Pins the current, documented
+     * behaviour (no ADR 0029 §2.4 line names this combination unconditionally forbidden either way).
+     */
+    @Test
+    public fun `B22 inTransazione dentro inLettura annidata in inTransazione e accettato`() {
+        val a = ambiente()
+
+        val esito = a.unitaDiLavoro.inTransazione {
+            a.scrivi("esterno")
+            val interno = a.lettura.inLettura {
+                a.unitaDiLavoro.inTransazione {
+                    a.scrivi("annidato")
+                    Esito.Ok(Unit)
+                }
+            }
+            interno.poi { Esito.Ok(Unit) }
+        }
+
+        assertIs<Esito.Ok<Unit>>(esito)
+        assertEquals(listOf("annidato", "esterno"), a.effetti().sorted())
     }
 
     @Test

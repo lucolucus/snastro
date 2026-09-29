@@ -1,5 +1,7 @@
 package snastro.parlanti.adattatori.persistenza
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import snastro.kernel.Esito
@@ -23,8 +25,13 @@ import snastro.persistenza.MetadatiDelProgetto
 import snastro.persistenza.MetadatiDiRegistrazione
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.checkpointDopoCommit
+import snastro.supporto.RitentaConBackoff
+import snastro.supporto.Segnalazione
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 import migrations.Impronta_vocale as ImprontaVocaleRiga
 import migrations.Parlante as ParlanteRiga
 
@@ -51,13 +58,42 @@ import migrations.Parlante as ParlanteRiga
  * nested transaction to the OUTERMOST one (`Transacter.kt`), so the checkpoint only ever runs once
  * that transaction has actually committed.
  *
+ * B17/D-0014 (pre-R3-4): [checkpointDopoCommit]'s own result is unusable (its KDoc), so [walTroncato] —
+ * the caller's own check of the project's `-wal` file, e.g. `File(cartella, "progetto.db-wal").let { !it.exists()
+ * || it.length() == 0L }` (mirrors `ParlanteRepositorySqlCheckpointTest`) — is what actually decides whether the
+ * checkpoint left purged pages behind (an open DEFERRED reader, ADR 0009/0020). When it does, [ritentaCheckpoint]
+ * (a [RitentaConBackoff], `:supporto` — this module's own edge, ADR 0028 §5) is asked for one more attempt,
+ * reported through the constructor's `segnalazione` and retried with a backoff until the WAL is finally empty;
+ * [avviaRitentaCheckpoint] starts that worker on the project's scope (`:avvio`'s `ModuloParlanti`, mirroring
+ * `AbbonatoRiallineamentoImpronte`'s own `RitentaConBackoff` wiring). The defaults (`walTroncato = { true }`, a
+ * no-op [Segnalazione]) preserve today's fire-and-forget behaviour for every caller that does not wire them
+ * (every existing test, and until `:avvio` wires the real check — DEVIATION, see DECISIONS/DEVIATIONS).
+ *
  * [trova]/[delProgetto] read the root row and its prints from ONE [lettura] snapshot (ADR 0029 §5,
  * AC-C30/C31): never the root outside it.
  */
 public class ParlanteRepositorySql(
     private val db: SnastroDatabase,
     private val lettura: LetturaCoerente,
+    private val walTroncato: () -> Boolean = { true },
+    private val segnalazione: Segnalazione = Segnalazione { _, _ -> },
+    ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
+    ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
 ) : ParlanteRepository {
+    private val ritentaCheckpoint =
+        RitentaConBackoff<Unit>(::ripetiCheckpoint, segnalazione, ritardoIniziale, ritardoMassimo)
+
+    /** Starts the checkpoint retry worker on [scope]; cancelling [scope] (or the returned [Job]) stops it. */
+    public fun avviaRitentaCheckpoint(scope: CoroutineScope): Job = ritentaCheckpoint.avvia(scope)
+
+    /** D-0014: the commit-time attempt itself is never tracked by [ritentaCheckpoint] (only ITS OWN later
+     * attempts are) — logged here once, then queued for retry. A property, not a member function (TooManyFunctions
+     * budget), shared by [salva] and [rimuovi]. */
+    private val alCheckpointIncompleto: () -> Unit = {
+        segnalazione.segnala("checkpoint WAL incompleto dopo il commit, in coda per il ritento", null)
+        ritentaCheckpoint.richiedi(Unit)
+    }
+
     override fun trova(id: ParlanteId): Parlante? = lettura.inLettura {
         val riga = db.parlanteQueries.trovaPerId(id.valore).executeAsOneOrNull() ?: return@inLettura null
         riga.inDominio(impronteDi(db, id))
@@ -79,14 +115,14 @@ public class ParlanteRepositorySql(
             if (ex.resultCode != SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE) throw ex
             return Esito.Errore(NomeGiaInUso(p.nome.valore))
         }
-        if (sostituisciImpronte(db, p)) db.checkpointDopoCommit()
+        if (sostituisciImpronte(db, p)) db.checkpointDopoCommit(walTroncato, alCheckpointIncompleto)
         return Esito.Ok(Unit)
     }
 
     override fun rimuovi(id: ParlanteId) {
         db.improntaVocaleQueries.eliminaDiParlante(id.valore)
         db.parlanteQueries.rimuovi(id.valore)
-        db.checkpointDopoCommit()
+        db.checkpointDopoCommit(walTroncato, alCheckpointIncompleto)
     }
 
     override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> =
@@ -112,6 +148,20 @@ public class ParlanteRepositorySql(
             modelloAtteso = attesa.modello,
         ).value
         return righe == 1L
+    }
+
+    /** D-0014: `true` = the WAL is now empty (done), `false` = [ritentaCheckpoint] retries with a backoff. Runs
+     * OUTSIDE any transaction (never wrapped, like [snastro.persistenza.checkpointDopoCommit]'s own hook body —
+     * `PRAGMA wal_checkpoint(TRUNCATE)` cannot run inside one). */
+    @Suppress("UnusedParameter") // RitentaConBackoff<Unit>'s lavoro signature: one coalesced key, unused on purpose
+    private suspend fun ripetiCheckpoint(ignorata: Unit): Boolean {
+        db.transazioneQueries.walCheckpointTruncate()
+        return walTroncato()
+    }
+
+    private companion object {
+        val RITARDO_INIZIALE_DEFAULT: Duration = 500.milliseconds
+        val RITARDO_MASSIMO_DEFAULT: Duration = 30.seconds
     }
 }
 

@@ -1,5 +1,6 @@
 package snastro.parlanti.applicazione.letture
 
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
@@ -15,16 +16,22 @@ import snastro.parlanti.applicazione.porte.ParlanteRepository
 public class NomiDelleVoci(
     private val attribuzioni: AttribuzioneRepository,
     private val parlanti: ParlanteRepository,
+    private val lettura: LetturaCoerente,
 ) {
     /**
      * AC-101: the Nome of the Parlante each attributed Voce of [id] is attributed to, keyed by its
      * [VoceRef] — the Parlante's CURRENT Nome, even when it is `eliminato` (tombstone, INV-13/INV-24).
      * A Voce without Attribuzione is absent.
+     *
+     * B33: one [attribuzioni] read + one [parlanti].trova per attributed Voce — wrapped in ONE [lettura]
+     * snapshot (ADR 0029 §5) so outside a unit every `trova` doesn't open its own read transaction (overhead)
+     * and the names are all read from the SAME instant, never a mix of an old and a newer Parlante state.
      */
-    public fun nomi(id: RegistrazioneId): Map<VoceRef, String> =
+    public fun nomi(id: RegistrazioneId): Map<VoceRef, String> = lettura.inLettura {
         attribuzioni.diRegistrazione(id)
             .mapNotNull { a -> parlanti.trova(a.parlanteId)?.let { p -> a.voceRef to p.nome.valore } }
             .toMap()
+    }
 
     /** AC-102: the distinct Registrazioni with at least one Attribuzione to [parlanteId]. */
     public fun registrazioniCon(parlanteId: ParlanteId): List<RegistrazioneId> =

@@ -19,11 +19,12 @@ INSERT INTO riassunto(id, registrazione_id, stato, argomento, lunghezza_massima_
 VALUES (:id, :registrazioneId, :stato, :argomento, :lunghezzaMassimaParole, :richiestoAlle,
     :avviatoAlle, :motivoFallimento, :sommario, :omessi, :struttura);
 
--- The queue's claim: in_attesa -> in_corso. A plain UPDATE is safe here — at most one in_attesa|
--- in_corso row exists per Registrazione (riassunto_non_pronto_unico), so there is nothing to race
--- against on this id. The completion transition below is the one that needs a CAS.
+-- A46: the queue's claim, in_attesa -> in_corso, IS its own CAS — the unique index only stops a second
+-- non-pronto row of the same Registrazione, never two claims racing the SAME id. Correctness rests on
+-- the single-consumer queue (avvio-coda-condivisa) in production; this guard is the cheap defensive
+-- backstop RiassuntoRepositorySql.aggiornaRadiceEsistente's own `check(righe == 1L)` (A83) relies on.
 avvia:
-UPDATE riassunto SET stato = 'in_corso', avviato_alle = :avviatoAlle WHERE id = :id;
+UPDATE riassunto SET stato = 'in_corso', avviato_alle = :avviatoAlle WHERE id = :id AND stato = 'in_attesa';
 
 -- ADR 0022 §4 step 3 (INV-S8): the CAS half of completion — 0 affected rows iff the id is absent, or
 -- no longer in_corso (already completed, or every Riassunto of the Registrazione was purged meanwhile).

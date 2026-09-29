@@ -75,10 +75,11 @@ public class RiassuntoRepositorySql(
     }
 
     override fun salva(r: Riassunto): Esito<Unit> = try {
-        if (db.riassuntoQueries.trovaPerId(r.id.valore).executeAsOneOrNull() == null) {
+        val esistente = db.riassuntoQueries.trovaPerId(r.id.valore).executeAsOneOrNull()
+        if (esistente == null) {
             scriviRadiceNuova(db, r)
         } else {
-            aggiornaRadiceEsistente(db, r)
+            aggiornaRadiceEsistente(db, r, statoAttuale = esistente.stato)
         }
         eliminaFigli(db, r.id)
         if (r.pronto) scriviFigli(db, r)
@@ -95,7 +96,13 @@ public class RiassuntoRepositorySql(
         return try {
             if (r.pronto) rimuoviPrecedentePronto(db, r.registrazioneId)
             val righe = eseguiConcludi(db, r)
-            if (righe == 0L) return Esito.Ok(false)
+            // A86: esistente.stato == CODICE_IN_CORSO was just read above, in the SAME BEGIN IMMEDIATE
+            // transaction (exclusive write lock held since it started) — no other writer can have moved this
+            // row between that read and this UPDATE, so 0 rows here is impossible on the intended path. `check`
+            // over a silent `Ok(false)` matters especially for a pronto: rimuoviPrecedentePronto above has, by
+            // this point, already removed the previous pronto — an `Ok(false)` here would silently report
+            // "nothing happened" while that row is actually gone.
+            check(righe == 1L) { "concludi di ${r.id}: 0 righe toccate dopo un esistente gia' in_corso" }
             if (r.pronto) scriviFigli(db, r)
             Esito.Ok(true)
         } catch (ex: SQLiteException) {
@@ -133,12 +140,31 @@ private fun scriviRadiceNuova(db: SnastroDatabase, r: Riassunto) {
     )
 }
 
-/** No mutable column of an `in_attesa` row ever changes after [scriviRadiceNuova] (INV-S10): nothing to write. */
-private fun aggiornaRadiceEsistente(db: SnastroDatabase, r: Riassunto) {
+/**
+ * No mutable column of an `in_attesa` row ever changes after [scriviRadiceNuova] (INV-S10): nothing to write.
+ * [salva] is only ever called right after the aggregate's own ONE-STEP transition ([RiassuntoRepositorySql]'s
+ * class KDoc), so the UPDATE issued here for `in_corso`/`pronto`/`fallito` must always touch exactly the one row
+ * with [r]'s id — UNLESS the stored row is already at [r]'s target [statoAttuale] (a repeat save of the identical,
+ * already-stored state, the class KDoc's harmless no-op: e.g. `salva` called twice in a row with the same
+ * unchanged [r]). `check` turns any OTHER silent 0-row UPDATE (a save more than one transition ahead, e.g. a
+ * `pronto`/`fallito` target over a row still `in_attesa`) into a loud failure instead of letting [salva] go on to
+ * write the incoming children against a root row it never actually moved, which every later
+ * [RiassuntoRepositorySql.trova]/[diRegistrazione] would then read back INV-S1-broken (A83).
+ */
+private fun aggiornaRadiceEsistente(db: SnastroDatabase, r: Riassunto, statoAttuale: String) {
     if (r.inCorso) {
-        db.riassuntoQueries.avvia(avviatoAlle = checkNotNull(r.avviatoAlle).toEpochMilli(), id = r.id.valore)
+        val righe = db.riassuntoQueries.avvia(
+            avviatoAlle = checkNotNull(r.avviatoAlle).toEpochMilli(),
+            id = r.id.valore,
+        ).value
+        check(righe == 1L || statoAttuale == r.stato.codice) {
+            "salva: avvia di ${r.id} non ha toccato nessuna riga (precondizione one-step violata)"
+        }
     } else if (r.pronto || r.fallito) {
-        eseguiConcludi(db, r)
+        val righe = eseguiConcludi(db, r)
+        check(righe == 1L || statoAttuale == r.stato.codice) {
+            "salva: concludi di ${r.id} non ha toccato nessuna riga (precondizione one-step violata)"
+        }
     }
 }
 

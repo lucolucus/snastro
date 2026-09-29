@@ -39,6 +39,53 @@ class CheckpointDopoCommitTest {
         assertEquals(listOf("BEGIN IMMEDIATE TRANSACTION", "ROLLBACK TRANSACTION"), sql.transazioniECheckpoint())
     }
 
+    /** B17/D-0014: [checkpointDopoCommit]'s own `walCheckpointTruncate()` result is unusable (see its KDoc) — the
+     * caller-supplied [snastro.persistenza.checkpointDopoCommit]'s `walTroncato` is what decides `seIncompleto`. */
+    @Test
+    fun `B17 quando walTroncato riporta falso seIncompleto gira una volta dopo il commit`() {
+        val sql = DatabaseTracciato(cartella)
+        var chiamate = 0
+
+        sql.uow.inTransazione {
+            sql.db.checkpointDopoCommit(walTroncato = { false }, seIncompleto = { chiamate++ })
+            sql.scrivi("uno")
+            Esito.Ok(Unit)
+        }.atteso()
+
+        assertEquals(1, chiamate)
+    }
+
+    /** A truthful [checkpointDopoCommit]'s `walTroncato` (the default, and the common case) never calls
+     * `seIncompleto` — the existing fire-and-forget tests above stay green unchanged with no `walTroncato` at all. */
+    @Test
+    fun `B17 quando walTroncato riporta vero seIncompleto non gira mai`() {
+        val sql = DatabaseTracciato(cartella)
+        var chiamate = 0
+
+        sql.uow.inTransazione {
+            sql.db.checkpointDopoCommit(walTroncato = { true }, seIncompleto = { chiamate++ })
+            sql.scrivi("uno")
+            Esito.Ok(Unit)
+        }.atteso()
+
+        assertEquals(0, chiamate)
+    }
+
+    /** On a rollback, the checkpoint itself never runs (existing AC-C26 coverage above) — so neither does the
+     * completion check: [seIncompleto] must not fire either. */
+    @Test
+    fun `B17 in una transazione annullata seIncompleto non gira mai`() {
+        val sql = DatabaseTracciato(cartella)
+        var chiamate = 0
+
+        sql.uow.inTransazione<Unit> {
+            sql.db.checkpointDopoCommit(walTroncato = { false }, seIncompleto = { chiamate++ })
+            Esito.Errore(ErroreDiProva.Fallito("rollback"))
+        }.erroreAtteso<ErroreDiProva.Fallito>()
+
+        assertEquals(0, chiamate)
+    }
+
     @Test
     fun `AC-C26 due chiamate nella stessa transazione fanno due checkpoint`() {
         val sql = DatabaseTracciato(cartella)
@@ -53,6 +100,30 @@ class CheckpointDopoCommitTest {
             listOf("BEGIN IMMEDIATE TRANSACTION", "END TRANSACTION", CHECKPOINT, CHECKPOINT),
             sql.transazioniECheckpoint(),
         )
+    }
+
+    /** B23: no enclosing unit at all — the raw `transaction { }` call opens its OWN `BEGIN IMMEDIATE` (never
+     * "joins" anything) and the checkpoint still runs exactly once, inside it. */
+    @Test
+    fun `B23 fuori da ogni unita checkpointDopoCommit apre una propria transazione`() {
+        val sql = DatabaseTracciato(cartella)
+
+        sql.db.checkpointDopoCommit()
+
+        assertEquals(listOf("BEGIN IMMEDIATE TRANSACTION", "END TRANSACTION", CHECKPOINT), sql.transazioniECheckpoint())
+    }
+
+    /** B23: called from inside [snastro.kernel.LetturaCoerente.inLettura], the checkpoint DOES join the read
+     * transaction, but its `afterCommit` only fires once the read itself ends — never during the snapshot. */
+    @Test
+    fun `B23 dentro inLettura il checkpoint gira dopo la END della lettura mai durante`() {
+        val sql = DatabaseTracciato(cartella)
+
+        sql.uow.inLettura {
+            sql.db.checkpointDopoCommit()
+        }
+
+        assertEquals(listOf("BEGIN DEFERRED TRANSACTION", "END TRANSACTION", CHECKPOINT), sql.transazioniECheckpoint())
     }
 
     private fun DatabaseTracciato.transazioniECheckpoint() =
