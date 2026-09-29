@@ -51,3 +51,8 @@
 2026-09-29T08:23:47Z	c2-contenuto-app-base	worker	dispatch	cycle=0	tier=standard	model=sonnet
 2026-09-29T08:52:41Z	c2-contenuto-app-base	verifier	result	cycle=0	tier=deep	model=opus	PASS; integrated
 2026-09-29T08:52:42Z	c3-composizione-piatta	worker	dispatch	cycle=0	tier=deep	model=opus
+2026-09-29T10:30:37Z	c3-composizione-piatta	verifier+code-review	result	cycle=0	tier=deep	model=opus	FAIL gate flake AC-C58 / APPROVE → rework 1
+2026-09-29T11:22:47Z	c3-composizione-piatta	verifier	result	cycle=1	tier=deep	model=opus	FAIL gate AC-S145 timeout → rework 2 (last)
+2026-09-29T11:56:54Z	c3-composizione-piatta	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW (AC-S145 test-probe race; test-only fix)
+2026-09-29T12:10:46Z	c3-composizione-piatta	verifier	result	cycle=2	tier=deep	model=opus	PASS; integrated
+2026-09-29T12:10:54Z	c4-presenter-obbligatori	worker	dispatch	cycle=0	tier=standard	model=sonnet

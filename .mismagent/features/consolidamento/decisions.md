@@ -66,3 +66,29 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: worker-composer
 - Docs: [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
 - Revisit: c3 is re-scoped or dropped.
+
+### D-0006 · Riassunto cancel leaves the shared queue
+- Meta: 2026-09-29; scope: block:c3-composizione-piatta; status: accepted
+- Question: may c3 remove the sintesi-pinned FonteCoda.annulla and CodaCondivisa.annullaInCorso (sintesi D-0005) to break the queue↔Sintesi cycle?
+- Options: accept the removal with a dated ADR note (kept) vs restore the pinned fields on the queue.
+- Hypothesis: n/a — decided by the user on the c3 reviews, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Check: n/a — decided by the user on the c3 reviews, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Result: n/a — decided by the user on the c3 reviews, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Debate: verifier flagged a pinned-contract change; code-review judged it implied by ADR 0030 §1; both recommended accepting; AC-S63/S149/S161/S162 green.
+- Decision: best-effort Riassunto cancel is EsecuzioniRiassunto.annulla(registrazioneId), called by ModuloSintesi; the queue only wakes via Campanello. Supersedes the 7th FonteCoda field of sintesi D-0005. Owed: a dated note in ADR 0023 §5 / ADR 0030 §1.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md), [pre-release](pre-release.md)
+- Revisit: another queue source needs a cancel hook.
+
+### D-0007 · c3 flat composition choices
+- Meta: 2026-09-29; scope: block:c3-composizione-piatta; status: accepted
+- Question: how does the single composition filter events, recover, start, stop and keep its tests deterministic?
+- Options: filtered registration (kept) vs unfiltered; sync recovery at open (kept) vs in avvia; one 5 s shutdown deadline (kept) vs per-level bounds.
+- Hypothesis: n/a — decided by ADR 0030, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Check: n/a — decided by ADR 0030, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Result: n/a — decided by ADR 0030, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Debate: reviews found two load flakes (AC-C58, AC-S145), both test races fixed test-side; production shutdown order kept (moving ferma before cancel would hang).
+- Decision: Abbonamento per event type; recupera() sync at open; ArrestoProgetto reverse order, 5 s total, poi after last ferma; fermaEAttendi interrupts the running source; start order Trascrizione, Documento, Parlanti, Sintesi, Progetto.
+- By: decided: worker; recorded: worker-composer
+- Docs: [pre-release](pre-release.md), [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Revisit: a subscriber needs a supertype, or shutdown exceeds 5 s in the field.
