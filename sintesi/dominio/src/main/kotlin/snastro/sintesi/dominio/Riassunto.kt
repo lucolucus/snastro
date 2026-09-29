@@ -52,10 +52,12 @@ public class Riassunto internal constructor(
     public val motivoFallimento: MotivoFallimento? get() = _motivoFallimento
 
     public val sommario: Sommario? get() = _contenuto?.sommario
-    public val decisioni: List<Decisione> get() = _contenuto?.decisioni.orEmpty()
-    public val questioniAperte: List<QuestioneAperta> get() = _contenuto?.questioniAperte.orEmpty()
-    public val azioni: List<Azione> get() = _contenuto?.azioni.orEmpty()
-    public val puntiChiave: List<PuntoChiave> get() = _contenuto?.puntiChiave.orEmpty()
+
+    // .toList() (not the raw field): state captive, an accessor never exposes the backing collection.
+    public val decisioni: List<Decisione> get() = _contenuto?.decisioni?.toList().orEmpty()
+    public val questioniAperte: List<QuestioneAperta> get() = _contenuto?.questioniAperte?.toList().orEmpty()
+    public val azioni: List<Azione> get() = _contenuto?.azioni?.toList().orEmpty()
+    public val puntiChiave: List<PuntoChiave> get() = _contenuto?.puntiChiave?.toList().orEmpty()
 
     /** Elements (+ a Sommario) dropped by the Verifica delle fonti; null unless `pronto`. */
     public val omessi: Int? get() = _contenuto?.omessi
@@ -153,7 +155,17 @@ public class Riassunto internal constructor(
             val haElementi = sommario != null || decisioni.isNotEmpty() || questioniAperte.isNotEmpty() ||
                 azioni.isNotEmpty() || puntiChiave.isNotEmpty()
             require(omessi != null || !haElementi) { "INV-S1: contenuto senza omessi" }
-            val contenuto = omessi?.let { EsitoVerifica(sommario, decisioni, questioniAperte, azioni, puntiChiave, it) }
+            // .toList(): the caller's lists (e.g. built by the mapper) are never aliased by the root (state captive).
+            val contenuto = omessi?.let {
+                EsitoVerifica(
+                    sommario,
+                    decisioni.toList(),
+                    questioniAperte.toList(),
+                    azioni.toList(),
+                    puntiChiave.toList(),
+                    it,
+                )
+            }
             return Riassunto(
                 id, registrazioneId, argomento, lunghezzaMassima, richiestoAlle,
                 stato, avviatoAlle, motivoFallimento, contenuto, struttura,

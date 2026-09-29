@@ -7,6 +7,14 @@ import snastro.kernel.VoceId
  * a speaker is `{V<n>}`, a literal brace is doubled (`{{`, `}}`).
  */
 public data class TestoConVoci(val parti: List<ParteTesto>) {
+    init {
+        // Programmer-error guard (CR-5): keeps every [ParteTesto.Voce] inside the [TOKEN] range so `codifica()`
+        // can never write what `decodifica()` would reject (A28: n >= 1, at most 9 digits, no leading zero).
+        parti.filterIsInstance<ParteTesto.Voce>().forEach { voce ->
+            require(voce.voceId.numero in 1..VOCE_ID_MASSIMO) { "VoceId non canonico: ${voce.voceId.numero}" }
+        }
+    }
+
     /** Every Voce referenced in the text. */
     public val voci: Set<VoceId> get() = parti.filterIsInstance<ParteTesto.Voce>().map { it.voceId }.toSet()
 
@@ -46,5 +54,8 @@ public data class TestoConVoci(val parti: List<ParteTesto>) {
 
         /** `{{`, `}}`, a well-formed `{V<n>}` (n ≥ 1, no leading zero: lossless), or a lone brace (malformed). */
         private val TOKEN = Regex("""\{\{|}}|\{V([1-9][0-9]{0,8})}|[{}]""")
+
+        /** The [TOKEN] regex's upper bound: at most 9 digits, no leading zero (A28). */
+        private const val VOCE_ID_MASSIMO: Int = 999_999_999
     }
 }

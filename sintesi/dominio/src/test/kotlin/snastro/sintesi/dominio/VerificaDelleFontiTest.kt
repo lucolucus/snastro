@@ -134,6 +134,20 @@ class VerificaDelleFontiTest {
     }
 
     @Test
+    fun `A29 un elemento con Fonti valide ma testo vuoto e scartato come un Sommario vuoto, non tenuto`() {
+        val r = completa(
+            unaBozza(
+                sommario = "   ",
+                decisioni = listOf(BozzaElemento("  ", fonti = listOf(1), voce = null), unElemento("tenuta", 1)),
+            ),
+        )
+
+        assertNull(r.sommario, "un Sommario vuoto resta assente")
+        assertEquals(listOf(Decisione(testo("tenuta"), segmenti(1))), r.decisioni, "l elemento vuoto non e tenuto")
+        assertEquals(0, r.omessi, "come il Sommario vuoto, il testo vuoto non e contato: non e stato scartato nulla")
+    }
+
+    @Test
     fun `INV-S5 un token malformato scarta l elemento che lo porta e lo conta`() {
         listOf("{ solo", "solo }", "{V} x", "{V0} x", "{Vx} x").forEach { malformato ->
             val r = completa(unaBozza(decisioni = listOf(unElemento(malformato, 1), unElemento("tenuta", 1))))
