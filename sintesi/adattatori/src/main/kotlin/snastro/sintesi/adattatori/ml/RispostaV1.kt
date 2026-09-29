@@ -9,7 +9,8 @@ import snastro.sintesi.applicazione.porte.RispostaModello
  * Answer schema v1 (provisional until spike `qualita-riassunto`'s ADR, ADR 0021 §4): the JSON the bounded grammar
  * ([GrammaticaRisposta]) makes the model write, read into the port's raw [RispostaModello]. Exactly the five keys
  * [CHIAVI]; elements `{testo, fonti}` (+ `responsabile` for azioni, `parlante` for punti_chiave, an integer or
- * `null`). Every text is re-expressed with [VociNelTesto]. The ids are NOT validated here: the root does ([INV-S4]).
+ * `null`). Every text is re-expressed with [VociNelTesto]; the Sommario is split into paragraphs
+ * ([ParagrafiSommario]). The ids are NOT validated here: the root does ([INV-S4]).
  */
 internal object RispostaV1 {
     val CHIAVI: List<String> = listOf("sommario", "decisioni", "questioni_aperte", "azioni", "punti_chiave")
@@ -25,7 +26,7 @@ internal object RispostaV1 {
         val sommario = radice["sommario"]
         if (sommario != null && sommario !is String) return null
         return RispostaModello(
-            sommario = (sommario as String?)?.let { VociNelTesto.canonico(it, legenda) },
+            sommario = (sommario as String?)?.let { VociNelTesto.canonico(ParagrafiSommario.dividi(it), legenda) },
             decisioni = elementi(radice["decisioni"], setOf(), legenda) { testo, fonti, _ ->
                 ElementoRisposta(testo, fonti)
             } ?: return null,

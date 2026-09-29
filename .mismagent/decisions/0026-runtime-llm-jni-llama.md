@@ -125,7 +125,9 @@ their cancel past the open, never during it.)*
 > prompt now asks for a TARGET of ≈ 40 % of the transcript's words (rounded to 50, at least 250, never above the cap)
 > with a Sommario of ≈ 30 % of it, and each list's grammar bound is one item per 60 target words, in **[6, 40]**
 > (`MisuraRisposta`, `GrammaticaRisposta.per`). `fonti` ≤ 6 and `max_tokens` (from the cap) are unchanged, so the
-> output is still bounded twice.
+> output is still bounded twice. The Sommario is split into paragraphs by the adapter (`ParagrafiSommario`: at the
+> first sentence end past 80 words): asking Qwen3.5 9B for paragraphs itself — raw line breaks, a list of paragraphs,
+> the Sommario last — each time emptied the four lists or ended the answer early (4 runs on New Recording 4).
 > **Amended 2026-09-29 [user]: limits lifted, same model.** The word cap goes to **[300, 10 000]** (default 2000):
 > `max_tokens` at 10 000 = 35 512. `n_ctx` is no longer fixed: each run opens ⌈(estimate of the formatted prompt +
 > `max_tokens`) / 1024⌉ × 1024, never below 40 960 (inputs ≤ ≈ 1 h 10 open exactly as measured below) nor above the
