@@ -49,4 +49,14 @@ internal abstract class FonteCodaContratto {
 
         assertEquals(RisultatoTentativo.Nessuno, risultato, "un limite prima della testa la rifiuta, mai la rivendica")
     }
+
+    @Test
+    fun `tutti concorda con teste guidato fino in fondo, stessi id nello stesso ordine`() {
+        val fonte = conDue()
+
+        val viaTeste = enumeraViaTeste(fonte.teste) // il fallback di default (A122): il riferimento
+        val viaTutti = fonte.tutti() // la fonte REALE: o lo stesso fallback, o la sua listing a query singola (A124)
+
+        assertEquals(viaTeste, viaTutti, "tutti() deve elencare esattamente cio' che teste elenca fino in fondo")
+    }
 }

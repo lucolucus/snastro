@@ -85,7 +85,9 @@ import kotlin.coroutines.coroutineContext
  * cancels the scope given to [avvia] first): it calls the CURRENTLY running item's source [FonteCoda.interrompi]
  * (unconditional — unlike [annulla][FonteCoda.annulla], no `(tipo, registrazioneId)` match is needed,
  * because only one item can ever be running) before/while [runInterruptible] interrupts whatever call
- * is mid-flight. With nothing running, no source's `interrompi` is called.
+ * is mid-flight. With nothing running, no source's `interrompi` is called. After a cancel (A120), "running"
+ * can already have FINISHED — `interrompi` is still called on its source; both real implementations are
+ * no-ops when nothing of theirs is in flight, so this is harmless.
  *
  * **A throwing peek is handled like an escape (MED, user-approved 2026-09-26).** [FonteCoda.teste] and
  * [FonteCoda.trattenuta] are read inside [eseguiProtetto] too (not just [FonteCoda.prossima]): a source
@@ -182,7 +184,9 @@ internal class CodaCondivisa(
      * **A120 (MED, fixed).** The caller already cancelled the scope BEFORE calling this, so [provaAvanzare]'s
      * own cancellation-triggered unwind can race this method's read of [inCorso] on the calling thread. [inCorso]
      * is only cleared on a NORMAL (non-cancelling) completion — never mid-shutdown — so this read always still
-     * sees the source that was running, however late the worker's own `finally` runs relative to it.
+     * sees the source that was running, however late the worker's own `finally` runs relative to it. That
+     * item can already have FINISHED by then — `interrompi` is called on it anyway; both real implementations
+     * (`EsecuzioniRiassunto`, Elaborazione's default no-op) do nothing when nothing of theirs is in flight.
      */
     fun fermaEAttendi(timeoutMs: Long = TIMEOUT_STOP_MS): Boolean {
         inCorso?.let { fonte ->
@@ -354,7 +358,9 @@ internal data class ElementoInCoda(val id: String, val registrazioneId: String, 
  * [interrompi] (D-0006, accepted pin extension, additive/backward-compatible, default no-op): the STOP
  * channel — [CodaCondivisa.fermaEAttendi] calls it, UNCONDITIONALLY, on whichever source's item is
  * currently running, before/while it interrupts the worker. Unlike [annulla] it takes no
- * `registrazioneId`: only one item can ever be running, so there is nothing to match.
+ * `registrazioneId`: only one item can ever be running, so there is nothing to match. After a cancel
+ * (A120), this can be a source whose item already finished — both real implementations no-op when
+ * nothing of theirs is in flight, so this is harmless.
  *
  * [tutti] (A122/A124, accepted pin extension, additive/backward-compatible): ONE full, ordered listing of every
  * `in_attesa` item, used by [CodaCondivisa.istantanea] instead of driving [teste] to exhaustion. Defaults to
