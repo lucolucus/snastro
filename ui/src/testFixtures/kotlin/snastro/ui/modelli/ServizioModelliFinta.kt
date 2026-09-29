@@ -15,6 +15,12 @@ import kotlinx.coroutines.flow.asStateFlow
  * [scaricaFacoltativo]/[statoFacoltativi] (ADR 0025, `tec-modelli-ui-facoltativo`) mirror the same
  * shape one level down, keyed by id: [emettiFacoltativo] simulates a later tick the same way [emetti]
  * does for the required flow.
+ *
+ * [scaricaFacoltativo] mirrors the D2 (`ServizioModelliProvisioning`) contract (A144/A145): an id
+ * already [StatoModelloFacoltativo.Installato] is a TRUE no-op (nothing re-attempted, [alTentativoDiScarico]
+ * not called); an id outside [facoltativiIniziali]'s keys (unknown to the catalogue) ends in
+ * [StatoModelloFacoltativo.Errore]`(`[ErroreServizioModelli.DownloadFallito]`)`, never `Installato` — the
+ * real adapter's `ProvisioningModelli.scarica(id)` fails the same way for an id its catalogue never declared.
  */
 class ServizioModelliFinta(
     iniziale: StatoModelli = StatoModelli.Mancanti(numero = 1, totaleByte = 1_000_000),
@@ -22,9 +28,13 @@ class ServizioModelliFinta(
     private val risultatoScarica: StatoModelli = StatoModelli.Pronti,
     facoltativiIniziali: Map<String, StatoModelloFacoltativo> = emptyMap(),
     private val risultatoScaricaFacoltativo: StatoModelloFacoltativo = StatoModelloFacoltativo.Installato,
+    /** Test-only probe (A145): called once per REAL download attempt, never for an already-Installato id. */
+    private val alTentativoDiScarico: (String) -> Unit = {},
 ) : ServizioModelli {
     private val _stato = MutableStateFlow(iniziale)
     override val stato: StateFlow<StatoModelli> = _stato.asStateFlow()
+
+    private val idsConosciuti = facoltativiIniziali.keys
 
     private val _statoFacoltativi = MutableStateFlow(facoltativiIniziali)
     override val statoFacoltativi: StateFlow<Map<String, StatoModelloFacoltativo>> = _statoFacoltativi.asStateFlow()
@@ -34,7 +44,16 @@ class ServizioModelliFinta(
     }
 
     override fun scaricaFacoltativo(id: String) {
-        _statoFacoltativi.value = _statoFacoltativi.value + (id to risultatoScaricaFacoltativo)
+        if (_statoFacoltativi.value[id] == StatoModelloFacoltativo.Installato) return // A145: true no-op
+
+        alTentativoDiScarico(id)
+        val esito = if (id in idsConosciuti) {
+            risultatoScaricaFacoltativo
+        } else {
+            // A144: an id the catalogue never declared — mirrors ProvisioningModelli.scarica's own failure.
+            StatoModelloFacoltativo.Errore(ErroreServizioModelli.DownloadFallito("id sconosciuto: '$id'"))
+        }
+        _statoFacoltativi.value = _statoFacoltativi.value + (id to esito)
     }
 
     override fun licenze(): List<LicenzaVista> = licenzeIniziali

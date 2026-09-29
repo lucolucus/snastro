@@ -82,7 +82,16 @@ class ModelloLinguisticoFintoTest : ModelloLinguisticoContratto() {
 
     @Test
     fun `AC-S12 il controllo dei parlanti rifiuta ogni forma diversa da V tra graffe`() {
-        listOf("V1 dice di si", "come detto da [V2]", "Voce 3 propone", "{V1} e V2").forEach {
+        listOf(
+            "V1 dice di si",
+            "come detto da [V2]",
+            "Voce 3 propone",
+            "{V1} e V2",
+            // A11: case-insensitive and \s* — un tempo sfuggivano tutte e tre.
+            "la voce 2 propone",
+            "Voce2 conferma",
+            "v2 e d'accordo",
+        ).forEach {
             assertTrue(parlanteFuoriForma(it), it)
         }
         listOf("{V1} e {V12} concordano", "Versione 2 del piano", "nessun parlante").forEach {

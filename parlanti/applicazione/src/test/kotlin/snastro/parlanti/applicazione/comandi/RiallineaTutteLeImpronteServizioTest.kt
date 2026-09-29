@@ -15,7 +15,9 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
+import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.RigaImpronta
 import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
@@ -90,6 +92,29 @@ class RiallineaTutteLeImpronteServizioTest {
         servizio().esegui(RiallineaTutteLeImpronte(PROGETTO)).atteso()
 
         assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-C33 la lettura di impronteDelProgetto gira dentro inLettura`() {
+        val viste = mutableListOf<Boolean>()
+        val parlantiSpia = object : ParlanteRepository by parlanti {
+            override fun impronteDelProgetto(id: ProgettoId): List<RigaImpronta> =
+                parlanti.impronteDelProgetto(id).also { viste += transazioni.letturaAperta }
+        }
+        val riallinea = RiallineaImpronteServizio(
+            eventi.unitaDiLavoro,
+            voci,
+            parlanti,
+            DecodificatoreAudioFinta(transazioni),
+            EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
+            eventi,
+        )
+        val servizio = RiallineaTutteLeImpronteServizio(transazioni, parlantiSpia, riallinea)
+        unParlanteConImpronteObsolete("Marco", PROGETTO, listOf(A))
+
+        servizio.esegui(RiallineaTutteLeImpronte(PROGETTO)).atteso()
+
+        assertEquals(listOf(true), viste, "impronteDelProgetto deve girare dentro inLettura")
     }
 
     @Test

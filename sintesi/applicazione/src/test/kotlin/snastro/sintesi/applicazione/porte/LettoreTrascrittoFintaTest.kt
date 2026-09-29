@@ -75,6 +75,20 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
             return voce
         }
 
+        override fun unisciVoci(r: RegistrazioneId, sopravvive: VoceId, rimossa: VoceId) {
+            val lista = trascritti.getValue(r)
+            trascritti[r] = lista.map { if (it.voceId == rimossa) it.copy(voceId = sopravvive) else it }.toMutableList()
+        }
+
+        override fun dividiVoce(r: RegistrazioneId, origine: VoceId, segmenti: Set<SegmentoId>): VoceId {
+            val nuova = VoceId(prossimaVoce.getValue(r)).also { prossimaVoce[r] = it.numero + 1 }
+            val lista = trascritti.getValue(r)
+            trascritti[r] = lista.map {
+                if (it.voceId == origine && it.segmentoId in segmenti) it.copy(voceId = nuova) else it
+            }.toMutableList()
+            return nuova
+        }
+
         private fun passa(r: RegistrazioneId, da: Set<Stato>, a: Stato) {
             val stati = elaborazioni.getValue(r)
             require(stati.lastOrNull() in da) { "ultima Elaborazione ${stati.lastOrNull()}, attesa una di $da" }

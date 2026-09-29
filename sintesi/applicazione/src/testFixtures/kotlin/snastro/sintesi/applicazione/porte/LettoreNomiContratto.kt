@@ -43,6 +43,36 @@ public abstract class LettoreNomiContratto {
     }
 
     @Test
+    public fun `AC-S8 una Voce ri-attribuita risolve al Parlante attuale, non al primo`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val r = a.aggiungiRegistrazione(voci = 1)
+        a.attribuisciANuovo(r.voci[0], "Marco")
+        assertEquals(mapOf(r.voci[0] to "Marco"), lettore.nomi(r.id))
+
+        // Re-attribution of the SAME Voce, to a DIFFERENT (brand new) Parlante: an adapter caching the
+        // Voce->Parlante pairing from the FIRST attribution (instead of re-reading it) would still answer "Marco".
+        a.attribuisciANuovo(r.voci[0], "Giulia")
+
+        assertEquals(mapOf(r.voci[0] to "Giulia"), lettore.nomi(r.id))
+    }
+
+    @Test
+    public fun `AC-S8 un rinomina di sole maiuscole minuscole e visibile`() {
+        val a = ambiente()
+        val lettore = a.lettore
+        val r = a.aggiungiRegistrazione(voci = 1)
+        val marco = a.attribuisciANuovo(r.voci[0], "marco")
+        assertEquals(mapOf(r.voci[0] to "marco"), lettore.nomi(r.id))
+
+        // Case-only rename: a case-folding implementation (comparing "marco" == "Marco" and skipping the
+        // write, or normalizing the stored Nome) would still answer "marco" here.
+        a.rinomina(marco, "Marco")
+
+        assertEquals(mapOf(r.voci[0] to "Marco"), lettore.nomi(r.id))
+    }
+
+    @Test
     public fun `AC-S8 un Parlante eliminato risolve ancora al suo Nome`() {
         val a = ambiente()
         val lettore = a.lettore

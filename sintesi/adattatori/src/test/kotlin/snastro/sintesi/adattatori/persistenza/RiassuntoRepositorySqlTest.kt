@@ -63,6 +63,13 @@ class RiassuntoRepositorySqlTest : RiassuntoRepositoryContratto() {
         semina(driver, predisposizione)
     }
 
+    /** A64: reads the child tables directly (never through [RiassuntoRepository]), so a re-save can't mask them. */
+    override fun figliOrfaniDi(id: RiassuntoId): Int {
+        val db = SnastroDatabase(driver)
+        return db.riassuntoElementoQueries.trovaDiRiassunto(id.valore).executeAsList().size +
+            db.riassuntoFonteQueries.trovaDiRiassunto(id.valore).executeAsList().size
+    }
+
     @Test
     fun `AC-S112 un vincolo diverso dagli indici parziali non e mappato e arriva grezzo`() {
         // No registrazione seeded: the immediate FK riassunto.registrazione_id -> registrazione(id) refuses it,
