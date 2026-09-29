@@ -109,3 +109,7 @@ fun testoOmessi(omessi: Int): String? = when {
 fun testoMetadati(argomento: String?, lunghezzaMassimaParole: Int): String =
     listOfNotNull(argomento?.let { "Argomento: $it" }, "Lunghezza massima: $lunghezzaMassimaParole parole")
         .joinToString(" · ")
+
+/** "Copia" the shown Riassunto to the clipboard, and its brief confirmation. */
+const val ETICHETTA_COPIA_RIASSUNTO: String = "Copia"
+const val ETICHETTA_RIASSUNTO_COPIATO: String = "Copiato"

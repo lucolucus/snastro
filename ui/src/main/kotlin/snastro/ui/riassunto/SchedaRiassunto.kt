@@ -18,19 +18,30 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.ClipEntry
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import snastro.kernel.VoceId
 import snastro.sintesi.applicazione.letture.VoceVista
 import snastro.ui.stile.BottoneSn
@@ -51,9 +62,11 @@ import snastro.ui.testi.CAPTION_SALVATO
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_ARGOMENTO
 import snastro.ui.testi.ETICHETTA_CAMBIA
+import snastro.ui.testi.ETICHETTA_COPIA_RIASSUNTO
 import snastro.ui.testi.ETICHETTA_IN_CORSO
 import snastro.ui.testi.ETICHETTA_RIASSUMI
 import snastro.ui.testi.ETICHETTA_RIASSUMI_DI_NUOVO
+import snastro.ui.testi.ETICHETTA_RIASSUNTO_COPIATO
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_SALVA
 import snastro.ui.testi.MESSAGGIO_NESSUN_RIASSUNTO
@@ -61,6 +74,7 @@ import snastro.ui.testi.NOTA_DURATA_RIASSUNTO
 import snastro.ui.testi.PLACEHOLDER_ARGOMENTO
 import snastro.ui.testi.PRIVACY_RIASSUNTO
 import snastro.ui.testi.testoLunghezzaMassima
+import java.awt.datatransfer.StringSelection
 
 private val LARGHEZZA_TESTO: Dp = 640.dp // ux-proposal: Sommario/prose ~68ch (an S3-column-wide cap, not AC-tested)
 private val ALTEZZA_RIGA_SCHELETRO: Dp = 16.dp
@@ -73,6 +87,8 @@ private const val LARGHEZZA_SCHELETRO_DISPARI = 0.6f
 private const val TAG_RADICE = "riassunto"
 private const val TAG_CARICAMENTO = "riassunto-scheletro"
 private const val TAG_CONTENUTO = "riassunto-contenuto"
+private const val TAG_COPIA = "riassunto-copia"
+private const val DURATA_COPIATO_MS = 2_000L
 private const val TAG_SOMMARIO = "riassunto-sommario"
 private const val TAG_OMESSI = "riassunto-omessi"
 private const val TAG_METADATI = "riassunto-metadati"
@@ -204,12 +220,51 @@ private fun AvvisoSuperato() {
     }
 }
 
+/**
+ * The shown Riassunto: "Copia" on top (the whole Riassunto as text, [testoRiassuntoDaCopiare]), then the content —
+ * selectable, so a part can be copied with the mouse too.
+ */
 @Composable
 private fun SezioniContenuto(contenuto: ContenutoUi) {
     Column(
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
         modifier = Modifier.testTag(TAG_CONTENUTO),
     ) {
+        BottoneCopia(contenuto)
+        SelectionContainer { TestoContenuto(contenuto) }
+    }
+}
+
+/** Puts the Riassunto on the system clipboard; the label reads "Copiato" for a moment after. */
+@Composable
+private fun BottoneCopia(contenuto: ContenutoUi) {
+    val appunti = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var copiato by remember(contenuto) { mutableStateOf(false) }
+    LaunchedEffect(copiato) {
+        if (copiato) {
+            delay(DURATA_COPIATO_MS)
+            copiato = false
+        }
+    }
+    BottoneSn(
+        etichetta = if (copiato) ETICHETTA_RIASSUNTO_COPIATO else ETICHETTA_COPIA_RIASSUNTO,
+        onClick = {
+            scope.launch {
+                appunti.setClipEntry(ClipEntry(StringSelection(testoRiassuntoDaCopiare(contenuto))))
+                copiato = true
+            }
+        },
+        variante = VarianteBottone.Secondario,
+        piccolo = true,
+        icona = if (copiato) Icona.Check else Icona.Copy,
+        modifier = Modifier.testTag(TAG_COPIA),
+    )
+}
+
+@Composable
+private fun TestoContenuto(contenuto: ContenutoUi) {
+    Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4)) {
         val colori = LocalSnastroColori.current
         val tipografia = LocalSnastroTipografia.current
         contenuto.sommario?.let {
