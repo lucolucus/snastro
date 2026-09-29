@@ -1,0 +1,2 @@
+package snastro.avvio.sintesi
+val coda = java.util.concurrent.atomic.AtomicReference<CodaCondivisa?>(null)

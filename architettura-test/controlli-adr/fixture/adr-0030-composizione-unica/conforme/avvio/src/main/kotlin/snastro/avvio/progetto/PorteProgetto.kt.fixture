@@ -1,0 +1,4 @@
+package snastro.avvio.progetto
+import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
+import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
+ * KDoc: `r3.r2.r1` as CollaboratoriR3 is retired

@@ -1,0 +1,2 @@
+package snastro.avvio
+val r3 = collaboratori.estensione as? CollaboratoriR3

@@ -7,9 +7,9 @@ import java.util.logging.Level
 
 /**
  * The ONE JUL-backed [Segnalazione] of `:avvio` src/main (ADR 0028 §2, AC-C54): the Documento worker
- * ([snastro.avvio.r1.EstensioneR1]), the Parlanti realignment worker ([snastro.avvio.r2.EstensioneR2]) and
- * [CodaCondivisa]'s own escape hook all report through this SAME instance — the a2/a3 per-extension local
- * `Segnalazione { … }` lambdas are gone.
+ * ([snastro.avvio.documento.ModuloDocumento]), the Parlanti realignment worker
+ * ([snastro.avvio.parlanti.ModuloParlanti]) and [snastro.avvio.coda.CodaCondivisa]'s own escape hook all report
+ * through this SAME instance — the a2/a3 per-extension local `Segnalazione { … }` lambdas are gone.
  *
  * It logs through [loggerSnastro] — the SAME strong reference [configuraLoggingApp] attaches the rotating
  * file handler to (AC-C87..AC-C90, rework cycle 1 HIGH #1: never a fresh `Logger.getLogger("snastro")`,

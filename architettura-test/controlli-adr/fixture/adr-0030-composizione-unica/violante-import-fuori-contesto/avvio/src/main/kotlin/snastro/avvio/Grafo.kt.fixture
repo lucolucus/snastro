@@ -1,0 +1,2 @@
+package snastro.avvio
+import snastro.progetto.adattatori.porte.RegistroProgettiFile

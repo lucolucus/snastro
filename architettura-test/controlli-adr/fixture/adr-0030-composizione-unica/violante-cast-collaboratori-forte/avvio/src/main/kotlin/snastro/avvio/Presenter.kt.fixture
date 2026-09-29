@@ -1,0 +1,2 @@
+package snastro.avvio
+val r2 = (x as CollaboratoriR2)

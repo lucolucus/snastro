@@ -1,0 +1,3 @@
+package snastro.avvio
+// a comment may name snastro.parlanti.adattatori.X and `as? CollaboratoriR3` and AtomicReference<CodaCondivisa>
+fun main() = Unit

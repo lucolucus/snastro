@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
  * never the criterion, since it is always rebuildable while the source exists.
  *
  * [stato] is set SYNCHRONOUSLY at each call (matches [snastro.ui.lettore.LettoreAudioContratto], which
- * pins only the synchronous part of the port): R0's S2 reflects only `inRiproduzione` per row
+ * pins only the synchronous part of the port): S2 reflects only `inRiproduzione` per row
  * (`StatoRiproduzioneRiga` has no numeric field), so live position ticking — which the contract's own
  * KDoc assigns to `:avvio` — is not built here (YAGNI: nothing downstream reads it yet).
  *
