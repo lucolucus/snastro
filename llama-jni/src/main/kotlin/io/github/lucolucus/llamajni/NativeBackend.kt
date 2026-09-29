@@ -27,9 +27,17 @@ internal class NativeBackend(
 
     override fun openModel(model: Path, params: ModelParams): LlamaResult<LlamaModel> {
         reserve()
-        val opened = open(model, params)
-        if (opened is LlamaResult.Err) release()
-        return opened
+        var succeeded = false
+        try {
+            val opened = open(model, params)
+            succeeded = opened is LlamaResult.Ok
+            return opened
+        } finally {
+            // A bridge call in open() throwing (not just an Err) must not leak the reservation: with no
+            // release() here that path would leave openModels incremented forever, so the backend is never
+            // freed again even once every model has closed.
+            if (!succeeded) release()
+        }
     }
 
     private fun open(model: Path, params: ModelParams): LlamaResult<LlamaModel> {

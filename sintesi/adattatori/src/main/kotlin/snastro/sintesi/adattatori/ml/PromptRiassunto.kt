@@ -10,8 +10,11 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
  * built by Sintesi (`IngressoRiassunto`: lines `[s<n> V<n>] testo`, then the legend `V<n> = nome`).
  */
 internal object PromptRiassunto {
-    /** ChatML control markers: removed from the inserted texts so they can never close or open a turn. */
-    private val MARCATORI = listOf("<|im_start|>", "<|im_end|>")
+    /**
+     * ChatML-style control markers (`<|…|>`, e.g. `<|im_start|>`, `<|im_end|>`, `<|endoftext|>`): removed from
+     * every inserted text so it can never close or open a turn, nor smuggle another special token in.
+     */
+    private val MARCATORE = Regex("""<\|[^|]*\|>""")
 
     fun componi(richiesta: RichiestaRiassunto): String =
         "<|im_start|>system\n${istruzioni(richiesta)}<|im_end|>\n" +
@@ -39,5 +42,14 @@ internal object PromptRiassunto {
         }
     }
 
-    private fun neutro(testo: String): String = MARCATORI.fold(testo) { t, m -> t.replace(m, "") }
+    /**
+     * Strips [MARCATORE] to a fixed point, not just once: removing an inner marker can reveal an outer one that
+     * did not match before (`"<|im_star" + "<|im_end|>" + "t|>"` has no `<|im_start|>` until the `<|im_end|>` in
+     * the middle is gone) — a single pass would leave that reconstructed marker in place, so `neutro` would not
+     * be idempotent and a crafted input could still smuggle a live marker through.
+     */
+    private tailrec fun neutro(testo: String): String {
+        val ripulito = MARCATORE.replace(testo, "")
+        return if (ripulito == testo) testo else neutro(ripulito)
+    }
 }

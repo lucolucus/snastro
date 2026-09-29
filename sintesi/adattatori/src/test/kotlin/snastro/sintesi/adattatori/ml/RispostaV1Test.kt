@@ -22,7 +22,7 @@ class RispostaV1Test {
                 azioni = listOf(AzioneRisposta("Preparare il prototipo entro venerdi.", listOf(2), responsabile = 2)),
                 puntiChiave = listOf(PuntoChiaveRisposta("Il ritmo resta lento di proposito.", listOf(1, 3), null)),
             ),
-            RispostaV1.leggi(RISPOSTA_VALIDA),
+            RispostaV1.leggi(RISPOSTA_VALIDA, emptySet()),
         )
     }
 
@@ -31,6 +31,7 @@ class RispostaV1Test {
         val r = RispostaV1.leggi(
             """ { "punti_chiave" : [ ], "azioni":[], "questioni_aperte":[],
                 "decisioni":[{"fonti":[ 12 , 7 ],"testo":"x"}], "sommario":"" } """,
+            emptySet(),
         )
 
         assertEquals(listOf(ElementoRisposta("x", listOf(12, 7))), assertNotNull(r).decisioni)
@@ -39,7 +40,10 @@ class RispostaV1Test {
 
     @Test
     fun `AC-S154 gli escape JSON sono decodificati`() {
-        val r = RispostaV1.leggi(RISPOSTA_VALIDA.replace("Combattimento a turni.", """A \"turni\"\ncon \u00e8 e \\"""))
+        val r = RispostaV1.leggi(
+            RISPOSTA_VALIDA.replace("Combattimento a turni.", """A \"turni\"\ncon \u00e8 e \\"""),
+            emptySet(),
+        )
 
         assertEquals("A \"turni\"\ncon è e \\", assertNotNull(r).decisioni.single().testo)
     }
@@ -62,12 +66,15 @@ class RispostaV1Test {
             RISPOSTA_VALIDA.replace("\"{V1} e {V2} scelgono il combattimento a turni.\"", "3"), // sommario not a string
             RISPOSTA_VALIDA.replace("\"decisioni\":[", "\"decisioni\":{\"a\":[")
                 .replace("],\"questioni_aperte", "]},\"questioni_aperte"), // a list that is an object
-        ).forEach { assertNull(RispostaV1.leggi(it), it) }
+        ).forEach { assertNull(RispostaV1.leggi(it, emptySet()), it) }
     }
 
     @Test
     fun `AC-S154 sommario null e accettato`() {
-        val r = RispostaV1.leggi(RISPOSTA_VALIDA.replace("\"{V1} e {V2} scelgono il combattimento a turni.\"", "null"))
+        val r = RispostaV1.leggi(
+            RISPOSTA_VALIDA.replace("\"{V1} e {V2} scelgono il combattimento a turni.\"", "null"),
+            emptySet(),
+        )
 
         assertNull(assertNotNull(r).sommario)
     }
@@ -75,7 +82,8 @@ class RispostaV1Test {
     // --- {V<n>}: the port's canonical form, whatever the model wrote (ADR 0021 §4) ---------------------------
 
     @Test
-    fun `ogni parlante e riscritto nella forma canonica V tra graffe`() {
+    fun `ogni parlante e riscritto nella forma canonica V tra graffe quando il numero e nella legenda`() {
+        val legenda = setOf(1, 2, 3, 4, 12)
         mapOf(
             "{V2} prepara" to "{V2} prepara",
             "V2 prepara" to "{V2} prepara",
@@ -83,7 +91,33 @@ class RispostaV1Test {
             "Voce 3 propone" to "{V3} propone",
             "{ V4 } e V12" to "{V4} e {V12}",
             "{V02}" to "{V2}",
-        ).forEach { (grezzo, atteso) -> assertEquals(atteso, VociNelTesto.canonico(grezzo), grezzo) }
+        ).forEach { (grezzo, atteso) -> assertEquals(atteso, VociNelTesto.canonico(grezzo, legenda), grezzo) }
+    }
+
+    // --- a bare V<n> / Voce <n> outside the legend is ordinary text, never a speaker reference ------------------
+
+    @Test
+    fun `un V o Voce nudo il cui numero non e nella legenda resta testo, non diventa un riferimento`() {
+        val legenda = setOf(1, 2)
+        mapOf(
+            "il motore V8 si e rotto" to "il motore V8 si e rotto",
+            "la Voce 9 del contratto" to "la Voce 9 del contratto",
+        ).forEach { (grezzo, atteso) -> assertEquals(atteso, VociNelTesto.canonico(grezzo, legenda), grezzo) }
+    }
+
+    @Test
+    fun `le forme esplicite V tra graffe e tra quadre contano sempre, anche fuori legenda`() {
+        mapOf(
+            "{V8} propone" to "{V8} propone",
+            "[V9]" to "{V9}",
+        ).forEach { (grezzo, atteso) -> assertEquals(atteso, VociNelTesto.canonico(grezzo, emptySet()), grezzo) }
+    }
+
+    @Test
+    fun `la legenda di IngressoRiassunto e letta dalle righe V n uguale nome`() {
+        val ingresso = "[s1 V1] Decidiamo i turni.\n[s2 V2] Preparo il prototipo.\nV1 = Anna\nV2 = Voce 2"
+
+        assertEquals(setOf(1, 2), VociNelTesto.legenda(ingresso))
     }
 
     @Test
@@ -94,21 +128,21 @@ class RispostaV1Test {
             "la voce 2 del bilancio" to "la voce 2 del bilancio",
             "V0 e VX" to "V0 e VX",
             "COVID19 e MV2" to "COVID19 e MV2",
-        ).forEach { (grezzo, atteso) -> assertEquals(atteso, VociNelTesto.canonico(grezzo), grezzo) }
+        ).forEach { (grezzo, atteso) -> assertEquals(atteso, VociNelTesto.canonico(grezzo, emptySet()), grezzo) }
     }
 
     @Test
     fun `il testo canonico si decodifica sempre con il codec del Riassunto`() {
         listOf("{V1} e }{ e {x} e V0 e V1234567890", "{", "}", "{{V1}}", "[V3]{V4}").forEach {
-            assertNotNull(TestoConVoci.decodifica(VociNelTesto.canonico(it)), it)
+            assertNotNull(TestoConVoci.decodifica(VociNelTesto.canonico(it, emptySet())), it)
         }
     }
 
     @Test
-    fun `i testi della risposta sono riscritti in forma canonica`() {
+    fun `i testi della risposta sono riscritti in forma canonica secondo la legenda`() {
         val grezza = RISPOSTA_VALIDA.replace("{V1} e {V2}", "V1 e [V2]").replace("Combattimento", "Voce 1 {x}")
 
-        val r = RispostaV1.leggi(grezza)
+        val r = RispostaV1.leggi(grezza, setOf(1, 2))
 
         assertEquals("{V1} e {V2} scelgono il combattimento a turni.", assertNotNull(r).sommario)
         assertEquals("{V1} {{x}} a turni.", r.decisioni.single().testo)

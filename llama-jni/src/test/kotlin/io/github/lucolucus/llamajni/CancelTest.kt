@@ -140,6 +140,31 @@ class CancelTest {
         assertTrue(bridge.calls.indexOf("abort-end") < bridge.calls.indexOf("freeContext"), "${bridge.calls}")
     }
 
+    @Test
+    fun `a throwing cancel does not kill the watcher, the next poll still catches a real cancel`() {
+        var ticks = 0
+        val cancel = {
+            ticks++
+            if (ticks == 1) throw SimulatedFailure("boom") else true
+        }
+        var cancelled = false
+        val raised = CountDownLatch(1)
+        CancelWatcher(cancel = cancel, pollMillis = 1) {
+            cancelled = true
+            raised.countDown()
+        }.use { assertTrue(raised.await(5, TimeUnit.SECONDS)) }
+
+        assertTrue(cancelled)
+        assertTrue(ticks >= 2, "the watcher must have polled again after the throw: $ticks")
+    }
+
+    @Test
+    fun `a throwing onCancel still lets close join, it does not hang the caller`() {
+        val watcher = CancelWatcher(cancel = { true }, pollMillis = 1) { throw SimulatedFailure("boom") }
+
+        watcher.close() // must return: onCancel's throw must not leave the watcher thread unjoinable
+    }
+
     private fun spinFor(millis: Long) {
         val until = System.nanoTime() + millis * NANOS_PER_MILLI
         while (System.nanoTime() < until) Thread.onSpinWait()

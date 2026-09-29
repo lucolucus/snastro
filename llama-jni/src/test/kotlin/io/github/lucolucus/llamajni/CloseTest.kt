@@ -59,6 +59,28 @@ class CloseTest {
     }
 
     @Test
+    fun `openModel releases the backend reservation even when the bridge throws, not just on Err`() {
+        val bridge = FakeNativeBridge()
+        var calls = 0
+        val throwing = object : NativeBridge by bridge {
+            override fun newContext(model: Long, nCtx: Int, nUbatch: Int, flashAttention: Int): Long {
+                calls++
+                if (calls == 1) throw SimulatedFailure("boom") // only the first open() fails
+                return bridge.newContext(model, nCtx, nUbatch, flashAttention)
+            }
+        }
+        val backend: LlamaBackend = NativeBackend(throwing, dynamicBackendDir = null)
+        assertFailsWith<SimulatedFailure> { backend.openModel(aModelPath, someParams()) }
+
+        // The failed open on its own already brings the refcount back to 0 (1 backendFree). If its reservation
+        // had leaked instead, this second (successful) open+close would leave the refcount at 1, not 0, and
+        // backendFree would never run a second time.
+        backend.openModel(aModelPath, someParams()).value().close()
+
+        assertEquals(2, bridge.count("backendFree"))
+    }
+
+    @Test
     fun `AC-S168 a call from another thread is a programming error`() {
         val model = anOpenModel(FakeNativeBridge())
         val executor = Executors.newSingleThreadExecutor()

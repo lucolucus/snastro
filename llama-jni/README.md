@@ -44,6 +44,9 @@ sealed interface LlamaError {   // NOT a Throwable
 (`0` = greedy) → a seeded draw (`RANDOM_SEED` = -1 = a new seed per generation). `Timings` are wall-clock
 milliseconds: `loadMs` is the model + context open, `prefillMs` the prompt decode, `generationMs` the rest.
 
+`LlamaJni.load` is idempotent per JVM: once it has succeeded, a LATER call — even with a DIFFERENT
+`nativeDir` — loads nothing and silently returns the SAME backend the first call returned.
+
 Example:
 
 ```kotlin
@@ -72,9 +75,12 @@ val backend = (LlamaJni.load(nativeDir) as LlamaResult.Ok).value
 7. **Memory:** `close()` frees the context, then the model; the last open model also calls
    `llama_backend_free` (the next `openModel` initializes the backend again). `close()` is idempotent;
    `countTokens` / `generate` after it return `Err(Closed)`.
-8. **Threads:** a model is blocking and confined to the thread that opened it (one generation at a time);
-   a call from another thread, like an invalid `ModelParams` / `GenerateOptions` / `Sampling`, is a
-   programming error (an exception), not a `LlamaError`.
+8. **Threads and misuse — always a programming error (an unchecked exception), never a `LlamaError`:**
+   - a call from another thread than the one that opened the model (`IllegalStateException`);
+   - an invalid `ModelParams` / `GenerateOptions` / `Sampling` (`IllegalArgumentException`);
+   - `generate` with a `prompt` that tokenizes to zero tokens (`IllegalArgumentException`);
+   - a native `tokenize` failure — out-of-memory or an `int32` overflow, vanishingly rare in practice
+     (`IllegalStateException`).
 
 The prompt is used as given: no chat template, no BOS/EOS added (`llama_tokenize` with special-token
 parsing, `add_special = false`); `countTokens` counts the same way.
