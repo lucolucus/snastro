@@ -6,10 +6,9 @@ import snastro.ui.modelli.LicenzaVista
  * AC-556: the three bundled OFL fonts (AC-554), in the shape the S5 licences screen already uses
  * ([LicenzaVista]). NOT wired into the assembled S5 list here — that composition happens in
  * `:avvio` (`ServizioModelliProvisioning.licenze()`,
- * `avvio/src/main/kotlin/snastro/avvio/r1/ServizioModelliProvisioning.kt`), which reads `:modelli`'s
+ * `avvio/src/main/kotlin/snastro/avvio/modelli/ServizioModelliProvisioning.kt`), which reads `:modelli`'s
  * catalogue and is outside this block's `:ui` boundary (golden rule: never cross a boundary from a
- * worker dispatch). Whoever next touches that composition (wave 16, or a dedicated `:avvio` task)
- * appends `LICENZE_CARATTERI` to its returned list.
+ * worker dispatch). Whoever next touches that composition appends `LICENZE_CARATTERI` to its returned list.
  */
 public val LICENZE_CARATTERI: List<LicenzaVista> = listOf(
     LicenzaVista(

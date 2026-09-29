@@ -61,6 +61,7 @@ class RegistrazioniPresenterAggiornamentoTest {
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
             identificazioni = { emptyList() },
             ritrascrivi = { error("ritrascrivi non atteso in questo test") },
             annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },

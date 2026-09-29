@@ -13,9 +13,9 @@ sealed interface ShellUiStato {
     data object Caricamento : ShellUiStato
 
     /**
-     * A Progetto is open: the left nav shows only [destinazioniDisponibili] (AC-177, AC-341 — R0/R1
-     * omit [DestinazioneShell.PARLANTI]). [erroreApertura], when set, is a dismissible banner over the
-     * nav for the last failed `crea`/`apri` while this Progetto stayed open (H1).
+     * A Progetto is open: the left nav shows only [destinazioniDisponibili] (AC-177, AC-341 — the single
+     * composition always includes [DestinazioneShell.PARLANTI]). [erroreApertura], when set, is a
+     * dismissible banner over the nav for the last failed `crea`/`apri` while this Progetto stayed open (H1).
      */
     data class ConProgetto(
         val progetto: ProgettoAperto,

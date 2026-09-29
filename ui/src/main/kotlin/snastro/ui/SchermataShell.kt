@@ -195,7 +195,7 @@ private fun NavigazioneShell(
                     // Re-clicking the ALREADY-selected 'Registrazioni' item goes back to its own top, and
                     // ANY nav click out of S5 leaves S5 for good (no hidden S5 left behind for the next
                     // 'Registrazioni' click) — switching INTO Registrazioni from Parlanti otherwise
-                    // preserves the place it was left at (R2's own "keeps where the user was").
+                    // preserves the place it was left at (the shell's own "keeps where the user was").
                     val tornaAllElenco = modelliSelezionati ||
                         (destinazione == DestinazioneShell.REGISTRAZIONI && giaSelezionata)
                     if (tornaAllElenco) onRegistrazioniSelezionata?.invoke()
@@ -284,7 +284,7 @@ private fun VoceNavigazione(destinazione: DestinazioneShell, selezionata: Boolea
  * AC-572/rework cycle 2 (MED #3): when [onModelliELicenze] is wired the footer IS the S5 entry point and
  * says so — 'Modelli e licenze' (Cube, caption `inkMuted`) over a 'Tutto in locale' second line (a neutral
  * privacy line, no readiness claim the shell state cannot back); [selezionato] gives it the nav item's
- * active style while S5 is shown. Unwired (R0, no S5) it is just the privacy line.
+ * active style while S5 is shown. Unwired (no S5) it is just the privacy line.
  * [statoModelloLinguisticoPiede] (AC-S33, ADR 0025): a third line, only while the optional model is
  * downloading — never for `NonInstallato`/`Installato` (the mapping to `null` already excludes those,
  * see [SchermataShell]'s KDoc), placed above the privacy line so the actionable/changing text stays

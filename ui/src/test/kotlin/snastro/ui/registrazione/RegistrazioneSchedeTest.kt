@@ -1,5 +1,8 @@
 package snastro.ui.registrazione
 
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.runDesktopComposeUiTest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,6 +24,7 @@ import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 private val REG_A = RegistrazioneId("id-a")
@@ -83,6 +87,39 @@ class RegistrazioneSchedeTest {
         presenter.azioni.selezionaScheda(SchedaS3.RIASSUNTO)
         advanceUntilIdle()
         assertEquals(SchedaS3.RIASSUNTO, presenter.dati.schedaSelezionata)
+    }
+
+    /** AC-S120: [RegistrazionePresenter.kt:171]'s `contenutoRiassunto = { riassunto.contenuto(registrazioneId) }`
+     * is not just non-null — it must actually DELEGATE to the injected [SorgenteRiassuntoS3.contenuto] with
+     * THIS presenter's `registrazioneId`. Fails if that line regresses to a different id or stops calling
+     * [SorgenteRiassuntoS3.contenuto] at all (composition is the only way to observe a `@Composable` value's
+     * effect, hence [runDesktopComposeUiTest]). */
+    @OptIn(ExperimentalTestApi::class)
+    @Test
+    fun `AC-S120 il contenutoRiassunto pubblicato delega alla sorgente riassunto`() {
+        var idRicevuto: RegistrazioneId? = null
+        var contenuto: (@Composable () -> Unit)? = null
+        runTest {
+            val sorgente = SorgenteRiassuntoS3(
+                contenuto = { id -> idRicevuto = id },
+                segno = { MutableStateFlow(null) },
+            )
+            val presenter = presentatore(this, registrazioneId = REG_A, riassunto = sorgente)
+            advanceUntilIdle()
+            contenuto = presenter.dati.contenutoRiassunto
+        }
+        val slot = assertNotNull(contenuto, "RegistrazionePresenter deve pubblicare contenutoRiassunto (AC-S120)")
+
+        runDesktopComposeUiTest {
+            setContent { slot() }
+            waitForIdle()
+        }
+
+        assertEquals(
+            REG_A,
+            idRicevuto,
+            "contenutoRiassunto deve delegare a SorgenteRiassuntoS3.contenuto(registrazioneId)",
+        )
     }
 
     @Test

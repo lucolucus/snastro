@@ -100,7 +100,7 @@ class RegistrazioniPresenter(
     private val clock: Clock,
     private val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
     private val avviaElaborazione: (AvviaElaborazione) -> Esito<Unit>,
-    private val apriRegistrazione: (RegistrazioneId) -> Unit = {},
+    private val apriRegistrazione: (RegistrazioneId) -> Unit,
     private val identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione>,
     private val ritrascrivi: (AvviaElaborazione) -> Esito<Unit>,
     private val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,

@@ -86,6 +86,7 @@ class RegistrazioniNumeroPersoneTest {
                 comandi += c
                 avvia(c)
             },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
             identificazioni = { emptyList() },
             ritrascrivi = { error("ritrascrivi non atteso in questo test") },
             annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },

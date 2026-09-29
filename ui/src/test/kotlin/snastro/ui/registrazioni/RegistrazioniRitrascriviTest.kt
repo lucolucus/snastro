@@ -109,6 +109,7 @@ class RegistrazioniRitrascriviTest {
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione (Trascrivi/Riprova) non atteso in questo test") },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
             identificazioni = { emptyList() },
             eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { posizioni },

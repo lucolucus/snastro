@@ -43,6 +43,7 @@ import kotlin.test.assertNull
 
 private val REG_1 = RegistrazioneId("id-1")
 private val REG_2 = RegistrazioneId("id-2")
+private val REG_3 = RegistrazioneId("id-3")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 private val ORA_FISSA: Instant = Instant.parse("2026-09-23T10:00:00Z")
 
@@ -93,7 +94,7 @@ class RegistrazioniPresenterTest {
         clock: Clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
         stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = { emptyList() },
         avvia: (AvviaElaborazione) -> Esito<Unit> = { error("avviaElaborazione non atteso in questo test") },
-        apriRegistrazione: (RegistrazioneId) -> Unit = {},
+        apriRegistrazione: (RegistrazioneId) -> Unit = { error("apriRegistrazione non atteso in questo test") },
         posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
@@ -479,6 +480,36 @@ class RegistrazioniPresenterTest {
         presenter.azioni.apriRiga(REG_1)
 
         assertEquals(REG_1, aperta)
+    }
+
+    @Test
+    fun `AC-342 il click su una riga non apre S3 quando il Trascritto non e disponibile`() = runTest {
+        var aperta: RegistrazioneId? = null
+        val presenter = presentatore(
+            this,
+            registrazioni = { listOf(rigaVista(REG_1), rigaVista(REG_2), rigaVista(REG_3)) },
+            // ADR 0018: NON_AVVIATA, and IN_ATTESA/FALLITA WITHOUT a Trascritto (numVoci left null here,
+            // so trascrittoDisponibile = false) never make a row apribile — the guard on
+            // `RegistrazioniPresenter.apriRiga` (`if (riga.trascrittoDisponibile) apriRegistrazione(id)`)
+            // must stay: this fails if that guard is removed (every click below would then set `aperta`).
+            stati = { ids ->
+                ids.map {
+                    when (it) {
+                        REG_1 -> statoVista(it, StatoElaborazioneVista.NON_AVVIATA)
+                        REG_2 -> statoVista(it, StatoElaborazioneVista.IN_ATTESA)
+                        else -> statoVista(it, StatoElaborazioneVista.FALLITA, motivoFallimento = "audio illeggibile")
+                    }
+                }
+            },
+            apriRegistrazione = { aperta = it },
+        )
+        advanceUntilIdle()
+
+        presenter.azioni.apriRiga(REG_1)
+        presenter.azioni.apriRiga(REG_2)
+        presenter.azioni.apriRiga(REG_3)
+
+        assertNull(aperta)
     }
 
     @Test

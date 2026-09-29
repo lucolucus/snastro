@@ -54,6 +54,7 @@ class RegistrazioniRinominaTest {
             clock = Clock.fixed(Instant.parse("2026-09-23T10:00:00Z"), ZoneOffset.UTC),
             statiElaborazione = { emptyList() },
             avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
+            apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
             identificazioni = { emptyList() },
             ritrascrivi = { error("ritrascrivi non atteso in questo test") },
             annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },

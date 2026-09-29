@@ -16,7 +16,7 @@ import snastro.ui.testi.messaggioPer
 /**
  * State holder of the app shell (RC-2, thin UI): reflects [SessioneProgetto.corrente] and forwards
  * `crea`/`apri`/`chiudi`/`seleziona` to it. [sezioniDisponibili] is injected by the composition root
- * (AC-341) — R0/R1's `:avvio` wiring omits [DestinazioneShell.PARLANTI].
+ * (AC-341) — the single composition's `SEZIONI_SHELL` always includes every [DestinazioneShell].
  */
 class ShellPresenter(
     private val scope: CoroutineScope,
