@@ -81,7 +81,7 @@ private fun ContenutoChipStato(tipo: TipoChipStato, testo: Color) {
         is TipoChipStato.DaTrascrivere -> Text("Da trascrivere", style = stileEtichetta)
         is TipoChipStato.InCoda -> {
             IconaSn(Icona.Clock, descrizione = null, tinta = testo, dimensione = ICONA_CHIP)
-            Text("In coda · ${tipo.posizione}", style = stileEtichetta)
+            Text(if (tipo.posizione != null) "In coda · ${tipo.posizione}" else "In coda", style = stileEtichetta)
         }
         is TipoChipStato.InCorso -> {
             PallinoInCorso()

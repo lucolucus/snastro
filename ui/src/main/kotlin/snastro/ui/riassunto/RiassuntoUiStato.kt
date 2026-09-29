@@ -31,6 +31,11 @@ sealed interface RiassuntoUiStato {
          * same pattern as [snastro.ui.registrazione.RegistrazioneUiStato.Dati.bannerSchermata]: it can
          * never drift from the fields above and is table-testable on plain [Dati] fixtures
          * ([RiassuntoUiStatoTest]).
+         *
+         * D-0014 (pre-release finding #156, rework): [nonDisponibileTesto] now outranks
+         * [fallimentoTesto] — an ENABLED "Riprova" the recording being unavailable makes certain to
+         * be refused is worse than the DISABLED "Riassumi" + caption [AreaAzione.NonDisponibile]
+         * already shows.
          */
         val areaAzione: AreaAzione
             get() = when {
@@ -38,10 +43,10 @@ sealed interface RiassuntoUiStato {
                     AreaAzione.ScaricaModello(modello.messaggio, modello.etichettaBottone)
                 modello is ModelloUi.InDownload -> AreaAzione.Scaricando(modello.testo, modello.avanzamento)
                 modello is ModelloUi.DownloadFallito -> AreaAzione.DownloadFallito(modello.messaggio)
-                richiesta is RichiestaUi.InAttesa -> AreaAzione.InCoda(richiesta.testo)
-                richiesta is RichiestaUi.InCorso -> AreaAzione.InCorso(richiesta.testo)
-                fallimentoTesto != null -> AreaAzione.Fallito(fallimentoTesto)
+                richiesta is RichiestaUi.InAttesa -> AreaAzione.InCoda(richiesta.posizione)
+                richiesta is RichiestaUi.InCorso -> AreaAzione.InCorso(richiesta.trascorsoMs)
                 nonDisponibileTesto != null -> AreaAzione.NonDisponibile(nonDisponibileTesto)
+                fallimentoTesto != null -> AreaAzione.Fallito(fallimentoTesto)
                 else -> AreaAzione.Azionabile(nuovo = contenuto != null)
             }
     }
@@ -58,11 +63,14 @@ sealed interface ModelloUi {
     data object Installato : ModelloUi
 }
 
-/** AC-S130/S131: [RiassuntoVista.richiestaAperta] mapped into ready-to-render text. */
+/** AC-S130/S131: [RiassuntoVista.richiestaAperta] mapped into ready-to-render fields (pre-release
+ * finding #152, rework: raw [posizione]/[trascorsoMs] rather than a pre-joined string, so the view
+ * can feed [snastro.ui.stile.TipoChipStato.InCoda]/[snastro.ui.stile.TipoChipStato.InCorso] directly). */
 sealed interface RichiestaUi {
-    data class InAttesa(val testo: String) : RichiestaUi
+    /** `null` = absent from the queue's snapshot ([snastro.ui.coda.PosizioniCoda] KDoc). */
+    data class InAttesa(val posizione: Int?) : RichiestaUi
 
-    data class InCorso(val testo: String) : RichiestaUi
+    data class InCorso(val trascorsoMs: Long) : RichiestaUi
 }
 
 /**
@@ -78,9 +86,9 @@ sealed interface AreaAzione {
 
     data class DownloadFallito(val messaggio: String) : AreaAzione
 
-    data class InCoda(val testo: String) : AreaAzione
+    data class InCoda(val posizione: Int?) : AreaAzione
 
-    data class InCorso(val testo: String) : AreaAzione
+    data class InCorso(val trascorsoMs: Long) : AreaAzione
 
     data class Fallito(val messaggio: String) : AreaAzione
 

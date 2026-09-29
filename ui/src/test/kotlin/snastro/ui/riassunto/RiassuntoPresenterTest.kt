@@ -129,26 +129,44 @@ class RiassuntoPresenterTest {
     private class Ambiente(scope: TestScope) {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         val coroutineScope = CoroutineScope(dispatcher)
+
+        // Pre-release finding #151 (rework, MED): a SEPARATE dispatcher instance (same virtual
+        // scheduler, so time control is unaffected) — `withContext` between the SAME dispatcher
+        // instance takes a fast, non-suspending path with no cancellation window at all, which would
+        // make the AC-S151 test below pass whether or not `ricarica()` is really single-flight.
+        val io = StandardTestDispatcher(scope.testScheduler)
         var vistaCorrente: RiassuntoVista? = unaVista()
         var impostazioniCorrenti = unaImpostazioni()
         var posizioniCorrenti = PosizioniCoda.VUOTA
         val chiamateRiassumi = mutableListOf<String?>()
         var risultatoRiassumi: Esito<Unit> = Esito.Ok(Unit)
+
+        // Pre-release finding #159 (rework, LOW): simulates `riassumiCmd` throwing (a real port fault),
+        // never a legitimate `Esito.Errore`.
+        var lanciaRiassumiCmd = false
         val chiamateLunghezza = mutableListOf<Int>()
         var risultatoLunghezza: Esito<Unit> = Esito.Ok(Unit)
         val servizioModelli = ServizioModelliSpia()
         val aggiornamenti = AggiornamentiVistaFinta()
         val orologio = OrologioFinto(ISTANTE_0)
 
+        // Pre-release finding #151 (rework, MED): counts every completed `ricarica()` — a
+        // single-flight reload only ever lets the LATEST trigger reach this last read.
+        var chiamatePosizioni = 0
+
         val presenter = RiassuntoPresenter(
             scope = coroutineScope,
-            io = dispatcher,
+            io = io,
             registrazioneId = REG_1,
             vista = { vistaCorrente },
             impostazioni = { impostazioniCorrenti },
-            posizioni = { posizioniCorrenti },
+            posizioni = {
+                chiamatePosizioni++
+                posizioniCorrenti
+            },
             riassumiCmd = { argomento ->
                 chiamateRiassumi.add(argomento)
+                if (lanciaRiassumiCmd) error("guasto simulato di riassumiCmd")
                 risultatoRiassumi
             },
             modificaLunghezzaMassimaCmd = { n ->
@@ -158,6 +176,9 @@ class RiassuntoPresenterTest {
             servizioModelli = servizioModelli,
             aggiornamenti = aggiornamenti,
             clock = orologio,
+            idModelloLinguistico = ID_MODELLO_LINGUISTICO,
+            dimensioneModelloLinguisticoByte = 6_169_341_984,
+            limiteCaratteriArgomento = 200,
         )
     }
 
@@ -201,6 +222,38 @@ class RiassuntoPresenterTest {
         assertEquals(1, a.chiamateRiassumi.size)
     }
 
+    // Pre-release finding #159 (rework, LOW): a THROWN `riassumiCmd` (never a legitimate
+    // `Esito.Errore`) used to leave the in-flight guard stuck `true` forever — a real fault would
+    // then have permanently disabled Riassumi for the rest of this presenter's life.
+    @Test
+    fun `AC-S128 rework riassumiCmd che lancia non blocca Riassumi per sempre`() = eseguiTest { a ->
+        runCurrent()
+        a.lanciaRiassumiCmd = true
+        a.presenter.azioni.riassumi()
+        runCurrent()
+        assertEquals(1, a.chiamateRiassumi.size)
+
+        a.lanciaRiassumiCmd = false
+        a.presenter.azioni.riassumi()
+        runCurrent()
+        assertEquals(2, a.chiamateRiassumi.size, "invioInCorso e' rimasto vero dopo il guasto")
+    }
+
+    // Pre-release finding #151 (rework, MED): three independent triggers (init, cambiamenti,
+    // statoFacoltativi) each `launch`ed their OWN `ricarica()` — none cancelling another. Firing TWO
+    // of them back-to-back (before draining the scheduler) used to let BOTH complete their own full
+    // read chain; single-flight (`collectLatest` over one merged flow) cancels the older one, so at
+    // most ONE reload ever reaches its last read (`posizioni()`) per settle.
+    @Test
+    fun `AC-S151 rework due trigger ravvicinati non completano due ricariche in parallelo`() = eseguiTest { a ->
+        runCurrent()
+        val basale = a.chiamatePosizioni
+        a.aggiornamenti.emetti(Cambiamento(REG_1))
+        a.servizioModelli.scaricaFacoltativo(ID_MODELLO_LINGUISTICO)
+        runCurrent()
+        assertEquals(basale + 1, a.chiamatePosizioni, "due ricariche indipendenti sono arrivate in fondo insieme")
+    }
+
     @Test
     fun `AC-S125 modello non installato mostra la dimensione e Scarica il modello`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(modello = StatoModelloVista.NonInstallato(6_169_341_984))
@@ -221,6 +274,18 @@ class RiassuntoPresenterTest {
         runCurrent()
         assertEquals(listOf(ID_MODELLO_LINGUISTICO), a.servizioModelli.chiamateScaricaFacoltativo)
         assertTrue(a.servizioModelli.statoFacoltativi.value.isNotEmpty())
+    }
+
+    // Pre-release finding #157 (rework, MED): no in-flight guard on `scaricaModello` — a double click
+    // started two 6 GB downloads. Same pattern as the Riassumi double-click test above.
+    @Test
+    fun `AC-S125 rework un doppio clic su Scarica il modello avvia un solo download`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(modello = StatoModelloVista.NonInstallato(6_169_341_984))
+        runCurrent()
+        a.presenter.azioni.scaricaModello()
+        a.presenter.azioni.scaricaModello()
+        runCurrent()
+        assertEquals(1, a.servizioModelli.chiamateScaricaFacoltativo.size)
     }
 
     @Test
@@ -260,12 +325,12 @@ class RiassuntoPresenterTest {
         a.vistaCorrente = unaVista(richiestaAperta = RichiestaApertaVista.InAttesa(ISTANTE_0))
         a.posizioniCorrenti = PosizioniCoda(elaborazioni = emptyMap(), riassunti = mapOf(REG_1 to 2))
         runCurrent()
-        assertEquals(AreaAzione.InCoda("In coda · 2"), dati(a.presenter).areaAzione)
+        assertEquals(AreaAzione.InCoda(2), dati(a.presenter).areaAzione)
 
         a.posizioniCorrenti = PosizioniCoda.VUOTA
         a.aggiornamenti.emetti(Cambiamento(REG_1))
         runCurrent()
-        assertEquals(AreaAzione.InCoda("In coda"), dati(a.presenter).areaAzione)
+        assertEquals(AreaAzione.InCoda(null), dati(a.presenter).areaAzione)
     }
 
     @Test
@@ -273,12 +338,12 @@ class RiassuntoPresenterTest {
         a.vistaCorrente = unaVista(richiestaAperta = RichiestaApertaVista.InCorso(ISTANTE_0))
         a.orologio.istante = ISTANTE_0.plusSeconds(72)
         runCurrent()
-        assertEquals(AreaAzione.InCorso("Sto riassumendo… 1:12"), dati(a.presenter).areaAzione)
+        assertEquals(AreaAzione.InCorso(72_000), dati(a.presenter).areaAzione)
 
         a.orologio.istante = ISTANTE_0.plusSeconds(73)
         advanceTimeBy(1_100)
         runCurrent()
-        assertEquals(AreaAzione.InCorso("Sto riassumendo… 1:13"), dati(a.presenter).areaAzione)
+        assertEquals(AreaAzione.InCorso(73_000), dati(a.presenter).areaAzione)
     }
 
     @Test
@@ -429,6 +494,18 @@ class RiassuntoPresenterTest {
         assertTrue(a.chiamateRiassumi.isEmpty())
     }
 
+    // Pre-release finding #153 (rework, LOW): the counter/errore used to count the RAW (untrimmed)
+    // length — 200 real characters plus surrounding whitespace showed as "over the limit" even though
+    // `Argomento.di` trims first and would accept it.
+    @Test
+    fun `AC-S137 rework 200 caratteri con spazi intorno non supera il limite, come il dominio`() = eseguiTest { a ->
+        runCurrent()
+        a.presenter.azioni.cambiaArgomento("  ${"x".repeat(200)}  ")
+        val dati = dati(a.presenter)
+        assertEquals("200/200", dati.argomento.contatore)
+        assertNull(dati.argomento.errore)
+    }
+
     @Test
     fun `AC-S138 Cambia poi un valore fuori intervallo mostra l errore e non invia il comando`() = eseguiTest { a ->
         runCurrent()
@@ -439,6 +516,34 @@ class RiassuntoPresenterTest {
         val modifica = assertIs<LunghezzaMassimaUiStato.Modifica>(dati(a.presenter).lunghezzaMassima)
         assertEquals("Scegli fra 300 e 2500 parole.", modifica.errore)
         assertTrue(a.chiamateLunghezza.isEmpty())
+    }
+
+    // Pre-release findings #153/#159 (rework, LOW): a COMMAND failure (in range, but rejected by
+    // `modificaLunghezzaMassimaCmd`, e.g. a race) used to ALWAYS show the generic range text, hiding
+    // the actual `ErroreSintesi` it carried.
+    @Test
+    fun `AC-S138 rework un comando fallito in range mostra il suo vero messaggio, non il range`() = eseguiTest { a ->
+        runCurrent()
+        a.risultatoLunghezza = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
+        a.presenter.azioni.modificaLunghezzaMassima()
+        a.presenter.azioni.cambiaLunghezzaMassima("1500")
+        a.presenter.azioni.salvaLunghezzaMassima()
+        runCurrent()
+        val modifica = assertIs<LunghezzaMassimaUiStato.Modifica>(dati(a.presenter).lunghezzaMassima)
+        assertEquals("C'è già un riassunto in coda o in corso per questa registrazione.", modifica.errore)
+    }
+
+    // Pre-release finding #153 (rework, LOW): no in-flight guard — a double click on Salva could send
+    // `modificaLunghezzaMassimaCmd` twice.
+    @Test
+    fun `AC-S138 rework un doppio clic su Salva invia il comando una sola volta`() = eseguiTest { a ->
+        runCurrent()
+        a.presenter.azioni.modificaLunghezzaMassima()
+        a.presenter.azioni.cambiaLunghezzaMassima("1500")
+        a.presenter.azioni.salvaLunghezzaMassima()
+        a.presenter.azioni.salvaLunghezzaMassima()
+        runCurrent()
+        assertEquals(listOf(1_500), a.chiamateLunghezza)
     }
 
     @Test
@@ -456,6 +561,27 @@ class RiassuntoPresenterTest {
         advanceTimeBy(2_100)
         runCurrent()
         assertEquals(LunghezzaMassimaUiStato.Testo(1_500), dati(a.presenter).lunghezzaMassima)
+    }
+
+    // Pre-release finding #153 (rework, LOW): the "Salvato" 2 s timer used to close a REOPENED editor
+    // too — reopening "Cambia" during that window must survive the timer's own delayed reset.
+    @Test
+    fun `AC-S138 rework il timer di Salvato non chiude un editor riaperto nel frattempo`() = eseguiTest { a ->
+        runCurrent()
+        a.presenter.azioni.modificaLunghezzaMassima()
+        a.presenter.azioni.cambiaLunghezzaMassima("1500")
+        a.presenter.azioni.salvaLunghezzaMassima()
+        runCurrent()
+        assertIs<LunghezzaMassimaUiStato.Salvato>(dati(a.presenter).lunghezzaMassima)
+
+        // The user reopens the editor before the 2 s "Salvato" window elapses.
+        a.presenter.azioni.modificaLunghezzaMassima()
+        advanceTimeBy(2_100)
+        runCurrent()
+        assertIs<LunghezzaMassimaUiStato.Modifica>(
+            dati(a.presenter).lunghezzaMassima,
+            "il timer di Salvato ha chiuso un editor riaperto nel frattempo",
+        )
     }
 
     @Test
@@ -485,6 +611,30 @@ class RiassuntoPresenterTest {
         runCurrent()
         assertEquals(2, a.chiamateRiassumi.size)
     }
+
+    // Pre-release finding #154 (rework, MED): messaggioErrore used to be cleared ONLY by a later
+    // successful Riassumi — after a race it stayed shown through in_attesa→in_corso→pronto. It must
+    // clear on the NEXT independent reload too (never just a successful Riassumi).
+    @Test
+    fun `AC-S139 rework un ErroreSintesi si azzera al ricarico successivo, non solo dopo un Riassumi riuscito`() =
+        eseguiTest { a ->
+            runCurrent()
+            a.risultatoRiassumi = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
+            a.presenter.azioni.riassumi()
+            runCurrent()
+            assertEquals(
+                "C'è già un riassunto in coda o in corso per questa registrazione.",
+                dati(a.presenter).messaggioErrore,
+            )
+            // A completely independent reload (a Cambiamento the natural in_attesa→in_corso→pronto
+            // progression would fire) — no successful Riassumi involved at all.
+            a.aggiornamenti.emetti(Cambiamento(REG_1))
+            runCurrent()
+            assertNull(
+                dati(a.presenter).messaggioErrore,
+                "il messaggio d'errore di una race e' rimasto oltre il suo stato",
+            )
+        }
 
     @Test
     fun `AC-S139 il testo mappato usa erroreAtteso per confermare l istanza del kernel`() {

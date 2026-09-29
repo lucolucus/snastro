@@ -82,6 +82,7 @@ private fun uniStato(
     errore = errore,
     soloLettura = soloLettura,
     bannerRitrascrizione = bannerRitrascrizione,
+    contenutoRiassunto = {},
 )
 
 /**

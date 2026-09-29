@@ -36,15 +36,32 @@ class TestiRiassuntoTest {
 
     @Test
     fun `AC-S127 un testo per ognuno dei motivi di download fallito`() {
-        assertEquals("La connessione si è interrotta.", messaggioDownloadFallito(MotivoDownload.ConnessioneInterrotta))
-        assertEquals("Il file scaricato non è integro.", messaggioDownloadFallito(MotivoDownload.FileNonIntegro))
+        assertEquals(
+            "La connessione si è interrotta.",
+            messaggioDownloadFallito(MotivoDownload.ConnessioneInterrotta, 6_169_341_984),
+        )
+        assertEquals(
+            "Il file scaricato non è integro.",
+            messaggioDownloadFallito(MotivoDownload.FileNonIntegro, 6_169_341_984),
+        )
         assertEquals(
             "Non c'è abbastanza spazio sul disco (servono 6,2 GB).",
-            messaggioDownloadFallito(MotivoDownload.SpazioInsufficiente),
+            messaggioDownloadFallito(MotivoDownload.SpazioInsufficiente, 6_169_341_984),
         )
         assertEquals(
             "Non è stato possibile salvare il modello sul disco.",
-            messaggioDownloadFallito(MotivoDownload.ScritturaFallita),
+            messaggioDownloadFallito(MotivoDownload.ScritturaFallita, 6_169_341_984),
+        )
+    }
+
+    // Pre-release finding #149 (rework, MED): the SpazioInsufficiente message used to hardcode its own
+    // byte size — a DIFFERENT `dimensioneModelloByte` here proves it is really a parameter, not a
+    // disguised literal (this would still pass "6,2 GB" against the OLD constant even with a bug).
+    @Test
+    fun `AC-S127 rework SpazioInsufficiente usa la dimensione passata, mai un valore fisso`() {
+        assertEquals(
+            "Non c'è abbastanza spazio sul disco (servono 1,0 GB).",
+            messaggioDownloadFallito(MotivoDownload.SpazioInsufficiente, 1_000_000_000),
         )
     }
 
@@ -84,17 +101,6 @@ class TestiRiassuntoTest {
     }
 
     @Test
-    fun `AC-S130 il testo In coda con e senza posizione`() {
-        assertEquals("In coda · 2", testoInCoda(2))
-        assertEquals("In coda", testoInCoda(null))
-    }
-
-    @Test
-    fun `AC-S131 il testo Sto riassumendo con il tempo trascorso`() {
-        assertEquals("Sto riassumendo… 1:12", testoInCorso(72_000))
-    }
-
-    @Test
     fun `AC-S132 il testo degli omessi al singolare al plurale e assente`() {
         assertNull(testoOmessi(0))
         assertEquals("1 elemento omesso perché non trovavo la frase citata.", testoOmessi(1))
@@ -109,8 +115,13 @@ class TestiRiassuntoTest {
 
     @Test
     fun `AC-S137 il contatore dell Argomento`() {
-        assertEquals("0/200", contatoreArgomento(0))
-        assertEquals("201/200", contatoreArgomento(201))
+        assertEquals("0/200", contatoreArgomento(0, 200))
+        assertEquals("201/200", contatoreArgomento(201, 200))
+    }
+
+    @Test
+    fun `AC-S137 l errore dell Argomento usa il limite passato`() {
+        assertEquals("Al massimo 200 caratteri.", erroreArgomentoTroppoLungo(200))
     }
 
     @Test

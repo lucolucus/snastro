@@ -186,8 +186,13 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            // AC-581: below the threshold the panel stacks under the transcript (render-check at 1024x640).
-            if (maxWidth < LARGHEZZA_SOGLIA_IMPILAMENTO) {
+            // D-0014 (pre-release finding #180): with the Riassunto tab selected, it gets the WHOLE
+            // content area — the Voci panel ("Riassegna per somiglianza" included) is Trascritto-only
+            // chrome, hidden here rather than squeezed alongside a summary that can run long and clip.
+            if (stato.schedaSelezionata == SchedaS3.RIASSUNTO) {
+                ColonnaTrascritto(stato, azioni, Modifier.fillMaxSize())
+                // AC-581: below the threshold the panel stacks under the transcript (render-check at 1024x640).
+            } else if (maxWidth < LARGHEZZA_SOGLIA_IMPILAMENTO) {
                 // Both children must carry a `weight` here: an unweighted panel would be measured
                 // BEFORE the weighted transcript and — since its own `voci-lista` is itself a
                 // `weight(1f)` LazyColumn that greedily fills whatever ceiling it is offered — it would
@@ -235,22 +240,19 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
 @Composable
 private fun ColonnaTrascritto(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione, modifier: Modifier) {
     Column(modifier = modifier) {
-        val contenutoRiassunto = stato.contenutoRiassunto
-        // `contenutoRiassunto == null` renders NEITHER SchedeSn NOR takes the RIASSUNTO branch below —
-        // only a `Dati` built OUTSIDE the presenter (a fixture/test) leaves it `null`; the presenter
-        // itself always supplies it (ADR 0030 §1), so the running app always shows both tabs.
-        if (contenutoRiassunto != null) {
-            SchedeSn(
-                schede = listOf(ETICHETTA_SCHEDA_TRASCRIZIONE, ETICHETTA_SCHEDA_RIASSUNTO),
-                selezionata = stato.schedaSelezionata.ordinal,
-                onSeleziona = { indice -> azioni.selezionaScheda(SchedaS3.entries[indice]) },
-                segni = stato.segnoRiassunto?.let { mapOf(SchedaS3.RIASSUNTO.ordinal to it) }.orEmpty(),
-                modifier = Modifier.testTag("registrazione-schede"),
-            )
-            Spacer(modifier = Modifier.height(SnastroMisure.space3))
-        }
-        if (contenutoRiassunto != null && stato.schedaSelezionata == SchedaS3.RIASSUNTO) {
-            contenutoRiassunto()
+        // Pre-release finding #83 (rework): [RegistrazioneUiStato.Dati.contenutoRiassunto] is
+        // MANDATORY (ADR 0030 §1) — the running app always shows both tabs, so this no longer
+        // branches on it being present at all.
+        SchedeSn(
+            schede = listOf(ETICHETTA_SCHEDA_TRASCRIZIONE, ETICHETTA_SCHEDA_RIASSUNTO),
+            selezionata = stato.schedaSelezionata.ordinal,
+            onSeleziona = { indice -> azioni.selezionaScheda(SchedaS3.entries[indice]) },
+            segni = stato.segnoRiassunto?.let { mapOf(SchedaS3.RIASSUNTO.ordinal to it) }.orEmpty(),
+            modifier = Modifier.testTag("registrazione-schede"),
+        )
+        Spacer(modifier = Modifier.height(SnastroMisure.space3))
+        if (stato.schedaSelezionata == SchedaS3.RIASSUNTO) {
+            stato.contenutoRiassunto()
         } else {
             stato.barraSelezione?.let { BarraSelezioneVista(it, stato.pannello?.carte.orEmpty(), azioni) }
             if (stato.segmenti.isEmpty()) {

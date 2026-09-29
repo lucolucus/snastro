@@ -3,10 +3,12 @@ package snastro.avvio
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import kotlinx.coroutines.CoroutineScope
+import snastro.avvio.modelli.DIMENSIONE_MODELLO_LINGUISTICO_BYTE
 import snastro.avvio.modelli.ID_MODELLO_LINGUISTICO
 import snastro.avvio.progetto.CollaboratoriProgetto
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.mappa
+import snastro.sintesi.dominio.Argomento
 import snastro.ui.ShellPresenter
 import snastro.ui.modelli.ModelliPresenter
 import snastro.ui.parlanti.ParlantiPresenter
@@ -146,6 +148,8 @@ internal fun costruisciRiassuntoPresenter(
     aggiornamenti = collaboratori.aggiornamentiVista,
     clock = grafo.clock,
     idModelloLinguistico = ID_MODELLO_LINGUISTICO,
+    dimensioneModelloLinguisticoByte = DIMENSIONE_MODELLO_LINGUISTICO_BYTE,
+    limiteCaratteriArgomento = Argomento.MASSIMO_CARATTERI,
 )
 
 /** `ui-schede-registrazione`'s slot: [presenter]'s tab body, and the tab mark read on its own lifecycle (AC-S122). */

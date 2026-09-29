@@ -120,6 +120,10 @@ class RegistrazioniRigheTest {
                 hasSetTextAction() and hasAnyAncestor(hasTestTag("registrazioni-numero-persone-${REG_A.valore}")),
                 useUnmergedTree = true,
             ).assertTextEquals("3")
+            // Pre-release finding #83 (rework): the More menu is ALWAYS present now (never
+            // `StatoEliminazione.Assente`), so 'Ritrascrivi' always lives there, never as its own
+            // row-level button (ADR 0020 §6 (b)) — open the menu to find it.
+            onNodeWithTag("registrazioni-altre-azioni-${REG_A.valore}", useUnmergedTree = true).performClick()
             onNodeWithText(ETICHETTA_RITRASCRIVI).assertIsDisplayed()
             onNodeWithText(ETICHETTA_DA_IDENTIFICARE).assertIsDisplayed()
         }

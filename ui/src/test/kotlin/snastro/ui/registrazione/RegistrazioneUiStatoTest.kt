@@ -29,7 +29,7 @@ private fun unDati(
     audioDisponibile: Boolean = true,
     pannello: PannelloVoci? = null,
     bannerRitrascrizione: String? = null,
-    contenutoRiassunto: (@Composable () -> Unit)? = { },
+    contenutoRiassunto: @Composable () -> Unit = { },
 ) = RegistrazioneUiStato.Dati(
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = DATA_1,

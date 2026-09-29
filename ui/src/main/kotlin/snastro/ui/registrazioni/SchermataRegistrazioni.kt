@@ -439,12 +439,12 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
                 Spacer(modifier = Modifier.width(SnastroMisure.space3))
                 ColonnaElaborazione(it, riga, azioni)
             }
-            // AC-625: StatoEliminazione.Assente (the presenter never produces it) means no menu at
-            // all, keeping the row's plain AC-575 content.
-            if (riga.eliminazione != StatoEliminazione.Assente) {
-                Spacer(modifier = Modifier.width(SnastroMisure.space2))
-                MenuAzioniRegistrazione(riga, azioni)
-            }
+            // Pre-release finding #83 (rework): the More menu is ALWAYS present (`eliminazione` is
+            // never absent, `RegistrazioniPresenter.eliminazioneDi` only ever returns Disponibile/
+            // NonDisponibile) — the `StatoEliminazione.Assente` release-flag leftover that used to
+            // gate this is retired.
+            Spacer(modifier = Modifier.width(SnastroMisure.space2))
+            MenuAzioniRegistrazione(riga, azioni)
         }
         riga.erroreRiga?.let {
             MessaggioInlineErrore(
@@ -510,7 +510,6 @@ private fun MenuAzioniRegistrazione(riga: RigaRegistrazione, azioni: AzioniRegis
  * presenter's own [RegistrazioniPresenter.elimina] guards the same rule independently. */
 @Composable
 private fun VoceMenuElimina(stato: StatoEliminazione, onClick: () -> Unit, tag: String) {
-    if (stato == StatoEliminazione.Assente) return // guarded by the caller too (AC-625)
     val colori = LocalSnastroColori.current
     val disabilitato = stato is StatoEliminazione.NonDisponibile
     DropdownMenuItem(
@@ -1009,9 +1008,10 @@ private fun ColonnaCompletata(riga: RigaRegistrazione, azioni: AzioniRegistrazio
             VarianteBottone.Secondario,
             azioni.modificaNumeroPersone,
             azioni.ritrascrivi,
-            // ADR 0020 §6/AC-625 (b): once the More menu is present, 'Ritrascrivi' moves into it — only
-            // the prefilled field stays on the row (the button would otherwise duplicate the menu item).
-            mostraBottone = riga.eliminazione == StatoEliminazione.Assente,
+            // ADR 0020 §6/AC-625 (b): the More menu is ALWAYS present (pre-release finding #83), so
+            // 'Ritrascrivi' ALWAYS moves into it — only the prefilled field stays on the row (the
+            // button would otherwise duplicate the menu item).
+            mostraBottone = false,
         )
     }
 }
