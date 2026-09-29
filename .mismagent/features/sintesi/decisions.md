@@ -167,3 +167,16 @@
 - By: decided: user (Luca Parsani); recorded: worker-composer
 - Docs: [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md), [pre-release](pre-release.md)
 - Revisit: a sintesi block's own spec changes, or a consolidamento review finds an R3 block non-conformant.
+
+### D-0014 · Pre-release triage: six user choices
+- Meta: 2026-09-29; scope: feature; status: accepted
+- Question: how are the six DECISIONE lines of the R3/R3c pre-release triage resolved?
+- Options: per line, the recommended option vs the alternative; the user took the recommended one except A4 (unify).
+- Hypothesis: n/a — decided by the user on the triage, [pre-release](pre-release.md)
+- Check: n/a — decided by the user on the triage, [pre-release](pre-release.md)
+- Result: n/a — decided by the user on the triage, [pre-release](pre-release.md)
+- Debate: design analysis kept per-context Seme* seeds (ADR 0002/0021); the user chose one shared test fixture.
+- Decision: A156 Riprova disabled, NonDisponibile caption; A186 amend ADR 0026 §4 (10 s after the open); A180 fix S3 Riassunto layout; A4 one Seme* fixture in :supporto-test; B17 retry checkpoint; B41 detekt on, fix findings.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [pre-release](pre-release.md), [ADR 0026](../../decisions/0026-runtime-llm-jni-llama.md)
+- Revisit: a cleanup change shows one of these costs more than expected.
