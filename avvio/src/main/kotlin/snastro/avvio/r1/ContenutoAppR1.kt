@@ -10,12 +10,7 @@ import snastro.avvio.GrafoR0
 import snastro.avvio.gestoreErrori
 import snastro.kernel.RegistrazioneId
 import snastro.supporto.figlioDi
-import snastro.ui.ShellPresenter
-import snastro.ui.modelli.ModelliPresenter
 import snastro.ui.modelli.ModelliRoute
-import snastro.ui.modelli.StatoModelli
-import snastro.ui.progetti.ProgettiPresenter
-import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazionePresenter
 import snastro.ui.registrazione.RegistrazioneRoute
@@ -26,45 +21,36 @@ import snastro.ui.registrazioni.RegistrazioniRoute
  * R1's app content: S1 without a project; with one, S2 (with the Trascrizione sources, AC-355), S3 of
  * a completed Registrazione (read-only, opened from S2's row, AC-203) or S5 — reachable from the
  * shell's own sidebar footer (rework cycle 1, HIGH #9: the former standalone 'Registrazioni'/'Modelli'
- * top bar is gone, navigation is the sidebar). S5 opens first while the models are not ready
- * (ux-proposal S5 "When: at startup") — it never blocks the app.
+ * top bar is gone, navigation is the sidebar). [ContenutoAppCondiviso] (AC-C65) owns the shell/models/
+ * projects presenters and the `ShellProgetto` wiring; this function only passes [SEZIONI_SHELL_R1], its
+ * OWN [CollaboratoriR1] extension (no Parlanti, no `dimenticaPosto`, unlike R2/R3) and the S3 builder.
  */
 @Composable
 internal fun ContenutoAppR1(grafo: GrafoR1, sceltaCartella: SceltaCartella) {
     val r0 = grafo.r0
-    val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R1) }
-    val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
-    val iniziale = {
-        if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) SchermataR1.Registrazioni else SchermataR1.Modelli
-    }
-    ShellProgetto(
-        shellPresenter = shellPresenter,
-        iniziale = iniziale,
-        contenutoSenzaProgetto = {
-            val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
-            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita, sceltaCartella)
-        },
-        contenuto = { conProgetto, navigazione ->
-            val collaboratori = r0.sessione.collaboratoriCorrenti()
-            val r1 = collaboratori?.estensione as? CollaboratoriR1
-            if (collaboratori != null && r1 != null) {
-                val progettoId = conProgetto.progetto.progettoId
-                val registrazioniPresenter = remember(progettoId) {
-                    costruisciRegistrazioniPresenterR1(r0, collaboratori, r1) { id ->
-                        navigazione.apriRegistrazione(id)
-                    }
+    ContenutoAppCondiviso(r0, grafo.servizioModelli, SEZIONI_SHELL_R1, sceltaCartella) {
+            conProgetto,
+            navigazione,
+            collaboratori,
+            modelliPresenter,
+        ->
+        val r1 = collaboratori.estensione as? CollaboratoriR1
+        if (r1 != null) {
+            val progettoId = conProgetto.progetto.progettoId
+            val registrazioniPresenter = remember(progettoId) {
+                costruisciRegistrazioniPresenterR1(r0, collaboratori, r1) { id ->
+                    navigazione.apriRegistrazione(id)
                 }
-                ContenutoProgetto(
-                    conProgetto = conProgetto,
-                    navigazione = navigazione,
-                    elenco = { RegistrazioniRoute(registrazioniPresenter) },
-                    registrazione = { id -> SchermataRegistrazioneR1(grafo, collaboratori, r1, id) },
-                    modelli = { ModelliRoute(modelliPresenter) },
-                )
             }
-        },
-        etichettaModelloLinguisticoPiede = modelliPresenter.etichettaModelloLinguisticoPiede,
-    )
+            ContenutoProgetto(
+                conProgetto = conProgetto,
+                navigazione = navigazione,
+                elenco = { RegistrazioniRoute(registrazioniPresenter) },
+                registrazione = { id -> SchermataRegistrazioneR1(grafo, collaboratori, r1, id) },
+                modelli = { ModelliRoute(modelliPresenter) },
+            )
+        }
+    }
 }
 
 /**
