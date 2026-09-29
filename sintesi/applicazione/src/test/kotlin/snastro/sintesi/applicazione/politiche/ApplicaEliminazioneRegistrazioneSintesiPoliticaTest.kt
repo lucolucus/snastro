@@ -19,6 +19,7 @@ import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.Riassunto
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * [ApplicaEliminazioneRegistrazioneSintesiPolitica] against [RiassuntoRepositoryFinta] (D1). AC-S98..S101,
@@ -44,9 +45,10 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
         scenari.forEachIndexed { i, (nome, costruisci) ->
             val r = RegistrazioneId("reg-$i")
             val altraRegistrazione = RegistrazioneId("altra-$i")
-            costruisci(r).forEach { riassunti.salva(it).atteso() }
+            val righe = costruisci(r).onEach { riassunti.salva(it).atteso() }
             riassunti.salva(unRiassuntoPronto("altra-pronto-$i", altraRegistrazione)).atteso()
             val altraPrima = riassunti.diRegistrazione(altraRegistrazione).map { it.statoOsservabile() }
+            val eventiPrima = eventi.pubblicati.size
 
             applica(r).atteso()
 
@@ -56,6 +58,10 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
                 riassunti.diRegistrazione(altraRegistrazione).map { it.statoOsservabile() },
                 "$nome: un'altra Registrazione resta byte-identica",
             )
+            // AC-S99: un solo RiassuntoEliminato anche quando lo scenario rimuove piu' righe (qui: ${righe.size}).
+            assertTrue(righe.size >= 1, nome)
+            assertEquals(eventiPrima + 1, eventi.pubblicati.size, "$nome: un solo evento anche con piu' righe")
+            assertEquals(RiassuntoEliminato(r), eventi.pubblicati.last(), nome)
         }
     }
 
