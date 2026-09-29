@@ -65,13 +65,15 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         private val parlanti = ParlanteRepositoryFinta()
         private val attribuzioni = AttribuzioneRepositoryFinta()
-        private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(parlanti, attribuzioni))
+        private val unitaDiLavoro = UnitaDiLavoroFinta(parlanti, attribuzioni)
+        private val eventi = DispatcherEventiFinta(unitaDiLavoro)
 
         /** Parlanti's OWN view of each Registrazione/Voce seeded so far (its consumed ports' fakes). */
         private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
         private val vociViste = mutableMapOf<RegistrazioneId, List<VoceVista>>()
 
-        override val lettore: LettoreNomi = LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti))
+        override val lettore: LettoreNomi =
+            LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro))
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,

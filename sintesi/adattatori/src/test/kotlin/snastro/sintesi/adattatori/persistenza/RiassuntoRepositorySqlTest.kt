@@ -38,6 +38,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): [RiassuntoRepositoryContratto] against
@@ -118,6 +119,31 @@ class RiassuntoRepositorySqlTest : RiassuntoRepositoryContratto() {
         } finally {
             reale.chiudi()
         }
+    }
+
+    /**
+     * A83: [salva]'s existing-row branch must not silently accept a 0-row UPDATE. Here the stored row is still
+     * `in_attesa` (never advanced through `avvia`), while the incoming, in-memory [Riassunto] jumped straight to
+     * `pronto` (a save more than one transition ahead) — `eseguiConcludi`'s `WHERE stato = 'in_corso'` cannot
+     * match, so without the `check` in `aggiornaRadiceEsistente` [salva] would return `Ok(Unit)` and still write
+     * `pronto` children against a row that never actually became `pronto` (every later read then throws, INV-S1).
+     */
+    @Test
+    fun `A83 salva su in_attesa con un Riassunto pronto in memoria fallisce forte senza scrivere figli`() {
+        val db = SnastroDatabase(driver)
+        val repo = RiassuntoRepositorySql(db, UnitaDiLavoroSql(db))
+        val id = RiassuntoId("riassunto-a83")
+        repo.salva(unRiassunto(id.valore, RiassuntoRepositoryContratto.REGISTRAZIONE)).atteso()
+
+        val pronto = unRiassunto(id.valore, RiassuntoRepositoryContratto.REGISTRAZIONE)
+            .conAvvio()
+            .conCompletamento(bozza(1), STRUTTURA)
+
+        assertFailsWith<IllegalStateException> { repo.salva(pronto) }
+
+        val letto = checkNotNull(repo.trova(id))
+        assertTrue(letto.inAttesa, "la riga non deve avanzare quando salva fallisce forte")
+        assertEquals(emptyList(), letto.decisioni, "nessun figlio orfano scritto contro una radice non pronto")
     }
 
     /** Delete + re-insert of [ID] with a different number of `decisioni`, in ONE write transaction. */

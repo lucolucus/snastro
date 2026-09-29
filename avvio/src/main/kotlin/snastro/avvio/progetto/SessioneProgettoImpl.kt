@@ -126,7 +126,7 @@ internal class SessioneProgettoImpl(
             rilasciaLock(lockCartella)
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
-        val porte = PorteProgetto(db.database, clock, seams.costruisciRegistrazioni)
+        val porte = PorteProgetto(db.database, clock, cartella.toFile(), seams.costruisciRegistrazioni)
         val esitoCrea = CreaProgettoServizio(porte.unitaDiLavoro, generatoreId, porte.progetti, porte.dispatcher)
             .esegui(CreaProgetto(nomeProgetto))
         if (esitoCrea is Esito.Errore) {
@@ -174,7 +174,7 @@ internal class SessioneProgettoImpl(
             return Esito.Errore(ErroreSessione.CartellaNonValida)
         }
 
-        val porte = PorteProgetto(db.database, clock, seams.costruisciRegistrazioni)
+        val porte = PorteProgetto(db.database, clock, cartella.toFile(), seams.costruisciRegistrazioni)
         val progetto = porte.progetti.trova()
         if (progetto == null) {
             rilasciaLock(lockCartella)

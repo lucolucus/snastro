@@ -87,6 +87,10 @@ internal class ModuloParlanti(
 ) : ModuloComposizione {
     private val progettoId: ProgettoId = apertura.progettoId
     private val ml = app.adattatoriParlanti()
+
+    /** B17/D-0014: [avvia] starts its checkpoint-retry worker on it; a plain field, [porte] itself is a constructor
+     * parameter (unused past construction otherwise). */
+    private val parlanti = porte.parlanti
     private val revisione = AbbonatoRevisioneParlanti(
         ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
         ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
@@ -232,6 +236,7 @@ internal class ModuloParlanti(
     override fun avvia(scope: CoroutineScope) {
         val figlio = figlioDi(scope, app.io, gestoreErrori) // AC-C56
         riallineamento.avvia(figlio)
+        parlanti.avviaRitentaCheckpoint(figlio) // B17/D-0014: joins figlio, so ferma's join below covers it too
         figlio.launch { riallineaAllApertura() }
         lavoroInBackground = figlio.coroutineContext.job
     }

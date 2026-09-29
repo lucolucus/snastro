@@ -3,10 +3,12 @@ package snastro.parlanti.applicazione.letture
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
+import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Nome
@@ -14,6 +16,7 @@ import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * [NomiDelleVoci] against the ports' fakes (D1): AC-101/AC-102 of `nomi-delle-voci`, mirroring the
@@ -22,7 +25,32 @@ import kotlin.test.assertEquals
 class NomiDelleVociTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()
     private val parlanti = ParlanteRepositoryFinta()
-    private val api = NomiDelleVoci(attribuzioni, parlanti)
+    private val api = NomiDelleVoci(attribuzioni, parlanti, UnitaDiLavoroFinta(attribuzioni, parlanti))
+
+    /** B33: [NomiDelleVoci.nomi] wraps its `attribuzioni` read and every `parlanti.trova` in ONE [lettura]
+     * snapshot — a throwaway probe removing the `inLettura` wrap makes [uow]'s `letturaAperta` false during
+     * `trova`, failing this. */
+    @Test
+    fun `B33 nomi legge attribuzioni e parlanti dentro una sola inLettura`() {
+        val uow = UnitaDiLavoroFinta(attribuzioni, parlanti)
+        val statiDurante = mutableListOf<Boolean>()
+        val parlantiOsservato = object : ParlanteRepository by parlanti {
+            override fun trova(id: ParlanteId): Parlante? {
+                statiDurante += uow.letturaAperta
+                return parlanti.trova(id)
+            }
+        }
+        val apiOsservata = NomiDelleVoci(attribuzioni, parlantiOsservato, uow)
+        val marco = unParlante("id-1", "Marco")
+        parlanti.salva(marco).atteso()
+        attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
+        attribuzioni.salva(Attribuzione.conferma(VOCE_3, PROGETTO, marco.id).aggregato)
+
+        apiOsservata.nomi(REGISTRAZIONE)
+
+        assertEquals(2, statiDurante.size, "due Voci attribuite, due trova")
+        assertTrue(statiDurante.all { it }, "ogni trova deve girare dentro l'unica inLettura di nomi(): $statiDurante")
+    }
 
     @Test
     fun `AC-101 senza Attribuzioni nomi e vuota`() {

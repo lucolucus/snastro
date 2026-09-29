@@ -57,6 +57,24 @@ public class UnitaDiLavoroSql(private val db: SnastroDatabase) : UnitaDiLavoro, 
      * unrelated outermost `BEGIN` to consume (which would silently turn a write DEFERRED and risk
      * `SQLITE_BUSY_SNAPSHOT`): [DriverSqliteImmediato.conInizioDeferred]'s own `finally` resets it, right
      * there, before this call ever returns.
+     *
+     * B26 (pre-R3-4, KNOWN residual hazard — SQLDelight 2.1.0's own `Transacter.transactionWithWrapper`,
+     * `Transacter.kt:364-367`, not something `:persistenza` can reach into): `driver.newTransaction()` already
+     * builds the NESTED `Transaction` and stores it as the driver's CURRENT one (the JDBC connection's
+     * transaction slot) BEFORE the `noEnclosing` check runs — the [IllegalStateException] above is thrown only
+     * AFTER that store. So a foreign, unknown-to-[stato] enclosing transaction leaves an ORPHAN nested
+     * `Transaction` in that slot: nobody holds a reference to it (the throw happens before SQLDelight ever
+     * returns it to us), so its `endTransaction()`/`postTransactionCleanup()` NEVER runs. If a caller catches
+     * this [IllegalStateException] and keeps using the SAME thread, every `transaction { afterCommit { … } }`
+     * registered afterwards (e.g. [checkpointDopoCommit]) silently nests UNDER the orphan instead of the real
+     * foreign transaction — its `afterCommit` hooks queue on the orphan and are LOST, until the foreign
+     * transaction itself eventually ends (which only resets the slot, discarding the orphan; it never runs the
+     * orphan's own hooks either). There is no supported way to repair or bypass this from here — `:persistenza`
+     * has no access to `driver.transaction` (package-private to `app.cash.sqldelight`) to reset it, and dropping
+     * `noEnclosing` would remove the DEFERRED-vs-IMMEDIATE safety net above for a strictly worse silent
+     * absorption. Only a caller that never catches [IllegalStateException] from [inLettura] (today's only
+     * caller, [PorteProgetto] and every repository, never does) avoids it. Pinned by
+     * `UnitaDiLavoroSqlTransazioneOrfanaTest`.
      */
     private fun <T> letturaEsterna(stato: Stato, blocco: () -> T): T {
         stato.modo = Modo.LETTURA
@@ -64,16 +82,35 @@ public class UnitaDiLavoroSql(private val db: SnastroDatabase) : UnitaDiLavoro, 
             return DriverSqliteImmediato.conInizioDeferred {
                 db.transactionWithResult(noEnclosing = true) {
                     db.transazioneQueries.attivaSolaLettura()
-                    try {
-                        annidataInLettura(stato, blocco)
-                    } finally {
-                        db.transazioneQueries.disattivaSolaLettura()
-                    }
+                    conDisattivaSolaLetturaDopo { annidataInLettura(stato, blocco) }
                 }
             }
         } finally {
             stato.modo = Modo.NESSUNO
         }
+    }
+
+    /**
+     * B20: a plain `finally { disattivaSolaLettura() }` would MASK [blocco]'s own exception if
+     * `disattivaSolaLettura()` itself throws (e.g. a `StaticConnectionManager` leaving `query_only` stuck at 1
+     * — ADR 0029 §2.7 "no leak" still holds, but silently swapping which failure the caller sees does not).
+     * On the failure path the reset is still attempted (best effort) and its own throwable is attached via
+     * [Throwable.addSuppressed] rather than replacing [blocco]'s.
+     */
+    @Suppress("TooGenericExceptionCaught") // try-with-resources idiom: [blocco] and the reset can throw anything
+    private fun <T> conDisattivaSolaLetturaDopo(blocco: () -> T): T {
+        val risultato = try {
+            blocco()
+        } catch (e: Throwable) {
+            try {
+                db.transazioneQueries.disattivaSolaLettura()
+            } catch (e2: Throwable) {
+                e.addSuppressed(e2)
+            }
+            throw e
+        }
+        db.transazioneQueries.disattivaSolaLettura()
+        return risultato
     }
 
     private fun <T> annidataInLettura(stato: Stato, blocco: () -> T): T {

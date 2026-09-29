@@ -1,5 +1,6 @@
 package snastro.avvio.progetto
 
+import snastro.avvio.segnalazioneApp
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.UnitaDiLavoro
@@ -21,6 +22,7 @@ import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.letture.FasiInCorso
 import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
+import java.io.File
 import java.time.Clock
 import snastro.documento.adattatori.porte.LettoreNomiDaParlanti as LettoreNomiDocumento
 import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione as LettoreTrascrittoDocumento
@@ -35,10 +37,17 @@ import snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto as L
  * the project's [LetturaCoerente] AND as the [dispatcher]'s delegate, ADR 0029 §3), the [dispatcher] itself, every SQL
  * repository (one instance each), [catalogo], the ONE [statiElaborazione] (AC-C63) and the cross-context readers.
  * Nothing else in `:avvio` builds a repository: every module (`Modulo<Contesto>`) receives the instances held here.
+ *
+ * B17/D-0014: [cartella] (the SAME folder `apriDatabaseProgetto` opened) is what [parlanti]'s `walTroncato` checks
+ * (`progetto.db-wal`'s size, ADR 0009/0020) — real, not the `{ true }` default `ParlanteRepositorySql` otherwise
+ * falls back to; `segnalazioneApp` (the ONE JUL-backed [snastro.supporto.Segnalazione] of `:avvio`, AC-C54) is what
+ * it logs an incomplete checkpoint and its retries through. `ModuloParlanti.avvia` starts the retry worker this
+ * wiring only PREPARES here — it is inert (queued, never run) until that call.
  */
 internal class PorteProgetto(
     val database: SnastroDatabase,
     clock: Clock,
+    cartella: File,
     costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = registrazioniSql,
 ) {
     private val unitaDiLavoroSql = UnitaDiLavoroSql(database)
@@ -58,7 +67,12 @@ internal class PorteProgetto(
     val catalogo: CatalogoRegistrazioni = CatalogoRegistrazioni(registrazioni)
     val trascritti: TrascrittoRepositorySql = TrascrittoRepositorySql(database, lettura)
     val elaborazioni: ElaborazioneRepositorySql = ElaborazioneRepositorySql(database)
-    val parlanti: ParlanteRepositorySql = ParlanteRepositorySql(database, lettura)
+    val parlanti: ParlanteRepositorySql = ParlanteRepositorySql(
+        database,
+        lettura,
+        walTroncato = { walTroncato(cartella) },
+        segnalazione = segnalazioneApp,
+    )
     val attribuzioni: AttribuzioneRepositorySql = AttribuzioneRepositorySql(database)
     val riassunti: RiassuntoRepositorySql = RiassuntoRepositorySql(database, lettura)
     val lunghezze: LunghezzaMassimaRiassuntoRepositorySql = LunghezzaMassimaRiassuntoRepositorySql(database)
@@ -73,7 +87,7 @@ internal class PorteProgetto(
     val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Documento's and Sintesi's readers. */
-    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti)
+    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 
@@ -89,4 +103,12 @@ internal class PorteProgetto(
         /** `SessioneProgettoSeams`' default: the production Registrazione repository, built through here only. */
         val registrazioniSql: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql
     }
+}
+
+/** B17/D-0014: the real completion check `ParlanteRepositorySql.checkpointDopoCommit` needs — mirrors
+ * `ParlanteRepositorySqlCheckpointTest`'s own file-size check (ADR 0009/0020's TRUNCATE either empties the
+ * `-wal` file, or leaves it non-empty when an open DEFERRED reader blocked it). */
+private fun walTroncato(cartella: File): Boolean {
+    val wal = File(cartella, "progetto.db-wal")
+    return !wal.exists() || wal.length() == 0L
 }

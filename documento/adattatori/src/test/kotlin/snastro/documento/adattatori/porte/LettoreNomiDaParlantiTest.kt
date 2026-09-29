@@ -116,7 +116,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 .atteso()
         }
 
-        override val lettore: LettoreNomi = LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti))
+        override val lettore: LettoreNomi =
+            LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, uowParlanti))
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventiParlanti.unitaDiLavoro,
