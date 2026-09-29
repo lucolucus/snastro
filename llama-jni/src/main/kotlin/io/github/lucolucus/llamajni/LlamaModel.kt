@@ -16,6 +16,10 @@ public interface LlamaModel : AutoCloseable {
      * [cancel] is polled by a watcher thread (which then raises the native abort flag) and before every
      * prefill chunk, so it must be thread-safe; a cancelled run returns [LlamaError.Cancelled] only after the
      * native call has returned.
+     *
+     * [cancel] must never block and must return promptly: the watcher's own `close()` joins it uninterruptibly,
+     * so a blocking [cancel] hangs the whole call. A thread interrupt of the CALLER is not itself a cancel —
+     * [cancel] alone decides; a caller that wants its own interrupt to cancel must check it inside [cancel].
      */
     public fun generate(prompt: String, options: GenerateOptions, cancel: () -> Boolean): LlamaResult<Generation>
 

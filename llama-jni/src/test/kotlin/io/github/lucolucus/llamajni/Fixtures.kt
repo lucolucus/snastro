@@ -23,5 +23,8 @@ internal inline fun <reified E : LlamaError> LlamaResult<*>.error(): E =
 
 internal val neverCancel: () -> Boolean = { false }
 
+/** A specific exception for fault-injection tests (a bare `RuntimeException` is `TooGenericExceptionThrown`). */
+internal class SimulatedFailure(message: String) : RuntimeException(message)
+
 /** A prompt of exactly [n] tokens with [FakeNativeBridge] (one token per UTF-8 byte). */
 internal fun aPromptOf(n: Int): String = "a".repeat(n)

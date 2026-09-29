@@ -4,6 +4,13 @@ package snastro.sintesi.adattatori.ml
  * A minimal strict JSON reader (RFC 8259 values: object → `Map`, array → `List`, string, integer → `Long`, other
  * number → `Double`, `true`/`false`, `null`) for the model's answer — the project has no JSON library and the
  * answer is one small document. A failure on any syntax error or trailing content.
+ *
+ * [valore] recurses through nested objects/arrays with no depth limit, and [escape] accepts a lone UTF-16
+ * surrogate `\u` escape unpaired. Both are unreachable from the sole caller, [RispostaV1]: [GrammaticaRisposta]
+ * bounds the JSON to schema v1's fixed shape (a flat root, lists ≤ 6 items, no nesting deep enough to overflow
+ * the stack), and a lone surrogate `Char` is valid Kotlin — it round-trips fine, it just fails to decode to a
+ * character when later interpreted as UTF-16 text. Reusing this reader for an UNBOUNDED document would need both
+ * hardened first.
  */
 internal class JsonMinimo private constructor(private val s: String) {
     private var i = 0

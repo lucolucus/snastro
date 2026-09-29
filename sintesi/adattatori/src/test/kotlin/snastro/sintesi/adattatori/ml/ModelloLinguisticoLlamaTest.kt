@@ -178,6 +178,17 @@ class ModelloLinguisticoLlamaTest {
     }
 
     @Test
+    fun `AC-S179 annullato tra l'apertura GPU fallita e il nuovo tentativo sulla CPU non riprova e da Annullato`() {
+        val backend = BackendFinto(esitiApertura = listOf(LlamaError.ModelLoadFailed("vram")))
+
+        val esito = modello(backend)
+            .riassumi(richiesta) { "open(-1)" in backend.chiamate } // cancelled right after the failed GPU open
+
+        esito.erroreAtteso<ErroreApplicazioneSintesi.Annullato>()
+        assertEquals(listOf("open(-1)"), backend.chiamate, "nessun secondo open ne generate ne close")
+    }
+
+    @Test
     fun `AC-S179 senza GPU apre direttamente sulla CPU una volta sola`() {
         val backend = BackendFinto(devices = listOf(UNA_CPU), esitiApertura = listOf(LlamaError.ModelLoadFailed("x")))
 
@@ -336,6 +347,18 @@ class ModelloLinguisticoLlamaTest {
     }
 
     @Test
+    fun `AC-S152 annullato tra caricaLibreria e apri non apre il modello e da Annullato`() {
+        val backend = BackendFinto()
+        val caricamenti = mutableListOf<Path>()
+
+        val esito = modello(backend, caricamenti = caricamenti)
+            .riassumi(richiesta) { caricamenti.isNotEmpty() } // cancelled right after caricaLibreria runs
+
+        esito.erroreAtteso<ErroreApplicazioneSintesi.Annullato>()
+        assertEquals(emptyList(), backend.chiamate, "nessun open: annullato prima di apri")
+    }
+
+    @Test
     fun `AC-S152 annullato durante l'apertura chiude il modello senza generare`() {
         var aperto = false
         val finto = BackendFinto()
@@ -353,6 +376,19 @@ class ModelloLinguisticoLlamaTest {
         m.riassumi(richiesta) { aperto }.erroreAtteso<ErroreApplicazioneSintesi.Annullato>()
 
         assertEquals(listOf("open(-1)", "close"), finto.chiamate)
+    }
+
+    @Test
+    fun `un annullamento tardivo scarta anche una generazione riuscita, l'Ok e da Annullato`() {
+        var generato = false
+        val backend = BackendFinto(genera = { _, _ ->
+            generato = true // the cancel flips true only once the (successful) generation returns
+            LlamaResult.Ok(unaGenerazione(RISPOSTA_VALIDA))
+        })
+
+        modello(backend).riassumi(richiesta) { generato }.erroreAtteso<ErroreApplicazioneSintesi.Annullato>()
+
+        assertEquals(listOf("open(-1)", "generate", "close"), backend.chiamate, "il modello e comunque chiuso")
     }
 
     // --- measurements (benchmarkRiassunto, AC-S153) -----------------------------------------------------------

@@ -58,9 +58,10 @@ public class ModelloLinguisticoLlama(
             is LlamaResult.Err -> return runtime("caricamento dei nativi llama.cpp da $nativi fallito", caricato.error)
             is LlamaResult.Ok -> caricato.value
         }
+        if (annulla()) return Esito.Errore(ErroreApplicazioneSintesi.Annullato) // a cancel between load and open
         val inizio = System.nanoTime()
-        val aperto = when (val esito = apri(backend, file)) {
-            is LlamaResult.Err -> return runtime("apertura del modello fallita", esito.error)
+        val aperto = when (val esito = apri(backend, file, annulla)) {
+            is LlamaResult.Err -> return mappaErroreApertura(esito.error)
             is LlamaResult.Ok -> esito.value
         }
         val apertura = millisDa(inizio)
@@ -69,28 +70,50 @@ public class ModelloLinguisticoLlama(
             (if (annulla()) null else modello.generate(PromptRiassunto.componi(richiesta), opzioni(richiesta), annulla))
                 .also { fineGenerazione = System.nanoTime() }
         }
+        registraMisure(generazione, apertura, fineGenerazione, aperto.gpu)
+        return esito(generazione, annulla, VociNelTesto.legenda(richiesta.ingresso))
+    }
+
+    /** The apri() failure as an Esito: [LlamaError.Cancelled] is Annullato, never the generic runtime mapping. */
+    private fun mappaErroreApertura(errore: LlamaError): Esito<Nothing> =
+        if (errore is LlamaError.Cancelled) {
+            Esito.Errore(ErroreApplicazioneSintesi.Annullato)
+        } else {
+            runtime("apertura del modello fallita", errore)
+        }
+
+    private fun registraMisure(
+        generazione: LlamaResult<Generation>?,
+        aperturaMs: Long,
+        fineGenerazione: Long,
+        gpu: Boolean,
+    ) {
         (generazione as? LlamaResult.Ok)?.value?.let { g ->
             misure(
                 MisureRiassunto(
-                    aperturaMs = apertura,
+                    aperturaMs = aperturaMs,
                     prefillMs = g.timings.prefillMs,
                     generazioneMs = g.timings.generationMs,
                     rilascioMs = millisDa(fineGenerazione),
                     tokenIngresso = g.promptTokens,
                     tokenGenerati = g.generatedTokens,
-                    gpu = aperto.gpu,
+                    gpu = gpu,
                 ),
             )
         }
-        return esito(generazione, annulla)
     }
 
-    /** Opens on the GPU when there is one, retrying ONCE on the CPU if that open fails (ADR 0027 §4). */
-    private fun apri(backend: LlamaBackend, file: Path): LlamaResult<Aperto> {
+    /**
+     * Opens on the GPU when there is one, retrying ONCE on the CPU if that open fails (ADR 0027 §4). A cancel
+     * between the failed GPU open and the CPU retry skips the retry (no second full open paid for a run that is
+     * being thrown away) and is reported as [LlamaError.Cancelled], never as a runtime failure.
+     */
+    private fun apri(backend: LlamaBackend, file: Path, annulla: () -> Boolean): LlamaResult<Aperto> {
         val gpu = backend.devices.any { it.kind == DeviceKind.GPU }
         val primo = backend.openModel(file, parametri(if (gpu) ModelParams.ALL else 0))
         val riprovaSullaCpu = gpu && primo is LlamaResult.Err &&
             (primo.error is LlamaError.ModelLoadFailed || primo.error is LlamaError.ContextCreateFailed)
+        if (riprovaSullaCpu && annulla()) return LlamaResult.Err(LlamaError.Cancelled)
         val esito = if (riprovaSullaCpu) backend.openModel(file, parametri(0)) else primo
         return when (esito) {
             is LlamaResult.Err -> esito
@@ -100,7 +123,11 @@ public class ModelloLinguisticoLlama(
 
     private class Aperto(val modello: LlamaModel, val gpu: Boolean)
 
-    private fun esito(generazione: LlamaResult<Generation>?, annulla: () -> Boolean): Esito<RispostaModello> =
+    private fun esito(
+        generazione: LlamaResult<Generation>?,
+        annulla: () -> Boolean,
+        legenda: Set<Int>,
+    ): Esito<RispostaModello> =
         when (generazione) {
             null -> Esito.Errore(ErroreApplicazioneSintesi.Annullato)
             is LlamaResult.Err -> when (val errore = generazione.error) {
@@ -113,7 +140,7 @@ public class ModelloLinguisticoLlama(
                 annulla() -> Esito.Errore(ErroreApplicazioneSintesi.Annullato) // a late cancel: the answer is discarded
                 generazione.value.stop == StopReason.MAX_TOKENS ->
                     Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
-                else -> RispostaV1.leggi(generazione.value.text)?.let { Esito.Ok(it) }
+                else -> RispostaV1.leggi(generazione.value.text, legenda)?.let { Esito.Ok(it) }
                     ?: Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
             }
         }

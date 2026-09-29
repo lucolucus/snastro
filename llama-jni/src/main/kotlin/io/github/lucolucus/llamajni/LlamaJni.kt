@@ -9,8 +9,8 @@ public object LlamaJni {
 
     /**
      * Loads the natives from [nativeDir] (the caller chooses it: no system property, no default location)
-     * and initializes the backend. Idempotent per JVM: after the first success, later calls load nothing and
-     * return the same backend.
+     * and initializes the backend. Idempotent per JVM: after the first success, a LATER call — even with a
+     * DIFFERENT [nativeDir] — loads nothing and silently returns the SAME backend the first call returned.
      */
     public fun load(nativeDir: Path): LlamaResult<LlamaBackend> = loader.load(nativeDir)
 }
