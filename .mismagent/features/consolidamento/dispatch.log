@@ -45,3 +45,5 @@
 2026-09-27T22:59:56Z	a4-supporto-avvio	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW
 2026-09-27T23:10:12Z	a4-supporto-avvio	verifier	result	cycle=1	tier=deep	model=opus	PASS
 2026-09-27T23:10:56Z	c1-porte-progetto	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-29T08:01:15Z	c1-porte-progetto	verifier	result	cycle=0	tier=standard	model=sonnet	FAIL (AC-C60/61; raw merge c90ee4d8 found unreviewed)
+2026-09-29T08:01:15Z	c1-porte-progetto	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED→user: one instance (rework)

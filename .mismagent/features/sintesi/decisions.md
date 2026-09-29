@@ -154,3 +154,16 @@
 - By: decided: worker; recorded: worker-composer
 - Docs: [pre-release](pre-release.md), [ADR 0026](../../decisions/0026-runtime-llm-jni-llama.md)
 - Revisit: the qualita-riassunto or filtro-fuori-tema ADR lands, or another module needs JSON.
+
+### D-0013 · Stale R3 review proofs accepted
+- Meta: 2026-09-29; scope: feature; status: accepted
+- Question: 30 done R3 blocks show stale review proofs; must they be re-reviewed?
+- Options: accept and record (kept) vs one batch re-review against the new ADRs.
+- Hypothesis: n/a — decided by the user on the stale_review_proof anomaly, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Check: n/a — decided by the user on the stale_review_proof anomaly, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Result: n/a — decided by the user on the stale_review_proof anomaly, [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
+- Debate: no block spec changed; only shared docs (ADR 0028–0030, architecture, dev-architecture) and pre-release ticks moved the spec hash.
+- Decision: keep the existing review proofs as valid for R3; conformance to ADR 0028–0030 is proven by the consolidamento blocks' own reviews. Cost: no per-block recheck against the new docs.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md), [pre-release](pre-release.md)
+- Revisit: a sintesi block's own spec changes, or a consolidamento review finds an R3 block non-conformant.

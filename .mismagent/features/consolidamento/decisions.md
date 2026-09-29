@@ -40,3 +40,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: worker-composer
 - Docs: [building-blocks.yaml](building-blocks.yaml)
 - Revisit: a block's code changes after integration, or a pin change alters an integrated block's contract.
+
+### D-0004 · Shared queue keeps swallowing OutOfMemoryError
+- Meta: 2026-09-29; scope: block:a4-supporto-avvio; status: accepted
+- Question: should CodaCondivisa rethrow OutOfMemoryError (block text: rethrow VirtualMachineError) or keep swallowing it to honour AC-312?
+- Options: rethrow and amend AC-312 vs keep swallowing, rethrow only StackOverflowError (kept).
+- Hypothesis: n/a — decided by the user on the a4 verifier finding, [pre-release](pre-release.md)
+- Check: n/a — decided by the user on the a4 verifier finding, [pre-release](pre-release.md)
+- Result: n/a — decided by the user on the a4 verifier finding, [pre-release](pre-release.md)
+- Debate: composer recommended rethrowing (JVM unreliable after OOM); the user chose queue continuity.
+- Decision: the queue keeps swallowing OutOfMemoryError (AC-312 stands); the a4 KDoc "user-approved" is now backed by this entry. Cost: after an OOM the app may keep running in a degraded JVM.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [pre-release](pre-release.md)
+- Revisit: an OOM is observed in the field, or the app gains a crash-restart path.
