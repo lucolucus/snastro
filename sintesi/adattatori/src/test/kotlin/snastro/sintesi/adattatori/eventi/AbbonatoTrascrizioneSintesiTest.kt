@@ -167,7 +167,7 @@ class AbbonatoTrascrizioneSintesiTest {
         val scenario = ScenarioRitrascrizione()
         val r = scenario.aggiungiRegistrazione()
         scenario.accoda(r)
-        val vecchioTesto = "a".repeat(70_000)
+        val vecchioTesto = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 3)
         scenario.completa(r, vecchioTesto)
         assertTrue(
             LimiteIngresso.stimaToken(vecchioTesto) > LimiteIngresso.LIMITE_TOKEN,

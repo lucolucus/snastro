@@ -120,6 +120,14 @@ a chunked prefill/generation cancel point. `AC-S152` and the opt-in `ModelloLing
 their cancel past the open, never during it.)*
 
 ### 5. Context budget, output bound, `LimiteIngresso` [user]
+> **Amended 2026-09-29 [user]: limits lifted, same model.** The word cap goes to **[300, 10 000]** (default 2000):
+> `max_tokens` at 10 000 = 35 512. `n_ctx` is no longer fixed: each run opens ⌈(estimate of the formatted prompt +
+> `max_tokens`) / 1024⌉ × 1024, never below 40 960 (inputs ≤ ≈ 1 h 10 open exactly as measured below) nor above the
+> model's native **262 144** (`qwen35.context_length`). `LimiteIngresso.LIMITE_TOKEN` = **225 000** (262 144 − 512 −
+> 35 512 = 226 120, rounded down; 540 000 characters ≈ 9–11 h of audio), now the model's ceiling, not a product cap.
+> Not yet measured: memory (KV ≈ 32 KiB/token → ≈ 8 GiB at 262k), prefill time and answer quality on multi-hour inputs,
+> and generation time near 10 000 words (≈ 35k tokens at ≈ 15 t/s ≈ 40 min). The text below is the original decision.
+
 - **Every generation is bounded twice (MANDATORY):**
   - a **bounded answer grammar** (GBNF of answer schema v1, compact whitespace): every list ≤ 6 items, every
     `fonti` ≤ 6 ids, ids `[1-9][0-9]{0,5}`;

@@ -62,31 +62,31 @@ class ModificaLunghezzaMassimaRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-S91 299 e 2501 rifiutano con LunghezzaMassimaFuoriIntervallo, niente scritto e nessun evento`() {
-        listOf(299, 2501).forEach { fuori ->
+    fun `AC-S91 299 e 10001 rifiutano con LunghezzaMassimaFuoriIntervallo, niente scritto e nessun evento`() {
+        listOf(299, 10001).forEach { fuori ->
             val a = unAmbiente()
 
             val errore = a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, fuori))
                 .erroreAtteso<ErroreSintesi.LunghezzaMassimaFuoriIntervallo>()
 
-            assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(fuori, 300, 2500), errore)
+            assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(fuori, 300, 10000), errore)
             assertEquals(LunghezzaMassimaParole.PREDEFINITA, a.lunghezze.trova(PROGETTO).parole.valore)
             assertTrue(a.eventi.pubblicati.isEmpty())
         }
     }
 
     @Test
-    fun `AC-S91 299 e 2501 rifiutati non toccano un 1500 gia salvato, non solo la riga vuota PREDEFINITA`() {
+    fun `AC-S91 299 e 10001 rifiutati non toccano un 1500 gia salvato, non solo la riga vuota PREDEFINITA`() {
         // The test above only proves "nothing written" on an EMPTY row: it cannot tell a written PREDEFINITA
         // apart from none at all. This seeds a real 1500 first and proves it survives each rejected value.
         val a = unAmbiente()
         a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, 1500)).atteso()
 
-        listOf(299, 2501).forEach { fuori ->
+        listOf(299, 10001).forEach { fuori ->
             val errore = a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, fuori))
                 .erroreAtteso<ErroreSintesi.LunghezzaMassimaFuoriIntervallo>()
 
-            assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(fuori, 300, 2500), errore)
+            assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(fuori, 300, 10000), errore)
             assertEquals(LunghezzaMassimaParole.di(1500).atteso(), a.lunghezze.trova(PROGETTO).parole, "$fuori")
             assertEquals(
                 listOf(LunghezzaMassimaRiassuntoModificata(PROGETTO)),

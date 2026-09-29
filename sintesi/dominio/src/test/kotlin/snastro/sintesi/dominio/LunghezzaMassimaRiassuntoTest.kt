@@ -28,13 +28,13 @@ class LunghezzaMassimaRiassuntoTest {
     }
 
     @Test
-    fun `AC-S49 modifica a 2600 restituisce LunghezzaMassimaFuoriIntervallo e lascia il valore invariato`() {
+    fun `AC-S49 modifica a 10100 restituisce LunghezzaMassimaFuoriIntervallo e lascia il valore invariato`() {
         val lunghezza = LunghezzaMassimaRiassunto.predefinita(progettoId)
         lunghezza.modifica(1500).atteso()
 
-        val errore = lunghezza.modifica(2600).erroreAtteso<ErroreSintesi.LunghezzaMassimaFuoriIntervallo>()
+        val errore = lunghezza.modifica(10100).erroreAtteso<ErroreSintesi.LunghezzaMassimaFuoriIntervallo>()
 
-        assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(2600, 300, 2500), errore)
+        assertEquals(ErroreSintesi.LunghezzaMassimaFuoriIntervallo(10100, 300, 10000), errore)
         assertEquals(1500, lunghezza.parole.valore)
     }
 }

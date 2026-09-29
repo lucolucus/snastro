@@ -16,12 +16,12 @@ class ImpostazioniSintesiLetturaTest {
     private val altroProgetto = ProgettoId("progetto-2")
 
     @Test
-    fun `AC-S109 senza riga la vista mostra la predefinita 2000 e i limiti 300 2500`() {
+    fun `AC-S109 senza riga la vista mostra la predefinita 2000 e i limiti 300 10000`() {
         val lettura = ImpostazioniSintesiLettura(LunghezzaMassimaRiassuntoRepositoryFinta())
 
         val vista = lettura.di(progetto)
 
-        assertEquals(ImpostazioniSintesiVista(lunghezzaMassimaParole = 2000, minimo = 300, massimo = 2500), vista)
+        assertEquals(ImpostazioniSintesiVista(lunghezzaMassimaParole = 2000, minimo = 300, massimo = 10000), vista)
     }
 
     @Test
@@ -35,11 +35,11 @@ class ImpostazioniSintesiLetturaTest {
         val vistaAltroProgetto = lettura.di(altroProgetto)
 
         assertEquals(
-            ImpostazioniSintesiVista(lunghezzaMassimaParole = 1500, minimo = 300, massimo = 2500),
+            ImpostazioniSintesiVista(lunghezzaMassimaParole = 1500, minimo = 300, massimo = 10000),
             vista,
         )
         assertEquals(
-            ImpostazioniSintesiVista(lunghezzaMassimaParole = 2000, minimo = 300, massimo = 2500),
+            ImpostazioniSintesiVista(lunghezzaMassimaParole = 2000, minimo = 300, massimo = 10000),
             vistaAltroProgetto,
         )
     }

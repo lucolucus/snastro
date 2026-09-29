@@ -111,6 +111,29 @@ class ModelloLinguisticoLlamaTest {
     }
 
     @Test
+    fun `un ingresso lungo apre un contesto dimensionato su di lui arrotondato a 1024`() {
+        val backend = BackendFinto()
+        val lunga = richiesta.copy(ingresso = "a".repeat(240_000)) // ≈ 100 000 token stimati, ≈ 4 h
+
+        modello(backend).riassumi(lunga) { false }
+
+        val nCtx = backend.parametri.single().nCtx
+        val atteso = ModelloLinguisticoLlama.nCtx(PromptRiassunto.componi(lunga), lunga)
+        assertEquals(atteso, nCtx)
+        assertEquals(0, nCtx % 1_024)
+        assertTrue(nCtx in 100_000 + 7_512..ModelloLinguisticoLlama.CONTESTO_NATIVO, "$nCtx")
+    }
+
+    @Test
+    fun `il contesto non scende sotto 40960 e non supera il contesto nativo del modello`() {
+        val corta = ModelloLinguisticoLlama.nCtx("breve", richiesta)
+        val enorme = ModelloLinguisticoLlama.nCtx("a".repeat(1_000_000), richiesta)
+
+        assertEquals(40_960, corta)
+        assertEquals(262_144, enorme)
+    }
+
+    @Test
     fun `AC-S160 ContextOverflow diventa IngressoTroppoLungo con i token del prompt`() {
         val overflow = LlamaError.ContextOverflow(promptTokens = 33_500, maxTokens = 7_512, nCtx = 40_960)
         val backend = BackendFinto(genera = { _, _ -> LlamaResult.Err(overflow) })

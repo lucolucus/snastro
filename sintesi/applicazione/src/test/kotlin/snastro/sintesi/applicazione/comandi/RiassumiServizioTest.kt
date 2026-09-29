@@ -35,6 +35,7 @@ import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi
+import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.LunghezzaMassimaParole
 import snastro.sintesi.dominio.LunghezzaMassimaRiassunto
 import snastro.sintesi.dominio.Riassunto
@@ -131,7 +132,7 @@ class RiassumiServizioTest {
 
     @Test
     fun `AC-S78 un ingresso stimato oltre il limite rifiuta con RegistrazioneTroppoLunga`() {
-        val testoLungo = "a".repeat(70_000)
+        val testoLungo = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 3)
         val trascritti = LettoreTrascrittoFinta(
             mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi(testo = testoLungo))),
         )

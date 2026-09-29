@@ -10,7 +10,7 @@ import snastro.kernel.Esito
 public value class LunghezzaMassimaParole private constructor(public val valore: Int) {
     public companion object {
         public const val MINIMO: Int = 300
-        public const val MASSIMO: Int = 2500
+        public const val MASSIMO: Int = 10_000
         public const val PREDEFINITA: Int = 2000
 
         public fun di(n: Int): Esito<LunghezzaMassimaParole> =

@@ -32,6 +32,7 @@ import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi
+import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.LunghezzaMassimaParole
 import snastro.sintesi.dominio.LunghezzaMassimaRiassunto
 import snastro.sintesi.dominio.Riassunto
@@ -121,11 +122,12 @@ class ApplicaSostituzioneTrascrittoSintesiPoliticaTest {
 
     @Test
     fun `AC-S95 modello non installato o oltre il limite rimuove ma non crea, solo RiassuntoEliminato pubblicato`() {
+        val oltreIlLimite = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 3)
         listOf(
             unAmbiente(disponibilita = DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.NonInstallato(1))),
             unAmbiente(
                 trascritti = LettoreTrascrittoFinta(
-                    mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi(testo = "a".repeat(70_000)))),
+                    mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi(testo = oltreIlLimite))),
                 ),
             ),
         ).forEach { a ->

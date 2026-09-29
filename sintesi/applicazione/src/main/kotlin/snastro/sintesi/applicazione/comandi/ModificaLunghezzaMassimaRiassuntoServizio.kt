@@ -12,7 +12,7 @@ import snastro.sintesi.dominio.LunghezzaMassimaRiassuntoModificataDominio
  * Use-case `ModificaLunghezzaMassimaRiassunto` (AC-S90/S91; INV-S9, INV-S10; ADR 0021 §3):
  * - reads the Progetto's current setting (no row ⇒ [snastro.sintesi.dominio.LunghezzaMassimaRiassunto.predefinita]);
  * - delegates the range to its `modifica`, itself delegating to `LunghezzaMassimaParole.di` (INV-S9): the VO is the
- *   only place [300, 2500] is checked, this service never re-checks it;
+ *   only place [300, 10 000] is checked, this service never re-checks it;
  * - on success, upserts the row and publishes `LunghezzaMassimaRiassuntoModificata`, delivered after commit only
  *   (ADR 0012); on `LunghezzaMassimaFuoriIntervallo`, nothing is written and nothing is published.
  *

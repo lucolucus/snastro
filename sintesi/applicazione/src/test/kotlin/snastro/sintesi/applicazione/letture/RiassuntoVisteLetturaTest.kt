@@ -287,7 +287,7 @@ class RiassuntoVisteLetturaTest {
             checkNotNull(aperta.lettura.di(REGISTRAZIONE)).disponibilita,
         )
 
-        val testoLungo = "a".repeat(70_000)
+        val testoLungo = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 3)
         val troppoLunga = unAmbiente(
             trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi(testo = testoLungo)))),
         )

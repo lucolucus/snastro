@@ -16,6 +16,7 @@ import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
+import snastro.sintesi.dominio.LimiteIngresso
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -60,14 +61,15 @@ public class ModelloLinguisticoLlama(
         }
         if (annulla()) return Esito.Errore(ErroreApplicazioneSintesi.Annullato) // a cancel between load and open
         val inizio = System.nanoTime()
-        val aperto = when (val esito = apri(backend, file, annulla)) {
+        val prompt = PromptRiassunto.componi(richiesta)
+        val aperto = when (val esito = apri(backend, file, nCtx(prompt, richiesta), annulla)) {
             is LlamaResult.Err -> return mappaErroreApertura(esito.error)
             is LlamaResult.Ok -> esito.value
         }
         val apertura = millisDa(inizio)
         var fineGenerazione = 0L
         val generazione = aperto.modello.use { modello ->
-            (if (annulla()) null else modello.generate(PromptRiassunto.componi(richiesta), opzioni(richiesta), annulla))
+            (if (annulla()) null else modello.generate(prompt, opzioni(richiesta), annulla))
                 .also { fineGenerazione = System.nanoTime() }
         }
         registraMisure(generazione, apertura, fineGenerazione, aperto.gpu)
@@ -108,13 +110,13 @@ public class ModelloLinguisticoLlama(
      * between the failed GPU open and the CPU retry skips the retry (no second full open paid for a run that is
      * being thrown away) and is reported as [LlamaError.Cancelled], never as a runtime failure.
      */
-    private fun apri(backend: LlamaBackend, file: Path, annulla: () -> Boolean): LlamaResult<Aperto> {
+    private fun apri(backend: LlamaBackend, file: Path, nCtx: Int, annulla: () -> Boolean): LlamaResult<Aperto> {
         val gpu = backend.devices.any { it.kind == DeviceKind.GPU }
-        val primo = backend.openModel(file, parametri(if (gpu) ModelParams.ALL else 0))
+        val primo = backend.openModel(file, parametri(if (gpu) ModelParams.ALL else 0, nCtx))
         val riprovaSullaCpu = gpu && primo is LlamaResult.Err &&
             (primo.error is LlamaError.ModelLoadFailed || primo.error is LlamaError.ContextCreateFailed)
         if (riprovaSullaCpu && annulla()) return LlamaResult.Err(LlamaError.Cancelled)
-        val esito = if (riprovaSullaCpu) backend.openModel(file, parametri(0)) else primo
+        val esito = if (riprovaSullaCpu) backend.openModel(file, parametri(0, nCtx)) else primo
         return when (esito) {
             is LlamaResult.Err -> esito
             is LlamaResult.Ok -> LlamaResult.Ok(Aperto(esito.value, gpu && !riprovaSullaCpu))
@@ -149,8 +151,15 @@ public class ModelloLinguisticoLlama(
         Esito.Errore(ErroreApplicazioneSintesi.ErroreRuntime("$contesto: $errore"))
 
     public companion object {
-        /** The context (ADR 0026 §5): the 28 000-token input limit + ≤ 512 template + `maxTokens` at 2500 words fit. */
+        /**
+         * The context floor (ADR 0026 §5): every input up to ≈ 1 h 10 opens exactly as measured there. Longer
+         * inputs get [nCtx] sized to them (2026-09-29), up to the model's native [CONTESTO_NATIVO].
+         */
         public const val N_CTX: Int = 40_960
+
+        /** Qwen3.5 9B's trained context (`qwen35.context_length` of the GGUF). */
+        public const val CONTESTO_NATIVO: Int = 262_144
+        private const val GRANA_CONTESTO = 1_024
         public const val N_UBATCH: Int = 2_048
 
         /** 512-token prefill decodes, each a cancel point: the 10 s cancellation bound (ADR 0026 §4). */
@@ -169,11 +178,22 @@ public class ModelloLinguisticoLlama(
         internal const val NATIVI_NON_IMPOSTATI: String = "cartella dei nativi llama.cpp non impostata: né la " +
             "proprietà di sistema snastro.llm.native.path né compose.application.resources.dir è impostata"
 
-        /** `⌈3.5 × lunghezzaMassimaParole⌉ + 512` (ADR 0026 §5): 2000 → 7 512, 2500 → 9 262. */
+        /** `⌈3.5 × lunghezzaMassimaParole⌉ + 512` (ADR 0026 §5): 2000 → 7 512, 10 000 → 35 512. */
         public fun maxTokens(lunghezzaMassimaParole: Int): Int =
             (TOKEN_PER_DUE_PAROLE * lunghezzaMassimaParole + 1) / 2 + TOKEN_OLTRE_IL_TETTO
 
-        private fun parametri(nGpuLayers: Int) = ModelParams(nGpuLayers, N_CTX, N_UBATCH, PREFILL_CHUNK)
+        /**
+         * The run's context: the formatted prompt's estimate (≥ the real count, [LimiteIngresso]) + [maxTokens],
+         * rounded up to [GRANA_CONTESTO], never below [N_CTX] nor above [CONTESTO_NATIVO]. The KV cache only
+         * grows for the inputs that need it; `ContextOverflow` stays the exact backstop.
+         */
+        public fun nCtx(prompt: String, richiesta: RichiestaRiassunto): Int {
+            val necessari = LimiteIngresso.stimaToken(prompt).toLong() + maxTokens(richiesta.lunghezzaMassimaParole)
+            val arrotondati = (necessari + GRANA_CONTESTO - 1) / GRANA_CONTESTO * GRANA_CONTESTO
+            return arrotondati.coerceIn(N_CTX.toLong(), CONTESTO_NATIVO.toLong()).toInt()
+        }
+
+        private fun parametri(nGpuLayers: Int, nCtx: Int) = ModelParams(nGpuLayers, nCtx, N_UBATCH, PREFILL_CHUNK)
 
         private fun opzioni(richiesta: RichiestaRiassunto) = GenerateOptions(
             maxTokens = maxTokens(richiesta.lunghezzaMassimaParole),
