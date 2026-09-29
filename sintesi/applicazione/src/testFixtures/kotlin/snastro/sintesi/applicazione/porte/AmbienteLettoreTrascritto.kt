@@ -41,4 +41,10 @@ public interface AmbienteLettoreTrascritto {
      * current Voce keeps at least one other Segmento). Returns the Voce it belongs to now.
      */
     public fun riassegna(r: RegistrazioneId, segmento: SegmentoId, destinazione: VoceId?): VoceId
+
+    /** Revisione: unisciVoci merges every Segmento of [rimossa] onto [sopravvive] (A2). */
+    public fun unisciVoci(r: RegistrazioneId, sopravvive: VoceId, rimossa: VoceId)
+
+    /** Revisione: dividiVoce splits [segmenti] off [origine] into a brand new Voce; returns its id (A2). */
+    public fun dividiVoce(r: RegistrazioneId, origine: VoceId, segmenti: Set<SegmentoId>): VoceId
 }

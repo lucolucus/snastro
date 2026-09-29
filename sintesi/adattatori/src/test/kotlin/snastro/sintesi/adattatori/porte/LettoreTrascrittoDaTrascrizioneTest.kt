@@ -23,13 +23,18 @@ import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
+import snastro.trascrizione.applicazione.comandi.DividiVoce
+import snastro.trascrizione.applicazione.comandi.DividiVoceServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.PortePipeline
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.RisultatoAvanzamento
+import snastro.trascrizione.applicazione.comandi.UnisciVoci
+import snastro.trascrizione.applicazione.comandi.UnisciVociServizio
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
+import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.letture.FasiInCorso
 import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
@@ -202,6 +207,19 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             RiassegnaSegmentoServizio(eventi.unitaDiLavoro, trascritti, eventi)
                 .esegui(RiassegnaSegmento(r, segmento, destinazione))
                 .atteso()
+
+        override fun unisciVoci(r: RegistrazioneId, sopravvive: VoceId, rimossa: VoceId) {
+            UnisciVociServizio(eventi.unitaDiLavoro, trascritti, eventi)
+                .esegui(UnisciVoci(r, sopravvive, rimossa))
+                .atteso()
+        }
+
+        override fun dividiVoce(r: RegistrazioneId, origine: VoceId, segmenti: Set<SegmentoId>): VoceId {
+            DividiVoceServizio(eventi.unitaDiLavoro, trascritti, eventi)
+                .esegui(DividiVoce(r, origine, segmenti))
+                .atteso()
+            return eventi.pubblicati.filterIsInstance<VoceDivisa>().last().nuova
+        }
 
         /** Test-only hook (AC-S51): registers a synchronous subscriber on Trascrizione's own dispatcher. */
         fun registraSincrono(azione: (TrascrittoSostituito) -> Unit) {

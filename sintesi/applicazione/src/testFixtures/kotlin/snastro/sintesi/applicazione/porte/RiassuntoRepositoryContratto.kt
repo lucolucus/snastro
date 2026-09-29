@@ -31,6 +31,15 @@ public abstract class RiassuntoRepositoryContratto {
     /** Hook for real stores: create the parent rows of every id the contract uses ([PREDISPOSIZIONE]). */
     protected open fun predisponi(predisposizione: PredisposizioneSintesi) {}
 
+    /**
+     * A64: the child rows (elementi + Fonti) STILL physically stored for [id] — `null` where there is no
+     * separate physical child storage to check (the Finta: an in-memory map has no orphan rows by
+     * construction). A re-save through [salva] REPLACES children, which would mask an orphan left behind
+     * by [RiassuntoRepository.rimuovi]/[RiassuntoRepository.rimuoviDiRegistrazione] — checking straight
+     * after removal, before any re-save, is what actually discriminates.
+     */
+    protected open fun figliOrfaniDi(id: RiassuntoId): Int? = null
+
     private lateinit var repo: RiassuntoRepository
 
     @BeforeEach
@@ -279,6 +288,10 @@ public abstract class RiassuntoRepositoryContratto {
         assertEquals(emptyList(), repo.diRegistrazione(REGISTRAZIONE))
         assertEquals(emptyList(), repo.inAttesa())
         assertEquals(altro.statoOsservabile(), checkNotNull(repo.trova(altro.id)).statoOsservabile())
+        // A64: checked BEFORE any re-save, which would REPLACE (and so mask) an orphan left behind.
+        listOf(RiassuntoId("riassunto-1"), RiassuntoId("riassunto-2")).forEach { id ->
+            figliOrfaniDi(id)?.let { assertEquals(0, it, "figli orfani di $id dopo rimuoviDiRegistrazione") }
+        }
         // No element or Fonte left behind: the same id saved again carries only its new children.
         val rifatto = unPronto("riassunto-1", bozza = BOZZA_BREVE)
         repo.salva(rifatto).atteso()
@@ -305,6 +318,8 @@ public abstract class RiassuntoRepositoryContratto {
 
         repo.rimuovi(RiassuntoId("riassunto-1")).atteso()
         assertNull(repo.trova(RiassuntoId("riassunto-1")))
+        // A64: checked BEFORE any re-save, which would REPLACE (and so mask) an orphan left behind.
+        figliOrfaniDi(RiassuntoId("riassunto-1"))?.let { assertEquals(0, it, "figli orfani di riassunto-1 dopo rimuovi") }
         assertEquals(listOf(resta.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
         val rifatto = unPronto("riassunto-1", bozza = BOZZA_BREVE)
         repo.salva(rifatto).atteso()

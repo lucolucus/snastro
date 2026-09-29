@@ -36,6 +36,7 @@ import snastro.sintesi.dominio.SegmentoIngresso
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * AC-S102..S108: the `vista-riassunto` read-model. Every scenario reads through the repository fakes
@@ -428,6 +429,33 @@ class RiassuntoVisteLetturaTest {
         ).conAvvio(T0.plusSeconds(61)).conCompletamento(unaBozzaMinima(), unaStruttura(1 to 1))
         prontoPiuRecente.salva(prontoNuovo).atteso()
         assertEquals("nuovo pronto", argomentoPrecompilatoDi(prontoPiuRecente))
+    }
+
+    @Test
+    fun `AC-C32 le letture interne di di girano tutte dentro inLettura`() {
+        val uow = UnitaDiLavoroFinta()
+        val viste = mutableListOf<Boolean>()
+        val trascrittiDelega = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi())))
+        val trascritti = object : LettoreTrascritto {
+            override fun segmenti(r: RegistrazioneId) = trascrittiDelega.segmenti(r).also { viste += uow.letturaAperta }
+            override fun elaborazioneAperta(r: RegistrazioneId) =
+                trascrittiDelega.elaborazioneAperta(r).also { viste += uow.letturaAperta }
+        }
+        val riassuntiDelega = RiassuntoRepositoryFinta()
+        val riassunti = object : RiassuntoRepository by riassuntiDelega {
+            override fun diRegistrazione(r: RegistrazioneId) =
+                riassuntiDelega.diRegistrazione(r).also { viste += uow.letturaAperta }
+        }
+        val nomiDelega = LettoreNomiFinta()
+        val nomi = object : LettoreNomi {
+            override fun nomi(r: RegistrazioneId) = nomiDelega.nomi(r).also { viste += uow.letturaAperta }
+        }
+        val lettura = RiassuntoVisteLettura(uow, riassunti, trascritti, nomi, unModelloInstallato())
+
+        lettura.di(REGISTRAZIONE)
+
+        assertTrue(viste.isNotEmpty(), "nessuna lettura interna osservata")
+        assertTrue(viste.all { it }, "una lettura interna e' girata fuori da inLettura: $viste")
     }
 
     private fun unaBozzaMinima(): BozzaRiassunto = BozzaRiassunto(

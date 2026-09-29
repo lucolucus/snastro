@@ -103,6 +103,34 @@ public abstract class LettoreTrascrittoContratto {
         assertEquals(attesi, a.lettore.segmenti(id))
     }
 
+    // A2: AC-S5 esercitava la Revisione solo via riassegna; unisciVoci/dividiVoce (le stesse invarianti
+    // id/intervallo/testo, ADR 0018/INV-9/INV-10) restavano inosservate.
+    @Test
+    public fun `AC-S5 dopo UnisciVoci e DividiVoce ogni segmento porta la Voce attuale con id intervallo e testo invariati`() {
+        val a = ambiente()
+        val id = a.aggiungiRegistrazione()
+        val turni = listOf(
+            SemeTurno(0, IntervalloMs(0, 2_000), "Buongiorno a tutti."),
+            SemeTurno(0, IntervalloMs(5_000, 8_000), "Partiamo dal budget."),
+            SemeTurno(1, IntervalloMs(9_000, 12_000), "Sure, go ahead."),
+            SemeTurno(1, IntervalloMs(13_000, 15_000), "Ne parliamo dopo."),
+        )
+        val c = completa(a, id, turni)
+        val voceUno = c[0].voceId
+        val voceDue = c[2].voceId
+        check(voceUno != voceDue)
+
+        a.unisciVoci(id, sopravvive = voceUno, rimossa = voceDue)
+        val dopoUnione = atteso(turni, c).map { if (it.voceId == voceDue) it.copy(voceId = voceUno) else it }
+        assertEquals(dopoUnione, a.lettore.segmenti(id), "dopo UnisciVoci")
+
+        val nuovaVoce = a.dividiVoce(id, origine = voceUno, segmenti = setOf(c[2].segmentoId, c[3].segmentoId))
+        val dopoDivisione = dopoUnione.map {
+            if (it.segmentoId == c[2].segmentoId || it.segmentoId == c[3].segmentoId) it.copy(voceId = nuovaVoce) else it
+        }
+        assertEquals(dopoDivisione, a.lettore.segmenti(id), "dopo DividiVoce")
+    }
+
     @Test
     public fun `AC-S6 elaborazioneAperta e vera solo mentre l ultima Elaborazione e in attesa o in corso`() {
         val a = ambiente()
@@ -126,6 +154,21 @@ public abstract class LettoreTrascrittoContratto {
         a.avviaElaborazione(id)
         a.completaElaborazione(id, listOf(SemeTurno(0, IntervalloMs(0, 1_000), "Fatto.")))
         assertFalse(a.lettore.elaborazioneAperta(id), "completata")
+    }
+
+    // A3: nessun caso annullava l'UNICA Elaborazione mai messa in coda (nessuna storia precedente).
+    @Test
+    public fun `AC-S6 annullare l unica Elaborazione mai messa in coda lascia elaborazioneAperta falso`() {
+        val a = ambiente()
+        val id = a.aggiungiRegistrazione()
+
+        a.accodaElaborazione(id)
+        assertTrue(a.lettore.elaborazioneAperta(id), "in_attesa, la prima e unica mai creata")
+
+        a.annullaElaborazione(id)
+
+        assertFalse(a.lettore.elaborazioneAperta(id), "annullata: mai esistita un'altra Elaborazione")
+        assertNull(a.lettore.segmenti(id), "nessun Trascritto: mai completata alcuna Elaborazione")
     }
 
     @Test
@@ -161,6 +204,9 @@ public abstract class LettoreTrascrittoContratto {
 
         a.accodaElaborazione(id)
         a.annullaElaborazione(id)
+        // A3: elaborazioneAperta era controllata solo prima, mai qui — un annullamento che la lasciasse vera
+        // (invece di tornare alla "completata" precedente) passava inosservato.
+        assertFalse(a.lettore.elaborazioneAperta(id), "rielaborazione annullata")
         assertEquals(vecchio, a.lettore.segmenti(id), "rielaborazione annullata")
 
         val nuovi = listOf(SemeTurno(0, IntervalloMs(10_000, 14_000), "Versione nuova."))

@@ -22,7 +22,19 @@ public abstract class LetturaCoerenteContratto {
         /** Backed by the same state as [lettura]. */
         public val unitaDiLavoro: UnitaDiLavoro
 
-        /** Writes one effect; must fail (leaving no effect) inside an outermost [LetturaCoerente.inLettura]. */
+        /**
+         * Writes one effect; must fail (leaving no effect) inside an outermost [LetturaCoerente.inLettura].
+         *
+         * B18: this is THIS ENVIRONMENT's OWN plumbing (each subclass's `ambiente()` wires its own
+         * `check(!letturaAperta)` or the SQL adapter's `query_only`) — it is not proof that [UnitaDiLavoroFinta]
+         * enforces the rule on anyone's behalf. [UnitaDiLavoroFinta.letturaAperta] only TRACKS whether a read is
+         * open; it refuses nothing by itself. A real consumer repository fake (`ParlanteRepositoryFinta`,
+         * `TrascrittoRepositoryFinta`, `RiassuntoRepositoryFinta`, …) that omits its OWN
+         * `check(!lettura.letturaAperta)` before writing would still pass THIS contract while silently
+         * diverging from the SQL adapter's `query_only` — a write-during-read application bug would then go
+         * undetected on every D1 (Finta-backed) test and surface only on the real SQL adapter. Authoring a
+         * repository fake means adding this check yourself; it is not inherited for free.
+         */
         public fun scrivi(effetto: String)
 
         /** The committed effects, read outside any unit. */

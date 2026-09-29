@@ -2,6 +2,7 @@ package snastro.ui.modelli
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * Consumer-driven contract of `tec-modelli-ui-facoltativo` (owned here, ADR 0025, in-process): the
@@ -26,6 +27,7 @@ abstract class ServizioModelliFacoltativoContratto {
     protected abstract fun con(
         dimensioniByte: Map<String, Long> = emptyMap(),
         installati: Set<String> = emptySet(),
+        alTentativoDiScarico: (String) -> Unit = {},
     ): ServizioModelli
 
     @Test
@@ -38,13 +40,37 @@ abstract class ServizioModelliFacoltativoContratto {
         assertEquals(statoPrima, servizio.stato.value)
     }
 
+    // A144: an id the catalogue never declared is NOT the same as "installed" — a D1 marking it
+    // Installato while D2/the real adapter fails would give a consumer tested only on D1 a false green.
+    @Test
+    fun `AC-S32 scaricaFacoltativo di un id sconosciuto al catalogo restituisce Errore, mai Installato`() {
+        val servizio = con(dimensioniByte = mapOf("id-facoltativo" to 2_000))
+
+        servizio.scaricaFacoltativo("id-sconosciuto")
+
+        val stato = servizio.statoFacoltativi.value["id-sconosciuto"]
+        assertTrue(
+            stato is StatoModelloFacoltativo.Errore && stato.errore is ErroreServizioModelli.DownloadFallito,
+            "atteso Errore(DownloadFallito), ottenuto $stato",
+        )
+    }
+
     @Test
     fun `un id gia Installato non e riscaricato`() {
-        val servizio = con(dimensioniByte = mapOf("id-facoltativo" to 2_000), installati = setOf("id-facoltativo"))
+        val tentativi = mutableListOf<String>()
+        val servizio = con(
+            dimensioniByte = mapOf("id-facoltativo" to 2_000),
+            installati = setOf("id-facoltativo"),
+            alTentativoDiScarico = { tentativi += it },
+        )
 
         servizio.scaricaFacoltativo("id-facoltativo")
 
         assertEquals(StatoModelloFacoltativo.Installato, servizio.statoFacoltativi.value["id-facoltativo"])
+        // A145: only the FINAL state was checked before — a wrong implementation that re-runs the
+        // download unconditionally (relying on it happening to land back on Installato) would pass that
+        // alone; nothing may even be ATTEMPTED for an id already Installato.
+        assertEquals(emptyList(), tentativi, "un id gia' Installato non deve tentare un nuovo download")
     }
 
     @Test
@@ -58,12 +84,16 @@ abstract class ServizioModelliFacoltativoContratto {
 
     @Test
     fun `dopo un download riuscito lo stato resta Installato, un secondo scaricaFacoltativo e un no-op`() {
-        val servizio = con(dimensioniByte = mapOf("id-facoltativo" to 2_000))
+        val tentativi = mutableListOf<String>()
+        val servizio = con(dimensioniByte = mapOf("id-facoltativo" to 2_000), alTentativoDiScarico = { tentativi += it })
 
         servizio.scaricaFacoltativo("id-facoltativo")
         assertEquals(StatoModelloFacoltativo.Installato, servizio.statoFacoltativi.value["id-facoltativo"])
+        assertEquals(listOf("id-facoltativo"), tentativi)
 
         servizio.scaricaFacoltativo("id-facoltativo") // terminal state: a repeat call changes nothing
         assertEquals(StatoModelloFacoltativo.Installato, servizio.statoFacoltativi.value["id-facoltativo"])
+        // A145: the SECOND call must not even attempt a new download, not just "happen to" land Installato.
+        assertEquals(listOf("id-facoltativo"), tentativi, "il secondo scaricaFacoltativo non deve ritentare")
     }
 }

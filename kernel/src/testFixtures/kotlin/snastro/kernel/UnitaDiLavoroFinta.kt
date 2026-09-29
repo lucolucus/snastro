@@ -23,7 +23,14 @@ public class UnitaDiLavoroFinta(private vararg val partecipanti: Ripristinabile)
     /** True only while a block runs inside [inTransazione]; false again after commit and rollback. */
     public val transazioneAperta: Boolean get() = modo == Modo.SCRITTURA
 
-    /** True only inside an outermost [inLettura] (and whatever runs nested in it); false again after it ends. */
+    /**
+     * True only inside an outermost [inLettura] (and whatever runs nested in it); false again after it ends.
+     *
+     * B18: a mere TRACKER, not an enforcer — [UnitaDiLavoroFinta] refuses no write by itself. A repository
+     * fake's OWN write method (`salva`, `elimina`, …) must check this itself before writing (mirrors the SQL
+     * adapter's `query_only` PRAGMA); an omission is invisible on every D1 (Finta-backed) test and surfaces
+     * only against the real SQL adapter (`LetturaCoerenteContratto.Ambiente.scrivi`'s KDoc has the full case).
+     */
     public val letturaAperta: Boolean get() = modo == Modo.LETTURA
 
     override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> {

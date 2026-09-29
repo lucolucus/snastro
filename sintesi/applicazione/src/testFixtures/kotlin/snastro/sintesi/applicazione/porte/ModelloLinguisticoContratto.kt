@@ -113,7 +113,10 @@ public abstract class ModelloLinguisticoContratto {
         private const val RITARDO_ANNULLAMENTO_MS = 50L
         private const val MARGINE_MS = 1_000L
         private val VOCE_TRA_GRAFFE = Regex("""\{V\d+}""")
-        private val VOCE_FUORI_FORMA = Regex("""\bV\d+\b|\bVoce\s+\d+""")
+
+        // Case-insensitive ("voce2", "VOCE 2") and \s* (zero or more spaces: "Voce2") — A11: was case-sensitive
+        // and required \s+, so "la voce 2", "Voce2", "v2" all slipped through undetected.
+        private val VOCE_FUORI_FORMA = Regex("""\bV\d+\b|\bVoce\s*\d+""", RegexOption.IGNORE_CASE)
 
         /** Every text of [r]: the Sommario (when present) and each element's testo. */
         public fun testiDi(r: RispostaModello): List<String> =

@@ -15,15 +15,23 @@ import snastro.ui.modelli.ServizioModelliFacoltativoContratto
  * pre-installed ids is enough to reproduce every [con] shape the contract needs).
  */
 class ServizioModelliProvisioningFacoltativoTest : ServizioModelliFacoltativoContratto() {
-    override fun con(dimensioniByte: Map<String, Long>, installati: Set<String>): ServizioModelli {
+    override fun con(
+        dimensioniByte: Map<String, Long>,
+        installati: Set<String>,
+        alTentativoDiScarico: (String) -> Unit,
+    ): ServizioModelli {
         val catalogo = CatalogoModelli(dimensioniByte.map { (id, dimensione) -> voce(id, dimensione) })
         val installatiCorrenti = installati.toMutableSet()
         fun scarica(id: String, progresso: (Long, Long) -> Unit): Esito<Unit> {
             val dimensione = catalogo.voci.find { it.id == id }?.dimensioneByte
             return when {
                 id in installatiCorrenti -> Esito.Ok(Unit)
-                dimensione == null -> Esito.Errore(ErroreModelli.DownloadFallito("id sconosciuto: '$id'"))
+                dimensione == null -> {
+                    alTentativoDiScarico(id)
+                    Esito.Errore(ErroreModelli.DownloadFallito("id sconosciuto: '$id'"))
+                }
                 else -> {
+                    alTentativoDiScarico(id)
                     progresso(dimensione, dimensione)
                     installatiCorrenti += id
                     Esito.Ok(Unit)
