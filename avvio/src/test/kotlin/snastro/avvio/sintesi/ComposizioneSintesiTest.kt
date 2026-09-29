@@ -55,6 +55,7 @@ import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -137,14 +138,20 @@ class ComposizioneSintesiTest {
             }
             val alPrimoReclamo = CopyOnWriteArrayList<Any?>()
             val ambiente = it
+            // The worker claims as soon as `avvia` runs, INSIDE `apri` — before the session publishes the project
+            // that `ambiente.riassunti`/`stato` read through. So the probe waits for that publish (rework c3-2): the
+            // queue is single-threaded and parked in this very claim, so what it reads is still the first claim's.
+            val pubblicato = CountDownLatch(1)
             ambiente.modello.primaDellaRisposta = { _ ->
                 if (alPrimoReclamo.isEmpty()) {
+                    check(pubblicato.await(ATTESA_PUBBLICAZIONE_S, TimeUnit.SECONDS)) { "apri non ha pubblicato" }
                     alPrimoReclamo += ambiente.riassunti.trova(RiassuntoId("interrotto"))?.motivoFallimento
                     alPrimoReclamo += ambiente.stato(a)
                 }
             }
 
             it.sessione.apri(cartella).atteso()
+            pubblicato.countDown()
 
             it.attendiPronto(b)
             assertEquals(listOf(MotivoFallimento.INTERROTTO, StatoElaborazioneVista.FALLITA), alPrimoReclamo.toList())
@@ -477,6 +484,7 @@ class ComposizioneSintesiTest {
 
     private companion object {
         const val PAUSA_MS = 20L
+        const val ATTESA_PUBBLICAZIONE_S = 10L
 
         /** ADR 0030 §2: Sintesi → Parlanti → Trascrizione, each module's pairs in its own declared order. */
         val SINCRONI_DICHIARATI = listOf("AbbonatoTrascrizioneSintesi", "AbbonatoProgettoSintesi") +
