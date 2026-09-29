@@ -92,3 +92,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: worker; recorded: worker-composer
 - Docs: [pre-release](pre-release.md), [ADR 0030](../../decisions/0030-composizione-unica-per-contesto.md)
 - Revisit: a subscriber needs a supertype, or shutdown exceeds 5 s in the field.
+
+### D-0008 · Stale c1–c3 review proofs accepted
+- Meta: 2026-09-29; scope: feature; status: accepted
+- Question: c1–c3 show stale review proofs after c3/c4 edited shared docs; re-review them?
+- Options: accept per the user's sintesi D-0013 policy (kept) vs re-review three integrated blocks.
+- Hypothesis: n/a — decided by sintesi D-0013 (user policy), [sintesi decisions](../sintesi/decisions.md)
+- Check: n/a — decided by sintesi D-0013 (user policy), [sintesi decisions](../sintesi/decisions.md)
+- Result: n/a — decided by sintesi D-0013 (user policy), [sintesi decisions](../sintesi/decisions.md)
+- Debate: no block spec changed; only ADR 0030 (c3 activated its check), dev-architecture #presenter (c4, AC-C85) and pre-release lines moved the pack hash.
+- Decision: keep the c1–c3 review proofs as valid; the later blocks' own reviews cover the shared-doc edits. Cost: no recheck of c1–c3 against the new #presenter bullet.
+- By: decided: user policy (Luca Parsani, sintesi D-0013); recorded: worker-composer
+- Docs: [sintesi decisions](../sintesi/decisions.md), [pre-release](pre-release.md)
+- Revisit: a block's own spec changes after its review.

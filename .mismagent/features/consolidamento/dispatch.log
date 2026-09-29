@@ -56,3 +56,7 @@
 2026-09-29T11:56:54Z	c3-composizione-piatta	worker	result	cycle=2	tier=deep	model=opus	READY-FOR-REVIEW (AC-S145 test-probe race; test-only fix)
 2026-09-29T12:10:46Z	c3-composizione-piatta	verifier	result	cycle=2	tier=deep	model=opus	PASS; integrated
 2026-09-29T12:10:54Z	c4-presenter-obbligatori	worker	dispatch	cycle=0	tier=standard	model=sonnet
+2026-09-29T13:04:32Z	c4-presenter-obbligatori	worker	result	cycle=0	tier=standard	model=sonnet	READY-FOR-REVIEW (probe done in-worktree on avvio Presenter.kt, reverted — rule breach to verify)
+2026-09-29T13:10:06Z	c4-presenter-obbligatori	verifier	result	cycle=0	tier=deep	model=opus	FAIL (AC-C85 R-wording, apriRegistrazione default, 2 lost tests) → rework 1
+2026-09-29T13:32:20Z	c4-presenter-obbligatori	worker	result	cycle=1	tier=standard	model=sonnet	READY-FOR-REVIEW
+2026-09-29T13:41:14Z	c4-presenter-obbligatori	verifier	result	cycle=1	tier=deep	model=opus	PASS; integrated
