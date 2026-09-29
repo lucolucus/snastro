@@ -193,3 +193,16 @@
 - By: decided: worker; recorded: worker-composer
 - Docs: [pre-release](pre-release.md)
 - Revisit: the user wants blank elements reported in omessi.
+
+### D-0016 · Riassumi disabled; checkpoint only in background
+- Meta: 2026-09-29; scope: feature; status: accepted
+- Question: confirm the A156 UI variant, and should the commit-time TRUNCATE checkpoint stay synchronous?
+- Options: A156 "Riassumi" disabled with the NonDisponibile caption (kept) vs "Riprova" disabled plus the failure reason; B17 skip the synchronous attempt (kept) vs keep it.
+- Hypothesis: n/a — decided by the user on the pre-R3-2/pre-R3-4 reviews, [pre-release](pre-release.md)
+- Check: n/a — decided by the user on the pre-R3-2/pre-R3-4 reviews, [pre-release](pre-release.md)
+- Result: n/a — decided by the user on the pre-R3-2/pre-R3-4 reviews, [pre-release](pre-release.md)
+- Debate: the synchronous TRUNCATE blocks the committing thread up to busy_timeout (5 s) with an open DEFERRED reader.
+- Decision: when not available and last failed, the disabled button reads "Riassumi" with the NonDisponibile caption; the after-commit checkpoint no longer runs on the committing thread, only the background retry worker does it.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [pre-release](pre-release.md)
+- Revisit: users miss the failure reason, or WAL growth becomes visible.
