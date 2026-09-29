@@ -5,22 +5,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import snastro.avvio.CollaboratoriProgettoAperto
 import snastro.avvio.GrafoR0
-import snastro.avvio.r1.ContenutoProgetto
-import snastro.avvio.r1.SchermataR1
-import snastro.avvio.r1.ShellProgetto
+import snastro.avvio.r1.ContenutoAppCondiviso
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.mappa
-import snastro.ui.ShellPresenter
-import snastro.ui.modelli.ModelliPresenter
-import snastro.ui.modelli.ModelliRoute
-import snastro.ui.modelli.StatoModelli
 import snastro.ui.parlanti.ParlantiPresenter
-import snastro.ui.parlanti.ParlantiRoute
-import snastro.ui.progetti.ProgettiPresenter
-import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazionePresenter
 import snastro.ui.registrazione.RegistrazioneRoute
@@ -28,7 +18,6 @@ import snastro.ui.registrazione.SelezioneSchedaS3
 import snastro.ui.registrazione.SorgenteRiassuntoS3
 import snastro.ui.registrazione.SorgentiParlanti
 import snastro.ui.registrazioni.RegistrazioniPresenter
-import snastro.ui.registrazioni.RegistrazioniRoute
 
 /**
  * R2's app content: R1's (S1; with a project, S2/S3/S5 — S5 reachable from the shell's sidebar footer,
@@ -38,51 +27,26 @@ import snastro.ui.registrazioni.RegistrazioniRoute
  * every presenter are remembered per project ABOVE the section switch, so going to Parlanti and back
  * keeps where the user was (re-clicking the sidebar's OWN 'Registrazioni' item, already selected,
  * still jumps back to its list). Rework cycle 2 (HIGH #1): the footer opens S5 from ANY section and any
- * nav click leaves it — [ShellProgetto]/[snastro.avvio.r1.NavigazioneProgetto].
+ * nav click leaves it — [ContenutoAppCondiviso]/[snastro.avvio.r1.NavigazioneProgetto]. AC-C65: this
+ * function only passes [SEZIONI_SHELL_R2], its own [CollaboratoriR2] extension and the S3 builder;
+ * [ContenutoProgettoR2] is R2's and R3's (pre-release.md's "near-copy") shared content.
  */
 @Composable
 internal fun ContenutoAppR2(grafo: GrafoR2, sceltaCartella: SceltaCartella) {
     val r0 = grafo.r0
-    val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R2) }
-    val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
-    val iniziale = {
-        if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) SchermataR1.Registrazioni else SchermataR1.Modelli
-    }
-    ShellProgetto(
-        shellPresenter = shellPresenter,
-        iniziale = iniziale,
-        contenutoSenzaProgetto = {
-            val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
-            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita, sceltaCartella)
-        },
-        contenuto = { conProgetto, navigazione ->
-            val collaboratori = r0.sessione.collaboratoriCorrenti()
-            val r2 = collaboratori?.estensione as? CollaboratoriR2
-            if (collaboratori != null && r2 != null) {
-                val progettoId = conProgetto.progetto.progettoId
-                val registrazioniPresenter = remember(progettoId) {
-                    costruisciRegistrazioniPresenterR2(r0, collaboratori, r2) { id ->
-                        navigazione.apriRegistrazione(id)
-                    }
-                }
-                val parlantiPresenter = remember(progettoId) { costruisciParlantiPresenter(r0, collaboratori, r2) }
-                // AC-632 step (4): a deleted Registrazione's S3 place is forgotten, on the UI dispatcher.
-                DisposableEffect(r2, navigazione) {
-                    r2.pulizia.dimenticaPosto = { id -> collaboratori.scope.launch { navigazione.dimentica(id) } }
-                    onDispose { r2.pulizia.dimenticaPosto = {} }
-                }
-                ContenutoProgetto(
-                    conProgetto = conProgetto,
-                    navigazione = navigazione,
-                    elenco = { RegistrazioniRoute(registrazioniPresenter) },
-                    registrazione = { id -> SchermataRegistrazioneR2(grafo, collaboratori, r2, id) },
-                    modelli = { ModelliRoute(modelliPresenter) },
-                    parlanti = { ParlantiRoute(parlantiPresenter) },
-                )
+    ContenutoAppCondiviso(r0, grafo.servizioModelli, SEZIONI_SHELL_R2, sceltaCartella) {
+            conProgetto,
+            navigazione,
+            collaboratori,
+            modelliPresenter,
+        ->
+        val r2 = collaboratori.estensione as? CollaboratoriR2
+        if (r2 != null) {
+            ContenutoProgettoR2(r0, conProgetto, navigazione, collaboratori, r2, modelliPresenter) { id ->
+                SchermataRegistrazioneR2(grafo, collaboratori, r2, id)
             }
-        },
-        etichettaModelloLinguisticoPiede = modelliPresenter.etichettaModelloLinguisticoPiede,
-    )
+        }
+    }
 }
 
 /**

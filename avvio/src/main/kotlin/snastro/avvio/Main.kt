@@ -27,10 +27,8 @@ import snastro.avvio.r3.modelliReali
 import snastro.avvio.r3.primaRegistrazioneCompletataR3
 import snastro.kernel.Esito
 import snastro.ui.DestinazioneShell
-import snastro.ui.ShellPresenter
 import snastro.ui.ShellRoute
 import snastro.ui.modelli.StatoModelli
-import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazioni.RegistrazioniPresenter
@@ -105,19 +103,19 @@ fun main(args: Array<String>) {
  * `remember` alone (no explicit key) already gives a FRESH presenter every time a `when` branch of
  * [snastro.ui.SchermataShell] is re-entered (Compose disposes a branch's slot table when it leaves
  * composition) — this is what keeps S1's list fresh after creating/closing a Progetto, and S2 bound
- * to the Progetto currently open.
+ * to the Progetto currently open. AC-C65: R0 has no Models/Parlanti/S3 screen (it is never shipped,
+ * only its own tests exercise it — R3 alone is `main()`'s binding), so it stays on the plain
+ * [ShellRoute] rather than [snastro.avvio.r1.ContenutoAppCondiviso]'s `ShellProgetto`; it only reuses
+ * the two presenter builders that genuinely ARE identical across every release,
+ * [costruisciShellPresenter] and [costruisciProgettiPresenter] (constructed nowhere else).
  */
 @Composable
 internal fun ContenutoApp(grafo: GrafoR0, sceltaCartella: SceltaCartella) {
-    val shellPresenter = remember {
-        ShellPresenter(grafo.scope, grafo.io, grafo.sessione, SEZIONI_SHELL_R0)
-    }
+    val shellPresenter = remember { costruisciShellPresenter(grafo, SEZIONI_SHELL_R0) }
     ShellRoute(
         presenter = shellPresenter,
         contenutoSenzaProgetto = {
-            val progettiPresenter = remember {
-                ProgettiPresenter(grafo.scope, grafo.io, grafo.elencoProgetti, grafo.sessione)
-            }
+            val progettiPresenter = remember { costruisciProgettiPresenter(grafo) }
             ProgettiRoute(progettiPresenter, grafo.cartellaProgettiPredefinita, sceltaCartella)
         },
         contenuto = { conProgetto ->

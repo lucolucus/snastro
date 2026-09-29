@@ -7,29 +7,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import snastro.avvio.CollaboratoriProgettoAperto
-import snastro.avvio.r1.ContenutoProgetto
-import snastro.avvio.r1.SchermataR1
-import snastro.avvio.r1.ShellProgetto
+import snastro.avvio.r1.ContenutoAppCondiviso
+import snastro.avvio.r2.ContenutoProgettoR2
 import snastro.avvio.r2.GrafoR2
 import snastro.avvio.r2.SEZIONI_SHELL_R2
-import snastro.avvio.r2.costruisciParlantiPresenter
 import snastro.avvio.r2.costruisciRegistrazionePresenterR2
-import snastro.avvio.r2.costruisciRegistrazioniPresenterR2
 import snastro.kernel.RegistrazioneId
-import snastro.ui.ShellPresenter
-import snastro.ui.modelli.ModelliPresenter
-import snastro.ui.modelli.ModelliRoute
-import snastro.ui.modelli.StatoModelli
-import snastro.ui.parlanti.ParlantiRoute
-import snastro.ui.progetti.ProgettiPresenter
-import snastro.ui.progetti.ProgettiRoute
 import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazioneRoute
 import snastro.ui.registrazione.SelezioneSchedaS3
 import snastro.ui.registrazione.SorgenteRiassuntoS3
-import snastro.ui.registrazioni.RegistrazioniRoute
 import snastro.ui.riassunto.RiassuntoPresenter
 import snastro.ui.riassunto.SchedaRiassunto
 import snastro.ui.riassunto.segnoRiassunto
@@ -37,52 +25,28 @@ import snastro.ui.riassunto.segnoRiassunto
 /**
  * R3's app content (ADR 0021 §10): R2's — S1; with a project S2/S3/S4/S5, the same presenters built by the same R2
  * builders — plus the Riassunto tab on S3. ONE [SelezioneSchedaS3] per window (AC-S121, carry-over 3), remembered at
- * this root and shared by every S3 presenter, so the chosen tab survives navigating between recordings.
+ * this root and shared by every S3 presenter, so the chosen tab survives navigating between recordings. AC-C65: this
+ * function only passes [SEZIONI_SHELL_R2] (via [ContenutoAppCondiviso], R1/R2/R3's shared body), its own
+ * [CollaboratoriR3] extension and the S3 builder; [ContenutoProgettoR2] is R2's and R3's shared content (the
+ * "near-copy" pre-release.md called out), reused here over `r3.r2`.
  */
 @Composable
 internal fun ContenutoAppR3(grafo: GrafoR2, sceltaCartella: SceltaCartella) {
     val r0 = grafo.r0
-    val shellPresenter = remember { ShellPresenter(r0.scope, r0.io, r0.sessione, SEZIONI_SHELL_R2) }
-    val modelliPresenter = remember { ModelliPresenter(r0.scope, r0.io, grafo.servizioModelli) }
     val selezioneScheda = remember { SelezioneSchedaS3() }
-    val iniziale = {
-        if (grafo.servizioModelli.stato.value == StatoModelli.Pronti) SchermataR1.Registrazioni else SchermataR1.Modelli
-    }
-    ShellProgetto(
-        shellPresenter = shellPresenter,
-        iniziale = iniziale,
-        contenutoSenzaProgetto = {
-            val progettiPresenter = remember { ProgettiPresenter(r0.scope, r0.io, r0.elencoProgetti, r0.sessione) }
-            ProgettiRoute(progettiPresenter, r0.cartellaProgettiPredefinita, sceltaCartella)
-        },
-        contenuto = { conProgetto, navigazione ->
-            val collaboratori = r0.sessione.collaboratoriCorrenti()
-            val r3 = collaboratori?.estensione as? CollaboratoriR3
-            if (collaboratori != null && r3 != null) {
-                val r2 = r3.r2
-                val progettoId = conProgetto.progetto.progettoId
-                val registrazioniPresenter = remember(progettoId) {
-                    costruisciRegistrazioniPresenterR2(r0, collaboratori, r2) { id ->
-                        navigazione.apriRegistrazione(id)
-                    }
-                }
-                val parlantiPresenter = remember(progettoId) { costruisciParlantiPresenter(r0, collaboratori, r2) }
-                DisposableEffect(r2, navigazione) {
-                    r2.pulizia.dimenticaPosto = { id -> collaboratori.scope.launch { navigazione.dimentica(id) } }
-                    onDispose { r2.pulizia.dimenticaPosto = {} }
-                }
-                ContenutoProgetto(
-                    conProgetto = conProgetto,
-                    navigazione = navigazione,
-                    elenco = { RegistrazioniRoute(registrazioniPresenter) },
-                    registrazione = { id -> SchermataRegistrazioneR3(grafo, collaboratori, r3, id, selezioneScheda) },
-                    modelli = { ModelliRoute(modelliPresenter) },
-                    parlanti = { ParlantiRoute(parlantiPresenter) },
-                )
+    ContenutoAppCondiviso(r0, grafo.servizioModelli, SEZIONI_SHELL_R2, sceltaCartella) {
+            conProgetto,
+            navigazione,
+            collaboratori,
+            modelliPresenter,
+        ->
+        val r3 = collaboratori.estensione as? CollaboratoriR3
+        if (r3 != null) {
+            ContenutoProgettoR2(r0, conProgetto, navigazione, collaboratori, r3.r2, modelliPresenter) { id ->
+                SchermataRegistrazioneR3(grafo, collaboratori, r3, id, selezioneScheda)
             }
-        },
-        etichettaModelloLinguisticoPiede = modelliPresenter.etichettaModelloLinguisticoPiede,
-    )
+        }
+    }
 }
 
 /**
