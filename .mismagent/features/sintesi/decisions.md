@@ -180,3 +180,42 @@
 - By: decided: user (Luca Parsani); recorded: worker-composer
 - Docs: [pre-release](pre-release.md), [ADR 0026](../../decisions/0026-runtime-llm-jni-llama.md)
 - Revisit: a cleanup change shows one of these costs more than expected.
+
+### D-0015 · Blank element dropped, not counted in omessi
+- Meta: 2026-09-29; scope: block:pre-R3-6; status: accepted
+- Question: an element with valid Fonti but blank testo — keep it, drop and count it in omessi, or drop it uncounted?
+- Options: drop uncounted, like the blank Sommario (kept) vs drop and count (INV-S4 literal) vs keep.
+- Hypothesis: n/a — decided by INV-S4's blank-Sommario precedent, [pre-release](pre-release.md)
+- Check: n/a — decided by INV-S4's blank-Sommario precedent, [pre-release](pre-release.md)
+- Result: n/a — decided by INV-S4's blank-Sommario precedent, [pre-release](pre-release.md)
+- Debate: verifier: consistent with the product rule and the UI wording ("frasi citate non trovate"), but departs from INV-S4's "omessi equals exactly" wording.
+- Decision: VerificaDelleFonti drops a blank-testo element without counting it; omessi counts only elements with missing or invalid Fonti or tokens. INV-S4 wording to be amended.
+- By: decided: worker; recorded: worker-composer
+- Docs: [pre-release](pre-release.md)
+- Revisit: the user wants blank elements reported in omessi.
+
+### D-0016 · Riassumi disabled; checkpoint only in background
+- Meta: 2026-09-29; scope: feature; status: accepted
+- Question: confirm the A156 UI variant, and should the commit-time TRUNCATE checkpoint stay synchronous?
+- Options: A156 "Riassumi" disabled with the NonDisponibile caption (kept) vs "Riprova" disabled plus the failure reason; B17 skip the synchronous attempt (kept) vs keep it.
+- Hypothesis: n/a — decided by the user on the pre-R3-2/pre-R3-4 reviews, [pre-release](pre-release.md)
+- Check: n/a — decided by the user on the pre-R3-2/pre-R3-4 reviews, [pre-release](pre-release.md)
+- Result: n/a — decided by the user on the pre-R3-2/pre-R3-4 reviews, [pre-release](pre-release.md)
+- Debate: the synchronous TRUNCATE blocks the committing thread up to busy_timeout (5 s) with an open DEFERRED reader.
+- Decision: when not available and last failed, the disabled button reads "Riassumi" with the NonDisponibile caption; the after-commit checkpoint no longer runs on the committing thread, only the background retry worker does it.
+- By: decided: user (Luca Parsani); recorded: worker-composer
+- Docs: [pre-release](pre-release.md)
+- Revisit: users miss the failure reason, or WAL growth becomes visible.
+
+### D-0017 · FonteCoda gains an optional tutti() listing
+- Meta: 2026-09-29; scope: boundary:coda-condivisa; status: accepted
+- Question: may the pinned FonteCoda gain a field to list its items in one query and bound the teste() enumeration?
+- Options: additive `tutti` with a bounded default (kept) vs changing teste()'s contract vs leaving the O(N²) unbounded loop.
+- Hypothesis: n/a — decided by the pre-R3-7 findings A122/A124, [pre-release](pre-release.md)
+- Check: n/a — decided by the pre-R3-7 findings A122/A124, [pre-release](pre-release.md)
+- Result: n/a — decided by the pre-R3-7 findings A122/A124, [pre-release](pre-release.md)
+- Debate: verifier: additive and backward-compatible, but an undeclared extension of a pinned type (D-0005/D-0006 precedent) — record it.
+- Decision: FonteCoda gets a 9th field `tutti` defaulting to a bounded enumeraViaTeste; both real sources override it with their single-query elenco(). No behaviour change for existing sources.
+- By: decided: worker; recorded: worker-composer
+- Docs: [pre-release](pre-release.md)
+- Revisit: a source cannot list its items in one query.

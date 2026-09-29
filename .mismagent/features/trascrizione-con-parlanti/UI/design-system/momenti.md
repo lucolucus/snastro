@@ -34,7 +34,7 @@ Ogni momento risponde a tre domande: **cosa vuole sapere l'utente**, **cosa gli 
 
 ## 8 · Trascritta e identificata
 - **Vuole sapere:** di cosa si è parlato e chi ha detto cosa, senza rileggere un'ora di testo.
-- **Mostriamo:** la scheda Riassunto (`RecordingSummary`). Oggi contiene durata, minuti di parlato, persone e quota di parlato per persona, calcolabili subito dal trascritto. Con la v2 si aggiungono il riassunto in prosa, le decisioni e le cose da fare con chi se ne occupa. Il documento `.md` si apre con «Apri documento».
+- **Mostriamo:** la pagina della registrazione con le schede **Trascrizione | Riassunto** nel corpo centrale e il pannello Voci a destra. Con Riassunto selezionata, la scheda (`RecordingSummary`) occupa tutta l'area centrale: Sommario in prosa, Decisioni, Azioni con Responsabile, QuestioniAperte e PuntiChiave, ognuno con le sue Fonti (parlante e minuto); il pannello Voci resta nascosto finché non si torna su Trascrizione. Il documento `.md` si apre con «Apri documento».
 - **Azione:** leggere e ascoltare. Cliccando una frase la si ascolta da lì.
 
 ## 9 · Non riuscita
@@ -52,6 +52,6 @@ Ogni momento risponde a tre domande: **cosa vuole sapere l'utente**, **cosa gli 
 Sono da confermare prima di implementarle:
 1. **La pagina della registrazione si apre in ogni stato**, non solo quando esiste un trascritto (oggi S3 si apre solo in quel caso). Prima della trascrizione si ascolta e si avvia. Durante mostra le fasi.
 2. **Stima del tempo di trascrizione**, calcolata dalla durata e dal rapporto misurato su questo Mac (R1: 60 min in meno di 10 min).
-3. **Scheda Riassunto nella pagina della registrazione**. I dati di fatto (durata, parlato, quota per persona) sono disponibili subito. La prosa, le decisioni e le cose da fare arrivano con la v2, e fino ad allora compaiono solo come esempio.
+3. *(Implementato, feature sintesi)* **Scheda Riassunto nella pagina della registrazione**: le schede Trascrizione | Riassunto stanno nel corpo centrale (non più affiancata a Voci nel pannello destro). Con Riassunto selezionata il riassunto — Sommario, Decisioni, Azioni, QuestioniAperte, PuntiChiave, ognuno con le sue Fonti — occupa tutta l'area e il pannello Voci resta nascosto.
 4. **Home del progetto con «Da fare» e riassunto** sopra l'elenco. «Presenze» significa in quante registrazioni compare ogni persona.
 5. **Corsie delle voci nella barra audio**: mostrano chi parla lungo tutta la registrazione. Cliccando una corsia si salta a quel punto.

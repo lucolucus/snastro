@@ -53,10 +53,11 @@ import kotlin.time.Duration.Companion.seconds
  * it (never here), and rethrows every [Error] and the worker's OWN cancellation (AC-C48). The startup sweep
  * (AC-185, ADR 0012 R4) is requested once, in `init`: it only LISTS the ids from [registrazioniConTrascritto] and
  * fans them into their OWN [Chiave.PerRegistrazione] via [accoda] (AC-C47) — unlike
- * [RigenerazioneDocumentoPolitica.esegui] of `RigeneraTuttiIDocumenti` (AC-157), whose fold is reserved for a
- * caller that wants exactly that all-or-nothing stop, the sweep here must NOT let one poisoned Registrazione's
- * retries block or re-run every other one every 30 s. Requested at construction, it runs once [avvia] starts
- * the worker.
+ * [RigenerazioneDocumentoPolitica]'s own `rigeneraOgnuna` fold (its `perParlanteRinominato`/`perParlantePromosso`
+ * callers, all-or-nothing: the first write failure stops every later one), the sweep here must NOT let one
+ * poisoned Registrazione's retries block or re-run every other one every 30 s. Requested at construction, it
+ * runs once [avvia] starts the worker. (B51 pre-release triage, 2026-09-29: this sweep replaced the retired
+ * `RigeneraTuttiIDocumenti` command/fold since the AC-C47 fan-out — this class has listed ids itself ever since.)
  *
  * **Deletion** (ADR 0020 §3, AC-624/AC-C93). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
  * per-[RegistrazioneId] key: merged into a pending entry it replaces the regeneration (a removal, once
@@ -78,7 +79,7 @@ public class AbbonatoDocumentoEventi(
      * The startup sweep's own id lister (AC-C47) — e.g. `LettoreTrascritto::registrazioniConTrascritto` bound at
      * the `:avvio` wiring site to the SAME `LettoreTrascritto` instance given to [politica]: injected here (never
      * read off [politica], which keeps its `LettoreTrascritto` private) so the sweep can list ids WITHOUT going
-     * through [RigenerazioneDocumentoPolitica]'s all-or-nothing `RigeneraTuttiIDocumenti` fold (AC-157).
+     * through [RigenerazioneDocumentoPolitica]'s all-or-nothing `rigeneraOgnuna` fold.
      */
     private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
     segnalazione: Segnalazione,
