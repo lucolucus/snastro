@@ -1,7 +1,8 @@
 package snastro.parlanti.adattatori.eventi
 
 import kotlinx.coroutines.CoroutineScope
-import snastro.kernel.DispatcherEventiInMemoria
+import kotlinx.coroutines.Job
+import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.RegistrazioneId
@@ -34,27 +35,24 @@ import kotlin.time.Duration.Companion.seconds
  * again anyway (`RiallineaTutteLeImpronte`, `avvio-composizione`), so a retry that never succeeds
  * still self-heals.
  *
- * Registers itself on [dispatcher] in `init`. This is a plain component: wiring it into the app's
- * composition (registering it at startup, before the first command) is `avvio-parlanti`'s job, not
- * this block's — unlike `AbbonatoDocumentoEventi` it has no startup sweep of its own, since
- * `RiallineaTutteLeImpronte` at project open is `avvio-composizione`'s responsibility.
+ * A plain [AbbonatoDopoCommit] VALUE (ADR 0030 §1, AC-C67): it never registers itself, and constructing it
+ * launches nothing — its worker runs only once [avvia] is called with the open project's scope (`:avvio`'s
+ * `ModuloParlanti`, step 6 of `apriProgetto`). A request received before that is kept and runs at [avvia].
+ * Unlike `AbbonatoDocumentoEventi` it has no startup sweep of its own: `RiallineaTutteLeImpronte` at project
+ * open is the composition's responsibility.
  */
 public class AbbonatoRiallineamentoImpronte(
-    dispatcher: DispatcherEventiInMemoria,
     private val riallinea: RiallineaImpronteServizio,
-    scope: CoroutineScope,
     segnalazione: Segnalazione,
     ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
     ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
-) {
+) : AbbonatoDopoCommit {
     private val ritenta = RitentaConBackoff<RegistrazioneId>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
-    init {
-        dispatcher.registraDopoCommit { evento -> ricevi(evento) }
-        ritenta.avvia(scope)
-    }
+    /** Starts the retry worker on [scope]; cancelling [scope] (or the returned [Job]) stops it. */
+    public fun avvia(scope: CoroutineScope): Job = ritenta.avvia(scope)
 
-    private fun ricevi(evento: EventoPubblicato) {
+    override fun ricevi(evento: EventoPubblicato) {
         val registrazioneId = when (evento) {
             is VociUnite -> evento.registrazioneId
             is VoceDivisa -> evento.registrazioneId

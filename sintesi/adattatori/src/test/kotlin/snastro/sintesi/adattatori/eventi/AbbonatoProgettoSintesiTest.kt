@@ -2,6 +2,8 @@ package snastro.sintesi.adattatori.eventi
 
 import io.mockk.spyk
 import io.mockk.verify
+import snastro.kernel.AbbonatoDopoCommit
+import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
@@ -19,23 +21,28 @@ import snastro.sintesi.dominio.ErroreSintesi
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertIs
 
 /**
  * [AbbonatoProgettoSintesi] (AC-S117/AC-S118): a REAL [DispatcherEventiInMemoria] over a REAL [UnitaDiLavoroFinta]
  * whose participant is the `Ripristinabile` [RiassuntoRepositoryFinta], so a doomed transaction is genuinely rolled
  * back; the policy's own rule coverage is [ApplicaEliminazioneRegistrazioneSintesiPolitica]'s own test — this
- * proves registration shape, routing, transaction placement and doom, mirroring
+ * proves the value's shape, routing, transaction placement and doom, mirroring
  * `AbbonatoEliminazioneRegistrazioneTest` (Trascrizione) and `AbbonatoTrascrizioneSintesiTest` (this module).
  */
 class AbbonatoProgettoSintesiTest {
     @Test
-    fun `AC-S117 il costruttore registra esattamente un abbonato sincrono e nessuno dopo commit`() {
+    fun `AC-S117 e un valore AbbonatoSincrono, mai dopo commit, e costruirlo non registra nulla`() {
         val riassunti = RiassuntoRepositoryFinta()
         val dispatcher = spyk(DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti)))
 
-        AbbonatoProgettoSintesi(dispatcher, ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
+        val abbonato: Any =
+            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
 
-        verify(exactly = 1) { dispatcher.registraSincrono(any()) }
+        assertIs<AbbonatoSincrono>(abbonato)
+        assertFalse(abbonato is AbbonatoDopoCommit)
+        verify(exactly = 0) { dispatcher.registraSincrono(any()) } // ADR 0030 §1, AC-C67: the composition registers
         verify(exactly = 0) { dispatcher.registraDopoCommit(any()) }
     }
 
@@ -44,7 +51,7 @@ class AbbonatoProgettoSintesiTest {
         val riassunti = RiassuntoRepositoryFinta()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        AbbonatoProgettoSintesi(dispatcher, politica)
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(object : EventoPubblicato {})
@@ -61,7 +68,7 @@ class AbbonatoProgettoSintesiTest {
         riassunti.salva(unRiassunto("vecchio", REG)).atteso()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        AbbonatoProgettoSintesi(dispatcher, politica)
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(eliminata(REG))
@@ -82,9 +89,8 @@ class AbbonatoProgettoSintesiTest {
         val riassuntiGuasti = object : RiassuntoRepository by riassunti {
             override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> = guasto
         }
-        AbbonatoProgettoSintesi(
-            dispatcher,
-            ApplicaEliminazioneRegistrazioneSintesiPolitica(riassuntiGuasti, dispatcher),
+        dispatcher.registraSincrono(
+            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassuntiGuasti, dispatcher)),
         )
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {

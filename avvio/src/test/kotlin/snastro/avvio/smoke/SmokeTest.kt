@@ -1,0 +1,180 @@
+package snastro.avvio.smoke
+
+import org.junit.jupiter.api.io.TempDir
+import snastro.kernel.DispatcherEventiInMemoria
+import snastro.kernel.ElaborazioneId
+import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IntervalloMs
+import snastro.kernel.ProgettoId
+import snastro.kernel.RegistrazioneId
+import snastro.kernel.RiferimentoAudio
+import snastro.kernel.VoceId
+import snastro.kernel.VoceRef
+import snastro.kernel.atteso
+import snastro.kernel.mappa
+import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
+import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
+import snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto
+import snastro.parlanti.adattatori.porte.LettoreVociDaTrascrizione
+import snastro.parlanti.applicazione.comandi.ConfermaAttribuzione
+import snastro.parlanti.applicazione.comandi.ConfermaAttribuzioneServizio
+import snastro.parlanti.applicazione.comandi.ObiettivoAttribuzione
+import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
+import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
+import snastro.persistenza.SnastroDatabase
+import snastro.persistenza.UnitaDiLavoroSql
+import snastro.persistenza.apriDatabaseProgetto
+import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
+import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
+import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.progetto.dominio.NomeProgetto
+import snastro.progetto.dominio.Progetto
+import snastro.progetto.dominio.Registrazione
+import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
+import snastro.sintesi.applicazione.porte.conAvvio
+import snastro.sintesi.applicazione.porte.conCompletamento
+import snastro.sintesi.applicazione.porte.unRiassunto
+import snastro.sintesi.applicazione.porte.unaStruttura
+import snastro.sintesi.dominio.BozzaElemento
+import snastro.sintesi.dominio.BozzaRiassunto
+import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
+import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
+import snastro.trascrizione.applicazione.letture.VociDelTrascritto
+import snastro.trascrizione.dominio.SegmentoIniziale
+import snastro.trascrizione.dominio.StatoElaborazione
+import snastro.trascrizione.dominio.Trascritto
+import snastro.trascrizione.dominio.unaElaborazione
+import java.nio.file.Files
+import java.nio.file.Path
+import java.time.Instant
+import java.time.LocalDate
+import java.util.logging.Logger
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+/**
+ * AC-237 + AC-351 + AC-357: `--smoke <fixture-dir>` opens the fixture project (>=1 Registrazione already
+ * imported, one of them with a completed Trascritto whose Voce 1 is named 'Anna') and saves S1, S2 (the
+ * smoke waits for the identification badge '2 voci · 1 da identificare'), S3 (the Voci panel, Voce 1's
+ * Nome shown), S3 with the Riassunto tab selected (AC-S151: the fixture's pronto Riassunto), S4 (the shell's
+ * Parlanti section) and S5 — headless, on the ML Finte: no sherpa natives,
+ * no models. fix-batch-16 LOW-1: S5 renders the REAL catalogue over an empty cache ('Mancanti',
+ * 'Scarica'). The fixture here is built DIRECTLY via the SQL repositories + domain factories (never
+ * `AggiungiRegistrazioneServizio`'s real FFmpeg probe/copy pipeline — this proves the smoke MECHANISM,
+ * not audio import), and its Parlante through the REAL `ConfermaAttribuzione` over the Finte decoder and
+ * extractor, so this test needs no native library and stays in the default gate.
+ */
+class SmokeTest {
+    @TempDir
+    lateinit var cartella: Path
+
+    @Test
+    fun `AC-237 AC-351 AC-357 AC-S151 smoke salva S1, S2, S3, S3 Riassunto, S4 e S5 del fixture, senza nativi`() {
+        val cartellaFixture = cartella.resolve("Fixture.snastro")
+        costruisciProgettoFixture(cartellaFixture)
+        SCHERMATE.forEach { Files.deleteIfExists(Path.of("build/smoke/$it.png")) }
+        // AC-C90: lo smoke non installa MAI il file handler di produzione (mai scrittura sulla cartella reale).
+        val gestoriPrimaDelloSmoke = Logger.getLogger("snastro").handlers.size
+
+        eseguiSmoke(cartellaFixture.toString())
+
+        SCHERMATE.forEach { nome ->
+            val png = Path.of("build/smoke/$nome.png")
+            assertTrue(Files.exists(png) && Files.size(png) > 0, "screenshot di $nome mancante o vuoto: $png")
+        }
+        assertEquals(
+            gestoriPrimaDelloSmoke,
+            Logger.getLogger("snastro").handlers.size,
+            "AC-C90: eseguiSmoke non deve mai installare un FileHandler sul logger \"snastro\"",
+        )
+    }
+
+    /** A valid `.snastro` folder with a Progetto and one Registrazione — SQL only, no FFmpeg. */
+    private fun costruisciProgettoFixture(cartellaProgetto: Path) {
+        Files.createDirectories(cartellaProgetto.resolve("audio"))
+        Files.createDirectories(cartellaProgetto.resolve("documenti"))
+        Files.createDirectories(cartellaProgetto.resolve("cache/audio"))
+        // La sorgente non serve alla decodifica FFmpeg qui (S2 controlla solo l'esistenza del file
+        // per `disponibile`, non riproduce nulla durante lo smoke) — un file segnaposto basta.
+        Files.write(cartellaProgetto.resolve("audio/rec-1.wav"), byteArrayOf(0))
+
+        val db = apriDatabaseProgetto(cartellaProgetto.toFile())
+        val progetti = ProgettoRepositorySql(db.database)
+        val registrazioni = RegistrazioneRepositorySql(db.database)
+
+        val nome = NomeProgetto.di("Progetto Fixture").atteso()
+        val progetto = Progetto.crea(ProgettoId("fixture-progetto"), nome)
+        progetti.salva(progetto.aggregato)
+
+        val registrazione = Registrazione.aggiungi(
+            id = RegistrazioneId("fixture-registrazione"),
+            progettoId = progetto.aggregato.id,
+            titolo = "Riunione di prova",
+            riferimentoAudio = RiferimentoAudio("audio/rec-1.wav"),
+            durataMs = 60_000,
+            dataRegistrazione = LocalDate.parse("2026-01-01"),
+            aggiuntaAlle = Instant.parse("2026-01-01T10:00:00Z"),
+        )
+        registrazioni.salva(registrazione.aggregato)
+
+        // AC-351: a completed Elaborazione + its Trascritto (two Voci, no Parlanti -> 'Voce 1'/'Voce 2').
+        val registrazioneId = registrazione.aggregato.id
+        ElaborazioneRepositorySql(db.database).salva(
+            unaElaborazione(StatoElaborazione.COMPLETATA, ElaborazioneId("fixture-elaborazione"), registrazioneId),
+        ).atteso()
+        val segmenti = listOf(
+            SegmentoIniziale(0, IntervalloMs(0, 4_000), "Buongiorno a tutti, iniziamo con il punto sul progetto."),
+            SegmentoIniziale(1, IntervalloMs(4_500, 9_000), "Grazie. Da parte mia ci sono due aggiornamenti."),
+            SegmentoIniziale(0, IntervalloMs(9_500, 12_000), "Perfetto, partiamo dal primo."),
+        )
+        val trascritto = Trascritto.crea(registrazioneId, durataMs = 60_000, segmenti = segmenti).atteso()
+        TrascrittoRepositorySql(db.database, UnitaDiLavoroSql(db.database)).salva(trascritto.aggregato)
+
+        // AC-357: Voce 1 is 'Anna' (S2 badge '2 voci · 1 da identificare', S3 Nome, one S4 row).
+        confermaAttribuzione(db.database, registrazioni).esegui(
+            ConfermaAttribuzione(VoceRef(registrazioneId, VoceId(1)), ObiettivoAttribuzione.NuovoParlante("Anna")),
+        ).atteso()
+
+        // AC-S151: a pronto Riassunto of it (Sintesi's own SQL repository and root transitions), so the smoke
+        // captures S3 with the Riassunto tab selected and its content shown.
+        val uow = UnitaDiLavoroSql(db.database)
+        val riassunti = RiassuntoRepositorySql(db.database, uow)
+        val riassunto = unRiassunto("fixture-riassunto", registrazioneId, argomento = "punto sul progetto").conAvvio()
+        uow.inTransazione { riassunti.salva(riassunto) }.atteso()
+        riassunto.conCompletamento(BOZZA_FIXTURE, unaStruttura(1 to 1, 2 to 2, 3 to 1))
+        uow.inTransazione { riassunti.concludi(riassunto).mappa { } }.atteso()
+        db.chiudi()
+    }
+
+    private fun confermaAttribuzione(
+        database: SnastroDatabase,
+        registrazioni: RegistrazioneRepositorySql,
+    ): ConfermaAttribuzioneServizio {
+        val unitaDiLavoroSql = UnitaDiLavoroSql(database)
+        val eventi = DispatcherEventiInMemoria(unitaDiLavoroSql)
+        return ConfermaAttribuzioneServizio(
+            eventi.unitaDiLavoro,
+            GeneratoreIdFinto(),
+            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
+            LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database, unitaDiLavoroSql))),
+            ParlanteRepositorySql(database, unitaDiLavoroSql),
+            AttribuzioneRepositorySql(database),
+            DecodificatoreAudioFinta(),
+            EstrattoreImprontaFinta(),
+            eventi,
+        )
+    }
+
+    private companion object {
+        val SCHERMATE = listOf("s1", "s2", "s3", "s3-riassunto", "s4", "s5")
+
+        val BOZZA_FIXTURE = BozzaRiassunto(
+            sommario = "{V1} apre la riunione e {V2} porta due aggiornamenti.",
+            decisioni = listOf(BozzaElemento("Si parte dal primo aggiornamento.", listOf(3), null)),
+            questioniAperte = listOf(BozzaElemento("Il secondo aggiornamento resta da discutere.", listOf(2), null)),
+            azioni = listOf(BozzaElemento("{V2} presenta il primo aggiornamento.", listOf(2), 2)),
+            puntiChiave = listOf(BozzaElemento("Il punto sul progetto.", listOf(1), 1)),
+        )
+    }
+}

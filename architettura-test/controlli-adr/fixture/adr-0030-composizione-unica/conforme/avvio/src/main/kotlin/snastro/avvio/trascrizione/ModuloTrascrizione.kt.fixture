@@ -1,0 +1,2 @@
+package snastro.avvio.trascrizione
+import snastro.trascrizione.adattatori.eventi.AbbonatoEliminazioneRegistrazione

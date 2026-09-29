@@ -60,7 +60,7 @@ class AbbonatoDocumentoEliminazioneTest {
                 override fun registrazioniConTrascritto() = trascritti.keys.toList()
             }
             val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
-            AbbonatoDocumentoEventi(
+            abbonaDocumento(
                 dispatcher,
                 politica,
                 lettore::registrazioniConTrascritto,

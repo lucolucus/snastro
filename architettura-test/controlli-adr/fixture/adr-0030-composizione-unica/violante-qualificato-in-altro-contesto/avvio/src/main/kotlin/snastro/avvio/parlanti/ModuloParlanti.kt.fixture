@@ -1,0 +1,2 @@
+package snastro.avvio.parlanti
+val x = snastro.sintesi.adattatori.eventi.AbbonatoProgettoSintesi(p)

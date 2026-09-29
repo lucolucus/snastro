@@ -72,8 +72,8 @@ class AbbonatoDocumentoEventiTest {
 
     /**
      * One test's wiring: a real [DispatcherEventiInMemoria], a real [RigenerazioneDocumentoPolitica]
-     * over [scrittore], and the [AbbonatoDocumentoEventi] under test (self-registering, discarded) —
-     * all sharing [scheduler]'s virtual clock.
+     * over [scrittore], and the [AbbonatoDocumentoEventi] under test (registered as the composition
+     * registers it, then started) — all sharing [scheduler]'s virtual clock.
      */
     private class Ambiente(
         scheduler: TestCoroutineScheduler,
@@ -88,7 +88,7 @@ class AbbonatoDocumentoEventiTest {
 
         init {
             val scope = CoroutineScope(StandardTestDispatcher(scheduler))
-            AbbonatoDocumentoEventi(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
+            abbonaDocumento(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
         }
 
         fun commit(evento: EventoPubblicato) {
@@ -206,7 +206,7 @@ class AbbonatoDocumentoEventiTest {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(
+        abbonaDocumento(
             dispatcher,
             politica,
             lettore::registrazioniConTrascritto,
@@ -410,7 +410,7 @@ class AbbonatoDocumentoEventiTest {
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val segnalazioni = SegnalazioniRegistrate()
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
+        abbonaDocumento(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
         advanceTimeBy(1.seconds)
         runCurrent() // lo sweep di avvio: puo' fallire su poisoned, irrilevante qui
 
@@ -446,7 +446,7 @@ class AbbonatoDocumentoEventiTest {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(
+        abbonaDocumento(
             dispatcher,
             politica,
             lettore::registrazioniConTrascritto,
@@ -488,7 +488,7 @@ class AbbonatoDocumentoEventiTest {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
         val politica = RigenerazioneDocumentoPolitica(lettore, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(
+        abbonaDocumento(
             dispatcher,
             politica,
             lettore::registrazioniConTrascritto,
@@ -525,7 +525,7 @@ class AbbonatoDocumentoEventiTest {
         val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
         val segnalazioni = SegnalazioniRegistrate()
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(dispatcher, politica, trascritti::registrazioniConTrascritto, scope, segnalazioni)
+        abbonaDocumento(dispatcher, politica, trascritti::registrazioniConTrascritto, scope, segnalazioni)
         advanceUntilIdle() // sweep di avvio
         val primaDellaCancellazione = scrittore.operazioni.size
 
@@ -552,7 +552,7 @@ class AbbonatoDocumentoEventiTest {
             val scope = CoroutineScope(
                 StandardTestDispatcher(testScheduler) + CoroutineExceptionHandler { _, e -> sfuggiti += e },
             )
-            AbbonatoDocumentoEventi(dispatcher, politica, trascritti::registrazioniConTrascritto, scope, segnalazioni)
+            abbonaDocumento(dispatcher, politica, trascritti::registrazioniConTrascritto, scope, segnalazioni)
             advanceUntilIdle()
 
             assertEquals(1, scrittore.tentativi, "un solo tentativo: l'Error non e' un ritento")
@@ -595,7 +595,7 @@ class AbbonatoDocumentoEventiTest {
             val nomi = LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco"))
             val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
             val politica = RigenerazioneDocumentoPolitica(trascritti, nomi, scrittore)
-            AbbonatoDocumentoEventi(
+            abbonaDocumento(
                 dispatcher,
                 politica,
                 trascritti::registrazioniConTrascritto,
@@ -662,7 +662,7 @@ class AbbonatoDocumentoEventiTest {
         }
         val politica = RigenerazioneDocumentoPolitica(trascritti, LettoreNomiFinta(), scrittore)
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
-        AbbonatoDocumentoEventi(
+        abbonaDocumento(
             dispatcher,
             politica,
             trascritti::registrazioniConTrascritto,

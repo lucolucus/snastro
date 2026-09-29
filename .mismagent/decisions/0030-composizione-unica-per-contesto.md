@@ -5,15 +5,14 @@ supersedes: null   # partial, amended in place with dated pointers here: ADR 002
 closes_spike: null
 decided: 2026-09-27 · user (post-R3 design review, analysis §2.3 R1–R4, §2.4 X4, §6.1; C1–C5 as recommended; the release METHOD is unchanged) · architect (target shape, AC table, block split)
 enforced_by:
-  # PLANNED (not yet an entry: ControlliAdrTest requires the script to exist): block c3-composizione-piatta adds
-  #   - check: architettura-test/controlli-adr/adr-0030-composizione-unica.sh
-  #     from: c3-composizione-piatta
+  - check: architettura-test/controlli-adr/adr-0030-composizione-unica.sh
+    from: c3-composizione-piatta
     # FAIL if (1) a directory avvio/src/main/kotlin/snastro/avvio/r<digit> exists; (2) avvio/src/main has a cast
     # `as Collaboratori…` / `as? Collaboratori…`; (3) avvio/src/main has `AtomicReference<CodaCondivisa`; (4) a file
     # under avvio/src/main/kotlin/snastro/avvio/ outside `<ctx>/` and `progetto/` imports or fully-qualifies
     # `snastro.<ctx>.adattatori` (ctx ∈ progetto|trascrizione|parlanti|documento|sintesi; comment lines stripped).
-    # Clause (4) replaces GrafoR0Test's AC-350 package guard.
-  # Pending delivery (block c3-composizione-piatta): script + red-green fixtures, validated via bash -c.
+    # Clause (4) replaces GrafoR0Test's AC-350 package guard. Red-green fixtures in
+    # controlli-adr/fixture/adr-0030-composizione-unica/, validated via ControlliAdrTest.
 ---
 # 0030 — Single composition, one module per context; R0–R2 retired as code (the release method stays)
 
