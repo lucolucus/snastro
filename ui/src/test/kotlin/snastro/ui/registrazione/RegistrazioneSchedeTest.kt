@@ -13,6 +13,7 @@ import snastro.kernel.VoceId
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
+import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.stile.SegnoScheda
@@ -39,7 +40,7 @@ private fun unaSorgente(segno: MutableStateFlow<SegnoScheda?> = MutableStateFlow
     SorgenteRiassuntoS3(contenuto = {}, segno = { segno })
 
 /**
- * AC-S119..S122: the presenter half of the Riassunto tab — [RegistrazionePresenter]'s optional
+ * AC-S120..S122: the presenter half of the Riassunto tab — [RegistrazionePresenter]'s
  * [SorgenteRiassuntoS3]/[SelezioneSchedaS3] collaborators. AC-S123 (the banner precedence table) is a
  * pure predicate of [RegistrazioneUiStato.Dati], tested state-only in `RegistrazioneUiStatoTest`.
  */
@@ -49,18 +50,22 @@ class RegistrazioneSchedeTest {
     private fun presentatore(
         scope: TestScope,
         registrazioneId: RegistrazioneId = REG_A,
-        riassunto: SorgenteRiassuntoS3? = null,
-        selezioneSchedaS3: SelezioneSchedaS3? = null,
+        riassunto: SorgenteRiassuntoS3 = unaSorgente(),
+        selezioneSchedaS3: SelezioneSchedaS3 = SelezioneSchedaS3(),
     ): RegistrazionePresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
         return RegistrazionePresenter(
-            scope = CoroutineScope(dispatcher),
+            scope = scopeCoroutine,
             io = dispatcher,
             registrazioneId = registrazioneId,
             trascritto = { unaVista(registrazioneId) },
             documento = { null },
             lettore = LettoreAudioFinta(),
             apriEsterno = ApriEsternoFinta(),
+            parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
+            stati = { null },
+            aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = riassunto,
             selezioneSchedaS3 = selezioneSchedaS3,
         )
@@ -69,25 +74,11 @@ class RegistrazioneSchedeTest {
     private val RegistrazionePresenter.dati get() = assertIs<RegistrazioneUiStato.Dati>(stato.value)
 
     @Test
-    fun `AC-S119 senza SorgenteRiassuntoS3 non ce contenuto Riassunto e selezionaScheda non fa nulla`() = runTest {
-        val presenter = presentatore(this)
-        advanceUntilIdle()
-
-        assertNull(presenter.dati.contenutoRiassunto)
-        assertEquals(SchedaS3.TRASCRIZIONE, presenter.dati.schedaSelezionata)
-
-        presenter.azioni.selezionaScheda(SchedaS3.RIASSUNTO)
-        advanceUntilIdle()
-        assertEquals(SchedaS3.TRASCRIZIONE, presenter.dati.schedaSelezionata, "un no-op senza la sorgente (AC-S119)")
-    }
-
-    @Test
     fun `AC-S120 con la sorgente Trascrizione e selezionata di default e Riassunto mostra lo slot`() = runTest {
         val presenter = presentatore(this, riassunto = unaSorgente())
         advanceUntilIdle()
 
         assertEquals(SchedaS3.TRASCRIZIONE, presenter.dati.schedaSelezionata)
-        assertEquals(true, presenter.dati.contenutoRiassunto != null)
 
         presenter.azioni.selezionaScheda(SchedaS3.RIASSUNTO)
         advanceUntilIdle()

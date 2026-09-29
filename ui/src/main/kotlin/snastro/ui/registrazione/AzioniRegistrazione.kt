@@ -7,13 +7,14 @@ import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 
 /**
- * One lambda per user action of S3 · Registrazione, READ-ONLY in R1 (dev-architecture `#presenter`,
- * user decision K-c). [riproduciDaInizio]/[pausa] back the header audio bar; [riproduciSegmento] is
- * AC-208's click/'▶' on a Segmento (a no-op when the audio source is missing, AC-217 — enforced by the
- * presenter, not just by disabling the control).
+ * One lambda per user action of S3 · Registrazione (dev-architecture `#presenter`, user decision K-c).
+ * [riproduciDaInizio]/[pausa] back the header audio bar; [riproduciSegmento] is AC-208's click/'▶' on a
+ * Segmento (a no-op when the audio source is missing, AC-217 — enforced by the presenter, not just by
+ * disabling the control).
  *
- * R2 (schermata-registrazione-identificazione): the Voci panel and Revisione actions below default to
- * no-ops, and the presenter ignores them when built without [SorgentiParlanti] (AC-402).
+ * The Voci panel and Revisione actions below default to no-ops so a fixture that only exercises a few
+ * of them (render-check, a narrow presenter test) can omit the rest (frugality) — every one of them is
+ * always wired in the running app (ADR 0030 §1, U1).
  */
 @Suppress("LongParameterList") // one lambda per user action (K-c)
 data class AzioniRegistrazione(
@@ -48,7 +49,6 @@ data class AzioniRegistrazione(
     val applicaSomiglianza: () -> Unit = {},
     /** 'Annulla' (computation or preview), 'Chiudi' (N = 0) and the result message's dismissal. */
     val annullaSomiglianza: () -> Unit = {},
-    /** AC-S120/S121: switches the centre-column tab — a no-op while [RegistrazioneUiStato.Dati.contenutoRiassunto]
-     * is `null` (the presenter ignores it, same guard as every R2-only action above). */
+    /** AC-S120/S121: switches the centre-column tab. */
     val selezionaScheda: (SchedaS3) -> Unit = {},
 )

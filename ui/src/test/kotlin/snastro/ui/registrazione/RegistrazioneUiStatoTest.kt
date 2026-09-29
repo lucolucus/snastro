@@ -89,17 +89,6 @@ class RegistrazioneUiStatoTest {
     }
 
     @Test
-    fun `AC-S119 senza lo slot Riassunto solo il banner di ritrascrizione resta possibile`() {
-        // AC-S119: no SorgenteRiassuntoS3 (R0/R1/R2) — audio mancante / voci da identificare never
-        // escalate to a screen Banner, S3 stays exactly as it was before this feature.
-        val senzaSlot = unDati(audioDisponibile = false, pannello = unPannello(3), contenutoRiassunto = null)
-        assertNull(senzaSlot.bannerSchermata)
-
-        val conRitrascrizione = unDati(bannerRitrascrizione = "banner", contenutoRiassunto = null)
-        assertEquals(BannerSchermata.Ritrascrizione("banner", null), conRitrascrizione.bannerSchermata)
-    }
-
-    @Test
     fun `AC-S123 superato una richiesta fallita e il download del modello non sono letti qui`() {
         // These conditions are tab-scoped (scheda-riassunto) and never even reach RegistrazioneUiStato —
         // there is no field for them on Dati at all, so an otherwise-clear screen stays banner-free.

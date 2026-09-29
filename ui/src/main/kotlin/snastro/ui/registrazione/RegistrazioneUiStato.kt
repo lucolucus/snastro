@@ -8,9 +8,10 @@ import snastro.ui.stile.SegnoScheda
 import java.time.LocalDate
 
 /**
- * State of S3 · Registrazione, READ-ONLY in R1 (AC-207/208/217/218/402) — presenter-owned, rendered by
- * [SchermataRegistrazione]. The Voci panel, the selection and the Revisione UI are R2 (block
- * `schermata-registrazione-identificazione`): [Dati.pannello] is `null` in R1 (AC-402).
+ * State of S3 · Registrazione (AC-207/208/217/218) — presenter-owned, rendered by
+ * [SchermataRegistrazione]. The Voci panel, the selection and the Revisione UI ([Dati.pannello]) are
+ * published asynchronously by [StatoVoci] once the transcript is loaded — `null` only before that
+ * first publish (AC-402).
  */
 sealed interface RegistrazioneUiStato {
     /** AC-207: the trascritto is still loading — the transcript area renders a skeleton, not a blank screen. */
@@ -25,12 +26,10 @@ sealed interface RegistrazioneUiStato {
      * then (AC-218). [errore] is a dismissible inline message for the last failed
      * riproduzione/apertura (H1 pattern), never replacing [segmenti].
      *
-     * ADR 0018 (optional `stati` source, AC-452): [soloLettura] is `true` while the latest Elaborazione
-     * of this Registrazione is `in_attesa`/`in_corso` (a re-run over the Trascritto shown here);
-     * [bannerRitrascrizione] is the R1 two-line banner text, `null` unless [soloLettura] (also `null`
-     * without the optional `stati` source — R1 test: never read-only). [bannerRitrascrizionePannello]
-     * is owned and set ONLY by the R2 panel (`schermata-registrazione-identificazione`, AC-454's third
-     * banner line) — the base presenter never writes it.
+     * ADR 0018 (`stati` source, AC-452): [soloLettura] is `true` while the latest Elaborazione of this
+     * Registrazione is `in_attesa`/`in_corso` (a re-run over the Trascritto shown here); [bannerRitrascrizione]
+     * is the two-line banner text, `null` unless [soloLettura]. [bannerRitrascrizionePannello] is owned and
+     * set ONLY by the Voci panel ([StatoVoci], AC-454's third banner line) — the base presenter never writes it.
      */
     @Suppress("LongParameterList") // one field per AC-207/208/217/218/402/452 datum of the screen
     data class Dati(
@@ -42,18 +41,18 @@ sealed interface RegistrazioneUiStato {
         val audioDisponibile: Boolean,
         val documentoPercorso: String?,
         val errore: String? = null,
-        /** R2 only (AC-402: `null` in R1 — no panel at all). */
+        /** AC-402: `null` only before [StatoVoci]'s first publish — no panel yet. */
         val pannello: PannelloVoci? = null,
-        /** AC-209: the selected Segmenti, always of one Voce (R2 only). */
+        /** AC-209: the selected Segmenti, always of one Voce. */
         val selezione: Set<SegmentoId> = emptySet(),
         /** AC-209..211: the selection toolbar, `null` without a selection. */
         val barraSelezione: BarraSelezione? = null,
         val soloLettura: Boolean = false,
         val bannerRitrascrizione: String? = null,
         val bannerRitrascrizionePannello: String? = null,
-        /** AC-S119/S120: the Riassunto tab's own content, bound to this Registrazione by the presenter
-         * ([SorgenteRiassuntoS3.contenuto] partially applied) — `null` iff the composition supplied no
-         * [SorgenteRiassuntoS3] (R0/R1/R2), in which case no tabs render at all. */
+        /** AC-S120: the Riassunto tab's own content, bound to this Registrazione by the presenter
+         * ([SorgenteRiassuntoS3.contenuto] partially applied) — `null` only in a fixture/test that does
+         * not build [Dati] through the presenter (the presenter itself always supplies it, ADR 0030 §1). */
         val contenutoRiassunto: (@Composable () -> Unit)? = null,
         /** AC-S121: which tab is shown, kept per window ([SelezioneSchedaS3]) — irrelevant while
          * [contenutoRiassunto] is `null` (no tabs to select between). */
@@ -67,10 +66,6 @@ sealed interface RegistrazioneUiStato {
          * missing ([audioDisponibile]) > 'n voci da identificare' ([pannello]). A PURE, computed
          * predicate (dev-architecture named-predicate pattern) — never stored, so it can never drift
          * from the fields above, and is table-testable on plain [Dati] fixtures.
-         *
-         * AC-S119: [contenutoRiassunto] `null` (R0/R1/R2, no Riassunto slot) short-circuits to
-         * [bannerRitrascrizione] alone — S3 stays byte-for-byte unchanged where the Riassunto tab does
-         * not exist yet, exactly as every pre-Sintesi render/presenter test already pins.
          */
         val bannerSchermata: BannerSchermata?
             get() = when {
@@ -93,13 +88,13 @@ sealed interface RegistrazioneUiStato {
 
 /**
  * One row of the transcript (AC-207/208/217): [etichettaVoce] is trascritto-view's own "Voce n" label
- * (never a Nome — R2 only, AC-402); the color dot is computed at render time from [voceId]
+ * until [StatoVoci] resolves a Nome (AC-402); the color dot is computed at render time from [voceId]
  * ([snastro.ui.palette], a pure function of the number — not presenter state). [inRiproduzione]
  * (AC-208) is `true` while the shared player plays this Registrazione with a position inside
  * `[inizioMs, fineMs)` — computed live from [snastro.ui.lettore.StatoLettore], never re-decided by a
  * click (a click only asks [snastro.ui.lettore.LettoreAudio] to play from [inizioMs]).
  *
- * R2 only (ADR 0019 §6, set by the Voci panel's presenter half; always the defaults in R1): [confermato]
+ * ADR 0019 §6, set by the Voci panel's presenter half ([StatoVoci], defaults otherwise): [confermato]
  * renders the pin (AC-528); [attesaFrase] is the pending state of a 'Dai un nome a questa frase' on this
  * Segmento (AC-529, ADR 0017 §3).
  */

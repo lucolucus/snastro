@@ -6,9 +6,9 @@ import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 
 /**
- * R2 Voci panel of S3 (ux-proposal S3, AC-209..219/318/319/403..405/411..417) — built by
- * [RegistrazionePresenter] only when [SorgentiParlanti] are supplied; `null` in R1 (AC-402).
- * [parlantiAttivi] feeds 'altri ▾' / 'cambia'; [unioni] the merge banners (AC-216);
+ * Voci panel of S3 (ux-proposal S3, AC-209..219/318/319/403..405/411..417) — published by [StatoVoci]
+ * into [RegistrazioneUiStato.Dati.pannello] once the transcript is loaded; `null` only before that
+ * (AC-402). [parlantiAttivi] feeds 'altri ▾' / 'cambia'; [unioni] the merge banners (AC-216);
  * [estrattiDisponibili] is `false` when the audio source is missing (AC-403: every '▶' disabled, with
  * [MESSAGGIO_ESTRATTI_NON_DISPONIBILI][snastro.ui.testi.MESSAGGIO_ESTRATTI_NON_DISPONIBILI]).
  */
@@ -18,7 +18,7 @@ data class PannelloVoci(
     val unioni: List<PropostaDiUnione>,
     val estrattiDisponibili: Boolean,
     val unioneAbilitata: Boolean,
-    /** ADR 0019 §6: 'Riassegna per somiglianza' in the header; `null` without [AzioniSomiglianza]. */
+    /** ADR 0019 §6: 'Riassegna per somiglianza' in the header, `null` only before the first publish. */
     val somiglianza: PannelloSomiglianza? = null,
 )
 
@@ -78,14 +78,12 @@ data class BarraSelezione(
 
 /**
  * AC-526/AC-528: the naming menu of the ONE selected [segmentoId] — the `attivo` [parlanti], then 'nuovo…';
- * [confermato] offers 'Togli conferma' ([togliConfermaDisponibile]: the command is wired). [abilitata] is
- * `false` while read-only (AC-454), while a similarity run is open (AC-531/AC-545) or while this
- * Segmento's own naming is pending (AC-529).
+ * [confermato] offers 'Togli conferma'. [abilitata] is `false` while read-only (AC-454), while a
+ * similarity run is open (AC-531/AC-545) or while this Segmento's own naming is pending (AC-529).
  */
 data class MenuFrase(
     val segmentoId: SegmentoId,
     val parlanti: List<ParlanteAttivo>,
     val confermato: Boolean,
     val abilitata: Boolean,
-    val togliConfermaDisponibile: Boolean = true,
 )

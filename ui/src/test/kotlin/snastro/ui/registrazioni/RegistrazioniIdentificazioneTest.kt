@@ -15,6 +15,7 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.porte.FaseElaborazione
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
 import java.time.Clock
 import java.time.Instant
@@ -52,9 +53,8 @@ private fun statoVista(
 )
 
 /**
- * AC-204/AC-345 (R2, fetta Parlanti): the identification badge — [RegistrazioniPresenter.identificazioni]
- * (split from `RegistrazioniPresenterTest`, which only builds the presenter with `identificazioni` absent,
- * the R0/R1 default).
+ * AC-204/AC-345 (fetta Parlanti): the identification badge — [RegistrazioniPresenter.identificazioni]
+ * (split from `RegistrazioniPresenterTest`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioniIdentificazioneTest {
@@ -63,7 +63,7 @@ class RegistrazioniIdentificazioneTest {
         scope: TestScope,
         registrazioni: () -> List<RegistrazioneDelProgettoVista>,
         stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
-        identificazioni: ((List<RegistrazioneId>) -> List<ConteggioIdentificazione>)? = null,
+        identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione> = { emptyList() },
         aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
@@ -78,7 +78,12 @@ class RegistrazioniIdentificazioneTest {
             aggiornamenti = aggiornamenti,
             clock = Clock.fixed(Instant.parse("2026-09-23T10:00:00Z"), ZoneOffset.UTC),
             statiElaborazione = stati,
+            avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
             identificazioni = identificazioni,
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
         )
     }
 
@@ -94,20 +99,6 @@ class RegistrazioniIdentificazioneTest {
 
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
         assertEquals(IdentificazioneRiga(numVoci = 3, numVociDaIdentificare = 1), riga.identificazione)
-    }
-
-    @Test
-    fun `AC-345 senza la sorgente di identificazione la riga non ha badge R0 R1`() = runTest {
-        val presenter = presentatore(
-            this,
-            registrazioni = { listOf(rigaVista(REG_1)) },
-            stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
-            // identificazioni resta null (default)
-        )
-        advanceUntilIdle()
-
-        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
-        assertNull(riga.identificazione)
     }
 
     @Test

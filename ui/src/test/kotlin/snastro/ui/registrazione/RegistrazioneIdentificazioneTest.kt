@@ -3,6 +3,7 @@ package snastro.ui.registrazione
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -44,10 +45,10 @@ import kotlin.test.assertTrue
 private const val SOGLIA = RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS
 
 /**
- * R2 (schermata-registrazione-identificazione): S3's Voci panel, Nome labels, selection toolbar and
- * Revisione UI, with every R2 collaborator a hand-written fake ([AmbienteVoci]) and virtual time
- * ([OrologioVirtuale]) for the ADR 0017 pending state. The R1 read-only mode stays covered, untouched,
- * by `RegistrazionePresenterTest` (AC-402).
+ * S3's Voci panel, Nome labels, selection toolbar and Revisione UI, with every collaborator a
+ * hand-written fake ([AmbienteVoci]) and virtual time ([OrologioVirtuale]) for the ADR 0017 pending
+ * state. The base presenter's own loading/playback/audio-bar behaviour is covered, without the Voci
+ * panel exercised, by `RegistrazionePresenterTest`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("LargeClass", "TooManyFunctions") // one test per tests_nl item
@@ -69,28 +70,7 @@ class RegistrazioneIdentificazioneTest {
     private fun CartaVoce.proposta(): StatoProposta =
         assertIs<ContenutoCarta.DaIdentificare>(contenuto).proposta
 
-    // --- AC-402 / AC-405 ----------------------------------------------------------------------------
-
-    @Test
-    fun `AC-402 senza sorgenti Parlanti le azioni R2 non fanno nulla e non c e pannello`() = runTest {
-        val dispatcher = StandardTestDispatcher(testScheduler)
-        val presenter = RegistrazionePresenter(
-            scope = CoroutineScope(dispatcher),
-            io = dispatcher,
-            registrazioneId = REG,
-            trascritto = { unTrascritto() },
-            documento = { null },
-            lettore = LettoreAudioFinta(),
-            apriEsterno = ApriEsternoFinta(),
-        )
-        advanceUntilIdle()
-        presenter.azioni.selezionaSegmento(SegmentoId(1))
-        presenter.azioni.conferma(V1)
-        advanceUntilIdle()
-        assertNull(presenter.dati.pannello)
-        assertTrue(presenter.dati.selezione.isEmpty())
-        assertNull(presenter.dati.barraSelezione)
-    }
+    // --- AC-405 --------------------------------------------------------------------------------------
 
     @Test
     fun `AC-405 prima della lettura ogni card mostra il caricamento, mai una galleria vuota`() = runTest {
@@ -595,6 +575,10 @@ class RegistrazioneIdentificazioneTest {
             lettore = lettore,
             apriEsterno = ApriEsternoFinta(),
             parlanti = a.sorgenti,
+            stati = { null },
+            aggiornamenti = a.aggiornamenti,
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
         )
         advanceUntilIdle()
         assertFalse(assertNotNull(presenter.dati.pannello).estrattiDisponibili)

@@ -3,6 +3,7 @@ package snastro.ui.registrazione
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import snastro.kernel.Esito
 import snastro.kernel.EstrattoRef
@@ -45,6 +46,27 @@ internal val MARCO = ParlanteAttivo(ParlanteId("p-marco"), "Marco", TipoParlante
 internal val GIULIA = ParlanteAttivo(ParlanteId("p-giulia"), "Giulia", TipoParlanteVista.OCCASIONALE)
 
 internal fun ref(voce: VoceId) = VoceRef(REG, voce)
+
+/**
+ * A [SorgentiParlanti] a test can pass where the Voci panel itself is not under test (ADR 0030 §1, U1:
+ * the collaborator is mandatory, but a fixture that does not exercise it needs no behaviour from it) —
+ * every source empty/no-op. Prefer [AmbienteVoci] instead when the test DOES exercise the panel.
+ */
+internal fun unaSorgentiParlantiInerte(scope: CoroutineScope, clock: Clock = Clock.systemUTC()) = SorgentiParlanti(
+    identificazione = { emptyList() },
+    proposta = { null },
+    unioni = { emptyList() },
+    parlantiAttivi = { emptyList() },
+    estratto = { null },
+    comandi = ComandiVoceFinta(scope, clock),
+    unisci = { Esito.Ok(Unit) },
+    dividi = { Esito.Ok(Unit) },
+    riassegna = { Esito.Ok(Unit) },
+    aggiornamenti = AggiornamentiVistaFinta(),
+    clock = clock,
+    confermaSegmento = { Esito.Ok(Unit) },
+    somiglianza = AzioniSomiglianzaFinta(clock),
+)
 
 internal fun unCandidato(parlante: ParlanteAttivo = MARCO, fascia: Fascia = Fascia.FORTE) = Candidato(
     parlante.parlanteId,
@@ -224,11 +246,19 @@ internal class AmbienteVoci(
         }
     }
 
+    /** A distinct, always-idle instance — the base presenter's own AC-453 reload trigger when a test
+     * does not opt into the ADR 0018 Amendment (b) §2 wiring ([conStati]): nothing ever publishes on it,
+     * so it stays behaviourally absent while [aggiornamenti] (shared with [sorgenti]) still drives
+     * AC-319's Voci-panel reload regardless of [conStati]. */
+    private val aggiornamentiBase = AggiornamentiVistaFinta()
+    private val riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) })
+    private val selezioneSchedaS3 = SelezioneSchedaS3()
+
     /**
      * [conStati] opts a test into the ADR 0018 Amendment (b) §2 wiring — [statoElaborazione] as the
-     * optional `stati` source, and [aggiornamenti] (the SAME instance [sorgenti] already collects) as
-     * the base presenter's own reload trigger too. `false` by default: every pre-existing test stays
-     * on the untouched R2 wiring (no `stati`, no base-level `aggiornamenti`).
+     * `stati` source, and [aggiornamenti] (the SAME instance [sorgenti] already collects) as the base
+     * presenter's own reload trigger too. `false` by default: every pre-existing test stays on the
+     * untouched wiring ([statoElaborazione] always `null`, [aggiornamentiBase] never published to).
      */
     fun presenter(scope: CoroutineScope, io: CoroutineDispatcher, conStati: Boolean = false) = RegistrazionePresenter(
         scope = scope,
@@ -239,7 +269,9 @@ internal class AmbienteVoci(
         lettore = lettore,
         apriEsterno = ApriEsternoFinta(),
         parlanti = sorgenti,
-        stati = if (conStati) ({ statoElaborazione }) else null,
-        aggiornamenti = if (conStati) aggiornamenti else null,
+        stati = { if (conStati) statoElaborazione else null },
+        aggiornamenti = if (conStati) aggiornamenti else aggiornamentiBase,
+        riassunto = riassunto,
+        selezioneSchedaS3 = selezioneSchedaS3,
     )
 }

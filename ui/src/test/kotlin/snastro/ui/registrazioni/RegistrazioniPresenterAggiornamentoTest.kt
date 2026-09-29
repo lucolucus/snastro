@@ -14,6 +14,7 @@ import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
 import java.time.Clock
 import java.time.Instant
@@ -45,7 +46,7 @@ class RegistrazioniPresenterAggiornamentoTest {
         registrazioni: () -> List<RegistrazioneDelProgettoVista> = { emptyList() },
         aggiungi: (AggiungiRegistrazione) -> Esito<Unit> = { error("aggiungi non atteso in questo test") },
         aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
-        stati: ((List<RegistrazioneId>) -> List<StatoRegistrazioneVista>)? = null,
+        stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = { emptyList() },
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         return RegistrazioniPresenter(
@@ -59,6 +60,12 @@ class RegistrazioniPresenterAggiornamentoTest {
             aggiornamenti = aggiornamenti,
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = stati,
+            avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
         )
     }
 

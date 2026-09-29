@@ -1,6 +1,6 @@
 package snastro.ui.testi
 
-/** S3 · Voci panel + Revisione toolbar labels (R2), Italian (dev-architecture `#presenter`). */
+/** S3 · Voci panel + Revisione toolbar labels, Italian (dev-architecture `#presenter`). */
 const val TITOLO_PANNELLO_VOCI: String = "Voci"
 
 // AC-558/AC-559/AC-589b: `Icona.Listen` renders at the call site (`SchermataPannelloVoci`'s

@@ -7,6 +7,7 @@ import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -20,6 +21,7 @@ import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
+import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ApriEsterno
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.lettore.LettoreAudio
@@ -88,14 +90,20 @@ class RegistrazionePresenterPreRilascioTest {
         apriEsterno: ApriEsterno = ApriEsternoFinta(),
     ): RegistrazionePresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
         return RegistrazionePresenter(
-            CoroutineScope(dispatcher),
-            dispatcher,
-            REG_1,
-            trascritto,
-            documento,
-            lettore,
-            apriEsterno,
+            scope = scopeCoroutine,
+            io = dispatcher,
+            registrazioneId = REG_1,
+            trascritto = trascritto,
+            documento = documento,
+            lettore = lettore,
+            apriEsterno = apriEsterno,
+            parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
+            stati = { null },
+            aggiornamenti = AggiornamentiVistaFinta(),
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
         )
     }
 
@@ -161,13 +169,18 @@ class RegistrazionePresenterPreRilascioTest {
             }
             val scope = CoroutineScope(SupervisorJob() + ioReale)
             val presenter = RegistrazionePresenter(
-                scope,
-                ioReale,
-                REG_1,
+                scope = scope,
+                io = ioReale,
+                registrazioneId = REG_1,
                 trascritto = { unaVista(listOf(unSegmento(SegmentoId(1), 0, 1_000))) },
                 documento = { null },
                 lettore = fake,
                 apriEsterno = ApriEsternoFinta(),
+                parlanti = unaSorgentiParlantiInerte(scope),
+                stati = { null },
+                aggiornamenti = AggiornamentiVistaFinta(),
+                riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+                selezioneSchedaS3 = SelezioneSchedaS3(),
             )
             attendiFinche(messaggio = "presenter con Dati") { presenter.stato.value is RegistrazioneUiStato.Dati }
 

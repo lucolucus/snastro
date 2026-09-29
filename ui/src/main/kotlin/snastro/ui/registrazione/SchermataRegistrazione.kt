@@ -106,10 +106,9 @@ private const val LARGHEZZA_SCHELETRO_PARI = 0.8f
 private const val LARGHEZZA_SCHELETRO_DISPARI = 0.55f
 
 /**
- * Thin view of S3 · Registrazione (RC-2): only renders [stato] and forwards [azioni]'s events. R1 is
- * read-only (AC-402): with [RegistrazioneUiStato.Dati.pannello] `null` there is no Voci panel, no
- * selection, no Revisione UI. R2 (`schermata-registrazione-identificazione`) adds them on the right
- * ([PannelloVociVista]) and above the transcript ([BarraSelezioneVista]).
+ * Thin view of S3 · Registrazione (RC-2): only renders [stato] and forwards [azioni]'s events. The Voci
+ * panel ([PannelloVociVista], right) and the selection toolbar ([BarraSelezioneVista], above the
+ * transcript) render once [RegistrazioneUiStato.Dati.pannello] is published (AC-402).
  *
  * [scuro]/[riduciMovimento] mirror [SnastroTema]'s own optional overrides (same defaults, same
  * call-site-unchanged guarantee for [RegistrazioneRoute]) — AC-589's render-check pins both per
@@ -237,9 +236,9 @@ private fun ContenutoRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: Azi
 private fun ColonnaTrascritto(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione, modifier: Modifier) {
     Column(modifier = modifier) {
         val contenutoRiassunto = stato.contenutoRiassunto
-        // AC-S119: `contenutoRiassunto == null` (R0/R1/R2, no Riassunto slot) renders NEITHER SchedeSn
-        // NOR takes the `RIASSUNTO` branch below — the transcript body is reached exactly as before,
-        // byte-for-byte, whatever `stato.schedaSelezionata`'s default happens to be.
+        // `contenutoRiassunto == null` renders NEITHER SchedeSn NOR takes the RIASSUNTO branch below —
+        // only a `Dati` built OUTSIDE the presenter (a fixture/test) leaves it `null`; the presenter
+        // itself always supplies it (ADR 0030 §1), so the running app always shows both tabs.
         if (contenutoRiassunto != null) {
             SchedeSn(
                 schede = listOf(ETICHETTA_SCHEDA_TRASCRIZIONE, ETICHETTA_SCHEDA_RIASSUNTO),
@@ -420,8 +419,8 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
     }
 }
 
-/** AC-580's caption meta line — sums view-only data already in [stato] (a Voce count and, only when the
- * R2 panel is present, how many are still to identify); no new source, purely display arithmetic. */
+/** AC-580's caption meta line — sums view-only data already in [stato] (a Voce count and, only once the
+ * Voci panel is published, how many are still to identify); no new source, purely display arithmetic. */
 private fun testoIntestazione(stato: RegistrazioneUiStato.Dati): String {
     val persone = stato.pannello?.carte?.size ?: stato.segmenti.map { it.voceId }.distinct().size
     val daIdentificare = stato.pannello?.carte?.count { it.contenuto is ContenutoCarta.DaIdentificare } ?: 0
@@ -453,9 +452,9 @@ private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit) {
 }
 
 /**
- * AC-452: the R1 two-line banner (`\n`-joined, [snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO])
- * while a re-run is queued/running. AC-454: [pannello] is the R2 panel's own third line
- * ([RegistrazioneUiStato.Dati.bannerRitrascrizionePannello]), `null` without the panel block.
+ * AC-452: the two-line banner (`\n`-joined, [snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO])
+ * while a re-run is queued/running. AC-454: [pannello] is the Voci panel's own third line
+ * ([RegistrazioneUiStato.Dati.bannerRitrascrizionePannello]), `null` before the panel is published.
  */
 @Composable
 private fun BannerRitrascrizione(testo: String, pannello: String?) {
@@ -480,7 +479,7 @@ private fun BannerRitrascrizione(testo: String, pannello: String?) {
 
 @Composable
 private fun ElencoSegmenti(stato: RegistrazioneUiStato.Dati, azioni: AzioniRegistrazione) {
-    // AC-209: the selection toggle exists only with the R2 panel (AC-402: none in R1).
+    // AC-209: the selection toggle exists only once the Voci panel is published (AC-402).
     val selezionabile = stato.pannello != null
     // AC-582/MED-8: "named" is decided from the Nome already in the panel's own state (a Voce's card
     // content is `ContenutoCarta.Attribuita` there), never by comparing `etichettaVoce` to a literal
@@ -655,7 +654,7 @@ private fun AzioniFrase(frase: MenuFrase, azioni: AzioniRegistrazione, onNuovo: 
         icona = Icona.Person,
         conNuovo = onNuovo,
     ) { azioni.nominaFrase(ObiettivoNome.Esistente(it)) }
-    if (frase.confermato && frase.togliConfermaDisponibile) {
+    if (frase.confermato) {
         BottoneSn(
             ETICHETTA_TOGLI_CONFERMA,
             onClick = azioni.togliConferma,

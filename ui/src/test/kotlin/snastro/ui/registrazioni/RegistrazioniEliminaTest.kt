@@ -17,6 +17,7 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.porte.FaseElaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVistaFinta
+import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
 import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
 import snastro.ui.testi.messaggioEliminata
@@ -74,8 +75,8 @@ private fun statiCon(
 /**
  * ADR 0020 §6: the More menu ('Elimina…' state per row, AC-625), its confirmation (AC-626), the
  * confirmed command's three outcomes (AC-627/628) and the post-elimination notice —
- * [RegistrazioniPresenter.elimina]/`annullaElimina`/`confermaElimina`/`chiudiAvviso`, all optional
- * (R2 only), split from `RegistrazioniPresenterTest` like `RegistrazioniRitrascriviTest`.
+ * [RegistrazioniPresenter.elimina]/`annullaElimina`/`confermaElimina`/`chiudiAvviso`, split from
+ * `RegistrazioniPresenterTest` like `RegistrazioniRitrascriviTest`.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioniEliminaTest {
@@ -85,8 +86,6 @@ class RegistrazioniEliminaTest {
     private fun presentatore(
         scope: TestScope,
         stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = statiCon(StatoElaborazioneVista.NON_AVVIATA),
-        eliminaSupportato: Boolean = true,
-        ritrascriviSupportato: Boolean = false,
         lettore: LettoreAudioFinta = LettoreAudioFinta(),
         elimina: (EliminaRegistrazione) -> Esito<Unit> = { Esito.Ok(Unit) },
     ): RegistrazioniPresenter {
@@ -103,18 +102,13 @@ class RegistrazioniEliminaTest {
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
-            ritrascrivi = if (ritrascriviSupportato) {
-                { error("ritrascrivi non atteso in questo test") }
-            } else {
-                null
-            },
-            eliminaRegistrazione = if (eliminaSupportato) {
-                { c ->
-                    eliminazioni += c
-                    elimina(c)
-                }
-            } else {
-                null
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
+            eliminaRegistrazione = { c ->
+                eliminazioni += c
+                elimina(c)
             },
         )
     }
@@ -125,10 +119,10 @@ class RegistrazioniEliminaTest {
     private fun RegistrazioniPresenter.righeOVuota(): List<RigaRegistrazione> =
         assertIs<RegistrazioniUiStato.Dati>(stato.value).righe
 
-    // --- AC-625: the row's `eliminazione` state, per row state and per combination of sources -------
+    // --- AC-625: the row's `eliminazione` state, per row state -------------------------------------
 
     @Test
-    fun `AC-625 NON_AVVIATA con entrambe le sorgenti e Disponibile e Ritrascrivi assente`() = runTest {
+    fun `AC-625 NON_AVVIATA e Disponibile e Ritrascrivi non disponibile`() = runTest {
         val presenter = presentatore(this, stati = statiCon(StatoElaborazioneVista.NON_AVVIATA))
         advanceUntilIdle()
 
@@ -178,38 +172,9 @@ class RegistrazioniEliminaTest {
     }
 
     @Test
-    fun `AC-625 senza la sorgente eliminaRegistrazione la riga e Assente qualunque sia lo stato`() = runTest {
+    fun `AC-625 Completata e Disponibile e Ritrascrivi disponibile`() = runTest {
         val presenter = presentatore(
             this,
-            eliminaSupportato = false,
-            stati = statiCon(StatoElaborazioneVista.IN_CORSO, fase = FaseElaborazione.TRASCRIZIONE),
-        )
-        advanceUntilIdle()
-
-        assertEquals(StatoEliminazione.Assente, presenter.riga().eliminazione)
-    }
-
-    @Test
-    fun `AC-625 solo Ritrascrivi fornito la riga resta Assente e Ritrascrivi disponibile`() = runTest {
-        val presenter = presentatore(
-            this,
-            eliminaSupportato = false,
-            ritrascriviSupportato = true,
-            stati = statiCon(StatoElaborazioneVista.COMPLETATA, trascrittoDisponibile = true),
-        )
-        advanceUntilIdle()
-
-        val riga = presenter.riga()
-        assertEquals(StatoEliminazione.Assente, riga.eliminazione)
-        assertEquals(true, riga.ritrascriviDisponibile)
-    }
-
-    @Test
-    fun `AC-625 entrambe le sorgenti su Completata sono Disponibile e Ritrascrivi disponibile`() = runTest {
-        val presenter = presentatore(
-            this,
-            eliminaSupportato = true,
-            ritrascriviSupportato = true,
             stati = statiCon(StatoElaborazioneVista.COMPLETATA, trascrittoDisponibile = true),
         )
         advanceUntilIdle()
@@ -258,21 +223,6 @@ class RegistrazioniEliminaTest {
         assertEquals(emptyList(), eliminazioni)
     }
 
-    @Test
-    fun `AC-626 senza la sorgente elimina e annullaElimina non fanno nulla`() = runTest {
-        val presenter = presentatore(
-            this,
-            eliminaSupportato = false,
-            stati = statiCon(StatoElaborazioneVista.NON_AVVIATA),
-        )
-        advanceUntilIdle()
-
-        presenter.azioni.elimina(REG_1)
-        presenter.azioni.annullaElimina(REG_1)
-
-        assertEquals(false, presenter.riga().confermaElimina)
-    }
-
     // --- AC-627: the confirmed 'Elimina' — pause, reload, notice ---------------------------------------
 
     @Test
@@ -302,6 +252,11 @@ class RegistrazioniEliminaTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = statiCon(StatoElaborazioneVista.NON_AVVIATA),
+            avviaElaborazione = { error("non atteso") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("non atteso") },
+            annullaElaborazione = { error("non atteso") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
             eliminaRegistrazione = {
                 eliminazioni += it
                 registrazioniCorrenti = emptyList()
@@ -335,6 +290,11 @@ class RegistrazioniEliminaTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = statiCon(StatoElaborazioneVista.NON_AVVIATA),
+            avviaElaborazione = { error("non atteso") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("non atteso") },
+            annullaElaborazione = { error("non atteso") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
             eliminaRegistrazione = {
                 eliminazioni += it
                 registrazioniCorrenti = emptyList()
@@ -470,6 +430,11 @@ class RegistrazioniEliminaTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
             statiElaborazione = statiCon(StatoElaborazioneVista.NON_AVVIATA),
+            avviaElaborazione = { error("non atteso") },
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("non atteso") },
+            annullaElaborazione = { error("non atteso") },
+            posizioniNellaCoda = { PosizioniCoda.VUOTA },
             eliminaRegistrazione = {
                 eliminazioni += it
                 registrazioniCorrenti = emptyList()

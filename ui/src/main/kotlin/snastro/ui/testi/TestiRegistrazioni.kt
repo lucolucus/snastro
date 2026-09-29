@@ -65,8 +65,8 @@ fun etichettaInCorso(faseEtichetta: String, trascorsoMs: Long): String =
 fun etichettaIdentificazione(numVoci: Int, numVociDaIdentificare: Int): String =
     if (numVociDaIdentificare > 0) "$numVoci voci · $numVociDaIdentificare da identificare" else "$numVoci voci"
 
-/** ADR 0018 (R2, optional `ritrascrivi` source): the action on a `Completata` row that already has a
- * Trascritto — same 'Numero di persone' field as 'Trascrivi'/'Riprova' (AC-448). */
+/** ADR 0018: the action on a `Completata` row that already has a Trascritto — same 'Numero di persone'
+ * field as 'Trascrivi'/'Riprova' (AC-448). */
 const val ETICHETTA_RITRASCRIVI: String = "Ritrascrivi"
 
 /** AC-449: the ONLY S2 action with a confirmation — inline, same style as S4's delete confirmation

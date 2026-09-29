@@ -321,6 +321,14 @@ public sealed interface RegistrazioneUiStato {
   as `rinominaParlanteServizio::esegui`). Same test/production wiring as the typed form above —
   a fake presenter test just passes a lambda instead of a fake service instance; it is not a
   weaker seam, only a leaner one for a single-method dependency (frugality ladder rung 5).
+- *(2026-09-29, [ADR 0030](../decisions/0030-composizione-unica-per-contesto.md) §1, U1)*
+  **Collaborators are MANDATORY, never a release feature flag.** Now that one composition wires
+  every presenter, a constructor parameter (typed or function-typed) is never nullable and never
+  defaults to `null` — a missed wiring fails to compile instead of silently hiding a screen area.
+  A presenter test passes a Finta/fake for every collaborator (no "R0/R1/R2 variant" built by
+  omitting one). A UI-STATE field the presenter *publishes* (e.g. `RegistrazioneUiStato.Dati.pannello`,
+  populated asynchronously by `StatoVoci`) may still be nullable — that is data timing, not an
+  optional collaborator, and stays governed by its own field-level KDoc.
 - `:ui:renderCheck` renders `Schermata<X>` directly from fixture `UiStato` values (every state).
 - UI strings in `snastro.ui.testi` (Italian only, v1). `MessaggiErrore.kt` *(amended 2026-09-23,
   R25)*: one `messaggioPer(e: Errore<Contesto>)` per context hierarchy, each an exhaustive `when`

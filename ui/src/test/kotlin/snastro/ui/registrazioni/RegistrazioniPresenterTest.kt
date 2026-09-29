@@ -75,9 +75,9 @@ private fun statoVista(
 )
 
 /**
- * AC-342: the R0 variant is exercised by simply omitting `stati`/`avvia` from [presentatore] (their
- * defaults) — the same presenter class, constructed with fakes of `RegistrazioniDelProgetto`,
- * `AggiungiRegistrazione`, `ModificaDataRegistrazione` and [LettoreAudio] only.
+ * [RegistrazioniPresenter], constructed with fakes of every collaborator (ADR 0030 §1, U1: all
+ * mandatory) — `RegistrazioniDelProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`,
+ * [LettoreAudio] and the Trascrizione sources ([presentatore]'s `stati`/`avvia`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazioniPresenterTest {
@@ -91,8 +91,8 @@ class RegistrazioniPresenterTest {
         lettore: LettoreAudio = LettoreAudioFinta(),
         aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
         clock: Clock = Clock.fixed(ORA_FISSA, ZoneOffset.UTC),
-        stati: ((List<RegistrazioneId>) -> List<StatoRegistrazioneVista>)? = null,
-        avvia: ((AvviaElaborazione) -> Esito<Unit>)? = null,
+        stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = { emptyList() },
+        avvia: (AvviaElaborazione) -> Esito<Unit> = { error("avviaElaborazione non atteso in questo test") },
         apriRegistrazione: (RegistrazioneId) -> Unit = {},
         posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
@@ -110,6 +110,10 @@ class RegistrazioniPresenterTest {
             statiElaborazione = stati,
             avviaElaborazione = avvia,
             apriRegistrazione = apriRegistrazione,
+            identificazioni = { emptyList() },
+            ritrascrivi = { error("ritrascrivi non atteso in questo test") },
+            annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
+            eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { posizioni },
         )
     }
@@ -151,43 +155,6 @@ class RegistrazioniPresenterTest {
     // M5: a failure loading the initial catalog is covered below ("M5 un fallimento del caricamento
     // iniziale mostra uno stato Errore distinto") — it is now a distinct RegistrazioniUiStato.Errore,
     // never a Dati (which would show the misleading AC-199 empty-list message).
-
-    // --- AC-342: R0 variant, no Trascrizione sources -------------------------------------------
-
-    @Test
-    fun `AC-342 senza StatiElaborazione le righe non hanno colonna di stato`() = runTest {
-        val presenter = presentatore(this, registrazioni = { listOf(rigaVista(REG_1)) })
-        advanceUntilIdle()
-        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
-        assertNull(riga.elaborazione)
-    }
-
-    @Test
-    fun `AC-342 il click su una riga non apre S3 quando le sorgenti sono assenti`() = runTest {
-        var aperta: RegistrazioneId? = null
-        val presenter = presentatore(
-            this,
-            registrazioni = { listOf(rigaVista(REG_1)) },
-            apriRegistrazione = { aperta = it },
-        )
-        advanceUntilIdle()
-
-        presenter.azioni.apriRiga(REG_1)
-
-        assertNull(aperta)
-    }
-
-    @Test
-    fun `AC-342 avviaElaborazione senza il servizio R1 non fa nulla`() = runTest {
-        val presenter = presentatore(this, registrazioni = { listOf(rigaVista(REG_1)) })
-        advanceUntilIdle()
-
-        presenter.azioni.avviaElaborazione(REG_1) // `avvia` è `null` (R0)
-
-        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
-        assertEquals(false, riga.operazioneInCorso)
-        assertNull(riga.erroreRiga)
-    }
 
     // --- AC-343: per-row playback ----------------------------------------------------------------
 
@@ -420,7 +387,7 @@ class RegistrazioniPresenterTest {
         assertEquals(1, chiamate)
     }
 
-    // --- AC-203/AC-344 (R1): Trascrizione sources supplied --------------------------------------
+    // --- AC-203/AC-344: Trascrizione sources -----------------------------------------------------
 
     @Test
     fun `AC-203 NON_AVVIATA e mappata su NonAvviata`() = runTest {
