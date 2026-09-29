@@ -48,3 +48,4 @@
 2026-09-29T08:01:15Z	c1-porte-progetto	verifier	result	cycle=0	tier=standard	model=sonnet	FAIL (AC-C60/61; raw merge c90ee4d8 found unreviewed)
 2026-09-29T08:01:15Z	c1-porte-progetto	code-review	result	cycle=0	tier=deep	model=opus	BLOCKED→user: one instance (rework)
 2026-09-29T08:23:29Z	c1-porte-progetto	verifier+code-review	result	cycle=1	tier=deep	model=opus	PASS/APPROVE; integrated
+2026-09-29T08:23:47Z	c2-contenuto-app-base	worker	dispatch	cycle=0	tier=standard	model=sonnet
