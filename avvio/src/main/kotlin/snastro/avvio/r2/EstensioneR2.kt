@@ -13,11 +13,11 @@ import snastro.avvio.gestoreErrori
 import snastro.avvio.porte.PorteProgetto
 import snastro.avvio.r1.CollaboratoriR1
 import snastro.avvio.r1.EstensioneR1
+import snastro.avvio.r2.PorteProgettoParlanti.Companion.parlanti
 import snastro.avvio.segnalazioneApp
 import snastro.documento.adattatori.porte.LettoreNomiDaParlanti
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
-import snastro.kernel.LetturaCoerente
 import snastro.kernel.ProgettoId
 import snastro.kernel.VoceRef
 import snastro.parlanti.adattatori.eventi.AbbonatoRevisioneParlanti
@@ -26,8 +26,6 @@ import snastro.parlanti.adattatori.ml.ClassificatoreSomiglianzaCoseno
 import snastro.parlanti.adattatori.ml.ClassificatoreSomiglianzaCoseno.Companion.MARGINE_MINIMO
 import snastro.parlanti.adattatori.ml.ClassificatoreSomiglianzaCoseno.Companion.SIMILARITA_MINIMA
 import snastro.parlanti.adattatori.ml.ConfrontoImpronteCoseno
-import snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql
-import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.parlanti.adattatori.porte.LettoreVociDaTrascrizione
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzioneServizio
 import snastro.parlanti.applicazione.comandi.EliminaParlanteServizio
@@ -50,9 +48,7 @@ import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
 import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
 import snastro.parlanti.applicazione.porte.SoglieSomiglianza
-import snastro.persistenza.SnastroDatabase
 import snastro.progetto.adattatori.audio.ArchivioAudioFile
-import snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql
 import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioni
 import snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioniServizio
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
@@ -103,7 +99,7 @@ internal class EstensioneR2(
         val dispatcher = contesto.dispatcher
         val uow = dispatcher.unitaDiLavoro
         val repos = contesto.porte
-        val porte = PorteParlanti(repos, contesto.database, contesto.lettura)
+        val porte = PorteParlanti(repos)
         val ml = adattatori()
         val decodificatore = ml.decodificatore(contesto.cartella)
         val estrattoAudio = EstrattoAudio(porte.voci)
@@ -132,7 +128,7 @@ internal class EstensioneR2(
 
         val archivio = ArchivioAudioFile(contesto.cartella)
         val pulizia = PuliziaRegistrazioneEliminata(dispatcher, contesto.lettoreAudio, archivio, contesto.cartella)
-        val inSospeso = EliminazioniInSospesoSql(contesto.database, clock)
+        val inSospeso = repos.eliminazioniInSospeso
 
         val collaboratoriR1 = r1.apri(contesto) as CollaboratoriR1
 
@@ -304,27 +300,23 @@ internal class EstensioneR2(
 }
 
 /**
- * The Parlanti ports of one project database (ADR 0030 §1, AC-C60/AC-C61): [parlanti]/[attribuzioni] are R2's
- * own ONE instance each per open project; [voci]/[registrazione] reuse [PorteProgetto]'s shared Trascrizione/
- * Progetto repositories instead of building a THIRD `TrascrittoRepositorySql`.
+ * The Parlanti ports of one project (ADR 0030 §1, AC-C60/AC-C61): [parlanti]/[attribuzioni] are the project's ONE
+ * instance each ([PorteProgettoParlanti]); [voci]/[registrazione] read [PorteProgetto]'s shared Trascrizione/
+ * Progetto repositories.
  */
-private class PorteParlanti(porte: PorteProgetto, database: SnastroDatabase, lettura: LetturaCoerente) {
-    val parlanti = ParlanteRepositorySql(database, lettura)
-    val attribuzioni = AttribuzioneRepositorySql(database)
+private class PorteParlanti(porte: PorteProgetto) {
+    val parlanti = porte.parlanti.parlanti
+    val attribuzioni = porte.parlanti.attribuzioni
     val voci = LettoreVociDaTrascrizione(VociDelTrascritto(porte.trascritti))
     val registrazione = LettoreRegistrazionePerParlanti(porte.catalogo)
 }
 
 /**
- * The Documento's Nomi from [parlanti]/[attribuzioni] — what R2 hands R1 (as its `lettoreNomi` factory,
- * bound once at app-launch, AC-359) in place of 'Voce n'. Its own [ParlanteRepositorySql]/
- * [AttribuzioneRepositorySql] cannot reuse [CollaboratoriR2]'s (built by a LATER `apri()` call than this
- * factory's binding) — an accepted, pre-existing duplication (2 Parlanti-repo instances per open project
- * instead of 5 Trascritto-repo ones), left to c3's flat composition where `lettoreNomi` stops being an
- * app-launch-bound factory.
+ * The Documento's Nomi from the project's Parlanti ([PorteProgettoParlanti]): what R2 hands R1 (as its
+ * `lettoreNomi` factory, bound once at app-launch, AC-359) in place of 'Voce n'. R1 calls it inside its own `apri`,
+ * on the same [PorteProgetto] R2 and R3 read: the SAME two repositories, never a second pair (AC-C61).
  */
 internal fun lettoreNomiDaParlanti(contesto: ContestoEstensione): LettoreNomiDaParlanti {
-    val database = contesto.database
-    val parlanti = ParlanteRepositorySql(database, contesto.lettura)
-    return LettoreNomiDaParlanti(NomiDelleVoci(AttribuzioneRepositorySql(database), parlanti))
+    val parti = contesto.porte.parlanti
+    return LettoreNomiDaParlanti(NomiDelleVoci(parti.attribuzioni, parti.parlanti))
 }

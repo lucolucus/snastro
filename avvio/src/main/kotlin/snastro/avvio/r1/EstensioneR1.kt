@@ -22,7 +22,6 @@ import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.supporto.figlioDi
 import snastro.trascrizione.adattatori.audio.DecodificatoreAudioFfmpeg
 import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
@@ -92,7 +91,7 @@ internal class EstensioneR1(
         val aggiornamenti = AggiornamentiVistaTrascrizione(dispatcher)
         val ml = adattatoriMl()
 
-        val (lavoroDocumento, rigenerazioneDocumento) = avviaRigenerazioneDocumento(contesto, trascritti, catalogo)
+        val (lavoroDocumento, rigenerazioneDocumento) = avviaRigenerazioneDocumento(contesto)
 
         val pipeline = PortePipeline(
             registrazioni = lettoreRegistrazione,
@@ -159,13 +158,10 @@ internal class EstensioneR1(
      * [CollaboratoriR1.ferma] joins) paired with the [RigenerazioneDocumentoPolitica] it subscribes — AC-C61:
      * R2's `PuliziaDerivatiFile` reuses this SAME instance instead of building its own.
      */
-    private fun avviaRigenerazioneDocumento(
-        contesto: ContestoEstensione,
-        trascritti: TrascrittoRepositorySql,
-        catalogo: CatalogoRegistrazioni,
-    ): Pair<Job, RigenerazioneDocumentoPolitica> {
+    private fun avviaRigenerazioneDocumento(contesto: ContestoEstensione): Pair<Job, RigenerazioneDocumentoPolitica> {
         val scope = figlioDi(contesto.scope, io, gestoreErrori)
-        val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(trascritti), catalogo)
+        val porte = contesto.porte
+        val lettoreTrascritto = LettoreTrascrittoDaTrascrizione(VociDelTrascritto(porte.trascritti), porte.catalogo)
         val politica = RigenerazioneDocumentoPolitica(
             lettoreTrascritto,
             lettoreNomi(contesto),

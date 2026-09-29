@@ -22,7 +22,6 @@ import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.adattatori.audio.ArchivioAudioFile
 import snastro.progetto.adattatori.audio.SondaAudioFfmpeg
-import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
@@ -147,8 +146,8 @@ internal class SessioneProgettoImpl(
         }
         val uow = UnitaDiLavoroSql(db.database)
         val dispatcher = DispatcherEventiInMemoria(uow)
-        val registrazioni = seams.costruisciRegistrazioni(db.database)
-        val porte = PorteProgetto(db.database, uow, registrazioni)
+        val porte = PorteProgetto(db.database, uow, clock, seams.costruisciRegistrazioni)
+        val registrazioni = porte.registrazioni
         val esitoCrea = CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, porte.progetti, dispatcher)
             .esegui(CreaProgetto(nomeProgetto))
         if (esitoCrea is Esito.Errore) {
@@ -204,8 +203,8 @@ internal class SessioneProgettoImpl(
 
         val uow = UnitaDiLavoroSql(db.database)
         val dispatcher = DispatcherEventiInMemoria(uow)
-        val registrazioni = seams.costruisciRegistrazioni(db.database)
-        val porte = PorteProgetto(db.database, uow, registrazioni)
+        val porte = PorteProgetto(db.database, uow, clock, seams.costruisciRegistrazioni)
+        val registrazioni = porte.registrazioni
         val progetto = porte.progetti.trova()
         if (progetto == null) {
             rilasciaLock(lockCartella)
@@ -431,7 +430,7 @@ private data class ContestoDatabase(
  */
 internal data class SessioneProgettoSeams(
     val apriDatabase: (File) -> DatabaseProgetto = ::apriDatabaseProgetto,
-    val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = ::RegistrazioneRepositorySql,
+    val costruisciRegistrazioni: (SnastroDatabase) -> RegistrazioneRepository = PorteProgetto.registrazioniSql,
     val riproduttoreFabbrica: () -> RiproduttoreWav = ::RiproduttoreWav,
     val chiudiDatabase: (DatabaseProgetto) -> Unit = DatabaseProgetto::chiudi,
     val sondaAudio: () -> SondaAudio = ::SondaAudioFfmpeg,

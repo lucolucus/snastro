@@ -35,9 +35,9 @@ import kotlin.test.assertTrue
  * **R1 retargeting (avvio-composizione, carry-over 6).** R1 lives in the same module, so the static
  * guard is now SCOPED TO THE R0 GRAPH: every R1 file lives in package `snastro.avvio.r1`
  * (`avvio/src/main/kotlin/snastro/avvio/r1/`), every R2 file in `snastro.avvio.r2` (avvio-parlanti), and
- * nothing OUTSIDE them (and, since `c1-porte-progetto`/ADR 0030 §1, `snastro.avvio.porte` —
- * `PorteProgetto`, common to R1/R2/R3, built before any of them runs) may import `snastro.trascrizione`,
- * `snastro.documento`, `snastro.modelli`, `snastro.ml` or `snastro.parlanti` — the R0 graph reaches R1
+ * nothing OUTSIDE them may import `snastro.trascrizione`, `snastro.documento`, `snastro.modelli`, `snastro.ml`,
+ * `snastro.parlanti` or `snastro.sintesi` (since `c1-porte-progetto`/ADR 0030 §1, `snastro.avvio.porte` —
+ * `PorteProgetto`, common to R1/R2/R3 — may import `snastro.trascrizione` only) — the R0 graph reaches R1
  * only through the type-neutral `EstensioneSessione` hook. The behavioral half is kept in R0 MODE: [costruisciGrafoR0]
  * without an extension builds no extension at all, and `RegistrazioniPresenter` built through R0's
  * own [costruisciRegistrazioniPresenter] never carries an `elaborazione` state. The dynamic half —
@@ -55,10 +55,11 @@ class GrafoR0Test {
     @Test
     fun `AC-350 fuori dai pacchetti r1, r2 e r3 avvio src main non importa i contesti delle release successive`() {
         val radice = File("src/main/kotlin")
-        // c1-porte-progetto (ADR 0030 §1): "porte" (PorteProgetto) is common to R1/R2/R3, built before any of
-        // them runs — it necessarily imports every context's repository to build each ONCE, so it joins the
-        // exemption alongside r1/r2/r3, never the bare R0 graph.
-        val estensioni = listOf("r1", "r2", "r3", "porte").map { File(radice, "snastro/avvio/$it") }
+        val estensioni = listOf("r1", "r2", "r3").map { File(radice, "snastro/avvio/$it") }
+        // c1-porte-progetto (ADR 0030 §1): PorteProgetto (common to R1/R2/R3, built before any of them runs) builds
+        // the Trascrizione repositories every level needs; that is its ONLY exemption. Parlanti's and Sintesi's
+        // parts live in r2/r3 (PorteProgettoParlanti, PorteProgettoSintesi).
+        val porte = File(radice, "snastro/avvio/porte")
         val proibiti = listOf(
             "snastro.trascrizione",
             "snastro.documento",
@@ -67,26 +68,32 @@ class GrafoR0Test {
             "snastro.parlanti",
             "snastro.sintesi", // avvio-sintesi: R3 lives in snastro.avvio.r3
         )
-        val fileR0 = radice.walkTopDown()
-            .filter { file -> file.isFile && file.extension == "kt" && estensioni.none { file.startsWith(it) } }
-            .toList()
+        val tutti = radice.walkTopDown().filter { file -> file.isFile && file.extension == "kt" }.toList()
+        val fileR0 = tutti.filter { file -> (estensioni + porte).none { file.startsWith(it) } }
+        val filePorte = tutti.filter { file -> file.startsWith(porte) }
+
         // L624b: match the package prefix ANYWHERE a real code line could carry it (a plain
         // `import`, an `as`-aliased one, or an inline FQN with no import at all) — not just the
         // literal `import <pacchetto>` prefix, which missed the other two. Comment lines (KDoc
         // continuation, `//`, or a one-line `/* … */`) are excluded: `CodaCondivisa.kt` NAMES
         // `snastro.trascrizione` in its class doc precisely to explain it never imports it.
-        val pattern = proibiti.map { pacchetto -> Regex("""\b${Regex.escape(pacchetto)}\b""") }
-        val violazioni = fileR0
-            .flatMap { file -> file.readLines().mapIndexed { i, riga -> Triple(file, i + 1, riga) } }
-            .filter { (_, _, riga) ->
-                val codice = riga.trimStart()
-                val eCommento = codice.startsWith("*") || codice.startsWith("//") || codice.startsWith("/*")
-                !eCommento && pattern.any { it.containsMatchIn(riga) }
-            }
-            .map { (file, numero, riga) -> "$file:$numero: $riga" }
+        fun violazioni(file: List<File>, pacchetti: List<String>): List<String> {
+            val pattern = pacchetti.map { pacchetto -> Regex("""\b${Regex.escape(pacchetto)}\b""") }
+            return file
+                .flatMap { f -> f.readLines().mapIndexed { i, riga -> Triple(f, i + 1, riga) } }
+                .filter { (_, _, riga) ->
+                    val codice = riga.trimStart()
+                    val eCommento = codice.startsWith("*") || codice.startsWith("//") || codice.startsWith("/*")
+                    !eCommento && pattern.any { it.containsMatchIn(riga) }
+                }
+                .map { (f, numero, riga) -> "$f:$numero: $riga" }
+        }
 
+        assertTrue(filePorte.any { it.name == "PorteProgetto.kt" }, "la guardia deve vedere PorteProgetto")
+        assertEquals(emptyList(), violazioni(filePorte, proibiti - "snastro.trascrizione"))
         assertTrue(fileR0.any { it.name == "SessioneProgettoImpl.kt" }, "la guardia deve vedere il grafo R0")
-        assertTrue(violazioni.isEmpty(), "il grafo R0 non deve importare i contesti di R1: $violazioni")
+        val r0 = violazioni(fileR0, proibiti)
+        assertTrue(r0.isEmpty(), "il grafo R0 non deve importare i contesti di R1: $r0")
     }
 
     @Test
