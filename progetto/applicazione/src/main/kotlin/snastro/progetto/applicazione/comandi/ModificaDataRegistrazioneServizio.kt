@@ -11,7 +11,7 @@ import snastro.progetto.dominio.ErroreProgetto
 /**
  * Use-case `ModificaDataRegistrazione` (AC-62/63): replaces the DataRegistrazione of an existing
  * Registrazione and publishes `DataRegistrazioneModificata` — an AFTER-COMMIT consumer regenerates
- * the Documento (ADR 0012).
+ * the Sbobinatura (ADR 0012).
  */
 public class ModificaDataRegistrazioneServizio(
     private val uow: UnitaDiLavoro,

@@ -5,7 +5,7 @@ import snastro.kernel.RegistrazioneId
 /**
  * Consumer-owned, read-only port through which Sintesi reads a Trascritto and the state of its latest
  * Elaborazione from Trascrizione (boundary `trascritto-per-sintesi`, ADR 0021 §3, Published Language only).
- * Same name as Documento's port, another package: each consumer owns its own need.
+ * Same name as Sbobinatura's port, another package: each consumer owns its own need.
  */
 public interface LettoreTrascritto {
     /**

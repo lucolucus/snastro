@@ -38,7 +38,7 @@ class TrascrizioneRealeTest {
     lateinit var radice: Path
 
     @Test
-    fun `reale trascrive en wav attraverso la composizione e scrive il Documento`() {
+    fun `reale trascrive en wav attraverso la composizione e scrive la Sbobinatura`() {
         val spike = System.getenv(VARIABILE)?.let(Path::of)
         assumeTrue(spike != null && Files.isDirectory(spike), "$VARIABILE non impostata: test saltato")
         checkNotNull(spike)
@@ -67,11 +67,11 @@ class TrascrizioneRealeTest {
             val vista = checkNotNull(trascrizione.trascritto(id))
             assertTrue(vista.segmenti.any { it.testo.isNotBlank() }, "nessun testo riconosciuto: $vista")
             assertTrue(vista.voci.all { it.etichetta.startsWith("Voce ") })
-            val documenti = Path.of(progetto.percorso).resolve("documenti")
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento scritto") {
-                documenti.listDirectoryEntries("*.md").isNotEmpty()
+            val sbobinature = Path.of(progetto.percorso).resolve("sbobinature")
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura scritta") {
+                sbobinature.listDirectoryEntries("*.md").isNotEmpty()
             }
-            println("Documento:\n" + documenti.listDirectoryEntries("*.md").single().readText())
+            println("Sbobinatura:\n" + sbobinature.listDirectoryEntries("*.md").single().readText())
         } finally {
             sessione.chiudi()
         }

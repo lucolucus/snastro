@@ -36,7 +36,8 @@ class ArrestoProgettoTest {
 
     @Test
     fun `AC-C73 ferma la coda e i moduli nell ordine inverso di avvia, poi chiude`() {
-        val avviati = listOf("trascrizione", "documento", "parlanti", "sintesi", "progetto", "coda").map(::Registrante)
+        val avviati = listOf("trascrizione", "sbobinatura", "parlanti", "sintesi", "progetto", "coda")
+            .map(::Registrante)
         avviati.forEach { it.avvia(CoroutineScope(EmptyCoroutineContext)) }
         registro.clear()
 
@@ -44,7 +45,8 @@ class ArrestoProgettoTest {
 
         assertTrue(inTempo)
         assertEquals(
-            listOf("coda", "progetto", "sintesi", "parlanti", "documento", "trascrizione").map { "ferma $it" } + "poi",
+            listOf("coda", "progetto", "sintesi", "parlanti", "sbobinatura", "trascrizione")
+                .map { "ferma $it" } + "poi",
             registro.toList(),
         )
     }

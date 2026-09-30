@@ -13,7 +13,7 @@ import snastro.parlanti.applicazione.eventi.ParlanteEliminato as ParlanteElimina
  * `EliminaParlante` (AC-94/AC-95): goes through [snastro.parlanti.dominio.Parlante.elimina] for
  * `[INV-13]` — the tombstone transaction purges every `ImprontaVocale` in the same call (ADR 0009);
  * `salva` persists the now-empty print list. No `Attribuzione` is touched (out of this block's
- * scope) and no `Documento` `Rigenerazione` is triggered by this event.
+ * scope) and no `Sbobinatura` `Rigenerazione` is triggered by this event.
  */
 public class EliminaParlanteServizio(
     private val uow: UnitaDiLavoro,

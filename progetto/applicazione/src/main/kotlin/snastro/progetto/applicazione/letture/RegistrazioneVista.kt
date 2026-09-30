@@ -8,7 +8,7 @@ import java.time.LocalDate
 /**
  * Read view of a [snastro.progetto.dominio.Registrazione] (AC-97): the pinned Published Language
  * shape [CatalogoRegistrazioni] hands to the `registrazione-per-trascrizione`,
- * `registrazione-per-parlanti` and `trascritto-per-documento` boundaries — each consumer keeps its
+ * `registrazione-per-parlanti` and `trascritto-per-sbobinatura` boundaries — each consumer keeps its
  * own equal-shaped copy, this is the supplier's.
  */
 public data class RegistrazioneVista(

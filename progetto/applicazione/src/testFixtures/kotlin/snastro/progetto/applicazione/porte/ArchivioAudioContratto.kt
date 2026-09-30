@@ -85,11 +85,11 @@ public abstract class ArchivioAudioContratto {
     @Test
     public fun `AC-27 scarta non tocca nulla fuori da audio`() {
         val a = ambiente()
-        a.creaNelProgetto("documenti/nota.md", CONTENUTO)
+        a.creaNelProgetto("sbobinature/nota.md", CONTENUTO)
         a.creaNelProgetto("progetto.db", CONTENUTO)
-        a.archivio.scarta(RiferimentoAudio("documenti/nota.md"))
+        a.archivio.scarta(RiferimentoAudio("sbobinature/nota.md"))
         a.archivio.scarta(RiferimentoAudio("audio/../progetto.db"))
-        assertContentEquals(CONTENUTO, a.contenutoNelProgetto("documenti/nota.md"))
+        assertContentEquals(CONTENUTO, a.contenutoNelProgetto("sbobinature/nota.md"))
         assertContentEquals(CONTENUTO, a.contenutoNelProgetto("progetto.db"))
     }
 

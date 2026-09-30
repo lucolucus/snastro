@@ -88,7 +88,7 @@ internal fun costruisciRegistrazioniPresenter(
 )
 
 /**
- * S3 of [id] on [scope]: the Trascritto, the Documento's path, the Voci panel, the card commands (AC-418) and
+ * S3 of [id] on [scope]: the Trascritto, the Sbobinatura's path, the Voci panel, the card commands (AC-418) and
  * namings (ADR 0019 §5), 'Togli conferma', 'Riassegna per somiglianza', the Revisione UI, the latest run's state
  * (READ-ONLY while a re-run is queued or running, AC-461) and the Riassunto tab ([costruisciRiassuntoPresenter],
  * ADR 0021 §10) with the ONE per-window [selezioneSchedaS3] (AC-S121).
@@ -108,7 +108,7 @@ internal fun costruisciRegistrazionePresenter(
         io = grafo.io,
         registrazioneId = id,
         trascritto = { trascrizione.trascritto(id) },
-        documento = { collaboratori.documento.percorsoDocumento(id) },
+        sbobinatura = { collaboratori.sbobinatura.percorsoSbobinatura(id) },
         lettore = collaboratori.lettoreAudio,
         apriEsterno = grafo.apriEsterno,
         parlanti = SorgentiParlanti(

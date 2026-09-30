@@ -42,14 +42,14 @@ import java.time.LocalDate
  * OWN in-memory port fakes (`applicazione` testFixtures): ADR 0021 §2's edge table gives
  * `:sintesi:adattatori` no edge to `:parlanti:adattatori` (ADR 0002, CR-1: consumer:adattatori
  * reaches only supplier:applicazione, never supplier:adattatori), so this test — like
- * `documento:adattatori`'s `LettoreNomiDaParlantiTest` for the identical `nomi-per-*` port shape —
+ * `sbobinatura:adattatori`'s `LettoreNomiDaParlantiTest` for the identical `nomi-per-*` port shape —
  * seeds Parlanti's REAL command services over its REAL `ParlanteRepositoryFinta`/
  * `AttribuzioneRepositoryFinta` (a legitimate port implementation, dev-architecture-app.md#test:
  * "fakes are mandatory for every port"), never touching a raw Parlanti aggregate or query. Parlanti's
  * OWN consumed ports (`LettoreRegistrazione`/`LettoreVoci`/`DecodificatoreAudio`/`EstrattoreImpronta`)
  * are Parlanti's OWN fakes too — none of them is part of the `nomi-per-sintesi` boundary under test,
  * so the Registrazione/Voci they need are synthesized directly (this Ambiente's own contract, unlike
- * Documento's, never promises real Trascritto-minted Voci — see `AmbienteLettoreNomi`'s KDoc).
+ * Sbobinatura's, never promises real Trascritto-minted Voci — see `AmbienteLettoreNomi`'s KDoc).
  *
  * [ParlanteSeminato] stays opaque at Sintesi's own boundary the whole time (ADR 0021 §7, INV-S5): only
  * this environment maps its [ParlanteSeminato.chiave] to the real [ParlanteId] Parlanti minted, read

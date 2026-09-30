@@ -33,10 +33,10 @@ include(
     ":parlanti:dominio",
     ":parlanti:applicazione",
     ":parlanti:adattatori",
-    ":documento:applicazione",
-    ":documento:adattatori",
+    ":sbobinatura:applicazione",
+    ":sbobinatura:adattatori",
     // (2026-09-26, ADR 0021) :sintesi is a path-holder only (like :progetto, :trascrizione,
-    // :parlanti, :documento): no build.gradle.kts, no dependencies of its own.
+    // :parlanti, :sbobinatura): no build.gradle.kts, no dependencies of its own.
     ":sintesi:dominio",
     ":sintesi:applicazione",
     ":sintesi:adattatori",

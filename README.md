@@ -94,7 +94,7 @@ in the code.
 | `progetto` | Projects and their recordings |
 | `trascrizione` | Processing runs, transcripts, voices, segments, review |
 | `parlanti` | People, voice prints, the gallery, attribution proposals |
-| `documento` | The Markdown projection (owns no source of truth) |
+| `sbobinatura` | The Markdown projection (owns no source of truth) |
 | `sintesi` | Summaries and source verification |
 
 Technical modules sit around the contexts: `kernel`, `persistenza`, `audio`, `ml-sherpa`,

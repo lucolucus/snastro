@@ -6,8 +6,8 @@ import java.util.Locale
 /**
  * The titolo a new Registrazione receives in `AggiungiRegistrazione` (AC-322..324), and the key
  * `RinominaRegistrazione` checks (AC-361): unique in its
- * Progetto on the file-safe, case-insensitive [chiave], so the Documento file name
- * `nomeFile(data, titolo)` of two Registrazioni can never collide (`tec-scrittore-documento`
+ * Progetto on the file-safe, case-insensitive [chiave], so the Sbobinatura file name
+ * `nomeFile(data, titolo)` of two Registrazioni can never collide (`tec-scrittore-sbobinatura`
  * keys.nomeFile). Pure; `internal` so the rule is table-tested directly.
  */
 internal object TitoloRegistrazione {
@@ -38,14 +38,14 @@ internal object TitoloRegistrazione {
     fun chiave(titolo: String): String = pulisci(titolo).uppercase(Locale.ROOT).lowercase(Locale.ROOT)
 
     /**
-     * PRIVATE COPY of documento's `pulisci` (`:progetto` may not depend on `:documento`) — the rule
-     * pinned in `tec-scrittore-documento` keys.nomeFile, same table rows as documento AC-320:
+     * PRIVATE COPY of sbobinatura's `pulisci` (`:progetto` may not depend on `:sbobinatura`) — the rule
+     * pinned in `tec-scrittore-sbobinatura` keys.nomeFile, same table rows as sbobinatura AC-320:
      * NFC-normalize; every character invalid on Windows/macOS/Linux (`< > : " / \ | ? *` and the
      * control characters U+0000-U+001F, U+007F) → `_`; leading/trailing spaces and dots removed;
      * truncated to [LIMITE_BYTE_PULITO] UTF-8 bytes on a code-point boundary (never splitting a
      * surrogate pair) and trailing spaces/dots removed again; a Windows reserved name (`CON`, `PRN`,
      * `AUX`, `NUL`, `COM1`-`COM9`, `LPT1`-`LPT9`, case-insensitive) gets a trailing `_`; empty result
-     * → `"registrazione"`. Keep it row-for-row identical to documento's.
+     * → `"registrazione"`. Keep it row-for-row identical to sbobinatura's.
      */
     fun pulisci(titolo: String): String {
         val normalizzato = Normalizer.normalize(titolo, Normalizer.Form.NFC)

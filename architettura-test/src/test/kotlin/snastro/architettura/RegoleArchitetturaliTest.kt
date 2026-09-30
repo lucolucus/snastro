@@ -16,7 +16,7 @@ import kotlin.test.Test
 
 /**
  * Proiezione eseguibile delle regole meccaniche di `code-rules.md` CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
- * (il lint del gate), su tutti i contesti (Progetto, Trascrizione, Parlanti, Documento, Sintesi) e sui
+ * (il lint del gate), su tutti i contesti (Progetto, Trascrizione, Parlanti, Sbobinatura, Sintesi) e sui
  * moduli tecnici; CR-18 sulle librerie `:supporto` / `:supporto-test` (ADR 0028). Lo scope e il progetto intero,
  * `.worktrees/` esclusa ([progetto]), letto una sola volta.
  * CR-6, CR-7, CR-9, CR-11 sono compiti di detekt e del compilatore (`build-logic`); CR-12 e
@@ -24,7 +24,7 @@ import kotlin.test.Test
  * `:persistenza:test`. Gli script di `controlli-adr` degli ADR girano in [ControlliAdrTest].
  */
 class RegoleArchitetturaliTest {
-    private val contesti = setOf("progetto", "trascrizione", "parlanti", "documento", "sintesi")
+    private val contesti = setOf("progetto", "trascrizione", "parlanti", "sbobinatura", "sintesi")
 
     private fun contestoDi(pacchetto: String): String? {
         val segmenti = pacchetto.removePrefix("snastro.").split(".")
@@ -224,7 +224,7 @@ class RegoleArchitetturaliTest {
     /**
      * The aggregate roots, verbatim from the features' tactical models (the `(root)` rows):
      * `.mismagent/features/trascrizione-con-parlanti/tactical-model.md` — Progetto, Registrazione (§ Progetto);
-     * Elaborazione, Trascritto (§ Trascrizione); Parlante, Attribuzione (§ Parlanti); Documento has none —
+     * Elaborazione, Trascritto (§ Trascrizione); Parlante, Attribuzione (§ Parlanti); Sbobinatura has none —
      * and `.mismagent/features/sintesi/tactical-model.md` — Riassunto, LunghezzaMassimaRiassunto (§ Sintesi).
      * CR-4 bans `data class` for these only: VOs, events and error members MUST be `data class` (CR-5).
      * A feature adding a root amends this list.
@@ -332,6 +332,8 @@ class RegoleArchitetturaliTest {
         // `letture/Proposta.kt`), "Proposta" and "Riferimento" (already legitimate terms elsewhere,
         // per the context-map's own parenthetical).
         "Summary", "Verbale", "Report", "Resoconto", "Minuta",
+        // (2026-09-30, ADR 0031) the term before the rename to Sbobinatura.
+        "Documento",
         "Sintetizza", "Rigenera", "Aggiorna",
         "Tema", "Prompt", "Descrizione", "Oggetto",
         "Rumore", "Divagazione",
@@ -522,11 +524,11 @@ class RegoleArchitetturaliTest {
 
     /**
      * The ubiquitous-language tokens of `.mismagent/context-map.md` (the bounded contexts' canonical nouns: Progetto,
-     * Trascrizione, Parlanti, Documento, Sintesi). The list lives HERE only (CR-18b); a new context term amends it.
+     * Trascrizione, Parlanti, Sbobinatura, Sintesi). The list lives HERE only (CR-18b); a new context term amends it.
      */
     private val tokenUbiquitari = setOf(
         "Progetto", "Registrazione", "Elaborazione", "Trascritto", "Voce", "Segmento", "Revisione",
-        "Parlante", "Impronta", "Attribuzione", "Documento", "Riassunto", "Fonte",
+        "Parlante", "Impronta", "Attribuzione", "Sbobinatura", "Riassunto", "Fonte",
     )
 
     private fun nomeConTokenUbiquitario(nome: String): Boolean =

@@ -29,8 +29,8 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:parlanti:dominio` | `snastro.parlanti.dominio` | `Parlante` (+ `ImprontaVocale`), `Attribuzione`, events |
 | `:parlanti:applicazione` | `snastro.parlanti.applicazione` | commands (`ConfermaAttribuzione`, `SaltaVoce`, `RinominaParlante`, `PromuoviParlante`, `EliminaParlante`), revisione-policy, read-models (`Proposta`, `EstrattoAudio`, `PropostaUnione`, `ParlantiDelProgetto`, `ParlantiAttivi`), ports (repository; `LettoreVoci` → Trascrizione; `LettoreRegistrazione` → Progetto; `EstrattoreImpronta`, `ConfrontoImpronte`), public query API (`NomiDelleVoci`) |
 | `:parlanti:adattatori` | `snastro.parlanti.adattatori` | repositories, port adapters (→ Trascrizione / Progetto API, → `:ml-sherpa`), pure `ConfrontoImpronte` |
-| `:documento:applicazione` | `snastro.documento.applicazione` | `Documento` projection (pure: inputs → markdown string), `Rigenerazione` policy, ports (`LettoreTrascritto`, `LettoreNomi`, `ScrittoreDocumento`) |
-| `:documento:adattatori` | `snastro.documento.adattatori` | port adapters (→ Trascrizione / Parlanti API), atomic `.md` writer |
+| `:sbobinatura:applicazione` | `snastro.sbobinatura.applicazione` | `Sbobinatura` projection (pure: inputs → markdown string), `Rigenerazione` policy, ports (`LettoreTrascritto`, `LettoreNomi`, `ScrittoreSbobinatura`) |
+| `:sbobinatura:adattatori` | `snastro.sbobinatura.adattatori` | port adapters (→ Trascrizione / Parlanti API), atomic `.md` writer |
 | `:sintesi:dominio` | `snastro.sintesi.dominio` | *(2026-09-25, [ADR 0021](decisions/0021-sintesi-moduli-confini-porte.md))* `Riassunto` (+ `Fonte`, elements, `StrutturaTrascritto`, `Verifica delle fonti`), `LunghezzaMassimaRiassunto`, pure guard `Riassumibilita`, input builder `IngressoRiassunto`, events, `ErroreSintesi` |
 | `:sintesi:applicazione` | `snastro.sintesi.applicazione` | commands (`Riassumi`, `EseguiProssimoRiassunto`, `RecuperaRiassuntiInterrotti`, `ModificaLunghezzaMassimaRiassunto`), policies (on `TrascrittoSostituito` / `RegistrazioneEliminata`), read-models (`riassunto-vista`, `impostazioni-sintesi`, `RiassuntiInAttesa`), ports (repositories; `LettoreTrascritto` → Trascrizione; `LettoreNomi` → Parlanti; `ModelloLinguistico`; `DisponibilitaModelloLinguistico`) |
 | `:sintesi:adattatori` | `snastro.sintesi.adattatori` | SQLDelight repositories (`6.sqm`, [ADR 0022](decisions/0022-persistenza-sintesi-6sqm.md)), port adapters (→ Trascrizione / Parlanti API), synchronous subscribers, `ModelloLinguistico` adapter (→ `:llama-jni`, *2026-09-26, [ADR 0027](decisions/0027-libreria-llama-jni-separata.md)*) |
@@ -41,7 +41,7 @@ Directory = Gradle project path (`progetto/dominio` ↔ `:progetto:dominio`). Ko
 | `:modelli` | `snastro.modelli` | model catalogue (URL, SHA-256, licence), first-run download, cache paths — the ONLY network module |
 | `:ui` | `snastro.ui` | Compose screens S1–S4 + shared `lettore-audio`: presenters (state holders, unit-tested) + thin composables; declares `LettoreAudio` |
 | `:supporto` | `snastro.supporto` | *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])* **domain-free technical library**: `RitentaConBackoff`, `gestoreErroriNonCatturati`, `figlioDi`, `catturaNonFatale`, `Segnalazione` (the pinned public API, CR-18c). Only `kotlinx-coroutines-core`; no snastro dependency |
-| `:avvio` | `snastro.avvio.{progetto, trascrizione, parlanti, sintesi, documento, modelli, coda, smoke}` | `main()`, the **single** composition root (*2026-09-27, [ADR 0030](decisions/0030-composizione-unica-per-contesto.md)*: `PorteProgetto` once per project, one `ModuloComposizione` per context, `apriProgetto` with declared orders; no per-release composition), adapter selection (config), the shared queue (`avvio.coda`), startup policies, `--smoke` mode |
+| `:avvio` | `snastro.avvio.{progetto, trascrizione, parlanti, sintesi, sbobinatura, modelli, coda, smoke}` | `main()`, the **single** composition root (*2026-09-27, [ADR 0030](decisions/0030-composizione-unica-per-contesto.md)*: `PorteProgetto` once per project, one `ModuloComposizione` per context, `apriProgetto` with declared orders; no per-release composition), adapter selection (config), the shared queue (`avvio.coda`), startup policies, `--smoke` mode |
 | `:architettura-test` | `snastro.architettura` | Konsist rules (test-only module) |
 | `:supporto-test` | `snastro.supporto.test` | *(2026-09-27, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) [user])* test-only helpers, **never shipped**: `attendiFinche`, `OrologioFinto`, `conScopeDiProva`. No snastro dependency |
 
@@ -56,8 +56,8 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 | `:progetto:adattatori` | `:progetto:applicazione`, `:progetto:dominio`, `:kernel`, `:persistenza`, `:audio`, `:supporto` |
 | `:trascrizione:adattatori` | `:trascrizione:applicazione`, `:trascrizione:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:audio`, `:ml-sherpa`, `:supporto` |
 | `:parlanti:adattatori` | `:parlanti:applicazione`, `:parlanti:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:audio`, `:ml-sherpa`, `:supporto` |
-| `:documento:applicazione` | `:kernel` |
-| `:documento:adattatori` | `:documento:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione`, `:supporto` |
+| `:sbobinatura:applicazione` | `:kernel` |
+| `:sbobinatura:adattatori` | `:sbobinatura:applicazione`, `:kernel`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:progetto:applicazione`, `:supporto` |
 | `:sintesi:adattatori` | `:sintesi:applicazione`, `:sintesi:dominio`, `:kernel`, `:persistenza`, `:progetto:applicazione`, `:trascrizione:applicazione`, `:parlanti:applicazione`, `:llama-jni` *(ADR 0021; library per ADR 0027)*, `:supporto` |
 | `:llama-jni` | — *(no project dependency, ADR 0027; `:llm → :kernel, :modelli` of ADR 0021 withdrawn)* |
 | `:persistenza` | `:kernel` |
@@ -77,7 +77,7 @@ Anything not listed is forbidden (`verificaDipendenzeModuli` fails the build).
 
 Direction summary: `adattatori → applicazione → dominio → kernel`; cross-context only
 `consumer:adattatori → supplier:applicazione`; `Progetto` is upstream of all; `Trascrizione` is
-upstream of `Parlanti`, `Documento` and `Sintesi`; `Parlanti` is upstream of `Documento` and `Sintesi`; no context depends on `Sintesi` (ADR 0021). `ui` sees only
+upstream of `Parlanti`, `Sbobinatura` and `Sintesi`; `Parlanti` is upstream of `Sbobinatura` and `Sintesi`; no context depends on `Sintesi` (ADR 0021). `ui` sees only
 `applicazione`. Technical modules (`persistenza`, `audio`, `ml-sherpa`, `modelli`, and the separate library
 `llama-jni`) are reached only from adapters (and `avvio`). The library depends on nothing of snastro (ADR 0027). *(2026-09-27, ADR 0028)* The domain-free `:supporto` is reached only by adapters, `:ui` and `avvio`, and it depends on nothing of snastro. `:supporto-test` is reached only from test source sets.
 
@@ -110,7 +110,7 @@ only**, not guarded state ([INV-3] unchanged). **Pending:** the context-map amen
 reference.
 
 ## Transactions and events
-One transaction per command; invariant-carrying policies in-transaction; `Documento`
+One transaction per command; invariant-carrying policies in-transaction; `Sbobinatura`
 `Rigenerazione` after commit, idempotent, retried ([ADR 0012](decisions/0012-unita-di-lavoro-ed-eventi.md)).
 Cross-context events flow `supplier:applicazione` (published events, Published Language) →
 `consumer:adattatori` (subscriber, via the kernel `DispatcherEventi`) → `consumer:applicazione`
@@ -143,7 +143,7 @@ allowed because it carries ids and intervals only, never an embedding.)*
 - `EliminaRegistrazione` (Progetto) publishes `RegistrazioneEliminata` inside its transaction. Trascrizione (a veto if
   an `Elaborazione` is open, then its purge) and Parlanti (purge + INV-25) react as synchronous subscribers, and then
   the `registrazione` row is removed.
-- Files (`audio/`, `cache/audio/`, the Documento `.md`) are removed after commit by their owners.
+- Files (`audio/`, `cache/audio/`, the Sbobinatura `.md`) are removed after commit by their owners.
 - A Progetto-owned `eliminazione_in_sospeso` row, written in the same transaction, drives crash recovery at the next
   project open.
 - The edges table is unchanged.
@@ -153,7 +153,7 @@ allowed because it carries ids and intervals only, never an embedding.)*
 ## Composition (2026-09-27, [ADR 0030](decisions/0030-composizione-unica-per-contesto.md)) [user]
 One composition, organised by context rather than by release. The release **method** is unchanged: a new release adds a module and its ACs.
 - **`PorteProgetto`**: built once per open project by `SessioneProgettoImpl`. It holds the database, the one `UnitaDiLavoroSql` (`UnitaDiLavoro` + `LetturaCoerente`), the dispatcher, one instance of every SQL repository, `CatalogoRegistrazioni`, the cross-context readers and `LayoutCartellaProgetto`.
-- **`ModuloComposizione<Ctx>`**, one each for Trascrizione, Parlanti, Sintesi and Documento. Each exposes:
+- **`ModuloComposizione<Ctx>`**, one each for Trascrizione, Parlanti, Sintesi and Sbobinatura. Each exposes:
   - its synchronous and after-commit subscribers as values (no self-registration in `init`);
   - `fontiCoda()`, `avvia(scope)`/`ferma()`, and typed collaborators for `:ui`.
 - **`apriProgetto(porte)`**, in this order:

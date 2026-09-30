@@ -26,7 +26,7 @@ public class ArchivioAudioFinta : ArchivioAudio {
 
     public fun conSorgenteCheFallisce(percorso: String): ArchivioAudioFinta = apply { guaste += percorso }
 
-    /** Puts a file at [percorsoRelativo] in the project folder (e.g. `documenti/…`). */
+    /** Puts a file at [percorsoRelativo] in the project folder (e.g. `sbobinature/…`). */
     public fun conFileNelProgetto(percorsoRelativo: String, contenuto: ByteArray): ArchivioAudioFinta = apply {
         progetto[percorsoRelativo] = contenuto.copyOf()
     }

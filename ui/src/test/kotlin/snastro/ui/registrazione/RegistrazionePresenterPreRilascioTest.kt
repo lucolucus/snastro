@@ -85,7 +85,7 @@ class RegistrazionePresenterPreRilascioTest {
     private fun presentatore(
         scope: TestScope,
         trascritto: () -> TrascrittoView? = { unaVista(listOf(unSegmento(SegmentoId(1), 0, 1_000))) },
-        documento: () -> String? = { null },
+        sbobinatura: () -> String? = { null },
         lettore: LettoreAudio = LettoreAudioFinta(),
         apriEsterno: ApriEsterno = ApriEsternoFinta(),
     ): RegistrazionePresenter {
@@ -96,7 +96,7 @@ class RegistrazionePresenterPreRilascioTest {
             io = dispatcher,
             registrazioneId = REG_1,
             trascritto = trascritto,
-            documento = documento,
+            sbobinatura = sbobinatura,
             lettore = lettore,
             apriEsterno = apriEsterno,
             parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
@@ -173,7 +173,7 @@ class RegistrazionePresenterPreRilascioTest {
                 io = ioReale,
                 registrazioneId = REG_1,
                 trascritto = { unaVista(listOf(unSegmento(SegmentoId(1), 0, 1_000))) },
-                documento = { null },
+                sbobinatura = { null },
                 lettore = fake,
                 apriEsterno = ApriEsternoFinta(),
                 parlanti = unaSorgentiParlantiInerte(scope),
@@ -206,13 +206,13 @@ class RegistrazionePresenterPreRilascioTest {
     }
 
     @Test
-    fun `L573b un guasto di documento non impedisce il caricamento del trascritto`() = runTest {
-        val presenter = presentatore(this, documento = { error("guasto simulato di documento") })
+    fun `L573b un guasto di sbobinatura non impedisce il caricamento del trascritto`() = runTest {
+        val presenter = presentatore(this, sbobinatura = { error("guasto simulato di sbobinatura") })
         advanceUntilIdle()
 
         val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
         assertEquals(1, dati.segmenti.size)
-        assertNull(dati.documentoPercorso)
+        assertNull(dati.sbobinaturaPercorso)
     }
 
     @Test

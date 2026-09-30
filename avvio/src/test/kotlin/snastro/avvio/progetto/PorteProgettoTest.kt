@@ -90,10 +90,10 @@ class PorteProgettoTest {
                 assertTrue(ricevute.isNotEmpty(), "$consumatore non ha ricevuto $classe")
                 assertTrue(ricevute.all { it === costruzioni.istanze(classe).single() }, "$consumatore: $classe")
             }
-            // Documento's worker and Progetto's PuliziaDerivatiFile: the same RigenerazioneDocumentoPolitica.
+            // Sbobinatura's worker and Progetto's PuliziaDerivatiFile: the same RigenerazioneSbobinaturaPolitica.
             assertSame(
-                costruzioni.argomenti(ABBONATO_DOCUMENTO, POLITICA_DOCUMENTO).single(),
-                costruzioni.argomenti(PULIZIA_DERIVATI, POLITICA_DOCUMENTO).single(),
+                costruzioni.argomenti(ABBONATO_SBOBINATURA, POLITICA_SBOBINATURA).single(),
+                costruzioni.argomenti(PULIZIA_DERIVATI, POLITICA_SBOBINATURA).single(),
             )
             // S2's StatiElaborazione (Trascrizione, a bound reference) and Sintesi's LettoreTrascrittoDaTrascrizione.
             val s2 = (ambiente.trascrizione.statiElaborazione as CallableReference).boundReceiver
@@ -154,9 +154,9 @@ class PorteProgettoTest {
     }
 
     private companion object {
-        const val POLITICA_DOCUMENTO = "snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica"
+        const val POLITICA_SBOBINATURA = "snastro.sbobinatura.applicazione.politiche.RigenerazioneSbobinaturaPolitica"
         const val STATI = "snastro.trascrizione.applicazione.letture.StatiElaborazione"
-        const val ABBONATO_DOCUMENTO = "snastro.documento.adattatori.eventi.AbbonatoDocumentoEventi"
+        const val ABBONATO_SBOBINATURA = "snastro.sbobinatura.adattatori.eventi.AbbonatoSbobinaturaEventi"
         const val PULIZIA_DERIVATI = "snastro.avvio.progetto.PuliziaDerivatiFile"
         const val LETTORE_SINTESI = "snastro.sintesi.adattatori.porte.LettoreTrascrittoDaTrascrizione"
         const val PROGETTO_SQL = "snastro.progetto.adattatori.persistenza.ProgettoRepositorySql"
@@ -170,7 +170,7 @@ class PorteProgettoTest {
         const val LUNGHEZZA_SQL = "snastro.sintesi.adattatori.persistenza.LunghezzaMassimaRiassuntoRepositorySql"
         const val CATALOGO = "snastro.progetto.applicazione.letture.CatalogoRegistrazioni"
 
-        /** AC-C60: every SQL repository, CatalogoRegistrazioni, the Documento policy and the project's ports. */
+        /** AC-C60: every SQL repository, CatalogoRegistrazioni, the Sbobinatura policy and the project's ports. */
         val UNA_PER_APERTURA = listOf(
             PROGETTO_SQL,
             REGISTRAZIONE_SQL,
@@ -182,7 +182,7 @@ class PorteProgettoTest {
             RIASSUNTO_SQL,
             LUNGHEZZA_SQL,
             CATALOGO,
-            POLITICA_DOCUMENTO,
+            POLITICA_SBOBINATURA,
             STATI,
             "snastro.trascrizione.applicazione.letture.FasiInCorso",
             "snastro.persistenza.UnitaDiLavoroSql",
@@ -193,14 +193,15 @@ class PorteProgettoTest {
             "snastro.parlanti.adattatori.porte.LettoreVociDaTrascrizione",
             "snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto",
             "snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto",
-            "snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione",
-            "snastro.documento.adattatori.porte.LettoreNomiDaParlanti",
+            "snastro.sbobinatura.adattatori.porte.LettoreTrascrittoDaTrascrizione",
+            "snastro.sbobinatura.adattatori.porte.LettoreNomiDaParlanti",
             LETTORE_SINTESI,
             "snastro.sintesi.adattatori.porte.LettoreNomiDaParlanti",
             "snastro.avvio.progetto.PorteProgetto",
         )
 
-        /** AC-C61: (consumer, what it must receive) across the Progetto, Trascrizione, Documento, Parlanti, Sintesi. */
+        /** AC-C61: (consumer, what it must receive) across the Progetto, Trascrizione, Sbobinatura, Parlanti, Sintesi.
+         * */
         val CONSUMATORI = listOf(
             "snastro.progetto.applicazione.comandi.CreaProgettoServizio" to PROGETTO_SQL,
             CATALOGO to REGISTRAZIONE_SQL,
@@ -214,7 +215,7 @@ class PorteProgettoTest {
             "snastro.trascrizione.applicazione.politiche.ApplicaEliminazioneRegistrazionePolitica" to ELABORAZIONE_SQL,
             "snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto" to CATALOGO,
             "snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto" to CATALOGO,
-            "snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione" to CATALOGO,
+            "snastro.sbobinatura.adattatori.porte.LettoreTrascrittoDaTrascrizione" to CATALOGO,
             "snastro.parlanti.applicazione.letture.NomiDelleVoci" to PARLANTE_SQL,
             "snastro.parlanti.applicazione.letture.NomiDelleVoci" to ATTRIBUZIONE_SQL,
             "snastro.parlanti.applicazione.comandi.RinominaParlanteServizio" to PARLANTE_SQL,
@@ -222,8 +223,8 @@ class PorteProgettoTest {
             "snastro.sintesi.applicazione.comandi.RiassumiServizio" to RIASSUNTO_SQL,
             "snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSintesiPolitica" to RIASSUNTO_SQL,
             "snastro.sintesi.applicazione.comandi.ModificaLunghezzaMassimaRiassuntoServizio" to LUNGHEZZA_SQL,
-            ABBONATO_DOCUMENTO to POLITICA_DOCUMENTO,
-            PULIZIA_DERIVATI to POLITICA_DOCUMENTO,
+            ABBONATO_SBOBINATURA to POLITICA_SBOBINATURA,
+            PULIZIA_DERIVATI to POLITICA_SBOBINATURA,
             LETTORE_SINTESI to STATI,
             "snastro.kernel.DispatcherEventiInMemoria" to "snastro.persistenza.UnitaDiLavoroSql",
         )

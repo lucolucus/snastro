@@ -37,7 +37,7 @@ private fun unDati(
     segmenti = emptyList(),
     barra = LettoreUiStato.Inattivo,
     audioDisponibile = audioDisponibile,
-    documentoPercorso = null,
+    sbobinaturaPercorso = null,
     pannello = pannello,
     bannerRitrascrizione = bannerRitrascrizione,
     contenutoRiassunto = contenutoRiassunto,

@@ -15,7 +15,7 @@ class AbbonatiComeValoriTest {
     private val radice: File = File(System.getProperty("snastro.radiceProgetto") ?: "..").canonicalFile
 
     private val sorgentiAdattatori: List<File> by lazy {
-        listOf("progetto", "trascrizione", "parlanti", "documento", "sintesi")
+        listOf("progetto", "trascrizione", "parlanti", "sbobinatura", "sintesi")
             .map { File(radice, "$it/adattatori/src/main") }
             .filter(File::isDirectory)
             .flatMap { it.walkTopDown().filter { f -> f.isFile && f.extension == "kt" }.toList() }

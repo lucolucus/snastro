@@ -5,7 +5,7 @@
 #   2. no cast `as Collaboratori…` / `as? Collaboratori…`;
 #   3. no `AtomicReference<CodaCondivisa` (the queue↔sintesi cycle is broken by the Campanello);
 #   4. a file under avvio/src/main/kotlin/snastro/avvio/ outside `<ctx>/` and `progetto/` never imports nor
-#      fully-qualifies `snastro.<ctx>.adattatori` (ctx in progetto|trascrizione|parlanti|documento|sintesi).
+#      fully-qualifies `snastro.<ctx>.adattatori` (ctx in progetto|trascrizione|parlanti|sbobinatura|sintesi).
 # Clause 4 replaces GrafoR0Test's AC-350 package guard.
 # Usage: sh architettura-test/controlli-adr/adr-0030-composizione-unica.sh [project-root]
 N='ADR-0030 composizione-unica'
@@ -17,7 +17,7 @@ V1=$(find "$A" -type d -name 'r[0-9]' 2>/dev/null)
 V2=$(grep -rnE --include='*.kt' --exclude-dir=build '[^A-Za-z0-9_]as\??[[:space:]]+Collaboratori' avvio/src/main 2>/dev/null | grep -vE "$COMMENTO")
 V3=$(grep -rnE --include='*.kt' --exclude-dir=build 'AtomicReference<CodaCondivisa' avvio/src/main 2>/dev/null | grep -vE "$COMMENTO")
 V4=''
-for c in progetto trascrizione parlanti documento sintesi; do
+for c in progetto trascrizione parlanti sbobinatura sintesi; do
   v=$(grep -rnE --include='*.kt' --exclude-dir=build "snastro\.$c\.adattatori" "$A" 2>/dev/null | grep -vE "$COMMENTO" | grep -vE "^$A/($c|progetto)/")
   [ -z "$v" ] || V4="$V4$v
 "

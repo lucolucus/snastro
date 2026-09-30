@@ -161,32 +161,32 @@ class ComposizioneTrascrizioneTest {
     }
 
     @Test
-    fun `AC-356 una Voce senza Parlante nominato e resa Voce n e una Revisione committata rigenera il Documento`() {
+    fun `AC-356 una Voce senza Parlante nominato e resa Voce n e una Revisione committata rigenera la Sbobinatura`() {
         AmbienteProgetto(radice, dueVoci).use {
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento con due Voci") {
-                documento(it)?.contains("**Voce 2**") == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura con due Voci") {
+                sbobinatura(it)?.contains("**Voce 2**") == true
             }
-            assertTrue(documento(it).orEmpty().contains("**Voce 1**"))
+            assertTrue(sbobinatura(it).orEmpty().contains("**Voce 1**"))
 
             val unione = UnisciVoci(id, sopravvive = VoceId(1), rimossa = VoceId(2))
             it.trascrizione.revisione.unisciVoci.esegui(unione).atteso()
 
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento rigenerato dopo VociUnite") {
-                documento(it)?.contains("**Voce 2**") == false
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rigenerata dopo VociUnite") {
+                sbobinatura(it)?.contains("**Voce 2**") == false
             }
-            assertEquals(2, Regex("""\*\*Voce 1\*\*""").findAll(documento(it).orEmpty()).count())
+            assertEquals(2, Regex("""\*\*Voce 1\*\*""").findAll(sbobinatura(it).orEmpty()).count())
         }
     }
 
     @Test
-    fun `AC-351 S3 in sola lettura mostra il Trascritto completato con etichette Voce n e il percorso del Documento`() {
+    fun `AC-351 S3 in sola lettura mostra il Trascritto completato, le etichette Voce n e dove sta la Sbobinatura`() {
         AmbienteProgetto(radice, dueVoci).use {
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento scritto") {
-                it.documento.percorsoDocumento(id) != null
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura scritta") {
+                it.sbobinatura.percorsoSbobinatura(id) != null
             }
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
 
@@ -198,7 +198,7 @@ class ComposizioneTrascrizioneTest {
             }
             val dati = presenter.stato.value as RegistrazioneUiStato.Dati
             assertEquals(listOf("Voce 1", "Voce 2"), dati.segmenti.map { s -> s.etichettaVoce })
-            assertNotNull(dati.documentoPercorso)
+            assertNotNull(dati.sbobinaturaPercorso)
             scopeS3.cancel()
         }
     }
@@ -363,22 +363,23 @@ class ComposizioneTrascrizioneTest {
 
     @Test
     @Suppress("MaxLineLength", "MaximumLineLength", "ArgumentListWrapping") // the test name alone crosses 120 columns
-    fun `AC-C55 un Error che sfugge al lavoro del Documento dopo commit e segnalato una volta, lo scope del progetto sopravvive`() {
+    fun `AC-C55 un Error che sfugge al lavoro della Sbobinatura dopo commit e segnalato una volta, lo scope del progetto sopravvive`() {
         SpiaSnastro().use { spia ->
-            // The fault is injected through the session's only repository seam, and ONLY on the Documento worker's own
+            // The fault is injected through the session's only repository seam, and ONLY on the Sbobinatura worker's
+            // own
             // stack: the pipeline and every command read the same repository untouched.
             val ambiente = AmbienteProgetto(
                 radice,
-                costruisciRegistrazioni = { db -> RegistrazioniGuasteNelDocumento(PorteProgetto.registrazioniSql(db)) },
+                costruisciRegistrazioni = { db -> RegistrazioniGuasteNellaSbobinatura(PorteProgetto.registrazioniSql(db)) },
             )
             val id = ambiente.importa()
 
             // AC-356: dopo un'Elaborazione completata, ElaborazioneCompletata fa girare (dopo commit) il
-            // worker del Documento, che legge la Registrazione — qui un OutOfMemoryError, un Error che
-            // RitentaConBackoff non cattura mai (rethrow): sfugge alla coroutine del worker del Documento.
+            // worker della Sbobinatura, che legge la Registrazione — qui un OutOfMemoryError, un Error che
+            // RitentaConBackoff non cattura mai (rethrow): sfugge alla coroutine del worker della Sbobinatura.
             ambiente.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
 
-            attendiFinche(timeout = 10.seconds, messaggio = "l'Error del worker Documento e' stato segnalato") {
+            attendiFinche(timeout = 10.seconds, messaggio = "l'Error del worker Sbobinatura e' stato segnalato") {
                 spia.catturati.any { it.thrown is OutOfMemoryError }
             }
             assertEquals(
@@ -388,7 +389,7 @@ class ComposizioneTrascrizioneTest {
             )
             assertTrue(
                 ambiente.collaboratori.scope.isActive,
-                "AC-C55: lo scope del progetto sopravvive all'Error del worker Documento (SupervisorJob)",
+                "AC-C55: lo scope del progetto sopravvive all'Error del worker Sbobinatura (SupervisorJob)",
             )
 
             ambiente.close()
@@ -482,12 +483,14 @@ class ComposizioneTrascrizioneTest {
         ambiente.close() // pulizia dell'esecutore/scope residui di AmbienteProgetto (chiudi() e' idempotente)
     }
 
-    /** AC-C55: the production Registrazione repository; its `trova` throws an [Error] on the Documento worker only. */
-    private class RegistrazioniGuasteNelDocumento(private val delegato: RegistrazioneRepository) :
+    /** AC-C55: the production Registrazione repository; its `trova` throws an [Error] on the Sbobinatura worker only.
+     * */
+    private class RegistrazioniGuasteNellaSbobinatura(private val delegato: RegistrazioneRepository) :
         RegistrazioneRepository by delegato {
         override fun trova(id: RegistrazioneId): Registrazione? {
-            val dalDocumento = Thread.currentThread().stackTrace.any { f -> f.className.startsWith(ABBONATO_DOCUMENTO) }
-            if (dalDocumento) throw OutOfMemoryError("guasto iniettato")
+            val dallaSbobinatura =
+                Thread.currentThread().stackTrace.any { f -> f.className.startsWith(ABBONATO_SBOBINATURA) }
+            if (dallaSbobinatura) throw OutOfMemoryError("guasto iniettato")
             return delegato.trova(id)
         }
     }
@@ -518,8 +521,8 @@ class ComposizioneTrascrizioneTest {
     private fun rigaCompleta(stato: RegistrazioniUiStato, id: RegistrazioneId): RigaRegistrazione? =
         (stato as? RegistrazioniUiStato.Dati)?.righe?.find { it.registrazioneId == id }
 
-    private fun documento(ambiente: AmbienteProgetto): String? =
-        ambiente.cartellaDocumenti().takeIf(Files::isDirectory)
+    private fun sbobinatura(ambiente: AmbienteProgetto): String? =
+        ambiente.cartellaSbobinature().takeIf(Files::isDirectory)
             ?.listDirectoryEntries("*.md")?.singleOrNull()?.readText()
 
     /** A RiconoscitoreParlato that keeps a (pretend) model loaded across calls, counting its releases. */
@@ -578,6 +581,6 @@ class ComposizioneTrascrizioneTest {
     private companion object {
         const val ATTESA_INTERROMPI_S = 20L
         const val ATTESA_NESSUN_AVVIO_MS = 1_500L
-        const val ABBONATO_DOCUMENTO = "snastro.documento.adattatori.eventi.AbbonatoDocumentoEventi"
+        const val ABBONATO_SBOBINATURA = "snastro.sbobinatura.adattatori.eventi.AbbonatoSbobinaturaEventi"
     }
 }

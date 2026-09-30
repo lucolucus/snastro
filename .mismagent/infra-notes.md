@@ -76,7 +76,7 @@
   (ADR 0006 Amendment (a)); a committed `.sqm` is never edited (a fix is a new migration), no down
   migrations.
 - Set invariants INV-4 / INV-16 backed by partial unique indexes (ADR 0007).
-- Documenti `.md` are derived: written atomically, never read back (enforced_by, ADR 0010).
+- Sbobinature `.md` are derived: written atomically, never read back (enforced_by, ADR 0010).
 - *(2026-09-25, [ADR 0022](decisions/0022-persistenza-sintesi-6sqm.md))* `Riassunto`s live only in `progetto.db` (`6.sqm`): plain TEXT, one row per element and
   per `Fonte` (FTS5-ready), no `Nome`/`ParlanteId` stored. They are included in the folder backup and deleted with their
   `Registrazione` (ADR 0024).
@@ -91,7 +91,7 @@
 
 ## Project layout, backup & restore (ADR 0010)
 - A Progetto is a **self-contained relocatable folder** `<nome>.snastro/` (default parent
-  `~/Documents/snastro/`): `progetto.db`, `audio/` (**copied** sources), `documenti/`
+  `~/Documents/snastro/`): `progetto.db`, `audio/` (**copied** sources), `sbobinature/`
   (`<AAAA-MM-DD> <titolo>.md`, atomic overwrite), `cache/audio/` (derived WAV, regenerable), `.lock`.
 - Paths in the DB are relative → the folder can be copied/moved/backed up as a unit.
 - Backup = the user copies the folder; the app makes no backups. Retention: none.

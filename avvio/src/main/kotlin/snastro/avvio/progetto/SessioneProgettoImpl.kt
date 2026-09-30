@@ -106,7 +106,7 @@ internal class SessioneProgettoImpl(
         Files.createDirectories(genitore)
         val cartella = creaCartellaLibera(genitore, NomeCartella.base(nome))
         Files.createDirectories(cartella.resolve("audio"))
-        Files.createDirectories(cartella.resolve("documenti"))
+        Files.createDirectories(cartella.resolve("sbobinature"))
         Files.createDirectories(cartella.resolve("cache/audio"))
 
         // Un brand-new folder: nessun altro puo' gia' detenere il lock, difensivo soltanto.
@@ -220,7 +220,8 @@ internal class SessioneProgettoImpl(
                 sessione.risorse.lettoreAudio.chiudi()
             }
             sessione.composto.collaboratori.scope.cancel()
-            // I lavoratori di sfondo (la coda condivisa, il Documento, i Parlanti, ...) sono gia' stati cancellati con
+            // I lavoratori di sfondo (la coda condivisa, la Sbobinatura, i Parlanti, ...) sono gia' stati cancellati
+            // con
             // lo scope qui sopra; ArrestoProgetto attende, entro UNA scadenza condivisa (AC-C73), che smettano davvero
             // di toccare il database PRIMA di chiuderlo. fix-batch-16 MED-1: se un lavoratore sopravvive alla scadenza
             // (una chiamata nativa ignora l'interruzione), chiusura del database e rilascio del lock sono RINVIATI alla

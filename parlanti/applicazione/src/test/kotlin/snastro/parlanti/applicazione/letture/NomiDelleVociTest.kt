@@ -20,7 +20,7 @@ import kotlin.test.assertTrue
 
 /**
  * [NomiDelleVoci] against the ports' fakes (D1): AC-101/AC-102 of `nomi-delle-voci`, mirroring the
- * semantics the consumer-driven `LettoreNomiContratto` (documento) already pins for this shape.
+ * semantics the consumer-driven `LettoreNomiContratto` (sbobinatura) already pins for this shape.
  */
 class NomiDelleVociTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()

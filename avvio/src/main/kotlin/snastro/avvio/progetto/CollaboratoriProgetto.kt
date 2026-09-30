@@ -1,8 +1,8 @@
 package snastro.avvio.progetto
 
 import kotlinx.coroutines.CoroutineScope
-import snastro.avvio.documento.CollaboratoriDocumento
 import snastro.avvio.parlanti.CollaboratoriParlanti
+import snastro.avvio.sbobinatura.CollaboratoriSbobinatura
 import snastro.avvio.sintesi.CollaboratoriSintesi
 import snastro.avvio.trascrizione.CollaboratoriTrascrizione
 import snastro.kernel.Esito
@@ -19,7 +19,7 @@ import snastro.ui.lettore.LettoreAudio
 /**
  * The collaborators of ONE open project that `:avvio`'s presenters are wired over (ADR 0030 §1, AC-C72): Progetto's
  * own (S2's list and commands, the ONE player, the after-commit [pulizia] the UI attaches `dimenticaPosto` to) and
- * one NON-NULL, typed field per context — [trascrizione], [parlanti], [sintesi], [documento]. No cast, no chain.
+ * one NON-NULL, typed field per context — [trascrizione], [parlanti], [sintesi], [sbobinatura]. No cast, no chain.
  *
  * [avviaElaborazione] is 'Trascrivi'/'Riprova'/'Ritrascrivi': Trascrizione's command (which rings the queue), then
  * the similarity computation or preview of that Registrazione is dropped (AC-537/AC-549). [scope] is the session's
@@ -37,7 +37,7 @@ internal class CollaboratoriProgetto(
     val trascrizione: CollaboratoriTrascrizione,
     val parlanti: CollaboratoriParlanti,
     val sintesi: CollaboratoriSintesi,
-    val documento: CollaboratoriDocumento,
+    val sbobinatura: CollaboratoriSbobinatura,
     val avviaElaborazione: (AvviaElaborazione) -> Esito<Unit>,
     val posizioniNellaCoda: PosizioniNellaCoda,
     val aggiornamentiVista: AggiornamentiVista,

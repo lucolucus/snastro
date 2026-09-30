@@ -26,8 +26,8 @@ import snastro.ui.Cambiamento
  * a Proposta is always invalidated before any screen hears of the change that made it stale (AC-173, AC-317):
  *
  * - `AttribuzioneConfermata` → invalidate, `Cambiamento(its Registrazione)` (S2 badge, S3 panel, S4);
- * - `ImpronteRiallineate` → invalidate, `Cambiamento(its Registrazione)` (AC-317; the Documento does not
- *   subscribe to it: prints do not change a Documento);
+ * - `ImpronteRiallineate` → invalidate, `Cambiamento(its Registrazione)` (AC-317; the Sbobinatura does not
+ *   subscribe to it: prints do not change a Sbobinatura);
  * - `ParlanteCreato`/`Rinominato`/`Promosso`/`Eliminato` → invalidate, `Cambiamento(null)` (a Nome may show
  *   in every Registrazione);
  * - `TrascrittoSostituito` (ADR 0018 §5, AC-456) → invalidate, `Cambiamento(null)`: cached Proposte are keyed

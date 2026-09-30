@@ -5,7 +5,7 @@ import snastro.kernel.ParlanteId
 
 /**
  * Published Language of the domain event `ParlantePromosso` (boundary `eventi-parlanti`, after commit);
- * [nomeCambiato] lets the Documento policy regenerate only when the `Nome` changed (R22).
+ * [nomeCambiato] lets the Sbobinatura policy regenerate only when the `Nome` changed (R22).
  */
 public data class ParlantePromosso(
     val parlanteId: ParlanteId,

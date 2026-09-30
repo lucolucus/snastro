@@ -11,7 +11,6 @@ import snastro.avvio.Abbonamento
 import snastro.avvio.ModuloComposizione
 import snastro.avvio.abbonamenti
 import snastro.avvio.gestoreErrori
-import snastro.documento.applicazione.politiche.RigenerazioneDocumentoPolitica
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.progetto.adattatori.audio.ArchivioAudioFile
@@ -33,6 +32,7 @@ import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioniDelProgetto
 import snastro.progetto.applicazione.porte.RegistroProgetti
+import snastro.sbobinatura.applicazione.politiche.RigenerazioneSbobinaturaPolitica
 import snastro.supporto.figlioDi
 import snastro.ui.AggiornamentiVista
 import java.nio.file.Path
@@ -47,14 +47,15 @@ import java.util.logging.Logger
  * - its after-commit subscribers: [AggiornamentiVistaEventi] (AC-242/AC-366) and [PuliziaRegistrazioneEliminata]
  *   (ADR 0020 §3/§5, AC-632);
  * - at [avvia], in the background, `CompletaEliminazioniRegistrazioni` of the pending rows (ADR 0020 §4, AC-633): the
- *   Documento removal goes through [rigenerazioneDocumento], the project's ONE policy (AC-C61). A failure is logged:
+ *   Sbobinatura removal goes through [rigenerazioneSbobinatura], the project's ONE policy (AC-C61). A failure is
+ * logged:
  *   the rows stay for the next opening.
  */
 internal class ModuloProgetto(
     porte: PorteProgetto,
     apertura: AperturaProgetto,
     private val app: ComponentiApp,
-    rigenerazioneDocumento: RigenerazioneDocumentoPolitica,
+    rigenerazioneSbobinatura: RigenerazioneSbobinaturaPolitica,
 ) : ModuloComposizione {
     private val archivio = ArchivioAudioFile(apertura.cartella)
     private val aggiornamenti = AggiornamentiVistaEventi()
@@ -62,7 +63,7 @@ internal class ModuloProgetto(
         porte.unitaDiLavoro,
         porte.eliminazioniInSospeso,
         archivio,
-        PuliziaDerivatiFile(apertura.cartella, rigenerazioneDocumento),
+        PuliziaDerivatiFile(apertura.cartella, rigenerazioneSbobinatura),
     )
 
     @Volatile private var lavoro: Job? = null

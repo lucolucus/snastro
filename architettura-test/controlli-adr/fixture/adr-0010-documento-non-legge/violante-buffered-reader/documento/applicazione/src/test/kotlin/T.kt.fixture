@@ -1,3 +1,0 @@
-package snastro.documento.applicazione
-
-fun f(f: java.io.File) = f.bufferedReader()

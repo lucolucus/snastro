@@ -38,7 +38,7 @@ import kotlin.time.Duration.Companion.seconds
  * A plain [AbbonatoDopoCommit] VALUE (ADR 0030 §1, AC-C67): it never registers itself, and constructing it
  * launches nothing — its worker runs only once [avvia] is called with the open project's scope (`:avvio`'s
  * `ModuloParlanti`, step 6 of `apriProgetto`). A request received before that is kept and runs at [avvia].
- * Unlike `AbbonatoDocumentoEventi` it has no startup sweep of its own: `RiallineaTutteLeImpronte` at project
+ * Unlike `AbbonatoSbobinaturaEventi` it has no startup sweep of its own: `RiallineaTutteLeImpronte` at project
  * open is the composition's responsibility.
  */
 public class AbbonatoRiallineamentoImpronte(

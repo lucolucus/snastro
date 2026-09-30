@@ -6,7 +6,7 @@ import java.io.File
 
 /**
  * [ApriEsterno] over `java.awt.Desktop` (frugality rung 3: the platform's own file-manager/default-
- * app integration over a hand-rolled per-OS launcher): S3's "Apri documento" / "Mostra nella cartella", built ONCE
+ * app integration over a hand-rolled per-OS launcher): S3's "Apri sbobinatura" / "Mostra nella cartella", built ONCE
  * by `costruisciGrafo` for the whole app.
  */
 internal class ApriEsternoDesktop : ApriEsterno {

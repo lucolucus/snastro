@@ -73,7 +73,7 @@ import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.DESCRIZIONE_SELEZIONA_FRASE
 import snastro.ui.testi.ETICHETTA_ANNULLA
-import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
+import snastro.ui.testi.ETICHETTA_APRI_SBOBINATURA
 import snastro.ui.testi.ETICHETTA_BRICIOLA_REGISTRAZIONI
 import snastro.ui.testi.ETICHETTA_DESELEZIONA
 import snastro.ui.testi.ETICHETTA_DIVIDI_VOCE
@@ -403,17 +403,17 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
                 horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
             ) {
                 BottoneSn(
-                    ETICHETTA_APRI_DOCUMENTO,
-                    onClick = azioni.apriDocumento,
-                    abilitato = stato.documentoPercorso != null,
+                    ETICHETTA_APRI_SBOBINATURA,
+                    onClick = azioni.apriSbobinatura,
+                    abilitato = stato.sbobinaturaPercorso != null,
                     icona = Icona.Document,
-                    modifier = Modifier.testTag("registrazione-apri-documento"),
+                    modifier = Modifier.testTag("registrazione-apri-sbobinatura"),
                 )
                 BottoneIconaSn(
                     Icona.Reveal,
                     ETICHETTA_MOSTRA_CARTELLA,
-                    onClick = azioni.mostraDocumentoNellaCartella,
-                    abilitato = stato.documentoPercorso != null,
+                    onClick = azioni.mostraSbobinaturaNellaCartella,
+                    abilitato = stato.sbobinaturaPercorso != null,
                     modifier = Modifier.testTag("registrazione-mostra-cartella"),
                 )
             }

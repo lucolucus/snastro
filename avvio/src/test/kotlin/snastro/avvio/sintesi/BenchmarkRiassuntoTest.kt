@@ -42,14 +42,15 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
 /**
- * AC-S153 (opt-in, `./gradlew benchmarkRiassunto -Pcampione=<Documento .md>`, never in `check`): ONE Riassunto of
+ * AC-S153 (opt-in, `./gradlew benchmarkRiassunto -Pcampione=<Sbobinatura .md>`, never in `check`): ONE Riassunto of
  * the sample at the default 2000-word cap, through the REAL `EseguiProssimoRiassuntoServizio` and the REAL
  * [ModelloLinguisticoLlama] (llama.cpp natives copied by `copiaNativiLlama`, Qwen3.5 9B), from `RiassuntoAvviato`
  * to `RiassuntoPronto`, model load and release included (ADR 0026 §6). The storage and read ports are the Sintesi
  * fakes: the time is the model's, not SQLite's. Prints load / prefill / generation / release, tokens, peak RSS;
  * fails above 600 s or when the run does not end `pronto`.
  *
- * The sample is a snastro Documento (`**Nome** (mm:ss): testo` per Segmento, `Documento.proietta`): its lines become
+ * The sample is a snastro Sbobinatura (`**Nome** (mm:ss): testo` per Segmento, `Sbobinatura.proietta`): its lines
+ * become
  * the Segmenti in order, a distinct name a Voce (a `Voce n` name stays unattributed). The model is `-Pmodello`,
  * else the installed catalogue GGUF of the app's model cache.
  */
@@ -60,7 +61,7 @@ class BenchmarkRiassuntoTest {
     @Test
     fun `AC-S153 un Riassunto di un'ora al tetto predefinito si completa entro 600 s`() {
         val campione = Path.of(checkNotNull(System.getProperty("snastro.benchmark.campione")) { "-Pcampione=<.md>" })
-        val (segmenti, nomi) = leggiDocumento(campione)
+        val (segmenti, nomi) = leggiSbobinatura(campione)
         val misure = CopyOnWriteArrayList<MisureRiassunto>()
         val eventi = CopyOnWriteArrayList<Pair<EventoPubblicato, Long>>()
         val riassunti = RiassuntoRepositoryFinta()
@@ -125,8 +126,8 @@ class BenchmarkRiassuntoTest {
             ?: fileModelloLinguistico(ProvisioningModelli(catalogo, CartellaCacheModelli.risolvi()))
     }
 
-    /** Documento lines -> Segmenti (in order, ids 1..n) and the Nome of each attributed Voce. */
-    private fun leggiDocumento(md: Path): Pair<List<SegmentoSintesi>, Map<VoceId, String>> {
+    /** Sbobinatura lines -> Segmenti (in order, ids 1..n) and the Nome of each attributed Voce. */
+    private fun leggiSbobinatura(md: Path): Pair<List<SegmentoSintesi>, Map<VoceId, String>> {
         val voci = LinkedHashMap<String, VoceId>()
         val segmenti = Files.readAllLines(md).mapNotNull { RIGA.matchEntire(it.trim()) }.mapIndexed { i, m ->
             val (nome, minuti, secondi) = m.destructured

@@ -265,7 +265,7 @@ internal class AmbienteVoci(
         io = io,
         registrazioneId = REG,
         trascritto = { vista },
-        documento = { "/progetti/demo.snastro/documenti/seduta.md" },
+        sbobinatura = { "/progetti/demo.snastro/sbobinature/seduta.md" },
         lettore = lettore,
         apriEsterno = ApriEsternoFinta(),
         parlanti = sorgenti,

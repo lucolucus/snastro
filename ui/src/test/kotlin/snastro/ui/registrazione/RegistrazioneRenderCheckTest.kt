@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.ui.lettore.LettoreUiStato
-import snastro.ui.testi.ETICHETTA_APRI_DOCUMENTO
+import snastro.ui.testi.ETICHETTA_APRI_SBOBINATURA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
@@ -36,8 +36,8 @@ private val AZIONI_VUOTE = AzioniRegistrazione(
     riproduciDaInizio = {},
     pausa = {},
     riproduciSegmento = {},
-    apriDocumento = {},
-    mostraDocumentoNellaCartella = {},
+    apriSbobinatura = {},
+    mostraSbobinaturaNellaCartella = {},
     chiudiErrore = {},
     riprova = {},
 )
@@ -67,7 +67,7 @@ private fun uniStato(
     segmenti: List<SegmentoRiga>,
     barra: LettoreUiStato = LettoreUiStato.Inattivo,
     audioDisponibile: Boolean = true,
-    documentoPercorso: String? = "/progetti/demo.snastro/documenti/2026-03-12 Seduta.md",
+    sbobinaturaPercorso: String? = "/progetti/demo.snastro/sbobinature/2026-03-12 Seduta.md",
     errore: String? = null,
     soloLettura: Boolean = false,
     bannerRitrascrizione: String? = null,
@@ -78,7 +78,7 @@ private fun uniStato(
     segmenti = segmenti,
     barra = barra,
     audioDisponibile = audioDisponibile,
-    documentoPercorso = documentoPercorso,
+    sbobinaturaPercorso = sbobinaturaPercorso,
     errore = errore,
     soloLettura = soloLettura,
     bannerRitrascrizione = bannerRitrascrizione,
@@ -199,7 +199,7 @@ class RegistrazioneRenderCheckTest {
         onAllNodesWithText("Voce 1").assertCountEquals(2)
         onNodeWithText("Posso interrompere un attimo?").assertIsDisplayed()
         onNodeWithText("Anche io vorrei dire una cosa.").assertIsDisplayed()
-        onNodeWithText(ETICHETTA_APRI_DOCUMENTO).assertIsDisplayed()
+        onNodeWithText(ETICHETTA_APRI_SBOBINATURA).assertIsDisplayed()
         catturaPng("registrazione-trascritto-sovrapposto", width, height)
     }
 

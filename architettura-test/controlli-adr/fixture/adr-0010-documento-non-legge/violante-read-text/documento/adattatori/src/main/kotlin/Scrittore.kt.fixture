@@ -1,3 +1,0 @@
-package snastro.documento.adattatori
-
-fun f(f: java.io.File) = f.readText()

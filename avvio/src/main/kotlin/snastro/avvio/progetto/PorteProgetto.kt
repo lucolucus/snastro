@@ -24,9 +24,9 @@ import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import java.io.File
 import java.time.Clock
-import snastro.documento.adattatori.porte.LettoreNomiDaParlanti as LettoreNomiDocumento
-import snastro.documento.adattatori.porte.LettoreTrascrittoDaTrascrizione as LettoreTrascrittoDocumento
 import snastro.parlanti.adattatori.porte.LettoreRegistrazioneDaProgetto as LettoreRegistrazioneParlanti
+import snastro.sbobinatura.adattatori.porte.LettoreNomiDaParlanti as LettoreNomiSbobinatura
+import snastro.sbobinatura.adattatori.porte.LettoreTrascrittoDaTrascrizione as LettoreTrascrittoSbobinatura
 import snastro.sintesi.adattatori.porte.LettoreNomiDaParlanti as LettoreNomiSintesi
 import snastro.sintesi.adattatori.porte.LettoreTrascrittoDaTrascrizione as LettoreTrascrittoSintesi
 import snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto as LettoreRegistrazioneTrascrizione
@@ -86,7 +86,7 @@ internal class PorteProgetto(
     /** Trascrizione's public read API over [trascritti], shared by every cross-context reader below. */
     val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti)
 
-    /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Documento's and Sintesi's readers. */
+    /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Sbobinatura's and Sintesi's readers. */
     val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
@@ -94,8 +94,9 @@ internal class PorteProgetto(
     val registrazionePerTrascrizione: LettoreRegistrazioneTrascrizione = LettoreRegistrazioneTrascrizione(catalogo)
     val registrazionePerParlanti: LettoreRegistrazioneParlanti = LettoreRegistrazioneParlanti(catalogo)
     val vociPerParlanti: LettoreVociDaTrascrizione = LettoreVociDaTrascrizione(vociDelTrascritto)
-    val trascrittoPerDocumento: LettoreTrascrittoDocumento = LettoreTrascrittoDocumento(vociDelTrascritto, catalogo)
-    val nomiPerDocumento: LettoreNomiDocumento = LettoreNomiDocumento(nomiDelleVoci)
+    val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
+        LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
+    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci)
     val trascrittoPerSintesi: LettoreTrascrittoSintesi = LettoreTrascrittoSintesi(vociDelTrascritto, statiElaborazione)
     val nomiPerSintesi: LettoreNomiSintesi = LettoreNomiSintesi(nomiDelleVoci)
 

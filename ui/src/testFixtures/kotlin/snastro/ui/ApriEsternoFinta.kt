@@ -2,7 +2,7 @@ package snastro.ui
 
 /**
  * Fake [ApriEsterno] (RC-9): records every call so a test can assert WHICH `percorso` was opened/shown
- * (AC-218 — 'Apri documento'/'Mostra nella cartella' use the Documento's path), without touching the OS.
+ * (AC-218 — 'Apri sbobinatura'/'Mostra nella cartella' use the Sbobinatura's path), without touching the OS.
  */
 class ApriEsternoFinta : ApriEsterno {
     private val _fileAperti = mutableListOf<String>()

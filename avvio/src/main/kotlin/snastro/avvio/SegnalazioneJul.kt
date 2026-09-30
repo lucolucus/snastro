@@ -6,8 +6,8 @@ import snastro.supporto.gestoreErroriNonCatturati
 import java.util.logging.Level
 
 /**
- * The ONE JUL-backed [Segnalazione] of `:avvio` src/main (ADR 0028 §2, AC-C54): the Documento worker
- * ([snastro.avvio.documento.ModuloDocumento]), the Parlanti realignment worker
+ * The ONE JUL-backed [Segnalazione] of `:avvio` src/main (ADR 0028 §2, AC-C54): the Sbobinatura worker
+ * ([snastro.avvio.sbobinatura.ModuloSbobinatura]), the Parlanti realignment worker
  * ([snastro.avvio.parlanti.ModuloParlanti]) and [snastro.avvio.coda.CodaCondivisa]'s own escape hook all report
  * through this SAME instance — the a2/a3 per-extension local `Segnalazione { … }` lambdas are gone.
  *

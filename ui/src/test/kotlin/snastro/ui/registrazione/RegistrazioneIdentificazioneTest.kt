@@ -571,7 +571,7 @@ class RegistrazioneIdentificazioneTest {
             io = dispatcher,
             registrazioneId = REG,
             trascritto = { a.vista },
-            documento = { null },
+            sbobinatura = { null },
             lettore = lettore,
             apriEsterno = ApriEsternoFinta(),
             parlanti = a.sorgenti,

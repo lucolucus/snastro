@@ -9,10 +9,10 @@ import kotlinx.coroutines.launch
 import snastro.avvio.Grafo
 import snastro.avvio.coda.CodaCondivisa
 import snastro.avvio.coda.FonteCoda
-import snastro.avvio.documento.CollaboratoriDocumento
 import snastro.avvio.orologioApp
 import snastro.avvio.parlanti.AdattatoriParlanti
 import snastro.avvio.parlanti.CollaboratoriParlanti
+import snastro.avvio.sbobinatura.CollaboratoriSbobinatura
 import snastro.avvio.sintesi.CollaboratoriSintesi
 import snastro.avvio.trascrizione.AdattatoriMl
 import snastro.avvio.trascrizione.CollaboratoriTrascrizione
@@ -87,7 +87,7 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio as Decodifica
 /**
  * The ONE test Ambiente of `:avvio` (ADR 0030 §3, AC-C79): the REAL single composition — [SessioneProgettoImpl] over a
  * SQLite project FILE opened with the production driver, then the production [apriProgetto] (never re-wired by hand):
- * real shared queue and its worker thread, real SQL repositories and subscribers of every context, real Documento
+ * real shared queue and its worker thread, real SQL repositories and subscribers of every context, real Sbobinatura
  * writer — with only the non-headless edges of [ComponentiApp] faked: the FFmpeg probe/decoders, the sherpa ML Finte
  * ([diarizzatore], [riconoscitore]), the print [estrattore], the LLM ([modello]) and its availability ([disponibilita],
  * `Installato` by default).
@@ -203,7 +203,7 @@ internal class AmbienteProgetto(
     val trascrizione: CollaboratoriTrascrizione get() = collaboratori.trascrizione
     val parlanti: CollaboratoriParlanti get() = collaboratori.parlanti
     val sintesi: CollaboratoriSintesi get() = collaboratori.sintesi
-    val documento: CollaboratoriDocumento get() = collaboratori.documento
+    val sbobinatura: CollaboratoriSbobinatura get() = collaboratori.sbobinatura
 
     /** The app graph over this Ambiente's session, scope and dispatchers (the one `ContenutoApp` would receive). */
     fun grafo(servizioModelli: ServizioModelli = ServizioModelliFinta(StatoModelli.Pronti)): Grafo = Grafo(
@@ -275,7 +275,7 @@ internal class AmbienteProgetto(
         impronte = porte.parlanti.impronteDelProgetto(progetto.progettoId).size,
     )
 
-    fun cartellaDocumenti(): Path = Path.of(progetto.percorso).resolve("documenti")
+    fun cartellaSbobinature(): Path = Path.of(progetto.percorso).resolve("sbobinature")
 
     /** Collects the project's Cambiamenti from now on: the flows' replayed past ones are drained and dropped. */
     fun raccogliCambiamenti(): MutableList<Cambiamento> {

@@ -36,11 +36,11 @@ dependencies {
     implementation(project(":parlanti:applicazione"))
 
     // R1 composition (avvio-composizione, package snastro.avvio.r1): Trascrizione SQL repositories +
-    // decoder + AllineatorePerTurno, Documento regeneration, :modelli behind ServizioModelli (AC-329),
+    // decoder + AllineatorePerTurno, Sbobinatura regeneration, :modelli behind ServizioModelli (AC-329),
     // MotoreSherpa handed to the real ML adapters once they wire themselves in (SelezioneAdattatoriMl).
     implementation(project(":trascrizione:adattatori"))
-    implementation(project(":documento:applicazione"))
-    implementation(project(":documento:adattatori"))
+    implementation(project(":sbobinatura:applicazione"))
+    implementation(project(":sbobinatura:adattatori"))
     implementation(project(":modelli"))
     implementation(project(":ml-sherpa"))
     // R3 (modello-facoltativo-avvio): DisponibilitaModelloLinguisticoAvvio implements Sintesi's
@@ -68,7 +68,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.swing)
     // Segnalazione (ADR 0028 §7.3 step 3): the JUL-backed implementation EstensioneR1 injects into
-    // AbbonatoDocumentoEventi, until a4 unifies every wiring site behind one.
+    // AbbonatoSbobinaturaEventi, until a4 unifies every wiring site behind one.
     implementation(project(":supporto"))
 
     testImplementation(testFixtures(project(":kernel")))
@@ -170,12 +170,12 @@ tasks.named<Test>("test") {
     }
 }
 
-// AC-S153 (ADR 0026 §6), opt-in, NEVER in `check`: `./gradlew benchmarkRiassunto -Pcampione=<Documento .md>
+// AC-S153 (ADR 0026 §6), opt-in, NEVER in `check`: `./gradlew benchmarkRiassunto -Pcampione=<Sbobinatura .md>
 // [-Pmodello=<gguf>]` — one Riassunto of a real 60-minute Registrazione through the real service + the real
 // llama.cpp adapter; prints load / prefill / generation / release, tokens and peak RSS; fails above 600 s.
 tasks.register<Test>("benchmarkRiassunto") {
     group = "verification"
-    description = "Opt-in NFR benchmark of a Riassunto (ADR 0026 §6, -Pcampione=<Documento .md> [-Pmodello=<gguf>])."
+    description = "Opt-in NFR benchmark of a Riassunto (ADR 0026 §6, -Pcampione=<Sbobinatura .md> [-Pmodello=<gguf>])."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
@@ -190,7 +190,7 @@ tasks.register<Test>("benchmarkRiassunto") {
     val campione = providers.gradleProperty("campione")
     val modello = providers.gradleProperty("modello")
     doFirst {
-        if (!campione.isPresent) throw GradleException("benchmarkRiassunto needs -Pcampione=<path to a Documento .md>")
+        if (!campione.isPresent) throw GradleException("benchmarkRiassunto needs -Pcampione=<path to a Sbobinatura .md>")
     }
     jvmArgumentProviders += CommandLineArgumentProvider {
         listOf(

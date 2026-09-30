@@ -2,7 +2,7 @@ package snastro.ui.testi
 
 /** S3 · Registrazione screen labels, Italian (dev-architecture `#presenter`: UI strings live in
  * `snastro.ui.testi`). */
-const val ETICHETTA_APRI_DOCUMENTO: String = "Apri documento"
+const val ETICHETTA_APRI_SBOBINATURA: String = "Apri sbobinatura"
 const val ETICHETTA_MOSTRA_CARTELLA: String = "Mostra nella cartella"
 
 /** AC-580: the header breadcrumb back to S2 — plain caption text, not a link: this screen has no

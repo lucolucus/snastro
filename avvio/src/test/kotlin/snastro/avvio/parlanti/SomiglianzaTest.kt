@@ -173,11 +173,11 @@ class SomiglianzaTest {
         ParlanteRepositorySql(a.porte.database, a.porte.lettura).impronteDiRegistrazione(id).size,
     )
 
-    private fun documento(a: AmbienteProgetto, id: RegistrazioneId): String? =
-        a.documento.percorsoDocumento(id)?.let { p -> Path.of(p).readText() }
+    private fun sbobinatura(a: AmbienteProgetto, id: RegistrazioneId): String? =
+        a.sbobinatura.percorsoSbobinatura(id)?.let { p -> Path.of(p).readText() }
 
     @Test
-    fun `AC-538 anteprima senza scritture, Applica in una transazione, confermate intatte, Documento rigenerato`() {
+    fun `AC-538 anteprima senza scritture, Applica in una transazione, confermate intatte, Sbobinatura rigenerata`() {
         ambiente().use { a ->
             val id = prepara(a)
             val riallineate = CopyOnWriteArrayList<EventoPubblicato>()
@@ -210,8 +210,8 @@ class SomiglianzaTest {
             val attribuzioni = AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id)
             assertEquals(listOf(1, 2, 4), attribuzioni.map { it.voceRef.voceId.numero }.sorted(), "Luca tiene Voce 4")
 
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento rigenerato") {
-                documento(a, id)?.let { d -> d.split("**Anna**").size - 1 == 4 && "**Voce 3**" in d } == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rigenerata") {
+                sbobinatura(a, id)?.let { d -> d.split("**Anna**").size - 1 == 4 && "**Voce 3**" in d } == true
             }
             attendiFinche(timeout = 10.seconds, messaggio = "RiallineaImpronte dopo il commit") {
                 riallineate.isNotEmpty()
@@ -325,8 +325,8 @@ class SomiglianzaTest {
             assertEquals(attribuzione.parlanteId, dariano.parlanteId)
             val repoParlanti = ParlanteRepositorySql(a.porte.database, a.porte.lettura)
             assertEquals(1, repoParlanti.impronteDiRegistrazione(id).size)
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento con Dario") {
-                documento(a, id)?.contains("**Dario**") == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura con Dario") {
+                sbobinatura(a, id)?.contains("**Dario**") == true
             }
 
             val prima = AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id).size

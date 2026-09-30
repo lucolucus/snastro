@@ -7,8 +7,8 @@ import snastro.avvio.ModuloComposizione
 import snastro.avvio.coda.Campanello
 import snastro.avvio.coda.CodaCondivisa
 import snastro.avvio.coda.FonteCoda
-import snastro.avvio.documento.ModuloDocumento
 import snastro.avvio.parlanti.ModuloParlanti
+import snastro.avvio.sbobinatura.ModuloSbobinatura
 import snastro.avvio.segnalazioneApp
 import snastro.avvio.sintesi.ModuloSintesi
 import snastro.avvio.trascrizione.ModuloTrascrizione
@@ -25,7 +25,7 @@ import snastro.kernel.EventoPubblicato
  * 1. a [Campanello] (the queue's wake-up handle), then the modules, each built from [porte];
  * 2. the synchronous subscribers, registered from ONE declared list: Sintesi → Parlanti → Trascrizione (ADR 0030 §2,
  *    AC-S143 — correctness does not depend on it: all run in the command's single transaction);
- * 3. the after-commit subscribers, from ONE declared list: Sintesi → Parlanti → Trascrizione → Documento → Progetto
+ * 3. the after-commit subscribers, from ONE declared list: Sintesi → Parlanti → Trascrizione → Sbobinatura → Progetto
  *    (Parlanti before Trascrizione: a Proposta is invalidated before any screen hears of the change, AC-317);
  * 4. the shared queue ([CodaCondivisa]) over the sources of every module (+ [fontiAggiuntive], a test seam only);
  * 5. the startup recoveries of every source (AC-S145/AC-C71: before the first claim, and before the Parlanti
@@ -43,15 +43,15 @@ internal fun apriProgetto(
     val campanello = Campanello()
     // 1. the modules
     val trascrizione = ModuloTrascrizione(porte, apertura, app, campanello)
-    val documento = ModuloDocumento(porte, apertura, app)
+    val sbobinatura = ModuloSbobinatura(porte, apertura, app)
     val parlanti = ModuloParlanti(porte, apertura, app, trascrizione.collaboratori)
     val sintesi = ModuloSintesi(porte, apertura, app, campanello)
-    val progetto = ModuloProgetto(porte, apertura, app, documento.politica)
-    // The start order (step 6): Documento's worker before Progetto's CompletaEliminazioniRegistrazioni (ADR 0020 §4).
-    val moduli = listOf(trascrizione, documento, parlanti, sintesi, progetto)
+    val progetto = ModuloProgetto(porte, apertura, app, sbobinatura.politica)
+    // The start order (step 6): Sbobinatura's worker before Progetto's CompletaEliminazioniRegistrazioni (ADR 0020 §4).
+    val moduli = listOf(trascrizione, sbobinatura, parlanti, sintesi, progetto)
     // 2. + 3. the declared lists
     val sincroni: List<ModuloComposizione> = listOf(sintesi, parlanti, trascrizione)
-    val dopoCommit: List<ModuloComposizione> = listOf(sintesi, parlanti, trascrizione, documento, progetto)
+    val dopoCommit: List<ModuloComposizione> = listOf(sintesi, parlanti, trascrizione, sbobinatura, progetto)
     check(moduli.filterNot { it in sincroni }.all { it.abbonatiSincroni().isEmpty() }) {
         "un modulo fuori dalla lista sincrona dichiarata ha abbonati sincroni: vanno dichiarati (ADR 0030 §2)"
     }
@@ -85,7 +85,7 @@ internal fun apriProgetto(
         trascrizione = trascrizione.collaboratori,
         parlanti = parlanti.collaboratori,
         sintesi = sintesi.collaboratori,
-        documento = documento.collaboratori,
+        sbobinatura = sbobinatura.collaboratori,
         avviaElaborazione = { comando ->
             trascrizione.collaboratori.avviaElaborazione(comando).also {
                 if (it is Esito.Ok) parlanti.collaboratori.somiglianza.scarta(comando.registrazioneId)

@@ -417,7 +417,7 @@ class RegistroProgettiFileRobustezzaTest {
         val file = cartella.resolve("progetti-recenti")
         val percorsi = listOf(
             "/Users/utente/Documents/snastro/Riunione (2).snastro",
-            "C:\\Utenti\\Città\\Documenti\\snastro\\Città metropolitana (3).snastro",
+            "C:\\Utenti\\Città\\Sbobinature\\snastro\\Città metropolitana (3).snastro",
             "/percorsi/Attività è più «unicode» ünïcödé/Progetto.snastro",
         )
         val voci = percorsi.mapIndexed { i, p ->

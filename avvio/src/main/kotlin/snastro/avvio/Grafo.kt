@@ -31,7 +31,7 @@ import java.time.Duration
  * wiring, all in `:avvio`). [scope] is a single presenter scope on `Dispatchers.Swing` with a `SupervisorJob` — one
  * presenter's failure never kills another's collectors. [io] is the ONE background dispatcher. [clock] ticks at
  * millisecond precision: the SQL adapters store epoch millis, a finer clock would break save/read equality.
- * [servizioModelli] is S5's port (models are per user), [apriEsterno] what S3 uses for the Documento, [preferenze]
+ * [servizioModelli] is S5's port (models are per user), [apriEsterno] what S3 uses for the Sbobinatura, [preferenze]
  * the app-wide Impostazioni (theme, folder of new projects).
  */
 @Suppress("LongParameterList") // one parameter per app-wide collaborator of the screens

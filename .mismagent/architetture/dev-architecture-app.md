@@ -40,7 +40,7 @@ Sections: [#pacchetti](#pacchetti) · [#valori-id](#valori-id) · [#aggregato](#
 - *(2026-09-27, ADR 0028)* `snastro.supporto` (flat; the domain-free technical library) and `snastro.supporto.test`
   (test helpers, test source sets only).
 - *(2026-09-27, ADR 0030)* `:avvio` by concern:
-  - `snastro.avvio.{progetto, trascrizione, parlanti, sintesi, documento, modelli, coda, smoke}`;
+  - `snastro.avvio.{progetto, trascrizione, parlanti, sintesi, sbobinatura, modelli, coda, smoke}`;
   - `Main.kt` in `snastro.avvio`;
   - never a per-release package (`r0`…`r3`).
 

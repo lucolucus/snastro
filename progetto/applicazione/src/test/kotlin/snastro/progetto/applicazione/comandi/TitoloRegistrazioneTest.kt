@@ -16,15 +16,15 @@ import kotlin.test.assertTrue
 class TitoloRegistrazioneTest {
 
     /**
-     * DRIFT GUARD: the first rows are copied VERBATIM from documento's AC-320 "tabella" test
-     * (`DocumentoTest`, `:documento:applicazione`) — they MUST stay identical to that test's rows
+     * DRIFT GUARD: the first rows are copied VERBATIM from sbobinatura's AC-320 "tabella" test
+     * (`SbobinaturaTest`, `:sbobinatura:applicazione`) — they MUST stay identical to that test's rows
      * (the NFD row is only spelled with escapes here), because [TitoloRegistrazione.pulisci] is a
-     * private copy of documento's `pulisci` (`:progetto` may not depend on `:documento`). The rows
-     * after the marker cover pinned-rule clauses documento's table does not test yet (the trim after
-     * the 237-byte cut, U+007F) — they are to be added to documento's table too, so both stay identical.
+     * private copy of sbobinatura's `pulisci` (`:progetto` may not depend on `:sbobinatura`). The rows
+     * after the marker cover pinned-rule clauses sbobinatura's table does not test yet (the trim after
+     * the 237-byte cut, U+007F) — they are to be added to sbobinatura's table too, so both stay identical.
      */
     @Test
-    fun `AC-322 pulisci segue la regola di nomeFile, stesse righe della tabella AC-320 di documento`() {
+    fun `AC-322 pulisci segue la regola di nomeFile, stesse righe della tabella AC-320 di sbobinatura`() {
         val casi = listOf(
             "Riunione 3/10: budget?" to "Riunione 3_10_ budget_",
             "  Nota finale.. " to "Nota finale",
@@ -37,7 +37,7 @@ class TitoloRegistrazioneTest {
             "" to "registrazione",
             "e\u0301" to "\u00e9", // 'e' + accento combinante (NFD) -> 'é' precomposto (NFC)
             "Titolo pulito" to "Titolo pulito",
-            // --- extra rows (not in documento's table) ---
+            // --- extra rows (not in sbobinatura's table) ---
             "a".repeat(236) + " b" to "a".repeat(236), // the 237-byte cut lands right after a space
             "a".repeat(236) + ".b" to "a".repeat(236), // the 237-byte cut lands right after a dot
             "prima\u007Fdopo" to "prima_dopo", // U+007F (DEL) -> '_'

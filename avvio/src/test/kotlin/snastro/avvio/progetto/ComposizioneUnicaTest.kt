@@ -4,10 +4,10 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.ModuloComposizione
 import snastro.avvio.coda.Campanello
 import snastro.avvio.coda.CodaCondivisa
-import snastro.avvio.documento.CollaboratoriDocumento
-import snastro.avvio.documento.ModuloDocumento
 import snastro.avvio.parlanti.CollaboratoriParlanti
 import snastro.avvio.parlanti.ModuloParlanti
+import snastro.avvio.sbobinatura.CollaboratoriSbobinatura
+import snastro.avvio.sbobinatura.ModuloSbobinatura
 import snastro.avvio.sintesi.CollaboratoriSintesi
 import snastro.avvio.sintesi.ModuloSintesi
 import snastro.avvio.trascrizione.CollaboratoriTrascrizione
@@ -68,7 +68,7 @@ class ComposizioneUnicaTest {
             ModuloTrascrizione::class to CollaboratoriTrascrizione::class,
             ModuloParlanti::class to CollaboratoriParlanti::class,
             ModuloSintesi::class to CollaboratoriSintesi::class,
-            ModuloDocumento::class to CollaboratoriDocumento::class,
+            ModuloSbobinatura::class to CollaboratoriSbobinatura::class,
         )
         collaboratori.forEach { (modulo, tipo) ->
             val campo = modulo.java.getDeclaredField("collaboratori")
@@ -106,14 +106,14 @@ class ComposizioneUnicaTest {
             "trascrizione" to CollaboratoriTrascrizione::class.java,
             "parlanti" to CollaboratoriParlanti::class.java,
             "sintesi" to CollaboratoriSintesi::class.java,
-            "documento" to CollaboratoriDocumento::class.java,
+            "sbobinatura" to CollaboratoriSbobinatura::class.java,
         )
         campi.forEach { (nome, tipo) ->
             assertEquals(tipo, CollaboratoriProgetto::class.java.getDeclaredField(nome).type, nome)
         }
         AmbienteProgetto(radice).use {
             val c = it.collaboratori
-            assertTrue(listOf<Any>(c.trascrizione, c.parlanti, c.sintesi, c.documento).size == campi.size)
+            assertTrue(listOf<Any>(c.trascrizione, c.parlanti, c.sintesi, c.sbobinatura).size == campi.size)
         }
         assertEquals(emptyList(), righe(Regex("""\bas\??\s+Collaboratori""")))
         assertEquals(emptyList(), righe(Regex("""\br[0-9]\.r[0-9]\b""")))
@@ -168,14 +168,15 @@ class ComposizioneUnicaTest {
             assertTrue(file.isFile, "$percorso esiste")
             assertEquals("package $pacchetto", file.readLines().first(), percorso)
         }
-        val concern = setOf("progetto", "trascrizione", "parlanti", "sintesi", "documento", "modelli", "coda", "smoke")
+        val concern =
+            setOf("progetto", "trascrizione", "parlanti", "sintesi", "sbobinatura", "modelli", "coda", "smoke")
         val cartelle = avvio.listFiles { f -> f.isDirectory }.orEmpty().map { f -> f.name }.toSet()
         assertEquals(concern, cartelle, "solo pacchetti per concern")
     }
 
     private companion object {
         val MODULI =
-            listOf(ModuloTrascrizione::class, ModuloParlanti::class, ModuloSintesi::class, ModuloDocumento::class)
+            listOf(ModuloTrascrizione::class, ModuloParlanti::class, ModuloSintesi::class, ModuloSbobinatura::class)
 
         /** ADR 0030 §1 "Retired" (AC-C74): none of these names survives in `:avvio`'s sources. */
         val RITIRATI = listOf(

@@ -193,7 +193,7 @@ private fun stato(
     ).map { if (it.segmentoId.numero in confermati) it.copy(confermato = true) else it },
     barra = LettoreUiStato.Inattivo,
     audioDisponibile = pannello.estrattiDisponibili,
-    documentoPercorso = "/progetti/demo.snastro/documenti/2026-03-12 Seduta.md",
+    sbobinaturaPercorso = "/progetti/demo.snastro/sbobinature/2026-03-12 Seduta.md",
     errore = errore,
     pannello = pannello,
     selezione = selezione,
@@ -1145,7 +1145,7 @@ class RegistrazioneVociRenderCheckTest {
             onNodeWithTag("registrazione-titolo").assertTextEquals("Seduta del 12 marzo")
             // CARTE_TRE: 3 persone, 2 da identificare (CARTA_CANDIDATI + CARTA_NESSUNA).
             onNodeWithText(testoPersone(3, 2), substring = true).assertIsDisplayed()
-            onNodeWithTag("registrazione-apri-documento").assertIsEnabled()
+            onNodeWithTag("registrazione-apri-sbobinatura").assertIsEnabled()
             onNode(hasContentDescription(ETICHETTA_MOSTRA_CARTELLA)).assertIsDisplayed()
         }
 }

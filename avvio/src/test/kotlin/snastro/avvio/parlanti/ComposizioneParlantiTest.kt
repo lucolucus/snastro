@@ -72,7 +72,7 @@ class ComposizioneParlantiTest {
     lateinit var radice: Path
 
     @Test
-    fun `AC-359 il Documento mostra i Nomi attribuiti e ne segue la rinomina`() {
+    fun `AC-359 la Sbobinatura mostra i Nomi attribuiti e ne segue la rinomina`() {
         AmbienteProgetto(radice).use {
             val id = it.importa()
             it.trascrivi(id)
@@ -80,16 +80,16 @@ class ComposizioneParlantiTest {
             val nomina = runBlocking { it.parlanti.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) }
 
             assertEquals(Esito.Ok(Unit), nomina)
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento con il Nome") {
-                documento(it)?.contains("**Anna**") == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura con il Nome") {
+                sbobinatura(it)?.contains("**Anna**") == true
             }
-            assertTrue(documento(it).orEmpty().contains("**Voce 2**"), "una Voce senza Parlante resta 'Voce n'")
+            assertTrue(sbobinatura(it).orEmpty().contains("**Voce 2**"), "una Voce senza Parlante resta 'Voce n'")
 
-            // S4's command, over eventi.unitaDiLavoro: its ParlanteRinominato reaches the Documento after commit.
+            // S4's command, over eventi.unitaDiLavoro: its ParlanteRinominato reaches the Sbobinatura after commit.
             val anna = it.parlanti.letture.parlantiDelProgetto().single().parlanteId
             it.parlanti.comandiParlante.rinomina(RinominaParlante(anna, "Bea")).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento rinominato") {
-                documento(it)?.contains("**Bea**") == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rinominato") {
+                sbobinatura(it)?.contains("**Bea**") == true
             }
         }
     }
@@ -142,20 +142,20 @@ class ComposizioneParlantiTest {
     }
 
     @Test
-    fun `AC-317 ImpronteRiallineate produce un Cambiamento e invalida la Proposta, senza rigenerare il Documento`() {
+    fun `AC-317 ImpronteRiallineate produce un Cambiamento e invalida la Proposta, senza rigenerare la Sbobinatura`() {
         val estrattore = EstrattoreConMutex()
         AmbienteProgetto(radice, estrattore = estrattore).use {
             val id = it.importa()
             it.trascrivi(id)
             runBlocking { it.parlanti.comandi.esegui(ComandoVoce.Nuovo(voce(id, 1), "Anna")) }
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento con il Nome") {
-                documento(it)?.contains("**Anna**") == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura con il Nome") {
+                sbobinatura(it)?.contains("**Anna**") == true
             }
             val cambiamenti = it.raccogliCambiamenti()
             it.parlanti.letture.proposta(voce(id, 2))
             it.parlanti.letture.proposta(voce(id, 2))
             val primaDellEvento = estrattore.chiamate.get()
-            val file = checkNotNull(fileDocumento(it))
+            val file = checkNotNull(fileSbobinatura(it))
             val scritto = file.getLastModifiedTime()
 
             val dispatcher = it.porte.dispatcher
@@ -168,7 +168,7 @@ class ComposizioneParlantiTest {
             assertEquals(primaDellEvento + 1, estrattore.chiamate.get(), "la Proposta e ricalcolata dopo l'evento")
             restaVeroPer(
                 ATTESA_NESSUNA_RIGENERAZIONE_MS.milliseconds,
-                messaggio = "le impronte non cambiano il Documento",
+                messaggio = "le impronte non cambiano la Sbobinatura",
             ) {
                 file.getLastModifiedTime() == scritto
             }
@@ -267,8 +267,8 @@ class ComposizioneParlantiTest {
                 attendiFinche(timeout = 10.seconds, messaggio = "S2/S3 informati della Revisione") {
                     Cambiamento(id) in cambiamenti
                 }
-                attendiFinche(timeout = 10.seconds, messaggio = "Documento rigenerato con la nuova Voce") {
-                    documentoIn(Path.of(percorso))?.contains("**Voce 3**") == true
+                attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rigenerata con la nuova Voce") {
+                    sbobinaturaIn(Path.of(percorso))?.contains("**Voce 3**") == true
                 }
             }
         }
@@ -415,14 +415,15 @@ class ComposizioneParlantiTest {
         }
     }
 
-    private fun fileDocumento(ambiente: AmbienteProgetto): Path? = fileDocumentoIn(Path.of(ambiente.progetto.percorso))
+    private fun fileSbobinatura(ambiente: AmbienteProgetto): Path? =
+        fileSbobinaturaIn(Path.of(ambiente.progetto.percorso))
 
-    private fun fileDocumentoIn(progetto: Path): Path? =
-        progetto.resolve("documenti").takeIf(Files::isDirectory)?.listDirectoryEntries("*.md")?.singleOrNull()
+    private fun fileSbobinaturaIn(progetto: Path): Path? =
+        progetto.resolve("sbobinature").takeIf(Files::isDirectory)?.listDirectoryEntries("*.md")?.singleOrNull()
 
-    private fun documentoIn(progetto: Path): String? = fileDocumentoIn(progetto)?.readText()
+    private fun sbobinaturaIn(progetto: Path): String? = fileSbobinaturaIn(progetto)?.readText()
 
-    private fun documento(ambiente: AmbienteProgetto): String? = fileDocumento(ambiente)?.readText()
+    private fun sbobinatura(ambiente: AmbienteProgetto): String? = fileSbobinatura(ambiente)?.readText()
 
     /** Captures WARNING records of the `snastro.avvio` loggers while in use. */
     private class RegistroLog : Handler(), AutoCloseable {

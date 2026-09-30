@@ -80,7 +80,7 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
 
         val cartellaProgetto = Path.of(progetto.percorso)
         assertTrue(Files.isDirectory(cartellaProgetto.resolve("audio")))
-        assertTrue(Files.isDirectory(cartellaProgetto.resolve("documenti")))
+        assertTrue(Files.isDirectory(cartellaProgetto.resolve("sbobinature")))
         assertTrue(Files.isDirectory(cartellaProgetto.resolve("cache/audio")))
         assertTrue(Files.isRegularFile(cartellaProgetto.resolve("progetto.db")))
         assertTrue(Files.exists(cartellaProgetto.resolve(".lock")))

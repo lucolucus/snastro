@@ -28,7 +28,7 @@ fun titoloConfermaEliminazioneParlante(nome: String): String = "Eliminare «$nom
 
 /** AC-225: the privacy effect the confirmation reports before a Parlante is tombstoned (ADR 0009). */
 const val MESSAGGIO_CONFERMA_ELIMINAZIONE_PARLANTE: String =
-    "Le impronte vocali vengono cancellate; il nome resta nei documenti passati."
+    "Le impronte vocali vengono cancellate; il nome resta nelle sbobinature passate."
 
 /** M5-style distinct message for the INITIAL load failure (dev-architecture `#presenter`). */
 const val MESSAGGIO_ERRORE_CARICAMENTO_PARLANTI: String = "Non è stato possibile caricare i parlanti."

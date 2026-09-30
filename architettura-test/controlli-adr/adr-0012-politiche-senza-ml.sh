@@ -3,7 +3,7 @@
 # `politiche` package of parlanti/trascrizione applicazione main references the extraction /
 # decoding ports, CampioniAudio or Impronta.
 # Same logic as the legacy enforced_by rule. (2026-09-27) The scan covers the `politiche` of EVERY
-# `*/applicazione/src/main` by glob (it named parlanti and trascrizione only, missing sintesi and documento);
+# `*/applicazione/src/main` by glob (it named parlanti and trascrizione only, missing sintesi and sbobinatura);
 # parlanti and trascrizione stay the required targets.
 # Usage: sh architettura-test/controlli-adr/adr-0012-politiche-senza-ml.sh [project-root]
 N='ADR-0012 politiche-senza-ml'

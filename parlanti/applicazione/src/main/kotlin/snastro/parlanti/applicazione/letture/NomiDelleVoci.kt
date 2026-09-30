@@ -8,7 +8,7 @@ import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 
 /**
- * Public query API of the Parlanti context (Published Language): the shape the `nomi-per-documento`
+ * Public query API of the Parlanti context (Published Language): the shape the `nomi-per-sbobinatura`
  * port `LettoreNomi` pins exactly, so its future adapter (`lettore-nomi-da-parlanti`) only delegates
  * here (RC-1). Read-only: every method reads through [AttribuzioneRepository] / [ParlanteRepository],
  * no rule lives here.

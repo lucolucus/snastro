@@ -13,7 +13,7 @@ class TestiRegistrazioniTest {
     fun `AC-S141 il testo di conferma elimina con trascritto nomina il riassunto`() {
         assertEquals(
             "Verranno cancellati il file audio copiato nel progetto, la trascrizione con le correzioni delle voci, " +
-                "i nomi dati alle voci, il documento, il riassunto e le impronte vocali ricavate da questa " +
+                "i nomi dati alle voci, la sbobinatura, il riassunto e le impronte vocali ricavate da questa " +
                 "registrazione. Non si può annullare.",
             MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO,
         )

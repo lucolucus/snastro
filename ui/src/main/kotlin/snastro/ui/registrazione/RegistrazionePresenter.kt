@@ -31,17 +31,17 @@ import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
 
 /**
  * State holder of S3 · Registrazione (RC-2, thin UI; AC-207/208/217/218). Joins `trascritto-view`
- * ([trascritto]) with the Documento's resolved path ([documento]) and reflects the shared [lettore]
+ * ([trascritto]) with the Sbobinatura's resolved path ([sbobinatura]) and reflects the shared [lettore]
  * (AC-208: which Segmento is currently playing; AC-217: the header audio bar disabled, with a message,
  * when the source is missing — clicking a Segmento then does nothing, the transcript itself stays
  * readable). [parlanti] ([SorgentiParlanti]) drives the Voci panel, the Nome labels, the selection
  * toolbar and the Revisione commands, all handled by [StatoVoci] into this presenter's own [stato].
  * [SOGLIA_ATTESA_VISIBILE_MS] (ADR 0017 §3) is defined here, once.
  *
- * Depends on `applicazione` through PLAIN FUNCTION TYPES ([trascritto]/[documento]) rather than the
+ * Depends on `applicazione` through PLAIN FUNCTION TYPES ([trascritto]/[sbobinatura]) rather than the
  * concrete query classes, mirroring `RegistrazioniPresenter` (dev-architecture `#presenter`): `:avvio`
- * binds the real shape (`TrascrittoQuery::vista` bound to [registrazioneId]; the Documento's absolute
- * path under `documenti/`, joined from `documento`'s `nomeFile` and the open Progetto's folder) — this
+ * binds the real shape (`TrascrittoQuery::vista` bound to [registrazioneId]; the Sbobinatura's absolute
+ * path under `sbobinature/`, joined from `sbobinatura`'s `nomeFile` and the open Progetto's folder) — this
  * presenter's own test doubles stay plain lambdas over Published-Language values, never a `*:dominio`
  * type (CR-1(b)).
  *
@@ -64,7 +64,7 @@ class RegistrazionePresenter(
     io: CoroutineDispatcher,
     private val registrazioneId: RegistrazioneId,
     private val trascritto: () -> TrascrittoView?,
-    private val documento: () -> String?,
+    private val sbobinatura: () -> String?,
     private val lettore: LettoreAudio,
     private val apriEsterno: ApriEsterno,
     private val parlanti: SorgentiParlanti,
@@ -144,14 +144,14 @@ class RegistrazionePresenter(
                 _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
                 return
             }
-            // L573b: `documento()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
+            // L573b: `sbobinatura()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
             // to fall into the same catch below as `trascritto()` and take the WHOLE screen to `Errore`,
-            // discarding the vista just read. `documento()` is the simpler of the two: `null` is already
-            // its own legitimate "not resolved yet" value (AC-218 disables 'Apri documento'/'Mostra
+            // discarding the vista just read. `sbobinatura()` is the simpler of the two: `null` is already
+            // its own legitimate "not resolved yet" value (AC-218 disables 'Apri sbobinatura'/'Mostra
             // nella cartella' the same way, no separate signal is worth adding), so a thrown call is
-            // folded into that same `null` by [documentoOSicuro] — never a silent swallow, just no extra
+            // folded into that same `null` by [sbobinaturaOSicuro] — never a silent swallow, just no extra
             // state for a fault that already has a safe, defined UI.
-            val percorso = documentoOSicuro()
+            val percorso = sbobinaturaOSicuro()
             // `lettore.disponibile()` is NOT folded the same way: a THROWN call says nothing about the
             // source itself (unlike a clean `false`), so it must not look like "audio non disponibile"
             // (which disables retry). [disponibileOSicuro] tells the two apart; a throw sets
@@ -172,7 +172,7 @@ class RegistrazionePresenter(
                 segmenti = segmentiDi(vista, statoLettore),
                 barra = barraDi(statoLettore, disponibile),
                 audioDisponibile = disponibile,
-                documentoPercorso = percorso,
+                sbobinaturaPercorso = percorso,
                 soloLettura = soloLettura,
                 bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
                 contenutoRiassunto = contenutoRiassunto,
@@ -184,7 +184,7 @@ class RegistrazionePresenter(
             throw e
         } catch (
             // Same rationale as every other presenter in this codebase (RegistrazioniPresenter/ShellPresenter):
-            // a fault of trascritto/documento/lettore never leaves this screen stuck on Caricamento.
+            // a fault of trascritto/sbobinatura/lettore never leaves this screen stuck on Caricamento.
             @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
         ) {
             _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
@@ -192,10 +192,10 @@ class RegistrazionePresenter(
         if (_stato.value is RegistrazioneUiStato.Dati) voci.ricaricaParlanti()
     }
 
-    // L573b: `documento()` degraded to `null` (same as it legitimately having none) — 'Apri documento'/
+    // L573b: `sbobinatura()` degraded to `null` (same as it legitimately having none) — 'Apri sbobinatura'/
     // 'Mostra nella cartella' just stay disabled (AC-218), the transcript is untouched.
-    private suspend fun documentoOSicuro(): String? = try {
-        withContext(io) { documento() }
+    private suspend fun sbobinaturaOSicuro(): String? = try {
+        withContext(io) { sbobinatura() }
     } catch (e: CancellationException) {
         throw e
     } catch (
@@ -297,15 +297,15 @@ class RegistrazionePresenter(
     /** The header audio bar's own pause. */
     fun pausa() = avviaLettore { lettore.pausa() }
 
-    /** AC-218: opens the Documento with the OS default app. A no-op while
-     * [RegistrazioneUiStato.Dati.documentoPercorso] has not resolved yet. */
-    fun apriDocumento() = conDocumento(apriEsterno::apriFile)
+    /** AC-218: opens the Sbobinatura with the OS default app. A no-op while
+     * [RegistrazioneUiStato.Dati.sbobinaturaPercorso] has not resolved yet. */
+    fun apriSbobinatura() = conSbobinatura(apriEsterno::apriFile)
 
-    /** AC-218: reveals the Documento in a file manager window. Same guard as [apriDocumento]. */
-    fun mostraDocumentoNellaCartella() = conDocumento(apriEsterno::mostraNellaCartella)
+    /** AC-218: reveals the Sbobinatura in a file manager window. Same guard as [apriSbobinatura]. */
+    fun mostraSbobinaturaNellaCartella() = conSbobinatura(apriEsterno::mostraNellaCartella)
 
-    private fun conDocumento(azione: (String) -> Unit) {
-        val percorso = (_stato.value as? RegistrazioneUiStato.Dati)?.documentoPercorso ?: return
+    private fun conSbobinatura(azione: (String) -> Unit) {
+        val percorso = (_stato.value as? RegistrazioneUiStato.Dati)?.sbobinaturaPercorso ?: return
         avvia { azione(percorso) }
     }
 
@@ -367,8 +367,8 @@ class RegistrazionePresenter(
         riproduciDaInizio = ::riproduciDaInizio,
         pausa = ::pausa,
         riproduciSegmento = ::riproduciSegmento,
-        apriDocumento = ::apriDocumento,
-        mostraDocumentoNellaCartella = ::mostraDocumentoNellaCartella,
+        apriSbobinatura = ::apriSbobinatura,
+        mostraSbobinaturaNellaCartella = ::mostraSbobinaturaNellaCartella,
         chiudiErrore = ::chiudiErrore,
         riprova = ::riprova,
         selezionaSegmento = voci::selezionaSegmento,

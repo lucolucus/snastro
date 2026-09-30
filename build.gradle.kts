@@ -32,7 +32,7 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":progetto" to emptySet(),
     ":trascrizione" to emptySet(),
     ":parlanti" to emptySet(),
-    ":documento" to emptySet(),
+    ":sbobinatura" to emptySet(),
     ":sintesi" to emptySet(),
     ":kernel" to emptySet(),
     ":progetto:dominio" to setOf(":kernel"),
@@ -52,9 +52,9 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
         ":parlanti:applicazione", ":parlanti:dominio", ":kernel", ":persistenza",
         ":progetto:applicazione", ":trascrizione:applicazione", ":audio", ":ml-sherpa", ":supporto",
     ),
-    ":documento:applicazione" to setOf(":kernel"),
-    ":documento:adattatori" to setOf(
-        ":documento:applicazione", ":kernel", ":trascrizione:applicazione",
+    ":sbobinatura:applicazione" to setOf(":kernel"),
+    ":sbobinatura:adattatori" to setOf(
+        ":sbobinatura:applicazione", ":kernel", ":trascrizione:applicazione",
         ":parlanti:applicazione", ":progetto:applicazione", ":supporto",
     ),
     // (2026-09-26, ADR 0027 §1) no :llm module is ever created: the ..ml adapter of ModelloLinguistico reaches
@@ -74,7 +74,7 @@ val allowedModuleEdges: Map<String, Set<String>> = mapOf(
     ":llama-jni" to emptySet(),
     ":ui" to setOf(
         ":kernel", ":progetto:applicazione", ":trascrizione:applicazione",
-        ":parlanti:applicazione", ":documento:applicazione", ":sintesi:applicazione", ":supporto",
+        ":parlanti:applicazione", ":sbobinatura:applicazione", ":sintesi:applicazione", ":supporto",
     ),
     // (2026-09-27, ADR 0028 §5) the domain-free technical libraries depend on nothing of snastro.
     ":supporto" to emptySet(),

@@ -32,7 +32,7 @@ import kotlin.test.assertTrue
 
 private val REG_1 = RegistrazioneId("id-1")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
-private const val PERCORSO_DOCUMENTO = "/progetti/demo.snastro/documenti/2026-03-12 Seduta.md"
+private const val PERCORSO_SBOBINATURA = "/progetti/demo.snastro/sbobinature/2026-03-12 Seduta.md"
 
 private fun unaVista(
     segmenti: List<SegmentoTrascrittoView> = listOf(unSegmento()),
@@ -55,7 +55,7 @@ private fun unSegmento(
 ) = SegmentoTrascrittoView(segmentoId, voceId, inizioMs, fineMs, testo)
 
 /**
- * AC-207/208/217/218: the base loading/playback/audio-bar/Documento behaviour of [RegistrazionePresenter]
+ * AC-207/208/217/218: the base loading/playback/audio-bar/Sbobinatura behaviour of [RegistrazionePresenter]
  * — every test below wires a real, inert [SorgentiParlanti] ([unaSorgentiParlantiInerte]) since none of
  * them exercises the Voci panel; that half has its own file (`AmbienteVoci`-based tests).
  */
@@ -66,7 +66,7 @@ class RegistrazionePresenterTest {
         scope: TestScope,
         registrazioneId: RegistrazioneId = REG_1,
         trascritto: () -> TrascrittoView? = { unaVista() },
-        documento: () -> String? = { PERCORSO_DOCUMENTO },
+        sbobinatura: () -> String? = { PERCORSO_SBOBINATURA },
         lettore: LettoreAudio = LettoreAudioFinta(),
         apriEsterno: ApriEsterno = ApriEsternoFinta(),
     ): RegistrazionePresenter {
@@ -77,7 +77,7 @@ class RegistrazionePresenterTest {
             io = dispatcher,
             registrazioneId = registrazioneId,
             trascritto = trascritto,
-            documento = documento,
+            sbobinatura = sbobinatura,
             lettore = lettore,
             apriEsterno = apriEsterno,
             parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
@@ -227,34 +227,34 @@ class RegistrazionePresenterTest {
     }
 
     @Test
-    fun `AC-218 apri documento usa il percorso del Documento`() = runTest {
+    fun `AC-218 apri sbobinatura usa il percorso della Sbobinatura`() = runTest {
         val apriEsterno = ApriEsternoFinta()
         val presenter = presentatore(this, apriEsterno = apriEsterno)
         advanceUntilIdle()
-        presenter.azioni.apriDocumento()
+        presenter.azioni.apriSbobinatura()
         advanceUntilIdle()
-        assertEquals(listOf(PERCORSO_DOCUMENTO), apriEsterno.fileAperti)
+        assertEquals(listOf(PERCORSO_SBOBINATURA), apriEsterno.fileAperti)
     }
 
     @Test
-    fun `AC-218 mostra nella cartella usa il percorso del Documento`() = runTest {
+    fun `AC-218 mostra nella cartella usa il percorso della Sbobinatura`() = runTest {
         val apriEsterno = ApriEsternoFinta()
         val presenter = presentatore(this, apriEsterno = apriEsterno)
         advanceUntilIdle()
-        presenter.azioni.mostraDocumentoNellaCartella()
+        presenter.azioni.mostraSbobinaturaNellaCartella()
         advanceUntilIdle()
-        assertEquals(listOf(PERCORSO_DOCUMENTO), apriEsterno.cartelleMostrate)
+        assertEquals(listOf(PERCORSO_SBOBINATURA), apriEsterno.cartelleMostrate)
     }
 
     @Test
-    fun `AC-218 apri documento non fa nulla finche il percorso non e risolto`() = runTest {
+    fun `AC-218 apri sbobinatura non fa nulla finche il percorso non e risolto`() = runTest {
         val apriEsterno = ApriEsternoFinta()
-        val presenter = presentatore(this, documento = { null }, apriEsterno = apriEsterno)
+        val presenter = presentatore(this, sbobinatura = { null }, apriEsterno = apriEsterno)
         advanceUntilIdle()
-        presenter.azioni.apriDocumento()
+        presenter.azioni.apriSbobinatura()
         advanceUntilIdle()
         assertTrue(apriEsterno.fileAperti.isEmpty())
-        assertEquals(null, (presenter.stato.value as RegistrazioneUiStato.Dati).documentoPercorso)
+        assertEquals(null, (presenter.stato.value as RegistrazioneUiStato.Dati).sbobinaturaPercorso)
     }
 
     @Test
@@ -265,7 +265,7 @@ class RegistrazionePresenterTest {
         }
         val presenter = presentatore(this, apriEsterno = apriEsterno)
         advanceUntilIdle()
-        presenter.azioni.apriDocumento()
+        presenter.azioni.apriSbobinatura()
         advanceUntilIdle()
         val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
         assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)

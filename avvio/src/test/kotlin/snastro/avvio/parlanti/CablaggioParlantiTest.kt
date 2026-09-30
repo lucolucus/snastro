@@ -80,12 +80,12 @@ class CablaggioParlantiTest {
     }
 
     @Test
-    fun `AC-633 CompletaEliminazioniRegistrazioni parte dopo il lavoro del Documento, con il suo giro gia accodato`() {
+    fun `AC-633 CompletaEliminazioniRegistrazioni parte dopo il lavoro della Sbobinatura, col suo giro accodato`() {
         AmbienteProgetto(radice).use {
             val avvio = it.composto.ordineAvvio.map { a -> a::class.simpleName }
             assertTrue(
-                avvio.indexOf("ModuloDocumento") in 0 until avvio.indexOf("ModuloProgetto"),
-                "il Documento parte prima del completamento delle eliminazioni: $avvio",
+                avvio.indexOf("ModuloSbobinatura") in 0 until avvio.indexOf("ModuloProgetto"),
+                "la Sbobinatura parte prima del completamento delle eliminazioni: $avvio",
             )
         }
     }

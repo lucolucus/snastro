@@ -1,5 +1,0 @@
-package snastro.documento.applicazione
-
-// never readText here
- * nor Files.newInputStream
-class Nota

@@ -93,7 +93,7 @@ class SmokeTest {
     /** A valid `.snastro` folder with a Progetto and one Registrazione — SQL only, no FFmpeg. */
     private fun costruisciProgettoFixture(cartellaProgetto: Path) {
         Files.createDirectories(cartellaProgetto.resolve("audio"))
-        Files.createDirectories(cartellaProgetto.resolve("documenti"))
+        Files.createDirectories(cartellaProgetto.resolve("sbobinature"))
         Files.createDirectories(cartellaProgetto.resolve("cache/audio"))
         // La sorgente non serve alla decodifica FFmpeg qui (S2 controlla solo l'esistenza del file
         // per `disponibile`, non riproduce nulla durante lo smoke) — un file segnaposto basta.

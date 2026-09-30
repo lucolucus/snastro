@@ -6,7 +6,7 @@ import snastro.trascrizione.applicazione.porte.TrascrittoRepository
 
 /**
  * Public query API of the Trascrizione context (Published Language): the shapes read-models of other
- * contexts are built from (`voci-per-parlanti`, `trascritto-per-documento`) — those consumer-owned
+ * contexts are built from (`voci-per-parlanti`, `trascritto-per-sbobinatura`) — those consumer-owned
  * ports map [VoceVista] / [SegmentoVista] into their own DTOs, never re-deciding anything (RC-1).
  * Read-only: every method reads through [TrascrittoRepository], no rule lives here.
  */

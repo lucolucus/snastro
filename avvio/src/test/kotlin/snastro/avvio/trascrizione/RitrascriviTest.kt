@@ -73,13 +73,13 @@ class RitrascriviTest {
     private val diarizzatore = DiarizzatoreScriptato()
 
     @Test
-    fun `AC-458 Ritrascrivi sostituisce il Trascritto, purga Attribuzioni e impronte e rigenera il Documento`() {
+    fun `AC-458 Ritrascrivi sostituisce il Trascritto, purga Attribuzioni e impronte e rigenera la Sbobinatura`() {
         AmbienteProgetto(radice, diarizzatore).use {
             val s = prepara(it)
             val s2 = presenterS2(it)
             val s3 = presenterS3(it, s.x)
             attendiFinche(timeout = 10.seconds, messaggio = "S3 modificabile") { datiS3(s3)?.soloLettura == false }
-            val documentoPrima = documento(it, s.x)
+            val sbobinaturaPrima = sbobinatura(it, s.x)
             val barriera = CountDownLatch(1)
             diarizzatore.turni = AmbienteProgetto.TRE_VOCI // ignores k: the re-run finds 3 Voci anyway
             diarizzatore.barriera = barriera
@@ -116,13 +116,13 @@ class RitrascriviTest {
             assertEquals(s.mario, attribuzioni.diRegistrazione(s.y).single().parlanteId)
             assertEquals(1, parlanti.impronteDiRegistrazione(s.y).size, "la sua impronta altrove resta")
             assertEquals(3, it.trascrizione.trascritto(s.x)?.voci?.size)
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento riscritto con Voce 1..3") {
-                documento(it, s.x)?.contains("**Voce 3**") == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura riscritta con Voce 1..3") {
+                sbobinatura(it, s.x)?.contains("**Voce 3**") == true
             }
-            val nuovo = documento(it, s.x).orEmpty()
+            val nuovo = sbobinatura(it, s.x).orEmpty()
             assertFalse("Mario" in nuovo || "Ospite" in nuovo, "solo etichette 'Voce n': $nuovo")
             assertTrue((1..3).all { n -> "**Voce $n**" in nuovo })
-            assertNotEquals(documentoPrima, nuovo)
+            assertNotEquals(sbobinaturaPrima, nuovo)
             attendiFinche(timeout = 10.seconds, messaggio = "S3 ricaricato sulla nuova generazione, modificabile") {
                 datiS3(s3)?.let { d -> !d.soloLettura && d.segmenti.size == 3 } == true
             }
@@ -130,7 +130,7 @@ class RitrascriviTest {
     }
 
     @Test
-    fun `AC-459 una Ritrascrizione fallita lascia intatti Attribuzioni, impronte, Trascritto, Documento e Galleria`() {
+    fun `AC-459 una Ritrascrizione fallita non tocca Attribuzioni, impronte, Trascritto, Sbobinatura e Galleria`() {
         AmbienteProgetto(radice, diarizzatore).use {
             val s = prepara(it)
             val s2 = presenterS2(it)
@@ -148,7 +148,7 @@ class RitrascriviTest {
                 "Ritrascrizione non riuscita: errore nella separazione delle voci",
                 messaggioRitrascrizioneNonRiuscita(checkNotNull(r.ritrascrizioneFallita)),
             )
-            assicuraInvariata(it, s.x, prima) // nothing after commit may touch the Documento either
+            assicuraInvariata(it, s.x, prima) // nothing after commit may touch the Sbobinatura either
         }
     }
 
@@ -246,7 +246,7 @@ class RitrascriviTest {
             it.trascrivi(y)
             runBlocking { it.parlanti.comandi.esegui(ComandoVoce.Nuovo(voce(y, 1), "Anna")) }
             attendiFinche(timeout = 10.seconds, messaggio = "ParlanteCreato consegnato") {
-                documento(it, y)?.contains("**Anna**") == true
+                sbobinatura(it, y)?.contains("**Anna**") == true
             }
             val cambiamenti = it.raccogliCambiamenti()
             it.parlanti.letture.proposta(voce(x, 2))
@@ -311,7 +311,7 @@ class RitrascriviTest {
     private fun prepara(ambiente: AmbienteProgetto): Scenario {
         val x = ambiente.importa()
         val y = ambiente.importa()
-        // Distinct titles: the Documento file name is date + titolo (ADR 0010).
+        // Distinct titles: the Sbobinatura file name is date + titolo (ADR 0010).
         ambiente.collaboratori.rinominaRegistrazione(RinominaRegistrazione(y, "Altra riunione")).atteso()
         ambiente.trascrivi(x)
         ambiente.trascrivi(y)
@@ -322,10 +322,10 @@ class RitrascriviTest {
         val parlanti = ParlanteRepositorySql(ambiente.porte.database, ambiente.porte.lettura)
         assertEquals(2, parlanti.impronteDiRegistrazione(x).size)
         assertEquals(2, ambiente.parlanti.letture.parlantiDelProgetto().size)
-        // Both Documento rewrites of X must have landed (Nuovo -> 'Mario', Salta -> 'Ospite del ...'): the
+        // Both Sbobinatura rewrites of X must have landed (Nuovo -> 'Mario', Salta -> 'Ospite del ...'): the
         // after-commit writer is asynchronous, and AC-459/AC-479 take their byte-level baseline right after this.
-        attendiFinche(timeout = 10.seconds, messaggio = "Documento di X con Mario e l'Ospite") {
-            documento(ambiente, x)?.let { d -> "**Mario**" in d && "**Ospite del " in d } == true
+        attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura di X con Mario e l'Ospite") {
+            sbobinatura(ambiente, x)?.let { d -> "**Mario**" in d && "**Ospite del " in d } == true
         }
         return Scenario(x, y, mario)
     }
@@ -399,19 +399,19 @@ class RitrascriviTest {
         }
     }
 
-    /** What AC-459/AC-479 require unchanged: X's Parlanti rows, Trascritto and Documento bytes, and the Galleria. */
+    /** What AC-459/AC-479 require unchanged: X's Parlanti rows, Trascritto and Sbobinatura bytes, and the Galleria. */
     private class Istantanea(
         val attribuzioni: List<Any>,
         val impronte: List<Any>,
         val trascritto: Any?,
-        val documento: ByteArray?,
+        val sbobinatura: ByteArray?,
         val galleria: List<Any>,
     ) {
         fun confronta(prima: Istantanea) {
             assertEquals(prima.attribuzioni, attribuzioni)
             assertEquals(prima.impronte, impronte)
             assertEquals(prima.trascritto, trascritto)
-            assertContentEquals(prima.documento, documento)
+            assertContentEquals(prima.sbobinatura, sbobinatura)
             assertEquals(prima.galleria, galleria)
         }
 
@@ -422,7 +422,7 @@ class RitrascriviTest {
                 impronte = ParlanteRepositorySql(ambiente.porte.database, ambiente.porte.lettura)
                     .impronteDiRegistrazione(id),
                 trascritto = ambiente.trascrizione.trascritto(id),
-                documento = ambiente.documento.percorsoDocumento(id)?.let { p -> Path.of(p).readBytes() },
+                sbobinatura = ambiente.sbobinatura.percorsoSbobinatura(id)?.let { p -> Path.of(p).readBytes() },
                 galleria = ambiente.parlanti.letture.parlantiDelProgetto(),
             )
         }
@@ -453,7 +453,7 @@ class RitrascriviTest {
     private companion object {
         const val ATTESA_NESSUN_EFFETTO_MS = 500L
 
-        fun documento(ambiente: AmbienteProgetto, id: RegistrazioneId): String? =
-            ambiente.documento.percorsoDocumento(id)?.let { p -> Path.of(p).readText() }
+        fun sbobinatura(ambiente: AmbienteProgetto, id: RegistrazioneId): String? =
+            ambiente.sbobinatura.percorsoSbobinatura(id)?.let { p -> Path.of(p).readText() }
     }
 }

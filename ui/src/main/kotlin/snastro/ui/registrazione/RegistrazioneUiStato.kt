@@ -21,8 +21,8 @@ sealed interface RegistrazioneUiStato {
      * The loaded trascritto. [segmenti] are in time order across Voci, exactly [TrascrittoView]'s own
      * order (INV-7/INV-8, never re-sorted here) — an empty list is a real "nessun parlato rilevato"
      * catalog, rendered as a dedicated message, not [Errore]. [barra] reflects the shared [LettoreAudio]
-     * for this Registrazione only ([RegistrazionePresenter.registrazioneId]); [documentoPercorso] is
-     * `null` only while it has not resolved yet — 'Apri documento'/'Mostra nella cartella' are disabled
+     * for this Registrazione only ([RegistrazionePresenter.registrazioneId]); [sbobinaturaPercorso] is
+     * `null` only while it has not resolved yet — 'Apri sbobinatura'/'Mostra nella cartella' are disabled
      * then (AC-218). [errore] is a dismissible inline message for the last failed
      * riproduzione/apertura (H1 pattern), never replacing [segmenti].
      *
@@ -39,7 +39,7 @@ sealed interface RegistrazioneUiStato {
         val segmenti: List<SegmentoRiga>,
         val barra: LettoreUiStato,
         val audioDisponibile: Boolean,
-        val documentoPercorso: String?,
+        val sbobinaturaPercorso: String?,
         val errore: String? = null,
         /** AC-402: `null` only before [StatoVoci]'s first publish — no panel yet. */
         val pannello: PannelloVoci? = null,

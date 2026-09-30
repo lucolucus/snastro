@@ -24,7 +24,7 @@ import java.util.logging.Logger
  *
  * Every step is idempotent. An I/O failure is logged and never thrown (the command has already committed). The
  * `eliminazione_in_sospeso` row is not touched: `CompletaEliminazioniRegistrazioni` concludes it at the next open
- * (AC-633). The Documento `.md` is not handled here: `abbonato-documento` removes it on its per-key queue.
+ * (AC-633). The Sbobinatura `.md` is not handled here: `abbonato-sbobinatura` removes it on its per-key queue.
  */
 internal class PuliziaRegistrazioneEliminata(
     private val lettore: LettoreAudio,

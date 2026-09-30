@@ -4,7 +4,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.costruisciRegistrazioniPresenter
 import snastro.avvio.orologioApp
-import snastro.documento.applicazione.letture.Documento
 import snastro.kernel.CampioniAudio
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
@@ -26,6 +25,7 @@ import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.EliminazioneInSospeso
+import snastro.sbobinatura.applicazione.letture.Sbobinatura
 import snastro.supporto.test.attendiFinche
 import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
@@ -58,7 +58,7 @@ import kotlin.time.Duration.Companion.seconds
 
 /**
  * ADR 0020 end to end on the REAL single composition ([AmbienteProgetto]: a SQLite project FILE opened by the session
- * with the production driver, real queue, real Parlanti/Trascrizione subscribers, real Documento writer; Finte ML):
+ * with the production driver, real queue, real Parlanti/Trascrizione subscribers, real Sbobinatura writer; Finte ML):
  * AC-630 (S2 supplied), AC-631, AC-633, AC-634 (INV-28), AC-635. Rows are read through the SQL adapters; the project
  * database is the production one with its driver counting `wal_checkpoint` ([DatabaseProgettoContato], AC-634).
  */
@@ -74,8 +74,8 @@ class EliminaRegistrazioneTest {
         ambiente().use {
             val s = prepara(it)
             val cartella = Path.of(it.progetto.percorso)
-            val documentoR = Path.of(checkNotNull(it.documento.percorsoDocumento(s.r)))
-            val documentoQ = Path.of(checkNotNull(it.documento.percorsoDocumento(s.q)))
+            val sbobinaturaR = Path.of(checkNotNull(it.sbobinatura.percorsoSbobinatura(s.r)))
+            val sbobinaturaQ = Path.of(checkNotNull(it.sbobinatura.percorsoSbobinatura(s.q)))
             val s2 = presenterS2(it)
             attendiFinche(timeout = 10.seconds, messaggio = "'Elimina…' disponibile su R") {
                 riga(s2, s.r)?.eliminazione == StatoEliminazione.Disponibile
@@ -103,10 +103,10 @@ class EliminaRegistrazioneTest {
             assertEquals("Terzo", lapide.nome.valore)
             assertFalse(Files.exists(cartella.resolve(audio(s.r))))
             assertFalse(Files.exists(cartella.resolve(wav(s.r))))
-            attendiFinche(timeout = 10.seconds, messaggio = "Documento di R rimosso") { !Files.exists(documentoR) }
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura di R rimosso") { !Files.exists(sbobinaturaR) }
             assertTrue(Files.exists(cartella.resolve(audio(s.q))))
             assertTrue(Files.exists(cartella.resolve(wav(s.q))))
-            assertTrue(Files.exists(documentoQ))
+            assertTrue(Files.exists(sbobinaturaQ))
             assertEquals(
                 listOf(false, false, false),
                 contato.checkpoint,
@@ -186,8 +186,8 @@ class EliminaRegistrazioneTest {
             it.trascrivi(x)
             it.trascrivi(y)
             runBlocking { it.parlanti.comandi.esegui(ComandoVoce.Nuovo(voce(x, 1), "Anna")) }
-            attendiFinche(timeout = 10.seconds, messaggio = "Nomi nel Documento") {
-                it.documento.percorsoDocumento(x)?.let { p -> "**Anna**" in Path.of(p).toFile().readText() } == true
+            attendiFinche(timeout = 10.seconds, messaggio = "Nomi nella Sbobinatura") {
+                it.sbobinatura.percorsoSbobinatura(x)?.let { p -> "**Anna**" in Path.of(p).toFile().readText() } == true
             }
             val cambiamenti = it.raccogliCambiamenti()
             it.parlanti.letture.proposta(voce(x, 2))
@@ -213,9 +213,9 @@ class EliminaRegistrazioneTest {
     }
 
     @Test
-    fun `AC-633 all apertura una riga in sospeso fa sparire audio, WAV e Documento, e la riga`() {
+    fun `AC-633 all apertura una riga in sospeso fa sparire audio, WAV e Sbobinatura, e la riga`() {
         val (percorso, file) = progettoConEliminazioneInterrotta()
-        val appunti = Path.of(percorso).resolve("documenti/appunti.md")
+        val appunti = Path.of(percorso).resolve("sbobinature/appunti.md")
         Files.write(appunti, byteArrayOf(1))
 
         AmbienteProgetto(radice.resolve("bis").also(Files::createDirectories)).use {
@@ -252,7 +252,7 @@ class EliminaRegistrazioneTest {
 
     /**
      * A project folder where a Registrazione was deleted and the app died after the COMMIT: its pending row, and its
-     * `audio/`, `cache/audio/` and `documenti/` files, all still there. Returns the folder and those three files.
+     * `audio/`, `cache/audio/` and `sbobinature/` files, all still there. Returns the folder and those three files.
      */
     private fun progettoConEliminazioneInterrotta(): Pair<String, List<Path>> {
         val percorso = ambiente().use { it.progetto.percorso }
@@ -262,7 +262,7 @@ class EliminaRegistrazioneTest {
         val file = listOf(
             "audio/${id.valore}.m4a",
             wav(id),
-            "documenti/${Documento.nomeFile(data, "Riunione persa")}",
+            "sbobinature/${Sbobinatura.nomeFile(data, "Riunione persa")}",
         ).map(cartella::resolve)
         file.forEach { f ->
             Files.createDirectories(f.parent)
@@ -303,8 +303,8 @@ class EliminaRegistrazioneTest {
         assertTrue(galleria.any { p -> p.nome.startsWith("Ospite") })
         val cartella = Path.of(ambiente.progetto.percorso)
         listOf(r, q).forEach { id -> Files.write(cartella.resolve(wav(id)), byteArrayOf(1)) }
-        attendiFinche(timeout = 10.seconds, messaggio = "Documenti di R e Q scritti") {
-            ambiente.documento.percorsoDocumento(r) != null && ambiente.documento.percorsoDocumento(q) != null
+        attendiFinche(timeout = 10.seconds, messaggio = "Sbobinature di R e Q scritti") {
+            ambiente.sbobinatura.percorsoSbobinatura(r) != null && ambiente.sbobinatura.percorsoSbobinatura(q) != null
         }
         return Scenario(r, q, mario, terzo)
     }

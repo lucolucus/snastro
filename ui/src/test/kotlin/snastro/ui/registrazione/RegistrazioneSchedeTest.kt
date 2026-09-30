@@ -64,7 +64,7 @@ class RegistrazioneSchedeTest {
             io = dispatcher,
             registrazioneId = registrazioneId,
             trascritto = { unaVista(registrazioneId) },
-            documento = { null },
+            sbobinatura = { null },
             lettore = LettoreAudioFinta(),
             apriEsterno = ApriEsternoFinta(),
             parlanti = unaSorgentiParlantiInerte(scopeCoroutine),

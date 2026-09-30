@@ -57,7 +57,7 @@ JDBC / SQLDelight / `org.sqlite` only in `:persistenza` and `:progetto|:trascriz
 (ADR 0006; `:sintesi` added 2026-09-25, ADR 0021/0022); the LLM runtime only in the separate library `:llama-jni` (ADR 0021; llama.cpp via our JNI shim,
 [ADR 0026](decisions/0026-runtime-llm-jni-llama.md): the native-load exception above, no loopback), which itself names nothing of snastro:
 no project dependency, no `snastro.*` in code or build scripts, no snastro plugin / `rootProject` / `rootDir` / `../`
-([ADR 0027](decisions/0027-libreria-llama-jni-separata.md) `enforced_by`); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `documento`
+([ADR 0027](decisions/0027-libreria-llama-jni-separata.md) `enforced_by`); network APIs only in `:modelli` (ADR 0008); `.md` read APIs never in `sbobinatura`
 (ADR 0010). → gate lint: Konsist (+ each ADR's `enforced_by`).
 
 **CR-3b · Transactions only through the kernel ports.** *(2026-09-27, [ADR 0029](decisions/0029-lettura-coerente-deferred.md) [user])*
@@ -144,7 +144,7 @@ would be the only alternative, never stubbing a port that has a fake — is a **
 - **CR-18a.** Files of `snastro.supporto..` (`:supporto`, `:supporto-test`) import no `snastro.*` outside `snastro.supporto..`.
 - **CR-18b.** No declaration in those modules has a name containing a ubiquitous-language token of `context-map.md`
   (`Progetto`, `Registrazione`, `Elaborazione`, `Trascritto`, `Voce`, `Segmento`, `Parlante`, `Impronta`, `Attribuzione`,
-  `Documento`, `Riassunto`, `Fonte`, … — the list lives once in the Konsist rule, sourced from the context-map).
+  `Sbobinatura`, `Riassunto`, `Fonte`, … — the list lives once in the Konsist rule, sourced from the context-map).
 - **CR-18c.** The public declarations of `:supporto` equal the list pinned in ADR 0028 §2. Adding one amends the ADR.
 - **Also.** No `snastro.supporto.test` import under `src/main` or `src/testFixtures`. Build level: `:supporto-test` appears
   only in `testImplementation`/`testRuntimeOnly` (`verificaDipendenzeModuli` test-only rule).
@@ -191,7 +191,7 @@ cache, log of embedding values; every removal path deletes rows in the command's
 (ADR 0009).
 
 **RC-7 · Transaction placement.** Invariant-carrying policies run inside the command's transaction;
-`Documento` `Rigenerazione` runs after commit, idempotent; the ML pipeline never holds a transaction
+`Sbobinatura` `Rigenerazione` runs after commit, idempotent; the ML pipeline never holds a transaction
 (ADR 0012). *(2026-09-25, ADR 0023)* The LLM (`ModelloLinguistico`) is never called inside a transaction, and the
 Sintesi policies (`..politiche`) never call it. The test half: `ModelloLinguisticoFinto` throws if a transaction is open.
 *(2026-09-27, [ADR 0029](decisions/0029-lettura-coerente-deferred.md) [user])* **Snapshot rule** (review criterion):

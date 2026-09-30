@@ -40,7 +40,7 @@ private fun unoStatoVuoto(trascritto: TrascrittoView) = MutableStateFlow<Registr
         segmenti = emptyList(),
         barra = LettoreUiStato.Inattivo,
         audioDisponibile = true,
-        documentoPercorso = null,
+        sbobinaturaPercorso = null,
         contenutoRiassunto = {},
     ),
 )
