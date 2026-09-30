@@ -1,0 +1,28 @@
+snastro
+Copyright 2026 Luca Parsani
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+-------------------------------------------------------------------------------
+Third-party models (NOT distributed with this source code)
+
+The models below are downloaded by the application on first use from pinned
+URLs with a verified SHA-256. They remain under their own licences.
+
+- NVIDIA parakeet-tdt-0.6b-v3 (CC-BY-4.0), ONNX export by k2-fsa sherpa-onnx
+- pyannote segmentation-3.0 (MIT), (c) pyannote (Herve Bredin);
+  ONNX export by k2-fsa sherpa-onnx
+- WeSpeaker ResNet34-LM (CC-BY-4.0), WeSpeaker team;
+  trained on VoxCeleb (CC-BY-4.0, Nagrani/Chung/Zisserman)
+- NVIDIA NeMo TitaNet-small (CC-BY-4.0), ONNX export by k2-fsa sherpa-onnx
+- Silero VAD (MIT), snakers4/silero-vad
+- Qwen3.5 9B Q4_K_M (Apache-2.0), Qwen team; quant bartowski (optional)
+
+Third-party libraries
+
+- sherpa-onnx (Apache-2.0), k2-fsa
+- llama.cpp / ggml (MIT), ggml-org
+- FFmpeg (LGPL-2.1+, LGPL build, dynamically linked) via JavaCV (Apache-2.0)
+- Compose Multiplatform (Apache-2.0), JetBrains
+- SQLDelight (Apache-2.0), Cash App; sqlite-jdbc (Apache-2.0), xerial
+- Apache Commons Compress (Apache-2.0)
