@@ -255,6 +255,7 @@ class AttesaMutexTest {
                 restaVeroPer(ATTESA_OSSERVAZIONE_MS.milliseconds, messaggio = "mai N attese concorrenti sul Mutex") {
                     estrattore.lock.queueLength <= 1
                 }
+                assertEquals(1, estrattore.lock.queueLength, "la Proposta e ancora in attesa quando si esce da S3")
 
                 schermate.forEach(CoroutineScope::cancel) // leaving S3
                 attendiFinche(timeout = 10.seconds, messaggio = "nessuna Proposta piu in attesa") {

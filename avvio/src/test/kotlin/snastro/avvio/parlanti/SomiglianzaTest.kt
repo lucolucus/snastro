@@ -271,6 +271,8 @@ class SomiglianzaTest {
             restaVeroPer(ATTESA_COALESCENZA_MS.milliseconds, messaggio = "l'anteprima annullata ha scritto qualcosa") {
                 a.parlanti.somiglianza.stato.value[id] == null && righe(a, id) == prima
             }
+            assertNull(a.parlanti.somiglianza.stato.value[id])
+            assertEquals(prima, righe(a, id))
 
             assertTrue(calcola(a, id) is StatoSomiglianza.Anteprima)
             a.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso() // 'Ritrascrivi' queued

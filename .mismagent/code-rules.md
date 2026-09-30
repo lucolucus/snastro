@@ -152,16 +152,18 @@ would be the only alternative, never stubbing a port that has a fake — is a **
 
 **CR-19 · Shared primitives are used, not re-invented.** *(2026-09-30, [ADR 0028](decisions/0028-librerie-tecniche-supporto.md) Amendment 2026-09-30 [user])*
 A prose rule a fresh worker never reads gets broken: every primitive ADR 0028 introduced is now enforced at its call sites.
-- **CR-19a.** `Thread.sleep` / `TimeUnit.*.sleep` appear only inside `:supporto-test`. Tests wait with
+- **CR-19a.** `Thread.sleep` / `TimeUnit.*.sleep` (or a static import of `sleep`) appear only inside `:supporto-test`. Tests wait with
   `attendiFinche` (until true), `restaVeroPer` (nothing happens during a window) or `pausaInTempoReale(durata, motivo)`
   (real time is the subject, reason mandatory). Frozen exceptions, listed in the rule: two real-time drivers in
   `:avvio` `src/main`, one `testFixtures` contract until M2/S5; `:llama-jni` is out of scope (ADR 0027).
-- **CR-19b.** In `src/main`, `runCatching` and `catch` of `Throwable`/`Exception`/`RuntimeException` appear only in
-  `:supporto` or in the frozen list of the rule (each entry rethrows or is a documented edge). New code catches at the
-  edges with `catturaNonFatale`, and inner layers return `Esito`.
-- **CR-19c.** In `src/main`, a `CoroutineScope(...)` is constructed only in `:supporto` (`figlioDi`) or in the frozen
-  list of the rule (the app root scope). New scopes are `figlioDi` of an existing one.
-- A frozen list only shrinks; adding an entry needs a dated reason in the rule and a review.
+- **CR-19b.** In `src/main`, `runCatching` and `catch` of `Throwable`/`Exception`/`RuntimeException`/`Error` (any
+  layout, annotated multi-line form included) appear only in `:supporto` or up to the frozen per-file count of the rule
+  (27 files on 2026-09-30, mostly presenters turning a failure into an error state). New code catches at the edges with
+  `catturaNonFatale`, and inner layers return `Esito`.
+- **CR-19c.** In `src/main`, a scope is built by hand (`CoroutineScope(...)`, `MainScope()`, `GlobalScope`, an
+  `object : CoroutineScope`) only in `:supporto` (`figlioDi`) or up to the frozen count (the app root, S3's scope).
+- The rules read the code with comments and string contents removed. A frozen count must match exactly: a new
+  occurrence fails the gate, and a removed one fails it until the count is lowered, so the lists only shrink.
 → gate lint: Konsist (`RegoleArchitetturaliTest` CR-19).
 
 ## Discursive rules (review criteria)

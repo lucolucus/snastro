@@ -246,6 +246,7 @@ class EliminaRegistrazioneTest {
                 ATTESA_NESSUN_EFFETTO_MS.milliseconds,
                 messaggio = "la pulizia dei derivati e' fallita: la riga resta",
             ) { inSospeso(it).size == 1 }
+            assertEquals(1, inSospeso(it).size, "la pulizia dei derivati e' fallita: la riga resta")
         }
     }
 

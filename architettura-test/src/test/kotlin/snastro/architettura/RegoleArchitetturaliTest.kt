@@ -609,17 +609,26 @@ class RegoleArchitetturaliTest {
 
     // --- CR-19 - Shared primitives are used, not re-invented (ADR 0028 amendment 2026-09-30) ----------------
 
-    /** Code lines only: KDoc, block and line comments may name the forbidden call. */
-    private fun righeDiCodice(testo: String): List<String> =
-        testo.lines().map { it.trim() }.filterNot { it.startsWith("*") || it.startsWith("/*") || it.startsWith("//") }
+    /**
+     * The code of a file without comments and string contents, so a forbidden call named in KDoc, a trailing
+     * comment or a string never counts, and a construct spread over several lines (the house style of an annotated
+     * `catch`) is seen whole. Raw strings, then block comments, then strings, then line comments.
+     */
+    private fun codice(testo: String): String = testo
+        .replace(Regex("\"\"\"[\\s\\S]*?\"\"\""), "\"\"")
+        .replace(Regex("""/\*[\s\S]*?\*/"""), " ")
+        .replace(Regex(""""(?:\\.|[^"\\\n])*""""), "\"\"")
+        .replace(Regex("""//[^\n]*"""), "")
 
     private fun KoFileDeclaration.percorsoRelativo(): String =
         java.io.File(path).relativeTo(radice).invariantSeparatorsPath
 
-    private fun KoFileDeclaration.chiama(regex: Regex): Boolean =
-        righeDiCodice(text).any { regex.containsMatchIn(it) }
+    private fun KoFileDeclaration.occorrenze(regex: Regex): Int = regex.findAll(codice(text)).count()
 
     private val sleep = Regex("""\b(Thread|TimeUnit\.[A-Z_]+)\.sleep\(""")
+    private val sleepImportato = Regex("""^import java\.lang\.Thread\.sleep\b""", RegexOption.MULTILINE)
+
+    private fun KoFileDeclaration.dorme(): Boolean = occorrenze(sleep) > 0 || sleepImportato.containsMatchIn(text)
 
     /**
      * Frozen: the fixed pauses that are not in a test source set of a module that can reach `:supporto-test`.
@@ -633,78 +642,125 @@ class RegoleArchitetturaliTest {
             "snastro/sintesi/applicazione/porte/ModelloLinguisticoContratto.kt",
     )
 
+    private fun fuoriDaSupporto(p: String): Boolean =
+        !p.startsWith("supporto/") && !p.startsWith("supporto-test/") && !p.startsWith("llama-jni/")
+
     @Test
     fun `CR-19a Thread sleep solo dentro supporto-test`() {
         val violazioni = progetto.files
             .filter { !it.isRegolaArchitetturale() }
-            .filter { f ->
-                val percorso = f.percorsoRelativo()
-                !percorso.startsWith("supporto-test/") && !percorso.startsWith("llama-jni/")
-            }
-            .filter { it.percorsoRelativo() !in sleepAmmessi }
-            .filter { it.chiama(sleep) }
+            .filter { fuoriDaSupporto(it.percorsoRelativo()) && it.percorsoRelativo() !in sleepAmmessi }
+            .filter { it.dorme() }
             .map { it.percorsoRelativo() }
         kotlin.test.assertTrue(violazioni.isEmpty(), "Thread.sleep fuori da :supporto-test (CR-19a): $violazioni")
     }
 
-    @Test
-    fun `CR-19a il predicato vede la chiamata e ignora i commenti`() {
-        kotlin.test.assertTrue(righeDiCodice("    Thread.sleep(10)").any { sleep.containsMatchIn(it) })
-        kotlin.test.assertTrue(righeDiCodice("x; TimeUnit.SECONDS.sleep(1)").any { sleep.containsMatchIn(it) })
-        val commenti = " * no `Thread.sleep(1)` here\n// Thread.sleep(2)"
-        kotlin.test.assertTrue(righeDiCodice(commenti).none { sleep.containsMatchIn(it) })
-    }
+    private val catturaTutto = Regex(
+        """\brunCatching\b|\bcatch\s*\((?:[^()]|\([^()]*\))*?:\s*(?:kotlin\.|java\.lang\.)?""" +
+            """(?:Throwable|Exception|RuntimeException|Error)\s*,?\s*\)""",
+    )
 
-    private val catturaTutto = Regex("""\brunCatching\b|catch \(\w+: (Throwable|Exception|RuntimeException)\)""")
+    private val nuovoScope = Regex(
+        """(?<!\w)CoroutineScope\s*\(|\bMainScope\s*\(|\bGlobalScope\b|:\s*CoroutineScope\s*\{""",
+    )
 
     /**
-     * Frozen (CR-19b): each rethrows what it must or is a documented best-effort edge, in a module that cannot reach
-     * `:supporto` (ADR 0028 §5). It only shrinks; a new entry needs a dated reason here.
+     * Frozen (CR-19b): the catch-alls of `src/main` outside `:supporto` on 2026-09-30, counted per file. Each was
+     * reviewed with its detekt suppression (a presenter turning a failure into an error state, a queue or dispatcher
+     * that condemns and rethrows, a best-effort cleanup). A count may only go DOWN: a new catch-all fails the gate,
+     * and a removed one fails it too until the count here is lowered. New code uses `catturaNonFatale` or `Esito`.
      */
-    private val catturaTuttoAmmessi = setOf(
-        "audio/src/main/kotlin/snastro/audio/RiproduttoreWav.kt", // best-effort drain in finally
-        "kernel/src/main/kotlin/snastro/kernel/DispatcherEventiInMemoria.kt", // condemns and rethrows
-        "persistenza/src/main/kotlin/snastro/persistenza/UnitaDiLavoroSql.kt", // condemns and rethrows
-        "parlanti/applicazione/src/main/kotlin/snastro/parlanti/applicazione/comandi/RiallineaImpronteServizio.kt",
+    private val catturaTuttoCongelati: Map<String, Int> = mapOf(
+        "audio/src/main/kotlin/snastro/audio/RiproduttoreWav.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/CartellaLogApp.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/coda/CodaCondivisa.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/parlanti/AzioniSomiglianzaProgetto.kt" to 2,
+        "avvio/src/main/kotlin/snastro/avvio/parlanti/ComandiVoceProgetto.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/parlanti/ModuloParlanti.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/progetto/ModuloProgetto.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/progetto/SessioneProgettoImpl.kt" to 8,
+        "avvio/src/main/kotlin/snastro/avvio/trascrizione/SegnalatoreFaseConRilascio.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/trascrizione/SelezioneAdattatoriMl.kt" to 1,
+        "kernel/src/main/kotlin/snastro/kernel/DispatcherEventiInMemoria.kt" to 4,
+        "parlanti/applicazione/src/main/kotlin/snastro/parlanti/applicazione/comandi/RiallineaImpronteServizio.kt" to 2,
         "parlanti/applicazione/src/main/kotlin/snastro/parlanti/applicazione/comandi/" +
-            "RiallineaTutteLeImpronteServizio.kt",
+            "RiallineaTutteLeImpronteServizio.kt" to 1,
+        "persistenza/src/main/kotlin/snastro/persistenza/UnitaDiLavoroSql.kt" to 4,
+        "trascrizione/applicazione/src/main/kotlin/snastro/trascrizione/applicazione/comandi/" +
+            "EseguiProssimaElaborazioneServizio.kt" to 3,
+        "ui/src/main/kotlin/snastro/ui/ShellPresenter.kt" to 2,
+        "ui/src/main/kotlin/snastro/ui/impostazioni/ImpostazioniPresenter.kt" to 2,
+        "ui/src/main/kotlin/snastro/ui/impostazioni/LunghezzaRiassuntoPresenter.kt" to 2,
+        "ui/src/main/kotlin/snastro/ui/lettore/LettorePresenter.kt" to 1,
+        "ui/src/main/kotlin/snastro/ui/modelli/ModelliPresenter.kt" to 1,
+        "ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt" to 3,
+        "ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt" to 2,
+        "ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt" to 4,
+        "ui/src/main/kotlin/snastro/ui/registrazione/SomiglianzaVoci.kt" to 1,
+        "ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt" to 5,
+        "ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt" to 8,
+        "ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt" to 2,
     )
 
-    private val nuovoScope = Regex("""(?<!\w)CoroutineScope\(""")
-
-    /** Frozen (CR-19c): the app root scope and S3's scope handed to [snastro.supporto.figlioDi]. Only shrinks. */
-    private val nuovoScopeAmmessi = setOf(
-        "avvio/src/main/kotlin/snastro/avvio/Grafo.kt",
-        "avvio/src/main/kotlin/snastro/avvio/parlanti/ModuloParlanti.kt",
+    /** Frozen (CR-19c): the app root scope and S3's scope handed to [snastro.supporto.figlioDi]. Only goes down. */
+    private val nuovoScopeCongelati: Map<String, Int> = mapOf(
+        "avvio/src/main/kotlin/snastro/avvio/Grafo.kt" to 1,
+        "avvio/src/main/kotlin/snastro/avvio/parlanti/ModuloParlanti.kt" to 1,
     )
 
-    private fun violazioniInMain(regex: Regex, ammessi: Set<String>): List<String> = progetto.files
-        .map { it to it.percorsoRelativo() }
-        .filter { (_, p) -> "/src/main/" in p && !p.startsWith("supporto/") && !p.startsWith("supporto-test/") }
-        .filter { (_, p) -> !p.startsWith("llama-jni/") && p !in ammessi }
-        .filter { (f, _) -> f.chiama(regex) }
-        .map { it.second }
-
-    @Test
-    fun `CR-19b catch-all e runCatching in src main solo in supporto o nella lista congelata`() {
-        val violazioni = violazioniInMain(catturaTutto, catturaTuttoAmmessi)
-        kotlin.test.assertTrue(violazioni.isEmpty(), "Usa catturaNonFatale o Esito (CR-19b): $violazioni")
+    /** Files of `src/main` outside `:supporto` whose count differs from the frozen one, as `path=count`. */
+    private fun scostamenti(regex: Regex, congelati: Map<String, Int>): List<String> {
+        val contati = progetto.files
+            .filter { "/src/main/" in it.percorsoRelativo() && fuoriDaSupporto(it.percorsoRelativo()) }
+            .associate { it.percorsoRelativo() to it.occorrenze(regex) }
+            .filterValues { it > 0 }
+        return (contati.keys + congelati.keys).sorted()
+            .filter { contati[it] ?: 0 != congelati[it] ?: 0 }
+            .map { "$it=${contati[it] ?: 0} (congelato ${congelati[it] ?: 0})" }
     }
 
     @Test
-    fun `CR-19c scope costruiti a mano in src main solo in supporto o nella lista congelata`() {
-        val violazioni = violazioniInMain(nuovoScope, nuovoScopeAmmessi)
-        kotlin.test.assertTrue(violazioni.isEmpty(), "Usa figlioDi (CR-19c): $violazioni")
+    fun `CR-19b catch-all e runCatching in src main solo in supporto o nei conteggi congelati`() {
+        val scostamenti = scostamenti(catturaTutto, catturaTuttoCongelati)
+        kotlin.test.assertTrue(
+            scostamenti.isEmpty(),
+            "Usa catturaNonFatale o Esito; se ne hai tolto uno abbassa il conteggio (CR-19b):\n" +
+                scostamenti.joinToString("\n"),
+        )
     }
 
     @Test
-    fun `CR-19b e CR-19c i predicati vedono le chiamate e lasciano passare i nomi simili`() {
-        kotlin.test.assertTrue(catturaTutto.containsMatchIn("val r = runCatching { x() }"))
-        kotlin.test.assertTrue(catturaTutto.containsMatchIn("} catch (e: Exception) {"))
-        kotlin.test.assertFalse(catturaTutto.containsMatchIn("} catch (e: IOException) {"))
-        kotlin.test.assertTrue(nuovoScope.containsMatchIn("val s = CoroutineScope(SupervisorJob())"))
-        kotlin.test.assertTrue(nuovoScope.containsMatchIn("val s = kotlinx.coroutines.CoroutineScope(io)"))
-        kotlin.test.assertFalse(nuovoScope.containsMatchIn("val s = rememberCoroutineScope()"))
+    fun `CR-19c scope costruiti a mano in src main solo in supporto o nei conteggi congelati`() {
+        val scostamenti = scostamenti(nuovoScope, nuovoScopeCongelati)
+        kotlin.test.assertTrue(
+            scostamenti.isEmpty(),
+            "Usa figlioDi; se ne hai tolto uno abbassa il conteggio (CR-19c):\n" + scostamenti.joinToString("\n"),
+        )
+    }
+
+    @Test
+    fun `CR-19 i predicati vedono le forme reali e ignorano commenti e stringhe`() {
+        fun vede(regex: Regex, testo: String) = regex.findAll(codice(testo)).count()
+        kotlin.test.assertEquals(1, vede(sleep, "    Thread.sleep(10)"))
+        kotlin.test.assertEquals(1, vede(sleep, "x; TimeUnit.SECONDS.sleep(1)"))
+        val commenti = "/**\n * no `Thread.sleep(1)`\n */\n// Thread.sleep(2)\nf() // Thread.sleep(3)"
+        kotlin.test.assertEquals(0, vede(sleep, commenti))
+        kotlin.test.assertEquals(0, vede(sleep, "val s = \"Thread.sleep(4)\"\n/* Thread.sleep(5)\n still */"))
+        kotlin.test.assertTrue(sleepImportato.containsMatchIn("package a\nimport java.lang.Thread.sleep\n"))
+        kotlin.test.assertEquals(1, vede(catturaTutto, "val r = runCatching { x() }"))
+        kotlin.test.assertEquals(1, vede(catturaTutto, "} catch (e: Exception) {"))
+        kotlin.test.assertEquals(1, vede(catturaTutto, "} catch(e : java.lang.Throwable) {"))
+        kotlin.test.assertEquals(1, vede(catturaTutto, "} catch (_: Error) {"))
+        val annotato = "} catch (\n    // why\n    @Suppress(\"TooGenericExceptionCaught\", \"X\") e: Exception,\n) {"
+        kotlin.test.assertEquals(1, vede(catturaTutto, annotato))
+        val specifici = "} catch (e: IOException) {\n} catch (e: CancellationException) {"
+        kotlin.test.assertEquals(0, vede(catturaTutto, specifici))
+        kotlin.test.assertEquals(1, vede(nuovoScope, "val s = CoroutineScope(SupervisorJob())"))
+        kotlin.test.assertEquals(1, vede(nuovoScope, "val s = kotlinx.coroutines.CoroutineScope (io)"))
+        kotlin.test.assertEquals(1, vede(nuovoScope, "val s = MainScope()"))
+        kotlin.test.assertEquals(1, vede(nuovoScope, "GlobalScope.launch { }"))
+        kotlin.test.assertEquals(1, vede(nuovoScope, "object : CoroutineScope {"))
+        kotlin.test.assertEquals(0, vede(nuovoScope, "val s = rememberCoroutineScope()\nfun f(s: CoroutineScope) = s"))
     }
 
     private companion object {

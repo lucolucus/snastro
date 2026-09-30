@@ -307,7 +307,7 @@ internal class AmbienteProgetto(
         private const val THREAD_IO = 4
         private const val DIMENSIONE_SORGENTE = 64
         private const val ATTESA_CHIUSURA_S = 5L
-        private val ATTESA_REPLAY = 200.milliseconds
+        private val ATTESA_REPLAY = 300.milliseconds
 
         /** Voce 1 = [0, 1000), Voce 2 = [2000, 3000). */
         val DUE_VOCI = listOf(Turno(IntervalloMs(0, 1_000), 0), Turno(IntervalloMs(2_000, 3_000), 1))

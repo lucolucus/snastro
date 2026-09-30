@@ -9,5 +9,6 @@ import kotlin.time.Duration
  */
 public fun pausaInTempoReale(durata: Duration, motivo: String) {
     require(motivo.isNotBlank()) { "pausaInTempoReale: serve il motivo" }
+    require(!durata.isNegative()) { "pausaInTempoReale: durata negativa $durata" }
     Thread.sleep(durata.inWholeMilliseconds)
 }

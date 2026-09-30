@@ -131,4 +131,9 @@ class AiutantiDiProvaTest {
     fun `CR-19a pausaInTempoReale rifiuta un motivo vuoto`() {
         assertFailsWith<IllegalArgumentException> { pausaInTempoReale(1.milliseconds, motivo = " ") }
     }
+
+    @Test
+    fun `CR-19a pausaInTempoReale rifiuta una durata negativa`() {
+        assertFailsWith<IllegalArgumentException> { pausaInTempoReale((-1).milliseconds, motivo = "prova") }
+    }
 }

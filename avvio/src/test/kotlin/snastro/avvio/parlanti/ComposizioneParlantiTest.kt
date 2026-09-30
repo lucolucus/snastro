@@ -468,9 +468,7 @@ class ComposizioneParlantiTest {
     private companion object {
         const val ATTESA_NESSUNA_RIGENERAZIONE_MS = 500L
 
-        // Only a hang guard: B17 releases the reader itself. At 15 s a slower host (the GitHub macOS runner) let the
-        // reader release on its own before the commit-time checkpoint ran, so that checkpoint completed.
-        const val ATTESA_LETTORE_S = 60L
+        const val ATTESA_LETTORE_S = 15L
 
         // Comfortably longer than AperturaDatabase's busy_timeout (5s): the FIRST wal_checkpoint(TRUNCATE) — both
         // the commit-time one and the retry worker's own first attempt — internally WAITS on that timeout for the
