@@ -106,7 +106,6 @@ public class ApplicaSostituzioneTrascrittoSintesiPolitica(
      * it only feeds [LimiteIngresso]'s guard estimate, never the model (this policy calls no `ModelloLinguistico`). */
     private fun ingressoDi(segmenti: List<SegmentoSintesi>): String = IngressoRiassunto.costruisci(
         segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-        nomi = emptyMap(),
     )
 }
 

@@ -8,7 +8,8 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
  * turn carries the rules of answer schema v1, the `{V<n>}` speaker syntax, the length ([MisuraRisposta]: a target
  * proportional to the transcript, the cap as its ceiling) and — when present — the
  * Argomento instruction (wording provisional until spike `filtro-fuori-tema`); the user turn is the labelled input
- * built by Sintesi (`IngressoRiassunto`: lines `[s<n> V<n>] testo`, then the legend `V<n> = nome`).
+ * built by Sintesi (`IngressoRiassunto`: lines `[s<n> V<n>] testo`, then the legend `V<n> = Voce n`, ADR 0032). The
+ * system text still says "V<n> = nome": it is the wording measured with the good results, left as is on purpose.
  */
 internal object PromptRiassunto {
     /**

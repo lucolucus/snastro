@@ -88,7 +88,6 @@ public class RiassumiServizio(
      * consumes — the legend falls back to "Voce n", which does not change the token estimate's purpose: a guard). */
     private fun ingressoDi(segmenti: List<SegmentoSintesi>): String = IngressoRiassunto.costruisci(
         segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-        nomi = emptyMap(),
     )
 }
 

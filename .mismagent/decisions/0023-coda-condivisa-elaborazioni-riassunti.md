@@ -80,7 +80,8 @@ R0–R2 bind only the Elaborazione source (behaviour unchanged).
 Three phases, with **no transaction around the LLM**:
 1. **Claim:** a short transaction, `in_attesa → in_corso`, then `RiassuntoAvviato`.
 2. **Run, outside any transaction:**
-   - read the `Segmento`s (`LettoreTrascritto`) and the current names (`LettoreNomi`);
+   - read the `Segmento`s (`LettoreTrascritto`) and the current names (`LettoreNomi`)
+     *(amended 2026-10-01, [ADR 0032](0032-riassunto-senza-nomi-nell-ingresso.md): the run no longer reads names)*;
    - build the labelled input (`IngressoRiassunto`);
    - call `ModelloLinguistico.riassumi(…, annullato)`;
    - apply [INV-S4] on the root against the structure read in this phase.

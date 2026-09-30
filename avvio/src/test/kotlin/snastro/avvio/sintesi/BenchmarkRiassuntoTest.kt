@@ -88,7 +88,7 @@ class BenchmarkRiassuntoTest {
         val secondi = pronto?.let { (it - avviato) / NANOS_PER_SECONDO.toDouble() }
         println(
             """
-            benchmarkRiassunto — ${campione.fileName}: ${segmenti.size} segmenti, ${nomi.size} nomi
+            benchmarkRiassunto — ${campione.fileName}: ${segmenti.size} segmenti, ${nomi.size} nomi (ignorati: il modello vede solo Voce n, ADR 0032)
               esito: ${riassunto.stato} ${riassunto.motivoFallimento ?: ""} (eventi: ${eventi.map { it.first::class.simpleName }})
               RiassuntoAvviato -> RiassuntoPronto: ${secondi?.let { "%.1f s".format(it) } ?: "-"} (limite 600 s)
               misure: ${misure.singleOrNull()}

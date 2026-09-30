@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial: ADR 0021 §4's legend `V<n> = <Nome | Voce n>` becomes `V<n> = Voce n` for the model run; context-map Parlanti → Sintesi amended in place.
 closes_spike: null
 decided: 2026-10-01 · user (asked to fix the defect found by spike contesto-lungo of feature `incontro`) · Claude (option H2 over H1, on measured evidence)
-enforced_by: []   # unit-tested: EseguiProssimoRiassuntoServizioTest AC-S85 (an attributed Voce still reads "Voce n" in the request)
+enforced_by: []   # by construction: IngressoRiassunto.costruisci takes no Nomi at all; plus ComposizioneSintesiTest (a named Voce never reaches the model)
 ---
 # 0032 — The model never sees a Nome: the Riassunto input legend is always `Voce n`
 
@@ -30,7 +30,8 @@ but with 0 Decisioni and 20 invented, generic Questioni aperte, which was worse.
 
 ## Decision
 - The model run builds its input with the legend `V<n> = Voce n` for every Voce, whatever its `Attribuzione`.
-  `EseguiProssimoRiassuntoServizio` no longer reads `LettoreNomi`.
+  `EseguiProssimoRiassuntoServizio` no longer reads `LettoreNomi`, and `IngressoRiassunto.costruisci` has no
+  parameter for names, so no caller (the Incontro Riassunto included) can put one back.
 - Nomi are applied only when the Riassunto is shown (`{V<n>}` tokens, `Responsabile`, `PuntoChiave` speaker). The
   display resolution through Sintesi's `LettoreNomi` is unchanged.
 - The input is now byte-identical to the measured good case, so the output is the same with or without names.

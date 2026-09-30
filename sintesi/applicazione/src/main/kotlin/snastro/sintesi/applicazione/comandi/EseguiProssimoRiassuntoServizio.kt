@@ -122,7 +122,6 @@ public class EseguiProssimoRiassuntoServizio(
     private fun richiesta(riassunto: Riassunto, segmenti: List<SegmentoSintesi>): RichiestaRiassunto {
         val ingresso = IngressoRiassunto.costruisci(
             segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-            nomi = emptyMap(),
         )
         return RichiestaRiassunto(ingresso, riassunto.argomento?.valore, riassunto.lunghezzaMassima.valore)
     }

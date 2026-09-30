@@ -16,7 +16,10 @@ internal object VociNelTesto {
     private val VOCE_LEGENDA = Regex("""(?m)^V(\d+) = .*$""")
     private const val MASSIMO_VOCE = 999_999_999
 
-    /** The `V<n>` numbers `IngressoRiassunto`'s legend lines (`V<n> = <nome>`, at the end of [ingresso]) name. */
+    /**
+     * The `V<n>` numbers `IngressoRiassunto`'s legend lines (`V<n> = Voce n`, at the end of [ingresso], ADR 0032)
+     * name.
+     */
     fun legenda(ingresso: String): Set<Int> =
         VOCE_LEGENDA.findAll(ingresso).mapNotNull { it.groupValues[1].toIntOrNull() }.toSet()
 

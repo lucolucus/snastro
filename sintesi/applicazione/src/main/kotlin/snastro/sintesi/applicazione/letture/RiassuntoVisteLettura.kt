@@ -66,7 +66,6 @@ public class RiassuntoVisteLettura(
     private fun disponibilita(r: RegistrazioneId, segmenti: List<SegmentoSintesi>): DisponibilitaVista {
         val ingresso = IngressoRiassunto.costruisci(
             segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-            nomi = emptyMap(),
         )
         val esito = Riassumibilita.valuta(
             registrazioneId = r,

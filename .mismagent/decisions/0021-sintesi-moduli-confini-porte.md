@@ -96,7 +96,8 @@ public data class AzioneRisposta(val testo: String, val fonti: List<Int>, val re
 public data class PuntoChiaveRisposta(val testo: String, val fonti: List<Int>, val parlante: Int?)
 ```
 - **Who owns what.** Sintesi owns the **input format** and the **reference syntax**:
-  - the input line is `[s<segmentoId> V<voceId> m:ss] <testo>`, plus a legend `V<n> = <Nome | Voce n>`;
+  - the input line is `[s<segmentoId> V<voceId> m:ss] <testo>`, plus a legend `V<n> = <Nome | Voce n>`
+    *(amended 2026-10-01, [ADR 0032](0032-riassunto-senza-nomi-nell-ingresso.md): the legend is always `V<n> = Voce n`, never a Nome)*;
     *(amended 2026-09-26, ADR 0026: `[s<segmentoId> V<voceId>] <testo>`, no `m:ss` — see the Amendment below)*
   - in every answer text, a speaker is written `{V<n>}` (literal braces doubled). This is the port's
     canonical form. The adapter translates whatever syntax its prompt uses into it, so the root and

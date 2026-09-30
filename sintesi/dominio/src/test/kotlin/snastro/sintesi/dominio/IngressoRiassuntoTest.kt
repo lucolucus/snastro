@@ -10,14 +10,13 @@ class IngressoRiassuntoTest {
         SegmentoIngresso(SegmentoId(s), VoceId(v), ms, testo)
 
     @Test
-    fun `AC-S3 una riga per Segmento nell ordine dato senza tempo poi la legenda delle Voci per n crescente`() {
+    fun `AC-S3 ADR 0032 una riga per Segmento senza tempo poi la legenda Voce n per n crescente`() {
         val ingresso = IngressoRiassunto.costruisci(
             listOf(
                 segmento(2, 3, 5_000, "ciao"),
                 segmento(1, 1, 65_000, "budget"),
                 segmento(7, 3, 3_725_000, "chiudiamo"),
             ),
-            mapOf(VoceId(3) to "Marco", VoceId(9) to "Assente"),
         )
 
         assertEquals(
@@ -26,7 +25,7 @@ class IngressoRiassuntoTest {
                 "[s1 V1] budget",
                 "[s7 V3] chiudiamo",
                 "V1 = Voce 1",
-                "V3 = Marco",
+                "V3 = Voce 3", // ADR 0032: never a Nome — there is no way to pass one
             ).joinToString("\n"),
             ingresso,
         )

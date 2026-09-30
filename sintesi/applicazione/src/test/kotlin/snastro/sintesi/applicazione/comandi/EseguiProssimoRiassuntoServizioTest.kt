@@ -52,9 +52,9 @@ import kotlin.test.assertTrue
 /**
  * [EseguiProssimoRiassuntoServizio] against the ports' fakes (D1): AC-S83..AC-S89. [modello] is built
  * WITH [transazioni], so any read invoked while a transaction is open throws (AC-S84, ADR 0012 (b)) —
- * every test in this file shares that guard. AC-S84 additionally wires [LettoreTrascrittoConGuardia] and
- * [LettoreNomiConGuardia] — the same `check(!transazioneAperta)` for both lettori, so a regression moving
- * either read into the claim transaction is also caught there (rework 1, FAIL 2).
+ * every test in this file shares that guard. AC-S84 additionally wires [LettoreTrascrittoConGuardia] — the same
+ * `check(!transazioneAperta)` on the read, so a regression moving it into the claim transaction is also caught
+ * there (rework 1, FAIL 2).
  */
 class EseguiProssimoRiassuntoServizioTest {
     private val riassunti = RiassuntoRepositoryFinta()
@@ -181,9 +181,6 @@ class EseguiProssimoRiassuntoServizioTest {
         assertEquals(1500, inviata.lunghezzaMassimaParole)
         val atteso = IngressoRiassunto.costruisci(
             SEGMENTI.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-            // ADR 0032: the model never sees a Nome — with names in the legend it returned no elements at all
-            // (spike 2026-09-30); names are applied only when the Riassunto is shown.
-            emptyMap(),
         )
         assertEquals(atteso, inviata.ingresso)
     }

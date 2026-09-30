@@ -328,7 +328,6 @@ class RiassuntoVisteLetturaTest {
         val voce = VoceId(1)
         fun ingressoSenzaNomi(testo: String) = IngressoRiassunto.costruisci(
             listOf(SegmentoIngresso(SegmentoId(1), voce, 0, testo)),
-            nomi = emptyMap(),
         )
         // Il piu' lungo testo il cui ingresso NAME-FREE resta esattamente a LIMITE_TOKEN (ricerca sulla formula
         // pura, cosi' il confine resta esatto anche se il testo di contorno di IngressoRiassunto cambiasse).
