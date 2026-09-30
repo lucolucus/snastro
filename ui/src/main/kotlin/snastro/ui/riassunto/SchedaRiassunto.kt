@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -76,7 +75,6 @@ import snastro.ui.testi.PRIVACY_RIASSUNTO
 import snastro.ui.testi.testoLunghezzaMassima
 import java.awt.datatransfer.StringSelection
 
-private val LARGHEZZA_TESTO: Dp = 640.dp // ux-proposal: Sommario/prose ~68ch (an S3-column-wide cap, not AC-tested)
 private val ALTEZZA_RIGA_SCHELETRO: Dp = 16.dp
 private val ALTEZZA_BARRA_PROGRESSO: Dp = 6.dp
 private val LARGHEZZA_CAMPO_LUNGHEZZA: Dp = 88.dp
@@ -303,7 +301,8 @@ private fun TestoContenuto(contenuto: ContenutoUi) {
                 text = it,
                 style = tipografia.abstract,
                 color = colori.ink,
-                modifier = Modifier.widthIn(max = LARGHEZZA_TESTO).testTag(TAG_SOMMARIO),
+                // 2026-09-30, user: the 640dp prose cap left the Sommario on the left of a wide tab — it fills it now.
+                modifier = Modifier.testTag(TAG_SOMMARIO),
             )
         }
         if (contenuto.decisioni.isNotEmpty()) {
