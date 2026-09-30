@@ -110,6 +110,7 @@ class RiassuntoPresenter(
     // AC-S128/S134/S139: the field's own local edit — `null` until the user types; reset after a
     // successful Riassumi so the NEXT reload's `argomentoPrecompilato` prefills it again.
     private var argomentoToccato = false
+    private var moduloAperto = false
     private var argomentoAttuale = ""
 
     // AC-S138: `null` = show the freshly read value plainly; non-null while the editor/its "Salvato"
@@ -192,6 +193,7 @@ class RiassuntoPresenter(
         argomento = argomentoUiDi(argomentoAttuale),
         lunghezzaMassima = lunghezzaMassimaLocale ?: LunghezzaMassimaUiStato.Testo(ultimaLunghezzaMassimaLetta),
         messaggioErrore = messaggioErrore,
+        moduloAperto = moduloAperto,
     )
 
     private fun modelloUi(m: StatoModelloVista): ModelloUi = when (m) {
@@ -259,7 +261,10 @@ class RiassuntoPresenter(
             var erroreDaMostrare: String? = null
             try {
                 when (val esito = withContext(io) { riassumiCmd(argomento) }) {
-                    is Esito.Ok -> argomentoToccato = false
+                    is Esito.Ok -> {
+                        argomentoToccato = false
+                        moduloAperto = false
+                    }
                     is Esito.Errore -> erroreDaMostrare = messaggioPer(esito.errore)
                 }
             } catch (e: CancellationException) {
@@ -362,6 +367,18 @@ class RiassuntoPresenter(
         aggiornaDati { it.copy(lunghezzaMassima = nuovo) }
     }
 
+    /** The top bar's "Riassumi di nuovo": opens the form above the shown Riassunto. */
+    private fun apriModulo() {
+        moduloAperto = true
+        aggiornaDati { it.copy(moduloAperto = true) }
+    }
+
+    /** "Annulla" on the opened form: closes it; the typed Argomento stays for the next opening. */
+    private fun chiudiModulo() {
+        moduloAperto = false
+        aggiornaDati { it.copy(moduloAperto = false) }
+    }
+
     /** AC-S138: restores the last value read from `impostazioni-sintesi`, not merely the one before "Cambia". */
     private fun annullaLunghezzaMassima() {
         lunghezzaMassimaLocale = null
@@ -376,5 +393,7 @@ class RiassuntoPresenter(
         cambiaLunghezzaMassima = ::cambiaLunghezzaMassima,
         salvaLunghezzaMassima = ::salvaLunghezzaMassima,
         annullaLunghezzaMassima = ::annullaLunghezzaMassima,
+        apriModulo = ::apriModulo,
+        chiudiModulo = ::chiudiModulo,
     )
 }

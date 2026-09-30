@@ -48,6 +48,7 @@ private const val TAG_IN_CODA_TEST = "riassunto-in-coda"
 private const val TAG_IN_CORSO_TEST = "riassunto-in-corso"
 private const val TAG_FALLITO_TEST = "riassunto-fallito"
 private const val TAG_BOTTONE_RIASSUMI_TEST = "riassunto-bottone-principale"
+private const val TAG_RIASSUMI_DI_NUOVO_TEST = "riassunto-riassumi-di-nuovo"
 private const val TAG_MESSAGGIO_ERRORE_TEST = "riassunto-messaggio-errore"
 
 /** AC-S139: [snastro.ui.testi.messaggioPer]'s own mapping of `ErroreSintesi.RiassuntoGiaAperto`. */
@@ -178,9 +179,7 @@ private fun statoFallito() = unDati(
 )
 
 // AC-S125/S129/S130/S131 (rework FAIL 2): the SAME base states, but with a shown Riassunto already
-// present — states 1/5 keep the shown Riassunto ABOVE (ux row 1: "this block replaces only the
-// action area"; AC-S129: "stays visible above"); states 6/7 keep it BELOW (ux rows 6/7: "the shown
-// Riassunto stays below").
+// present — since 2026-09-30 (top bar) EVERY state keeps its area ABOVE and the shown Riassunto BELOW.
 private fun statoModelloNonInstallatoConContenuto() =
     statoModelloNonInstallato().copy(contenuto = contenutoSemplice())
 
@@ -247,19 +246,19 @@ class SchedaRiassuntoRenderCheckTest {
         verifica("modello-non-installato", statoModelloNonInstallato(), PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
 
     @Test
-    fun `AC-S125 state 1 con Riassunto mostrato l area di download resta sotto a 1280x800`() =
+    fun `AC-S125 state 1 con Riassunto mostrato l area di download sta sopra il Riassunto a 1280x800`() =
         verifica("modello-non-installato-con-contenuto", statoModelloNonInstallatoConContenuto(), LARGA, ALTA) {
-            assertAreaSotto(TAG_SCARICA_MODELLO_TEST)
+            assertStatoSopra(TAG_SCARICA_MODELLO_TEST)
         }
 
     @Test
-    fun `AC-S125 state 1 con Riassunto mostrato l area di download resta sotto a 1024x640`() =
+    fun `AC-S125 state 1 con Riassunto mostrato l area di download sta sopra il Riassunto a 1024x640`() =
         verifica(
             "modello-non-installato-con-contenuto",
             statoModelloNonInstallatoConContenuto(),
             PICCOLA_LARGA,
             PICCOLA_ALTA,
-        ) { assertAreaSotto(TAG_SCARICA_MODELLO_TEST) }
+        ) { assertStatoSopra(TAG_SCARICA_MODELLO_TEST) }
 
     @Test
     fun `AC-S126 state 2 download in corso a 1280x800`() =
@@ -329,19 +328,19 @@ class SchedaRiassuntoRenderCheckTest {
         verifica("non-disponibile", statoNonDisponibile(), PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
 
     @Test
-    fun `AC-S129 state 5 con Riassunto mostrato l area resta sotto a 1280x800`() =
+    fun `AC-S129 state 5 con Riassunto mostrato l area sta sopra il Riassunto a 1280x800`() =
         verifica("non-disponibile-con-contenuto", statoNonDisponibileConContenuto(), LARGA, ALTA) {
-            assertAreaSotto(TAG_NON_DISPONIBILE_TEST)
+            assertStatoSopra(TAG_NON_DISPONIBILE_TEST)
         }
 
     @Test
-    fun `AC-S129 state 5 con Riassunto mostrato l area resta sotto a 1024x640`() =
+    fun `AC-S129 state 5 con Riassunto mostrato l area sta sopra il Riassunto a 1024x640`() =
         verifica(
             "non-disponibile-con-contenuto",
             statoNonDisponibileConContenuto(),
             PICCOLA_LARGA,
             PICCOLA_ALTA,
-        ) { assertAreaSotto(TAG_NON_DISPONIBILE_TEST) }
+        ) { assertStatoSopra(TAG_NON_DISPONIBILE_TEST) }
 
     // Pre-release finding #152 (rework, MED): state 6 used to be plain `Text` (its own font-metric
     // height), not a real 24dp-tall pill [ChipStato] — the fixed chip height is what actually tells
@@ -431,8 +430,30 @@ class SchedaRiassuntoRenderCheckTest {
     @Test
     fun `AC-S140 state 8 pronto ricco altezza completa mostra l area azione a 1024`() =
         verifica("pronto-altezza-completa", statoPronto(), PICCOLA_LARGA, ALTEZZA_COMPLETA) {
-            onNodeWithTag(TAG_BOTTONE_RIASSUMI_TEST).assertIsDisplayed()
+            onNodeWithTag(TAG_RIASSUMI_DI_NUOVO_TEST).assertIsDisplayed()
         }
+
+    @Test
+    fun `con un Riassunto lungo Copia e Riassumi di nuovo sono in cima senza scorrere a 1024x640`() =
+        verifica("pronto-barra", statoPronto(), PICCOLA_LARGA, PICCOLA_ALTA) {
+            onNodeWithTag(TAG_RIASSUMI_DI_NUOVO_TEST).assertIsDisplayed()
+            onNodeWithTag("riassunto-copia").assertIsDisplayed()
+            assertStatoSopra("riassunto-barra")
+            onNodeWithTag(TAG_BOTTONE_RIASSUMI_TEST).assertDoesNotExist()
+        }
+
+    @Test
+    fun `Riassumi di nuovo apre il modulo sopra il Riassunto a 1024x640`() =
+        verifica("pronto-modulo-aperto", statoPronto().copy(moduloAperto = true), PICCOLA_LARGA, PICCOLA_ALTA) {
+            onNodeWithTag(TAG_BOTTONE_RIASSUMI_TEST).assertIsDisplayed()
+            onNodeWithTag("riassunto-modulo-annulla").assertIsDisplayed()
+            onNodeWithTag(TAG_RIASSUMI_DI_NUOVO_TEST).assertDoesNotExist()
+            assertStatoSopra("riassunto-modulo")
+        }
+
+    @Test
+    fun `Riassumi di nuovo aperto scuro a 1280x800`() =
+        verifica("pronto-modulo-aperto", statoPronto().copy(moduloAperto = true), LARGA, ALTA, scuro = true)
 
     @Test
     fun `AC-S133 state 9 superato a 1280x800`() = verifica("superato", statoSuperato(), LARGA, ALTA)
@@ -452,7 +473,7 @@ class SchedaRiassuntoRenderCheckTest {
     @Test
     fun `AC-S140 state 9 superato altezza completa mostra l area azione a 1024`() =
         verifica("superato-altezza-completa", statoSuperato(), PICCOLA_LARGA, ALTEZZA_COMPLETA) {
-            onNodeWithTag(TAG_BOTTONE_RIASSUMI_TEST).assertIsDisplayed()
+            onNodeWithTag(TAG_RIASSUMI_DI_NUOVO_TEST).assertIsDisplayed()
         }
 
     @Test
@@ -498,14 +519,7 @@ class SchedaRiassuntoRenderCheckTest {
             )
         }
 
-    /** AC-S129/AC-S125 (rework FAIL 2): the bottom-placed area never overlaps the content above it. */
-    private fun ComposeUiTest.assertAreaSotto(tagArea: String) {
-        val contenuto = onNodeWithTag(TAG_CONTENUTO_TEST).getUnclippedBoundsInRoot()
-        val area = onNodeWithTag(tagArea).getUnclippedBoundsInRoot()
-        assertTrue(area.top >= contenuto.bottom, "l'area azione ($tagArea) deve restare sotto il Riassunto mostrato")
-    }
-
-    /** AC-S130/AC-S131/AC-S134 (rework FAIL 2): the top-placed status never overlaps the content below it. */
+    /** Every action area/status sits ABOVE the shown Riassunto, never past it (2026-09-30, top bar). */
     private fun ComposeUiTest.assertStatoSopra(tagStato: String) {
         val contenuto = onNodeWithTag(TAG_CONTENUTO_TEST).getUnclippedBoundsInRoot()
         val stato = onNodeWithTag(tagStato).getUnclippedBoundsInRoot()

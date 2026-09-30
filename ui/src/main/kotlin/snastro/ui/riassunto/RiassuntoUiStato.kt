@@ -24,6 +24,8 @@ sealed interface RiassuntoUiStato {
         val argomento: ArgomentoUiStato,
         val lunghezzaMassima: LunghezzaMassimaUiStato,
         val messaggioErrore: String? = null,
+        /** With a shown Riassunto, the Argomento/lunghezza form opens from the top bar's "Riassumi di nuovo". */
+        val moduloAperto: Boolean = false,
     ) : RiassuntoUiStato {
         /**
          * The ONE bottom action-area variant, by PRECEDENCE (ux-proposal's own layout: model line at

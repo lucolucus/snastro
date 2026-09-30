@@ -9,4 +9,6 @@ data class AzioniRiassunto(
     val cambiaLunghezzaMassima: (String) -> Unit,
     val salvaLunghezzaMassima: () -> Unit,
     val annullaLunghezzaMassima: () -> Unit,
+    val apriModulo: () -> Unit = {},
+    val chiudiModulo: () -> Unit = {},
 )

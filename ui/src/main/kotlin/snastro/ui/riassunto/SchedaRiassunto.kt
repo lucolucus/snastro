@@ -88,6 +88,10 @@ private const val TAG_RADICE = "riassunto"
 private const val TAG_CARICAMENTO = "riassunto-scheletro"
 private const val TAG_CONTENUTO = "riassunto-contenuto"
 private const val TAG_COPIA = "riassunto-copia"
+private const val TAG_BARRA = "riassunto-barra"
+private const val TAG_RIASSUMI_DI_NUOVO = "riassunto-riassumi-di-nuovo"
+private const val TAG_MODULO = "riassunto-modulo"
+private const val TAG_MODULO_ANNULLA = "riassunto-modulo-annulla"
 private const val DURATA_COPIATO_MS = 2_000L
 private const val TAG_SOMMARIO = "riassunto-sommario"
 private const val TAG_OMESSI = "riassunto-omessi"
@@ -118,13 +122,11 @@ private const val TAG_MESSAGGIO_ERRORE = "riassunto-messaggio-errore"
  * (the S3 host already gives this composable a weighted, width-capped container), never a
  * `LazyRow`/`horizontalScroll` ancestor of [GruppoFonti]/[FonteChip] (lesson `FonteChip.kt:54`,
  * pre-release finding #113: `weight(1f, fill = false)` needs a bounded parent):
- * - **states 1/2/3/4/5/8/9** (the model's own state, or the Argomento+Riassumi form): the shown
- *   Riassunto ([RiassuntoUiStato.Dati.contenuto], when present) comes FIRST, the ONE action area
- *   ([RiassuntoUiStato.Dati.areaAzione]) at the BOTTOM (ux row 1: "this block replaces only the
- *   action area"; AC-S129: "a shown Riassunto stays visible above").
- * - **states 6/7/10** (`in_attesa`/`in_corso`/`fallito` — THIS Riassunto's own open-request status,
- *   AC-S130/S131/S134): the status/message comes FIRST, the shown Riassunto (if any) stays BELOW it
- *   (ux rows 6/7/10: "the shown Riassunto stays below").
+ * - **no shown Riassunto**: the ONE action area ([RiassuntoUiStato.Dati.areaAzione]) is the tab's body.
+ * - **a shown Riassunto** (2026-09-30, user: the bottom "Riassumi di nuovo" could not be found under a long
+ *   Riassunto): a top bar ([BarraRiassunto]: metadata, "Copia", "Riassumi di nuovo") comes FIRST, then the
+ *   action area — for [AreaAzione.Azionabile] only the form the bar opened ([RiassuntoUiStato.Dati.moduloAperto]),
+ *   otherwise the model/queue/failure state — and the Riassunto BELOW it. No action ever sits past the content.
  *
  * The privacy line is the tab's own last line, always present once loaded (AC-S139), with the
  * [RiassuntoUiStato.Dati.messaggioErrore] inline notice (a race's `ErroreSintesi`, e.g.
@@ -160,7 +162,7 @@ private fun Scheletro(modifier: Modifier) {
 @Composable
 private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, modifier: Modifier) {
     val area = stato.areaAzione
-    val inAlto = area.inAlto()
+    val contenuto = stato.contenuto
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -170,20 +172,20 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
     ) {
         // AC-S139 (pre-release finding #155, rework, MED): [messaggioErrore] sits right after
-        // WHICHEVER area copy actually rendered — never fixed at the very bottom, past a long
-        // Riassunto — so on states 6/7/10 (`inAlto`) it lands near the TOP of this scrollable
-        // Column, never below the fold under the content that follows it.
-        if (inAlto) {
+        // WHICHEVER area copy actually rendered — always above the content, never below the fold.
+        if (contenuto == null) {
             AreaAzioneVista(area, stato, azioni)
-            MessaggioErroreVista(stato.messaggioErrore)
+        } else {
+            BarraRiassunto(contenuto, riassumiDiNuovo = area is AreaAzione.Azionabile && !stato.moduloAperto, azioni)
+            when {
+                area !is AreaAzione.Azionabile -> AreaAzioneVista(area, stato, azioni)
+                stato.moduloAperto -> ModuloRiassumiDiNuovo(stato, azioni)
+            }
         }
-        stato.contenuto?.let { contenuto ->
-            if (contenuto.superato) AvvisoSuperato()
-            SezioniContenuto(contenuto)
-        }
-        if (!inAlto) {
-            AreaAzioneVista(area, stato, azioni)
-            MessaggioErroreVista(stato.messaggioErrore)
+        MessaggioErroreVista(stato.messaggioErrore)
+        contenuto?.let {
+            if (it.superato) AvvisoSuperato()
+            SelectionContainer { TestoContenuto(it) }
         }
         Text(
             text = PRIVACY_RIASSUNTO,
@@ -193,11 +195,6 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
         )
     }
 }
-
-/** AC-S130/S131/S134 (states 6, 7, 10): THIS Riassunto's own open-request status/failure comes BEFORE
- * any previously shown Riassunto — see [ContenutoTab]'s own KDoc for the full precedence. */
-private fun AreaAzione.inAlto(): Boolean =
-    this is AreaAzione.InCoda || this is AreaAzione.InCorso || this is AreaAzione.Fallito
 
 @Composable
 private fun MessaggioErroreVista(messaggio: String?) {
@@ -221,17 +218,48 @@ private fun AvvisoSuperato() {
 }
 
 /**
- * The shown Riassunto: "Copia" on top (the whole Riassunto as text, [testoRiassuntoDaCopiare]), then the content —
- * selectable, so a part can be copied with the mouse too.
+ * The shown Riassunto's top bar: its metadata on the left, the actions on the right — "Copia" (the whole
+ * Riassunto as text, [testoRiassuntoDaCopiare]) and, when a new request can start, "Riassumi di nuovo",
+ * which opens the form ([AzioniRiassunto.apriModulo]) instead of hiding it under the content.
  */
 @Composable
-private fun SezioniContenuto(contenuto: ContenutoUi) {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
-        modifier = Modifier.testTag(TAG_CONTENUTO),
+private fun BarraRiassunto(contenuto: ContenutoUi, riassumiDiNuovo: Boolean, azioni: AzioniRiassunto) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
+        modifier = Modifier.fillMaxWidth().testTag(TAG_BARRA),
     ) {
+        Text(
+            text = contenuto.metadatiTesto,
+            style = LocalSnastroTipografia.current.caption,
+            color = LocalSnastroColori.current.inkMuted,
+            modifier = Modifier.weight(1f).testTag(TAG_METADATI),
+        )
         BottoneCopia(contenuto)
-        SelectionContainer { TestoContenuto(contenuto) }
+        if (riassumiDiNuovo) {
+            BottoneSn(
+                etichetta = ETICHETTA_RIASSUMI_DI_NUOVO,
+                onClick = azioni.apriModulo,
+                variante = VarianteBottone.Primario,
+                piccolo = true,
+                icona = Icona.Retry,
+                modifier = Modifier.testTag(TAG_RIASSUMI_DI_NUOVO),
+            )
+        }
+    }
+}
+
+/** The form "Riassumi di nuovo" opened: Argomento + lunghezza massima + "Annulla" / "Riassumi". */
+@Composable
+private fun ModuloRiassumiDiNuovo(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto) {
+    Surface(
+        color = LocalSnastroColori.current.raised,
+        shape = RoundedCornerShape(SnastroMisure.radiusControl),
+        modifier = Modifier.fillMaxWidth().testTag(TAG_MODULO),
+    ) {
+        Column(modifier = Modifier.padding(SnastroMisure.space4)) {
+            FormRiassumi(stato, azioni, ETICHETTA_RIASSUMI, annulla = azioni.chiudiModulo)
+        }
     }
 }
 
@@ -264,7 +292,10 @@ private fun BottoneCopia(contenuto: ContenutoUi) {
 
 @Composable
 private fun TestoContenuto(contenuto: ContenutoUi) {
-    Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
+        modifier = Modifier.testTag(TAG_CONTENUTO),
+    ) {
         val colori = LocalSnastroColori.current
         val tipografia = LocalSnastroTipografia.current
         contenuto.sommario?.let {
@@ -290,12 +321,6 @@ private fun TestoContenuto(contenuto: ContenutoUi) {
         contenuto.omessiTesto?.let {
             Text(it, style = tipografia.caption, color = colori.inkMuted, modifier = Modifier.testTag(TAG_OMESSI))
         }
-        Text(
-            text = contenuto.metadatiTesto,
-            style = tipografia.caption,
-            color = colori.inkMuted,
-            modifier = Modifier.testTag(TAG_METADATI),
-        )
     }
 }
 
@@ -481,12 +506,17 @@ private fun AreaNonDisponibile(area: AreaAzione.NonDisponibile) {
 private fun AreaAzionabile(area: AreaAzione.Azionabile, stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto) {
     Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3)) {
         if (!area.nuovo) EmptyState(messaggio = MESSAGGIO_NESSUN_RIASSUNTO)
-        FormRiassumi(stato, azioni, if (area.nuovo) ETICHETTA_RIASSUMI_DI_NUOVO else ETICHETTA_RIASSUMI)
+        FormRiassumi(stato, azioni, ETICHETTA_RIASSUMI)
     }
 }
 
 @Composable
-private fun FormRiassumi(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, etichettaBottone: String) {
+private fun FormRiassumi(
+    stato: RiassuntoUiStato.Dati,
+    azioni: AzioniRiassunto,
+    etichettaBottone: String,
+    annulla: (() -> Unit)? = null,
+) {
     Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3)) {
         CampoSn(
             valore = stato.argomento.valore,
@@ -498,13 +528,23 @@ private fun FormRiassumi(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
             modifier = Modifier.testTag(TAG_ARGOMENTO),
         )
         LunghezzaMassimaVista(stato.lunghezzaMassima, azioni)
-        BottoneSn(
-            etichetta = etichettaBottone,
-            onClick = azioni.riassumi,
-            variante = VarianteBottone.Primario,
-            abilitato = stato.argomento.errore == null,
-            modifier = Modifier.testTag(TAG_BOTTONE_RIASSUMI),
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2)) {
+            BottoneSn(
+                etichetta = etichettaBottone,
+                onClick = azioni.riassumi,
+                variante = VarianteBottone.Primario,
+                abilitato = stato.argomento.errore == null,
+                modifier = Modifier.testTag(TAG_BOTTONE_RIASSUMI),
+            )
+            annulla?.let {
+                BottoneSn(
+                    ETICHETTA_ANNULLA,
+                    onClick = it,
+                    variante = VarianteBottone.Secondario,
+                    modifier = Modifier.testTag(TAG_MODULO_ANNULLA),
+                )
+            }
+        }
     }
 }
 

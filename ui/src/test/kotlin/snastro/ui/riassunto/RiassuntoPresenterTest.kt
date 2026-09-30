@@ -424,6 +424,24 @@ class RiassuntoPresenterTest {
     }
 
     @Test
+    fun `Riassumi di nuovo apre il modulo, Annulla lo chiude e un invio riuscito lo richiude`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(mostrato = unMostrato())
+        runCurrent()
+        assertEquals(false, dati(a.presenter).moduloAperto)
+
+        a.presenter.azioni.apriModulo()
+        assertEquals(true, dati(a.presenter).moduloAperto)
+        a.presenter.azioni.chiudiModulo()
+        assertEquals(false, dati(a.presenter).moduloAperto)
+
+        a.presenter.azioni.apriModulo()
+        a.presenter.azioni.riassumi()
+        runCurrent()
+        assertEquals(1, a.chiamateRiassumi.size)
+        assertEquals(false, dati(a.presenter).moduloAperto)
+    }
+
+    @Test
     fun `AC-S134 fallito mappa il motivo precompila l Argomento e Riprova invia Riassumi`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(
             ultimoFallimento = unFallimentoVista("INTERROTTO"),
