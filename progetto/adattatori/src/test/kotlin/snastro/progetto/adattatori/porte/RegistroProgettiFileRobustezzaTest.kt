@@ -3,6 +3,7 @@ package snastro.progetto.adattatori.porte
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.porte.VoceRegistro
+import snastro.supporto.test.attendiFinche
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -15,6 +16,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * AC-120 (atomic rewrite), AC-121 (a corrupt/unreadable file never crashes the caller), AC-328
@@ -383,12 +385,9 @@ class RegistroProgettiFileRobustezzaTest {
             .start()
         try {
             val registro = RegistroProgettiFile(file)
-            val scadenza = System.nanoTime() + TimeUnit.SECONDS.toNanos(60)
-            while (!Files.exists(pronto)) {
+            attendiFinche(timeout = 60.seconds, messaggio = "il figlio non e diventato pronto in tempo") {
                 assertTrue(figlio.isAlive, "il figlio e uscito prima di essere pronto: ${logFiglio()}")
-                assertTrue(System.nanoTime() < scadenza, "il figlio non e diventato pronto in tempo")
-                // real time is the subject: polls a REAL separate JVM's own readiness file on disk.
-                Thread.sleep(10)
+                Files.exists(pronto)
             }
 
             Files.createFile(via) // il segnale di partenza condiviso: da qui scrivono entrambi

@@ -3,11 +3,13 @@ package snastro.audio
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.io.TempDir
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 class RiproduttoreWavTest {
     // --- State before any playback: no device opened, safe for the default gate -----------------
@@ -67,8 +69,10 @@ class RiproduttoreWavTest {
 
         RiproduttoreWav().use { r ->
             r.riproduci(wav, intervalli = null, daMs = 0)
-            // real time is the subject: the real audio line's own playback position must actually advance.
-            Thread.sleep(ATTESA_IN_RIPRODUZIONE_MS)
+            pausaInTempoReale(
+                ATTESA_IN_RIPRODUZIONE_MS.milliseconds,
+                motivo = "la posizione della linea audio reale deve avanzare",
+            )
             r.pausa()
 
             assertFalse(r.inRiproduzione())

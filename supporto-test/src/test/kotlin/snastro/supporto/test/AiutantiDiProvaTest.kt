@@ -14,7 +14,7 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
-/** AC-C12: [attendiFinche], [OrologioFinto], [conScopeDiProva]. */
+/** AC-C12: [attendiFinche], [OrologioFinto], [conScopeDiProva]; CR-19a: [restaVeroPer], [pausaInTempoReale]. */
 class AiutantiDiProvaTest {
     private val inizio = Instant.parse("2026-09-27T10:00:00Z")
 
@@ -92,5 +92,43 @@ class AiutantiDiProvaTest {
 
         assertEquals(42, valore)
         assertFalse(checkNotNull(visto).isActive)
+    }
+
+    @Test
+    fun `CR-19a restaVeroPer dura tutta la finestra e controlla piu volte`() {
+        var controlli = 0
+        val partenza = TimeSource.Monotonic.markNow()
+
+        restaVeroPer(durata = 100.milliseconds, messaggio = "cambiata") { ++controlli > 0 }
+
+        assertTrue(partenza.elapsedNow() >= 100.milliseconds)
+        assertTrue(controlli > 2, "controllata solo $controlli volte")
+    }
+
+    @Test
+    fun `CR-19a restaVeroPer fallisce appena la condizione diventa falsa, senza aspettare la fine`() {
+        var controlli = 0
+        val partenza = TimeSource.Monotonic.markNow()
+
+        val errore = assertFailsWith<AssertionError> {
+            restaVeroPer(durata = 5.seconds, messaggio = "qualcosa e successo") { ++controlli < 3 }
+        }
+
+        assertTrue("qualcosa e successo" in errore.message.orEmpty(), errore.message)
+        assertTrue(partenza.elapsedNow() < 1.seconds)
+    }
+
+    @Test
+    fun `CR-19a pausaInTempoReale aspetta la durata`() {
+        val partenza = TimeSource.Monotonic.markNow()
+
+        pausaInTempoReale(30.milliseconds, motivo = "il tempo reale e il soggetto")
+
+        assertTrue(partenza.elapsedNow() >= 30.milliseconds)
+    }
+
+    @Test
+    fun `CR-19a pausaInTempoReale rifiuta un motivo vuoto`() {
+        assertFailsWith<IllegalArgumentException> { pausaInTempoReale(1.milliseconds, motivo = " ") }
     }
 }

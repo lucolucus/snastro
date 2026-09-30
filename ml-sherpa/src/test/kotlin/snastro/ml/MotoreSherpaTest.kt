@@ -2,6 +2,8 @@ package snastro.ml
 
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
+import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
@@ -16,6 +18,8 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /** Gate tests: no native library is ever loaded here — the loader is a counting fake (AC-399). */
 class MotoreSherpaTest {
@@ -191,7 +195,10 @@ class MotoreSherpaTest {
                 motore.conSessione(config) {
                     massimo.accumulateAndGet(dentro.incrementAndGet(), ::maxOf)
                     primaDentro.countDown()
-                    Thread.sleep(ATTESA_SOVRAPPOSIZIONE_MS)
+                    pausaInTempoReale(
+                        ATTESA_SOVRAPPOSIZIONE_MS.milliseconds,
+                        motivo = "la prima sessione resta dentro mentre la seconda prova a entrare",
+                    )
                     dentro.decrementAndGet()
                 }
             }
@@ -263,7 +270,7 @@ class MotoreSherpaTest {
                 erroreDiB.set(e)
             }
         }
-        attendiFinche { b.state == Thread.State.WAITING }
+        attendiInAttesaSulMutex { b.state == Thread.State.WAITING }
 
         b.interrupt()
         b.join(TIMEOUT_S * MS_PER_S)
@@ -312,9 +319,9 @@ class MotoreSherpaTest {
         }
         assertTrue(aDentro.await(TIMEOUT_S, TimeUnit.SECONDS))
         val b = thread { motore.conSessione(config) { ordine += "B" } }
-        attendiFinche { b.state == Thread.State.WAITING }
+        attendiInAttesaSulMutex { b.state == Thread.State.WAITING }
         val c = thread { motore.conSessione(config) { ordine += "C" } }
-        attendiFinche { c.state == Thread.State.WAITING }
+        attendiInAttesaSulMutex { c.state == Thread.State.WAITING }
 
         rilasciaA.countDown()
         listOf(a, b, c).forEach { it.join(TIMEOUT_S * MS_PER_S) }
@@ -341,7 +348,7 @@ class MotoreSherpaTest {
         }
         assertTrue(pipelineDentro.await(TIMEOUT_S, TimeUnit.SECONDS))
         val estrazione = thread { motore.conSessione(config) { ordine += "estrazione" } }
-        attendiFinche { estrazione.state == Thread.State.WAITING }
+        attendiInAttesaSulMutex { estrazione.state == Thread.State.WAITING }
 
         estrazioneInCoda.countDown()
         listOf(pipeline, estrazione).forEach { it.join(TIMEOUT_S * MS_PER_S) }
@@ -349,13 +356,12 @@ class MotoreSherpaTest {
         assertEquals(listOf("pipeline 1", "estrazione", "pipeline 2"), ordine)
     }
 
-    private fun attendiFinche(condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + TIMEOUT_S * MS_PER_S
-        while (!condizione()) {
-            check(System.currentTimeMillis() < scadenza) { "timeout: il thread non e in attesa sul Mutex" }
-            Thread.sleep(PASSO_ATTESA_MS)
-        }
-    }
+    private fun attendiInAttesaSulMutex(condizione: () -> Boolean) =
+        attendiFinche(
+            timeout = TIMEOUT_S.seconds,
+            messaggio = "il thread non e in attesa sul Mutex",
+            condizione = condizione,
+        )
 
     private companion object {
         const val PROPRIETA_PERCORSO_NATIVI = "sherpa_onnx.native.path"
@@ -364,6 +370,5 @@ class MotoreSherpaTest {
         const val ATTESA_SOVRAPPOSIZIONE_MS = 200L
         const val TIMEOUT_S = 10L
         const val MS_PER_S = 1_000L
-        const val PASSO_ATTESA_MS = 5L
     }
 }

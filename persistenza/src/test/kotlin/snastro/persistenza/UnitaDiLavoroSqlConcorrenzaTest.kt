@@ -5,6 +5,7 @@ import app.cash.sqldelight.db.SqlDriver
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
@@ -14,6 +15,7 @@ import kotlin.io.path.absolutePathString
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * MUST-FIX-2 (rework cycle 1, code-review HIGH): one [UnitaDiLavoroSql] instance is shared by the
@@ -47,7 +49,10 @@ class UnitaDiLavoroSqlConcorrenzaTest {
             esitoA.set(
                 uow.inTransazione<Unit> {
                     aDentroLaPropriaTransazione.countDown()
-                    Thread.sleep(300)
+                    pausaInTempoReale(
+                        300.milliseconds,
+                        motivo = "A tiene aperta la transazione mentre B apre e fallisce la sua",
+                    )
                     scrivi(driver, "esterno-a")
                     Esito.Ok(Unit)
                 },

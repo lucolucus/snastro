@@ -8,12 +8,14 @@ import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguisticoContratto
 import snastro.sintesi.applicazione.porte.RichiestaRiassunto
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.test.assertTrue
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import kotlin.time.TimeSource
 
@@ -64,8 +66,10 @@ class ModelloLinguisticoLlamaModelliTest : ModelloLinguisticoContratto() {
 
     /** Waits [ATTESA_PRIMA_DI_ANNULLARE_MS] (model open, generation under way), cancels, times the return. */
     private fun <T : Esito<*>> annullaDopo(chiamata: CompletableFuture<T>, annulla: () -> Unit): Pair<T, Duration> {
-        // real time is the subject: the REAL model must actually be mid-generation before we time the cancel.
-        Thread.sleep(ATTESA_PRIMA_DI_ANNULLARE_MS)
+        pausaInTempoReale(
+            ATTESA_PRIMA_DI_ANNULLARE_MS.milliseconds,
+            motivo = "il modello REALE deve essere a meta generazione prima di cronometrare l'annullamento",
+        )
         check(!chiamata.isDone) { "la generazione e finita prima dell'annullamento: ${chiamata.get()}" }
         annulla()
         val da = TimeSource.Monotonic.markNow()

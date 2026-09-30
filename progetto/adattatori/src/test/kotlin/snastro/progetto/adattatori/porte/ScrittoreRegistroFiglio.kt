@@ -2,10 +2,12 @@ package snastro.progetto.adattatori.porte
 
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.porte.VoceRegistro
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Instant
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * AC-328: the SEPARATE-JVM writer spawned by `RegistroProgettiFileRobustezzaTest` — a second app
@@ -28,8 +30,10 @@ object ScrittoreRegistroFiglio {
         val scadenza = System.nanoTime() + TimeUnit.SECONDS.toNanos(ATTESA_MASSIMA_SECONDI)
         while (!Files.exists(via)) {
             if (System.nanoTime() > scadenza) kotlin.system.exitProcess(USCITA_TIMEOUT)
-            // real time is the subject: this is a SEPARATE JVM polling a file the parent test process writes.
-            Thread.sleep(PAUSA_MILLIS)
+            pausaInTempoReale(
+                PAUSA_MILLIS.milliseconds,
+                motivo = "JVM separata che interroga un file scritto dal padre",
+            )
         }
         (0 until quante).forEach { i ->
             registro.registra(

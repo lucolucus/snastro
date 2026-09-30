@@ -20,6 +20,7 @@ import snastro.kernel.atteso
 import snastro.persistenza.DatabaseProgetto
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore
@@ -42,6 +43,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -250,9 +252,9 @@ class AttesaMutexTest {
                 attendiFinche(timeout = 10.seconds, messaggio = "una Proposta in attesa del Mutex") {
                     estrattore.lock.hasQueuedThreads()
                 }
-                // real time is the subject: confirms no SECOND thread also queues on the Mutex meanwhile.
-                Thread.sleep(ATTESA_OSSERVAZIONE_MS)
-                assertEquals(1, estrattore.lock.queueLength, "mai N attese concorrenti sul Mutex")
+                restaVeroPer(ATTESA_OSSERVAZIONE_MS.milliseconds, messaggio = "mai N attese concorrenti sul Mutex") {
+                    estrattore.lock.queueLength <= 1
+                }
 
                 schermate.forEach(CoroutineScope::cancel) // leaving S3
                 attendiFinche(timeout = 10.seconds, messaggio = "nessuna Proposta piu in attesa") {

@@ -16,6 +16,7 @@ import snastro.kernel.EstrattoRef
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE
 import java.util.concurrent.CountDownLatch
@@ -25,6 +26,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 private val REGISTRAZIONE_ID = RegistrazioneId("id-1")
 
@@ -397,9 +399,10 @@ class LettorePresenterTest {
             // without a lane, B's job would be free to enter `riproduciDa` concurrently with A's; give the
             // thread pool a generous window to schedule it before releasing A.
             presenter.riproduci(idB, 0)
-            // real time is the subject: gives the real thread pool a generous window to (wrongly) schedule
-            // B concurrently with A before releasing A, without which the race could never be exercised.
-            Thread.sleep(300)
+            pausaInTempoReale(
+                300.milliseconds,
+                motivo = "il pool reale deve poter avviare B in concorrenza con A, o la corsa non si esercita",
+            )
             viaLiberaA.countDown()
 
             attendiFinche(messaggio = "Pronto") { presenter.stato.value is LettoreUiStato.Pronto }

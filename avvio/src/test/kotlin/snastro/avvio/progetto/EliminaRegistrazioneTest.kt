@@ -1,6 +1,5 @@
 package snastro.avvio.progetto
 
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.costruisciRegistrazioniPresenter
@@ -28,6 +27,7 @@ import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.EliminazioneInSospeso
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
@@ -53,6 +53,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -188,7 +189,7 @@ class EliminaRegistrazioneTest {
             attendiFinche(timeout = 10.seconds, messaggio = "Nomi nel Documento") {
                 it.documento.percorsoDocumento(x)?.let { p -> "**Anna**" in Path.of(p).toFile().readText() } == true
             }
-            val cambiamenti = raccogli(it)
+            val cambiamenti = it.raccogliCambiamenti()
             it.parlanti.letture.proposta(voce(x, 2))
             val calcolate = estrattore.chiamate.get()
             val dispatcher = it.porte.dispatcher
@@ -197,9 +198,9 @@ class EliminaRegistrazioneTest {
                 dispatcher.pubblica(eliminataDi(it, y))
                 Esito.Errore(ErroreDiProva.Fallito("rollback"))
             }
-            // real time is the subject: confirms nothing is EVER delivered on a rolled-back transaction.
-            Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
-            assertFalse(Cambiamento(null) in cambiamenti, "mai consegnato su rollback")
+            restaVeroPer(ATTESA_NESSUN_EFFETTO_MS.milliseconds, messaggio = "mai consegnato su rollback") {
+                Cambiamento(null) !in cambiamenti
+            }
             it.parlanti.letture.proposta(voce(x, 2))
             assertEquals(calcolate, estrattore.chiamate.get(), "la Proposta resta in cache dopo un rollback")
 
@@ -241,9 +242,10 @@ class EliminaRegistrazioneTest {
             it.sessione.apri(percorso).atteso()
 
             attendiFinche(timeout = 10.seconds, messaggio = "audio scartato") { !Files.exists(file[0]) }
-            // real time is the subject: confirms the failed derivato cleanup never removes the pending row anyway.
-            Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
-            assertEquals(1, inSospeso(it).size, "la pulizia dei derivati e' fallita: la riga resta")
+            restaVeroPer(
+                ATTESA_NESSUN_EFFETTO_MS.milliseconds,
+                messaggio = "la pulizia dei derivati e' fallita: la riga resta",
+            ) { inSospeso(it).size == 1 }
         }
     }
 
@@ -362,15 +364,6 @@ class EliminaRegistrazioneTest {
     private fun riga(s2: RegistrazioniPresenter, id: RegistrazioneId): RigaRegistrazione? =
         righe(s2)?.find { it.registrazioneId == id }
 
-    private fun raccogli(ambiente: AmbienteProgetto): MutableList<Cambiamento> {
-        val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
-        ambiente.scope.launch { ambiente.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
-        // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
-        Thread.sleep(ATTESA_REPLAY_MS)
-        cambiamenti.clear()
-        return cambiamenti
-    }
-
     /** A [Diarizzatore] returning three Voci; [trattieni] holds the NEXT run in diarization until released. */
     private class DiarizzatoreTrattenuto : Diarizzatore {
         @Volatile private var barriera: CountDownLatch? = null
@@ -388,7 +381,6 @@ class EliminaRegistrazioneTest {
 
     private companion object {
         const val ATTESA_NESSUN_EFFETTO_MS = 500L
-        const val ATTESA_REPLAY_MS = 200L
 
         /** INV-28 after the COMMIT: nothing keyed by the Registrazione but its pending row. */
         val NESSUNA_RIGA = mapOf(

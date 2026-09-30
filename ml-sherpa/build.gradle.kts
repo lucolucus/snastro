@@ -22,6 +22,9 @@ dependencies {
     // CartellaCacheModelli + the asr-parakeet-tdt-0.6b-v3-int8 catalogue id (ADR 0008/0013): where
     // RiconoscitoreSherpaModelliTest (@Tag("modelli")) finds the real model by default.
     implementation(project(":modelli"))
+
+    // attendiFinche / pausaInTempoReale (ADR 0028 §5, test-only edge; CR-19a): the Mutex tests' waits.
+    testImplementation(project(":supporto-test"))
 }
 
 // Opt-in real native load (@Tag("modelli"), ADR 0004/0016): the natives are fetched first and

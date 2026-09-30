@@ -16,6 +16,7 @@ import snastro.parlanti.applicazione.letture.PianoRiassegnazione
 import snastro.parlanti.applicazione.letture.SpostamentoProposto
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
@@ -35,6 +36,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private val REG = RegistrazioneId("id-1")
@@ -135,7 +137,7 @@ class AzioniSomiglianzaProgettoTest {
         val interrotto = AtomicBoolean(false)
         val p = porta { _, _ ->
             try {
-                Thread.sleep(10_000) // real time is the subject: stands in for slow work that annulla must interrupt.
+                pausaInTempoReale(10.seconds, motivo = "lavoro lento che annulla deve interrompere")
             } catch (e: InterruptedException) {
                 interrotto.set(true)
                 throw e
@@ -144,8 +146,7 @@ class AzioniSomiglianzaProgettoTest {
         }
         p.calcola(REG)
         attendiFinche(timeout = 10.seconds, messaggio = "in corso") { p.stato.value[REG] is StatoSomiglianza.InCorso }
-        // real time is the subject: lets the fake work actually enter its own blocking sleep before annulla races it.
-        Thread.sleep(50)
+        pausaInTempoReale(50.milliseconds, motivo = "il lavoro finto entra davvero nella sua attesa prima di annulla")
         p.annulla(REG)
         attendiFinche(timeout = 10.seconds, messaggio = "interruzione") { interrotto.get() }
         assertNull(p.stato.value[REG])
@@ -218,8 +219,10 @@ class AzioniSomiglianzaProgettoTest {
                 Esito.Ok(piano)
             } else {
                 try {
-                    // real time is the subject: stands in for slow work that closing the progetto must interrupt.
-                    Thread.sleep(10_000)
+                    pausaInTempoReale(
+                        10.seconds,
+                        motivo = "lavoro lento che la chiusura del progetto deve interrompere",
+                    )
                 } catch (e: InterruptedException) {
                     interrotto.set(true)
                     throw e
@@ -230,8 +233,10 @@ class AzioniSomiglianzaProgettoTest {
         val altra = RegistrazioneId("id-2")
         p.calcola(altra)
         attendiFinche(timeout = 10.seconds, messaggio = "in corso") { p.stato.value[altra] is StatoSomiglianza.InCorso }
-        // real time is the subject: lets the fake work actually enter its own blocking sleep before cancel races it.
-        Thread.sleep(50)
+        pausaInTempoReale(
+            50.milliseconds,
+            motivo = "il lavoro finto entra davvero nella sua attesa prima della chiusura",
+        )
         progetto.cancel()
         runBlocking { checkNotNull(progetto.coroutineContext[Job]).join() }
         assertTrue(interrotto.get())

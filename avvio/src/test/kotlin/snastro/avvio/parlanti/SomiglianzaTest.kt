@@ -1,6 +1,5 @@
 package snastro.avvio.parlanti
 
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.AmbienteProgetto
@@ -23,6 +22,7 @@ import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
@@ -47,6 +47,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 private val ANNA = floatArrayOf(1f, 0f, 0f)
@@ -215,9 +216,9 @@ class SomiglianzaTest {
             attendiFinche(timeout = 10.seconds, messaggio = "RiallineaImpronte dopo il commit") {
                 riallineate.isNotEmpty()
             }
-            // real time is the subject: lets the coalescing window close, then checks no SECOND run happened.
-            Thread.sleep(ATTESA_COALESCENZA_MS)
-            assertEquals(1, riallineate.size, "un solo riallineamento per il batch")
+            restaVeroPer(ATTESA_COALESCENZA_MS.milliseconds, messaggio = "un solo riallineamento per il batch") {
+                riallineate.size == 1
+            }
             confermaLucaERicalcola(a, id)
         }
     }
@@ -267,10 +268,9 @@ class SomiglianzaTest {
             assertTrue(calcola(a, id) is StatoSomiglianza.Anteprima)
             a.parlanti.somiglianza.annulla(id)
             a.parlanti.somiglianza.applica(id)
-            // real time is the subject: the coalescing window must actually close before checking nothing survives it.
-            Thread.sleep(ATTESA_COALESCENZA_MS)
-            assertNull(a.parlanti.somiglianza.stato.value[id])
-            assertEquals(prima, righe(a, id))
+            restaVeroPer(ATTESA_COALESCENZA_MS.milliseconds, messaggio = "l'anteprima annullata ha scritto qualcosa") {
+                a.parlanti.somiglianza.stato.value[id] == null && righe(a, id) == prima
+            }
 
             assertTrue(calcola(a, id) is StatoSomiglianza.Anteprima)
             a.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso() // 'Ritrascrivi' queued
@@ -343,11 +343,7 @@ class SomiglianzaTest {
         ambiente().use { a ->
             val id = a.importa()
             a.trascrivi(id)
-            val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
-            a.scope.launch { a.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
-            // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
-            Thread.sleep(ATTESA_COALESCENZA_MS)
-            cambiamenti.clear()
+            val cambiamenti = a.raccogliCambiamenti()
             a.trascrizione.confermaSegmento(ConfermaSegmento(id, SegmentoId(1), confermato = true)).atteso()
             attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento") { Cambiamento(id) in cambiamenti }
         }

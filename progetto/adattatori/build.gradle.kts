@@ -23,4 +23,7 @@ dependencies {
 
     // databaseInMemoria() (testFixtures) — a fresh in-memory SnastroDatabase per contract test.
     testImplementation(testFixtures(project(":persistenza")))
+
+    // attendiFinche / pausaInTempoReale (ADR 0028 §5, test-only edge; CR-19a): the robustness test's waits.
+    testImplementation(project(":supporto-test"))
 }

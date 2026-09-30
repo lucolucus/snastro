@@ -5,9 +5,11 @@ import io.github.lucolucus.llamajni.LlamaResult
 import org.junit.jupiter.api.io.TempDir
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguisticoContratto
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -26,8 +28,10 @@ class ModelloLinguisticoLlamaSuLibreriaFintaTest : ModelloLinguisticoContratto()
         val backend = BackendFinto(genera = { _, cancel ->
             var passi = 0
             while (passi < PASSI_DI_GENERAZIONE && !cancel()) {
-                // real time is the subject: simulates slow generation so a real cancel can land mid-run.
-                Thread.sleep(PASSO_MS)
+                pausaInTempoReale(
+                    PASSO_MS.milliseconds,
+                    motivo = "generazione lenta: l'annullamento reale arriva a meta",
+                )
                 passi++
             }
             if (cancel()) LlamaResult.Err(LlamaError.Cancelled) else LlamaResult.Ok(unaGenerazione(RISPOSTA_VALIDA))

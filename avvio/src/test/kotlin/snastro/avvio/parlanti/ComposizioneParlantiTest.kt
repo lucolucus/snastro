@@ -1,6 +1,5 @@
 package snastro.avvio.parlanti
 
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.costruisciRegistrazioniPresenter
@@ -28,6 +27,8 @@ import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
+import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
@@ -58,6 +59,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -149,7 +151,7 @@ class ComposizioneParlantiTest {
             attendiFinche(timeout = 10.seconds, messaggio = "Documento con il Nome") {
                 documento(it)?.contains("**Anna**") == true
             }
-            val cambiamenti = raccogli(it)
+            val cambiamenti = it.raccogliCambiamenti()
             it.parlanti.letture.proposta(voce(id, 2))
             it.parlanti.letture.proposta(voce(id, 2))
             val primaDellEvento = estrattore.chiamate.get()
@@ -164,9 +166,12 @@ class ComposizioneParlantiTest {
             }
             it.parlanti.letture.proposta(voce(id, 2))
             assertEquals(primaDellEvento + 1, estrattore.chiamate.get(), "la Proposta e ricalcolata dopo l'evento")
-            // real time is the subject: confirms the Documento is NOT rewritten by a change that never touches it.
-            Thread.sleep(ATTESA_NESSUNA_RIGENERAZIONE_MS)
-            assertEquals(scritto, file.getLastModifiedTime(), "le impronte non cambiano il Documento")
+            restaVeroPer(
+                ATTESA_NESSUNA_RIGENERAZIONE_MS.milliseconds,
+                messaggio = "le impronte non cambiano il Documento",
+            ) {
+                file.getLastModifiedTime() == scritto
+            }
         }
     }
 
@@ -250,7 +255,7 @@ class ComposizioneParlantiTest {
 
                 // After commit: RiallineaImpronte throws → logged; the other subscribers still run.
                 estrattore.fallisci = true
-                val cambiamenti = raccogli(it)
+                val cambiamenti = it.raccogliCambiamenti()
                 registro.svuota()
                 it.trascrizione.revisione.dividiVoce.esegui(DividiVoce(id, VoceId(1), setOf(SegmentoId(3)))).atteso()
                 attendiFinche(timeout = 10.seconds, messaggio = "fallimento dopo commit nel log") {
@@ -361,9 +366,10 @@ class ComposizioneParlantiTest {
                     registro.contieneMessaggio("checkpoint WAL incompleto"),
                     "il checkpoint a fine commit deve risultare incompleto e loggato col lettore ancora parcheggiato",
                 )
-                // A real chance for the retry worker's OWN first attempt to also see the reader still parked (so it
-                // records at least one failure of its own, RitentaConBackoff's own report) before releasing it.
-                Thread.sleep(ATTESA_PRIMO_RITENTO_MS)
+                pausaInTempoReale(
+                    ATTESA_PRIMO_RITENTO_MS.milliseconds,
+                    motivo = "il primo tentativo del worker deve vedere anch'esso il lettore parcheggiato e fallire",
+                )
                 via.countDown()
                 lettore.join(10_000)
 
@@ -407,16 +413,6 @@ class ComposizioneParlantiTest {
         } finally {
             db.chiudi()
         }
-    }
-
-    /** Collects the project's Cambiamenti from now on (the flows' replayed past ones dropped). */
-    private fun raccogli(ambiente: AmbienteProgetto): MutableList<Cambiamento> {
-        val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
-        ambiente.scope.launch { ambiente.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
-        // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
-        Thread.sleep(ATTESA_REPLAY_MS)
-        cambiamenti.clear()
-        return cambiamenti
     }
 
     private fun fileDocumento(ambiente: AmbienteProgetto): Path? = fileDocumentoIn(Path.of(ambiente.progetto.percorso))
@@ -471,8 +467,10 @@ class ComposizioneParlantiTest {
 
     private companion object {
         const val ATTESA_NESSUNA_RIGENERAZIONE_MS = 500L
-        const val ATTESA_REPLAY_MS = 200L
-        const val ATTESA_LETTORE_S = 15L
+
+        // Only a hang guard: B17 releases the reader itself. At 15 s a slower host (the GitHub macOS runner) let the
+        // reader release on its own before the commit-time checkpoint ran, so that checkpoint completed.
+        const val ATTESA_LETTORE_S = 60L
 
         // Comfortably longer than AperturaDatabase's busy_timeout (5s): the FIRST wal_checkpoint(TRUNCATE) — both
         // the commit-time one and the retry worker's own first attempt — internally WAITS on that timeout for the

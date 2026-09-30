@@ -15,6 +15,7 @@ import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.VoceRegistro
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import snastro.ui.ErroreSessione
 import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoContratto
@@ -34,6 +35,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -212,8 +214,10 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
         val ordine: MutableList<String> = java.util.Collections.synchronizedList(mutableListOf())
         override fun elenco(): List<VoceRegistro> = emptyList()
         override fun registra(v: VoceRegistro) {
-            // deliberatamente lenta: prova che l'ordine regge anche se registra e' piu lenta di aggiorna
-            Thread.sleep(80)
+            pausaInTempoReale(
+                80.milliseconds,
+                motivo = "registra piu lenta di aggiorna: l'ordine deve reggere lo stesso",
+            )
             ordine += "registra"
         }
         override fun aggiorna(percorso: String, numRegistrazioni: Int, ultimaAttivita: Instant) {

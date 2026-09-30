@@ -29,6 +29,7 @@ import snastro.sintesi.applicazione.letture.VoceVista
 import snastro.sintesi.applicazione.porte.MotivoDownload
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.restaVeroPer
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
 import snastro.ui.coda.PosizioniCoda
@@ -46,6 +47,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 private val REG_1 = RegistrazioneId("id-1")
 private val ISTANTE_0: Instant = Instant.parse("2026-09-26T10:00:00Z")
@@ -769,7 +771,9 @@ class RiassuntoPresenterTest {
             }
             // Release the stale tick — on the OLD (unguarded) code this now clobbers the fresh state.
             orologio.rilascia()
-            Thread.sleep(300)
+            restaVeroPer(300.milliseconds, messaggio = "un tick in volo ha sovrascritto il Dati gia ricaricato") {
+                (presenter.stato.value as? RiassuntoUiStato.Dati)?.areaAzione is AreaAzione.Azionabile
+            }
             val dati = presenter.stato.value as RiassuntoUiStato.Dati
             assertIs<AreaAzione.Azionabile>(
                 dati.areaAzione,

@@ -3,6 +3,7 @@ package snastro.ml
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.CampioniAudio
+import snastro.supporto.test.attendiFinche
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CountDownLatch
@@ -182,7 +183,9 @@ class RiconoscitoreSherpaTest {
         val decodifica = thread { riconoscitore.riconosci(campioni) }
         inDecodifica.await()
         val chiusure = List(2) { thread { riconoscitore.chiudi() } }
-        attendiFinche { chiusure.all { it.state == Thread.State.WAITING } }
+        attendiFinche(messaggio = "i thread non sono in attesa sul Mutex") {
+            chiusure.all { it.state == Thread.State.WAITING }
+        }
         sblocca.countDown()
         (chiusure + decodifica).forEach(Thread::join)
 
@@ -199,19 +202,9 @@ class RiconoscitoreSherpaTest {
         assertEquals(0, violazioni.get(), "un modello rilasciato e' stato usato o rilasciato di nuovo")
     }
 
-    private fun attendiFinche(condizione: () -> Boolean) {
-        val scadenza = System.currentTimeMillis() + ATTESA_MASSIMA_MS
-        while (!condizione()) {
-            check(System.currentTimeMillis() < scadenza) { "timeout: i thread non sono in attesa sul Mutex" }
-            Thread.sleep(PASSO_ATTESA_MS)
-        }
-    }
-
     private companion object {
         const val ITERAZIONI_CONCORRENTI = 300
         const val ATTESA_SONDA_S = 5L
-        const val ATTESA_MASSIMA_MS = 5_000L
-        const val PASSO_ATTESA_MS = 5L
         const val PROPRIETA_RISORSE_COMPOSE = "compose.application.resources.dir"
         val LIBRERIE_NATIVE = listOf("onnxruntime", "sherpa-onnx-jni").map(System::mapLibraryName)
     }

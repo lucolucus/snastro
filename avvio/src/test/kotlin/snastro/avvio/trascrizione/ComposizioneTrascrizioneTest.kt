@@ -23,6 +23,7 @@ import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.dominio.Registrazione
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
@@ -61,6 +62,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -90,8 +92,10 @@ class ComposizioneTrascrizioneTest {
             attendiFinche(timeout = 10.seconds, messaggio = "riga NON_AVVIATA in S2") {
                 rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.NonAvviata
             }
-            Thread.sleep(ATTESA_NESSUN_AVVIO_MS) // la coda gira ogni secondo: nulla deve comparire nel frattempo
-            assertEquals(StatoElaborazioneVista.NON_AVVIATA, ambiente.stato(id))
+            // la coda gira ogni secondo: nulla deve comparire nel frattempo
+            restaVeroPer(ATTESA_NESSUN_AVVIO_MS.milliseconds, messaggio = "un'Elaborazione e partita da sola") {
+                ambiente.stato(id) == StatoElaborazioneVista.NON_AVVIATA
+            }
             ambiente.progetto.percorso to id
         }
 

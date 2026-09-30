@@ -9,6 +9,8 @@ dependencies {
     implementation(compose.material3)
     implementation(project(":kernel"))
     implementation(libs.kotlinx.coroutines.core)
+    // catturaNonFatale (ADR 0028 §5, CR-19b): the sanctioned catch-all at :ui's platform edges.
+    implementation(project(":supporto"))
 
     // MessaggiErrore (AC-180): ErroreApplicazioneProgetto lives in `..applicazione.porte`; each
     // context's dominio-owned Errore<Contesto> is reachable transitively (fix-batch-10, CR-1

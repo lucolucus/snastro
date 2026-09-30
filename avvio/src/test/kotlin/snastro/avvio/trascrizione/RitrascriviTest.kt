@@ -1,6 +1,5 @@
 package snastro.avvio.trascrizione
 
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.costruisciRegistrazionePresenter
@@ -22,6 +21,7 @@ import snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
@@ -55,6 +55,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -247,7 +248,7 @@ class RitrascriviTest {
             attendiFinche(timeout = 10.seconds, messaggio = "ParlanteCreato consegnato") {
                 documento(it, y)?.contains("**Anna**") == true
             }
-            val cambiamenti = raccogli(it)
+            val cambiamenti = it.raccogliCambiamenti()
             it.parlanti.letture.proposta(voce(x, 2))
             it.parlanti.letture.proposta(voce(x, 2))
             val calcolate = estrattore.chiamate.get()
@@ -257,9 +258,9 @@ class RitrascriviTest {
                 dispatcher.pubblica(TrascrittoSostituito(x))
                 Esito.Errore(ErroreDiProva.Fallito("rollback"))
             }
-            // real time is the subject: confirms nothing is EVER delivered on a rolled-back transaction.
-            Thread.sleep(ATTESA_NESSUN_EFFETTO_MS)
-            assertFalse(Cambiamento(null) in cambiamenti, "mai consegnato su rollback")
+            restaVeroPer(ATTESA_NESSUN_EFFETTO_MS.milliseconds, messaggio = "mai consegnato su rollback") {
+                Cambiamento(null) !in cambiamenti
+            }
             it.parlanti.letture.proposta(voce(x, 2))
             assertEquals(calcolate, estrattore.chiamate.get(), "la Proposta resta in cache dopo un rollback")
 
@@ -392,22 +393,10 @@ class RitrascriviTest {
         prima: Istantanea,
         entro: Long = ATTESA_NESSUN_EFFETTO_MS,
     ) {
-        // real time is the subject (see KDoc above): samples the invariant throughout the window instead of once.
-        val scadenza = System.currentTimeMillis() + entro
-        do {
+        restaVeroPer(entro.milliseconds, messaggio = "lo stato di $id e cambiato") {
             Istantanea.di(ambiente, id).confronta(prima)
-            Thread.sleep(PASSO_ATTESA_MS)
-        } while (System.currentTimeMillis() < scadenza)
-    }
-
-    /** Collects the project's Cambiamenti from now on (the flows' replayed past ones dropped). */
-    private fun raccogli(ambiente: AmbienteProgetto): MutableList<Cambiamento> {
-        val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
-        ambiente.scope.launch { ambiente.collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
-        // real time is the subject: drains the flow's replay of past Cambiamenti before collecting new ones.
-        Thread.sleep(ATTESA_REPLAY_MS)
-        cambiamenti.clear()
-        return cambiamenti
+            true
+        }
     }
 
     /** What AC-459/AC-479 require unchanged: X's Parlanti rows, Trascritto and Documento bytes, and the Galleria. */
@@ -463,8 +452,6 @@ class RitrascriviTest {
 
     private companion object {
         const val ATTESA_NESSUN_EFFETTO_MS = 500L
-        const val ATTESA_REPLAY_MS = 200L
-        const val PASSO_ATTESA_MS = 20L
 
         fun documento(ambiente: AmbienteProgetto, id: RegistrazioneId): String? =
             ambiente.documento.percorsoDocumento(id)?.let { p -> Path.of(p).readText() }

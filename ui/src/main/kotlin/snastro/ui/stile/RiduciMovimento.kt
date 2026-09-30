@@ -4,6 +4,7 @@ import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.staticCompositionLocalOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import snastro.supporto.catturaNonFatale
 import java.util.concurrent.TimeUnit
 
 /**
@@ -45,11 +46,10 @@ private fun leggiRiduciMovimentoSistema(): RisultatoLetturaMovimento {
     if (!eMacOs(sistemaOperativo)) {
         return RisultatoLetturaMovimento(interpretaRiduciMovimento(sistemaOperativo, null, ""), definitivo = true)
     }
-    @Suppress("TooGenericExceptionCaught", "SwallowedException") // deliberate platform-unavailable
-    // fallback (AC-565): ANY failure to run `defaults` (not just IOException — L723 widens the net,
-    // e.g. a SecurityException from a locked-down sandbox) falls back to the constant-dot default
-    // rather than crashing the theme, see interpretaRiduciMovimento.
-    return try {
+    // Deliberate platform-unavailable fallback (AC-565): ANY non-fatal failure to run `defaults` (not just
+    // IOException — L723 widens the net, e.g. a SecurityException from a locked-down sandbox) falls back to the
+    // constant-dot default rather than crashing the theme, see interpretaRiduciMovimento.
+    return catturaNonFatale {
         val processo = ProcessBuilder("defaults", "read", "com.apple.universalaccess", "reduceMotion")
             .redirectError(ProcessBuilder.Redirect.DISCARD)
             .start()
@@ -62,9 +62,7 @@ private fun leggiRiduciMovimentoSistema(): RisultatoLetturaMovimento {
             processo.destroyForcibly()
             RisultatoLetturaMovimento(true, definitivo = false) // L723: timeout — retry next time
         }
-    } catch (e: Exception) {
-        RisultatoLetturaMovimento(true, definitivo = false) // L723: never cache a failed attempt
-    }
+    }.getOrElse { RisultatoLetturaMovimento(true, definitivo = false) } // L723: never cache a failed attempt
 }
 
 private fun eMacOs(sistemaOperativo: String): Boolean = sistemaOperativo.lowercase().startsWith("mac")

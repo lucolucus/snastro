@@ -31,6 +31,7 @@ import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.dominio.LunghezzaMassimaParole
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
@@ -38,6 +39,7 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * AC-S153 (opt-in, `./gradlew benchmarkRiassunto -Pcampione=<Documento .md>`, never in `check`): ONE Riassunto of
@@ -145,7 +147,7 @@ class BenchmarkRiassuntoTest {
         private val campionatore = thread(isDaemon = true, name = "picco-rss") {
             while (attivo) {
                 massimo.accumulateAndGet(rss(), ::maxOf)
-                Thread.sleep(250) // real time is the subject: a periodic real-clock RSS sampler.
+                pausaInTempoReale(250.milliseconds, motivo = "campionatore periodico dell'RSS a orologio reale")
             }
         }
         val massimoKb: Long get() = massimo.get()

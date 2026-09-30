@@ -151,3 +151,17 @@ A new public declaration in `:supporto` is an amendment of this ADR (CR-18c).
 - The retry wording in ADR 0012 and the swallow in ADR 0023 are re-pointed here by dated notes.
 - Not decided here: who may extend `ErroreDominio` (analysis §6.3). `:supporto` declares no `ErroreDominio`
   subtype, and cannot, having no `:kernel` edge.
+
+## Amendment 2026-09-30 — the primitives are enforced where they are used (CR-19) [user]
+The migration in §7 replaced the copies that existed on 2026-09-27, but nothing stopped the next block from writing a
+new one: by 2026-09-30 `main` again had about 35 `Thread.sleep` in tests and two private `attendiFinche` in
+`:ml-sherpa`. The user asked that the harness's code errors not recur (feature `incontro`, explore). So:
+- `:supporto-test` gains `restaVeroPer(durata, messaggio) { condizione }` — the negative twin of `attendiFinche`: the
+  condition is checked throughout the window, failing as soon as it turns false — and `pausaInTempoReale(durata,
+  motivo)`, the one sanctioned fixed pause, reason mandatory. §3's first cut becomes five helpers.
+- `code-rules.md` CR-19a/b/c make the use of `:supporto` / `:supporto-test` a gate rule (Konsist): fixed pauses only
+  in `:supporto-test`; catch-alls and `runCatching` in `src/main` only in `:supporto`; hand-built scopes only in
+  `:supporto`. What existed and is correct is kept in frozen lists inside the rule, which may only shrink.
+- Every test sleep of `main` was migrated in the same change; the four copies of the Cambiamenti collector in
+  `:avvio` tests became one, `AmbienteProgetto.raccogliCambiamenti`.
+

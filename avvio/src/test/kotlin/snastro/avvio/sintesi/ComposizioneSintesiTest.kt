@@ -42,6 +42,7 @@ import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import snastro.supporto.test.OrologioFinto
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
@@ -368,9 +369,10 @@ class ComposizioneSintesiTest {
             val x = it.diRegistrazione(a).single { r -> r.inCorso }.id
 
             repeat(2) { _ -> consegna(it, RiassuntoEliminato(a)) } // late + duplicate delivery
-            // Real time is the subject here: gives the late/duplicate delivery above a chance to (wrongly)
-            // race the still-blocked model before sblocca — no observable signal exists for "nothing raced".
-            Thread.sleep(PAUSA_MS)
+            pausaInTempoReale(
+                PAUSA_MS.milliseconds,
+                motivo = "da' alla consegna tardiva o duplicata la possibilita' di correre contro il modello bloccato",
+            )
             it.modello.sblocca()
 
             it.attendiPronto(a)

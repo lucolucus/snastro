@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import snastro.avvio.Grafo
 import snastro.avvio.coda.CodaCondivisa
 import snastro.avvio.coda.FonteCoda
@@ -49,6 +50,7 @@ import snastro.sintesi.applicazione.porte.RispostaModello
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.dominio.Riassunto
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.pausaInTempoReale
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -60,6 +62,7 @@ import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VadFinta
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.ui.ApriEsternoFinta
+import snastro.ui.Cambiamento
 import snastro.ui.ProgettoAperto
 import snastro.ui.modelli.ServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta
@@ -76,6 +79,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreParlantiFinta
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudio as DecodificatoreTrascrizione
@@ -273,6 +277,18 @@ internal class AmbienteProgetto(
 
     fun cartellaDocumenti(): Path = Path.of(progetto.percorso).resolve("documenti")
 
+    /** Collects the project's Cambiamenti from now on: the flows' replayed past ones are drained and dropped. */
+    fun raccogliCambiamenti(): MutableList<Cambiamento> {
+        val cambiamenti = CopyOnWriteArrayList<Cambiamento>()
+        scope.launch { collaboratori.aggiornamentiVista.cambiamenti.collect(cambiamenti::add) }
+        pausaInTempoReale(
+            ATTESA_REPLAY,
+            motivo = "svuota il replay dei Cambiamenti passati prima di raccogliere i nuovi",
+        )
+        cambiamenti.clear()
+        return cambiamenti
+    }
+
     override fun close() {
         modello.sblocca()
         scope.cancel()
@@ -291,6 +307,7 @@ internal class AmbienteProgetto(
         private const val THREAD_IO = 4
         private const val DIMENSIONE_SORGENTE = 64
         private const val ATTESA_CHIUSURA_S = 5L
+        private val ATTESA_REPLAY = 200.milliseconds
 
         /** Voce 1 = [0, 1000), Voce 2 = [2000, 3000). */
         val DUE_VOCI = listOf(Turno(IntervalloMs(0, 1_000), 0), Turno(IntervalloMs(2_000, 3_000), 1))

@@ -607,6 +607,106 @@ class RegoleArchitetturaliTest {
             .assertTrue { file -> file.imports.none { it.name.startsWith("snastro.supporto.test") } }
     }
 
+    // --- CR-19 - Shared primitives are used, not re-invented (ADR 0028 amendment 2026-09-30) ----------------
+
+    /** Code lines only: KDoc, block and line comments may name the forbidden call. */
+    private fun righeDiCodice(testo: String): List<String> =
+        testo.lines().map { it.trim() }.filterNot { it.startsWith("*") || it.startsWith("/*") || it.startsWith("//") }
+
+    private fun KoFileDeclaration.percorsoRelativo(): String =
+        java.io.File(path).relativeTo(radice).invariantSeparatorsPath
+
+    private fun KoFileDeclaration.chiama(regex: Regex): Boolean =
+        righeDiCodice(text).any { regex.containsMatchIn(it) }
+
+    private val sleep = Regex("""\b(Thread|TimeUnit\.[A-Z_]+)\.sleep\(""")
+
+    /**
+     * Frozen: the fixed pauses that are not in a test source set of a module that can reach `:supporto-test`.
+     * `src/main` ones drive real time (audio watchdog, smoke run); the testFixtures one waits for M2/S5 (ADR 0028 §5).
+     * A new entry needs a dated reason here.
+     */
+    private val sleepAmmessi = setOf(
+        "avvio/src/main/kotlin/snastro/avvio/LettoreAudioReale.kt",
+        "avvio/src/main/kotlin/snastro/avvio/smoke/Smoke.kt",
+        "sintesi/applicazione/src/testFixtures/kotlin/" +
+            "snastro/sintesi/applicazione/porte/ModelloLinguisticoContratto.kt",
+    )
+
+    @Test
+    fun `CR-19a Thread sleep solo dentro supporto-test`() {
+        val violazioni = progetto.files
+            .filter { !it.isRegolaArchitetturale() }
+            .filter { f ->
+                val percorso = f.percorsoRelativo()
+                !percorso.startsWith("supporto-test/") && !percorso.startsWith("llama-jni/")
+            }
+            .filter { it.percorsoRelativo() !in sleepAmmessi }
+            .filter { it.chiama(sleep) }
+            .map { it.percorsoRelativo() }
+        kotlin.test.assertTrue(violazioni.isEmpty(), "Thread.sleep fuori da :supporto-test (CR-19a): $violazioni")
+    }
+
+    @Test
+    fun `CR-19a il predicato vede la chiamata e ignora i commenti`() {
+        kotlin.test.assertTrue(righeDiCodice("    Thread.sleep(10)").any { sleep.containsMatchIn(it) })
+        kotlin.test.assertTrue(righeDiCodice("x; TimeUnit.SECONDS.sleep(1)").any { sleep.containsMatchIn(it) })
+        val commenti = " * no `Thread.sleep(1)` here\n// Thread.sleep(2)"
+        kotlin.test.assertTrue(righeDiCodice(commenti).none { sleep.containsMatchIn(it) })
+    }
+
+    private val catturaTutto = Regex("""\brunCatching\b|catch \(\w+: (Throwable|Exception|RuntimeException)\)""")
+
+    /**
+     * Frozen (CR-19b): each rethrows what it must or is a documented best-effort edge, in a module that cannot reach
+     * `:supporto` (ADR 0028 §5). It only shrinks; a new entry needs a dated reason here.
+     */
+    private val catturaTuttoAmmessi = setOf(
+        "audio/src/main/kotlin/snastro/audio/RiproduttoreWav.kt", // best-effort drain in finally
+        "kernel/src/main/kotlin/snastro/kernel/DispatcherEventiInMemoria.kt", // condemns and rethrows
+        "persistenza/src/main/kotlin/snastro/persistenza/UnitaDiLavoroSql.kt", // condemns and rethrows
+        "parlanti/applicazione/src/main/kotlin/snastro/parlanti/applicazione/comandi/RiallineaImpronteServizio.kt",
+        "parlanti/applicazione/src/main/kotlin/snastro/parlanti/applicazione/comandi/" +
+            "RiallineaTutteLeImpronteServizio.kt",
+    )
+
+    private val nuovoScope = Regex("""(?<!\w)CoroutineScope\(""")
+
+    /** Frozen (CR-19c): the app root scope and S3's scope handed to [snastro.supporto.figlioDi]. Only shrinks. */
+    private val nuovoScopeAmmessi = setOf(
+        "avvio/src/main/kotlin/snastro/avvio/Grafo.kt",
+        "avvio/src/main/kotlin/snastro/avvio/parlanti/ModuloParlanti.kt",
+    )
+
+    private fun violazioniInMain(regex: Regex, ammessi: Set<String>): List<String> = progetto.files
+        .map { it to it.percorsoRelativo() }
+        .filter { (_, p) -> "/src/main/" in p && !p.startsWith("supporto/") && !p.startsWith("supporto-test/") }
+        .filter { (_, p) -> !p.startsWith("llama-jni/") && p !in ammessi }
+        .filter { (f, _) -> f.chiama(regex) }
+        .map { it.second }
+
+    @Test
+    fun `CR-19b catch-all e runCatching in src main solo in supporto o nella lista congelata`() {
+        val violazioni = violazioniInMain(catturaTutto, catturaTuttoAmmessi)
+        kotlin.test.assertTrue(violazioni.isEmpty(), "Usa catturaNonFatale o Esito (CR-19b): $violazioni")
+    }
+
+    @Test
+    fun `CR-19c scope costruiti a mano in src main solo in supporto o nella lista congelata`() {
+        val violazioni = violazioniInMain(nuovoScope, nuovoScopeAmmessi)
+        kotlin.test.assertTrue(violazioni.isEmpty(), "Usa figlioDi (CR-19c): $violazioni")
+    }
+
+    @Test
+    fun `CR-19b e CR-19c i predicati vedono le chiamate e lasciano passare i nomi simili`() {
+        kotlin.test.assertTrue(catturaTutto.containsMatchIn("val r = runCatching { x() }"))
+        kotlin.test.assertTrue(catturaTutto.containsMatchIn("} catch (e: Exception) {"))
+        kotlin.test.assertFalse(catturaTutto.containsMatchIn("} catch (e: IOException) {"))
+        kotlin.test.assertTrue(nuovoScope.containsMatchIn("val s = CoroutineScope(SupervisorJob())"))
+        kotlin.test.assertTrue(nuovoScope.containsMatchIn("val s = kotlinx.coroutines.CoroutineScope(io)"))
+        kotlin.test.assertFalse(nuovoScope.containsMatchIn("val s = rememberCoroutineScope()"))
+    }
+
     private companion object {
         /** La radice del progetto: `:architettura-test` gira con la propria cartella come `user.dir`. */
         val radice: java.io.File = java.io.File(System.getProperty("user.dir")).parentFile

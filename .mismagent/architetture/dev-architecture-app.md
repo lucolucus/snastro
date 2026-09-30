@@ -368,6 +368,9 @@ public sealed interface RegistrazioneUiStato {
 - **Coroutines:** `kotlinx-coroutines-test` `runTest`; inject `StandardTestDispatcher` as `io`.
 - **Shared test helpers** *(2026-09-27, [ADR 0028](../decisions/0028-librerie-tecniche-supporto.md) [user])*, from `:supporto-test`:
   - `attendiFinche(timeout, messaggio) { condizione }` is the ONLY polling wait. No private copies.
+  - `restaVeroPer(durata, messaggio) { condizione }` checks that nothing happens during a window (never a sleep then
+    one check). `pausaInTempoReale(durata, motivo)` is the only fixed pause, for when real time is the subject.
+    `Thread.sleep` outside `:supporto-test` fails the gate (CR-19a, 2026-09-30).
   - `OrologioFinto` separates instants: never `Thread.sleep` to make two timestamps differ.
   - `conScopeDiProva { }` / `backgroundScope` for every scope a test creates: it is cancelled in `finally`, never
     after an assertion that can fail.
