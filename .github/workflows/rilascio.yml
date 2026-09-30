@@ -24,7 +24,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Versione
         id: versione
@@ -41,10 +41,12 @@ jobs:
           fi
           echo "versione=$versione" >> "$GITHUB_OUTPUT"
 
-      # JetBrains Runtime 21: runs Gradle and satisfies the JBR toolchain (ADR 0001) that the .dmg bundles.
-      - uses: actions/setup-java@v4
+      # Temurin 21 only runs Gradle. The JetBrains Runtime 21 toolchain (ADR 0001) that the .dmg bundles is
+      # provisioned by Gradle through foojay: setup-java's `jetbrains` distribution queries the GitHub API
+      # unauthenticated and fails on the shared runner's rate limit.
+      - uses: actions/setup-java@v5
         with:
-          distribution: jetbrains
+          distribution: temurin
           java-version: "21"
 
       - uses: gradle/actions/setup-gradle@v4
