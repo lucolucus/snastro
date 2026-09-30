@@ -114,7 +114,7 @@ class AbbonatoSbobinaturaEventiTest {
     // --- AC-182 -------------------------------------------------------------------------------
 
     @Test
-    fun `AC-182 un comando annullato non scrive alcun Sbobinatura`() = runTest {
+    fun `AC-182 un comando annullato non scrive alcuna Sbobinatura`() = runTest {
         val ambiente = Ambiente(testScheduler, mapOf(REG_1 to unTrascritto(REG_1)))
         advanceUntilIdle() // AC-185's own startup sweep settles first (nothing to do with this AC)
         val primaDelRollback = ambiente.operazioni().size
@@ -230,7 +230,7 @@ class AbbonatoSbobinaturaEventiTest {
     // --- AC-185 (startup sweep) ------------------------------------------------------------------
 
     @Test
-    fun `AC-185 all avvio ogni Sbobinatura con un Trascritto viene rigenerato`() = runTest {
+    fun `AC-185 all avvio ogni Sbobinatura con un Trascritto viene rigenerata`() = runTest {
         val a = RegistrazioneId("reg-a")
         val b = RegistrazioneId("reg-b")
         val trascritti = mapOf(a to unTrascritto(a, titolo = "Uno"), b to unTrascritto(b, titolo = "Due"))

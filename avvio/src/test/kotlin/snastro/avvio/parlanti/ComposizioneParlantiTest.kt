@@ -88,7 +88,7 @@ class ComposizioneParlantiTest {
             // S4's command, over eventi.unitaDiLavoro: its ParlanteRinominato reaches the Sbobinatura after commit.
             val anna = it.parlanti.letture.parlantiDelProgetto().single().parlanteId
             it.parlanti.comandiParlante.rinomina(RinominaParlante(anna, "Bea")).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rinominato") {
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rinominata") {
                 sbobinatura(it)?.contains("**Bea**") == true
             }
         }

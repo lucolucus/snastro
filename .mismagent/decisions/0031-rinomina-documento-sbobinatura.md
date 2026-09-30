@@ -20,7 +20,9 @@ call it for what it is (feature `incontro`, explore, 2026-09-30) and to ship the
    unchanged: derived, regenerated, never a source, one per `Registrazione`.
 2. **The project folder is `sbobinature/`.** When a project is opened, a pre-rename `documenti/` folder is renamed to
    `sbobinature/` once (`migraCartellaSbobinature`, `:avvio`). The files are derived and the startup sweep regenerates
-   them anyway (AC-185), so nothing is merged: if both folders exist, both are left as they are.
+   them anyway (AC-185), so nothing is merged: if both folders exist, both are left as they are and a warning is logged.
+   A move that fails (permissions, a share that refuses renames) is logged and never stops the project from opening:
+   the sweep writes into a fresh `sbobinature/`. Tested on the function and through a real re-open.
 3. **History is not rewritten.** ADRs 0001–0030 and the feature folders keep `Documento`. The names of the
    `controlli-adr` scripts and fixtures stay as the ADRs' `enforced_by` cite them (e.g. `adr-0010-documento-non-legge.sh`);
    their contents check the renamed module paths.

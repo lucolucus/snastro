@@ -103,7 +103,7 @@ class EliminaRegistrazioneTest {
             assertEquals("Terzo", lapide.nome.valore)
             assertFalse(Files.exists(cartella.resolve(audio(s.r))))
             assertFalse(Files.exists(cartella.resolve(wav(s.r))))
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura di R rimosso") { !Files.exists(sbobinaturaR) }
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura di R rimossa") { !Files.exists(sbobinaturaR) }
             assertTrue(Files.exists(cartella.resolve(audio(s.q))))
             assertTrue(Files.exists(cartella.resolve(wav(s.q))))
             assertTrue(Files.exists(sbobinaturaQ))
@@ -303,7 +303,7 @@ class EliminaRegistrazioneTest {
         assertTrue(galleria.any { p -> p.nome.startsWith("Ospite") })
         val cartella = Path.of(ambiente.progetto.percorso)
         listOf(r, q).forEach { id -> Files.write(cartella.resolve(wav(id)), byteArrayOf(1)) }
-        attendiFinche(timeout = 10.seconds, messaggio = "Sbobinature di R e Q scritti") {
+        attendiFinche(timeout = 10.seconds, messaggio = "Sbobinature di R e Q scritte") {
             ambiente.sbobinatura.percorsoSbobinatura(r) != null && ambiente.sbobinatura.percorsoSbobinatura(q) != null
         }
         return Scenario(r, q, mario, terzo)

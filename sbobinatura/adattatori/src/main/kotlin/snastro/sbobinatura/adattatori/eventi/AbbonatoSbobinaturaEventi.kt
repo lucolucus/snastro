@@ -57,7 +57,7 @@ import kotlin.time.Duration.Companion.seconds
  * callers, all-or-nothing: the first write failure stops every later one), the sweep here must NOT let one
  * poisoned Registrazione's retries block or re-run every other one every 30 s. Requested at construction, it
  * runs once [avvia] starts the worker. (B51 pre-release triage, 2026-09-29: this sweep replaced the retired
- * `RigeneraTuttiISbobinature` command/fold since the AC-C47 fan-out — this class has listed ids itself ever since.)
+ * `RigeneraTuttiIDocumenti` command/fold since the AC-C47 fan-out — this class has listed ids itself ever since.)
  *
  * **Deletion** (ADR 0020 §3, AC-624/AC-C93). [RegistrazioneEliminata] becomes a REMOVAL entry on the SAME
  * per-[RegistrazioneId] key: merged into a pending entry it replaces the regeneration (a removal, once

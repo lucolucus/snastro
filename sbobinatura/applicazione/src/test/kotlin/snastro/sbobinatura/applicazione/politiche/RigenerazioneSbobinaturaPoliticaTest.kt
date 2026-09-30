@@ -27,7 +27,7 @@ import kotlin.test.assertTrue
  * `RegistrazioneRinominata`, which must behave like a date change on `nomeFile`). AC-158 (every
  * Registrazione with a Trascritto regenerated at startup) is exercised on its real path — the
  * `AbbonatoSbobinaturaEventi` fan-out sweep, `sbobinatura:adattatori`'s own AC-185 — since the
- * `RigeneraTuttiISbobinature` fold this file used to test it through was retired as dead code (B51
+ * `RigeneraTuttiIDocumenti` fold this file used to test it through was retired as dead code (B51
  * pre-release triage, 2026-09-29).
  */
 class RigenerazioneSbobinaturaPoliticaTest {
@@ -156,7 +156,7 @@ class RigenerazioneSbobinaturaPoliticaTest {
     fun `AC-327 spostare la data di Riunione (2) su Riunione non tocca il file di Riunione`() {
         val riunione2 = RegistrazioneId("riunione-2")
         val scrittore = ScrittoreSbobinaturaFinta()
-        // 'Riunione' ha gia' il suo sbobinatura scritta in precedenza (2026-09-12 Riunione.md).
+        // 'Riunione' ha gia' la sua sbobinatura scritta in precedenza (2026-09-12 Riunione.md).
         scrittore.scrivi("2026-09-12 Riunione.md", "# Riunione\n\ncontenuto originale\n")
         val trascritti = LettoreTrascrittoFinta(
             mapOf(riunione2 to unTrascritto(riunione2, titolo = "Riunione (2)", data = LocalDate.of(2026, 9, 12))),
@@ -352,7 +352,7 @@ class RigenerazioneSbobinaturaPoliticaTest {
         assertTrue(scrittore.sbobinature.containsKey("2026-09-20 Riunione.md"))
     }
 
-    // B51 (pre-release triage, 2026-09-29): `RigeneraTuttiISbobinature` and this class's `esegui` overload for it
+    // B51 (pre-release triage, 2026-09-29): `RigeneraTuttiIDocumenti` and this class's `esegui` overload for it
     // were dead in production since the AC-C47 startup-sweep fan-out (`ModuloSbobinatura`/`AbbonatoSbobinaturaEventi`
     // list ids themselves; only these two tests still called it) and are retired. Both exercised
     // `rigeneraOgnuna`'s fold (stop on first error / regenerate every id), shared code also reached by

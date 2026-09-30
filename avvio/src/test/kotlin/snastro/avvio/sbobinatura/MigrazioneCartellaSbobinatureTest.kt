@@ -1,6 +1,7 @@
 package snastro.avvio.sbobinatura
 
 import org.junit.jupiter.api.io.TempDir
+import java.nio.file.AccessDeniedException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
@@ -8,6 +9,7 @@ import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /** ADR 0031: a project made before the rename keeps its `.md` files, now under `sbobinature/`. */
@@ -34,13 +36,32 @@ class MigrazioneCartellaSbobinatureTest {
     }
 
     @Test
-    fun `ADR 0031 se esistono entrambe le cartelle non tocca nulla`(@TempDir progetto: Path) {
+    fun `ADR 0031 se esistono entrambe le cartelle non tocca nulla e lo segnala`(@TempDir progetto: Path) {
         Files.createDirectories(progetto.resolve("documenti")).resolve("vecchia.md").writeText("v")
         Files.createDirectories(progetto.resolve("sbobinature")).resolve("nuova.md").writeText("n")
+        val segnalati = mutableListOf<String>()
 
-        migraCartellaSbobinature(progetto)
+        migraCartellaSbobinature(progetto, segnala = { messaggio, _ -> segnalati += messaggio })
 
         assertTrue(Files.exists(progetto.resolve("documenti/vecchia.md")))
         assertTrue(Files.exists(progetto.resolve("sbobinature/nuova.md")))
+        assertEquals(1, segnalati.size, "$segnalati")
+    }
+
+    @Test
+    fun `ADR 0031 uno spostamento che fallisce e segnalato e non impedisce di aprire il progetto`(
+        @TempDir progetto: Path,
+    ) {
+        Files.createDirectories(progetto.resolve("documenti"))
+        val cause = mutableListOf<Throwable?>()
+
+        migraCartellaSbobinature(
+            progetto,
+            segnala = { _, causa -> cause += causa },
+            sposta = { _, _ -> throw AccessDeniedException(progetto.toString()) },
+        )
+
+        assertTrue(Files.exists(progetto.resolve("documenti")))
+        assertIs<AccessDeniedException>(cause.single())
     }
 }
