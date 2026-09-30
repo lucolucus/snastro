@@ -5,10 +5,15 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import snastro.avvio.progetto.attendiScritturaRegistro
 import snastro.avvio.smoke.eseguiSmoke
+import java.awt.Taskbar
+import java.awt.image.BufferedImage
+import javax.imageio.ImageIO
 import kotlin.system.exitProcess
 
 /**
@@ -34,6 +39,9 @@ fun main(args: Array<String>) {
     System.setProperty("apple.awt.fileDialogForDirectories", "true")
 
     val grafo = costruisciGrafo()
+    val icona = iconaApp()
+    icona?.let(::iconaNelDock)
+    val iconaFinestra = icona?.let { BitmapPainter(it.toComposeImageBitmap()) }
     application {
         var finestra by remember { mutableStateOf<ComposeWindow?>(null) }
         val esci = {
@@ -44,10 +52,23 @@ fun main(args: Array<String>) {
             attendiScritturaRegistro() // L530e: bounded drain of the registry's own queued write
             exitApplication()
         }
-        Window(onCloseRequest = esci, title = "snastro") {
+        Window(onCloseRequest = esci, title = "snastro", icon = iconaFinestra) {
             finestra = window
             val sceltaCartella = remember { SceltaCartellaFileDialog(window) }
             ContenutoApp(grafo, sceltaCartella)
         }
     }
 }
+
+/** The app icon (`avvio/icone/snastro.svg`, 512 px), for the window; the packaged app uses `icone/snastro.icns`. */
+private fun iconaApp(): BufferedImage? =
+    Thread.currentThread().contextClassLoader.getResourceAsStream(RISORSA_ICONA)?.use(ImageIO::read)
+
+/** Under `./gradlew :avvio:run` the Dock shows the JVM's icon unless told otherwise; the .app has its own. */
+private fun iconaNelDock(icona: BufferedImage) {
+    if (Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_IMAGE)) {
+        Taskbar.getTaskbar().iconImage = icona
+    }
+}
+
+private const val RISORSA_ICONA = "icone/snastro.png"

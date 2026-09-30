@@ -107,6 +107,10 @@ compose.desktop {
             // scaricaNativiSherpa (<this dir>/<os-arch>/ = the two sherpa-onnx libs). At runtime Compose
             // exposes the merged folder as `compose.application.resources.dir` (MotoreSherpa.caricaNativi).
             appResourcesRootDir.set(layout.buildDirectory.dir("risorse-app"))
+            // App icon: sorgente avvio/icone/snastro.svg (variante B3 del canvas "Icona app snastro").
+            macOS {
+                iconFile.set(project.file("icone/snastro.icns"))
+            }
         }
     }
 }
