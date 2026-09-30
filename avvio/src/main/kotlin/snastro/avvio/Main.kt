@@ -8,7 +8,9 @@ import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.window.Window
+import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import snastro.avvio.progetto.attendiScritturaRegistro
 import snastro.avvio.smoke.eseguiSmoke
 import java.awt.Taskbar
@@ -52,7 +54,9 @@ fun main(args: Array<String>) {
             attendiScritturaRegistro() // L530e: bounded drain of the registry's own queued write
             exitApplication()
         }
-        Window(onCloseRequest = esci, title = "snastro", icon = iconaFinestra) {
+        // 2026-09-30, user: the default 800x600 window always opened small — it opens maximized now.
+        val statoFinestra = rememberWindowState(placement = WindowPlacement.Maximized)
+        Window(onCloseRequest = esci, state = statoFinestra, title = "snastro", icon = iconaFinestra) {
             finestra = window
             val sceltaCartella = remember { SceltaCartellaFileDialog(window) }
             ContenutoApp(grafo, sceltaCartella)
