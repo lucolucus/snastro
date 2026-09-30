@@ -11,7 +11,6 @@ import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
-import snastro.sintesi.applicazione.porte.LettoreNomi
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
@@ -36,8 +35,8 @@ import java.time.Instant
  *    and `primaDi` honoured) and moves it `in_corso`, publishing [RiassuntoAvviato].
  * 2. **Run**, OUTSIDE any transaction — checks [DisponibilitaModelloLinguistico] first (AC-S87: the
  *    model is never called when it is not `Installato`), then reads the Segmenti ([LettoreTrascritto])
- *    and the CURRENT names ([LettoreNomi]) — never earlier, so a Revisione committed meanwhile is what
- *    the run sees (AC-S88) — builds the labelled input ([IngressoRiassunto]) with the Riassunto's OWN
+ *    — never earlier, so a Revisione committed meanwhile is what the run sees (AC-S88) — builds the labelled
+ *    input ([IngressoRiassunto], legend `Voce n` only, ADR 0032) with the Riassunto's OWN
  *    cap ([INV-S10], AC-S85), and calls [ModelloLinguistico].
  * 3. **Complete** — the raw answer is verified by the root itself ([Riassunto.completa], INV-S4) against
  *    the structure read in step 2, or the mapped failure is applied ([Riassunto.fallisci]); either way
@@ -60,7 +59,6 @@ public class EseguiProssimoRiassuntoServizio(
     private val orologio: Clock,
     private val riassunti: RiassuntoRepository,
     private val trascritti: LettoreTrascritto,
-    private val nomi: LettoreNomi,
     private val modello: ModelloLinguistico,
     private val disponibilita: DisponibilitaModelloLinguistico,
     private val eventi: DispatcherEventi,
@@ -116,12 +114,15 @@ public class EseguiProssimoRiassuntoServizio(
         }
     }
 
-    /** AC-S85: the legend names Voci through [LettoreNomi] read NOW; the cap is the Riassunto's OWN. */
+    /**
+     * AC-S85, ADR 0032: the legend always reads `V<n> = Voce n` — the model never sees a Nome (with names it returned
+     * no elements at all, spike 2026-09-30); Nomi are applied only when the Riassunto is shown. The cap is the
+     * Riassunto's OWN.
+     */
     private fun richiesta(riassunto: Riassunto, segmenti: List<SegmentoSintesi>): RichiestaRiassunto {
-        val nomiPerVoce = nomi.nomi(riassunto.registrazioneId).mapKeys { it.key.voceId }
         val ingresso = IngressoRiassunto.costruisci(
             segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-            nomiPerVoce,
+            nomi = emptyMap(),
         )
         return RichiestaRiassunto(ingresso, riassunto.argomento?.valore, riassunto.lunghezzaMassima.valore)
     }

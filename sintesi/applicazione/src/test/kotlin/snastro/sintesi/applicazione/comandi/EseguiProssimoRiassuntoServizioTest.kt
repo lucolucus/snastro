@@ -10,7 +10,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
-import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
@@ -21,8 +20,6 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
 import snastro.sintesi.applicazione.porte.ElementoRisposta
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
-import snastro.sintesi.applicazione.porte.LettoreNomi
-import snastro.sintesi.applicazione.porte.LettoreNomiFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
@@ -68,7 +65,6 @@ class EseguiProssimoRiassuntoServizioTest {
 
     private fun servizio(
         trascritti: LettoreTrascritto = LettoreTrascrittoFinta(),
-        nomi: LettoreNomi = LettoreNomiFinta(),
         modello: ModelloLinguistico = this.modello,
         disponibilita: DisponibilitaModelloLinguistico =
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
@@ -78,7 +74,6 @@ class EseguiProssimoRiassuntoServizioTest {
             orologio,
             riassunti,
             trascritti,
-            nomi,
             modello,
             disponibilita,
             eventi,
@@ -160,30 +155,25 @@ class EseguiProssimoRiassuntoServizioTest {
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
         val trascrittiConGuardia =
             LettoreTrascrittoConGuardia(transazioni, LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)))
-        val nomiConGuardia = LettoreNomiConGuardia(transazioni, LettoreNomiFinta())
 
         // ModelloLinguisticoFinto(transazioni) throws if riassumi runs while `transazioni` has an open
-        // transaction; trascrittiConGuardia / nomiConGuardia throw the same way for segmenti()/nomi() —
-        // reaching a result here already proves phases 2/3's reads/call all ran outside one (rework 1, FAIL 2).
-        val esito = servizio(trascritti = trascrittiConGuardia, nomi = nomiConGuardia)
+        // transaction; trascrittiConGuardia throws the same way for segmenti() — reaching a result here already
+        // proves phases 2/3's read/call all ran outside one (rework 1, FAIL 2).
+        val esito = servizio(trascritti = trascrittiConGuardia)
             .esegui(EseguiProssimoRiassunto())
 
         assertEquals(RisultatoRiassunto.Avviato(RiassuntoId("r1")), esito.atteso())
     }
 
     @Test
-    fun `AC-S85 INV-S10 la richiesta porta l ingresso etichettato l argomento e il cap del Riassunto`() {
-        val nomiPorta = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(REG1, VoceId(1)) to "parlante-1"),
-            nomiParlanti = mapOf("parlante-1" to "Anna"),
-        )
+    fun `AC-S85 INV-S10 la richiesta porta l ingresso con legenda Voce n anche se c e un Nome, l argomento e il cap`() {
         // INV-S10: this service has no LunghezzaMassimaRiassuntoRepository collaborator at all (only
         // ModificaLunghezzaMassimaRiassuntoServizio writes it) — it holds by construction, not by re-checking a
         // scenario here; the cap it can send is only ever the Riassunto's OWN [parole], fixed at Riassumi time.
         riassunti.salva(unRiassunto("r1", REG1, argomento = "il combattimento", parole = 1500, richiestoAlle = T1))
             .atteso()
 
-        servizio(trascritti = LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)), nomi = nomiPorta)
+        servizio(trascritti = LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)))
             .esegui(EseguiProssimoRiassunto()).atteso()
 
         val inviata = checkNotNull(modello.ultimaRichiesta)
@@ -191,7 +181,9 @@ class EseguiProssimoRiassuntoServizioTest {
         assertEquals(1500, inviata.lunghezzaMassimaParole)
         val atteso = IngressoRiassunto.costruisci(
             SEGMENTI.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-            mapOf(VoceId(1) to "Anna"), // V2 unattributed: both sides default it to "Voce 2"
+            // ADR 0032: the model never sees a Nome — with names in the legend it returned no elements at all
+            // (spike 2026-09-30); names are applied only when the Riassunto is shown.
+            emptyMap(),
         )
         assertEquals(atteso, inviata.ingresso)
     }
@@ -206,7 +198,6 @@ class EseguiProssimoRiassuntoServizioTest {
             orologio,
             repoSpia,
             LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)),
-            LettoreNomiFinta(),
             ModelloLinguisticoFinto(transazioniSpia),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventiSpia,
@@ -377,7 +368,6 @@ class EseguiProssimoRiassuntoServizioTest {
             orologio,
             concludiGuasto,
             LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)),
-            LettoreNomiFinta(),
             modello,
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventi,
@@ -498,17 +488,6 @@ private class LettoreTrascrittoConGuardia(
     }
 
     override fun elaborazioneAperta(r: RegistrazioneId): Boolean = delegato.elaborazioneAperta(r)
-}
-
-/** Same guard as [LettoreTrascrittoConGuardia], for [LettoreNomi] (AC-S84, rework 1 FAIL 2). */
-private class LettoreNomiConGuardia(
-    private val transazioni: UnitaDiLavoroFinta,
-    private val delegato: LettoreNomi,
-) : LettoreNomi {
-    override fun nomi(r: RegistrazioneId): Map<VoceRef, String> {
-        check(!transazioni.transazioneAperta) { "nomi invocato dentro una transazione (ADR 0012 (b))" }
-        return delegato.nomi(r)
-    }
 }
 
 /**

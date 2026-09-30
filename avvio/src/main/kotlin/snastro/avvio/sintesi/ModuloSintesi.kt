@@ -100,7 +100,6 @@ internal class ModuloSintesi(
             clock,
             RiassuntoRepositoryConReclamo(riassunti, esecuzioni),
             lettoreTrascritto,
-            nomi,
             app.modello,
             app.disponibilita,
             dispatcher,

@@ -417,7 +417,7 @@ class ComposizioneSintesiTest {
     }
 
     @Test
-    fun `LettoreNomi su SQL reale - il run etichetta la Voce col Nome attuale e la vista segue una rinomina`() {
+    fun `ADR 0032 su SQL reale il modello vede Voce n anche con un Nome, e la vista mostra il Nome e le rinomine`() {
         AmbienteProgetto(radice).use {
             val a = it.registrazioneTrascritta()
             val nomina = runBlocking { it.parlanti.comandi.esegui(ComandoVoce.Nuovo(voce(a, 1), "Anna")) }
@@ -426,7 +426,9 @@ class ComposizioneSintesiTest {
             it.riassumi(a)
             it.attendiPronto(a)
 
-            assertTrue("Anna" in it.modello.richieste.single().ingresso, "la legenda nomina Voce 1 'Anna'")
+            val ingresso = it.modello.richieste.single().ingresso
+            assertFalse("Anna" in ingresso, "ADR 0032: nessun Nome nell'ingresso del modello")
+            assertTrue("V1 = Voce 1" in ingresso, "la legenda resta 'Voce 1'")
             assertEquals(listOf("Anna"), nomiNelSommario(it, a))
             val parlanti = ParlanteRepositorySql(it.porte.database, it.porte.lettura)
             val anna = parlanti.delProgetto(it.progetto.progettoId).single().id

@@ -9,7 +9,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
-import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.modelli.CartellaCacheModelli
 import snastro.modelli.CatalogoModelli
@@ -22,7 +21,6 @@ import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
-import snastro.sintesi.applicazione.porte.LettoreNomiFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
@@ -74,10 +72,6 @@ class BenchmarkRiassuntoTest {
             Clock.systemUTC(),
             riassunti,
             LettoreTrascrittoFinta(mapOf(registrazione to segmenti)),
-            LettoreNomiFinta(
-                nomi.entries.associate { (voce, nome) -> VoceRef(registrazione, voce) to nome },
-                nomi.values.associateWith { it },
-            ),
             ModelloLinguisticoLlama({ cartellaNativiLlama() }, { fileModello() }, misure = { misure += it }),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             dispatcher,

@@ -16,7 +16,6 @@ import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
-import snastro.sintesi.applicazione.porte.LettoreNomiFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.ModelloLinguisticoFinto
@@ -67,7 +66,6 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
         Clock.fixed(Instant.parse("2026-09-26T11:00:00Z"), ZoneOffset.UTC),
         RiassuntoRepositoryConReclamo(repo, esecuzioni),
         LettoreTrascrittoFinta(listOf(R1, R2, R3).associateWith { listOf(SEGMENTO) }),
-        LettoreNomiFinta(),
         modello,
         DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
         eventi,
