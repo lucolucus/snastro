@@ -64,6 +64,12 @@ internal fun Project.configureTesting() {
         add("testFixturesImplementation", libs.library("kotlin-test"))
         add("testFixturesImplementation", libs.library("junit-jupiter"))
     }
+    // Every Test task (gate, renderCheck, modelliTest, benchmarks): a JUnit discovery issue — e.g. a Kotlin
+    // `fun name() = blocco { }` whose block returns a value, which Jupiter silently does NOT run — fails the
+    // task instead of being a warning nobody reads (2026-09-30: AC-C70/AC-C71 had never run).
+    tasks.withType(Test::class.java).configureEach {
+        systemProperty("junit.platform.discovery.issue.severity.critical", "WARNING")
+    }
     // Only the default `test` task excludes these tags — a custom Test task (e.g. `:ui:renderCheck`)
     // configures its own `useJUnitPlatform { includeTags(...) }` and must not inherit this filter
     // (the JUnit Platform Gradle engine excludes a tag that is both included and excluded).

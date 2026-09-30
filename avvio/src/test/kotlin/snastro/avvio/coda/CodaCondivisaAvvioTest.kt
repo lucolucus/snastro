@@ -17,7 +17,7 @@ import kotlin.test.assertTrue
  */
 class CodaCondivisaAvvioTest {
     @Test
-    fun `AC-C71 costruita non lancia nulla, recupera gira ogni fonte qui e avvia non lo ripete prima del reclamo`() =
+    fun `AC-C71 costruita non lancia nulla, recupera gira ogni fonte, avvia non la ripete prima del reclamo`(): Unit =
         conScopeDiProva { scope ->
             val ordine = CopyOnWriteArrayList<String>()
             val reclamato = CountDownLatch(1)
@@ -54,7 +54,7 @@ class CodaCondivisaAvvioTest {
         }
 
     @Test
-    fun `AC-C70 un suono del Campanello consegnato alla coda la sveglia`() = conScopeDiProva { scope ->
+    fun `AC-C70 un suono del Campanello consegnato alla coda la sveglia`(): Unit = conScopeDiProva { scope ->
         val campanello = Campanello()
         val testa = CopyOnWriteArrayList<ElementoInCoda>()
         val eseguito = CountDownLatch(1)

@@ -21,9 +21,9 @@ class MigrazioneCartellaSbobinatureAperturaTest {
             it.registrazioneTrascritta()
             attendiFinche(timeout = 10.seconds, messaggio = "sbobinatura scritta") {
                 Files.isDirectory(it.cartellaSbobinature()) &&
-                    it.cartellaSbobinature().listDirectoryEntries().isNotEmpty()
+                    it.cartellaSbobinature().listDirectoryEntries("*.md").isNotEmpty()
             }
-            val nomi = it.cartellaSbobinature().listDirectoryEntries().map { f -> f.fileName.toString() }.toSet()
+            val nomi = nomiMd(it.cartellaSbobinature())
             it.sessione.chiudi()
             val vecchia = it.cartellaSbobinature().resolveSibling("documenti")
             Files.move(it.cartellaSbobinature(), vecchia) // a project as it was before the rename
@@ -32,9 +32,13 @@ class MigrazioneCartellaSbobinatureAperturaTest {
 
             attendiFinche(timeout = 10.seconds, messaggio = "le sbobinature sono in sbobinature/") {
                 Files.isDirectory(it.cartellaSbobinature()) &&
-                    it.cartellaSbobinature().listDirectoryEntries().map { f -> f.fileName.toString() }.toSet() == nomi
+                    nomiMd(it.cartellaSbobinature()) == nomi
             }
             assertFalse(Files.exists(vecchia), "documenti/ non torna")
         }
     }
+
+    /** Only the `.md` files: the writer's `.tmp` may be there for a moment (write-then-rename). */
+    private fun nomiMd(cartella: Path): Set<String> =
+        cartella.listDirectoryEntries("*.md").map { f -> f.fileName.toString() }.toSet()
 }
