@@ -1,0 +1,104 @@
+# Builds the snastro .dmg (macOS Apple Silicon) and, on a version tag, publishes it as a GitHub release.
+#
+# Only macOS arm64 is wired: the sherpa-onnx and llama.cpp natives are pinned for that host only
+# (ADR 0016 §5, ADR 0027 Q-1). The .dmg is unsigned and not notarized (ADR 0016 O-2).
+#
+#   git tag v1.0.0 && git push origin v1.0.0   -> gate + .dmg + GitHub release
+#   Actions > Rilascio > Run workflow           -> gate + .dmg as a workflow artifact only
+name: Rilascio
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: rilascio-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  dmg-macos-arm64:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versione
+        id: versione
+        run: |
+          if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
+            versione="${GITHUB_REF_NAME#v}"
+          else
+            versione="1.0.0"
+          fi
+          # jpackage on macOS: MAJOR.MINOR.PATCH, MAJOR > 0.
+          if [[ ! "$versione" =~ ^[1-9][0-9]*\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versione '$versione' non valida: serve un tag vX.Y.Z con X >= 1"
+            exit 1
+          fi
+          echo "versione=$versione" >> "$GITHUB_OUTPUT"
+
+      # JetBrains Runtime 21: runs Gradle and satisfies the JBR toolchain (ADR 0001) that the .dmg bundles.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: jetbrains
+          java-version: "21"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # sherpa-onnx release assets (build.gradle.kts, SHA-256 verified on every use).
+      - name: Cache nativi sherpa-onnx
+        uses: actions/cache@v4
+        with:
+          path: native-cache
+          key: native-cache-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('gradle/libs.versions.toml', 'build.gradle.kts') }}
+
+      - name: Gate
+        run: ./gradlew check --no-daemon --max-workers=2
+
+      - name: Pacchetto .dmg
+        run: ./gradlew :avvio:packageDmg -PversioneApp=${{ steps.versione.outputs.versione }} --no-daemon
+
+      - name: Rinomina
+        id: dmg
+        run: |
+          origine="avvio/build/compose/binaries/main/dmg/snastro-${{ steps.versione.outputs.versione }}.dmg"
+          destinazione="snastro-${{ steps.versione.outputs.versione }}-macos-arm64.dmg"
+          mv "$origine" "$destinazione"
+          shasum -a 256 "$destinazione" > "$destinazione.sha256"
+          echo "file=$destinazione" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: snastro-macos-arm64
+          path: |
+            ${{ steps.dmg.outputs.file }}
+            ${{ steps.dmg.outputs.file }}.sha256
+          if-no-files-found: error
+
+      - name: Release GitHub
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > note.md <<'EOF'
+          ## snastro for macOS (Apple Silicon)
+
+          Download the `.dmg`, open it and drag **snastro** into Applications. The first launch downloads
+          and verifies the transcription models (~1 GB). The summary model (~6 GB) is optional and is
+          downloaded when you ask for it.
+
+          **The app is not signed or notarized yet.** macOS will block the first launch. Open it anyway from
+          *System Settings → Privacy & Security → Open Anyway*. If macOS says it is "damaged", run:
+
+          ```
+          xattr -dr com.apple.quarantine /Applications/snastro.app
+          ```
+          EOF
+          gh release create "$GITHUB_REF_NAME" \
+            --title "snastro ${{ steps.versione.outputs.versione }}" \
+            --notes-file note.md \
+            "${{ steps.dmg.outputs.file }}" "${{ steps.dmg.outputs.file }}.sha256"

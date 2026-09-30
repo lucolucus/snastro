@@ -102,7 +102,26 @@ val copiaNativiLlama = tasks.register<Copy>("copiaNativiLlama") {
 compose.desktop {
     application {
         mainClass = "snastro.avvio.MainKt"
+        // The packaged runtime is the build's own toolchain, JetBrains Runtime 21 (ADR 0001), not the JDK that runs
+        // Gradle: jpackage refuses some vendors (Homebrew OpenJDK), and the app must ship the JDK it is tested on.
+        javaHome = javaToolchains.launcherFor {
+            languageVersion.set(JavaLanguageVersion.of(21))
+            vendor.set(JvmVendorSpec.matching("JetBrains"))
+        }.get().metadata.installationPath.asFile.absolutePath
         nativeDistributions {
+            targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg)
+            packageName = "snastro"
+            // jpackage on macOS wants MAJOR.MINOR.PATCH with MAJOR > 0. The release workflow passes the tag.
+            packageVersion = providers.gradleProperty("versioneApp").getOrElse("1.0.0")
+            vendor = "snastro"
+            copyright = "Copyright 2026 Luca Parsani. Apache-2.0."
+            licenseFile.set(rootProject.file("LICENSE"))
+            // The jlink runtime: `suggestRuntimeModules` (the JDK ones) + java.logging (Segnalazione over JUL) and
+            // jdk.crypto.ec (TLS to Hugging Face / GitHub for the first-run model download).
+            modules(
+                "java.instrument", "java.logging", "java.management", "java.net.http", "java.sql",
+                "jdk.crypto.ec", "jdk.unsupported",
+            )
             // ADR 0016 §3: generated under build/ (never src/), filled by the root task
             // scaricaNativiSherpa (<this dir>/<os-arch>/ = the two sherpa-onnx libs). At runtime Compose
             // exposes the merged folder as `compose.application.resources.dir` (MotoreSherpa.caricaNativi).
