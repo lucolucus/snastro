@@ -7,6 +7,7 @@ import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
 import java.time.Clock
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -100,5 +101,27 @@ class SondaFfmpegTest {
         javax.imageio.ImageIO.write(immagine, "png", file.toFile())
 
         assertFailsWith<FormatoNonSupportato> { sonda.sonda(file) }
+    }
+
+    /**
+     * AC-I202, opt-in on the user's real Voice Memos (`SNASTRO_SPIKE_ORA_DIR`, never committed): "New Recording 4"
+     * starts 21/09 22:22:13, "Via Roquel" 21/09 22:44:22, in that order. Skipped when the variable is unset.
+     */
+    @Test
+    @Tag("modelli")
+    fun `AC-I202 i due Voice Memos reali hanno data e ora di inizio e l'ordine giusto`() {
+        val cartella = System.getenv("SNASTRO_SPIKE_ORA_DIR")?.let(Path::of) ?: return
+        val roma = SondaFfmpeg(Clock.system(ZoneId.of("Europe/Rome")))
+        fun inizio(prefisso: String) = Files.list(cartella).use { it.toList() }
+            .first { it.fileName.toString().startsWith(prefisso) }
+            .let { roma.sonda(it) }
+
+        val parte1 = inizio("New Recording 4")
+        val parte2 = inizio("Via Roquel")
+
+        assertEquals(LocalDate.of(2026, 9, 21), parte1.dataRegistrazione)
+        assertEquals(LocalTime.of(22, 22, 13), parte1.oraDiInizio)
+        assertEquals(LocalDate.of(2026, 9, 21), parte2.dataRegistrazione)
+        assertEquals(LocalTime.of(22, 44, 22), parte2.oraDiInizio)
     }
 }

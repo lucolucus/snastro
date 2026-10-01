@@ -12,9 +12,9 @@ import java.time.Clock
  */
 public class SondaFfmpeg(private val clock: Clock = Clock.systemDefaultZone()) {
     /**
-     * @return the duration (always > 0 for a probed source) and the recording date chosen by
-     *   [dataRegistrazione] (AC-364): the `creation_time` metadata, else the file's birth time, else
-     *   its last-modified time.
+     * @return the duration (always > 0 for a probed source), the recording date and the start time chosen by
+     *   [dataRegistrazione] (ADR 0040): `moov/udta/date` gives both; without it the time is empty and the date
+     *   is (AC-364) the `creation_time` metadata, else the file's birth time, else its last-modified time.
      * @throws AudioIlleggibile [file] is missing, empty, a directory, or unreadable as media.
      * @throws FormatoNonSupportato [file] opens fine but has no audio stream.
      */
@@ -23,14 +23,14 @@ public class SondaFfmpeg(private val clock: Clock = Clock.systemDefaultZone()) {
         try {
             val durataMs = grabber.lengthInTime / MICROSECONDI_PER_MS
             val attributi = Files.readAttributes(file, BasicFileAttributes::class.java)
-            val data = dataRegistrazione(
+            val inizio = dataRegistrazione(
+                udtaDate = leggiUdtaDate(file),
                 creationTime = grabber.metadata?.get(CHIAVE_CREATION_TIME),
                 creazioneFile = attributi.creationTime()?.toInstant(),
                 modificaFile = attributi.lastModifiedTime().toInstant(),
-                adesso = clock.instant(),
-                zona = clock.zone,
+                clock = clock,
             )
-            return InfoFile(durataMs, data)
+            return InfoFile(durataMs, inizio.data, inizio.ora)
         } finally {
             chiudi(grabber)
         }
