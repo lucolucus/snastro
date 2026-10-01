@@ -95,7 +95,7 @@ class RitrascriviTest {
             }
             assertEquals(2, datiS3(s3)?.segmenti?.size, "il vecchio Trascritto resta visibile")
             assertEquals(2, it.trascrizione.trascritto(s.x)?.voci?.size)
-            assertEquals(2, AttribuzioneRepositorySql(it.porte.database).diRegistrazione(s.x).size)
+            assertEquals(2, AttribuzioneRepositorySql(it.porte.database).diIncontro(it.incontroDi(s.x)).size)
 
             barriera.countDown()
 
@@ -109,11 +109,11 @@ class RitrascriviTest {
             assertEquals(NumeroPersone.di(2).atteso(), diarizzatore.numeroPersoneRicevuti.last())
             val parlanti = ParlanteRepositorySql(it.porte.database, it.porte.lettura)
             val attribuzioni = AttribuzioneRepositorySql(it.porte.database)
-            assertEquals(emptyList(), attribuzioni.diRegistrazione(s.x))
+            assertEquals(emptyList(), attribuzioni.diIncontro(it.incontroDi(s.x)))
             assertEquals(emptyList(), parlanti.impronteDiRegistrazione(s.x))
             val galleria = it.parlanti.letture.parlantiDelProgetto()
             assertEquals(listOf("Mario"), galleria.map { p -> p.nome }, "l'Ospite non esiste piu', Mario resta")
-            assertEquals(s.mario, attribuzioni.diRegistrazione(s.y).single().parlanteId)
+            assertEquals(s.mario, attribuzioni.diIncontro(it.incontroDi(s.y)).single().parlanteId)
             assertEquals(1, parlanti.impronteDiRegistrazione(s.y).size, "la sua impronta altrove resta")
             assertEquals(3, it.trascrizione.trascritto(s.x)?.voci?.size)
             attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura riscritta con Voce 1..3") {
@@ -209,7 +209,7 @@ class RitrascriviTest {
             it.porte.dispatcher.registraSincrono(
                 AbbonatoSincrono { evento: EventoPubblicato ->
                     if (evento is TrascrittoSostituito) {
-                        vistaNellaTransazione = attribuzioni.diRegistrazione(s.x).size
+                        vistaNellaTransazione = attribuzioni.diIncontro(it.incontroDi(s.x)).size
                         Esito.Errore(ErroreDiProva.Fallito("sonda"))
                     } else {
                         Esito.Ok(Unit)
@@ -228,7 +228,7 @@ class RitrascriviTest {
                 "salvataggio del risultato non riuscito",
                 it.trascrizione.statiElaborazione(listOf(s.x)).single().motivoFallimento,
             )
-            assertEquals(2, attribuzioni.diRegistrazione(s.x).size, "il rollback annulla anche la purga")
+            assertEquals(2, attribuzioni.diIncontro(it.incontroDi(s.x)).size, "il rollback annulla anche la purga")
             val parlanti = ParlanteRepositorySql(it.porte.database, it.porte.lettura)
             assertEquals(2, parlanti.impronteDiRegistrazione(s.x).size)
             assertEquals(2, it.trascrizione.trascritto(s.x)?.voci?.size)
@@ -297,7 +297,7 @@ class RitrascriviTest {
                 ElaborazioneRepositorySql(it.porte.database).trova(rerun)?.completata == true
             }
             // Same Voce numbers in the new generation: without the purge Anna would silently re-attach.
-            assertEquals(emptyList(), AttribuzioneRepositorySql(it.porte.database).diRegistrazione(x))
+            assertEquals(emptyList(), AttribuzioneRepositorySql(it.porte.database).diIncontro(it.incontroDi(x)))
             val parlanti = ParlanteRepositorySql(it.porte.database, it.porte.lettura)
             assertEquals(emptyList(), parlanti.impronteDiRegistrazione(x))
             val nomi = it.parlanti.letture.parlantiDelProgetto().map { p -> p.nome }
@@ -417,7 +417,7 @@ class RitrascriviTest {
 
         companion object {
             fun di(ambiente: AmbienteProgetto, id: RegistrazioneId): Istantanea = Istantanea(
-                attribuzioni = AttribuzioneRepositorySql(ambiente.porte.database).diRegistrazione(id)
+                attribuzioni = AttribuzioneRepositorySql(ambiente.porte.database).diIncontro(ambiente.incontroDi(id))
                     .map { a -> a.voceRef to a.parlanteId },
                 impronte = ParlanteRepositorySql(ambiente.porte.database, ambiente.porte.lettura)
                     .impronteDiRegistrazione(id),

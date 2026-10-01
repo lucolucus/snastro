@@ -5,6 +5,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 
 /**
@@ -16,6 +17,7 @@ import snastro.parlanti.applicazione.porte.ParlanteRepository
 public class NomiDelleVoci(
     private val attribuzioni: AttribuzioneRepository,
     private val parlanti: ParlanteRepository,
+    private val registrazioni: LettoreRegistrazione,
     private val lettura: LetturaCoerente,
 ) {
     /**
@@ -28,12 +30,19 @@ public class NomiDelleVoci(
      * and the names are all read from the SAME instant, never a mix of an old and a newer Parlante state.
      */
     public fun nomi(id: RegistrazioneId): Map<VoceRef, String> = lettura.inLettura {
-        attribuzioni.diRegistrazione(id)
+        // ADR 0033 §4.1: the Voci, and so their names, are the Incontro's the Registrazione is a Parte of.
+        val incontroId = registrazioni.registrazione(id)?.incontroId ?: return@inLettura emptyMap()
+        attribuzioni.diIncontro(incontroId)
             .mapNotNull { a -> parlanti.trova(a.parlanteId)?.let { p -> a.voceRef to p.nome.valore } }
             .toMap()
     }
 
-    /** AC-102: the distinct Registrazioni with at least one Attribuzione to [parlanteId]. */
+    /**
+     * AC-102: the distinct Registrazioni with at least one Attribuzione to [parlanteId]: every Parte of each Incontro
+     * holding one (ADR 0033 §4.1, unordered).
+     */
     public fun registrazioniCon(parlanteId: ParlanteId): List<RegistrazioneId> =
-        attribuzioni.diParlante(parlanteId).map { it.voceRef.registrazioneId }.distinct()
+        attribuzioni.diParlante(parlanteId).map { it.voceRef.incontroId }.distinct()
+            .flatMap { registrazioni.parti(it).orEmpty() }
+            .distinct()
 }

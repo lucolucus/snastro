@@ -11,6 +11,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzione
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzioneServizio
 import snastro.parlanti.applicazione.comandi.EliminaParlante
@@ -73,7 +74,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val vociViste = mutableMapOf<RegistrazioneId, List<VoceVista>>()
 
         override val lettore: LettoreNomi =
-            LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro))
+            LettoreNomiDaParlanti(
+                NomiDelleVoci(attribuzioni, parlanti, LettoreRegistrazioneFinta(registrazioniViste), unitaDiLavoro),
+            )
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
@@ -92,9 +95,10 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
             val id = RegistrazioneId(generatoreId.nuovo())
-            val refs = (1..voci).map { n -> VoceRef(id, VoceId(n)) }
+            val refs = (1..voci).map { n -> VoceRef(unIncontroDi(id), VoceId(n)) }
             registrazioniViste[id] = RegistrazioneVista(
                 registrazioneId = id,
+                incontroId = unIncontroDi(id),
                 progettoId = progettoId,
                 titolo = "Registrazione di prova",
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.wav"),

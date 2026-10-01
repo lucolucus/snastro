@@ -6,8 +6,10 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -19,7 +21,7 @@ import kotlin.test.assertEquals
 class PropostaUnioneTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()
     private val parlanti = ParlanteRepositoryFinta()
-    private val api = PropostaUnione(attribuzioni, parlanti)
+    private val api = PropostaUnione(attribuzioni, parlanti, ogniRegistrazioneNota())
 
     @Test
     fun `senza Attribuzioni non c'e alcuna proposta`() {
@@ -73,8 +75,12 @@ class PropostaUnioneTest {
     fun `una coppia di un'altra Registrazione non compare`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
-        attribuzioni.salva(Attribuzione.conferma(VoceRef(ALTRA_REGISTRAZIONE, VoceId(1)), PROGETTO, marco.id).aggregato)
-        attribuzioni.salva(Attribuzione.conferma(VoceRef(ALTRA_REGISTRAZIONE, VoceId(2)), PROGETTO, marco.id).aggregato)
+        attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(ALTRA_REGISTRAZIONE), VoceId(1)), PROGETTO, marco.id).aggregato,
+        )
+        attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(ALTRA_REGISTRAZIONE), VoceId(2)), PROGETTO, marco.id).aggregato,
+        )
 
         assertEquals(emptyList(), api.proposte(REGISTRAZIONE))
     }
@@ -115,7 +121,7 @@ class PropostaUnioneTest {
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(nome).atteso(), TipoParlante.RICORRENTE).aggregato
 
     private fun unAttribuzione(voceN: Int, parlanteId: ParlanteId): Attribuzione =
-        Attribuzione.conferma(VoceRef(REGISTRAZIONE, VoceId(voceN)), PROGETTO, parlanteId).aggregato
+        Attribuzione.conferma(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(voceN)), PROGETTO, parlanteId).aggregato
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")

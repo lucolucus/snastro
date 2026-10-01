@@ -48,7 +48,7 @@ private fun creaConGliStessiId(sorgente: Trascritto): Trascritto {
         }
     }
     val durata = sorgente.segmenti.maxOf { it.intervallo.fineMs }
-    val creato = Trascritto.crea(sorgente.registrazioneId, durata, iniziali)
+    val creato = Trascritto.crea(sorgente.registrazioneId, sorgente.incontroId, durata, iniziali)
     check(creato is Esito.Ok) { "crea rifiutata per la copia di ${sorgente.registrazioneId}: $creato" }
     return creato.valore.aggregato
 }

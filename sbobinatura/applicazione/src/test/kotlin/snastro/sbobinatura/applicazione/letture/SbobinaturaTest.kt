@@ -6,6 +6,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import snastro.sbobinatura.applicazione.porte.SegmentoVista
 import snastro.sbobinatura.applicazione.porte.TrascrittoTesto
 import java.time.LocalDate
@@ -27,7 +28,7 @@ class SbobinaturaTest {
                 unSegmento(2, 2, 3_000, 6_000, "Frase due."),
             ),
         )
-        val nomi = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "Marco")
+        val nomi = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "Marco")
 
         val prima = Sbobinatura.proietta(trascritto, nomi)
         val seconda = Sbobinatura.proietta(trascritto.copy(), nomi.toMap())
@@ -49,8 +50,8 @@ class SbobinaturaTest {
             unSegmento(5, 2, 12_000, 15_000, "Quinto."),
         )
         val nomi = mapOf(
-            VoceRef(REGISTRAZIONE, VoceId(1)) to "Marco",
-            VoceRef(REGISTRAZIONE, VoceId(2)) to "Anna",
+            VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "Marco",
+            VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2)) to "Anna",
         )
         val canonico = Sbobinatura.proietta(unTrascritto(segmenti = segmenti), nomi)
 
@@ -76,7 +77,7 @@ class SbobinaturaTest {
         // LettoreNomi risolve gia' il Nome di un Parlante eliminato (INV-24 sul suo lato): Sbobinatura
         // si limita a usare la stringa ricevuta, senza sapere se il Parlante e' attivo o eliminato.
         val trascritto = unTrascritto(segmenti = listOf(unSegmento(1, 5, 0, 1_000, "Ciao.")))
-        val nomi = mapOf(VoceRef(REGISTRAZIONE, VoceId(5)) to "Anna Bianchi")
+        val nomi = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(5)) to "Anna Bianchi")
 
         val vista = Sbobinatura.proietta(trascritto, nomi)
 
@@ -87,7 +88,7 @@ class SbobinaturaTest {
     fun `INV-24 un Nome mappato per un'altra registrazioneId non si applica, la Voce resta Voce n`() {
         val altraRegistrazione = RegistrazioneId("altra-registrazione")
         val trascritto = unTrascritto(segmenti = listOf(unSegmento(1, 5, 0, 1_000, "Ciao.")))
-        val nomi = mapOf(VoceRef(altraRegistrazione, VoceId(5)) to "Anna Bianchi")
+        val nomi = mapOf(VoceRef(unIncontroDi(altraRegistrazione), VoceId(5)) to "Anna Bianchi")
 
         val vista = Sbobinatura.proietta(trascritto, nomi)
 
@@ -137,7 +138,7 @@ class SbobinaturaTest {
                 unSegmento(3, 2, 6_000, 9_000, "Frase tre."),
             ),
         )
-        val nomi = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "Marco")
+        val nomi = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "Marco")
 
         val vista = Sbobinatura.proietta(trascritto, nomi)
 
@@ -296,7 +297,7 @@ class SbobinaturaTest {
             titolo: String = "Riunione",
             data: LocalDate = LocalDate.of(2026, 1, 1),
             segmenti: List<SegmentoVista>,
-        ) = TrascrittoTesto(REGISTRAZIONE, titolo, data, segmenti)
+        ) = TrascrittoTesto(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE), titolo, data, segmenti)
 
         fun unSegmento(segmentoId: Int, voceId: Int, inizioMs: Long, fineMs: Long, testo: String) =
             SegmentoVista(SegmentoId(segmentoId), VoceId(voceId), IntervalloMs(inizioMs, fineMs), testo)

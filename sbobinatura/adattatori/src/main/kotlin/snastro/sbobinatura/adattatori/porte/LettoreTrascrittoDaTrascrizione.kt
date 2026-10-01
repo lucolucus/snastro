@@ -24,6 +24,7 @@ public class LettoreTrascrittoDaTrascrizione(
             progetto.registrazione(id)?.let { registrazione ->
                 TrascrittoTesto(
                     registrazioneId = id,
+                    incontroId = registrazione.incontroId,
                     titolo = registrazione.titolo,
                     dataRegistrazione = registrazione.dataRegistrazione,
                     segmenti = segmenti.map { SegmentoVista(it.segmentoId, it.voceId, it.intervallo, it.testo) },

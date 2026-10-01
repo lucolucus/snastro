@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test
 import snastro.kernel.Esito
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import kotlin.test.assertEquals
 
 /** AC-S65..S69 (D1): [RiassuntoRepositoryFinta] passes [RiassuntoRepositoryContratto]; plus its rollback. */
@@ -17,12 +18,12 @@ class RiassuntoRepositoryFintaTest : RiassuntoRepositoryContratto() {
         uow.inTransazione { repo.salva(unRiassunto("riassunto-1", REGISTRAZIONE)) }.atteso()
 
         uow.inTransazione {
-            repo.rimuoviDiRegistrazione(REGISTRAZIONE).atteso()
+            repo.rimuoviDiIncontro(unIncontroDi(REGISTRAZIONE)).atteso()
             repo.salva(unRiassunto("riassunto-2", REGISTRAZIONE))
             repo.salva(unRiassunto("riassunto-3", REGISTRAZIONE))
         }
 
         assertEquals(listOf("riassunto-1"), repo.inAttesa().map { it.id.valore })
-        assertEquals(Esito.Ok(1), repo.rimuoviDiRegistrazione(REGISTRAZIONE))
+        assertEquals(Esito.Ok(1), repo.rimuoviDiIncontro(unIncontroDi(REGISTRAZIONE)))
     }
 }

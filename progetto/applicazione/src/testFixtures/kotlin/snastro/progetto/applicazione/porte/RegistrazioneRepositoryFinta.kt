@@ -1,5 +1,6 @@
 package snastro.progetto.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
@@ -17,6 +18,9 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
 
     override fun delProgetto(id: ProgettoId): List<Registrazione> =
         righe.values.filter { it.progettoId == id }.map { it.copia() }
+
+    override fun diIncontro(id: IncontroId): List<Registrazione> =
+        righe.values.filter { it.incontroId == id }.map { it.copia() }
 
     override fun titoliDelProgetto(id: ProgettoId): List<String> =
         righe.values.filter { it.progettoId == id }.map { it.titolo }
@@ -45,6 +49,7 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
         Registrazione.aggiungi(
             id,
             progettoId,
+            incontroId,
             titolo,
             riferimentoAudio,
             durataMs,

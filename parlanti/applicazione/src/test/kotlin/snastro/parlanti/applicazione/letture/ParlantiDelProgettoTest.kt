@@ -8,6 +8,8 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
@@ -17,6 +19,7 @@ import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
@@ -45,7 +48,7 @@ class ParlantiDelProgettoTest {
             lettoreVoci = unLettoreVoci(VOCE_A),
         )
         val marco = unParlante("p-1", "Marco", TipoParlante.RICORRENTE)
-        marco.registraImpronta(VOCE_A, impronta(1f), "s1", "finto").atteso()
+        marco.registraImpronta(VOCE_A, impronta(1f), "s1", "finto", unicaParteDi(VOCE_A)).atteso()
         ambiente.parlanti.salva(marco).atteso()
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_A, PROGETTO, marco.id).aggregato)
 
@@ -73,7 +76,7 @@ class ParlantiDelProgettoTest {
             lettoreVoci = unLettoreVoci(VOCE_A),
         )
         val marco = unParlante("p-1", "Marco", TipoParlante.RICORRENTE)
-        marco.registraImpronta(VOCE_A, impronta(1f), "s1", "finto").atteso()
+        marco.registraImpronta(VOCE_A, impronta(1f), "s1", "finto", unicaParteDi(VOCE_A)).atteso()
         ambiente.parlanti.salva(marco).atteso()
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_A, PROGETTO, marco.id).aggregato)
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_B_REG_2, PROGETTO, marco.id).aggregato)
@@ -97,7 +100,9 @@ class ParlantiDelProgettoTest {
         ambiente.parlanti.salva(marco).atteso()
         // due Voci della STESSA Registrazione attribuite allo stesso Parlante (INV-22): conta una volta.
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_A, PROGETTO, marco.id).aggregato)
-        ambiente.attribuzioni.salva(Attribuzione.conferma(VoceRef(REG_1, VoceId(2)), PROGETTO, marco.id).aggregato)
+        ambiente.attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(REG_1), VoceId(2)), PROGETTO, marco.id).aggregato,
+        )
 
         val riga = ambiente.api.parlanti(PROGETTO).single()
 
@@ -144,17 +149,17 @@ class ParlantiDelProgettoTest {
     private class Ambiente(
         val parlanti: ParlanteRepositoryFinta = ParlanteRepositoryFinta(),
         val attribuzioni: AttribuzioneRepositoryFinta = AttribuzioneRepositoryFinta(),
-        registrazioni: LettoreRegistrazione = LettoreRegistrazioneFinta(),
+        registrazioni: LettoreRegistrazione = ogniRegistrazioneNota(),
         lettoreVoci: LettoreVoci = LettoreVociFinta(),
     ) {
-        val estrattoAudio: EstrattoAudio = EstrattoAudio(lettoreVoci)
+        val estrattoAudio: EstrattoAudio = EstrattoAudio(lettoreVoci, ogniRegistrazioneNota())
         val api: ParlantiDelProgetto = ParlantiDelProgetto(parlanti, attribuzioni, registrazioni, estrattoAudio)
     }
 
     private fun impronta(seme: Float): Impronta = Impronta(FloatArray(8) { i -> seme + i })
 
     private fun unLettoreVoci(vararg voci: VoceRef): LettoreVoci {
-        val perRegistrazione = voci.groupBy(VoceRef::registrazioneId)
+        val perRegistrazione = voci.groupBy { unicaParteDi(it) }
             .mapValues { (_, v) -> v.map { VoceVista(it, listOf(IntervalloMs(0, 2_000))) } }
         return LettoreVociFinta(perRegistrazione)
     }
@@ -162,6 +167,7 @@ class ParlantiDelProgettoTest {
     private fun unaRegistrazione(id: RegistrazioneId, dataRegistrazione: LocalDate): RegistrazioneVista =
         RegistrazioneVista(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             progettoId = PROGETTO,
             titolo = "Seduta",
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
@@ -176,7 +182,7 @@ class ParlantiDelProgettoTest {
         val PROGETTO = ProgettoId("progetto-1")
         val REG_1 = RegistrazioneId("registrazione-1")
         val REG_2 = RegistrazioneId("registrazione-2")
-        val VOCE_A = VoceRef(REG_1, VoceId(1))
-        val VOCE_B_REG_2 = VoceRef(REG_2, VoceId(1))
+        val VOCE_A = VoceRef(unIncontroDi(REG_1), VoceId(1))
+        val VOCE_B_REG_2 = VoceRef(unIncontroDi(REG_2), VoceId(1))
     }
 }

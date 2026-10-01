@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.runTest
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -33,6 +34,7 @@ private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 
 private fun unaVista(registrazioneId: RegistrazioneId) = TrascrittoView(
     registrazioneId = registrazioneId,
+    incontroId = unIncontroDi(registrazioneId),
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = DATA_1,
     durataMs = 125_000,

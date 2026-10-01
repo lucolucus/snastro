@@ -1,5 +1,6 @@
 package snastro.parlanti.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
@@ -28,6 +29,9 @@ public interface AmbienteLettoreVoci {
 
     /** AvviaElaborazione of [registrazioneId] (never completata) that ends `fallita`: no Trascritto exists. */
     public fun fallisciElaborazione(registrazioneId: RegistrazioneId)
+
+    /** The Incontro the seeded Registrazione [registrazioneId] is a Parte of: the key of its VoceRefs (ADR 0033). */
+    public fun incontroDi(registrazioneId: RegistrazioneId): IncontroId
 
     /** UnisciVoci: every Segmento of [rimossa] moves onto [sopravvive]; [rimossa] ceases to exist. */
     public fun unisci(registrazioneId: RegistrazioneId, sopravvive: VoceId, rimossa: VoceId)

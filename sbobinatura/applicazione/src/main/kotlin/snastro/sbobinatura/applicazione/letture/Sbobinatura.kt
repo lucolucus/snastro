@@ -1,6 +1,6 @@
 package snastro.sbobinatura.applicazione.letture
 
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.VoceRef
 import snastro.sbobinatura.applicazione.porte.SegmentoVista
 import snastro.sbobinatura.applicazione.porte.TrascrittoTesto
@@ -39,7 +39,7 @@ public object Sbobinatura {
             append("# ${trascritto.titolo}\n\n")
             append("Registrata il ${trascritto.dataRegistrazione.format(FORMATO_VISUALIZZATO)}\n\n")
             for (segmento in segmentiInOrdine) {
-                val nome = nomeVoce(trascritto.registrazioneId, segmento, nomi)
+                val nome = nomeVoce(trascritto.incontroId, segmento, nomi)
                 append("**$nome** (${tempo(segmento)}): ${segmento.testo}\n\n")
             }
         }
@@ -112,10 +112,10 @@ public object Sbobinatura {
     }
 
     private fun nomeVoce(
-        registrazioneId: RegistrazioneId,
+        incontroId: IncontroId,
         segmento: SegmentoVista,
         nomi: Map<VoceRef, String>,
-    ): String = nomi[VoceRef(registrazioneId, segmento.voceId)] ?: "Voce ${segmento.voceId.numero}"
+    ): String = nomi[VoceRef(incontroId, segmento.voceId)] ?: "Voce ${segmento.voceId.numero}"
 
     /** `mm:ss` of [SegmentoVista.intervallo]'s start; `mm` grows past 59, `ss` stays zero-padded. */
     private fun tempo(segmento: SegmentoVista): String {

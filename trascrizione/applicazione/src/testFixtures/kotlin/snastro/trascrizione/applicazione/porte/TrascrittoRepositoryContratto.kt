@@ -2,11 +2,13 @@ package snastro.trascrizione.applicazione.porte
 
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
 import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unSegmentoIniziale
@@ -42,13 +44,14 @@ public abstract class TrascrittoRepositoryContratto {
 
         repo.salva(t)
 
-        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE)))
+        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))))
     }
 
     @Test
     public fun `AC-30 round-trip di Segmenti sovrapposti e con lo stesso inizio`() {
         val t = Trascritto.crea(
             REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
             listOf(
                 unSegmentoIniziale(voceIndice = 4, inizioMs = 0, fineMs = 3_000, testo = "si parla sopra"),
@@ -59,7 +62,7 @@ public abstract class TrascrittoRepositoryContratto {
 
         repo.salva(t)
 
-        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE)))
+        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))))
     }
 
     @Test
@@ -70,7 +73,7 @@ public abstract class TrascrittoRepositoryContratto {
 
         repo.salva(t)
 
-        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE)))
+        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))))
     }
 
     @Test
@@ -79,7 +82,7 @@ public abstract class TrascrittoRepositoryContratto {
         t.unisci(VoceId(1), VoceId(3)).atteso()
         repo.salva(t)
 
-        val ricaricato = assertNotNull(repo.trova(REGISTRAZIONE))
+        val ricaricato = assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
 
         assertStessoStato(t, ricaricato)
         assertEquals(4, ricaricato.prossimaVoce)
@@ -88,23 +91,32 @@ public abstract class TrascrittoRepositoryContratto {
     }
 
     @Test
+    public fun `AC-I208 il Trascritto porta il suo incontroId e si ritrova con quello, mai con un altro`() {
+        val t = unTrascritto(voci = 2, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE)
+        repo.salva(t)
+
+        assertEquals(unIncontroDi(REGISTRAZIONE), repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))?.incontroId)
+        assertNull(repo.trova(REGISTRAZIONE, unIncontroDi(ALTRA_REGISTRAZIONE)))
+    }
+
+    @Test
     public fun `AC-30 salvare di nuovo sostituisce lo stato salvato`() {
         val t = unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE)
         repo.salva(t)
-        val rivisto = assertNotNull(repo.trova(REGISTRAZIONE))
+        val rivisto = assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         rivisto.unisci(VoceId(2), VoceId(1)).atteso()
         rivisto.riassegna(SegmentoId(4), null).atteso()
 
         repo.salva(rivisto)
 
-        val ricaricato = assertNotNull(repo.trova(REGISTRAZIONE))
+        val ricaricato = assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         assertStessoStato(rivisto, ricaricato)
         assertEquals(listOf(VoceId(2), VoceId(3)), ricaricato.voci.map { it.id })
     }
 
     @Test
     public fun `AC-30 trova e conTrascritto distinguono le Registrazioni`() {
-        assertNull(repo.trova(REGISTRAZIONE))
+        assertNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), repo.conTrascritto())
 
         repo.salva(unTrascritto(voci = 1, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))
@@ -113,9 +125,9 @@ public abstract class TrascrittoRepositoryContratto {
 
         assertEquals(setOf(REGISTRAZIONE, ALTRA_REGISTRAZIONE), repo.conTrascritto().toSet())
         assertEquals(2, repo.conTrascritto().size, "ogni Registrazione una volta sola")
-        assertEquals(4, repo.trova(REGISTRAZIONE)?.segmenti?.size)
-        assertEquals(2, repo.trova(ALTRA_REGISTRAZIONE)?.segmenti?.size)
-        assertNull(repo.trova(SENZA_TRASCRITTO))
+        assertEquals(4, repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))?.segmenti?.size)
+        assertEquals(2, repo.trova(ALTRA_REGISTRAZIONE, unIncontroDi(ALTRA_REGISTRAZIONE))?.segmenti?.size)
+        assertNull(repo.trova(SENZA_TRASCRITTO, unIncontroDi(SENZA_TRASCRITTO)))
     }
 
     @Test
@@ -125,9 +137,9 @@ public abstract class TrascrittoRepositoryContratto {
         val atteso = Istantanea.di(t)
 
         t.unisci(VoceId(1), VoceId(2)).atteso()
-        assertNotNull(repo.trova(REGISTRAZIONE)).riassegna(SegmentoId(1), null).atteso()
+        assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).riassegna(SegmentoId(1), null).atteso()
 
-        assertEquals(atteso, Istantanea.di(assertNotNull(repo.trova(REGISTRAZIONE))))
+        assertEquals(atteso, Istantanea.di(assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))))
     }
 
     @Test
@@ -136,11 +148,11 @@ public abstract class TrascrittoRepositoryContratto {
         val altro = unTrascritto(voci = 3, segmentiPerVoce = 1, registrazioneId = ALTRA_REGISTRAZIONE)
         repo.salva(altro)
 
-        repo.rimuovi(REGISTRAZIONE)
+        repo.rimuovi(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))
 
-        assertNull(repo.trova(REGISTRAZIONE))
+        assertNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         assertEquals(listOf(ALTRA_REGISTRAZIONE), repo.conTrascritto())
-        assertStessoStato(altro, assertNotNull(repo.trova(ALTRA_REGISTRAZIONE)))
+        assertStessoStato(altro, assertNotNull(repo.trova(ALTRA_REGISTRAZIONE, unIncontroDi(ALTRA_REGISTRAZIONE))))
     }
 
     @Test
@@ -148,10 +160,10 @@ public abstract class TrascrittoRepositoryContratto {
         val t = unTrascritto(voci = 1, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE)
         repo.salva(t)
 
-        repo.rimuovi(SENZA_TRASCRITTO)
+        repo.rimuovi(SENZA_TRASCRITTO, unIncontroDi(SENZA_TRASCRITTO))
 
         assertEquals(listOf(REGISTRAZIONE), repo.conTrascritto())
-        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE)))
+        assertStessoStato(t, assertNotNull(repo.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))))
     }
 
     private fun assertStessoStato(atteso: Trascritto, trovato: Trascritto) {
@@ -161,6 +173,7 @@ public abstract class TrascrittoRepositoryContratto {
     /** The observable state of a [Trascritto] (the aggregate has no value equality). */
     private data class Istantanea(
         val registrazioneId: RegistrazioneId,
+        val incontroId: IncontroId,
         val segmenti: List<Any>,
         val voci: List<Any>,
         val prossimaVoce: Int,
@@ -168,7 +181,7 @@ public abstract class TrascrittoRepositoryContratto {
     ) {
         companion object {
             fun di(t: Trascritto): Istantanea =
-                Istantanea(t.registrazioneId, t.segmenti, t.voci, t.prossimaVoce, t.prossimoSegmento)
+                Istantanea(t.registrazioneId, t.incontroId, t.segmenti, t.voci, t.prossimaVoce, t.prossimoSegmento)
         }
     }
 

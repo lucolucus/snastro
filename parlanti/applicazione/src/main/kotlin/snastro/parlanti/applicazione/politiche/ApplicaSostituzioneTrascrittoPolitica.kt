@@ -1,6 +1,7 @@
 package snastro.parlanti.applicazione.politiche
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
@@ -36,8 +37,13 @@ public class ApplicaSostituzioneTrascrittoPolitica(
     private val parlanti: ParlanteRepository,
     private val attribuzioni: AttribuzioneRepository,
 ) {
-    public fun applica(registrazioneId: RegistrazioneId): Esito<Unit> {
-        val attribuzioniDiR = attribuzioni.diRegistrazione(registrazioneId)
+    /**
+     * [incontroId] is the Incontro of the Parte [registrazioneId], resolved by the caller (ADR 0033 §4.1). TRANSITION:
+     * the Attribuzioni purged are the Incontro's, exact while every Incontro has one Parte (ADR 0033 §6); the per-Parte
+     * rules come with the policies of wave 4.
+     */
+    public fun applica(registrazioneId: RegistrazioneId, incontroId: IncontroId): Esito<Unit> {
+        val attribuzioniDiR = attribuzioni.diIncontro(incontroId)
         val improntePurgare = parlanti.impronteDiRegistrazione(registrazioneId)
         val vociPerParlante = vociPerParlante(attribuzioniDiR, improntePurgare)
         attribuzioniDiR.forEach { attribuzioni.rimuovi(it.voceRef) }

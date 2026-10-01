@@ -5,6 +5,7 @@ import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
@@ -39,7 +40,7 @@ class EliminazioneRegistrazioneSqlTest {
     @Test
     fun `AC-620 dopo rimuovi e rimuoviDiRegistrazione le righe segmento voce trascritto elaborazione di r sono 0`() {
         uow.inTransazione {
-            trascritti.rimuovi(R)
+            trascritti.rimuovi(R, unIncontroDi(R))
             elaborazioni.rimuoviDiRegistrazione(R)
             Esito.Ok(Unit)
         }.atteso()
@@ -51,7 +52,7 @@ class EliminazioneRegistrazioneSqlTest {
     @Test
     fun `AC-620 rimuovi e rimuoviDiRegistrazione in una transazione annullata non tolgono nulla`() {
         uow.inTransazione<Unit> {
-            trascritti.rimuovi(R)
+            trascritti.rimuovi(R, unIncontroDi(R))
             elaborazioni.rimuoviDiRegistrazione(R)
             Esito.Errore(ElaborazioneNonTrovata(ElaborazioneId("annullata")))
         }.erroreAtteso<ElaborazioneNonTrovata>()

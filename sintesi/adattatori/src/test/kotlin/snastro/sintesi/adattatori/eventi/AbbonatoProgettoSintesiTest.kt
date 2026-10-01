@@ -7,11 +7,13 @@ import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSintesiPolitica
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
@@ -38,7 +40,10 @@ class AbbonatoProgettoSintesiTest {
         val dispatcher = spyk(DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti)))
 
         val abbonato: Any =
-            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
+            AbbonatoProgettoSintesi(
+                ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher),
+                ::unIncontroDi,
+            )
 
         assertIs<AbbonatoSincrono>(abbonato)
         assertFalse(abbonato is AbbonatoDopoCommit)
@@ -51,7 +56,7 @@ class AbbonatoProgettoSintesiTest {
         val riassunti = RiassuntoRepositoryFinta()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica, ::unIncontroDi))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(object : EventoPubblicato {})
@@ -63,12 +68,12 @@ class AbbonatoProgettoSintesiTest {
     }
 
     @Test
-    fun `AC-S117 RegistrazioneEliminata applica la politica col suo registrazioneId, dentro la transazione`() {
+    fun `AC-S117 RegistrazioneEliminata applica la politica col suo incontroId, dentro la transazione`() {
         val riassunti = RiassuntoRepositoryFinta()
         riassunti.salva(unRiassunto("vecchio", REG)).atteso()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica, ::unIncontroDi))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(eliminata(REG))
@@ -76,8 +81,8 @@ class AbbonatoProgettoSintesiTest {
         }
 
         esito.atteso()
-        verify(exactly = 1) { politica.applica(REG) }
-        assertEquals(emptyList(), riassunti.diRegistrazione(REG), "l'effetto della politica e davvero applicato")
+        verify(exactly = 1) { politica.applica(unIncontroDi(REG)) }
+        assertEquals(emptyList(), riassunti.trova(unIncontroDi(REG)), "l'effetto della politica e davvero applicato")
     }
 
     @Test
@@ -87,10 +92,13 @@ class AbbonatoProgettoSintesiTest {
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val guasto = Esito.Errore(ErroreSintesi.RiassuntoNonTrovato("x"))
         val riassuntiGuasti = object : RiassuntoRepository by riassunti {
-            override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> = guasto
+            override fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int> = guasto
         }
         dispatcher.registraSincrono(
-            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassuntiGuasti, dispatcher)),
+            AbbonatoProgettoSintesi(
+                ApplicaEliminazioneRegistrazioneSintesiPolitica(riassuntiGuasti, dispatcher),
+                ::unIncontroDi,
+            ),
         )
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
@@ -100,10 +108,10 @@ class AbbonatoProgettoSintesiTest {
         }
 
         assertEquals(guasto, esito, "EliminaRegistrazione fallisce con l'Errore della politica, invariato")
-        assertEquals(1, riassunti.diRegistrazione(REG).size, "rollback: la riga originale di REG resta")
+        assertEquals(1, riassunti.trova(unIncontroDi(REG)).size, "rollback: la riga originale di REG resta")
         assertEquals(
             emptyList(),
-            riassunti.diRegistrazione(ALTRA),
+            riassunti.trova(unIncontroDi(ALTRA)),
             "rollback: annulla anche la scrittura precedente al veto",
         )
     }

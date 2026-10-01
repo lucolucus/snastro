@@ -6,6 +6,7 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
@@ -27,6 +28,7 @@ class TrascrittoQueryTest {
     fun `AC-167 vista espone i campi della Registrazione, i segmenti in ordine di tempo e le voci etichettate`() {
         val trascritto = Trascritto.crea(
             REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
             listOf(
                 unSegmentoIniziale(voceIndice = 4, inizioMs = 2_000, fineMs = 4_000, testo = "seconda battuta"),
@@ -41,6 +43,7 @@ class TrascrittoQueryTest {
         assertEquals(
             TrascrittoView(
                 registrazioneId = REGISTRAZIONE,
+                incontroId = unIncontroDi(REGISTRAZIONE),
                 titolo = "Intervista",
                 dataRegistrazione = LocalDate.of(2026, 9, 1),
                 durataMs = 120_000,
@@ -62,6 +65,7 @@ class TrascrittoQueryTest {
     fun `AC-167 segmenti in ordine di tempo anche quando le Voci si alternano`() {
         val trascritto = Trascritto.crea(
             REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
             listOf(
                 unSegmentoIniziale(voceIndice = 1, inizioMs = 0, fineMs = 1_000, testo = "v1 turno 1"),
@@ -88,6 +92,7 @@ class TrascrittoQueryTest {
     fun `AC-167 etichetta 'Voce n' usa il VoceId anche con un buco nella sequenza`() {
         val trascritto = Trascritto.crea(
             REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
             listOf(
                 unSegmentoIniziale(voceIndice = 10, inizioMs = 0, fineMs = 1_000, testo = "a"),
@@ -164,6 +169,7 @@ class TrascrittoQueryTest {
         val ALTRA_REGISTRAZIONE = RegistrazioneId("registrazione-2")
         val UNA_REGISTRAZIONE = RegistrazioneVista(
             registrazioneId = REGISTRAZIONE,
+            incontroId = unIncontroDi(REGISTRAZIONE),
             progettoId = ProgettoId("progetto-1"),
             titolo = "Intervista",
             riferimentoAudio = RiferimentoAudio("audio/registrazione-1.wav"),

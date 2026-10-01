@@ -1,8 +1,10 @@
 package snastro.trascrizione.dominio
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.unIncontroDi
 
 /** Duration of the fixture `Registrazione`: large enough for every fixture turn. */
 public const val DURATA_TRASCRITTO_MS: Long = 600_000
@@ -24,11 +26,13 @@ public fun unTrascritto(
     voci: Int = 2,
     segmentiPerVoce: Int = 3,
     registrazioneId: RegistrazioneId = RegistrazioneId("id-1"),
+    incontroId: IncontroId = unIncontroDi(registrazioneId),
 ): Trascritto {
     val turni = (0 until segmentiPerVoce).flatMap { j ->
         (0 until voci).map { v -> unSegmentoIniziale(voceIndice = v, inizioMs = (j * voci + v) * 1_000L) }
     }
-    val esito = Trascritto.crea(registrazioneId, DURATA_TRASCRITTO_MS, turni)
+    val esito = Trascritto.crea(registrazioneId, incontroId, DURATA_TRASCRITTO_MS, turni)
     check(esito is Esito.Ok) { "fixture non valida: $esito" }
     return esito.valore.aggregato
 }
+

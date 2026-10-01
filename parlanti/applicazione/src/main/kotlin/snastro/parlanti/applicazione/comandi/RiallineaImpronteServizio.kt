@@ -57,7 +57,9 @@ public class RiallineaImpronteServizio(
                 sorgente != null && ImprontaVocale.obsoleta(riga.sorgente, riga.modello, sorgente.chiave, modello)
             }
             .groupBy { it.voceRef }
-            .map { (voceRef, righe) -> VoceObsoleta(voceRef, checkNotNull(sorgenti[voceRef]), righe) }
+            .map { (voceRef, righe) ->
+                VoceObsoleta(voceRef, registrazioneId, checkNotNull(sorgenti[voceRef]), righe)
+            }
     }
 
     private fun riallinea(registrazioneId: RegistrazioneId, voci: List<VoceObsoleta>, modello: String): Esito<Unit> {
@@ -85,10 +87,10 @@ public class RiallineaImpronteServizio(
 
     /** AC-297: decode + extract with no transaction open; then AC-293/AC-295 in one short transaction. */
     private fun riallineaVoce(voce: VoceObsoleta, modello: String): Esito<Int> {
-        val campioni = decodificatore.campioni(voce.voceRef.registrazioneId, voce.sorgente.intervalli)
+        val campioni = decodificatore.campioni(voce.parte, voce.sorgente.intervalli)
         val impronta = estrattore.estrai(campioni)
         return uow.inTransazione {
-            val attuale = lettoreVoci.voci(voce.voceRef.registrazioneId)
+            val attuale = lettoreVoci.voci(voce.parte)
                 ?.find { it.voceRef == voce.voceRef }
                 ?.takeIf { it.intervalli.isNotEmpty() }
             if (attuale == null || SorgenteImpronta.di(attuale.intervalli) != voce.sorgente) {
@@ -110,4 +112,10 @@ public class RiallineaImpronteServizio(
         }
 }
 
-private data class VoceObsoleta(val voceRef: VoceRef, val sorgente: SorgenteImpronta, val righe: List<RigaImpronta>)
+/** The stale print rows of [voceRef] extracted from the Parte [parte] (the rows read by `impronteDiRegistrazione`). */
+private data class VoceObsoleta(
+    val voceRef: VoceRef,
+    val parte: RegistrazioneId,
+    val sorgente: SorgenteImpronta,
+    val righe: List<RigaImpronta>,
+)

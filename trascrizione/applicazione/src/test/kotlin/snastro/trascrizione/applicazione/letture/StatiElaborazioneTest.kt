@@ -6,6 +6,7 @@ import snastro.kernel.atteso
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
@@ -23,7 +24,7 @@ class StatiElaborazioneTest {
     private val elaborazioni = ElaborazioneRepositoryFinta()
     private val trascritti = TrascrittoRepositoryFinta()
     private val fasi = FasiInCorso()
-    private val stati = StatiElaborazione(elaborazioni, trascritti, fasi)
+    private val stati = StatiElaborazione(elaborazioni, trascritti, ogniRegistrazioneNota(), fasi)
 
     @Test
     fun `AC-162 una Registrazione senza Elaborazione e non avviata con ogni altro campo nullo`() {

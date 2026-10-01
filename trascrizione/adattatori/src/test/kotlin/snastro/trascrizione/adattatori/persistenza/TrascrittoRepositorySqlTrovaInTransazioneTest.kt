@@ -9,6 +9,7 @@ import org.sqlite.SQLiteConfig
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
@@ -40,7 +41,7 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
 
         val visto = uow.inTransazione {
             repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = R))
-            Esito.Ok(repo.trova(R))
+            Esito.Ok(repo.trova(R, unIncontroDi(R)))
         }.atteso()
 
         assertEquals(3, visto?.prossimaVoce, "trova, annidata nella stessa unita, unisce la propria scrittura")
@@ -64,7 +65,7 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
             uow.inTransazione {
                 repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = R))
                 // guasto iniettato nell'inLettura annidata: il blocco lo CATTURA e prosegue come se nulla fosse
-                catturataDalBlocco = runCatching { repo.trova(R) }.exceptionOrNull()
+                catturataDalBlocco = runCatching { repo.trova(R, unIncontroDi(R)) }.exceptionOrNull()
                 Esito.Ok(Unit)
             }
         }
@@ -75,7 +76,10 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
         assertIs<IllegalStateException>(fine, "l'unita non committa pur col blocco che rende Ok: $fine")
         assertEquals("una transazione annidata e fallita con un'eccezione: rollback", fine.message)
         assertSame(catturataDalBlocco, fine.cause, "la causa del rollback e il guasto della lettura annidata")
-        assertNull(repo.trova(R), "l'intera unita e annullata: nemmeno la salva precedente nello stesso blocco resta")
+        assertNull(
+            repo.trova(R, unIncontroDi(R)),
+            "l'intera unita e annullata: nemmeno la salva precedente nello stesso blocco resta",
+        )
     }
 
     private fun predisponi(db: SnastroDatabase) {

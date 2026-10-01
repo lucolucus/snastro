@@ -13,6 +13,8 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
@@ -60,7 +62,7 @@ class RiallineaImpronteServizioTest {
     private fun unParlanteConImpronte(id: String, vararg impronte: Triple<Int, String, String>): ParlanteId {
         val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
         impronte.forEach { (voce, sorgente, modello) ->
-            p.registraImpronta(ref(voce), VECCHIA, sorgente, modello).atteso()
+            p.registraImpronta(ref(voce), VECCHIA, sorgente, modello, unicaParteDi(ref(voce))).atteso()
         }
         parlanti.salva(p).atteso()
         return p.id
@@ -87,8 +89,8 @@ class RiallineaImpronteServizioTest {
         esegui().atteso()
 
         assertEquals(VECCHIA, impronta(id, 1).impronta, "fresca: sorgente e modello correnti")
-        assertEquals(ImprontaVocale(ref(2), attesa(I2), chiave(I2), MODELLO), impronta(id, 2))
-        assertEquals(ImprontaVocale(ref(3), attesa(I3), chiave(I3), MODELLO), impronta(id, 3))
+        assertEquals(ImprontaVocale(ref(2), attesa(I2), chiave(I2), MODELLO, unicaParteDi(ref(2))), impronta(id, 2))
+        assertEquals(ImprontaVocale(ref(3), attesa(I3), chiave(I3), MODELLO, unicaParteDi(ref(3))), impronta(id, 3))
         assertEquals(3, parlanti.righeImpronte(id))
         assertEquals(0, parlanti.righeImpronte(altro), "nessuna riga creata per chi non ne aveva")
     }
@@ -121,7 +123,10 @@ class RiallineaImpronteServizioTest {
         esegui().atteso()
 
         verify(exactly = 1) { decodificatore.campioni(REGISTRAZIONE, sorgente.intervalli) }
-        assertEquals(ImprontaVocale(ref(1), attesa(sorgente.intervalli), sorgente.chiave, MODELLO), impronta(id, 1))
+        assertEquals(
+            ImprontaVocale(ref(1), attesa(sorgente.intervalli), sorgente.chiave, MODELLO, unicaParteDi(ref(1))),
+            impronta(id, 1),
+        )
     }
 
     @Test
@@ -182,12 +187,15 @@ class RiallineaImpronteServizioTest {
 
         esegui(servizio(estrattore = cambiaDurante)).atteso()
 
-        assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO), impronta(id, 2))
+        assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(2))), impronta(id, 2))
         assertEquals(emptyList(), riallineate())
 
         esegui().atteso()
 
-        assertEquals(ImprontaVocale(ref(2), attesa(nuovi), chiave(nuovi), MODELLO), impronta(id, 2))
+        assertEquals(
+            ImprontaVocale(ref(2), attesa(nuovi), chiave(nuovi), MODELLO, unicaParteDi(ref(2))),
+            impronta(id, 2),
+        )
         assertEquals(listOf(ImpronteRiallineate(REGISTRAZIONE)), riallineate())
     }
 
@@ -247,7 +255,7 @@ class RiallineaImpronteServizioTest {
 
         esegui().atteso()
 
-        val intatta = ImprontaVocale(ref(9), VECCHIA, "0-1000", MODELLO)
+        val intatta = ImprontaVocale(ref(9), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(9)))
         assertEquals(intatta, impronta(id, 9), "la rimozione spetta alla revisione")
         verify(exactly = 0) { decodificatore.campioni(any(), any()) }
         assertEquals(emptyList(), eventi.pubblicati)
@@ -260,7 +268,7 @@ class RiallineaImpronteServizioTest {
 
         esegui().atteso()
 
-        assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO), impronta(id, 2))
+        assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(2))), impronta(id, 2))
         verify(exactly = 0) { decodificatore.campioni(any(), any()) }
         assertEquals(emptyList(), eventi.pubblicati)
     }
@@ -282,8 +290,16 @@ class RiallineaImpronteServizioTest {
         val lanciata = assertFailsWith<IllegalStateException> { esegui(servizio(estrattore = fallisceSullaSeconda)) }
 
         assertEquals(guasto, lanciata)
-        assertEquals(ImprontaVocale(ref(1), attesa(I1), chiave(I1), MODELLO), impronta(id, 1), "Voce 1 committata")
-        assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO), impronta(id, 2), "Voce 2 intatta")
+        assertEquals(
+            ImprontaVocale(ref(1), attesa(I1), chiave(I1), MODELLO, unicaParteDi(ref(1))),
+            impronta(id, 1),
+            "Voce 1 committata",
+        )
+        assertEquals(
+            ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(2))),
+            impronta(id, 2),
+            "Voce 2 intatta",
+        )
         assertEquals(listOf(ImpronteRiallineate(REGISTRAZIONE)), riallineate(), "la Voce 1 cambiata e annunciata")
     }
 
@@ -297,7 +313,7 @@ class RiallineaImpronteServizioTest {
 
         assertEquals(guasto, assertFailsWith<IllegalStateException> { esegui(servizio(decoder = rotto)) })
 
-        assertEquals(ImprontaVocale(ref(1), VECCHIA, "0-1000", MODELLO), impronta(id, 1))
+        assertEquals(ImprontaVocale(ref(1), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(1))), impronta(id, 1))
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
@@ -373,7 +389,7 @@ class RiallineaImpronteServizioTest {
         val I2 = listOf(IntervalloMs(10_000, 13_000))
         val I3 = listOf(IntervalloMs(20_000, 22_000))
 
-        fun ref(voce: Int): VoceRef = VoceRef(REGISTRAZIONE, VoceId(voce))
+        fun ref(voce: Int): VoceRef = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(voce))
 
         fun unaVoce(voce: Int, intervalli: List<IntervalloMs>): VoceVista = VoceVista(ref(voce), intervalli)
 

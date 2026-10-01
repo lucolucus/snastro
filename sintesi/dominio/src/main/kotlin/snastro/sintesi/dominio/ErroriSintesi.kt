@@ -1,21 +1,21 @@
 package snastro.sintesi.dominio
 
 import snastro.kernel.ErroreDominio
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 
 /** Expected failures of the Sintesi context (ADR 0003): the whole hierarchy lives here, one file (CR-8). */
 public sealed interface ErroreSintesi : ErroreDominio {
-    /** INV-S2: the Registrazione already has a Riassunto `in_attesa | in_corso`. */
-    public data class RiassuntoGiaAperto(val registrazioneId: RegistrazioneId) : ErroreSintesi
+    /** INV-S2: the Incontro already has a Riassunto `in_attesa | in_corso`. */
+    public data class RiassuntoGiaAperto(val incontroId: IncontroId) : ErroreSintesi
 
     /** INV-S6: the local LLM model is not installed. */
     public data object ModelloNonInstallato : ErroreSintesi
 
-    /** INV-S6: the Registrazione has no Trascritto yet. */
-    public data class TrascrittoNonDisponibile(val registrazioneId: RegistrazioneId) : ErroreSintesi
+    /** INV-S6: the Incontro has no Trascritto yet. */
+    public data class TrascrittoNonDisponibile(val incontroId: IncontroId) : ErroreSintesi
 
-    /** INV-S6: an Elaborazione of the Registrazione is `in_attesa | in_corso`. */
-    public data class ElaborazioneGiaAperta(val registrazioneId: RegistrazioneId) : ErroreSintesi
+    /** INV-S6: an Elaborazione of a Parte of the Incontro is `in_attesa | in_corso`. */
+    public data class ElaborazioneGiaAperta(val incontroId: IncontroId) : ErroreSintesi
 
     /** INV-S6: the estimated input ([LimiteIngresso]) exceeds the limit. */
     public data class RegistrazioneTroppoLunga(val stimaToken: Int, val limite: Int) : ErroreSintesi

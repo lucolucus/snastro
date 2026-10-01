@@ -1,5 +1,6 @@
 package snastro.trascrizione.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
 import snastro.trascrizione.dominio.Trascritto
@@ -13,7 +14,8 @@ import snastro.trascrizione.dominio.Trascritto
 public class TrascrittoRepositoryFinta : TrascrittoRepository, Ripristinabile {
     private val righe = LinkedHashMap<RegistrazioneId, Trascritto>()
 
-    override fun trova(id: RegistrazioneId): Trascritto? = righe[id]?.copia()
+    override fun trova(id: RegistrazioneId, incontroId: IncontroId): Trascritto? =
+        righe[id]?.takeIf { it.incontroId == incontroId }?.copia()
 
     override fun conTrascritto(): List<RegistrazioneId> = righe.keys.toList()
 
@@ -21,8 +23,8 @@ public class TrascrittoRepositoryFinta : TrascrittoRepository, Ripristinabile {
         righe[t.registrazioneId] = t.copia()
     }
 
-    override fun rimuovi(id: RegistrazioneId) {
-        righe.remove(id)
+    override fun rimuovi(id: RegistrazioneId, incontroId: IncontroId) {
+        if (righe[id]?.incontroId == incontroId) righe.remove(id)
     }
 
     override fun istantanea(): () -> Unit {

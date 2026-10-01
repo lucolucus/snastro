@@ -8,8 +8,10 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
@@ -19,7 +21,7 @@ import kotlin.test.assertNotNull
 class RiassegnaSegmentoServizioTest {
     private val trascritti = TrascrittoRepositoryFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(trascritti))
-    private val servizio = RiassegnaSegmentoServizio(eventi.unitaDiLavoro, trascritti, eventi)
+    private val servizio = RiassegnaSegmentoServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
 
     @Test
     fun `AC-80 RiassegnaSegmento valido pubblica SegmentoRiassegnato con daRimossa e aNuova corretti`() {
@@ -28,7 +30,7 @@ class RiassegnaSegmentoServizioTest {
 
         servizio.esegui(RiassegnaSegmento(REGISTRAZIONE, segmento = SegmentoId(3), destinazione = null)).atteso()
 
-        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE))
+        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         val restanti = trascritto.voci.first { it.id == VoceId(1) }.segmenti.map { it.id }
         assertEquals(listOf(SegmentoId(1), SegmentoId(5)), restanti)
         assertEquals(
@@ -58,7 +60,9 @@ class RiassegnaSegmentoServizioTest {
 
         assertEquals(VoceId(3), nuova)
         assertEquals(VoceId(1), esistente)
-        val confermati = assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti.filter { it.confermato }
+        val confermati = assertNotNull(
+            trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)),
+        ).segmenti.filter { it.confermato }
         assertEquals(listOf(SegmentoId(2), SegmentoId(3)), confermati.map { it.id })
     }
 
@@ -92,7 +96,10 @@ class RiassegnaSegmentoServizioTest {
             .erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
 
         assertEquals(VoceId(99), errore.voceId)
-        assertEquals(originale.segmenti, assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti)
+        assertEquals(
+            originale.segmenti,
+            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+        )
         assertEquals(emptyList(), eventi.pubblicati)
     }
 

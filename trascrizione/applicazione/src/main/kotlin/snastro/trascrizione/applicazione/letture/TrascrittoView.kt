@@ -1,5 +1,6 @@
 package snastro.trascrizione.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
 
@@ -10,6 +11,7 @@ import java.time.LocalDate
  */
 public data class TrascrittoView(
     val registrazioneId: RegistrazioneId,
+    val incontroId: IncontroId,
     val titolo: String,
     val dataRegistrazione: LocalDate,
     val durataMs: Long,

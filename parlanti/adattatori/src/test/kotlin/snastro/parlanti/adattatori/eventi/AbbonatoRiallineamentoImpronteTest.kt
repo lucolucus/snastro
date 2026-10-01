@@ -29,6 +29,8 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.comandi.RiallineaImpronte
 import snastro.parlanti.applicazione.comandi.RiallineaImpronteServizio
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
@@ -118,16 +120,24 @@ class AbbonatoRiallineamentoImpronteTest {
             Esito.Errore(ErroreDiProva.Fallito("boom"))
         }
 
-        /** Seeds a Parlante with one STALE print row for `VoceRef(registrazioneId, voce)`. */
+        /** Seeds a Parlante with one STALE print row for `VoceRef(unIncontroDi(registrazioneId), voce)`. */
         fun seminaStale(id: String, voce: Int, registrazioneId: RegistrazioneId = REG): ParlanteId {
             val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
-            p.registraImpronta(VoceRef(registrazioneId, VoceId(voce)), VECCHIA, "0-1000", MODELLO).atteso()
+            p.registraImpronta(
+                VoceRef(unIncontroDi(registrazioneId), VoceId(voce)),
+                VECCHIA,
+                "0-1000",
+                MODELLO,
+                unicaParteDi(VoceRef(unIncontroDi(registrazioneId), VoceId(voce))),
+            ).atteso()
             parlanti.salva(p).atteso()
             return p.id
         }
 
         fun impronta(id: ParlanteId, voce: Int = 1, registrazioneId: RegistrazioneId = REG): ImprontaVocale =
-            assertNotNull(parlanti.trova(id)).impronte.single { it.voceRef == VoceRef(registrazioneId, VoceId(voce)) }
+            assertNotNull(
+                parlanti.trova(id),
+            ).impronte.single { it.voceRef == VoceRef(unIncontroDi(registrazioneId), VoceId(voce)) }
     }
 
     // --- AC-304 (after-commit timing + translation) --------------------------------------------
@@ -444,7 +454,7 @@ class AbbonatoRiallineamentoImpronteTest {
     }
 
     private fun unaVoce(voce: Int, intervalli: List<IntervalloMs>, registrazioneId: RegistrazioneId = REG): VoceVista =
-        VoceVista(VoceRef(registrazioneId, VoceId(voce)), intervalli)
+        VoceVista(VoceRef(unIncontroDi(registrazioneId), VoceId(voce)), intervalli)
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")

@@ -9,6 +9,7 @@ import snastro.avvio.parlanti.ModuloParlanti
 import snastro.avvio.progetto.AmbienteProgetto
 import snastro.avvio.progetto.EstrattoreConMutex
 import snastro.avvio.progetto.SondaCostruzioni
+import snastro.avvio.progetto.parteDi
 import snastro.avvio.progetto.voce
 import snastro.avvio.trascrizione.ModuloTrascrizione
 import snastro.kernel.DispatcherEventiInMemoria
@@ -119,8 +120,8 @@ class ComposizioneSintesiTest {
             val b = it.registrazioneTrascritta()
             val cartella = it.progetto.percorso
             it.sessione.chiudi()
-            val interrotto = unRiassunto("interrotto", a).conAvvio()
-            val daFare = unRiassunto("da-fare", b)
+            val interrotto = unRiassunto("interrotto", it.incontroDi(a)).conAvvio()
+            val daFare = unRiassunto("da-fare", it.incontroDi(b))
             conDatabase(cartella) { db ->
                 val uow = UnitaDiLavoroSql(db)
                 val repo = RiassuntoRepositorySql(db, uow)
@@ -225,9 +226,9 @@ class ComposizioneSintesiTest {
             it.trascrivi(a)
             val db = it.porte.database
             val repo = it.porte.riassunti
-            val r = unRiassunto("pronto", a).conAvvio()
+            val r = unRiassunto("pronto", it.incontroDi(a)).conAvvio()
             it.porte.unitaDiLavoro.inTransazione { repo.salva(r) }.atteso()
-            r.conCompletamento(BOZZA, unaStruttura(1 to 1, 2 to 2))
+            r.conCompletamento(BOZZA, unaStruttura(1 to 1, 2 to 2), parte = a)
             it.porte.unitaDiLavoro.inTransazione { repo.concludi(r).poiUnit() }.atteso()
             val figli = conteggiFigli(db, r.id)
             // ADR 0024 §1 "fails closed": the declared list MINUS Sintesi (the same subscriber values the modules
@@ -250,7 +251,7 @@ class ComposizioneSintesiTest {
 
             assertFalse(esito.getOrNull() is Esito.Ok, "l'eliminazione non riesce: $esito")
             assertTrue(it.collaboratori.registrazioni().any { x -> x.registrazioneId == a })
-            assertTrue(repo.diRegistrazione(a).single().pronto)
+            assertTrue(repo.trova(it.incontroDi(a)).single().pronto)
             assertEquals(figli, conteggiFigli(db, r.id))
             assertNotNull(it.trascrizione.trascritto(a))
         }
@@ -431,7 +432,7 @@ class ComposizioneSintesiTest {
         CopyOnWriteArrayList<RegistrazioneId>().also { l ->
             ambiente.porte.dispatcher.registraDopoCommit { e ->
                 when (e) {
-                    is RiassuntoAvviato -> l += e.registrazioneId
+                    is RiassuntoAvviato -> l += checkNotNull(parteDi(e.incontroId))
                     is ElaborazioneAvviata -> l += e.registrazioneId
                     else -> Unit
                 }
@@ -448,10 +449,10 @@ class ComposizioneSintesiTest {
     }
 
     private fun registrazioneDi(e: EventoPubblicato): RegistrazioneId? = when (e) {
-        is RiassuntoPronto -> e.registrazioneId
-        is RiassuntoFallito -> e.registrazioneId
-        is RiassuntoAvviato -> e.registrazioneId
-        is RiassuntoEliminato -> e.registrazioneId
+        is RiassuntoPronto -> parteDi(e.incontroId)
+        is RiassuntoFallito -> parteDi(e.incontroId)
+        is RiassuntoAvviato -> parteDi(e.incontroId)
+        is RiassuntoEliminato -> parteDi(e.incontroId)
         else -> null
     }
 

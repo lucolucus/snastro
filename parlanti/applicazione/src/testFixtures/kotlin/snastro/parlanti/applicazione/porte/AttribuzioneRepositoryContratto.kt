@@ -8,6 +8,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.dominio.Attribuzione
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -55,7 +56,7 @@ public abstract class AttribuzioneRepositoryContratto {
         repo.salva(a)
 
         assertEquals(ANNA, assertNotNull(repo.trova(voce(REGISTRAZIONE_1, 1))).parlanteId)
-        assertEquals(listOf(ANNA), repo.diRegistrazione(REGISTRAZIONE_1).map { it.parlanteId })
+        assertEquals(listOf(ANNA), repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.parlanteId })
         assertEquals(emptyList(), repo.diParlante(MARCO))
     }
 
@@ -65,21 +66,24 @@ public abstract class AttribuzioneRepositoryContratto {
 
         repo.salva(unaAttribuzione(voce(REGISTRAZIONE_1, 1), ANNA))
 
-        assertEquals(listOf(ANNA), repo.diRegistrazione(REGISTRAZIONE_1).map { it.parlanteId })
+        assertEquals(listOf(ANNA), repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.parlanteId })
     }
 
     @Test
-    public fun `AC-38 diRegistrazione restituisce le sole Attribuzioni di quella Registrazione`() {
+    public fun `AC-38 diIncontro restituisce le sole Attribuzioni di quell Incontro`() {
         repo.salva(unaAttribuzione(voce(REGISTRAZIONE_1, 1), MARCO))
         repo.salva(unaAttribuzione(voce(REGISTRAZIONE_1, 2), ANNA))
         repo.salva(unaAttribuzione(voce(REGISTRAZIONE_2, 1), MARCO))
 
         assertEquals(
             setOf(voce(REGISTRAZIONE_1, 1) to MARCO, voce(REGISTRAZIONE_1, 2) to ANNA),
-            repo.diRegistrazione(REGISTRAZIONE_1).map { it.voceRef to it.parlanteId }.toSet(),
+            repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.voceRef to it.parlanteId }.toSet(),
         )
-        assertEquals(listOf(voce(REGISTRAZIONE_2, 1)), repo.diRegistrazione(REGISTRAZIONE_2).map { it.voceRef })
-        assertEquals(emptyList(), repo.diRegistrazione(RegistrazioneId("registrazione-vuota")))
+        assertEquals(
+            listOf(voce(REGISTRAZIONE_2, 1)),
+            repo.diIncontro(unIncontroDi(REGISTRAZIONE_2)).map { it.voceRef },
+        )
+        assertEquals(emptyList(), repo.diIncontro(unIncontroDi(RegistrazioneId("registrazione-vuota"))))
     }
 
     @Test
@@ -104,7 +108,10 @@ public abstract class AttribuzioneRepositoryContratto {
         repo.rimuovi(voce(REGISTRAZIONE_1, 1))
 
         assertNull(repo.trova(voce(REGISTRAZIONE_1, 1)))
-        assertEquals(listOf(voce(REGISTRAZIONE_1, 2)), repo.diRegistrazione(REGISTRAZIONE_1).map { it.voceRef })
+        assertEquals(
+            listOf(voce(REGISTRAZIONE_1, 2)),
+            repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.voceRef },
+        )
         assertEquals(listOf(voce(REGISTRAZIONE_1, 2)), repo.diParlante(MARCO).map { it.voceRef })
     }
 
@@ -114,7 +121,10 @@ public abstract class AttribuzioneRepositoryContratto {
 
         repo.rimuovi(voce(REGISTRAZIONE_1, 2))
 
-        assertEquals(listOf(voce(REGISTRAZIONE_1, 1)), repo.diRegistrazione(REGISTRAZIONE_1).map { it.voceRef })
+        assertEquals(
+            listOf(voce(REGISTRAZIONE_1, 1)),
+            repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.voceRef },
+        )
     }
 
     @Test
@@ -126,10 +136,13 @@ public abstract class AttribuzioneRepositoryContratto {
         assertNotNull(repo.trova(voce(REGISTRAZIONE_1, 1))).cambia(ANNA).atteso()
 
         assertEquals(MARCO, assertNotNull(repo.trova(voce(REGISTRAZIONE_1, 1))).parlanteId)
-        assertEquals(listOf(MARCO), repo.diRegistrazione(REGISTRAZIONE_1).map { it.parlanteId })
+        assertEquals(listOf(MARCO), repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.parlanteId })
     }
 
-    private fun voce(registrazioneId: RegistrazioneId, n: Int): VoceRef = VoceRef(registrazioneId, VoceId(n))
+    private fun voce(
+        registrazioneId: RegistrazioneId,
+        n: Int,
+    ): VoceRef = VoceRef(unIncontroDi(registrazioneId), VoceId(n))
 
     private fun unaAttribuzione(voceRef: VoceRef, parlanteId: ParlanteId): Attribuzione =
         Attribuzione.conferma(voceRef, PROGETTO, parlanteId).aggregato
@@ -146,9 +159,9 @@ public abstract class AttribuzioneRepositoryContratto {
             progetti = setOf(PROGETTO),
             registrazioni = mapOf(REGISTRAZIONE_1 to PROGETTO, REGISTRAZIONE_2 to PROGETTO),
             voci = setOf(
-                VoceRef(REGISTRAZIONE_1, VoceId(1)),
-                VoceRef(REGISTRAZIONE_1, VoceId(2)),
-                VoceRef(REGISTRAZIONE_2, VoceId(1)),
+                VoceRef(unIncontroDi(REGISTRAZIONE_1), VoceId(1)),
+                VoceRef(unIncontroDi(REGISTRAZIONE_1), VoceId(2)),
+                VoceRef(unIncontroDi(REGISTRAZIONE_2), VoceId(1)),
             ),
             parlanti = mapOf(MARCO to PROGETTO, ANNA to PROGETTO),
         )

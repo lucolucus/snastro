@@ -13,6 +13,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
@@ -75,8 +77,14 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     @Test
     fun `AC-622 un salva che non toglie impronte non registra nessun checkpoint`() {
         val p = conImpronte(V1)
-        p.registraImpronta(V2, Impronta(floatArrayOf(4f)), "0-1000", "modello-1").atteso()
-        p.registraImpronta(V1, Impronta(floatArrayOf(5f)), "0-1000", "modello-1").atteso() // replaced in place
+        p.registraImpronta(V2, Impronta(floatArrayOf(4f)), "0-1000", "modello-1", unicaParteDi(V2)).atteso()
+        p.registraImpronta(
+            V1,
+            Impronta(floatArrayOf(5f)),
+            "0-1000",
+            "modello-1",
+            unicaParteDi(V1),
+        ).atteso() // replaced in place
         p.rinomina(Nome.di("Marta").atteso()).atteso()
 
         inTransazione { repo.salva(p) }
@@ -130,7 +138,9 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     private fun conImpronte(vararg voci: VoceRef, id: String = "id-1"): Parlante {
         val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di("Marco $id").atteso(), TipoParlante.RICORRENTE)
             .aggregato
-        voci.forEach { p.registraImpronta(it, Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1").atteso() }
+        voci.forEach {
+            p.registraImpronta(it, Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1", unicaParteDi(it)).atteso()
+        }
         inTransazione { repo.salva(p) }
         driver.checkpoint.clear()
         return p
@@ -189,8 +199,8 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val R = RegistrazioneId("registrazione-1")
-        val V1 = VoceRef(R, VoceId(1))
-        val V2 = VoceRef(R, VoceId(2))
+        val V1 = VoceRef(unIncontroDi(R), VoceId(1))
+        val V2 = VoceRef(unIncontroDi(R), VoceId(2))
 
         fun driverInMemoria(): SqlDriver {
             val config = SQLiteConfig().apply { enforceForeignKeys(true) }

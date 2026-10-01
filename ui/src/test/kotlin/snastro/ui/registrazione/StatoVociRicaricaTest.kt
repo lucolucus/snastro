@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import snastro.kernel.Esito
 import snastro.kernel.SegmentoId
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -25,6 +26,7 @@ import kotlin.test.assertTrue
 
 private val TRASCRITTO_UNA_VOCE = TrascrittoView(
     registrazioneId = REG,
+    incontroId = unIncontroDi(REG),
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = LocalDate.of(2026, 3, 12),
     durataMs = 10_000,

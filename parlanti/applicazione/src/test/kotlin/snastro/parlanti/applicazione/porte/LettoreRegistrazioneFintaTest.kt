@@ -1,6 +1,7 @@
 package snastro.parlanti.applicazione.porte
 
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -23,6 +24,7 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
             val id = RegistrazioneId(generatore.nuovo())
             registrazioni[id] = RegistrazioneVista(
                 registrazioneId = id,
+                incontroId = IncontroId(generatore.nuovo()),
                 progettoId = progettoId,
                 titolo = seme.titolo,
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.${seme.estensione.lowercase(Locale.ROOT)}"),
@@ -30,6 +32,12 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
                 durataMs = seme.durataMs,
             )
             return id
+        }
+
+        override fun incontroDi(id: RegistrazioneId): IncontroId = registrazioni.getValue(id).incontroId
+
+        override fun elimina(id: RegistrazioneId) {
+            registrazioni.remove(id)
         }
 
         override fun modificaData(id: RegistrazioneId, data: LocalDate) {

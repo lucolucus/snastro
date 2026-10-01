@@ -1,6 +1,7 @@
 package snastro.trascrizione.applicazione.politiche
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
@@ -21,14 +22,15 @@ public class ApplicaEliminazioneRegistrazionePolitica(
     private val elaborazioni: ElaborazioneRepository,
     private val trascritti: TrascrittoRepository,
 ) {
-    public fun applica(registrazioneId: RegistrazioneId): Esito<Unit> {
+    /** [incontroId] is the Incontro the deleted Parte belongs to, resolved by the caller (ADR 0033 §4.1). */
+    public fun applica(registrazioneId: RegistrazioneId, incontroId: IncontroId): Esito<Unit> {
         val diRegistrazione = elaborazioni.diRegistrazione(registrazioneId)
         return when {
             diRegistrazione.any { it.aperta } -> Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(registrazioneId))
             // INV-5: a Trascritto exists only with a completata Elaborazione — none at all, nothing to remove.
             diRegistrazione.isEmpty() -> Esito.Ok(Unit)
             else -> {
-                trascritti.rimuovi(registrazioneId)
+                trascritti.rimuovi(registrazioneId, incontroId)
                 elaborazioni.rimuoviDiRegistrazione(registrazioneId)
                 Esito.Ok(Unit)
             }

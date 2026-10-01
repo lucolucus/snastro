@@ -1,9 +1,11 @@
 package snastro.sbobinatura.applicazione.porte
 
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 
 class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
     override fun ambiente(): AmbienteLettoreTrascritto = AmbienteFinto()
@@ -23,9 +25,11 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
             get() = LettoreTrascrittoFinta(
                 trascritti.mapValues { (id, segmenti) ->
                     val r = registrazioni.getValue(id)
-                    TrascrittoTesto(id, r.titolo, r.dataRegistrazione, segmenti.toList())
+                    TrascrittoTesto(id, incontroDi(id), r.titolo, r.dataRegistrazione, segmenti.toList())
                 },
             )
+
+        override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId = unIncontroDi(registrazioneId)
 
         override fun aggiungiRegistrazione(seme: SemeRegistrazione): RegistrazioneId =
             RegistrazioneId(generatore.nuovo()).also { registrazioni[it] = seme }

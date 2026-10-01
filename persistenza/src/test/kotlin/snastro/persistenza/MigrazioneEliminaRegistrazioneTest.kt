@@ -141,9 +141,9 @@ class MigrazioneEliminaRegistrazioneTest {
         )
         elaborazioneQueries.inserisci("$registrazioneId-e1", registrazioneId, "fallita", 0L, 0L, "interrotta", null)
         elaborazioneQueries.inserisci("$registrazioneId-e2", registrazioneId, "completata", 1L, 1L, null, null)
-        vociIncontroQueries.inserisci(2L, registrazioneId)
+        vociIncontroQueries.inserisci(incontroDi(registrazioneId), 2L)
         trascrittoQueries.inserisci(registrazioneId, 2L)
-        voceIncontroQueries.inserisciSeAssente(1L, registrazioneId)
+        voceIncontroQueries.inserisciSeAssente(incontroDi(registrazioneId), 1L)
         voceQueries.inserisci(registrazioneId, 1L)
         segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 900L, "ciao", 0L)
     }

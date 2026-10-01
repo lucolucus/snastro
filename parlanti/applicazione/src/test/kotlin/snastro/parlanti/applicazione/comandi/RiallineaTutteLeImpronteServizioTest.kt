@@ -10,6 +10,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
@@ -36,7 +37,7 @@ class RiallineaTutteLeImpronteServizioTest {
     private val transazioni = UnitaDiLavoroFinta(parlanti)
     private val eventi = DispatcherEventiFinta(transazioni)
     private val voci = LettoreVociFinta(
-        listOf(A, B, ALTROVE).associateWith { listOf(VoceVista(VoceRef(it, VoceId(1)), INTERVALLI)) },
+        listOf(A, B, ALTROVE).associateWith { listOf(VoceVista(VoceRef(unIncontroDi(it), VoceId(1)), INTERVALLI)) },
     )
 
     private fun servizio(
@@ -60,13 +61,15 @@ class RiallineaTutteLeImpronteServizioTest {
         registrazioni: List<RegistrazioneId>,
     ): ParlanteId {
         val p = Parlante.crea(ParlanteId(id), progetto, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
-        registrazioni.forEach { p.registraImpronta(VoceRef(it, VoceId(1)), VECCHIA, "0-1000", "altro").atteso() }
+        registrazioni.forEach {
+            p.registraImpronta(VoceRef(unIncontroDi(it), VoceId(1)), VECCHIA, "0-1000", "altro", it).atteso()
+        }
         parlanti.salva(p).atteso()
         return p.id
     }
 
     private fun sorgenteDi(id: ParlanteId, registrazione: RegistrazioneId): String =
-        assertNotNull(parlanti.trova(id)).impronte.single { it.voceRef.registrazioneId == registrazione }.sorgente
+        assertNotNull(parlanti.trova(id)).impronte.single { it.parte == registrazione }.sorgente
 
     @Test
     fun `AC-300 riallinea ogni Registrazione del Progetto con righe d impronta e non quelle di altri Progetti`() {

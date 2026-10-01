@@ -1,6 +1,6 @@
 package snastro.sintesi.applicazione.letture
 
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import java.time.Instant
 
 /**
@@ -12,6 +12,6 @@ import java.time.Instant
  */
 public data class RiassuntoInCoda(
     public val riassuntoId: String,
-    public val registrazioneId: RegistrazioneId,
+    public val incontroId: IncontroId,
     public val richiestoAlle: Instant,
 )

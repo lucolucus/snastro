@@ -10,6 +10,7 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
@@ -21,6 +22,7 @@ import snastro.trascrizione.applicazione.politiche.ApplicaEliminazioneRegistrazi
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
@@ -42,7 +44,7 @@ class AbbonatoEliminazioneRegistrazioneTest {
     private val trascritti = TrascrittoRepositoryFinta()
     private val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(elaborazioni.delegato, trascritti)).also {
         val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti)
-        it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica))
+        it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica, ogniRegistrazioneNota()))
     }
 
     @Test
@@ -53,7 +55,7 @@ class AbbonatoEliminazioneRegistrazioneTest {
         pubblicaInTransazione(eliminata(R)).atteso()
 
         assertEquals(emptyList(), elaborazioni.diRegistrazione(R))
-        assertNull(trascritti.trova(R))
+        assertNull(trascritti.trova(R, unIncontroDi(R)))
     }
 
     @Test
@@ -62,13 +64,16 @@ class AbbonatoEliminazioneRegistrazioneTest {
         trascritti.salva(unTrascritto(registrazioneId = ALTRA))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
-            trascritti.rimuovi(ALTRA) // a write of the same command, before the veto
+            trascritti.rimuovi(ALTRA, unIncontroDi(ALTRA)) // a write of the same command, before the veto
             dispatcher.pubblica(eliminata(R))
             Esito.Ok(Unit)
         }
 
         assertEquals(ElaborazioneGiaAperta(R), esito.erroreAtteso<ElaborazioneGiaAperta>())
-        assertNotNull(trascritti.trova(ALTRA), "il rollback ripristina la scrittura fatta prima del veto")
+        assertNotNull(
+            trascritti.trova(ALTRA, unIncontroDi(ALTRA)),
+            "il rollback ripristina la scrittura fatta prima del veto",
+        )
         assertEquals(listOf("in-coda"), elaborazioni.diRegistrazione(R).map { it.id.valore })
     }
 
@@ -91,12 +96,12 @@ class AbbonatoEliminazioneRegistrazioneTest {
         val trascrittiSql = TrascrittoRepositorySql(db, uow)
         val sql = DispatcherEventiInMemoria(uow).also {
             val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql)
-            it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica))
+            it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica, ogniRegistrazioneNota()))
         }
         elaborazioniSql.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata"), R)).atteso()
         trascrittiSql.salva(unTrascritto(registrazioneId = R))
         elaborazioniSql.salva(unaElaborazione(IN_ATTESA, ElaborazioneId("in-coda"), R)).atteso()
-        val prima = trascrittiSql.trova(R)?.segmenti
+        val prima = trascrittiSql.trova(R, unIncontroDi(R))?.segmenti
 
         val esito = sql.unitaDiLavoro.inTransazione {
             sql.pubblica(eliminata(R))
@@ -106,7 +111,7 @@ class AbbonatoEliminazioneRegistrazioneTest {
 
         assertEquals(ElaborazioneGiaAperta(R), esito.erroreAtteso<ElaborazioneGiaAperta>())
         assertEquals(setOf("completata", "in-coda"), elaborazioniSql.diRegistrazione(R).map { it.id.valore }.toSet())
-        assertEquals(prima, trascrittiSql.trova(R)?.segmenti)
+        assertEquals(prima, trascrittiSql.trova(R, unIncontroDi(R))?.segmenti)
         assertNotNull(db.registrazioneQueries.trovaPerId(R.valore).executeAsOneOrNull())
     }
 

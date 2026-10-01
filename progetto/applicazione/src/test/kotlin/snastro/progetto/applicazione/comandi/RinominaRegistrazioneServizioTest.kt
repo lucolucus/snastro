@@ -3,6 +3,7 @@ package snastro.progetto.applicazione.comandi
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -120,6 +121,7 @@ class RinominaRegistrazioneServizioTest {
         Registrazione.aggiungi(
             id = id,
             progettoId = progettoId,
+            incontroId = IncontroId("incontro-di-${id.valore}"),
             titolo = titolo,
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
             durataMs = 3_600_000,

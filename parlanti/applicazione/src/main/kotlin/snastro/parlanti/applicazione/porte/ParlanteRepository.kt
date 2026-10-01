@@ -30,7 +30,7 @@ public interface ParlanteRepository {
     /** Physical removal with its prints — ONLY for the INV-25 cessation of an `occasionale`. */
     public fun rimuovi(id: ParlanteId)
 
-    /** Every stored print row of a Voce of the Registrazione [id] (any Parlante). */
+    /** Every stored print row extracted from the Parte (Registrazione) [id] (any Parlante, any Voce). */
     public fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>
 
     /** Every stored print row of the Parlanti of the Progetto [id]. */

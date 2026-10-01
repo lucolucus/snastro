@@ -6,7 +6,9 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
 import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unSegmentoIniziale
@@ -17,7 +19,7 @@ import kotlin.test.assertNull
 
 class VociDelTrascrittoTest {
     private val trascritti = TrascrittoRepositoryFinta()
-    private val api = VociDelTrascritto(trascritti)
+    private val api = VociDelTrascritto(trascritti, ogniRegistrazioneNota())
 
     @Test
     fun `AC-98 voci restituisce per ogni Voce voceRef e intervalli ordinati per inizio`() {
@@ -28,11 +30,11 @@ class VociDelTrascrittoTest {
         assertEquals(
             listOf(
                 VoceVista(
-                    VoceRef(REGISTRAZIONE, VoceId(1)),
+                    VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)),
                     listOf(IntervalloMs(0, 1_000), IntervalloMs(2_000, 3_000), IntervalloMs(4_000, 5_000)),
                 ),
                 VoceVista(
-                    VoceRef(REGISTRAZIONE, VoceId(2)),
+                    VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2)),
                     listOf(IntervalloMs(1_000, 2_000), IntervalloMs(3_000, 4_000), IntervalloMs(5_000, 6_000)),
                 ),
             ),
@@ -49,6 +51,7 @@ class VociDelTrascrittoTest {
     fun `AC-99 segmenti restituisce segmentoId, voceId, intervallo e testo ordinati per inizio e segmentoId`() {
         val trascritto = Trascritto.crea(
             REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
             listOf(
                 unSegmentoIniziale(voceIndice = 4, inizioMs = 0, fineMs = 3_000, testo = "si parla sopra"),
@@ -79,6 +82,7 @@ class VociDelTrascrittoTest {
     fun `AC-550 segmentiDiVoce restituisce ogni Segmento una volta ordinato con confermato e senza testo`() {
         val trascritto = Trascritto.crea(
             REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
             listOf(
                 unSegmentoIniziale(voceIndice = 4, inizioMs = 0, fineMs = 3_000),

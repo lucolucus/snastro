@@ -1,24 +1,16 @@
 -- Queries for `voci_incontro` — schema in migrations/7.sqm (ADR 0034). Written ONLY by the Trascrizione adapter.
--- Transition (ADR 0033 §6): the Incontro is resolved from registrazione_id by SQL join.
+-- Keyed by incontro_id directly (ADR 0033 §4.1): the caller resolved it, no query reads `registrazione`.
 
-trovaDiRegistrazione:
-SELECT v.incontro_id, v.prossima_voce
-FROM voci_incontro AS v INNER JOIN registrazione AS r ON r.incontro_id = v.incontro_id
-WHERE r.id = :registrazioneId;
+trovaPerIncontro:
+SELECT incontro_id, prossima_voce FROM voci_incontro WHERE incontro_id = :incontroId;
 
 inserisci:
-INSERT INTO voci_incontro(incontro_id, prossima_voce)
-SELECT incontro_id, :prossimaVoce FROM registrazione WHERE id = :registrazioneId;
+INSERT INTO voci_incontro(incontro_id, prossima_voce) VALUES (:incontroId, :prossimaVoce);
 
 aggiorna:
-UPDATE voci_incontro SET prossima_voce = :prossimaVoce
-WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId);
+UPDATE voci_incontro SET prossima_voce = :prossimaVoce WHERE incontro_id = :incontroId;
 
--- The root ceases with the last Parte that has a Trascritto.
-eliminaSeSenzaTrascritti:
+-- The root ceases once the Incontro has no Voce left (a Trascritto always has one, so: with its last Trascritto).
+eliminaSeSenzaVoci:
 DELETE FROM voci_incontro
-WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId)
-    AND NOT EXISTS (
-        SELECT 1 FROM trascritto AS t INNER JOIN registrazione AS r ON r.id = t.registrazione_id
-        WHERE r.incontro_id = voci_incontro.incontro_id AND t.registrazione_id <> :registrazioneId
-    );
+WHERE incontro_id = :incontroId AND NOT EXISTS (SELECT 1 FROM voce_incontro WHERE incontro_id = :incontroId);

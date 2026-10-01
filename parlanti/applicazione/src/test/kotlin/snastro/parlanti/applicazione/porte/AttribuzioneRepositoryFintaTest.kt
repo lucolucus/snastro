@@ -6,6 +6,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import kotlin.test.Test
@@ -19,8 +20,8 @@ class AttribuzioneRepositoryFintaTest : AttribuzioneRepositoryContratto() {
     fun `AC-38 la Finta segue il rollback di UnitaDiLavoroFinta`() {
         val repo = AttribuzioneRepositoryFinta()
         val uow = UnitaDiLavoroFinta(repo)
-        val voce1 = VoceRef(REGISTRAZIONE_1, VoceId(1))
-        val voce2 = VoceRef(REGISTRAZIONE_1, VoceId(2))
+        val voce1 = VoceRef(unIncontroDi(REGISTRAZIONE_1), VoceId(1))
+        val voce2 = VoceRef(unIncontroDi(REGISTRAZIONE_1), VoceId(2))
         uow.inTransazione {
             repo.salva(Attribuzione.conferma(voce1, PROGETTO, ParlanteId("marco")).aggregato)
             Esito.Ok(Unit)
@@ -32,7 +33,7 @@ class AttribuzioneRepositoryFintaTest : AttribuzioneRepositoryContratto() {
             Esito.Errore(ErroreParlanti.NomeVuoto)
         }.erroreAtteso<ErroreParlanti.NomeVuoto>()
 
-        assertEquals(listOf(voce1), repo.diRegistrazione(REGISTRAZIONE_1).map { it.voceRef })
+        assertEquals(listOf(voce1), repo.diIncontro(unIncontroDi(REGISTRAZIONE_1)).map { it.voceRef })
         assertNull(repo.trova(voce2))
     }
 }

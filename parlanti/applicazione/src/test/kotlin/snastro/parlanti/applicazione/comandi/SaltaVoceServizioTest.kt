@@ -15,6 +15,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
 import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
@@ -82,6 +83,7 @@ class SaltaVoceServizioTest {
             mapOf(
                 id to RegistrazioneVista(
                     registrazioneId = id,
+                    incontroId = unIncontroDi(id),
                     progettoId = progettoId,
                     titolo = "Riunione",
                     riferimentoAudio = RiferimentoAudio("audio/${id.valore}.wav"),
@@ -138,7 +140,7 @@ class SaltaVoceServizioTest {
         assertEquals("Ospite del 12/09/2026", assertNotNull(parlanti.trova(primoParlanteId)).nome.valore)
 
         // La Registrazione ha ora una DataRegistrazione diversa (una ModificaDataRegistrazione a monte).
-        val altraVoce = VoceRef(REGISTRAZIONE, VoceId(2))
+        val altraVoce = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2))
         val vociAggiornate = LettoreVociFinta(
             mapOf(
                 REGISTRAZIONE to listOf(
@@ -206,7 +208,7 @@ class SaltaVoceServizioTest {
 
     @Test
     fun `una Voce assente dal Trascritto corrente e VoceNonTrovata`() {
-        val altra = VoceRef(REGISTRAZIONE, VoceId(9))
+        val altra = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(9))
         val servizio = servizio(unaRegistrazione(), unaVoce(voceRef = altra))
 
         val errore = servizio.esegui(SaltaVoce(VOCE)).erroreAtteso<ErroreParlanti.VoceNonTrovata>()
@@ -369,7 +371,7 @@ class SaltaVoceServizioTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
-        val VOCE = VoceRef(REGISTRAZIONE, VoceId(1))
+        val VOCE = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
         val DATA: LocalDate = LocalDate.of(2026, 9, 12)
     }
 }

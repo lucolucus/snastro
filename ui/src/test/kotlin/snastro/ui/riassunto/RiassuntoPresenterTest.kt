@@ -13,6 +13,7 @@ import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.letture.AzioneVista
 import snastro.sintesi.applicazione.letture.DisponibilitaVista
 import snastro.sintesi.applicazione.letture.ElementoVista
@@ -113,7 +114,15 @@ private fun unaVista(
     disponibilita: DisponibilitaVista = DisponibilitaVista.Disponibile,
     argomentoPrecompilato: String? = null,
     mostrato: RiassuntoMostrato? = null,
-) = RiassuntoVista(REG_1, modello, richiestaAperta, ultimoFallimento, disponibilita, argomentoPrecompilato, mostrato)
+) = RiassuntoVista(
+    unIncontroDi(REG_1),
+    modello,
+    richiestaAperta,
+    ultimoFallimento,
+    disponibilita,
+    argomentoPrecompilato,
+    mostrato,
+)
 
 private fun unaVoce(numero: Int, nome: String? = "Marco") = VoceVista(numero, "Voce $numero", nome)
 
@@ -605,7 +614,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S138 rework un comando fallito in range mostra il suo vero messaggio, non il range`() = eseguiTest { a ->
         runCurrent()
-        a.risultatoLunghezza = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
+        a.risultatoLunghezza = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(unIncontroDi(REG_1)))
         a.presenter.azioni.modificaLunghezzaMassima()
         a.presenter.azioni.cambiaLunghezzaMassima("1500")
         a.presenter.azioni.salvaLunghezzaMassima()
@@ -679,7 +688,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S139 un ErroreSintesi mostra il messaggio e ricarica la vista`() = eseguiTest { a ->
         runCurrent()
-        a.risultatoRiassumi = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
+        a.risultatoRiassumi = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(unIncontroDi(REG_1)))
         a.presenter.azioni.riassumi()
         runCurrent()
         assertEquals(
@@ -700,7 +709,7 @@ class RiassuntoPresenterTest {
     fun `AC-S139 rework un ErroreSintesi si azzera al ricarico successivo, non solo dopo un Riassumi riuscito`() =
         eseguiTest { a ->
             runCurrent()
-            a.risultatoRiassumi = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
+            a.risultatoRiassumi = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(unIncontroDi(REG_1)))
             a.presenter.azioni.riassumi()
             runCurrent()
             assertEquals(
@@ -719,9 +728,9 @@ class RiassuntoPresenterTest {
 
     @Test
     fun `AC-S139 il testo mappato usa erroreAtteso per confermare l istanza del kernel`() {
-        val esito: Esito<Unit> = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REG_1))
+        val esito: Esito<Unit> = Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(unIncontroDi(REG_1)))
         val errore = esito.erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
-        assertEquals(REG_1, errore.registrazioneId)
+        assertEquals(unIncontroDi(REG_1), errore.incontroId)
     }
 
     /**

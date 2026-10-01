@@ -47,8 +47,8 @@ public abstract class LettoreVociContratto {
 
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[0].voceId), listOf(turni[0].intervallo)),
-                VoceVista(VoceRef(id, c[1].voceId), listOf(turni[1].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(turni[0].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[1].voceId), listOf(turni[1].intervallo)),
             ),
             lettore.voci(id),
         )
@@ -71,9 +71,9 @@ public abstract class LettoreVociContratto {
 
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[1].voceId), listOf(1, 5, 2).map { turni[it].intervallo }),
-                VoceVista(VoceRef(id, c[3].voceId), listOf(3, 0).map { turni[it].intervallo }),
-                VoceVista(VoceRef(id, c[4].voceId), listOf(turni[4].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[1].voceId), listOf(1, 5, 2).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[3].voceId), listOf(3, 0).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[4].voceId), listOf(turni[4].intervallo)),
             ).sortedBy { it.voceRef.voceId.numero },
             lettore.voci(id),
         )
@@ -90,13 +90,16 @@ public abstract class LettoreVociContratto {
             SemeTurno(0, IntervalloMs(5_000, 9_000)),
         )
         val c = a.completaElaborazione(id, turni)
-        assertTrue(c[2].segmentoId.numero < c[1].segmentoId.numero, "a parita di inizio la Voce minore ha il Segmento minore: $c")
+        assertTrue(
+            c[2].segmentoId.numero < c[1].segmentoId.numero,
+            "a parita di inizio la Voce minore ha il Segmento minore: $c",
+        )
 
         // Both 5 000 ms Segmenti end up in one Voce: the longer one has the smaller segmentoId.
         a.unisci(id, sopravvive = c[0].voceId, rimossa = c[1].voceId)
 
         assertEquals(
-            listOf(VoceVista(VoceRef(id, c[0].voceId), listOf(0, 2, 1).map { turni[it].intervallo })),
+            listOf(VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(0, 2, 1).map { turni[it].intervallo })),
             lettore.voci(id),
         )
     }
@@ -120,8 +123,8 @@ public abstract class LettoreVociContratto {
 
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[0].voceId), listOf(3, 1, 0, 4).map { turni[it].intervallo }),
-                VoceVista(VoceRef(id, c[2].voceId), listOf(turni[2].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(3, 1, 0, 4).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[2].voceId), listOf(turni[2].intervallo)),
             ).sortedBy { it.voceRef.voceId.numero },
             voci,
         )
@@ -140,11 +143,13 @@ public abstract class LettoreVociContratto {
         val cIntervista = a.completaElaborazione(intervista, listOf(turnoIntervista))
 
         assertEquals(
-            listOf(VoceVista(VoceRef(intervista, cIntervista[0].voceId), listOf(turnoIntervista.intervallo))),
+            listOf(
+                VoceVista(VoceRef(a.incontroDi(intervista), cIntervista[0].voceId), listOf(turnoIntervista.intervallo)),
+            ),
             lettore.voci(intervista),
         )
         assertEquals(
-            listOf(VoceVista(VoceRef(riunione, cRiunione[0].voceId), listOf(turnoRiunione.intervallo))),
+            listOf(VoceVista(VoceRef(a.incontroDi(riunione), cRiunione[0].voceId), listOf(turnoRiunione.intervallo))),
             lettore.voci(riunione),
         )
     }
@@ -171,13 +176,13 @@ public abstract class LettoreVociContratto {
 
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[1].voceId), listOf(1, 3).map { turni[it].intervallo }),
-                VoceVista(VoceRef(id, c[2].voceId), listOf(0, 2, 4).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[1].voceId), listOf(1, 3).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[2].voceId), listOf(0, 2, 4).map { turni[it].intervallo }),
             ).sortedBy { it.voceRef.voceId.numero },
             lettore.voci(id),
         )
         assertEquals(
-            listOf(VoceVista(VoceRef(altra, cAltra[0].voceId), listOf(IntervalloMs(0, 1_000)))),
+            listOf(VoceVista(VoceRef(a.incontroDi(altra), cAltra[0].voceId), listOf(IntervalloMs(0, 1_000)))),
             lettore.voci(altra),
         )
     }
@@ -201,9 +206,9 @@ public abstract class LettoreVociContratto {
         assertTrue(nuova != c[0].voceId && nuova != c[1].voceId, "la nuova Voce ha un voceId nuovo: $nuova")
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[0].voceId), listOf(turni[0].intervallo)),
-                VoceVista(VoceRef(id, c[1].voceId), listOf(turni[1].intervallo)),
-                VoceVista(VoceRef(id, nuova), listOf(2, 3).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(turni[0].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[1].voceId), listOf(turni[1].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), nuova), listOf(2, 3).map { turni[it].intervallo }),
             ).sortedBy { it.voceRef.voceId.numero },
             lettore.voci(id),
         )
@@ -227,9 +232,9 @@ public abstract class LettoreVociContratto {
         assertTrue(nuova != c[0].voceId && nuova != c[1].voceId, "la nuova Voce ha un voceId nuovo: $nuova")
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[0].voceId), listOf(turni[0].intervallo)),
-                VoceVista(VoceRef(id, c[1].voceId), listOf(turni[1].intervallo)),
-                VoceVista(VoceRef(id, nuova), listOf(turni[2].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(turni[0].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[1].voceId), listOf(turni[1].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), nuova), listOf(turni[2].intervallo)),
             ).sortedBy { it.voceRef.voceId.numero },
             lettore.voci(id),
         )
@@ -238,8 +243,8 @@ public abstract class LettoreVociContratto {
         assertEquals(c[0].voceId, a.riassegna(id, c[1].segmentoId, destinazione = c[0].voceId))
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[0].voceId), listOf(0, 1).map { turni[it].intervallo }),
-                VoceVista(VoceRef(id, nuova), listOf(turni[2].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(0, 1).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), nuova), listOf(turni[2].intervallo)),
             ).sortedBy { it.voceRef.voceId.numero },
             lettore.voci(id),
         )
@@ -264,9 +269,9 @@ public abstract class LettoreVociContratto {
         assertTrue(nuova !in c.map { it.voceId }, "voceId mai riusato: $nuova tra ${c.map { it.voceId }}")
         assertEquals(
             listOf(
-                VoceVista(VoceRef(id, c[0].voceId), listOf(0, 2).map { turni[it].intervallo }),
-                VoceVista(VoceRef(id, c[1].voceId), listOf(turni[1].intervallo)),
-                VoceVista(VoceRef(id, nuova), listOf(turni[3].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), c[0].voceId), listOf(0, 2).map { turni[it].intervallo }),
+                VoceVista(VoceRef(a.incontroDi(id), c[1].voceId), listOf(turni[1].intervallo)),
+                VoceVista(VoceRef(a.incontroDi(id), nuova), listOf(turni[3].intervallo)),
             ).sortedBy { it.voceRef.voceId.numero },
             lettore.voci(id),
         )

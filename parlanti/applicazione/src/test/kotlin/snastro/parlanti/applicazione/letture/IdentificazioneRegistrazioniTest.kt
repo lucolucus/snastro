@@ -5,6 +5,7 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.VoceVista
@@ -63,10 +64,10 @@ class IdentificazioneRegistrazioniTest {
     }
 
     private fun unaVoce(n: Int, registrazioneId: RegistrazioneId = REGISTRAZIONE): VoceVista =
-        VoceVista(VoceRef(registrazioneId, VoceId(n)), emptyList())
+        VoceVista(VoceRef(unIncontroDi(registrazioneId), VoceId(n)), emptyList())
 
     private fun unAttribuzione(voceN: Int, parlanteId: ParlanteId): Attribuzione =
-        Attribuzione.conferma(VoceRef(REGISTRAZIONE, VoceId(voceN)), PROGETTO, parlanteId).aggregato
+        Attribuzione.conferma(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(voceN)), PROGETTO, parlanteId).aggregato
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")

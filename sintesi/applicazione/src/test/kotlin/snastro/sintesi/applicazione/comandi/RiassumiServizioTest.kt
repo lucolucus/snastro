@@ -5,6 +5,7 @@ import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -13,6 +14,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.eventi.RiassuntoRichiesto
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
@@ -28,6 +30,7 @@ import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
 import snastro.sintesi.applicazione.porte.conFallimento
+import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
 import snastro.sintesi.applicazione.porte.statoOsservabile
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.applicazione.porte.unaStruttura
@@ -61,7 +64,7 @@ class RiassumiServizioTest {
         val cappata = LunghezzaMassimaRiassunto.predefinita(PROGETTO).also { it.modifica(1500).atteso() }
         a.lunghezze.salva(cappata).atteso()
 
-        val id = a.servizio.esegui(Riassumi(REGISTRAZIONE, argomento = "budget")).atteso()
+        val id = a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE), argomento = "budget")).atteso()
 
         val salvato = checkNotNull(a.riassunti.trova(id))
         assertEquals(RiassuntoId("id-1"), id)
@@ -69,8 +72,8 @@ class RiassumiServizioTest {
         assertEquals(LunghezzaMassimaParole.di(1500).atteso(), salvato.lunghezzaMassima)
         assertEquals(CLOCK.instant(), salvato.richiestoAlle)
         assertEquals(StatoRiassunto.IN_ATTESA, salvato.stato)
-        assertEquals(listOf(id), a.riassunti.diRegistrazione(REGISTRAZIONE).map { it.id })
-        assertEquals(listOf(RiassuntoRichiesto(REGISTRAZIONE)), a.eventi.pubblicati)
+        assertEquals(listOf(id), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)).map { it.id })
+        assertEquals(listOf(RiassuntoRichiesto(unIncontroDi(REGISTRAZIONE))), a.eventi.pubblicati)
     }
 
     @Test
@@ -82,9 +85,9 @@ class RiassumiServizioTest {
         ).forEach { stato ->
             val a = unAmbiente(disponibilita = DisponibilitaModelloLinguisticoFinta(stato))
 
-            a.servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.ModelloNonInstallato>()
+            a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.ModelloNonInstallato>()
 
-            assertEquals(emptyList(), a.riassunti.diRegistrazione(REGISTRAZIONE), "$stato")
+            assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)), "$stato")
             assertEquals(emptyList(), a.eventi.pubblicati, "$stato")
         }
     }
@@ -93,9 +96,9 @@ class RiassumiServizioTest {
     fun `AC-S78 senza Trascritto rifiuta con TrascrittoNonDisponibile e non scrive`() {
         val a = unAmbiente(trascritti = LettoreTrascrittoFinta())
 
-        a.servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.TrascrittoNonDisponibile>()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.TrascrittoNonDisponibile>()
 
-        assertEquals(emptyList(), a.riassunti.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), a.eventi.pubblicati)
     }
 
@@ -107,9 +110,9 @@ class RiassumiServizioTest {
         )
         val a = unAmbiente(trascritti = trascritti)
 
-        a.servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.ElaborazioneGiaAperta>()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.ElaborazioneGiaAperta>()
 
-        assertEquals(emptyList(), a.riassunti.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), a.eventi.pubblicati)
     }
 
@@ -122,9 +125,9 @@ class RiassumiServizioTest {
             val a = unAmbiente()
             a.riassunti.salva(aperto).atteso()
 
-            a.servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
+            a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
 
-            val righe = a.riassunti.diRegistrazione(REGISTRAZIONE).map { it.id }
+            val righe = a.riassunti.trova(unIncontroDi(REGISTRAZIONE)).map { it.id }
             assertEquals(listOf(aperto.id), righe, "${aperto.stato}")
             assertEquals(emptyList(), a.eventi.pubblicati, "${aperto.stato}")
         }
@@ -138,9 +141,9 @@ class RiassumiServizioTest {
         )
         val a = unAmbiente(trascritti = trascritti)
 
-        a.servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.RegistrazioneTroppoLunga>()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.RegistrazioneTroppoLunga>()
 
-        assertEquals(emptyList(), a.riassunti.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), a.eventi.pubblicati)
     }
 
@@ -148,11 +151,11 @@ class RiassumiServizioTest {
     fun `AC-S78 un argomento di 201 caratteri rifiuta con ArgomentoTroppoLungo dopo le guardie`() {
         val a = unAmbiente()
 
-        val comando = Riassumi(REGISTRAZIONE, argomento = "x".repeat(201))
+        val comando = Riassumi(unIncontroDi(REGISTRAZIONE), argomento = "x".repeat(201))
         val errore = a.servizio.esegui(comando).erroreAtteso<ErroreSintesi.ArgomentoTroppoLungo>()
 
         assertEquals(201, errore.lunghezza)
-        assertEquals(emptyList(), a.riassunti.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), a.eventi.pubblicati)
     }
 
@@ -174,9 +177,9 @@ class RiassumiServizioTest {
         a.riassunti.salva(fallito).atteso()
         val prontoPrima = pronto.statoOsservabile()
 
-        a.servizio.esegui(Riassumi(REGISTRAZIONE)).atteso()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).atteso()
 
-        val righe = a.riassunti.diRegistrazione(REGISTRAZIONE)
+        val righe = a.riassunti.trova(unIncontroDi(REGISTRAZIONE))
         assertEquals(setOf(StatoRiassunto.PRONTO, StatoRiassunto.IN_ATTESA), righe.map { it.stato }.toSet())
         assertEquals(prontoPrima, checkNotNull(righe.single { it.pronto }).statoOsservabile())
         assertNull(a.riassunti.trova(RiassuntoId("fallito-1")))
@@ -190,7 +193,7 @@ class RiassumiServizioTest {
             .conFallimento()
         a.riassunti.salva(precedente).atteso()
 
-        val id = a.servizio.esegui(Riassumi(REGISTRAZIONE, argomento = "   ")).atteso()
+        val id = a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE), argomento = "   ")).atteso()
 
         assertNull(checkNotNull(a.riassunti.trova(id)).argomento)
     }
@@ -215,11 +218,12 @@ class RiassumiServizioTest {
             riassuntiSpia,
             lunghezzeSpia,
             trascrittiSpia,
+            ogniIncontroConUnaParte(),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventi,
         )
 
-        servizio.esegui(Riassumi(REGISTRAZIONE)).atteso()
+        servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).atteso()
 
         assertTrue(trascrittiSpia.letture.isNotEmpty())
         assertTrue(trascrittiSpia.letture.all { it }, "${trascrittiSpia.letture}")
@@ -238,7 +242,7 @@ class RiassumiServizioTest {
         val fallitoPrima = fallito.statoOsservabile()
         val riassuntiGuasti = object : RiassuntoRepository by riassuntiReali {
             override fun salva(r: Riassunto): Esito<Unit> =
-                Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(REGISTRAZIONE))
+                Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(unIncontroDi(REGISTRAZIONE)))
         }
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(riassuntiReali, lunghezze))
         val servizio = RiassumiServizio(
@@ -249,15 +253,16 @@ class RiassumiServizioTest {
             riassuntiGuasti,
             lunghezze,
             LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi()))),
+            ogniIncontroConUnaParte(),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventi,
         )
 
-        servizio.esegui(Riassumi(REGISTRAZIONE)).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
+        servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
 
         // Il fallito era gia' stato rimosso da INV-S3 (crea()) prima che salva() fallisse: il rollback della
         // transazione (non solo di rimuovi, gia' provato da INV-S3 sotto) deve restituirlo intatto.
-        val righe = riassuntiReali.diRegistrazione(REGISTRAZIONE)
+        val righe = riassuntiReali.trova(unIncontroDi(REGISTRAZIONE))
         assertEquals(listOf(fallito.id), righe.map { it.id })
         assertEquals(fallitoPrima, righe.single().statoOsservabile())
         assertEquals(emptyList(), eventi.pubblicati)
@@ -281,14 +286,15 @@ class RiassumiServizioTest {
             riassuntiGuasti,
             lunghezze,
             LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi()))),
+            ogniIncontroConUnaParte(),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventi,
         )
 
-        val esito = servizio.esegui(Riassumi(REGISTRAZIONE))
+        val esito = servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE)))
 
         assertEquals(ErroreDiProva.Fallito("rimuovi"), esito.erroreAtteso<ErroreDiProva.Fallito>())
-        assertEquals(listOf(fallito.id), riassuntiReali.diRegistrazione(REGISTRAZIONE).map { it.id })
+        assertEquals(listOf(fallito.id), riassuntiReali.trova(unIncontroDi(REGISTRAZIONE)).map { it.id })
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
@@ -304,7 +310,8 @@ class RiassumiServizioTest {
         assertEquals(
             listOf(
                 "UnitaDiLavoro", "GeneratoreId", "Clock", "ProgettoId", "RiassuntoRepository",
-                "LunghezzaMassimaRiassuntoRepository", "LettoreTrascritto", "DisponibilitaModelloLinguistico",
+                "LunghezzaMassimaRiassuntoRepository", "LettoreTrascritto", "LettoreIncontro",
+                "DisponibilitaModelloLinguistico",
                 "DispatcherEventi",
             ),
             tipi,
@@ -312,7 +319,7 @@ class RiassumiServizioTest {
 
         // e la porta e' effettivamente usata: la guardia INV-S6 la legge davvero.
         val a = unAmbiente()
-        a.servizio.esegui(Riassumi(REGISTRAZIONE)).atteso()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).atteso()
     }
 
     private class LettoreTrascrittoSpia(
@@ -338,9 +345,9 @@ class RiassumiServizioTest {
     ) : RiassuntoRepository by delega {
         val letture = mutableListOf<Boolean>()
 
-        override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> {
+        override fun trova(incontroId: IncontroId): List<Riassunto> {
             letture += transazione.transazioneAperta
-            return delega.diRegistrazione(r)
+            return delega.trova(incontroId)
         }
     }
 
@@ -376,7 +383,7 @@ class RiassumiServizioTest {
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(riassunti, lunghezze))
         val servizio = RiassumiServizio(
             eventi.unitaDiLavoro, GeneratoreIdFinto(), CLOCK, PROGETTO,
-            riassunti, lunghezze, trascritti, disponibilita, eventi,
+            riassunti, lunghezze, trascritti, ogniIncontroConUnaParte(), disponibilita, eventi,
         )
         return Ambiente(servizio, riassunti, lunghezze, eventi)
     }

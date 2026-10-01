@@ -4,6 +4,7 @@ import snastro.kernel.CampioniAudio
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -12,6 +13,7 @@ import snastro.kernel.Ripristinabile
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
@@ -241,7 +243,7 @@ class EseguiProssimaElaborazioneServizioTest {
 
         servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
-        val trascritto = checkNotNull(trascritti.trova(id))
+        val trascritto = checkNotNull(trascritti.trova(id, unIncontroDi(id)))
         val voci = trascritto.voci
         assertEquals(2, voci.size)
         assertEquals("voce 2 0-1000", voci[0].segmenti.single().testo, "prima apparizione (0 ms) -> Voce 1")
@@ -498,7 +500,7 @@ class EseguiProssimaElaborazioneServizioTest {
             elaborazioni.diRegistrazione(id).single().completata,
             "un surplus di decodifica di 1 ms rispetto al catalogo non deve far fallire l'elaborazione",
         )
-        assertEquals(1, trascritti.trova(id)?.segmenti?.size)
+        assertEquals(1, trascritti.trova(id, unIncontroDi(id))?.segmenti?.size)
     }
 
     @Test
@@ -651,7 +653,10 @@ class EseguiProssimaElaborazioneServizioTest {
 
         val lanciata = runCatching { servizio.esegui(EseguiProssimaElaborazione()) }.exceptionOrNull()
 
-        assertNull(trascritti.trova(REGISTRAZIONE_GUASTO), "nessun Trascritto: rollback (INV-5)")
+        assertNull(
+            trascritti.trova(REGISTRAZIONE_GUASTO, unIncontroDi(REGISTRAZIONE_GUASTO)),
+            "nessun Trascritto: rollback (INV-5)",
+        )
         return EsecuzioneGuasta(lanciata, elaborazioniReali, segnalatore, eventi)
     }
 
@@ -709,6 +714,7 @@ class EseguiProssimaElaborazioneServizioTest {
     private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio, durataMs: Long): RegistrazioneVista =
         RegistrazioneVista(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             progettoId = PROGETTO,
             titolo = "Riunione",
             riferimentoAudio = riferimento,
@@ -882,13 +888,13 @@ private class AllineatoreVuoto : Allineatore {
 
 /** [TrascrittoRepository] whose `salva` always fails (INV-5). */
 private class TrascrittoRepositoryGuasta : TrascrittoRepository, Ripristinabile {
-    override fun trova(id: RegistrazioneId): Trascritto? = null
+    override fun trova(id: RegistrazioneId, incontroId: IncontroId): Trascritto? = null
 
     override fun conTrascritto(): List<RegistrazioneId> = emptyList()
 
     override fun salva(t: Trascritto): Unit = throw GuastoDiProva()
 
-    override fun rimuovi(id: RegistrazioneId): Unit = error("non usato dalla pipeline")
+    override fun rimuovi(id: RegistrazioneId, incontroId: IncontroId): Unit = error("non usato dalla pipeline")
 
     override fun istantanea(): () -> Unit = {}
 }

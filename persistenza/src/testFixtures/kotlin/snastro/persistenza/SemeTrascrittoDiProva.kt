@@ -13,16 +13,21 @@ package snastro.persistenza
  */
 public fun SnastroDatabase.seminaTrascrittoDiProva(registrazioneId: String, prossimaVoce: Long = 1L) {
     trascrittoQueries.inserisci(registrazioneId = registrazioneId, prossimoSegmento = 1L)
-    if (vociIncontroQueries.trovaDiRegistrazione(registrazioneId).executeAsOneOrNull() == null) {
-        vociIncontroQueries.inserisci(prossimaVoce = prossimaVoce, registrazioneId = registrazioneId)
+    val incontroId = incontroDi(registrazioneId)
+    if (vociIncontroQueries.trovaPerIncontro(incontroId).executeAsOneOrNull() == null) {
+        vociIncontroQueries.inserisci(incontroId = incontroId, prossimaVoce = prossimaVoce)
     }
 }
 
 /** Seeds a bare `voce` row (no `segmento`), for the same purpose as [seminaTrascrittoDiProva]. */
 public fun SnastroDatabase.seminaVoceDiProva(registrazioneId: String, numero: Long) {
-    voceIncontroQueries.inserisciSeAssente(numero = numero, registrazioneId = registrazioneId)
+    voceIncontroQueries.inserisciSeAssente(incontroId = incontroDi(registrazioneId), numero = numero)
     voceQueries.inserisci(registrazioneId = registrazioneId, numero = numero)
 }
+
+/** The Incontro the seeded Registrazione is a Parte of (test seeding only: no repository resolves it this way). */
+public fun SnastroDatabase.incontroDi(registrazioneId: String): String =
+    checkNotNull(registrazioneQueries.trovaPerId(registrazioneId).executeAsOne().incontro_id)
 
 /**
  * Seeds a `registrazione` as the one Parte of its own new Incontro (ADR 0034: `incontro_id` is mandatory). The

@@ -1,11 +1,13 @@
 package snastro.parlanti.applicazione.porte
 
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 
 class LettoreVociFintaTest : LettoreVociContratto() {
     override fun ambiente(): AmbienteLettoreVoci = AmbienteFinto()
@@ -62,6 +64,8 @@ class LettoreVociFintaTest : LettoreVociContratto() {
             pubblica(registrazioneId)
             return coniati
         }
+
+        override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId = unIncontroDi(registrazioneId)
 
         override fun fallisciElaborazione(registrazioneId: RegistrazioneId) {
             require(registrazioneId in registrazioni && registrazioneId !in trascritti)
@@ -120,7 +124,7 @@ class LettoreVociFintaTest : LettoreVociContratto() {
                 .toSortedMap(compareByDescending { it.numero })
                 .map { (voce, suoi) ->
                     VoceVista(
-                        VoceRef(registrazioneId, voce),
+                        VoceRef(unIncontroDi(registrazioneId), voce),
                         suoi.sortedWith(compareByDescending<Seg> { it.intervallo.inizioMs }.thenBy { it.id.numero })
                             .map { it.intervallo },
                     )

@@ -1,7 +1,7 @@
 package snastro.avvio.sintesi
 
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
@@ -17,10 +17,10 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * - [annullato] is what `EseguiProssimoRiassuntoServizio` hands the model: the CURRENT run's flag.
  * - [annulla] (reached from `RiassuntoEliminato` after commit, ADR 0023 §5 best effort): flips the running run's
- *   flag only if the running Riassunto belongs to THAT Registrazione (AC-S63: the match the shared queue made
+ *   flag only if the running Riassunto belongs to THAT Incontro (AC-S63: the match the shared queue made
  *   before ADR 0030, now kept by the source's own state, so nothing holds a reference to the queue) AND its OWN
- *   row is gone ([RiassuntoRepository.trova] `== null`) — a late or duplicate Eliminato, after a sostituzione
- *   re-queued a new Riassunto for the same Registrazione, never cancels it. Before the claim has saved (no id
+ *   row is gone ([RiassuntoRepository.trova] `== null`) — a late or duplicate Eliminato, after a new Riassunto
+ *   was queued for the same Incontro, never cancels it. Before the claim has saved (no id
  *   yet), or while an Elaborazione runs (no Riassunto run open), there is nothing to cancel.
  * - [interrompi] (`FonteCoda.interrompi`, the STOP of `fermaEAttendi`): flips it UNCONDITIONALLY — an LLM run
  *   may not honour a thread interrupt (ADR 0023 §5).
@@ -57,10 +57,10 @@ internal class EsecuzioniRiassunto(private val riassunti: RiassuntoRepository) {
         ultimoReclamato = riassunto.id.valore
     }
 
-    fun annulla(registrazioneId: RegistrazioneId) {
+    fun annulla(incontroId: IncontroId) {
         val esecuzione = corrente.get() ?: return
         val riassunto = esecuzione.reclamato ?: return
-        if (riassunto.registrazioneId == registrazioneId && riassunti.trova(riassunto.id) == null) {
+        if (riassunto.incontroId == incontroId && riassunti.trova(riassunto.id) == null) {
             esecuzione.annullata.set(true)
         }
     }

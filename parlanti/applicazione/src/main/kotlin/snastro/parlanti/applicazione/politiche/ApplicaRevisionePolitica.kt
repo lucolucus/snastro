@@ -1,7 +1,7 @@
 package snastro.parlanti.applicazione.politiche
 
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.mappa
@@ -34,9 +34,9 @@ public class ApplicaRevisionePolitica(
      * wins ([INV-21]): [rimossa]'s Attribuzione and row go ([INV-25] may cessa its Parlante). Otherwise
      * [sopravvissuta] INHERITS [rimossa]'s Parlante by re-keying (user decision 2026-09-23).
      */
-    public fun applicaVociUnite(registrazioneId: RegistrazioneId, sopravvissuta: VoceId, rimossa: VoceId): Esito<Unit> {
-        val perRimossa = VoceRef(registrazioneId, rimossa)
-        val perSopravvissuta = VoceRef(registrazioneId, sopravvissuta)
+    public fun applicaVociUnite(incontroId: IncontroId, sopravvissuta: VoceId, rimossa: VoceId): Esito<Unit> {
+        val perRimossa = VoceRef(incontroId, rimossa)
+        val perSopravvissuta = VoceRef(incontroId, sopravvissuta)
         val attribuzioneRimossa = attribuzioni.trova(perRimossa) ?: return Esito.Ok(Unit)
         return if (attribuzioni.trova(perSopravvissuta) != null) {
             rimuoviSePresente(perRimossa)
@@ -50,7 +50,7 @@ public class ApplicaRevisionePolitica(
      * exists for it) and [origine] keeps its Attribuzione and print row (stale, refreshed after commit).
      */
     @Suppress("UnusedParameter") // mirrors the VoceDivisa event 1:1 for abbonato-revisione-parlanti (AC-142)
-    public fun applicaVoceDivisa(registrazioneId: RegistrazioneId, origine: VoceId): Esito<Unit> = Esito.Ok(Unit)
+    public fun applicaVoceDivisa(incontroId: IncontroId, origine: VoceId): Esito<Unit> = Esito.Ok(Unit)
 
     /**
      * `SegmentoRiassegnato`: the source [da], if left without any Segmento ([daRimossa]), loses its
@@ -59,12 +59,12 @@ public class ApplicaRevisionePolitica(
      */
     @Suppress("UnusedParameter") // mirrors the SegmentoRiassegnato event 1:1 for abbonato-revisione-parlanti (AC-142)
     public fun applicaSegmentoRiassegnato(
-        registrazioneId: RegistrazioneId,
+        incontroId: IncontroId,
         da: VoceId,
         a: VoceId,
         daRimossa: Boolean,
         aNuova: Boolean,
-    ): Esito<Unit> = if (daRimossa) rimuoviSePresente(VoceRef(registrazioneId, da)) else Esito.Ok(Unit)
+    ): Esito<Unit> = if (daRimossa) rimuoviSePresente(VoceRef(incontroId, da)) else Esito.Ok(Unit)
 
     /**
      * [INV-21] the removed [voceRef] loses its Attribuzione and derived print, then [INV-25]: an `attivo

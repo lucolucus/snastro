@@ -3,17 +3,19 @@ package snastro.sintesi.applicazione.comandi
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
 import snastro.sintesi.applicazione.eventi.RiassuntoRichiesto
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
+import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.parteUnica
 import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.LimiteIngresso
@@ -31,7 +33,7 @@ import java.time.Clock
  *   shares) — INV-S6;
  * - validates the [Argomento] (AFTER the guards: `What to do`);
  * - reads the Progetto's current lunghezza massima and fixes it on the new Riassunto (INV-S10);
- * - removes a previous `fallito` of the Registrazione in this same transaction, leaving a `pronto`
+ * - removes a previous `fallito` of the Incontro in this same transaction, leaving a `pronto`
  *   untouched (INV-S3);
  * - creates the Riassunto `in_attesa` and publishes `RiassuntoRichiesto`, delivered after commit only
  *   (ADR 0012).
@@ -48,35 +50,38 @@ public class RiassumiServizio(
     private val riassunti: RiassuntoRepository,
     private val lunghezzeMassime: LunghezzaMassimaRiassuntoRepository,
     private val trascritti: LettoreTrascritto,
+    private val incontri: LettoreIncontro,
     private val disponibilita: DisponibilitaModelloLinguistico,
     private val eventi: DispatcherEventi,
 ) {
     public fun esegui(c: Riassumi): Esito<RiassuntoId> = uow.inTransazione {
-        val segmenti = trascritti.segmenti(c.registrazioneId)
+        // ADR 0033 §4.1: the Incontro's Parte, then its per-Parte reads; an unknown Incontro has no Trascritto.
+        val parte = incontri.parteUnica(c.incontroId)
+        val segmenti = parte?.let(trascritti::segmenti)
         val stimaToken = segmenti?.let { LimiteIngresso.stimaToken(ingressoDi(it)) }
         Riassumibilita.valuta(
-            registrazioneId = c.registrazioneId,
+            incontroId = c.incontroId,
             modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
             trascrittoPresente = segmenti != null,
-            elaborazioneAperta = trascritti.elaborazioneAperta(c.registrazioneId),
-            riassuntoAperto = riassunti.diRegistrazione(c.registrazioneId).any { it.aperto },
+            elaborazioneAperta = parte != null && trascritti.elaborazioneAperta(parte),
+            riassuntoAperto = riassunti.trova(c.incontroId).any { it.aperto },
             stimaToken = stimaToken,
         )
             .poi { Argomento.di(c.argomento) }
-            .poi { argomento -> crea(c.registrazioneId, argomento) }
+            .poi { argomento -> crea(c.incontroId, argomento) }
     }
 
     /**
      * INV-S3 (previous `fallito` removed — an `Errore` of [RiassuntoRepository.rimuovi] stops here and rolls back,
      * ADR 0003), INV-S10 (cap fixed at request), then `Riassunto.richiedi`.
      */
-    private fun crea(registrazioneId: RegistrazioneId, argomento: Argomento?): Esito<RiassuntoId> {
-        val fallito = riassunti.diRegistrazione(registrazioneId).singleOrNull { it.fallito }
+    private fun crea(incontroId: IncontroId, argomento: Argomento?): Esito<RiassuntoId> {
+        val fallito = riassunti.trova(incontroId).singleOrNull { it.fallito }
         val rimosso = fallito?.let { riassunti.rimuovi(it.id) } ?: Esito.Ok(Unit)
         return rimosso.poi {
             val cap = lunghezzeMassime.trova(progettoId).parole
             val id = RiassuntoId(generatoreId.nuovo())
-            val creato = Riassunto.richiedi(id, registrazioneId, argomento, cap, clock.instant())
+            val creato = Riassunto.richiedi(id, incontroId, argomento, cap, clock.instant())
             riassunti.salva(creato.aggregato).poi {
                 eventi.pubblica(creato.evento.pubblicato())
                 Esito.Ok(id)
@@ -91,4 +96,4 @@ public class RiassumiServizio(
     )
 }
 
-private fun RiassuntoRichiestoDominio.pubblicato(): RiassuntoRichiesto = RiassuntoRichiesto(registrazioneId)
+private fun RiassuntoRichiestoDominio.pubblicato(): RiassuntoRichiesto = RiassuntoRichiesto(incontroId)

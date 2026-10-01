@@ -1,5 +1,6 @@
 package snastro.progetto.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 
@@ -16,10 +17,19 @@ public class CatalogoRegistrazioni(private val registrazioni: RegistrazioneRepos
             RegistrazioneVista(
                 registrazioneId = r.id,
                 progettoId = r.progettoId,
+                incontroId = r.incontroId,
                 titolo = r.titolo,
                 riferimentoAudio = r.riferimentoAudio,
                 dataRegistrazione = r.dataRegistrazione,
                 durataMs = r.durataMs,
             )
         }
+
+    /**
+     * The Parti (Registrazioni) of the Incontro [incontroId], UNORDERED: the order of the Parti belongs to the
+     * `incontro` aggregate, so no caller sorts this list nor relies on its order (ADR 0033 §4.1, D-0031). `null` for an
+     * unknown Incontro, or one that ceased with its last Parte; a known Incontro has at least one Parte (INV-I1).
+     */
+    public fun parti(incontroId: IncontroId): List<RegistrazioneId>? =
+        registrazioni.diIncontro(incontroId).map { it.id }.ifEmpty { null }
 }

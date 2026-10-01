@@ -1,6 +1,6 @@
 package snastro.sintesi.adattatori.persistenza
 
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
@@ -27,7 +27,7 @@ internal fun inDominio(db: SnastroDatabase, riga: RigaRiassunto): Riassunto {
     val figli = leggiFigli(db, RiassuntoId(riga.id))
     return Riassunto.ricostituisci(
         id = RiassuntoId(riga.id),
-        registrazioneId = RegistrazioneId(riga.registrazioneId),
+        incontroId = IncontroId(riga.incontroId),
         argomento = riga.argomento?.let { a ->
             Argomento.di(a).valoreOppureErrore { "argomento invalido nel database: $a" }
         },
@@ -43,9 +43,8 @@ internal fun inDominio(db: SnastroDatabase, riga: RigaRiassunto): Riassunto {
         azioni = figli.azioni,
         puntiChiave = figli.puntiChiave,
         omessi = riga.omessi?.toInt(),
-        // TRANSITION (ADR 0033 §6): the stored key is '<registrazioneId>=<old encoding>' (ADR 0034 §1); the
-        // current domain compares the old encoding, so the prefix is stripped here (incontro-chiavi removes this).
-        struttura = riga.struttura?.substringAfter('='),
+        // The stored key is the domain's own '<registrazioneId>=<StrutturaTrascritto.chiave>' (ADR 0034 §1): verbatim.
+        struttura = riga.struttura,
     )
 }
 

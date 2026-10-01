@@ -6,13 +6,14 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class AttribuzioneTest {
-    private val voce = VoceRef(RegistrazioneId("id-r"), VoceId(1))
+    private val voce = VoceRef(unIncontroDi(RegistrazioneId("id-r")), VoceId(1))
     private val progetto = ProgettoId("id-p")
     private val marco = ParlanteId("id-1")
     private val luca = ParlanteId("id-2")
@@ -76,7 +77,7 @@ class AttribuzioneTest {
     fun `AC-269 trasferisci restituisce l Attribuzione con chiave a e stessi parlanteId e progettoId`() {
         val cambiata = unaAttribuzione()
         cambiata.cambia(luca).atteso()
-        val sopravvissuta = VoceRef(voce.registrazioneId, VoceId(7))
+        val sopravvissuta = VoceRef(voce.incontroId, VoceId(7))
 
         val trasferita = cambiata.trasferisci(sopravvissuta)
 
@@ -92,7 +93,7 @@ class AttribuzioneTest {
         // tombstone of an eliminato Parlante is re-keyed exactly like any other Attribuzione.
         val tombstone = unaAttribuzione(parlanteId = ParlanteId("id-eliminato"))
 
-        val trasferita: Attribuzione = tombstone.trasferisci(VoceRef(voce.registrazioneId, VoceId(2)))
+        val trasferita: Attribuzione = tombstone.trasferisci(VoceRef(voce.incontroId, VoceId(2)))
 
         assertEquals(ParlanteId("id-eliminato"), trasferita.parlanteId)
     }
@@ -101,6 +102,7 @@ class AttribuzioneTest {
     fun `AC-269 trasferisci verso una Voce di un altra Registrazione e rifiutato`() {
         val a = unaAttribuzione()
 
-        assertFailsWith<IllegalArgumentException> { a.trasferisci(VoceRef(RegistrazioneId("id-altra"), VoceId(1))) }
+        val altrove = VoceRef(unIncontroDi(RegistrazioneId("id-altra")), VoceId(1))
+        assertFailsWith<IllegalArgumentException> { a.trasferisci(altrove) }
     }
 }

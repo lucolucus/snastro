@@ -340,7 +340,9 @@ class RegistrazionePresenter(
     /** AC-403: '▶ estratto' of a Voce card — a no-op while the audio source is missing. */
     fun riproduciEstrattoVoce(voceId: VoceId) {
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
-        avviaLettore { parlanti.estratto(VoceRef(registrazioneId, voceId))?.let(lettore::riproduciEstratto) }
+        // ADR 0033 §4.1: the Voce is the Incontro's, read off the trascritto shown.
+        val incontroId = voci.vista?.incontroId ?: return
+        avviaLettore { parlanti.estratto(VoceRef(incontroId, voceId))?.let(lettore::riproduciEstratto) }
     }
 
     /** AC-403: '▶' of a Candidato (its own past excerpt) — a no-op while the audio source is missing. */

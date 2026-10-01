@@ -1,5 +1,6 @@
 package snastro.sbobinatura.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
@@ -26,6 +27,9 @@ public interface AmbienteLettoreTrascritto {
 
     /** Makes an Elaborazione of [registrazioneId] (never completata) end `fallita`: no Trascritto exists. */
     public fun fallisciElaborazione(registrazioneId: RegistrazioneId)
+
+    /** The Incontro the seeded Registrazione is a Parte of, as the supplier set it (ADR 0033 §4.1). */
+    public fun incontroDi(registrazioneId: RegistrazioneId): IncontroId
 
     /**
      * Revisione: riassegna [segmento] to [destinazione], or to a new Voce when it is `null` (the

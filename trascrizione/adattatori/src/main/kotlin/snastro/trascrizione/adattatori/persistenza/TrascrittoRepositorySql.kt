@@ -1,5 +1,6 @@
 package snastro.trascrizione.adattatori.persistenza
 
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
@@ -41,11 +42,13 @@ public class TrascrittoRepositorySql(
      * (D-0008); the snapshot rules that out.
      */
     @OptIn(RicostituzioneDaPersistenza::class)
-    override fun trova(id: RegistrazioneId): Trascritto? = lettura.inLettura {
+    override fun trova(id: RegistrazioneId, incontroId: IncontroId): Trascritto? = lettura.inLettura {
         val riga = db.trascrittoQueries.trovaPerRegistrazione(id.valore).executeAsOneOrNull()
             ?: return@inLettura null
+        val voci = db.vociIncontroQueries.trovaPerIncontro(incontroId.valore).executeAsOneOrNull()
+            ?: return@inLettura null
         val segmenti = db.segmentoQueries.trovaDiTrascritto(id.valore).executeAsList().map { it.inDominio() }
-        Trascritto.ricostituisci(id, segmenti, riga.prossima_voce.toInt(), riga.prossimo_segmento.toInt())
+        Trascritto.ricostituisci(id, incontroId, segmenti, voci.prossima_voce.toInt(), riga.prossimo_segmento.toInt())
     }
 
     override fun conTrascritto(): List<RegistrazioneId> =
@@ -53,11 +56,11 @@ public class TrascrittoRepositorySql(
 
     // ADR 0020: children first (voce -> trascritto is immediate); attribuzione / impronta_vocale rows pointing at
     // these voci are the Parlanti purge's, checked by the deferred FKs at COMMIT.
-    override fun rimuovi(id: RegistrazioneId) {
+    override fun rimuovi(id: RegistrazioneId, incontroId: IncontroId) {
         db.segmentoQueries.eliminaDiRegistrazione(id.valore)
         db.voceQueries.eliminaDiRegistrazione(id.valore)
-        db.voceIncontroQueries.eliminaSenzaPresenza(id.valore)
-        db.vociIncontroQueries.eliminaSeSenzaTrascritti(id.valore)
+        db.voceIncontroQueries.eliminaSenzaPresenza(incontroId.valore, id.valore)
+        db.vociIncontroQueries.eliminaSeSenzaVoci(incontroId.valore)
         db.trascrittoQueries.elimina(id.valore)
     }
 
@@ -68,21 +71,22 @@ public class TrascrittoRepositorySql(
         } else {
             db.trascrittoQueries.aggiornaContatori(t.prossimoSegmento.toLong(), registrazioneId)
         }
-        // The Voce counter lives in the root "Voci dell'Incontro" (ADR 0034 §2), resolved from the Parte by SQL join.
-        if (db.vociIncontroQueries.trovaDiRegistrazione(registrazioneId).executeAsOneOrNull() == null) {
-            db.vociIncontroQueries.inserisci(t.prossimaVoce.toLong(), registrazioneId)
+        // The Voce counter lives in the root "Voci dell'Incontro" (ADR 0034 §2), keyed by the Trascritto's Incontro.
+        val incontroId = t.incontroId.valore
+        if (db.vociIncontroQueries.trovaPerIncontro(incontroId).executeAsOneOrNull() == null) {
+            db.vociIncontroQueries.inserisci(incontroId, t.prossimaVoce.toLong())
         } else {
-            db.vociIncontroQueries.aggiorna(t.prossimaVoce.toLong(), registrazioneId)
+            db.vociIncontroQueries.aggiorna(t.prossimaVoce.toLong(), incontroId)
         }
 
         db.segmentoQueries.eliminaDiRegistrazione(registrazioneId)
         db.voceQueries.eliminaDiRegistrazione(registrazioneId)
 
         t.voci.forEach { voce ->
-            db.voceIncontroQueries.inserisciSeAssente(voce.id.numero.toLong(), registrazioneId)
+            db.voceIncontroQueries.inserisciSeAssente(incontroId, voce.id.numero.toLong())
             db.voceQueries.inserisci(registrazioneId = registrazioneId, numero = voce.id.numero.toLong())
         }
-        db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
+        db.voceIncontroQueries.eliminaSenzaPresenza(incontroId, registrazioneId)
         t.segmenti.forEach { s ->
             db.segmentoQueries.inserisci(
                 registrazioneId = registrazioneId,

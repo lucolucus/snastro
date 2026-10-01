@@ -9,6 +9,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
 import snastro.trascrizione.dominio.SegmentoIniziale
 import snastro.trascrizione.dominio.Trascritto
@@ -27,16 +28,16 @@ class TrascrittoRepositoryFintaTest : TrascrittoRepositoryContratto() {
         val repo = TrascrittoRepositoryFinta()
         val uow = UnitaDiLavoroFinta(repo)
         repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = ID))
-        val prima = firma(assertNotNull(repo.trova(ID)))
+        val prima = firma(assertNotNull(repo.trova(ID, unIncontroDi(ID))))
 
         uow.inTransazione<Unit> {
-            val t = assertNotNull(repo.trova(ID))
+            val t = assertNotNull(repo.trova(ID, unIncontroDi(ID)))
             t.unisci(VoceId(1), VoceId(2)).atteso()
             repo.salva(t)
             Esito.Errore(ErroreDiProva.Fallito("politica violata"))
         }.erroreAtteso<ErroreDiProva.Fallito>()
 
-        assertEquals(prima, firma(assertNotNull(repo.trova(ID))))
+        assertEquals(prima, firma(assertNotNull(repo.trova(ID, unIncontroDi(ID)))))
     }
 
     @Test
@@ -47,7 +48,7 @@ class TrascrittoRepositoryFintaTest : TrascrittoRepositoryContratto() {
         INIZI.forEach { iniziali ->
             statiRaggiungibili(iniziali).forEach { t ->
                 repo.salva(t)
-                val copia = assertNotNull(repo.trova(ID))
+                val copia = assertNotNull(repo.trova(ID, unIncontroDi(ID)))
                 assertNotSame(t, copia)
                 assertEquals(firma(t), firma(copia))
                 stati++
@@ -80,7 +81,7 @@ class TrascrittoRepositoryFintaTest : TrascrittoRepositoryContratto() {
     }
 
     private fun ripeti(iniziali: List<SegmentoIniziale>, cammino: List<Passo>): Trascritto {
-        val t = Trascritto.crea(ID, DURATA_TRASCRITTO_MS, iniziali).atteso().aggregato
+        val t = Trascritto.crea(ID, unIncontroDi(ID), DURATA_TRASCRITTO_MS, iniziali).atteso().aggregato
         cammino.forEach { assertTrue(it(t) is Esito.Ok) }
         return t
     }

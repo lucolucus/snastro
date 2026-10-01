@@ -59,6 +59,7 @@ internal class ModuloTrascrizione(
     private val aggiornamenti = AggiornamentiVistaTrascrizione()
     private val eliminazione = AbbonatoEliminazioneRegistrazione(
         ApplicaEliminazioneRegistrazionePolitica(porte.elaborazioni, porte.trascritti),
+        porte.registrazionePerTrascrizione,
     )
     private val fonte: FonteCoda
 
@@ -102,6 +103,8 @@ internal class ModuloTrascrizione(
             porte.elaborazioni,
         )
         val trascrittoQuery = TrascrittoQuery(porte.trascritti, porte.registrazionePerTrascrizione)
+        // ADR 0033 §4.1: every Revisione resolves the Parte's Incontro through the same reader.
+        val registrazioni = porte.registrazionePerTrascrizione
         collaboratori = CollaboratoriTrascrizione(
             // ADR 0030 §1/AC-C63: the project's ONE StatiElaborazione, the instance Sintesi's reader uses too.
             statiElaborazione = porte.statiElaborazione::stati,
@@ -111,12 +114,12 @@ internal class ModuloTrascrizione(
             annullaElaborazione = AnnullaElaborazioneServizio(uow, porte.elaborazioni, dispatcher)::esegui,
             trascritto = trascrittoQuery::vista,
             revisione = ComandiRevisione(
-                UnisciVociServizio(uow, porte.trascritti, dispatcher),
-                DividiVoceServizio(uow, porte.trascritti, dispatcher),
-                RiassegnaSegmentoServizio(uow, porte.trascritti, dispatcher),
+                UnisciVociServizio(uow, porte.trascritti, registrazioni, dispatcher),
+                DividiVoceServizio(uow, porte.trascritti, registrazioni, dispatcher),
+                RiassegnaSegmentoServizio(uow, porte.trascritti, registrazioni, dispatcher),
             ),
-            confermaSegmento = ConfermaSegmentoServizio(uow, porte.trascritti, dispatcher)::esegui,
-            riassegnaSegmenti = RiassegnaSegmentiServizio(uow, porte.trascritti, dispatcher)::esegui,
+            confermaSegmento = ConfermaSegmentoServizio(uow, porte.trascritti, registrazioni, dispatcher)::esegui,
+            riassegnaSegmenti = RiassegnaSegmentiServizio(uow, porte.trascritti, registrazioni, dispatcher)::esegui,
         )
     }
 

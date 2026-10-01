@@ -1,6 +1,6 @@
 package snastro.sintesi.adattatori.persistenza
 
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
 import snastro.kernel.atteso
@@ -27,7 +27,7 @@ import kotlin.test.assertFailsWith
 @OptIn(RicostituzioneDaPersistenza::class)
 class RiassuntoRicostituisciTest {
     private val id = RiassuntoId("riassunto-1")
-    private val registrazioneId = RegistrazioneId("registrazione-1")
+    private val incontroId = IncontroId("incontro-1")
     private val parole = LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA).atteso()
     private val richiestoAlle: Instant = Instant.parse("2026-09-26T10:00:00Z")
 
@@ -42,7 +42,7 @@ class RiassuntoRicostituisciTest {
         puntiChiave: List<PuntoChiave> = emptyList(),
         omessi: Int? = 0,
     ): Riassunto = Riassunto.ricostituisci(
-        id, registrazioneId, argomento = null, lunghezzaMassima = parole, richiestoAlle = richiestoAlle,
+        id, incontroId, argomento = null, lunghezzaMassima = parole, richiestoAlle = richiestoAlle,
         stato = StatoRiassunto.PRONTO, avviatoAlle = richiestoAlle, motivoFallimento = null,
         sommario = sommario, decisioni = decisioni, questioniAperte = questioniAperte,
         azioni = azioni, puntiChiave = puntiChiave, omessi = omessi, struttura = "1:1",

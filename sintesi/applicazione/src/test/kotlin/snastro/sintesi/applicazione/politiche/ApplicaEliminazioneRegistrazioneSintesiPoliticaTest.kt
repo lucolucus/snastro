@@ -2,8 +2,10 @@ package snastro.sintesi.applicazione.politiche
 
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.eventi.RiassuntoEliminato
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
@@ -47,21 +49,21 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
             val altraRegistrazione = RegistrazioneId("altra-$i")
             val righe = costruisci(r).onEach { riassunti.salva(it).atteso() }
             riassunti.salva(unRiassuntoPronto("altra-pronto-$i", altraRegistrazione)).atteso()
-            val altraPrima = riassunti.diRegistrazione(altraRegistrazione).map { it.statoOsservabile() }
+            val altraPrima = riassunti.trova(unIncontroDi(altraRegistrazione)).map { it.statoOsservabile() }
             val eventiPrima = eventi.pubblicati.size
 
             applica(r).atteso()
 
-            assertEquals(emptyList(), riassunti.diRegistrazione(r), nome)
+            assertEquals(emptyList(), riassunti.trova(unIncontroDi(r)), nome)
             assertEquals(
                 altraPrima,
-                riassunti.diRegistrazione(altraRegistrazione).map { it.statoOsservabile() },
+                riassunti.trova(unIncontroDi(altraRegistrazione)).map { it.statoOsservabile() },
                 "$nome: un'altra Registrazione resta byte-identica",
             )
             // AC-S99: un solo RiassuntoEliminato anche quando lo scenario rimuove piu' righe (qui: ${righe.size}).
             assertTrue(righe.size >= 1, nome)
             assertEquals(eventiPrima + 1, eventi.pubblicati.size, "$nome: un solo evento anche con piu' righe")
-            assertEquals(RiassuntoEliminato(r), eventi.pubblicati.last(), nome)
+            assertEquals(RiassuntoEliminato(unIncontroDi(r)), eventi.pubblicati.last(), nome)
         }
     }
 
@@ -71,7 +73,7 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
 
         applica(REGISTRAZIONE).atteso()
 
-        assertEquals(listOf(RiassuntoEliminato(REGISTRAZIONE)), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoEliminato(unIncontroDi(REGISTRAZIONE))), eventi.pubblicati)
     }
 
     @Test
@@ -89,8 +91,8 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
         val esito = applica(REGISTRAZIONE)
 
         assertEquals(Esito.Ok(Unit), esito)
-        assertEquals(emptyList(), riassunti.diRegistrazione(REGISTRAZIONE))
-        assertEquals(listOf(RiassuntoEliminato(REGISTRAZIONE)), eventi.pubblicati)
+        assertEquals(emptyList(), riassunti.trova(unIncontroDi(REGISTRAZIONE)))
+        assertEquals(listOf(RiassuntoEliminato(unIncontroDi(REGISTRAZIONE))), eventi.pubblicati)
     }
 
     @Test
@@ -101,13 +103,15 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
             eventi,
         )
 
-        val esito = eventi.unitaDiLavoro.inTransazione { politicaGuasta.applica(REGISTRAZIONE) }
+        val esito = eventi.unitaDiLavoro.inTransazione { politicaGuasta.applica(unIncontroDi(REGISTRAZIONE)) }
 
         assertEquals(guasto, esito)
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
-    private fun applica(r: RegistrazioneId): Esito<Unit> = eventi.unitaDiLavoro.inTransazione { politica.applica(r) }
+    private fun applica(
+        r: RegistrazioneId,
+    ): Esito<Unit> = eventi.unitaDiLavoro.inTransazione { politica.applica(unIncontroDi(r)) }
 
     /** A `pronto` Riassunto with a real Decisione + Fonte, to prove "elements and Fonti" are gone, not just the row. */
     private fun unRiassuntoPronto(id: String, r: RegistrazioneId): Riassunto {
@@ -126,7 +130,7 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
         private val delegata: RiassuntoRepository,
         private val guasto: Esito.Errore,
     ) : RiassuntoRepository by delegata {
-        override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> = guasto
+        override fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int> = guasto
     }
 
     private companion object {

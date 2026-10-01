@@ -6,6 +6,8 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi.RiassuntoGiaAperto
@@ -62,7 +64,7 @@ public abstract class RiassuntoRepositoryContratto {
         val elementi = listOf(letto.decisioni, letto.questioniAperte, letto.azioni, letto.puntiChiave)
         assertEquals(listOf(1, 1, 1, 1), elementi.map { it.size })
         assertEquals(2, letto.omessi)
-        assertEquals("1:1,2:2,3:1", letto.struttura)
+        assertEquals("${unicaParteDi(letto.incontroId).valore}=1:1,2:2,3:1", letto.struttura)
         assertEquals(setOf(1, 3), letto.puntiChiave.single().fonti.map { it.numero }.toSet())
         assertEquals(BOZZA.sommario, letto.sommario?.testo?.codifica())
         assertEquals(BOZZA.azioni.first().testo, letto.azioni.single().testo.codifica())
@@ -90,13 +92,19 @@ public abstract class RiassuntoRepositoryContratto {
         repo.salva(r).atteso()
         r.conAvvio()
         repo.salva(r).atteso()
-        assertEquals(listOf(r.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
+        assertEquals(
+            listOf(r.statoOsservabile()),
+            repo.trova(unIncontroDi(REGISTRAZIONE)).map { it.statoOsservabile() },
+        )
 
         r.conCompletamento(BOZZA, STRUTTURA)
         repo.salva(r).atteso()
         repo.salva(r).atteso()
 
-        assertEquals(listOf(r.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
+        assertEquals(
+            listOf(r.statoOsservabile()),
+            repo.trova(unIncontroDi(REGISTRAZIONE)).map { it.statoOsservabile() },
+        )
     }
 
     @Test
@@ -111,7 +119,7 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S66 un secondo in_attesa in_corso o fallito della stessa Registrazione e RiassuntoGiaAperto`() {
+    public fun `AC-S66 un secondo in_attesa in_corso o fallito dello stesso Incontro e RiassuntoGiaAperto`() {
         // (existing, second) pairs, one Registrazione each: every non-pronto state collides with every other.
         val casi = listOf(
             unRiassunto("esistente-0", REGISTRAZIONI[0]) to unRiassunto("secondo-0", REGISTRAZIONI[0]),
@@ -125,10 +133,10 @@ public abstract class RiassuntoRepositoryContratto {
 
         casi.forEach { (esistente, secondo) ->
             val errore = repo.salva(secondo).erroreAtteso<RiassuntoGiaAperto>()
-            assertEquals(RiassuntoGiaAperto(secondo.registrazioneId), errore)
+            assertEquals(RiassuntoGiaAperto(secondo.incontroId), errore)
             assertEquals(
                 listOf(esistente.statoOsservabile()),
-                repo.diRegistrazione(secondo.registrazioneId).map { it.statoOsservabile() },
+                repo.trova(secondo.incontroId).map { it.statoOsservabile() },
                 "nulla scritto per ${secondo.id}",
             )
             assertNull(repo.trova(secondo.id))
@@ -136,27 +144,30 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S66 un secondo pronto della stessa Registrazione e RiassuntoGiaAperto e nulla e scritto`() {
+    public fun `AC-S66 un secondo pronto dello stesso Incontro e RiassuntoGiaAperto e nulla e scritto`() {
         val primo = unPronto("riassunto-1")
         repo.salva(primo).atteso()
 
         val errore = repo.salva(unPronto("riassunto-2")).erroreAtteso<RiassuntoGiaAperto>()
 
-        assertEquals(RiassuntoGiaAperto(REGISTRAZIONE), errore)
+        assertEquals(RiassuntoGiaAperto(unIncontroDi(REGISTRAZIONE)), errore)
 
-        assertEquals(listOf(primo.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
+        assertEquals(
+            listOf(primo.statoOsservabile()),
+            repo.trova(unIncontroDi(REGISTRAZIONE)).map { it.statoOsservabile() },
+        )
         assertNull(repo.trova(RiassuntoId("riassunto-2")))
     }
 
     @Test
-    public fun `AC-S66 un pronto non esclude un aperto ne un fallito della stessa Registrazione`() {
+    public fun `AC-S66 un pronto non esclude un aperto ne un fallito dello stesso Incontro`() {
         repo.salva(unPronto("riassunto-1")).atteso()
         repo.salva(unRiassunto("riassunto-2", REGISTRAZIONE)).atteso()
         repo.salva(unPronto("riassunto-3", registrazioneId = ALTRA_REGISTRAZIONE)).atteso()
         repo.salva(unRiassunto("riassunto-4", ALTRA_REGISTRAZIONE).conAvvio().conFallimento()).atteso()
 
-        assertEquals(setOf("riassunto-1", "riassunto-2"), idDi(repo.diRegistrazione(REGISTRAZIONE)).toSet())
-        assertEquals(setOf("riassunto-3", "riassunto-4"), idDi(repo.diRegistrazione(ALTRA_REGISTRAZIONE)).toSet())
+        assertEquals(setOf("riassunto-1", "riassunto-2"), idDi(repo.trova(unIncontroDi(REGISTRAZIONE))).toSet())
+        assertEquals(setOf("riassunto-3", "riassunto-4"), idDi(repo.trova(unIncontroDi(ALTRA_REGISTRAZIONE))).toSet())
     }
 
     @Test
@@ -174,21 +185,21 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S67 diRegistrazione elenca ogni stato della Registrazione e solo quella`() {
+    public fun `AC-I30 AC-S67 trova per incontroId elenca ogni stato di quell Incontro e solo quello`() {
         repo.salva(unPronto("riassunto-1")).atteso()
         repo.salva(unRiassunto("riassunto-2", REGISTRAZIONE).conAvvio()).atteso()
         repo.salva(unRiassunto("riassunto-3", ALTRA_REGISTRAZIONE)).atteso()
 
-        assertEquals(setOf("riassunto-1", "riassunto-2"), idDi(repo.diRegistrazione(REGISTRAZIONE)).toSet())
-        assertEquals(listOf("riassunto-3"), idDi(repo.diRegistrazione(ALTRA_REGISTRAZIONE)))
-        assertEquals(emptyList(), repo.diRegistrazione(TERZA_REGISTRAZIONE))
+        assertEquals(setOf("riassunto-1", "riassunto-2"), idDi(repo.trova(unIncontroDi(REGISTRAZIONE))).toSet())
+        assertEquals(listOf("riassunto-3"), idDi(repo.trova(unIncontroDi(ALTRA_REGISTRAZIONE))))
+        assertEquals(emptyList(), repo.trova(unIncontroDi(TERZA_REGISTRAZIONE)))
     }
 
     @Test
     public fun `AC-S67 un repository vuoto restituisce liste vuote e trova null`() {
         assertEquals(emptyList(), repo.inAttesa())
         assertEquals(emptyList(), repo.inCorso())
-        assertEquals(emptyList(), repo.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), repo.trova(unIncontroDi(REGISTRAZIONE)))
         assertNull(repo.trova(RiassuntoId("riassunto-1")))
     }
 
@@ -202,7 +213,10 @@ public abstract class RiassuntoRepositoryContratto {
 
         assertNull(repo.trova(r.id))
         // D-0003: the previous pronto goes only after the in_corso check succeeds.
-        assertEquals(listOf(precedente.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
+        assertEquals(
+            listOf(precedente.statoOsservabile()),
+            repo.trova(unIncontroDi(REGISTRAZIONE)).map { it.statoOsservabile() },
+        )
     }
 
     @Test
@@ -220,16 +234,16 @@ public abstract class RiassuntoRepositoryContratto {
         (salvate + precedenti).forEach { repo.salva(it).atteso() }
 
         salvate.forEach { salvata ->
-            val prima = repo.diRegistrazione(salvata.registrazioneId).map { it.statoOsservabile() }.toSet()
+            val prima = repo.trova(salvata.incontroId).map { it.statoOsservabile() }.toSet()
             // The caller's copy of the same row, concluded the other way (pronto over fallito and vice versa).
-            val copia = unRiassunto(salvata.id.valore, salvata.registrazioneId).conAvvio()
+            val copia = unRiassunto(salvata.id.valore, unicaParteDi(salvata.incontroId)).conAvvio()
             if (salvata.pronto) copia.conFallimento() else copia.conCompletamento(BOZZA, STRUTTURA)
 
             assertEquals(false, repo.concludi(copia).atteso(), "${salvata.id}")
             assertEquals(salvata.statoOsservabile(), checkNotNull(repo.trova(salvata.id)).statoOsservabile())
             assertEquals(
                 prima,
-                repo.diRegistrazione(salvata.registrazioneId).map { it.statoOsservabile() }.toSet(),
+                repo.trova(salvata.incontroId).map { it.statoOsservabile() }.toSet(),
                 "nulla cambia per ${salvata.id}",
             )
         }
@@ -263,7 +277,7 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S68 concludi pronto sostituisce il pronto precedente della Registrazione e nessun altro`() {
+    public fun `AC-S68 concludi pronto sostituisce il pronto precedente dell Incontro e nessun altro`() {
         val precedente = unPronto("riassunto-1")
         val altro = unPronto("riassunto-3", registrazioneId = ALTRA_REGISTRAZIONE)
         val r = unRiassunto("riassunto-2", REGISTRAZIONE, parole = 800).conAvvio()
@@ -272,20 +286,23 @@ public abstract class RiassuntoRepositoryContratto {
         r.conCompletamento(BOZZA_BREVE, STRUTTURA)
         assertEquals(true, repo.concludi(r).atteso())
 
-        assertEquals(listOf(r.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
+        assertEquals(
+            listOf(r.statoOsservabile()),
+            repo.trova(unIncontroDi(REGISTRAZIONE)).map { it.statoOsservabile() },
+        )
         assertEquals(altro.statoOsservabile(), checkNotNull(repo.trova(altro.id)).statoOsservabile())
     }
 
     @Test
-    public fun `AC-S69 rimuoviDiRegistrazione restituisce quanti ne toglie con elementi e Fonti`() {
+    public fun `AC-S69 rimuoviDiIncontro restituisce quanti ne toglie con elementi e Fonti`() {
         repo.salva(unPronto("riassunto-1")).atteso()
         repo.salva(unRiassunto("riassunto-2", REGISTRAZIONE)).atteso()
         val altro = unPronto("riassunto-3", registrazioneId = ALTRA_REGISTRAZIONE)
         repo.salva(altro).atteso()
 
-        assertEquals(2, repo.rimuoviDiRegistrazione(REGISTRAZIONE).atteso())
+        assertEquals(2, repo.rimuoviDiIncontro(unIncontroDi(REGISTRAZIONE)).atteso())
 
-        assertEquals(emptyList(), repo.diRegistrazione(REGISTRAZIONE))
+        assertEquals(emptyList(), repo.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), repo.inAttesa())
         assertEquals(altro.statoOsservabile(), checkNotNull(repo.trova(altro.id)).statoOsservabile())
         // A64: checked BEFORE any re-save, which would REPLACE (and so mask) an orphan left behind.
@@ -299,10 +316,10 @@ public abstract class RiassuntoRepositoryContratto {
     }
 
     @Test
-    public fun `AC-S69 rimuoviDiRegistrazione senza Riassunti restituisce 0`() {
+    public fun `AC-S69 rimuoviDiIncontro senza Riassunti restituisce 0`() {
         repo.salva(unRiassunto("riassunto-1", ALTRA_REGISTRAZIONE)).atteso()
 
-        assertEquals(0, repo.rimuoviDiRegistrazione(REGISTRAZIONE).atteso())
+        assertEquals(0, repo.rimuoviDiIncontro(unIncontroDi(REGISTRAZIONE)).atteso())
 
         assertEquals(listOf("riassunto-1"), idDi(repo.inAttesa()))
     }
@@ -314,13 +331,18 @@ public abstract class RiassuntoRepositoryContratto {
         repo.salva(resta).atteso()
 
         repo.rimuovi(RiassuntoId("sconosciuto")).atteso()
-        assertEquals(setOf("riassunto-1", "riassunto-2"), idDi(repo.diRegistrazione(REGISTRAZIONE)).toSet())
+        assertEquals(setOf("riassunto-1", "riassunto-2"), idDi(repo.trova(unIncontroDi(REGISTRAZIONE))).toSet())
 
         repo.rimuovi(RiassuntoId("riassunto-1")).atteso()
         assertNull(repo.trova(RiassuntoId("riassunto-1")))
         // A64: checked BEFORE any re-save, which would REPLACE (and so mask) an orphan left behind.
-        figliOrfaniDi(RiassuntoId("riassunto-1"))?.let { assertEquals(0, it, "figli orfani di riassunto-1 dopo rimuovi") }
-        assertEquals(listOf(resta.statoOsservabile()), repo.diRegistrazione(REGISTRAZIONE).map { it.statoOsservabile() })
+        figliOrfaniDi(
+            RiassuntoId("riassunto-1"),
+        )?.let { assertEquals(0, it, "figli orfani di riassunto-1 dopo rimuovi") }
+        assertEquals(
+            listOf(resta.statoOsservabile()),
+            repo.trova(unIncontroDi(REGISTRAZIONE)).map { it.statoOsservabile() },
+        )
         val rifatto = unPronto("riassunto-1", bozza = BOZZA_BREVE)
         repo.salva(rifatto).atteso()
         assertEquals(rifatto.statoOsservabile(), checkNotNull(repo.trova(rifatto.id)).statoOsservabile())

@@ -4,6 +4,7 @@ import com.lemonappdev.konsist.api.Konsist
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.unIncontroDi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,14 +18,15 @@ class EventiSintesiTest {
 
     @Test
     fun `AC-S71 gli eventi pubblicati hanno esattamente i campi fissati`() {
-        val soloRegistrazione = listOf("registrazioneId: RegistrazioneId")
+        // ADR 0037 §1 (incontro-chiavi): every Riassunto event is keyed by the Incontro.
+        val soloIncontro = listOf("incontroId: IncontroId")
         assertEquals(
             mapOf(
-                "RiassuntoRichiesto" to soloRegistrazione,
-                "RiassuntoAvviato" to soloRegistrazione,
-                "RiassuntoPronto" to soloRegistrazione,
-                "RiassuntoFallito" to listOf("registrazioneId: RegistrazioneId", "motivo: String"),
-                "RiassuntoEliminato" to soloRegistrazione,
+                "RiassuntoRichiesto" to soloIncontro,
+                "RiassuntoAvviato" to soloIncontro,
+                "RiassuntoPronto" to soloIncontro,
+                "RiassuntoFallito" to listOf("incontroId: IncontroId", "motivo: String"),
+                "RiassuntoEliminato" to soloIncontro,
                 "LunghezzaMassimaRiassuntoModificata" to listOf("progettoId: ProgettoId"),
             ),
             classi.associate { c ->
@@ -49,15 +51,15 @@ class EventiSintesiTest {
     @Test
     fun `AC-S71 gli eventi sono EventoPubblicato e si confrontano per valore`() {
         val eventi: List<EventoPubblicato> = listOf(
-            RiassuntoRichiesto(registrazione),
-            RiassuntoAvviato(registrazione),
-            RiassuntoPronto(registrazione),
-            RiassuntoFallito(registrazione, "errore_modello"),
-            RiassuntoEliminato(registrazione),
+            RiassuntoRichiesto(unIncontroDi(registrazione)),
+            RiassuntoAvviato(unIncontroDi(registrazione)),
+            RiassuntoPronto(unIncontroDi(registrazione)),
+            RiassuntoFallito(unIncontroDi(registrazione), "errore_modello"),
+            RiassuntoEliminato(unIncontroDi(registrazione)),
             LunghezzaMassimaRiassuntoModificata(ProgettoId("progetto-1")),
         )
 
-        assertEquals(RiassuntoFallito(RegistrazioneId("registrazione-1"), "errore_modello"), eventi[3])
+        assertEquals(RiassuntoFallito(unIncontroDi(RegistrazioneId("registrazione-1")), "errore_modello"), eventi[3])
         assertEquals(LunghezzaMassimaRiassuntoModificata(ProgettoId("progetto-1")), eventi[5])
         assertEquals(6, eventi.toSet().size)
     }

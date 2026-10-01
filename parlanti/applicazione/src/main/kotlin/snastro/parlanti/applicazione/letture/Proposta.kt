@@ -15,6 +15,7 @@ import snastro.parlanti.applicazione.porte.Fascia
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
+import snastro.parlanti.applicazione.porte.voceNellaParte
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.SorgenteImpronta
@@ -66,14 +67,17 @@ public class Proposta(
 
     /** AC-173: forgets every cached Proposta of a Registrazione (a Revisione, `ImpronteRiallineate`). */
     public fun invalida(registrazioneId: RegistrazioneId) {
-        cache.keys.removeAll { it.registrazioneId == registrazioneId }
+        // ADR 0033 §4.1: the cached Voci are keyed by the Incontro the Registrazione is a Parte of. A Registrazione the
+        // catalogue no longer knows has no Voce left to ask for: its entries are never read again.
+        val incontroId = registrazioni.registrazione(registrazioneId)?.incontroId ?: return
+        cache.keys.removeAll { it.incontroId == incontroId }
     }
 
     private fun calcola(voceRef: VoceRef): PropostaVista? =
-        contesto(voceRef)?.let { (progettoId, intervalli) ->
+        contesto(voceRef)?.let { (progettoId, parte, intervalli) ->
             // AC-308: bounded by SorgenteImpronta.di, decoded exactly then; AC-422: ONE estrai, this Voce only.
             val sorgente = SorgenteImpronta.di(intervalli)
-            val campioni = decodificatore.campioni(voceRef.registrazioneId, sorgente.intervalli)
+            val campioni = decodificatore.campioni(parte, sorgente.intervalli)
             val impronta = estrattore.estrai(campioni) // puo lanciare InterruptedException (ADR 0017 S1.5): AC-423
             val candidati = parlanti.delProgetto(progettoId)
                 .filter { it.attivo }
@@ -84,12 +88,10 @@ public class Proposta(
 
     /** `null` when [voceRef] has no Trascritto/Registrazione, or its Voce has no interval left. */
     private fun contesto(voceRef: VoceRef): Contesto? =
-        registrazioni.registrazione(voceRef.registrazioneId)?.progettoId?.let { progettoId ->
-            voci.voci(voceRef.registrazioneId)
-                ?.find { it.voceRef == voceRef }
-                ?.intervalli
-                ?.takeIf { it.isNotEmpty() }
-                ?.let { intervalli -> Contesto(progettoId, intervalli) }
+        voceNellaParte(voceRef, registrazioni, voci)?.let { letta ->
+            letta.voce.intervalli.takeIf { it.isNotEmpty() }?.let { intervalli ->
+                Contesto(letta.registrazione.progettoId, letta.registrazione.registrazioneId, intervalli)
+            }
         }
 
     /** AC-170/AC-309: the BEST Fascia among the impronte of the current [EstrattoreImpronta.modello] only. */
@@ -106,7 +108,11 @@ public class Proposta(
                 }
             }
 
-    private data class Contesto(val progettoId: ProgettoId, val intervalli: List<IntervalloMs>)
+    private data class Contesto(
+        val progettoId: ProgettoId,
+        val parte: RegistrazioneId,
+        val intervalli: List<IntervalloMs>,
+    )
 
     private companion object {
         val ORDINE_CANDIDATI: Comparator<Candidato> = compareBy(

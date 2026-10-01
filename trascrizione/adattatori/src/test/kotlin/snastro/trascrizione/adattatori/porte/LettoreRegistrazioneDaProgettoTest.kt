@@ -2,6 +2,7 @@ package snastro.trascrizione.adattatori.porte
 
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoroFinta
@@ -81,6 +82,10 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
 
             return eventi.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }
+
+        // The supplier's own public read API: the id AggiungiRegistrazione minted through GeneratoreId.
+        override fun incontroDi(id: RegistrazioneId): IncontroId =
+            checkNotNull(CatalogoRegistrazioni(registrazioni).registrazione(id)).incontroId
 
         override fun modificaData(id: RegistrazioneId, data: LocalDate) {
             ModificaDataRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, eventi)

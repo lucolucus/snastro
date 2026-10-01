@@ -10,6 +10,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
@@ -60,7 +61,7 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
             val lettore = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
 
             val letto = AtomicReference<Trascritto?>()
-            val lettura = thread(name = "lettore") { letto.set(lettore.trova(R)) }
+            val lettura = thread(name = "lettore") { letto.set(lettore.trova(R, unIncontroDi(R))) }
 
             attendiFinche(messaggio = "il lettore deve parcheggiarsi dopo il SELECT su trascritto") {
                 parcheggiato.count == 0L
@@ -72,7 +73,7 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
             val trascritto = assertNotNull(letto.get())
             assertEquals(3, trascritto.prossimaVoce, "la lettura precede la Revisione per intero")
             assertEquals(2, trascritto.voci.size, "...e le sue Voci/Segmenti, mai un misto")
-            val dopo = assertNotNull(TrascrittoRepositorySql(scrittore, uowScrittore).trova(R))
+            val dopo = assertNotNull(TrascrittoRepositorySql(scrittore, uowScrittore).trova(R, unIncontroDi(R)))
             assertEquals(4, dopo.prossimaVoce, "la Revisione e committata comunque dopo la lettura")
             assertEquals(3, dopo.voci.size, "una nuova lettura vede la Voce in piu della Revisione")
         } finally {
@@ -108,7 +109,7 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
             val rilascia = CountDownLatch(1)
             val scrittoreThread = thread(name = "scrittore-immediate-non-committato") {
                 uowScrittore.inTransazione {
-                    scrittore.vociIncontroQueries.aggiorna(prossimaVoce = 99L, registrazioneId = R.valore)
+                    scrittore.vociIncontroQueries.aggiorna(prossimaVoce = 99L, incontroId = unIncontroDi(R).valore)
                     scrittore.trascrittoQueries.aggiornaContatori(
                         prossimoSegmento = 99L,
                         registrazioneId = R.valore,
@@ -128,7 +129,7 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
                 val letto = AtomicReference<Trascritto?>()
                 val guasto = AtomicReference<Throwable>()
                 val lettura = thread(name = "lettore-deferred") {
-                    runCatching { lettore.trova(R) }.onSuccess(letto::set).onFailure(guasto::set)
+                    runCatching { lettore.trova(R, unIncontroDi(R)) }.onSuccess(letto::set).onFailure(guasto::set)
                 }
 
                 attendiFinche(1.seconds, messaggio = "trova deve tornare ben prima del busy_timeout di 5 s") {
@@ -151,7 +152,7 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
     private fun dividi(db: SnastroDatabase, uow: UnitaDiLavoroSql) {
         val repo = TrascrittoRepositorySql(db, uow)
         uow.inTransazione {
-            val t = checkNotNull(repo.trova(R))
+            val t = checkNotNull(repo.trova(R, unIncontroDi(R)))
             t.dividi(VoceId(1), setOf(SegmentoId(3))).atteso() // Segmento 3 -> new Voce 3, prossimaVoce 3 -> 4
             repo.salva(t)
             Esito.Ok(Unit)

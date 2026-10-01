@@ -3,6 +3,7 @@ package snastro.sintesi.applicazione.comandi
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.mappa
 import snastro.kernel.poi
@@ -11,6 +12,7 @@ import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
+import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
@@ -18,6 +20,7 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.parteUnica
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.IngressoRiassunto
@@ -41,9 +44,9 @@ import java.time.Instant
  * 3. **Complete** — the raw answer is verified by the root itself ([Riassunto.completa], INV-S4) against
  *    the structure read in step 2, or the mapped failure is applied ([Riassunto.fallisci]); either way
  *    the result is committed ONLY through [RiassuntoRepository.concludi] (ADR 0022 §4's compare-and-set),
- *    which itself removes any previous `pronto` of the Registrazione — this service never calls
+ *    which itself removes any previous `pronto` of the Incontro — this service never calls
  *    `rimuovi` (D-0003, AC-S86). [RiassuntoRepository.concludi] returning `false` (the row vanished or is
- *    no longer `in_corso` — e.g. a concurrent eliminazione/sostituzione policy, INV-S8) means nothing is
+ *    no longer `in_corso` — e.g. a concurrent eliminazione policy, INV-S8) means nothing is
  *    written and NOTHING is published. `Errore(Annullato)` from the model skips this step entirely:
  *    nothing is written, nothing published. An `Errore` of the compare-and-set itself is
  *    returned by [esegui] (ADR 0003), never discarded.
@@ -59,6 +62,7 @@ public class EseguiProssimoRiassuntoServizio(
     private val orologio: Clock,
     private val riassunti: RiassuntoRepository,
     private val trascritti: LettoreTrascritto,
+    private val incontri: LettoreIncontro,
     private val modello: ModelloLinguistico,
     private val disponibilita: DisponibilitaModelloLinguistico,
     private val eventi: DispatcherEventi,
@@ -82,7 +86,7 @@ public class EseguiProssimoRiassuntoServizio(
         return prossimo.avvia(orologio.instant())
             .poi { riassunti.salva(prossimo) }
             .mappa {
-                eventi.pubblica(RiassuntoAvviato(prossimo.registrazioneId))
+                eventi.pubblica(RiassuntoAvviato(prossimo.incontroId))
                 prossimo
             }
     }
@@ -93,7 +97,7 @@ public class EseguiProssimoRiassuntoServizio(
             EsecuzioneModello.Annullata -> Esito.Ok(Unit) // INV-S8: nothing written, nothing published
             is EsecuzioneModello.Fallita -> concludi(riassunto) { riassunto.fallisci(esecuzione.motivo) }
             is EsecuzioneModello.Completata ->
-                concludi(riassunto) { riassunto.completa(esecuzione.bozza, esecuzione.struttura) }
+                concludi(riassunto) { riassunto.completa(esecuzione.bozza, esecuzione.parte, esecuzione.struttura) }
         }
 
     /** AC-S84: no transaction is open here. AC-S87: [ModelloLinguistico] is skipped when not Installato. */
@@ -102,14 +106,15 @@ public class EseguiProssimoRiassuntoServizio(
         if (disponibilita.stato() !is StatoModelloLinguistico.Installato) {
             return EsecuzioneModello.Fallita(MotivoFallimento.MODELLO_NON_DISPONIBILE)
         }
-        val registrazioneId = riassunto.registrazioneId
-        // INV-S8-style race: the Trascritto can vanish between the claim and here (outside any transaction, e.g. a
-        // concurrent EliminaRegistrazione/sostituzione policy) — treated like a CAS=false, not a programmer error:
+        // ADR 0033 §4.1: the Incontro's Parte, then its Segmenti. INV-S8-style race: the Incontro or the Trascritto can
+        // vanish between the claim and here (outside any transaction, e.g. a concurrent EliminaRegistrazione) —
+        // treated like a CAS=false, not a programmer error:
         // nothing written, nothing published (the row itself is already gone or about to be, ADR 0022 §4).
-        val segmenti = trascritti.segmenti(registrazioneId) ?: return EsecuzioneModello.Annullata
+        val parte = incontri.parteUnica(riassunto.incontroId) ?: return EsecuzioneModello.Annullata
+        val segmenti = trascritti.segmenti(parte) ?: return EsecuzioneModello.Annullata
         val struttura = StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })
         return when (val risposta = modello.riassumi(richiesta(riassunto, segmenti), annullato)) {
-            is Esito.Ok -> EsecuzioneModello.Completata(risposta.valore.inBozza(), struttura)
+            is Esito.Ok -> EsecuzioneModello.Completata(risposta.valore.inBozza(), parte, struttura)
             is Esito.Errore -> mappaErrore(risposta.errore)
         }
     }
@@ -145,15 +150,19 @@ public class EseguiProssimoRiassuntoServizio(
     }
 
     private fun eventoConclusione(riassunto: Riassunto) = if (riassunto.pronto) {
-        RiassuntoPronto(riassunto.registrazioneId)
+        RiassuntoPronto(riassunto.incontroId)
     } else {
-        RiassuntoFallito(riassunto.registrazioneId, checkNotNull(riassunto.motivoFallimento).codice)
+        RiassuntoFallito(riassunto.incontroId, checkNotNull(riassunto.motivoFallimento).codice)
     }
 }
 
 /** What [ModelloLinguistico] produced for phase 3, mapped from [ErroreApplicazioneSintesi] (ADR 0021 §4). */
 private sealed interface EsecuzioneModello {
-    data class Completata(val bozza: BozzaRiassunto, val struttura: StrutturaTrascritto) : EsecuzioneModello
+    data class Completata(
+        val bozza: BozzaRiassunto,
+        val parte: RegistrazioneId,
+        val struttura: StrutturaTrascritto,
+    ) : EsecuzioneModello
     data class Fallita(val motivo: MotivoFallimento) : EsecuzioneModello
     data object Annullata : EsecuzioneModello
 }

@@ -4,6 +4,7 @@ import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import java.util.Locale
 
 /** AC-S10 (D1): [LettoreNomiFinta] passes [LettoreNomiContratto] in the gate. */
@@ -26,7 +27,7 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata {
             require(voci >= 1)
             val id = RegistrazioneId(generatore.nuovo())
-            val refs = (1..voci).map { VoceRef(id, VoceId(it)) }
+            val refs = (1..voci).map { VoceRef(unIncontroDi(id), VoceId(it)) }
             this.voci += refs
             return RegistrazioneSeminata(id, refs)
         }

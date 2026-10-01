@@ -16,6 +16,9 @@ import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
+import snastro.parlanti.applicazione.porte.RegistrazioneVista
+import snastro.parlanti.applicazione.porte.VoceNellaParte
+import snastro.parlanti.applicazione.porte.leggiVoceNellaParte
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.AttribuzioneConfermata
 import snastro.parlanti.dominio.ErroreParlanti
@@ -61,42 +64,40 @@ public class SaltaVoceServizio(
 ) {
     public fun esegui(comando: SaltaVoce): Esito<Unit> {
         val voceRef = comando.voceRef
-        return sorgenteDellaVoceLibera(voceRef).poi { sorgente ->
-            val impronta = estrattore.estrai(decodificatore.campioni(voceRef.registrazioneId, sorgente.intervalli))
+        return voceLibera(voceRef).poi { letta ->
+            val sorgente = SorgenteImpronta.di(letta.voce.intervalli)
+            val parte = letta.registrazione.registrazioneId
+            val impronta = estrattore.estrai(decodificatore.campioni(parte, sorgente.intervalli))
             uow.inTransazione {
-                sorgenteDellaVoceLibera(voceRef).poi { attuale ->
-                    if (attuale.chiave != sorgente.chiave) {
+                voceLibera(voceRef).poi { attuale ->
+                    if (SorgenteImpronta.di(attuale.voce.intervalli).chiave != sorgente.chiave) {
                         Esito.Errore(ErroreParlanti.VoceCambiata(voceRef)) // AC-286: edited since the extraction
                     } else {
-                        creaOspite(voceRef, impronta, sorgente.chiave)
+                        creaOspite(voceRef, attuale.registrazione, impronta, sorgente.chiave)
                     }
                 }
             }
         }
     }
 
-    /** AC-89 first, then the Voce's current [SorgenteImpronta] (TrascrittoNonTrovato / VoceNonTrovata). */
-    private fun sorgenteDellaVoceLibera(voceRef: VoceRef): Esito<SorgenteImpronta> {
+    /** AC-89 first, then the Voce read in its Parte (ADR 0033 §4.1: TrascrittoNonTrovato / VoceNonTrovata). */
+    private fun voceLibera(voceRef: VoceRef): Esito<VoceNellaParte> {
         if (attribuzioni.trova(voceRef) != null) return Esito.Errore(ErroreParlanti.VoceGiaAttribuita(voceRef))
-        val vociTrascritto = voci.voci(voceRef.registrazioneId)
-        val voce = vociTrascritto?.find { it.voceRef == voceRef }
-        return when {
-            vociTrascritto == null -> Esito.Errore(ErroreParlanti.TrascrittoNonTrovato(voceRef.registrazioneId))
-            voce == null -> Esito.Errore(ErroreParlanti.VoceNonTrovata(voceRef))
-            else -> Esito.Ok(SorgenteImpronta.di(voce.intervalli))
-        }
+        return leggiVoceNellaParte(voceRef, registrazioni, voci)
     }
 
-    private fun creaOspite(voceRef: VoceRef, impronta: Impronta, sorgente: String): Esito<Unit> {
-        // Il Trascritto della Registrazione esiste (appena letto): la Registrazione stessa non puo mancare.
-        val registrazione = checkNotNull(registrazioni.registrazione(voceRef.registrazioneId)) {
-            "Registrazione ${voceRef.registrazioneId} assente pur avendo un Trascritto"
-        }
+    private fun creaOspite(
+        voceRef: VoceRef,
+        registrazione: RegistrazioneVista,
+        impronta: Impronta,
+        sorgente: String,
+    ): Esito<Unit> {
         val nome = nomeOspiteLibero(registrazione.progettoId, registrazione.dataRegistrazione)
         val (parlante, evParlante) =
             Parlante.crea(ParlanteId(generatoreId.nuovo()), registrazione.progettoId, nome, TipoParlante.OCCASIONALE)
         // Un Parlante appena creato e sempre attivo: registraImpronta non puo rifiutare la richiesta.
-        check(parlante.registraImpronta(voceRef, impronta, sorgente, estrattore.modello) is Esito.Ok)
+        val parte = registrazione.registrazioneId
+        check(parlante.registraImpronta(voceRef, impronta, sorgente, estrattore.modello, parte) is Esito.Ok)
         val (attribuzione, evAttribuzione) = Attribuzione.conferma(voceRef, registrazione.progettoId, parlante.id)
 
         // FK order: the new Parlante row before its Attribuzione.

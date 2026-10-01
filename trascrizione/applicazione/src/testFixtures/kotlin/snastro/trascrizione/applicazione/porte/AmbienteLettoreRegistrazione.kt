@@ -1,5 +1,6 @@
 package snastro.trascrizione.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
@@ -17,6 +18,9 @@ public interface AmbienteLettoreRegistrazione {
 
     /** Adds one Registrazione to [progettoId] and returns the id the supplier minted for it. */
     public fun semina(seme: SemeRegistrazione): RegistrazioneId
+
+    /** The Incontro the supplier made the seeded Registrazione [id] a Parte of, at import (ADR 0033 §4.1). */
+    public fun incontroDi(id: RegistrazioneId): IncontroId
 
     /** Changes the DataRegistrazione of the seeded Registrazione [id] in the supplier. */
     public fun modificaData(id: RegistrazioneId, data: LocalDate)

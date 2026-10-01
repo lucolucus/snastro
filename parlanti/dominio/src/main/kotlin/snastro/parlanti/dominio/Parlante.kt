@@ -4,6 +4,7 @@ import snastro.kernel.Creato
 import snastro.kernel.Esito
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.VoceRef
 
@@ -64,10 +65,17 @@ public class Parlante private constructor(
 
     /**
      * [INV-14] inserts, or replaces the ONE print of [voceRef]; the others are never touched.
-     * [sorgente] = `SorgenteImpronta.chiave`, [modello] = `EstrattoreImpronta.modello`.
+     * [sorgente] = `SorgenteImpronta.chiave`, [modello] = `EstrattoreImpronta.modello`, [parte] = the Parte the
+     * print was extracted from.
      */
-    public fun registraImpronta(voceRef: VoceRef, impronta: Impronta, sorgente: String, modello: String): Esito<Unit> =
-        seModificabile { metti(ImprontaVocale(voceRef, impronta, sorgente, modello)) }
+    public fun registraImpronta(
+        voceRef: VoceRef,
+        impronta: Impronta,
+        sorgente: String,
+        modello: String,
+        parte: RegistrazioneId,
+    ): Esito<Unit> =
+        seModificabile { metti(ImprontaVocale(voceRef, impronta, sorgente, modello, parte)) }
 
     /**
      * POLICY-ONLY ([INV-21] unire inheritance): re-keys the print of [da] onto [a], keeping impronta,

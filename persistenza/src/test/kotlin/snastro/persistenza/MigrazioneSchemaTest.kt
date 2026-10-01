@@ -121,12 +121,12 @@ class MigrazioneSchemaTest {
         eseguiQuerySintesi(db)
 
         // Cleanup in FK-safe (children-first) order — exercises every DELETE query too.
-        db.attribuzioneQueries.rimuovi(registrazioneId, 1L)
+        db.attribuzioneQueries.rimuovi(incontroDiProva, 1L)
         db.parlanteQueries.rimuovi(parlanteId)
         db.segmentoQueries.eliminaDiRegistrazione(registrazioneId)
         db.voceQueries.eliminaDiRegistrazione(registrazioneId)
-        db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
-        db.vociIncontroQueries.eliminaSeSenzaTrascritti(registrazioneId)
+        db.voceIncontroQueries.eliminaSenzaPresenza(incontroDiProva, registrazioneId)
+        db.vociIncontroQueries.eliminaSeSenzaVoci(incontroDiProva)
         eseguiQueryEliminaRegistrazione(db)
     }
 
@@ -171,16 +171,16 @@ class MigrazioneSchemaTest {
     private fun eseguiQueryTrascrittoVoceSegmentoElaborazione(db: SnastroDatabase) {
         db.trascrittoQueries.inserisci(registrazioneId, 1L)
         db.trascrittoQueries.esistePerRegistrazione(registrazioneId).executeAsOne()
-        db.vociIncontroQueries.inserisci(2L, registrazioneId)
-        db.vociIncontroQueries.trovaDiRegistrazione(registrazioneId).executeAsOne()
-        db.vociIncontroQueries.aggiorna(3L, registrazioneId)
+        db.vociIncontroQueries.inserisci(incontroDiProva, 2L)
+        db.vociIncontroQueries.trovaPerIncontro(incontroDiProva).executeAsOne()
+        db.vociIncontroQueries.aggiorna(3L, incontroDiProva)
         db.trascrittoQueries.trovaPerRegistrazione(registrazioneId).executeAsOne()
         db.trascrittoQueries.trovaRegistrazioniConTrascritto().executeAsList()
         db.trascrittoQueries.aggiornaContatori(2L, registrazioneId)
 
-        db.voceIncontroQueries.inserisciSeAssente(1L, registrazioneId)
+        db.voceIncontroQueries.inserisciSeAssente(incontroDiProva, 1L)
         db.voceQueries.inserisci(registrazioneId, 1L)
-        db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
+        db.voceIncontroQueries.eliminaSenzaPresenza(incontroDiProva, registrazioneId)
         db.voceQueries.trovaDiTrascritto(registrazioneId).executeAsList()
 
         db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)
@@ -195,17 +195,33 @@ class MigrazioneSchemaTest {
     }
 
     private fun eseguiQueryAttribuzioneEImpronta(db: SnastroDatabase) {
-        db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, parlanteId)
-        db.attribuzioneQueries.trova(registrazioneId, 1L).executeAsOne()
-        db.attribuzioneQueries.trovaDiRegistrazione(registrazioneId).executeAsList()
+        db.attribuzioneQueries.inserisci(incontroDiProva, 1L, progettoId, parlanteId)
+        db.attribuzioneQueries.trova(incontroDiProva, 1L).executeAsOne()
+        db.attribuzioneQueries.trovaDiIncontro(incontroDiProva).executeAsList()
         db.attribuzioneQueries.trovaDiParlante(parlanteId).executeAsList()
-        db.attribuzioneQueries.aggiornaParlante(parlanteId, registrazioneId, 1L)
+        db.attribuzioneQueries.aggiornaParlante(parlanteId, incontroDiProva, 1L)
 
-        db.improntaVocaleQueries.inserisci(parlanteId, registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+        db.improntaVocaleQueries.inserisci(
+            parlanteId,
+            incontroDiProva,
+            registrazioneId,
+            1L,
+            byteArrayOf(1),
+            "0-1000",
+            "modello-1",
+        )
         db.improntaVocaleQueries.trovaDiParlante(parlanteId).executeAsList()
         db.improntaVocaleQueries.metadatiDiRegistrazione(registrazioneId).executeAsList()
         db.improntaVocaleQueries.metadatiDelProgetto(progettoId).executeAsList()
-        db.improntaVocaleQueries.sostituisci(parlanteId, registrazioneId, 1L, byteArrayOf(2), "0-2000", "modello-1")
+        db.improntaVocaleQueries.sostituisci(
+            parlanteId,
+            incontroDiProva,
+            registrazioneId,
+            1L,
+            byteArrayOf(2),
+            "0-2000",
+            "modello-1",
+        )
         db.improntaVocaleQueries.aggiornaCompareAndSet(
             byteArrayOf(3),
             "0-3000",
@@ -224,10 +240,10 @@ class MigrazioneSchemaTest {
     private fun eseguiQuerySintesi(db: SnastroDatabase) {
         val riassuntoId = "riassunto-1"
         db.riassuntoQueries.inserisci(
-            riassuntoId, registrazioneId, "in_attesa", "argomento", 2000L, 0L, null, null, null, null, null,
+            riassuntoId, incontroDiProva, "in_attesa", "argomento", 2000L, 0L, null, null, null, null, null,
         )
         db.riassuntoQueries.trovaPerId(riassuntoId).executeAsOne()
-        db.riassuntoQueries.trovaDiRegistrazione(registrazioneId).executeAsList()
+        db.riassuntoQueries.trovaDiIncontro(incontroDiProva).executeAsList()
         db.riassuntoQueries.trovaInAttesa().executeAsList()
         db.riassuntoQueries.trovaInCorso().executeAsList()
         db.riassuntoQueries.avvia(1L, riassuntoId)
@@ -247,10 +263,10 @@ class MigrazioneSchemaTest {
         db.riassuntoElementoQueries.eliminaDiRiassunto(riassuntoId)
         db.riassuntoQueries.elimina(riassuntoId)
 
-        // Bulk-by-Registrazione removal (ADR 0020/0022) — nothing left, exercised for the smoke pass.
-        db.riassuntoFonteQueries.eliminaDiRegistrazione(registrazioneId)
-        db.riassuntoElementoQueries.eliminaDiRegistrazione(registrazioneId)
-        db.riassuntoQueries.eliminaDiRegistrazione(registrazioneId)
+        // Bulk-by-Incontro removal (ADR 0020/0022) — nothing left, exercised for the smoke pass.
+        db.riassuntoFonteQueries.eliminaDiIncontro(incontroDiProva)
+        db.riassuntoElementoQueries.eliminaDiIncontro(incontroDiProva)
+        db.riassuntoQueries.eliminaDiIncontro(incontroDiProva)
     }
 
     private fun pragmaLong(driver: SqlDriver, nome: String): Long =

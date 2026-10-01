@@ -5,9 +5,12 @@ import snastro.avvio.coda.FonteCoda
 import snastro.avvio.coda.RisultatoTentativo
 import snastro.avvio.coda.TipoElementoCoda
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassunto
 import snastro.sintesi.applicazione.comandi.RisultatoRiassunto
 import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
+import snastro.sintesi.applicazione.letture.RiassuntoInCoda
 
 /**
  * The Riassunto source of the shared queue (ADR 0023 §1/§2, boundary `riassunti-in-coda`): the wiring-site
@@ -28,14 +31,17 @@ internal fun fonteCodaRiassunto(
     esegui: (EseguiProssimoRiassunto) -> Esito<RisultatoRiassunto>,
     recupera: () -> Unit,
     esecuzioni: EsecuzioniRiassunto,
+    parteDi: (IncontroId) -> RegistrazioneId?,
 ): FonteCoda {
-    fun tutti(): List<ElementoInCoda> =
-        elenco.elenco().map { ElementoInCoda(it.riassuntoId, it.registrazioneId.valore, it.richiestoAlle) }
+    // ADR 0033 §4.1: the queue's positions are per Registrazione (the S3 tab); a Riassunto is its Incontro's one Parte.
+    fun elemento(it: RiassuntoInCoda) =
+        ElementoInCoda(it.riassuntoId, (parteDi(it.incontroId)?.valore ?: it.incontroId.valore), it.richiestoAlle)
+    fun tutti(): List<ElementoInCoda> = elenco.elenco().map(::elemento)
     fun testaAttuale(esclusi: Set<String>) = elenco.elenco().firstOrNull { it.riassuntoId !in esclusi }
     return FonteCoda(
         tipo = TipoElementoCoda.RIASSUNTO,
         teste = { esclusi ->
-            testaAttuale(esclusi)?.let { ElementoInCoda(it.riassuntoId, it.registrazioneId.valore, it.richiestoAlle) }
+            testaAttuale(esclusi)?.let(::elemento)
         },
         prossima = { esclusi, limite ->
             val esito = esecuzioni.perRun { esegui(EseguiProssimoRiassunto(esclusi, primaDi = limite)) }

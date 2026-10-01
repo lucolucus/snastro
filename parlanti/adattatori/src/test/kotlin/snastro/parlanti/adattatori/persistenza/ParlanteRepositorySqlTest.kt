@@ -11,6 +11,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryContratto
 import snastro.parlanti.applicazione.porte.PredisposizioneParlanti
@@ -65,7 +67,7 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
             db.seminaTrascrittoDiProva(registrazioneId = registrazioneId.valore)
         }
         predisposizione.voci.forEach { v ->
-            db.seminaVoceDiProva(registrazioneId = v.registrazioneId.valore, numero = v.voceId.numero.toLong())
+            db.seminaVoceDiProva(registrazioneId = unicaParteDi(v).valore, numero = v.voceId.numero.toLong())
         }
     }
 
@@ -89,7 +91,7 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
             val uowScrittore = UnitaDiLavoroSql(scrittore)
             val repoScrittore = ParlanteRepositorySql(scrittore, uowScrittore)
             val vecchio = unParlante()
-            vecchio.registraImpronta(V1, Impronta(floatArrayOf(1f)), "0-1000", "modello-1").atteso()
+            vecchio.registraImpronta(V1, Impronta(floatArrayOf(1f)), "0-1000", "modello-1", unicaParteDi(V1)).atteso()
             repoScrittore.salva(vecchio).atteso()
 
             val parcheggiato = CountDownLatch(1)
@@ -104,8 +106,8 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
                 parcheggiato.count == 0L
             }
             val nuovo = unParlante()
-            nuovo.registraImpronta(V1, Impronta(floatArrayOf(1f)), "0-1000", "modello-1").atteso()
-            nuovo.registraImpronta(V2, Impronta(floatArrayOf(2f)), "0-1000", "modello-1").atteso()
+            nuovo.registraImpronta(V1, Impronta(floatArrayOf(1f)), "0-1000", "modello-1", unicaParteDi(V1)).atteso()
+            nuovo.registraImpronta(V2, Impronta(floatArrayOf(2f)), "0-1000", "modello-1", unicaParteDi(V2)).atteso()
             repoScrittore.salva(nuovo).atteso()
             via.countDown()
             lettura.join(ATTESA_FINE_MS)
@@ -176,8 +178,8 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
         val PROGETTO = ProgettoId("progetto-c31")
         val REGISTRAZIONE = RegistrazioneId("registrazione-c31")
         val ID = ParlanteId("parlante-c31")
-        val V1 = VoceRef(REGISTRAZIONE, VoceId(1))
-        val V2 = VoceRef(REGISTRAZIONE, VoceId(2))
+        val V1 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
+        val V2 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2))
         const val ATTESA_SCRITTORE_MS = 5_000L
         const val ATTESA_FINE_MS = 10_000L
     }

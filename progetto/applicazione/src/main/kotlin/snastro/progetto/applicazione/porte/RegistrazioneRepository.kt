@@ -1,5 +1,6 @@
 package snastro.progetto.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.Registrazione
@@ -10,6 +11,9 @@ public interface RegistrazioneRepository {
 
     /** Every Registrazione of the Progetto [id], in no guaranteed order. */
     public fun delProgetto(id: ProgettoId): List<Registrazione>
+
+    /** Every Registrazione (Parte) of the Incontro [id], in no guaranteed order; empty for an unknown Incontro. */
+    public fun diIncontro(id: IncontroId): List<Registrazione>
 
     /**
      * The titolo of every Registrazione of the Progetto [id], in no guaranteed order (empty if none)

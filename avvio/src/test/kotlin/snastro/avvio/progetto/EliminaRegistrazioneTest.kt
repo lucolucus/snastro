@@ -334,14 +334,14 @@ class EliminaRegistrazioneTest {
     private fun righe(ambiente: AmbienteProgetto, id: RegistrazioneId): Map<String, Int> {
         val db = ambiente.porte.database
         val lettura = ambiente.porte.lettura
-        val trascritto = TrascrittoRepositorySql(db, lettura).trova(id)
+        val trascritto = TrascrittoRepositorySql(db, lettura).trova(id, ambiente.incontroDi(id))
         return mapOf(
             "registrazione" to listOfNotNull(RegistrazioneRepositorySql(db).trova(id)).size,
             "elaborazione" to ElaborazioneRepositorySql(db).diRegistrazione(id).size,
             "trascritto" to listOfNotNull(trascritto).size,
             "voce" to (trascritto?.voci?.size ?: 0),
             "segmento" to (trascritto?.segmenti?.size ?: 0),
-            "attribuzione" to AttribuzioneRepositorySql(db).diRegistrazione(id).size,
+            "attribuzione" to AttribuzioneRepositorySql(db).diIncontro(ambiente.incontroDi(id)).size,
             "impronta_vocale" to ParlanteRepositorySql(db, lettura).impronteDiRegistrazione(id).size,
             "eliminazione_in_sospeso" to inSospeso(ambiente).count { e -> e.registrazioneId == id },
         )

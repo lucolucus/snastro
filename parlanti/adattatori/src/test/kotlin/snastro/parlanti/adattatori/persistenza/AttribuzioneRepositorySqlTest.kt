@@ -1,5 +1,6 @@
 package snastro.parlanti.adattatori.persistenza
 
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryContratto
 import snastro.parlanti.applicazione.porte.PredisposizioneParlanti
@@ -37,7 +38,7 @@ class AttribuzioneRepositorySqlTest : AttribuzioneRepositoryContratto() {
             db.seminaTrascrittoDiProva(registrazioneId = registrazioneId.valore)
         }
         predisposizione.voci.forEach { v ->
-            db.seminaVoceDiProva(registrazioneId = v.registrazioneId.valore, numero = v.voceId.numero.toLong())
+            db.seminaVoceDiProva(registrazioneId = unicaParteDi(v).valore, numero = v.voceId.numero.toLong())
         }
         predisposizione.parlanti.forEach { (parlanteId, progettoId) ->
             db.parlanteQueries.inserisci(

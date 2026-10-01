@@ -13,6 +13,7 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
@@ -59,7 +60,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
 
         s.servizio().esegui(EseguiProssimaElaborazione()).atteso()
 
-        assertEquals(NUOVO, s.trascritti.trova(R)?.let(::forma))
+        assertEquals(NUOVO, s.trascritti.trova(R, unIncontroDi(R))?.let(::forma))
         assertEquals(listOf(ElaborazioneAvviata(R, OROLOGIO.instant()), ElaborazioneCompletata(R)), s.eventi.pubblicati)
         assertEquals(listOf(ElaborazioneAvviata(R, OROLOGIO.instant()), ElaborazioneCompletata(R)), s.sincroni)
     }
@@ -71,7 +72,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
         s.servizio().esegui(EseguiProssimaElaborazione()).atteso()
 
         assertEquals(2, s.contata.transazioni, "presa in carico + UNA transazione di completamento")
-        assertEquals(NUOVO, s.trascritti.trova(R)?.let(::forma), "Voci da 1, contatori del nuovo crea")
+        assertEquals(NUOVO, s.trascritti.trova(R, unIncontroDi(R))?.let(::forma), "Voci da 1, contatori del nuovo crea")
         val attese = listOf(
             ElaborazioneAvviata(R, OROLOGIO.instant()),
             TrascrittoSostituito(R),
@@ -89,12 +90,12 @@ class EseguiProssimaElaborazioneRitrascriviTest {
     fun `INV-5 ogni completata riscrive il Trascritto intero e nessun altro esito lo tocca`() {
         val completata = Scenario().giaTrascritta()
         completata.servizio().esegui(EseguiProssimaElaborazione()).atteso()
-        assertEquals(NUOVO, completata.trascritti.trova(R)?.let(::forma))
+        assertEquals(NUOVO, completata.trascritti.trova(R, unIncontroDi(R))?.let(::forma))
 
         val fallita = Scenario().giaTrascritta()
         fallita.servizio(fallita.pipeline(allineatore = AllineatoreMuto())).esegui(EseguiProssimaElaborazione())
             .atteso()
-        assertEquals(FORMA_VECCHIO, fallita.trascritti.trova(R)?.let(::forma))
+        assertEquals(FORMA_VECCHIO, fallita.trascritti.trova(R, unIncontroDi(R))?.let(::forma))
     }
 
     @Test
@@ -105,7 +106,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
             private val reale = DiarizzatoreFinta(TURNI)
 
             override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
-                osservato += s.trascritti.trova(R)?.let(::forma) to s.uow.transazioneAperta
+                osservato += s.trascritti.trova(R, unIncontroDi(R))?.let(::forma) to s.uow.transazioneAperta
                 return reale.diarizza(c, numeroPersone)
             }
         }
@@ -140,7 +141,11 @@ class EseguiProssimaElaborazioneRitrascriviTest {
 
             assertTrue(s.eventi.pubblicati.none { it is TrascrittoSostituito }, caso)
             assertTrue(s.eventi.pubblicati.none { it is ElaborazioneCompletata }, caso)
-            assertEquals(FORMA_VECCHIO, s.trascritti.trova(R)?.let(::forma), "$caso: vecchio Trascritto invariato")
+            assertEquals(
+                FORMA_VECCHIO,
+                s.trascritti.trova(R, unIncontroDi(R))?.let(::forma),
+                "$caso: vecchio Trascritto invariato",
+            )
             assertTrue(s.elaborazioni.trova(RITRASCRIZIONE)?.fallita == true, caso)
             assertTrue(s.elaborazioni.trova(COMPLETATA_1)?.completata == true, "$caso: la completata resta")
         }
@@ -159,7 +164,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
 
         s.servizio().esegui(EseguiProssimaElaborazione()).atteso()
 
-        assertEquals(FORMA_VECCHIO, s.trascritti.trova(R)?.let(::forma), "vecchio Trascritto intatto")
+        assertEquals(FORMA_VECCHIO, s.trascritti.trova(R, unIncontroDi(R))?.let(::forma), "vecchio Trascritto intatto")
         val fallita = checkNotNull(s.elaborazioni.trova(RITRASCRIZIONE))
         assertTrue(fallita.fallita)
         assertEquals("salvataggio del risultato non riuscito", fallita.motivoFallimento)
@@ -218,7 +223,9 @@ class EseguiProssimaElaborazioneRitrascriviTest {
             eventi.registraSincrono { evento ->
                 sincroni += evento
                 transazioneDiOgniSincrono += contata.transazioni
-                if (evento is TrascrittoSostituito) trascrittoAlSostituito = trascritti.trova(R)?.let(::forma)
+                if (evento is TrascrittoSostituito) {
+                    trascrittoAlSostituito = trascritti.trova(R, unIncontroDi(R))?.let(::forma)
+                }
                 Esito.Ok(Unit)
             }
         }
@@ -281,6 +288,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
 
         fun vista(id: RegistrazioneId) = RegistrazioneVista(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             progettoId = ProgettoId("progetto-1"),
             titolo = "Riunione",
             riferimentoAudio = riferimento(id),

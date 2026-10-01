@@ -1,9 +1,9 @@
 package snastro.sintesi.adattatori.persistenza
 
-/** One `riassunto` row as the transition queries project it: the Parte's `registrazione_id` joined in by SQL. */
+/** One `riassunto` row as its queries project it (`SELECT *`, keyed by `incontro_id`). */
 internal data class RigaRiassunto(
     val id: String,
-    val registrazioneId: String,
+    val incontroId: String,
     val stato: String,
     val argomento: String?,
     val lunghezzaMassimaParole: Long,
@@ -18,7 +18,7 @@ internal data class RigaRiassunto(
 @Suppress("LongParameterList") // the mapper SQLDelight's generated queries ask for: one parameter per column
 internal fun rigaRiassunto(
     id: String,
-    registrazioneId: String,
+    incontroId: String,
     stato: String,
     argomento: String?,
     lunghezzaMassimaParole: Long,
@@ -29,6 +29,6 @@ internal fun rigaRiassunto(
     omessi: Long?,
     struttura: String?,
 ): RigaRiassunto = RigaRiassunto(
-    id, registrazioneId, stato, argomento, lunghezzaMassimaParole, richiestoAlle, avviatoAlle,
+    id, incontroId, stato, argomento, lunghezzaMassimaParole, richiestoAlle, avviatoAlle,
     motivoFallimento, sommario, omessi, struttura,
 )

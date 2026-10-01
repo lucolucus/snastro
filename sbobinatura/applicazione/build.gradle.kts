@@ -9,4 +9,6 @@ dependencies {
 
     // LettoreTrascrittoFintaTest mints ids like the supplier, with the kernel's GeneratoreIdFinto.
     testImplementation(testFixtures(project(":kernel")))
+    // unIncontroDi / unicaParteDi: the one-Parte Incontro convention of the Finte (ADR 0033 §4.1).
+    testFixturesImplementation(testFixtures(project(":kernel")))
 }

@@ -2,6 +2,7 @@ package snastro.progetto.dominio
 
 import snastro.kernel.Creato
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
@@ -11,7 +12,9 @@ import java.time.LocalDate
 
 /**
  * Aggregate root: an audio recording of one [Progetto].
- * INV-1: [progettoId] is fixed at creation. INV-2: [dataRegistrazione] is always set, changed only by [modificaData].
+ * INV-1: [progettoId] is fixed at creation. INV-I1: [incontroId], the `Incontro` this Registrazione is a Parte of, is
+ * set at creation and never changes (ADR 0033 §1). INV-2: [dataRegistrazione] is always set, changed only by
+ * [modificaData].
  * [titolo] starts as the source file name without extension (R6) and is never blank; only [rinomina]
  * changes it (AC-360) — the audio file stored in the project is never renamed with it (AC-362).
  */
@@ -20,6 +23,7 @@ public class Registrazione
 private constructor(
     public val id: RegistrazioneId,
     public val progettoId: ProgettoId,
+    public val incontroId: IncontroId,
     titolo: String,
     public val riferimentoAudio: RiferimentoAudio,
     public val durataMs: Long,
@@ -71,6 +75,7 @@ private constructor(
         public fun aggiungi(
             id: RegistrazioneId,
             progettoId: ProgettoId,
+            incontroId: IncontroId,
             titolo: String,
             riferimentoAudio: RiferimentoAudio,
             durataMs: Long,
@@ -78,7 +83,16 @@ private constructor(
             aggiuntaAlle: Instant,
         ): Creato<Registrazione, RegistrazioneAggiunta> =
             Creato(
-                Registrazione(id, progettoId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle),
+                Registrazione(
+                    id,
+                    progettoId,
+                    incontroId,
+                    titolo,
+                    riferimentoAudio,
+                    durataMs,
+                    dataRegistrazione,
+                    aggiuntaAlle,
+                ),
                 RegistrazioneAggiunta(id, progettoId),
             )
 
@@ -87,12 +101,22 @@ private constructor(
         public fun ricostituisci(
             id: RegistrazioneId,
             progettoId: ProgettoId,
+            incontroId: IncontroId,
             titolo: String,
             riferimentoAudio: RiferimentoAudio,
             durataMs: Long,
             dataRegistrazione: LocalDate,
             aggiuntaAlle: Instant,
         ): Registrazione =
-            Registrazione(id, progettoId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle)
+            Registrazione(
+                id,
+                progettoId,
+                incontroId,
+                titolo,
+                riferimentoAudio,
+                durataMs,
+                dataRegistrazione,
+                aggiuntaAlle,
+            )
     }
 }

@@ -6,8 +6,10 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.SegmentoConfermato
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
@@ -17,7 +19,7 @@ import kotlin.test.assertNotNull
 class ConfermaSegmentoServizioTest {
     private val trascritti = TrascrittoRepositoryFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(trascritti))
-    private val servizio = ConfermaSegmentoServizio(eventi.unitaDiLavoro, trascritti, eventi)
+    private val servizio = ConfermaSegmentoServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
 
     @Test
     fun `AC-517 ConfermaSegmento imposta e revoca il flag e pubblica SegmentoConfermato una volta per cambio`() {
@@ -44,7 +46,10 @@ class ConfermaSegmentoServizioTest {
 
         servizio.esegui(ConfermaSegmento(REGISTRAZIONE, SegmentoId(1), confermato = false)).atteso()
 
-        assertEquals(originale.segmenti, assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti)
+        assertEquals(
+            originale.segmenti,
+            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+        )
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
@@ -66,12 +71,17 @@ class ConfermaSegmentoServizioTest {
             .erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
 
         assertEquals(ErroreTrascrizione.SegmentoNonTrovato(SegmentoId(99)), errore)
-        assertEquals(originale.segmenti, assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti)
+        assertEquals(
+            originale.segmenti,
+            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+        )
         assertEquals(emptyList(), eventi.pubblicati)
     }
 
     private fun confermati(): List<SegmentoId> =
-        assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti.filter { it.confermato }.map { it.id }
+        assertNotNull(
+            trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)),
+        ).segmenti.filter { it.confermato }.map { it.id }
 
     private companion object {
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")

@@ -8,6 +8,7 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -32,7 +33,7 @@ class EventiParlantiTest {
 
     @Test
     fun `AC-14 AttribuzioneConfermata ha voceRef, parlanteId e precedente facoltativo`() {
-        val voce = VoceRef(RegistrazioneId("id-9"), VoceId(2))
+        val voce = VoceRef(unIncontroDi(RegistrazioneId("id-9")), VoceId(2))
         val prima: EventoPubblicato =
             AttribuzioneConfermata(voceRef = voce, parlanteId = parlante, precedente = null)
         val correzione = AttribuzioneConfermata(voce, ParlanteId("id-2"), precedente = parlante)

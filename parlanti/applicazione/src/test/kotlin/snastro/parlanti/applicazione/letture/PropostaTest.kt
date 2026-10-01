@@ -10,6 +10,8 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.porte.ConfrontoImpronte
 import snastro.parlanti.applicazione.porte.ConfrontoImpronteFinta
@@ -25,6 +27,7 @@ import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -76,11 +79,11 @@ class PropostaTest {
         val ambiente = Ambiente()
 
         val incluso = unParlante("p-1", "Marco")
-        incluso.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO).atteso()
+        incluso.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO, unicaParteDi(voceStorica(1))).atteso()
         ambiente.parlanti.salva(incluso).atteso()
 
         val eliminato = unParlante("p-2", "Elena")
-        eliminato.registraImpronta(voceStorica(2), impronta(2f), "s2", MODELLO).atteso()
+        eliminato.registraImpronta(voceStorica(2), impronta(2f), "s2", MODELLO, unicaParteDi(voceStorica(2))).atteso()
         eliminato.elimina().atteso()
         ambiente.parlanti.salva(eliminato).atteso()
 
@@ -88,7 +91,13 @@ class PropostaTest {
         ambiente.parlanti.salva(senzaImpronte).atteso()
 
         val altroProgetto = unParlante("p-4", "Bea", progettoId = ProgettoId("altro-progetto"))
-        altroProgetto.registraImpronta(voceStorica(4), impronta(4f), "s4", MODELLO).atteso()
+        altroProgetto.registraImpronta(
+            voceStorica(4),
+            impronta(4f),
+            "s4",
+            MODELLO,
+            unicaParteDi(voceStorica(4)),
+        ).atteso()
         ambiente.parlanti.salva(altroProgetto).atteso()
 
         val nomi = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.map { it.nome }
@@ -100,7 +109,7 @@ class PropostaTest {
     fun `INV-20 la vista espone voceId e per ogni Candidato parlanteId nome tipoParlante fascia ed estratto`() {
         val ambiente = Ambiente()
         val p = unParlante("p-1", "Marco")
-        p.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO).atteso()
+        p.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO, unicaParteDi(voceStorica(1))).atteso()
         ambiente.parlanti.salva(p).atteso()
 
         val proposta = assertNotNull(ambiente.api.perVoce(VOCE_1))
@@ -147,8 +156,20 @@ class PropostaTest {
         val programmate = mapOf(debole to Fascia.DEBOLE, forte to Fascia.FORTE)
         val ambiente = Ambiente(confronto = ConfrontoImpronteFinta(programmate))
         val p = unParlante("p-1", "Marco")
-        p.registraImpronta(voceStorica(1), debole, "s1", MODELLO).atteso() // impronta debole, prima
-        p.registraImpronta(voceStorica(2), forte, "s2", MODELLO).atteso() // impronta forte, seconda
+        p.registraImpronta(
+            voceStorica(1),
+            debole,
+            "s1",
+            MODELLO,
+            unicaParteDi(voceStorica(1)),
+        ).atteso() // impronta debole, prima
+        p.registraImpronta(
+            voceStorica(2),
+            forte,
+            "s2",
+            MODELLO,
+            unicaParteDi(voceStorica(2)),
+        ).atteso() // impronta forte, seconda
         ambiente.parlanti.salva(p).atteso()
 
         val candidato = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.single()
@@ -162,7 +183,7 @@ class PropostaTest {
     fun `AC-309 un Parlante con solo impronte di un altro modello non e Candidato`() {
         val ambiente = Ambiente()
         val p = unParlante("p-1", "Marco")
-        p.registraImpronta(voceStorica(1), impronta(1f), "s1", "modello-vecchio").atteso()
+        p.registraImpronta(voceStorica(1), impronta(1f), "s1", "modello-vecchio", unicaParteDi(voceStorica(1))).atteso()
         ambiente.parlanti.salva(p).atteso()
 
         val proposta = assertNotNull(ambiente.api.perVoce(VOCE_1))
@@ -178,8 +199,14 @@ class PropostaTest {
         val programmate = mapOf(delModelloVecchio to Fascia.FORTE, delModelloCorrente to Fascia.DEBOLE)
         val ambiente = Ambiente(confronto = ConfrontoImpronteFinta(programmate))
         val p = unParlante("p-1", "Marco")
-        p.registraImpronta(voceStorica(1), delModelloVecchio, "s1", "modello-vecchio").atteso()
-        p.registraImpronta(voceStorica(2), delModelloCorrente, "s2", MODELLO).atteso()
+        p.registraImpronta(
+            voceStorica(1),
+            delModelloVecchio,
+            "s1",
+            "modello-vecchio",
+            unicaParteDi(voceStorica(1)),
+        ).atteso()
+        p.registraImpronta(voceStorica(2), delModelloCorrente, "s2", MODELLO, unicaParteDi(voceStorica(2))).atteso()
         ambiente.parlanti.salva(p).atteso()
 
         val candidato = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.single()
@@ -192,7 +219,7 @@ class PropostaTest {
     fun `AC-172 calcolare una Proposta non scrive nessuna riga impronta_vocale`() {
         val ambiente = Ambiente()
         val p = unParlante("p-1", "Marco")
-        p.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO).atteso()
+        p.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO, unicaParteDi(voceStorica(1))).atteso()
         ambiente.parlanti.salva(p).atteso()
         val contoPrima = ambiente.parlanti.righeImpronte(p.id)
 
@@ -205,12 +232,12 @@ class PropostaTest {
     fun `AC-173 invalida per Voce e per Registrazione forza il ricalcolo, senza resta la cache`() {
         val ambiente = Ambiente()
         val p1 = unParlante("p-1", "Marco")
-        p1.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO).atteso()
+        p1.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO, unicaParteDi(voceStorica(1))).atteso()
         ambiente.parlanti.salva(p1).atteso()
         assertEquals(1, assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.size)
 
         val p2 = unParlante("p-2", "Giulia")
-        p2.registraImpronta(voceStorica(2), impronta(2f), "s2", MODELLO).atteso()
+        p2.registraImpronta(voceStorica(2), impronta(2f), "s2", MODELLO, unicaParteDi(voceStorica(2))).atteso()
         ambiente.parlanti.salva(p2).atteso()
         val senzaInvalidare = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.size
         assertEquals(1, senzaInvalidare, "senza invalidare resta la cache")
@@ -220,7 +247,7 @@ class PropostaTest {
         assertEquals(2, dopoInvalidaVoce, "invalida(VoceRef): un'Attribuzione")
 
         val p3 = unParlante("p-3", "Elena")
-        p3.registraImpronta(voceStorica(3), impronta(3f), "s3", MODELLO).atteso()
+        p3.registraImpronta(voceStorica(3), impronta(3f), "s3", MODELLO, unicaParteDi(voceStorica(3))).atteso()
         ambiente.parlanti.salva(p3).atteso()
         val ancoraDallaCache = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.size
         assertEquals(2, ancoraDallaCache, "ancora dalla cache")
@@ -259,9 +286,9 @@ class PropostaTest {
             },
         )
         val p1 = unParlante("p-1", "Marco")
-        p1.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO).atteso()
+        p1.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO, unicaParteDi(voceStorica(1))).atteso()
         val p2 = unParlante("p-2", "Giulia")
-        p2.registraImpronta(voceStorica(2), impronta(2f), "s2", MODELLO).atteso()
+        p2.registraImpronta(voceStorica(2), impronta(2f), "s2", MODELLO, unicaParteDi(voceStorica(2))).atteso()
         ambiente.parlanti.salva(p1).atteso()
         ambiente.parlanti.salva(p2).atteso()
 
@@ -274,7 +301,7 @@ class PropostaTest {
     fun `AC-423 un calcolo annullato non lascia alcuna voce in cache, la richiesta successiva ricalcola`() {
         val ambiente = Ambiente(estrattore = { EstrattoreCheAnnullaUnaVolta() })
         val p = unParlante("p-1", "Marco")
-        p.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO).atteso()
+        p.registraImpronta(voceStorica(1), impronta(1f), "s1", MODELLO, unicaParteDi(voceStorica(1))).atteso()
         ambiente.parlanti.salva(p).atteso()
 
         assertFailsWith<InterruptedException> { ambiente.api.perVoce(VOCE_1) }
@@ -288,7 +315,7 @@ class PropostaTest {
 
     private fun aggiungiCandidato(ambiente: Ambiente, seme: Seed) {
         val p = unParlante(seme.id, seme.nome, seme.tipo)
-        p.registraImpronta(seme.storica, seme.impronta, "s-${seme.id}", MODELLO).atteso()
+        p.registraImpronta(seme.storica, seme.impronta, "s-${seme.id}", MODELLO, unicaParteDi(seme.storica)).atteso()
         ambiente.parlanti.salva(p).atteso()
     }
 
@@ -312,7 +339,7 @@ class PropostaTest {
         estrattore: (UnitaDiLavoroFinta) -> EstrattoreImpronta = { EstrattoreImprontaFinta(unitaDiLavoro = it) },
     ) {
         private val uow = UnitaDiLavoroFinta()
-        val estrattoAudio: EstrattoAudio = EstrattoAudio(lettoreVoci)
+        val estrattoAudio: EstrattoAudio = EstrattoAudio(lettoreVoci, ogniRegistrazioneNota())
         val api: Proposta = Proposta(
             lettoreVoci,
             registrazioni,
@@ -369,15 +396,16 @@ class PropostaTest {
         val PROGETTO = ProgettoId("progetto-1")
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
         val STORICA = RegistrazioneId("storica-1")
-        val VOCE_1 = VoceRef(REGISTRAZIONE, VoceId(1))
+        val VOCE_1 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
         val MODELLO = EstrattoreImprontaFinta.MODELLO
 
         fun impronta(seme: Float): Impronta = Impronta(FloatArray(8) { i -> seme + i })
 
-        fun voceStorica(n: Int): VoceRef = VoceRef(STORICA, VoceId(n))
+        fun voceStorica(n: Int): VoceRef = VoceRef(unIncontroDi(STORICA), VoceId(n))
 
         fun unaRegistrazioneVista(): RegistrazioneVista = RegistrazioneVista(
             registrazioneId = REGISTRAZIONE,
+            incontroId = unIncontroDi(REGISTRAZIONE),
             progettoId = PROGETTO,
             titolo = "Seduta",
             riferimentoAudio = RiferimentoAudio("audio/${REGISTRAZIONE.valore}.m4a"),

@@ -9,6 +9,8 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.dominio.ErroreParlanti
@@ -40,8 +42,8 @@ class EliminaParlanteServizioTest {
     @Test
     fun `AC-94 elimina azzera le impronte, mantiene il Nome, non e piu attivo e pubblica ParlanteEliminato`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "finto").atteso()
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "finto").atteso()
+        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "finto", unicaParteDi(VOCE_1)).atteso()
+        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "finto", unicaParteDi(VOCE_2)).atteso()
         repo.salva(p).atteso()
 
         servizio.esegui(EliminaParlante(ParlanteId("id-1"))).atteso()
@@ -90,7 +92,7 @@ class EliminaParlanteServizioTest {
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
-        val VOCE_1 = VoceRef(RegistrazioneId("registrazione-1"), VoceId(1))
-        val VOCE_2 = VoceRef(RegistrazioneId("registrazione-1"), VoceId(2))
+        val VOCE_1 = VoceRef(unIncontroDi(RegistrazioneId("registrazione-1")), VoceId(1))
+        val VOCE_2 = VoceRef(unIncontroDi(RegistrazioneId("registrazione-1")), VoceId(2))
     }
 }

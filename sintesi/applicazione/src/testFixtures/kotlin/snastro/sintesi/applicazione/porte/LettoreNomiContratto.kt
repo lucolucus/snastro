@@ -100,7 +100,7 @@ public abstract class LettoreNomiContratto {
         for (r in listOf(riunione, intervista)) {
             val nomi = lettore.nomi(r.id)
             assertTrue(nomi.isNotEmpty())
-            assertTrue(nomi.keys.all { it.registrazioneId == r.id }, "chiavi fuori da ${r.id}: ${nomi.keys}")
+            assertTrue(nomi.keys.all { it.incontroId == r.voci[0].incontroId }, "chiavi fuori da ${r.id}: ${nomi.keys}")
         }
         assertEquals(mapOf(riunione.voci[0] to "Marco"), lettore.nomi(riunione.id))
         assertEquals(mapOf(intervista.voci[0] to "Giulia", intervista.voci[1] to "Marco"), lettore.nomi(intervista.id))

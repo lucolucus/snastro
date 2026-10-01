@@ -1,5 +1,6 @@
 package snastro.parlanti.adattatori.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
@@ -18,10 +19,13 @@ public class LettoreRegistrazioneDaProgetto(
             RegistrazioneVista(
                 registrazioneId = vista.registrazioneId,
                 progettoId = vista.progettoId,
+                incontroId = vista.incontroId,
                 titolo = vista.titolo,
                 riferimentoAudio = vista.riferimentoAudio,
                 dataRegistrazione = vista.dataRegistrazione,
                 durataMs = vista.durataMs,
             )
         }
+
+    override fun parti(incontroId: IncontroId): List<RegistrazioneId>? = catalogo.parti(incontroId)
 }

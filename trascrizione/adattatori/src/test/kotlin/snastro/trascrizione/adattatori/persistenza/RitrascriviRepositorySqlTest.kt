@@ -11,6 +11,7 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
@@ -64,11 +65,11 @@ class RitrascriviRepositorySqlTest {
         val db = databaseInMemoria().seminato()
         val repo = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
         repo.salva(VECCHIO)
-        assertEquals(6 to 40, repo.trova(R)?.let { it.prossimaVoce to it.prossimoSegmento })
+        assertEquals(6 to 40, repo.trova(R, unIncontroDi(R))?.let { it.prossimaVoce to it.prossimoSegmento })
 
         repo.salva(NUOVO)
 
-        val riletto = checkNotNull(repo.trova(R))
+        val riletto = checkNotNull(repo.trova(R, unIncontroDi(R)))
         assertEquals(NUOVO.segmenti, riletto.segmenti)
         assertEquals(4 to 20, riletto.prossimaVoce to riletto.prossimoSegmento)
         assertEquals(listOf(1L, 2L, 3L), db.voceQueries.trovaDiTrascritto(R.valore).executeAsList().map { it.numero })
@@ -101,8 +102,8 @@ class RitrascriviRepositorySqlTest {
                 }
             }
 
-            assertEquals(VECCHIO.segmenti, repo.trova(R)?.segmenti, "il vecchio Trascritto e intatto")
-            assertEquals(6 to 40, repo.trova(R)?.let { it.prossimaVoce to it.prossimoSegmento })
+            assertEquals(VECCHIO.segmenti, repo.trova(R, unIncontroDi(R))?.segmenti, "il vecchio Trascritto e intatto")
+            assertEquals(6 to 40, repo.trova(R, unIncontroDi(R))?.let { it.prossimaVoce to it.prossimoSegmento })
             val attribuzioni = contaJdbc(url, "SELECT count(*) FROM attribuzione WHERE voce_id = 5")
             assertEquals(1, attribuzioni, "l attribuzione e intatta")
         } finally {
@@ -129,7 +130,7 @@ class RitrascriviRepositorySqlTest {
             Esito.Ok(Unit)
         }.atteso()
 
-        assertEquals(NUOVO.segmenti, repo.trova(R)?.segmenti)
+        assertEquals(NUOVO.segmenti, repo.trova(R, unIncontroDi(R))?.segmenti)
         assertEquals(0L, conta(driver, "SELECT count(*) FROM attribuzione"))
     }
 
@@ -216,7 +217,7 @@ class RitrascriviRepositorySqlTest {
             val turni = (0 until segmenti).map { i ->
                 SegmentoIniziale(i % voci, IntervalloMs(i * 1_000L, i * 1_000L + 900), "voce ${i % voci} n$i")
             }
-            val esito = Trascritto.crea(R, DURATA, turni)
+            val esito = Trascritto.crea(R, unIncontroDi(R), DURATA, turni)
             check(esito is Esito.Ok)
             return esito.valore.aggregato
         }

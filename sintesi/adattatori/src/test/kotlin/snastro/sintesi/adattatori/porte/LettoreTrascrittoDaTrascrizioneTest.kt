@@ -13,6 +13,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.porte.AmbienteLettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoContratto
@@ -134,14 +135,15 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         private val registrazioni = LettoreRegistrazioneFinta(registrazioniViste)
 
         override val lettore: LettoreTrascritto = LettoreTrascrittoDaTrascrizione(
-            VociDelTrascritto(trascritti),
-            StatiElaborazione(elaborazioni, trascritti, FasiInCorso()),
+            VociDelTrascritto(trascritti, registrazioni),
+            StatiElaborazione(elaborazioni, trascritti, registrazioni, FasiInCorso()),
         )
 
         override fun aggiungiRegistrazione(): RegistrazioneId {
             val id = RegistrazioneId(generatoreId.nuovo())
             registrazioniViste[id] = RegistrazioneVista(
                 registrazioneId = id,
+                incontroId = unIncontroDi(id),
                 progettoId = PROGETTO_ID,
                 titolo = "Registrazione ${id.valore}",
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.wav"),
@@ -178,7 +180,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             elaborazioni.salva(chiusa).atteso()
             accodaElaborazione(r)
             eseguiProssima(r, turni)
-            val trascritto = checkNotNull(trascritti.trova(r))
+            val trascritto = checkNotNull(trascritti.trova(r, unIncontroDi(r)))
             return turni.map { t ->
                 val segmento = trascritto.segmenti.single { it.intervallo == t.intervallo }
                 SegmentoConiato(segmento.id, segmento.voceId)
@@ -204,18 +206,18 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         }
 
         override fun riassegna(r: RegistrazioneId, segmento: SegmentoId, destinazione: VoceId?): VoceId =
-            RiassegnaSegmentoServizio(eventi.unitaDiLavoro, trascritti, eventi)
+            RiassegnaSegmentoServizio(eventi.unitaDiLavoro, trascritti, registrazioni, eventi)
                 .esegui(RiassegnaSegmento(r, segmento, destinazione))
                 .atteso()
 
         override fun unisciVoci(r: RegistrazioneId, sopravvive: VoceId, rimossa: VoceId) {
-            UnisciVociServizio(eventi.unitaDiLavoro, trascritti, eventi)
+            UnisciVociServizio(eventi.unitaDiLavoro, trascritti, registrazioni, eventi)
                 .esegui(UnisciVoci(r, sopravvive, rimossa))
                 .atteso()
         }
 
         override fun dividiVoce(r: RegistrazioneId, origine: VoceId, segmenti: Set<SegmentoId>): VoceId {
-            DividiVoceServizio(eventi.unitaDiLavoro, trascritti, eventi)
+            DividiVoceServizio(eventi.unitaDiLavoro, trascritti, registrazioni, eventi)
                 .esegui(DividiVoce(r, origine, segmenti))
                 .atteso()
             return eventi.pubblicati.filterIsInstance<VoceDivisa>().last().nuova

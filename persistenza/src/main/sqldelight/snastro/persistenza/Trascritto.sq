@@ -1,12 +1,8 @@
 -- Queries for `trascritto` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
--- trascritto.prossima_voce is retired (ADR 0034 §2): the Voce counter is voci_incontro's, joined by SQL (TRANSITION).
+-- trascritto.prossima_voce is retired (ADR 0034 §2): the Voce counter is voci_incontro's (VociIncontro.sq).
 trovaPerRegistrazione:
-SELECT t.registrazione_id, v.prossima_voce, t.prossimo_segmento
-FROM trascritto AS t
-INNER JOIN registrazione AS r ON r.id = t.registrazione_id
-INNER JOIN voci_incontro AS v ON v.incontro_id = r.incontro_id
-WHERE t.registrazione_id = :registrazioneId;
+SELECT registrazione_id, prossimo_segmento FROM trascritto WHERE registrazione_id = :registrazioneId;
 
 esistePerRegistrazione:
 SELECT registrazione_id FROM trascritto WHERE registrazione_id = :registrazioneId;

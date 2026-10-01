@@ -5,6 +5,7 @@ import kotlinx.coroutines.Job
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
@@ -82,6 +83,11 @@ public class AbbonatoSbobinaturaEventi(
      * through [RigenerazioneSbobinaturaPolitica]'s all-or-nothing `rigeneraOgnuna` fold.
      */
     private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
+    /**
+     * The Parti of an Incontro, unordered (ADR 0033 §4.1, e.g. `CatalogoRegistrazioni::parti` bound at `:avvio`): an
+     * [AttribuzioneConfermata] names a Voce of the Incontro, and each Parte has its own Sbobinatura.
+     */
+    private val partiDellIncontro: (IncontroId) -> List<RegistrazioneId>?,
     segnalazione: Segnalazione,
     ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
     ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
@@ -138,7 +144,8 @@ public class AbbonatoSbobinaturaEventi(
             is VociUnite -> accoda(evento.registrazioneId, LavoroPendente())
             is VoceDivisa -> accoda(evento.registrazioneId, LavoroPendente())
             is SegmentoRiassegnato -> accoda(evento.registrazioneId, LavoroPendente())
-            is AttribuzioneConfermata -> accoda(evento.voceRef.registrazioneId, LavoroPendente())
+            is AttribuzioneConfermata ->
+                partiDellIncontro(evento.voceRef.incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
             is DataRegistrazioneModificata ->
                 accoda(evento.registrazioneId, LavoroPendente(dataPrecedente = evento.precedente))
             is RegistrazioneRinominata ->

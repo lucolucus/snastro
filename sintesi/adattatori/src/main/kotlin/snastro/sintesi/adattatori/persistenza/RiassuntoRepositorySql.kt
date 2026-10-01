@@ -3,6 +3,7 @@ package snastro.sintesi.adattatori.persistenza
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -39,15 +40,15 @@ import snastro.sintesi.dominio.TestoConVoci
  * rethrown raw (ADR 0003).
  *
  * [concludi] is the completion compare-and-set (ADR 0022 §4, INV-S8): re-read by id first: absent or
- * no longer `in_corso` -> `Ok(false)`, nothing written (a previous `pronto` of the Registrazione
+ * no longer `in_corso` -> `Ok(false)`, nothing written (a previous `pronto` of the Incontro
  * included); only then, and only for a `pronto` [r], THIS call removes the previous `pronto` of the
- * SAME Registrazione (D-0003 — callers never do it first); the `concludi` query's own `stato =
+ * SAME Incontro (D-0003 — callers never do it first); the `concludi` query's own `stato =
  * 'in_corso'` condition is the defensive second half. Meaningful concurrency proof: the caller's
  * `UnitaDiLavoro` (`UnitaDiLavoroSql`) opens every transaction `BEGIN IMMEDIATE`
  * (`persistenza/AperturaDatabase.kt`), so the re-read here is authoritative — proven under a real race
  * in `RiassuntoRepositorySqlConcorrenzaTest` (AC-S113); `databaseInMemoria()` never contends.
  *
- * [trova]/[diRegistrazione]/[inAttesa]/[inCorso] read the root row and its children from ONE [lettura]
+ * [trova]/[inAttesa]/[inCorso] read the root row and its children from ONE [lettura]
  * snapshot (ADR 0029 §5, AC-C30): never the root outside it, so a completion committing between the root
  * SELECT and the children's can never pair an OLD root with NEW children or the reverse (AC-C31).
  * `concludi` stays a write (`BEGIN IMMEDIATE`, via the caller's `UnitaDiLavoro`), never [lettura].
@@ -62,8 +63,9 @@ public class RiassuntoRepositorySql(
         db.riassuntoQueries.trovaPerId(id.valore, ::rigaRiassunto).executeAsOneOrNull()?.let { inDominio(db, it) }
     }
 
-    override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> = lettura.inLettura {
-        db.riassuntoQueries.trovaDiRegistrazione(r.valore, ::rigaRiassunto).executeAsList().map { inDominio(db, it) }
+    override fun trova(incontroId: IncontroId): List<Riassunto> = lettura.inLettura {
+        db.riassuntoQueries.trovaDiIncontro(incontroId.valore, ::rigaRiassunto).executeAsList()
+            .map { inDominio(db, it) }
     }
 
     override fun inAttesa(): List<Riassunto> = lettura.inLettura {
@@ -85,7 +87,7 @@ public class RiassuntoRepositorySql(
         if (r.pronto) scriviFigli(db, r)
         Esito.Ok(Unit)
     } catch (ex: SQLiteException) {
-        mappaErrore(r.registrazioneId, ex)
+        mappaErrore(r.incontroId, ex)
     }
 
     @Suppress("ReturnCount") // ADR 0022 §4's own three numbered steps, each a guard clause — clearer than nesting
@@ -94,7 +96,7 @@ public class RiassuntoRepositorySql(
         val esistente = db.riassuntoQueries.trovaPerId(r.id.valore, ::rigaRiassunto).executeAsOneOrNull()
         if (esistente == null || esistente.stato != CODICE_IN_CORSO) return Esito.Ok(false)
         return try {
-            if (r.pronto) rimuoviPrecedentePronto(db, r.registrazioneId)
+            if (r.pronto) rimuoviPrecedentePronto(db, r.incontroId)
             val righe = eseguiConcludi(db, r)
             // A86: esistente.stato == CODICE_IN_CORSO was just read above, in the SAME BEGIN IMMEDIATE
             // transaction (exclusive write lock held since it started) — no other writer can have moved this
@@ -106,7 +108,7 @@ public class RiassuntoRepositorySql(
             if (r.pronto) scriviFigli(db, r)
             Esito.Ok(true)
         } catch (ex: SQLiteException) {
-            mappaErrore(r.registrazioneId, ex)
+            mappaErrore(r.incontroId, ex)
         }
     }
 
@@ -116,10 +118,10 @@ public class RiassuntoRepositorySql(
         return Esito.Ok(Unit)
     }
 
-    override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> {
-        db.riassuntoFonteQueries.eliminaDiRegistrazione(r.valore)
-        db.riassuntoElementoQueries.eliminaDiRegistrazione(r.valore)
-        val righe = db.riassuntoQueries.eliminaDiRegistrazione(r.valore).value
+    override fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int> {
+        db.riassuntoFonteQueries.eliminaDiIncontro(incontroId.valore)
+        db.riassuntoElementoQueries.eliminaDiIncontro(incontroId.valore)
+        val righe = db.riassuntoQueries.eliminaDiIncontro(incontroId.valore).value
         return Esito.Ok(righe.toInt())
     }
 }
@@ -135,8 +137,8 @@ private fun scriviRadiceNuova(db: SnastroDatabase, r: Riassunto) {
         motivoFallimento = r.motivoFallimento?.codice,
         sommario = r.sommario?.testo?.codifica(),
         omessi = r.omessi?.toLong(),
-        struttura = r.struttura?.let { "${r.registrazioneId.valore}=$it" },
-        registrazioneId = r.registrazioneId.valore,
+        struttura = r.struttura,
+        incontroId = r.incontroId.valore,
     )
 }
 
@@ -149,7 +151,7 @@ private fun scriviRadiceNuova(db: SnastroDatabase, r: Riassunto) {
  * unchanged [r]). `check` turns any OTHER silent 0-row UPDATE (a save more than one transition ahead, e.g. a
  * `pronto`/`fallito` target over a row still `in_attesa`) into a loud failure instead of letting [salva] go on to
  * write the incoming children against a root row it never actually moved, which every later
- * [RiassuntoRepositorySql.trova]/[diRegistrazione] would then read back INV-S1-broken (A83).
+ * [RiassuntoRepositorySql.trova] would then read back INV-S1-broken (A83).
  */
 private fun aggiornaRadiceEsistente(db: SnastroDatabase, r: Riassunto, statoAttuale: String) {
     if (r.inCorso) {
@@ -174,13 +176,13 @@ private fun eseguiConcludi(db: SnastroDatabase, r: Riassunto): Long =
         motivoFallimento = r.motivoFallimento?.codice,
         sommario = r.sommario?.testo?.codifica(),
         omessi = r.omessi?.toLong(),
-        struttura = r.struttura?.let { "${r.registrazioneId.valore}=$it" },
+        struttura = r.struttura,
         id = r.id.valore,
     ).value
 
-/** D-0003: only [RiassuntoRepositorySql.concludi] removes the previous `pronto` of [registrazioneId]. */
-private fun rimuoviPrecedentePronto(db: SnastroDatabase, registrazioneId: RegistrazioneId) {
-    val precedente = db.riassuntoQueries.trovaDiRegistrazione(registrazioneId.valore, ::rigaRiassunto).executeAsList()
+/** D-0003: only [RiassuntoRepositorySql.concludi] removes the previous `pronto` of [incontroId]. */
+private fun rimuoviPrecedentePronto(db: SnastroDatabase, incontroId: IncontroId) {
+    val precedente = db.riassuntoQueries.trovaDiIncontro(incontroId.valore, ::rigaRiassunto).executeAsList()
         .firstOrNull { it.stato == CODICE_PRONTO } ?: return
     eliminaFigli(db, RiassuntoId(precedente.id))
     db.riassuntoQueries.elimina(precedente.id)
@@ -192,18 +194,23 @@ private fun eliminaFigli(db: SnastroDatabase, id: RiassuntoId) {
     db.riassuntoElementoQueries.eliminaDiRiassunto(id.valore)
 }
 
+/**
+ * TRANSITION (ADR 0033 §4.1): the Fonti are SegmentoIds of the ONE Parte the content was verified against
+ * ([Riassunto.parte]); riassunto-incontro makes them SegmentoRefs.
+ */
 private fun scriviFigli(db: SnastroDatabase, r: Riassunto) {
+    val parte = checkNotNull(r.parte) { "Riassunto pronto senza struttura: ${r.id}" }
     r.decisioni.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_DECISIONE, i, e.testo, e.fonti, voce = null, r.registrazioneId)
+        scriviElemento(db, r.id, TIPO_DECISIONE, i, e.testo, e.fonti, voce = null, parte)
     }
     r.questioniAperte.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_QUESTIONE_APERTA, i, e.testo, e.fonti, voce = null, r.registrazioneId)
+        scriviElemento(db, r.id, TIPO_QUESTIONE_APERTA, i, e.testo, e.fonti, voce = null, parte)
     }
     r.azioni.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_AZIONE, i, e.testo, e.fonti, e.responsabile, r.registrazioneId)
+        scriviElemento(db, r.id, TIPO_AZIONE, i, e.testo, e.fonti, e.responsabile, parte)
     }
     r.puntiChiave.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_PUNTO_CHIAVE, i, e.testo, e.fonti, e.parlante, r.registrazioneId)
+        scriviElemento(db, r.id, TIPO_PUNTO_CHIAVE, i, e.testo, e.fonti, e.parlante, parte)
     }
 }
 
@@ -237,10 +244,10 @@ private fun scriviElemento(
 }
 
 /** Maps a `riassunto_non_pronto_unico` / `riassunto_pronto_unico` violation to the ONE Sintesi error for a
- * per-Registrazione collision (D-0003); any other constraint failure is an infra fault (ADR 0003). */
-private fun <T> mappaErrore(registrazioneId: RegistrazioneId, ex: SQLiteException): Esito<T> {
+ * per-Incontro collision (D-0003); any other constraint failure is an infra fault (ADR 0003). */
+private fun <T> mappaErrore(incontroId: IncontroId, ex: SQLiteException): Esito<T> {
     if (ex.resultCode != SQLiteErrorCode.SQLITE_CONSTRAINT_UNIQUE) throw ex
-    return Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(registrazioneId))
+    return Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(incontroId))
 }
 
 private const val CODICE_IN_CORSO = "in_corso"

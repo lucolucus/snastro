@@ -94,6 +94,7 @@ internal class ModuloParlanti(
     private val revisione = AbbonatoRevisioneParlanti(
         ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
         ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
+        porte.registrazionePerParlanti,
     )
     private val aggiornamenti: AggiornamentiVistaParlanti
     private val riallineamento: AbbonatoRiallineamentoImpronte
@@ -116,7 +117,7 @@ internal class ModuloParlanti(
         val voci = porte.vociPerParlanti
         val registrazione = porte.registrazionePerParlanti
         val decodificatore = ml.decodificatore(apertura.cartella)
-        val estrattoAudio = EstrattoAudio(voci)
+        val estrattoAudio = EstrattoAudio(voci, registrazione)
         val proposte = ProposteSerializzate(
             Proposta(
                 voci,
@@ -128,7 +129,7 @@ internal class ModuloParlanti(
                 estrattoAudio,
             ),
         )
-        aggiornamenti = AggiornamentiVistaParlanti(proposte)
+        aggiornamenti = AggiornamentiVistaParlanti(proposte, registrazione::parti)
         val riallinea = RiallineaImpronteServizio(uow, voci, porte.parlanti, decodificatore, ml.estrattore, dispatcher)
         // AC-C54: the ONE JUL-backed Segnalazione of `:avvio`.
         riallineamento = AbbonatoRiallineamentoImpronte(riallinea, segnalazioneApp)
@@ -167,6 +168,7 @@ internal class ModuloParlanti(
             confermaSegmento = trascrizione.confermaSegmento,
             riassegnaSegmento = trascrizione.revisione.riassegnaSegmento::esegui,
             confermaAttribuzione = conferma::esegui,
+            incontroDi = { r -> registrazione.registrazione(r)?.incontroId },
         )
         val attivi = ParlantiAttivi(porte.parlanti)
         val delProgetto = ParlantiDelProgetto(porte.parlanti, porte.attribuzioni, registrazione, estrattoAudio)
@@ -176,7 +178,7 @@ internal class ModuloParlanti(
             letture = LettureParlanti(
                 identificazione = IdentificazioneVoci(voci, porte.attribuzioni, porte.parlanti)::voci,
                 proposta = if (ml.proposte) proposte::perVoce else galleriaVuota,
-                unioni = PropostaUnione(porte.attribuzioni, porte.parlanti)::proposte,
+                unioni = PropostaUnione(porte.attribuzioni, porte.parlanti, registrazione)::proposte,
                 parlantiAttivi = { attivi.parlanti(progettoId) },
                 estratto = estrattoAudio::estratto,
                 parlantiDelProgetto = { delProgetto.parlanti(progettoId) },

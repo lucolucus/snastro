@@ -1,5 +1,6 @@
 package snastro.progetto.adattatori.persistenza
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
@@ -9,7 +10,6 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
-import java.util.UUID
 import migrations.Registrazione as RegistrazioneRiga
 
 /**
@@ -25,6 +25,9 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
     override fun delProgetto(id: ProgettoId): List<Registrazione> =
         db.registrazioneQueries.trovaDelProgetto(id.valore).executeAsList().map { it.inDominio() }
 
+    override fun diIncontro(id: IncontroId): List<Registrazione> =
+        db.registrazioneQueries.trovaDiIncontro(id.valore).executeAsList().map { it.inDominio() }
+
     // AC-326: reads the sole `titolo` column — no row-object holds the other columns, so this
     // path can never reconstitute a Registrazione (no rule to duplicate, RC-1).
     override fun titoliDelProgetto(id: ProgettoId): List<String> =
@@ -33,9 +36,12 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
     override fun salva(r: Registrazione) {
         val esistente = db.registrazioneQueries.trovaPerId(r.id.valore).executeAsOneOrNull()
         if (esistente == null) {
-            // ADR 0033 §6 (transition): a new Registrazione is the one Parte of its own new Incontro.
-            val incontroId = UUID.randomUUID().toString()
-            db.incontroQueries.inserisci(id = incontroId, progettoId = r.progettoId.valore)
+            // The Incontro row comes with its first Parte (INV-I1: an Incontro never exists without one); its id is
+            // minted by the command through GeneratoreId (ADR 0033 §4.1). incontro_id is written once, never updated.
+            val incontroId = r.incontroId.valore
+            if (db.incontroQueries.trovaPerId(incontroId).executeAsOneOrNull() == null) {
+                db.incontroQueries.inserisci(id = incontroId, progettoId = r.progettoId.valore)
+            }
             db.registrazioneQueries.inserisci(
                 id = r.id.valore,
                 progettoId = r.progettoId.valore,
@@ -69,6 +75,7 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
 private fun RegistrazioneRiga.inDominio(): Registrazione = Registrazione.ricostituisci(
     id = RegistrazioneId(id),
     progettoId = ProgettoId(progetto_id),
+    incontroId = IncontroId(checkNotNull(incontro_id) { "registrazione $id senza incontro_id (INV-I1)" }),
     titolo = titolo,
     riferimentoAudio = RiferimentoAudio(riferimento_audio),
     durataMs = durata_ms,

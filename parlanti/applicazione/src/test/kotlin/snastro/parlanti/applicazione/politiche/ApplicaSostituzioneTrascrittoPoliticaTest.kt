@@ -10,6 +10,8 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
@@ -39,12 +41,21 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
     private fun unParlante(id: String, tipo: TipoParlante = TipoParlante.RICORRENTE): Parlante =
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), tipo).aggregato
 
-    private fun unaVoce(registrazioneId: RegistrazioneId, n: Int): VoceRef = VoceRef(registrazioneId, VoceId(n))
+    private fun unaVoce(
+        registrazioneId: RegistrazioneId,
+        n: Int,
+    ): VoceRef = VoceRef(unIncontroDi(registrazioneId), VoceId(n))
 
     /** Attributes [voceRef] to [parlante] with one print, as a command would (skips a not-attivo Parlante). */
     private fun attribuisci(voceRef: VoceRef, parlante: Parlante, valore: Float = voceRef.voceId.numero.toFloat()) {
         if (parlante.attivo) {
-            parlante.registraImpronta(voceRef, Impronta(floatArrayOf(valore)), "0-1000", "finto").atteso()
+            parlante.registraImpronta(
+                voceRef,
+                Impronta(floatArrayOf(valore)),
+                "0-1000",
+                "finto",
+                unicaParteDi(voceRef),
+            ).atteso()
         }
         parlanti.salva(parlante).atteso()
         attribuzioni.salva(Attribuzione.conferma(voceRef, PROGETTO, parlante.id).aggregato)
@@ -52,7 +63,13 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
 
     /** A print row with NO Attribuzione (the defensive case: [INV-15] says it cannot exist). */
     private fun improntaOrfana(voceRef: VoceRef, parlante: Parlante, valore: Float) {
-        parlante.registraImpronta(voceRef, Impronta(floatArrayOf(valore)), "0-1000", "finto").atteso()
+        parlante.registraImpronta(
+            voceRef,
+            Impronta(floatArrayOf(valore)),
+            "0-1000",
+            "finto",
+            unicaParteDi(voceRef),
+        ).atteso()
         parlanti.salva(parlante).atteso()
     }
 
@@ -72,13 +89,17 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         pc.elimina().atteso()
         parlanti.salva(pc).atteso()
 
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
 
-        assertEquals(emptyList(), attribuzioni.diRegistrazione(R), "zero Attribuzioni di r")
+        assertEquals(emptyList(), attribuzioni.diIncontro(unIncontroDi(R)), "zero Attribuzioni di r")
         val messaggioImpronte = "zero righe d'impronta di r, incluse le orfane"
         assertEquals(emptyList(), parlanti.impronteDiRegistrazione(R), messaggioImpronte)
-        assertEquals(1, attribuzioni.diRegistrazione(ALTRA).size, "l'Attribuzione dell'altra Registrazione resta")
-        assertEquals(pa.id, attribuzioni.diRegistrazione(ALTRA).single().parlanteId)
+        assertEquals(
+            1,
+            attribuzioni.diIncontro(unIncontroDi(ALTRA)).size,
+            "l'Attribuzione dell'altra Registrazione resta",
+        )
+        assertEquals(pa.id, attribuzioni.diIncontro(unIncontroDi(ALTRA)).single().parlanteId)
         val righeAltra = parlanti.impronteDiRegistrazione(ALTRA)
         assertEquals(1, righeAltra.size, "la riga d'impronta dell'altra Registrazione resta")
         assertEquals(unaVoce(ALTRA, 1), righeAltra.single().voceRef)
@@ -92,7 +113,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         attribuisci(unaVoce(R, 2), ancheAltrove)
         attribuisci(unaVoce(ALTRA, 1), ancheAltrove, valore = 200f)
 
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
 
         assertNull(parlanti.trova(soloInR.id), "l'occasionale rimasto senza Attribuzioni cessa")
         val trovato = assertNotNull(parlanti.trova(ancheAltrove.id), "l'occasionale con Attribuzione altrove resta")
@@ -110,7 +131,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         eliminato.elimina().atteso()
         parlanti.salva(eliminato).atteso()
 
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
 
         val ricorrenteDopo = assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta")
         assertTrue(ricorrenteDopo.attivo)
@@ -132,15 +153,15 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         attribuisci(unaVoce(R, 1), occasionale)
         attribuisci(unaVoce(R, 2), ricorrente)
 
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
         val occasionaleDopoUna = parlanti.trova(occasionale.id)
         val ricorrenteDopoUna = parlanti.trova(ricorrente.id)
 
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
 
         assertEquals(occasionaleDopoUna, parlanti.trova(occasionale.id))
         assertEquals(ricorrenteDopoUna?.impronte, parlanti.trova(ricorrente.id)?.impronte)
-        assertEquals(emptyList(), attribuzioni.diRegistrazione(R))
+        assertEquals(emptyList(), attribuzioni.diIncontro(unIncontroDi(R)))
     }
 
     @Test
@@ -149,7 +170,10 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         val attribuzioniContate = spyk(attribuzioni)
         val politicaContata = ApplicaSostituzioneTrascrittoPolitica(parlantiContati, attribuzioniContate)
 
-        politicaContata.applica(RegistrazioneId("registrazione-vuota")).atteso()
+        politicaContata.applica(
+            RegistrazioneId("registrazione-vuota"),
+            unIncontroDi(RegistrazioneId("registrazione-vuota")),
+        ).atteso()
 
         verify(exactly = 0) { parlantiContati.salva(any()) }
         verify(exactly = 0) { parlantiContati.rimuovi(any()) }
@@ -163,7 +187,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         val parlantiGuasti = ParlanteRepositorySalvaFallisce(parlanti)
         val politicaConGuasto = ApplicaSostituzioneTrascrittoPolitica(parlantiGuasti, attribuzioni)
 
-        val errore = politicaConGuasto.applica(R).erroreAtteso<ErroreParlanti.NomeGiaInUso>()
+        val errore = politicaConGuasto.applica(R, unIncontroDi(R)).erroreAtteso<ErroreParlanti.NomeGiaInUso>()
 
         assertEquals(ErroreParlanti.NomeGiaInUso(p.nome.valore), errore)
     }

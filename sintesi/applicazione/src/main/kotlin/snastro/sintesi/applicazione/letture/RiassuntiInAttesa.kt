@@ -12,5 +12,5 @@ import snastro.sintesi.applicazione.porte.RiassuntoRepository
 public class RiassuntiInAttesa(private val riassunti: RiassuntoRepository) {
     /** AC-S110: FIFO by `(richiestoAlle, id)`, `in_attesa` only — the repository's own order, unmodified. */
     public fun elenco(): List<RiassuntoInCoda> =
-        riassunti.inAttesa().map { RiassuntoInCoda(it.id.valore, it.registrazioneId, it.richiestoAlle) }
+        riassunti.inAttesa().map { RiassuntoInCoda(it.id.valore, it.incontroId, it.richiestoAlle) }
 }

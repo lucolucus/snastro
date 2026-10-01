@@ -4,6 +4,7 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -52,6 +53,7 @@ import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import snastro.trascrizione.adattatori.porte.LettoreRegistrazioneDaProgetto as LettoreRegistrazioneTrascrizione
 
 /**
  * AC-237 + AC-351 + AC-357: `--smoke <fixture-dir>` opens the fixture project (>=1 Registrazione already
@@ -110,6 +112,7 @@ class SmokeTest {
         val registrazione = Registrazione.aggiungi(
             id = RegistrazioneId("fixture-registrazione"),
             progettoId = progetto.aggregato.id,
+            incontroId = IncontroId("incontro-di-fixture-registrazione"),
             titolo = "Riunione di prova",
             riferimentoAudio = RiferimentoAudio("audio/rec-1.wav"),
             durataMs = 60_000,
@@ -128,12 +131,20 @@ class SmokeTest {
             SegmentoIniziale(1, IntervalloMs(4_500, 9_000), "Grazie. Da parte mia ci sono due aggiornamenti."),
             SegmentoIniziale(0, IntervalloMs(9_500, 12_000), "Perfetto, partiamo dal primo."),
         )
-        val trascritto = Trascritto.crea(registrazioneId, durataMs = 60_000, segmenti = segmenti).atteso()
+        val trascritto = Trascritto.crea(
+            registrazioneId,
+            registrazione.aggregato.incontroId,
+            durataMs = 60_000,
+            segmenti = segmenti,
+        ).atteso()
         TrascrittoRepositorySql(db.database, UnitaDiLavoroSql(db.database)).salva(trascritto.aggregato)
 
         // AC-357: Voce 1 is 'Anna' (S2 badge '2 voci · 1 da identificare', S3 Nome, one S4 row).
         confermaAttribuzione(db.database, registrazioni).esegui(
-            ConfermaAttribuzione(VoceRef(registrazioneId, VoceId(1)), ObiettivoAttribuzione.NuovoParlante("Anna")),
+            ConfermaAttribuzione(
+                VoceRef(registrazione.aggregato.incontroId, VoceId(1)),
+                ObiettivoAttribuzione.NuovoParlante("Anna"),
+            ),
         ).atteso()
 
         // AC-S151: a pronto Riassunto of it (Sintesi's own SQL repository and root transitions), so the smoke
@@ -157,7 +168,12 @@ class SmokeTest {
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
             LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
-            LettoreVociDaTrascrizione(VociDelTrascritto(TrascrittoRepositorySql(database, unitaDiLavoroSql))),
+            LettoreVociDaTrascrizione(
+                VociDelTrascritto(
+                    TrascrittoRepositorySql(database, unitaDiLavoroSql),
+                    LettoreRegistrazioneTrascrizione(CatalogoRegistrazioni(registrazioni)),
+                ),
+            ),
             ParlanteRepositorySql(database, unitaDiLavoroSql),
             AttribuzioneRepositorySql(database),
             DecodificatoreAudioFinta(),

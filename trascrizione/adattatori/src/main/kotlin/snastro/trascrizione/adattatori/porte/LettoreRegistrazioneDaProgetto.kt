@@ -18,6 +18,7 @@ public class LettoreRegistrazioneDaProgetto(
             RegistrazioneVista(
                 registrazioneId = vista.registrazioneId,
                 progettoId = vista.progettoId,
+                incontroId = vista.incontroId,
                 titolo = vista.titolo,
                 riferimentoAudio = vista.riferimentoAudio,
                 dataRegistrazione = vista.dataRegistrazione,

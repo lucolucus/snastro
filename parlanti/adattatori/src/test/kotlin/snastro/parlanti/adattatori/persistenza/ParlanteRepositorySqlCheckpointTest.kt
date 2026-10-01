@@ -7,6 +7,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -51,14 +53,20 @@ class ParlanteRepositorySqlCheckpointTest {
 
             val repo = ParlanteRepositorySql(db, UnitaDiLavoroSql(db))
             val progettoId = ProgettoId("progetto-1")
-            val voceRef = VoceRef(RegistrazioneId("registrazione-1"), VoceId(1))
+            val voceRef = VoceRef(unIncontroDi(RegistrazioneId("registrazione-1")), VoceId(1))
             val p = Parlante.crea(
                 ParlanteId("id-1"),
                 progettoId,
                 Nome.di("Marco").atteso(),
                 TipoParlante.RICORRENTE,
             ).aggregato
-            p.registraImpronta(voceRef, Impronta(floatArrayOf(1f, 2f, 3f)), "0-1000", "modello-1").atteso()
+            p.registraImpronta(
+                voceRef,
+                Impronta(floatArrayOf(1f, 2f, 3f)),
+                "0-1000",
+                "modello-1",
+                unicaParteDi(voceRef),
+            ).atteso()
             repo.salva(p).atteso()
             assertEquals(1, repo.impronteDiRegistrazione(RegistrazioneId("registrazione-1")).size)
 

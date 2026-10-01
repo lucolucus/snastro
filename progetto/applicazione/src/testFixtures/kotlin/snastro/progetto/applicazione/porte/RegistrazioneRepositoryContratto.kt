@@ -3,6 +3,7 @@ package snastro.progetto.applicazione.porte
 import org.junit.jupiter.api.Test
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -104,6 +105,24 @@ public abstract class RegistrazioneRepositoryContratto {
     }
 
     @Test
+    public fun `AC-I203 diIncontro restituisce tutte e sole le Parti dell'Incontro, con il suo incontroId`() {
+        val a = ambiente()
+        val incontro = IncontroId("incontro-a")
+        val prima = unaRegistrazione(a.progettoId, RegistrazioneId("id-2"), "Parte 1", incontroId = incontro)
+        val seconda = unaRegistrazione(a.progettoId, RegistrazioneId("id-3"), "Parte 2", incontroId = incontro)
+        val altra = unaRegistrazione(a.progettoId, RegistrazioneId("id-4"), "Altro incontro")
+        a.salva(prima)
+        a.salva(seconda)
+        a.salva(altra)
+        assertEquals(
+            setOf(prima.stato(), seconda.stato()),
+            a.registrazioni.diIncontro(incontro).map { it.stato() }.toSet(),
+        )
+        assertEquals(listOf(altra.stato()), a.registrazioni.diIncontro(altra.incontroId).map { it.stato() })
+        assertEquals(emptyList(), a.registrazioni.diIncontro(IncontroId("incontro-sconosciuto")))
+    }
+
+    @Test
     public fun `AC-325 titoliDelProgetto restituisce i titoli di tutte e sole le Registrazioni del Progetto`() {
         val a = ambiente()
         a.salva(unaRegistrazione(a.progettoId, RegistrazioneId("id-2"), "Seduta di marzo"))
@@ -194,10 +213,12 @@ public abstract class RegistrazioneRepositoryContratto {
         id: RegistrazioneId = RegistrazioneId("id-2"),
         titolo: String = "Seduta di marzo",
         aggiuntaAlle: Instant = Instant.parse("2026-09-23T10:15:30.123Z"),
+        incontroId: IncontroId = IncontroId("incontro-di-${id.valore}"),
     ): Registrazione =
         Registrazione.aggiungi(
             id = id,
             progettoId = progettoId,
+            incontroId = incontroId,
             titolo = titolo,
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
             durataMs = 3_600_000,
@@ -207,7 +228,7 @@ public abstract class RegistrazioneRepositoryContratto {
 
     /** Every observable field of a Registrazione (the aggregate has no value equality). */
     private fun Registrazione.stato(): List<Any> =
-        listOf(id, progettoId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle)
+        listOf(id, progettoId, incontroId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle)
 
     private companion object {
         val DATA_DEL_FILE: LocalDate = LocalDate.of(2026, 2, 12)

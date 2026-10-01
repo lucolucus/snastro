@@ -48,7 +48,7 @@ class ValoriPerContenutoTest {
 
     @Test
     fun `id e riferimenti sono uguali per valore`() {
-        assertEquals(VoceRef(registrazione, VoceId(2)), VoceRef(RegistrazioneId("id-1"), VoceId(2)))
+        assertEquals(VoceRef(IncontroId("i-1"), VoceId(2)), VoceRef(IncontroId("i-1"), VoceId(2)))
         assertEquals(SegmentoId(3), SegmentoId(3))
         assertEquals(RiferimentoAudio("audio/id-1.mp3"), RiferimentoAudio("audio/id-1.mp3"))
     }
