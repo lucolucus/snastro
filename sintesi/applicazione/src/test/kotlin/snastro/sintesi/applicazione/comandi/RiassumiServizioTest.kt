@@ -27,6 +27,7 @@ import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.StatoParteSintesi
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
 import snastro.sintesi.applicazione.porte.conFallimento
@@ -333,9 +334,9 @@ class RiassumiServizioTest {
             return delega.segmenti(r)
         }
 
-        override fun elaborazioneAperta(r: RegistrazioneId): Boolean {
+        override fun statoParte(r: RegistrazioneId): StatoParteSintesi {
             letture += transazione.transazioneAperta
-            return delega.elaborazioneAperta(r)
+            return delega.statoParte(r)
         }
     }
 

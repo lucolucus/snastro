@@ -19,7 +19,7 @@ import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.inIngresso
 import snastro.sintesi.applicazione.porte.parteUnica
-import snastro.sintesi.applicazione.porte.statoParte
+import snastro.sintesi.applicazione.porte.statoDi
 import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.LimiteIngresso
@@ -69,7 +69,7 @@ public class RiassumiServizio(
         }
         Riassumibilita.valuta(
             modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
-            stati = listOf(PRIMA_PARTE to trascritti.statoParte(parte, segmenti)),
+            stati = listOf(PRIMA_PARTE to trascritti.statoDi(parte)),
             riassuntoAperto = riassunti.trova(c.incontroId).any { it.aperto },
             stimaToken = stimaToken,
         )

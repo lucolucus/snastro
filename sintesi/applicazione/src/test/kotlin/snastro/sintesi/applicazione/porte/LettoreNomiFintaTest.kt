@@ -1,10 +1,10 @@
 package snastro.sintesi.applicazione.porte
 
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
-import snastro.kernel.unIncontroDi
 import java.util.Locale
 
 /** AC-S10 (D1): [LettoreNomiFinta] passes [LettoreNomiContratto] in the gate. */
@@ -24,12 +24,23 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
 
         override val lettore: LettoreNomi = LettoreNomiFinta(attribuzioni, nomi)
 
-        override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata {
+        override val piuPartiPerIncontro: Boolean = true
+
+        override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata =
+            aggiungi(IncontroId(generatore.nuovo()), voci)
+
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneSeminata {
+            require(this.voci.any { it.incontroId == incontroId }) { "Incontro sconosciuto: $incontroId" }
+            return aggiungi(incontroId, voci)
+        }
+
+        /** The Voci of a new Parte are numbered after the Incontro's existing ones (INV-I4). */
+        private fun aggiungi(incontroId: IncontroId, voci: Int): RegistrazioneSeminata {
             require(voci >= 1)
-            val id = RegistrazioneId(generatore.nuovo())
-            val refs = (1..voci).map { VoceRef(unIncontroDi(id), VoceId(it)) }
+            val prima = this.voci.count { it.incontroId == incontroId } + 1
+            val refs = (prima until prima + voci).map { VoceRef(incontroId, VoceId(it)) }
             this.voci += refs
-            return RegistrazioneSeminata(id, refs)
+            return RegistrazioneSeminata(RegistrazioneId(generatore.nuovo()), incontroId, refs)
         }
 
         override fun attribuisciANuovo(voce: VoceRef, nome: String): ParlanteSeminato {

@@ -18,7 +18,7 @@ import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.inIngresso
 import snastro.sintesi.applicazione.porte.parteUnica
-import snastro.sintesi.applicazione.porte.statoParte
+import snastro.sintesi.applicazione.porte.statoDi
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.LimiteIngresso
@@ -52,7 +52,7 @@ public class RiassuntoVisteLettura(
         val parte = incontri.parteUnica(i) ?: return@inLettura null
         val segmenti = trascritti.segmenti(parte) ?: return@inLettura null
         val correnti = segmenti.associateBy { it.segmentoId }
-        val nomiVoci = nomi.nomi(parte)
+        val nomiVoci = nomi.nomi(i)
         val righe = riassunti.trova(i)
         val pronto = unicoOSseNessuno(righe.filter { it.pronto }, i, "pronto")
         val nonPronto = unicoOSseNessuno(righe.filterNot { it.pronto }, i, "non pronto")
@@ -78,7 +78,7 @@ public class RiassuntoVisteLettura(
         val esito = Riassumibilita.valuta(
             modelloInstallato = true, // surfaced by `modello`, not `disponibilita`
             // TRANSITION (D-0033): the one Parte, its Trascritto already known ([di] returned above otherwise).
-            stati = listOf(PRIMA_PARTE to trascritti.statoParte(parte, segmenti)),
+            stati = listOf(PRIMA_PARTE to trascritti.statoDi(parte)),
             riassuntoAperto = false, // surfaced by `richiestaAperta`, not `disponibilita`
             stimaToken = LimiteIngresso.stimaToken(ingresso),
         )
