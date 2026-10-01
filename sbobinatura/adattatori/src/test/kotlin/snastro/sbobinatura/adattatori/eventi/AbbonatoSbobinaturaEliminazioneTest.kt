@@ -133,7 +133,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
         val prima = ambiente.operazioni().size
 
         ambiente.commit(RegistrazioneRinominata(REG, precedente = "Vecchia", nuovo = TITOLO))
-        ambiente.commit(DataRegistrazioneModificata(REG, precedente = DATA.minusDays(1), nuova = DATA))
+        ambiente.commit(DataRegistrazioneModificata(REG, DATA.minusDays(1), DATA, unIncontroDi(REG)))
         ambiente.commit(eliminata())
         advanceUntilIdle()
 
@@ -226,7 +226,15 @@ class AbbonatoSbobinaturaEliminazioneTest {
         const val NOME = "2026-09-12 Riunione.md"
 
         fun eliminata() =
-            RegistrazioneEliminata(REG, ProgettoId("p"), TITOLO, DATA, RiferimentoAudio("audio/reg-1.m4a"))
+            RegistrazioneEliminata(
+                REG,
+                ProgettoId("p"),
+                TITOLO,
+                DATA,
+                RiferimentoAudio("audio/reg-1.m4a"),
+                unIncontroDi(REG),
+                incontroCessato = true,
+            )
 
         fun unTrascritto() = TrascrittoTesto(
             registrazioneId = REG,

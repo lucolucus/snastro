@@ -117,7 +117,15 @@ class AbbonatoProgettoSintesiTest {
     }
 
     private fun eliminata(r: RegistrazioneId) =
-        RegistrazioneEliminata(r, PROGETTO, "Seduta", DATA, RiferimentoAudio("audio/${r.valore}.m4a"))
+        RegistrazioneEliminata(
+            r,
+            PROGETTO,
+            "Seduta",
+            DATA,
+            RiferimentoAudio("audio/${r.valore}.m4a"),
+            unIncontroDi(r),
+            incontroCessato = true,
+        )
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")

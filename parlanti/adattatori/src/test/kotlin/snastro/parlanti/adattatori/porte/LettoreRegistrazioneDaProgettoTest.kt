@@ -24,6 +24,7 @@ import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
 import snastro.progetto.applicazione.porte.EliminazioniInSospesoFinta
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
@@ -62,7 +63,7 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
         }
 
         override val lettore: LettoreRegistrazione =
-            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni))
+            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni)))
 
         override fun semina(seme: SemeRegistrazione): RegistrazioneId {
             val percorso = "/sorgenti/${seme.titolo}.${seme.estensione}"
@@ -88,7 +89,9 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
 
         // The supplier's own public read API: the id AggiungiRegistrazione minted through GeneratoreId.
         override fun incontroDi(id: RegistrazioneId): IncontroId =
-            checkNotNull(CatalogoRegistrazioni(registrazioni).registrazione(id)).incontroId
+            checkNotNull(
+                CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni)).registrazione(id),
+            ).incontroId
 
         override fun elimina(id: RegistrazioneId) {
             EliminaRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, EliminazioniInSospesoFinta(), eventi)

@@ -159,7 +159,7 @@ class AbbonatoSbobinaturaEventiTest {
         // Prima di questa raffica il file davvero sul disco era "2026-09-19 Titolo Vecchio.md" (la
         // vecchia data CON il vecchio titolo): ne' un DataRegistrazioneModificata ne' una
         // RegistrazioneRinominata da soli lo sanno, solo la combinazione dei due precedenti.
-        ambiente.commit(DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData))
+        ambiente.commit(DataRegistrazioneModificata(REG_1, vecchiaData, nuovaData, unIncontroDi(REG_1)))
         ambiente.commit(RegistrazioneRinominata(REG_1, precedente = "Titolo Vecchio", nuovo = "Titolo Nuovo"))
         advanceUntilIdle()
 
@@ -288,7 +288,7 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = Ambiente(testScheduler, mapOf(REG_1 to unTrascritto(REG_1, data = nuovaData)))
         advanceUntilIdle()
 
-        ambiente.commit(DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData))
+        ambiente.commit(DataRegistrazioneModificata(REG_1, vecchiaData, nuovaData, unIncontroDi(REG_1)))
         advanceUntilIdle()
 
         val vecchioFile = ScrittoreSbobinaturaFinta.Operazione.Rimosso("2026-09-19 Riunione.md")
@@ -682,7 +682,7 @@ class AbbonatoSbobinaturaEventiTest {
         advanceUntilIdle() // sweep di avvio: non trova nulla
 
         dispatcher.unitaDiLavoro.inTransazione {
-            val evento = DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData)
+            val evento = DataRegistrazioneModificata(REG_1, vecchiaData, nuovaData, unIncontroDi(REG_1))
             Esito.Ok(dispatcher.pubblica(evento))
         }
         advanceUntilIdle()

@@ -2,6 +2,7 @@ package snastro.progetto.applicazione.comandi
 
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.UnitaDiLavoro
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.EliminazioneInSospeso
@@ -33,17 +34,21 @@ public class EliminaRegistrazioneServizio(
         inSospeso.registra(
             EliminazioneInSospeso(evento.id, evento.titolo, evento.dataRegistrazione, evento.riferimentoAudio),
         )
-        eventi.pubblica(evento.pubblicato())
+        eventi.pubblica(evento.pubblicato(registrazione.incontroId))
         registrazioni.rimuovi(evento.id)
         Esito.Ok(Unit)
     }
 }
 
-private fun snastro.progetto.dominio.RegistrazioneEliminata.pubblicato(): RegistrazioneEliminata =
+// incontroCessato = true: until block elimina-parte computes it from IncontroRepository.partiDi (ADR 0038 §1), every
+// Incontro has exactly one Parte (ADR 0033 §6), so deleting a Parte always ends its Incontro.
+private fun snastro.progetto.dominio.RegistrazioneEliminata.pubblicato(incontroId: IncontroId): RegistrazioneEliminata =
     RegistrazioneEliminata(
         registrazioneId = id,
         progettoId = progettoId,
         titolo = titolo,
         dataRegistrazione = dataRegistrazione,
         riferimentoAudio = riferimentoAudio,
+        incontroId = incontroId,
+        incontroCessato = true,
     )
