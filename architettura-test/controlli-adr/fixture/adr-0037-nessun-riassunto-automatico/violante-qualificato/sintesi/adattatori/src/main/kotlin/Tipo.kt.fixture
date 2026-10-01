@@ -1,0 +1,2 @@
+package x
+val k = snastro.trascrizione.applicazione.eventi.TrascrittoSostituito::class

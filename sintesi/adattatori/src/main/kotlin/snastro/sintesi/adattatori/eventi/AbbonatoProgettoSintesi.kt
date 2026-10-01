@@ -17,8 +17,7 @@ import snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSi
  * whole `EliminaRegistrazione` rolls back (ADR 0012). Every other event is ignored (`Esito.Ok(Unit)`, no policy call).
  *
  * `:sintesi:applicazione` may not import Progetto's published events (`architecture.md` / ADR 0021 §2-3 edges),
- * so this translation lives here, mirroring Trascrizione's own `AbbonatoEliminazioneRegistrazione` and Sintesi's
- * own `AbbonatoTrascrizioneSintesi`.
+ * so this translation lives here, mirroring Trascrizione's own `AbbonatoEliminazioneRegistrazione`.
  *
  * A plain [AbbonatoSincrono] VALUE (ADR 0030 §1, AC-C67): it never registers itself. `:avvio`'s `ModuloSintesi`
  * pairs it with [RegistrazioneEliminata] and the composition root registers it — before the first command,

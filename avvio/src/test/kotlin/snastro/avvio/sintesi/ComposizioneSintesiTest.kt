@@ -30,6 +30,7 @@ import snastro.sintesi.applicazione.eventi.RiassuntoEliminato
 import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
 import snastro.sintesi.applicazione.letture.ParteTestoVista
+import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
@@ -38,7 +39,6 @@ import snastro.sintesi.applicazione.porte.unaStruttura
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.MotivoFallimento
-import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import snastro.supporto.test.OrologioFinto
 import snastro.supporto.test.attendiFinche
@@ -61,8 +61,6 @@ import java.util.concurrent.locks.ReentrantLock
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
-import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
@@ -259,36 +257,45 @@ class ComposizioneSintesiTest {
     }
 
     @Test
-    fun `AC-S148 Ritrascrivi completata sostituisce il pronto con UN in_attesa con lo stesso Argomento`() {
+    fun `INV-I12b una Ritrascrivi completata lascia il pronto com'e, senza nuovo Riassunto ne voci in coda`() {
         AmbienteProgetto(radice).use {
             val a = it.registrazioneTrascritta()
             it.riassumi(a, "budget")
             it.attendiPronto(a)
-            val vecchio = it.diRegistrazione(a).single().id
-            val alCommit = CopyOnWriteArrayList<List<Riassunto>>()
-            it.porte.dispatcher.registraDopoCommit { e ->
-                if (e is TrascrittoSostituito && e.registrazioneId == a) alCommit += it.diRegistrazione(a)
-            }
-            val barriera = CountDownLatch(1)
-            it.diarizzatoreScriptato.barriera = barriera
+            val prima = it.diRegistrazione(a).single()
+            val chiamate = it.modello.chiamate.get()
             it.diarizzatoreScriptato.turni = AmbienteProgetto.TRE_VOCI
-            it.modello.blocca()
 
             it.avviaElaborazione(a)
-            attendiFinche(timeout = 10.seconds, messaggio = "ritrascrizione in corso") {
-                it.stato(a) == StatoElaborazioneVista.IN_CORSO
+            attendiFinche(timeout = 10.seconds, messaggio = "ritrascrizione completata") {
+                it.stato(a) == StatoElaborazioneVista.COMPLETATA
             }
-            assertEquals(listOf(vecchio), it.diRegistrazione(a).map { r -> r.id }, "prima del commit: il vecchio")
-            assertTrue(it.diRegistrazione(a).single().pronto)
-            barriera.countDown()
+            pausaInTempoReale(
+                PAUSA_MS.milliseconds,
+                motivo = "da' a un eventuale Riassunto automatico la possibilita' di essere accodato",
+            )
 
-            attendiFinche(timeout = 10.seconds, messaggio = "commit della sostituzione") { alCommit.isNotEmpty() }
-            val nuovo = alCommit.single().single()
-            assertTrue(nuovo.inAttesa)
-            assertEquals("budget", nuovo.argomento?.valore)
-            assertNotEquals(vecchio, nuovo.id)
-            it.modello.sblocca()
-            it.attendiPronto(a)
+            val dopo = it.diRegistrazione(a).single()
+            assertEquals(prima.id, dopo.id)
+            assertTrue(dopo.pronto)
+            assertEquals(prima.decisioni, dopo.decisioni)
+            assertEquals(prima.argomento, dopo.argomento)
+            assertEquals(emptyList(), RiassuntiInAttesa(it.porte.riassunti).elenco())
+            assertEquals(chiamate, it.modello.chiamate.get(), "nessun nuovo run del modello")
+        }
+    }
+
+    @Test
+    fun `INV-I12b un TrascrittoSostituito sul dispatcher non raggiunge alcun abbonato di Sintesi`() {
+        AmbienteProgetto(radice).use {
+            val a = it.registrazioneTrascritta()
+            val modulo = it.composto.ordineSincroni.filterIsInstance<ModuloSintesi>().single()
+            val eventi = modulo.abbonatiSincroni().map { ab -> ab.evento } +
+                modulo.abbonatiDopoCommit().map { ab -> ab.evento }
+
+            assertTrue(eventi.none { e -> e.isInstance(TrascrittoSostituito(a)) }, "abbonati di Sintesi: $eventi")
+            consegna(it, TrascrittoSostituito(a))
+            assertEquals(emptyList(), it.diRegistrazione(a))
         }
     }
 
@@ -353,35 +360,6 @@ class ComposizioneSintesiTest {
             assertTrue(it.modello.esiti.isEmpty(), "il Riassunto e ancora bloccato")
             it.modello.sblocca()
             it.attendiPronto(a)
-        }
-    }
-
-    @Test
-    fun `AC-S161 un RiassuntoEliminato tardivo o duplicato non annulla il Riassunto riaccodato dalla sostituzione`() {
-        AmbienteProgetto(radice).use {
-            val a = it.registrazioneTrascritta()
-            it.riassumi(a, "budget")
-            it.attendiPronto(a)
-            it.diarizzatoreScriptato.turni = AmbienteProgetto.TRE_VOCI
-            it.modello.blocca()
-            it.avviaElaborazione(a) // sostituzione: commits RiassuntoEliminato(a) + RiassuntoRichiesto(a), re-queues X
-            attendiFinche(timeout = 10.seconds, messaggio = "X reclamato e in corso") { it.modello.chiamate.get() == 2 }
-            val x = it.diRegistrazione(a).single { r -> r.inCorso }.id
-
-            repeat(2) { _ -> consegna(it, RiassuntoEliminato(a)) } // late + duplicate delivery
-            pausaInTempoReale(
-                PAUSA_MS.milliseconds,
-                motivo = "da' alla consegna tardiva o duplicata la possibilita' di correre contro il modello bloccato",
-            )
-            it.modello.sblocca()
-
-            it.attendiPronto(a)
-            assertEquals(x, it.diRegistrazione(a).single().id, "X completa normalmente, non resta in_corso")
-            assertIs<Esito.Ok<*>>(it.modello.esiti.last())
-            it.riassumi(a) // not refused (a stuck in_corso X would be RiassuntoGiaAperto)
-            attendiFinche(timeout = 10.seconds, messaggio = "il nuovo Riassunto completa") {
-                it.modello.chiamate.get() == 3
-            }
         }
     }
 
@@ -491,7 +469,7 @@ class ComposizioneSintesiTest {
         const val ATTESA_PUBBLICAZIONE_S = 10L
 
         /** ADR 0030 §2: Sintesi → Parlanti → Trascrizione, each module's pairs in its own declared order. */
-        val SINCRONI_DICHIARATI = listOf("AbbonatoTrascrizioneSintesi", "AbbonatoProgettoSintesi") +
+        val SINCRONI_DICHIARATI = listOf("AbbonatoProgettoSintesi") +
             List(5) { "AbbonatoRevisioneParlanti" } + "AbbonatoEliminazioneRegistrazione"
         const val TIMEOUT_STOP_MS = 5_000L
         const val NANO_PER_MS = 1_000_000L

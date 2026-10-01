@@ -1,0 +1,7 @@
+package x
+/**
+ * Never reacts to TrascrittoSostituito (KDoc).
+ */
+// TrascrittoSostituito is not subscribed either
+import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
+fun f(e: Any) = when (e) { is TrascrittoEliminato -> 1; else -> 0 }
