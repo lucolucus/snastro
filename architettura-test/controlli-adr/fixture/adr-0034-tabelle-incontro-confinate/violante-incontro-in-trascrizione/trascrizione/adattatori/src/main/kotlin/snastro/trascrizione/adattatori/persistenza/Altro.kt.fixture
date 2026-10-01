@@ -1,0 +1,3 @@
+package x
+
+class Altro { fun f(db: Db) = db.incontroQueries.inserisci("i", "p") }

@@ -9,6 +9,7 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
+import java.util.UUID
 import migrations.Registrazione as RegistrazioneRiga
 
 /**
@@ -32,9 +33,13 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
     override fun salva(r: Registrazione) {
         val esistente = db.registrazioneQueries.trovaPerId(r.id.valore).executeAsOneOrNull()
         if (esistente == null) {
+            // ADR 0033 §6 (transition): a new Registrazione is the one Parte of its own new Incontro.
+            val incontroId = UUID.randomUUID().toString()
+            db.incontroQueries.inserisci(id = incontroId, progettoId = r.progettoId.valore)
             db.registrazioneQueries.inserisci(
                 id = r.id.valore,
                 progettoId = r.progettoId.valore,
+                incontroId = incontroId,
                 titolo = r.titolo,
                 riferimentoAudio = r.riferimentoAudio.percorsoRelativo,
                 durataMs = r.durataMs,
@@ -51,8 +56,11 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
     }
 
     // ADR 0020: the elaborazione / trascritto FKs are immediate — their rows must already be gone.
+    // The Incontro ceases with its last Parte (ADR 0034 §2); still referenced (a Riassunto) the DELETE fails closed.
     override fun rimuovi(id: RegistrazioneId) {
+        val incontroId = db.registrazioneQueries.trovaPerId(id.valore).executeAsOneOrNull()?.incontro_id
         db.registrazioneQueries.elimina(id.valore)
+        if (incontroId != null) db.incontroQueries.eliminaSeSenzaParti(incontroId)
     }
 }
 

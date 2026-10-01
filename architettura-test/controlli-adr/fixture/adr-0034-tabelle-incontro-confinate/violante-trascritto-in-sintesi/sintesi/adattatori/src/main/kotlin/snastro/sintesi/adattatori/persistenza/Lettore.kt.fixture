@@ -1,0 +1,3 @@
+package x
+
+class Lettore { fun f(db: Db) = db.trascrittoQueries.trovaRegistrazioniConTrascritto() }

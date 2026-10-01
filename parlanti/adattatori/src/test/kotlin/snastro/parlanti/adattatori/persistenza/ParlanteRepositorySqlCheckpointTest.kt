@@ -13,6 +13,7 @@ import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.persistenza.seminaTrascrittoDiProva
 import snastro.persistenza.seminaVoceDiProva
 import java.io.File
@@ -36,7 +37,7 @@ class ParlanteRepositorySqlCheckpointTest {
         try {
             val db = database.database
             db.progettoQueries.inserisci("progetto-1", "Progetto di prova")
-            db.registrazioneQueries.inserisci(
+            db.seminaRegistrazioneDiProva(
                 id = "registrazione-1",
                 progettoId = "progetto-1",
                 titolo = "Registrazione di prova",

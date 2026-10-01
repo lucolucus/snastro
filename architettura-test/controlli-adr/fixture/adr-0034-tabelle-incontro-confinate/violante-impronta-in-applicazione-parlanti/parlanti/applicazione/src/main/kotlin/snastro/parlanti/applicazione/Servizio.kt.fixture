@@ -1,0 +1,3 @@
+package x
+
+class Servizio { fun f(db: Db) = db.improntaVocaleQueries.eliminaDiParlante("p") }

@@ -1,0 +1,5 @@
+package snastro.parlanti.adattatori.persistenza
+
+class RepoP(private val db: Db) {
+    fun f() = db.improntaVocaleQueries.eliminaDiParlante("p")
+}

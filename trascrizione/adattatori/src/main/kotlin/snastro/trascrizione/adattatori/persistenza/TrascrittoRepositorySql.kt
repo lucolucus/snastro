@@ -56,31 +56,33 @@ public class TrascrittoRepositorySql(
     override fun rimuovi(id: RegistrazioneId) {
         db.segmentoQueries.eliminaDiRegistrazione(id.valore)
         db.voceQueries.eliminaDiRegistrazione(id.valore)
+        db.voceIncontroQueries.eliminaSenzaPresenza(id.valore)
+        db.vociIncontroQueries.eliminaSeSenzaTrascritti(id.valore)
         db.trascrittoQueries.elimina(id.valore)
     }
 
     override fun salva(t: Trascritto) {
         val registrazioneId = t.registrazioneId.valore
-        if (db.trascrittoQueries.trovaPerRegistrazione(registrazioneId).executeAsOneOrNull() == null) {
-            db.trascrittoQueries.inserisci(
-                registrazioneId = registrazioneId,
-                prossimaVoce = t.prossimaVoce.toLong(),
-                prossimoSegmento = t.prossimoSegmento.toLong(),
-            )
+        if (db.trascrittoQueries.esistePerRegistrazione(registrazioneId).executeAsOneOrNull() == null) {
+            db.trascrittoQueries.inserisci(registrazioneId, t.prossimoSegmento.toLong())
         } else {
-            db.trascrittoQueries.aggiornaContatori(
-                prossimaVoce = t.prossimaVoce.toLong(),
-                prossimoSegmento = t.prossimoSegmento.toLong(),
-                registrazioneId = registrazioneId,
-            )
+            db.trascrittoQueries.aggiornaContatori(t.prossimoSegmento.toLong(), registrazioneId)
+        }
+        // The Voce counter lives in the root "Voci dell'Incontro" (ADR 0034 §2), resolved from the Parte by SQL join.
+        if (db.vociIncontroQueries.trovaDiRegistrazione(registrazioneId).executeAsOneOrNull() == null) {
+            db.vociIncontroQueries.inserisci(t.prossimaVoce.toLong(), registrazioneId)
+        } else {
+            db.vociIncontroQueries.aggiorna(t.prossimaVoce.toLong(), registrazioneId)
         }
 
         db.segmentoQueries.eliminaDiRegistrazione(registrazioneId)
         db.voceQueries.eliminaDiRegistrazione(registrazioneId)
 
         t.voci.forEach { voce ->
+            db.voceIncontroQueries.inserisciSeAssente(voce.id.numero.toLong(), registrazioneId)
             db.voceQueries.inserisci(registrazioneId = registrazioneId, numero = voce.id.numero.toLong())
         }
+        db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
         t.segmenti.forEach { s ->
             db.segmentoQueries.inserisci(
                 registrazioneId = registrazioneId,

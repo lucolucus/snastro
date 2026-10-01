@@ -1,4 +1,4 @@
--- Queries for `impronta_vocale` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+-- Queries for `impronta_vocale` — schema in migrations/7.sqm (ADR 0006 Amendment (a)).
 -- registraImpronta's "insert or replace" semantics use `sostituisci`, never touching the other
 -- prints of the same Parlante. `aggiornaCompareAndSet` is the ONLY write `RiallineaImpronte` uses —
 -- an UPDATE of the one row, never an INSERT ("no resurrection": a row purged meanwhile cannot be
@@ -20,13 +20,14 @@ FROM impronta_vocale AS iv
 INNER JOIN parlante AS p ON p.id = iv.parlante_id
 WHERE p.progetto_id = :progettoId;
 
+-- TRANSITION (ADR 0033 §6): incontro_id is resolved from registrazione_id by SQL join.
 inserisci:
-INSERT INTO impronta_vocale(parlante_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
-VALUES (:parlanteId, :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
+INSERT INTO impronta_vocale(parlante_id, incontro_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
+VALUES (:parlanteId, (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId), :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
 
 sostituisci:
-INSERT OR REPLACE INTO impronta_vocale(parlante_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
-VALUES (:parlanteId, :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
+INSERT OR REPLACE INTO impronta_vocale(parlante_id, incontro_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
+VALUES (:parlanteId, (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId), :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
 
 -- AC-267: compare-and-set UPDATE of the ONE row — no INSERT branch, ever (no resurrection).
 -- affectedRows() == 0 iff the row was removed or its sorgente/modello moved on since it was read.

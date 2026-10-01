@@ -1,0 +1,3 @@
+package x
+
+class Abbonato { fun f(database: snastro.persistenza.SnastroDatabase) = database.riassuntoFonteQueries.eliminaDiRiassunto("r") }

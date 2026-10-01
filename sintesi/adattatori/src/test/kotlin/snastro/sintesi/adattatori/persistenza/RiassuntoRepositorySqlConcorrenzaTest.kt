@@ -160,9 +160,12 @@ class RiassuntoRepositorySqlConcorrenzaTest {
             conn.createStatement().use { st ->
                 st.execute("INSERT INTO progetto(id, nome) VALUES ('$progettoId', 'Progetto di prova')")
                 st.execute(
-                    "INSERT INTO registrazione(id, progetto_id, titolo, riferimento_audio, durata_ms, " +
-                        "data_registrazione, aggiunta_alle) VALUES ('$registrazioneId', '$progettoId', 't', " +
-                        "'audio/$registrazioneId.wav', 1000, '2026-09-26', 0)",
+                    "INSERT INTO incontro(id, progetto_id) VALUES ('incontro-di-$registrazioneId', '$progettoId')",
+                )
+                st.execute(
+                    "INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, " +
+                        "data_registrazione, aggiunta_alle) VALUES ('$registrazioneId', '$progettoId', " +
+                        "'incontro-di-$registrazioneId', 't', 'audio/$registrazioneId.wav', 1000, '2026-09-26', 0)",
                 )
             }
         }

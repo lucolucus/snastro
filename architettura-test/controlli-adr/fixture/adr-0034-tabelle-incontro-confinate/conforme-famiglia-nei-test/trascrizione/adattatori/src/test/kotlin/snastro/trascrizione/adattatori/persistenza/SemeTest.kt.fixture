@@ -1,0 +1,3 @@
+package x
+
+class SemeTest { fun f(db: Db) = db.incontroQueries.inserisci("i", "p") + db.riassuntoQueries.elimina("r") }

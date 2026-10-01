@@ -12,6 +12,7 @@ import snastro.kernel.atteso
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -79,7 +80,7 @@ class TrascrittoRepositorySqlTrovaInTransazioneTest {
 
     private fun predisponi(db: SnastroDatabase) {
         db.progettoQueries.inserisci("progetto-1", "Progetto di prova")
-        db.registrazioneQueries.inserisci(
+        db.seminaRegistrazioneDiProva(
             id = R.valore,
             progettoId = "progetto-1",
             titolo = "Registrazione di prova",

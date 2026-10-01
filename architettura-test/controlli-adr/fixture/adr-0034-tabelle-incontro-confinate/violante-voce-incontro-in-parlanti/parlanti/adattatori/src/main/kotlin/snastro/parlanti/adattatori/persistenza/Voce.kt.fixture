@@ -1,0 +1,3 @@
+package x
+
+class Voce { fun f(db: Db) = db.voceIncontroQueries.eliminaSenzaPresenza("r") }

@@ -13,11 +13,19 @@ internal fun semina(driver: SqlDriver, predisposizione: PredisposizioneSintesi) 
         driver.execute(null, "INSERT INTO progetto(id, nome) VALUES ('${it.valore}', 'Progetto di prova')", 0)
     }
     predisposizione.registrazioni.forEach { (registrazioneId, progettoId) ->
+        // ADR 0034: every Registrazione is a Parte of an Incontro; its id differs from the Registrazione's on purpose.
         driver.execute(
             null,
-            "INSERT INTO registrazione(id, progetto_id, titolo, riferimento_audio, durata_ms, " +
+            "INSERT INTO incontro(id, progetto_id) " +
+                "VALUES ('incontro-di-${registrazioneId.valore}', '${progettoId.valore}')",
+            0,
+        )
+        driver.execute(
+            null,
+            "INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, " +
                 "data_registrazione, aggiunta_alle) VALUES ('${registrazioneId.valore}', '${progettoId.valore}', " +
-                "'t', 'audio/${registrazioneId.valore}.wav', 1000, '2026-09-26', 0)",
+                "'incontro-di-${registrazioneId.valore}', 't', 'audio/${registrazioneId.valore}.wav', 1000, " +
+                "'2026-09-26', 0)",
             0,
         )
     }

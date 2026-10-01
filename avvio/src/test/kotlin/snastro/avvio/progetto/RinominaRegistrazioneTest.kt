@@ -11,6 +11,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.persistenza.SnastroDatabase
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
@@ -58,7 +59,7 @@ class RinominaRegistrazioneTest {
     private fun apriConUnaRegistrazione(): CollaboratoriProgetto {
         val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
         Files.write(Path.of(progetto.percorso).resolve("audio/reg-1.m4a"), AUDIO)
-        checkNotNull(db).registrazioneQueries.inserisci(
+        checkNotNull(db).seminaRegistrazioneDiProva(
             id = id.valore,
             progettoId = progetto.progettoId.valore,
             titolo = "Seduta di marzo",

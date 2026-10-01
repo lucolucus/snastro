@@ -56,19 +56,18 @@ class MigrazioneEliminaRegistrazioneTest {
         val prima = TABELLE.associateWith { contenuto(v5, it) }
         v5.close()
 
-        val db = apriDatabaseProgetto(cartella.toFile())
+        // 5.sqm is the 5 -> 6 step: migrate exactly that one (later migrations rebuild some of these tables).
         val driver = driverSqlite(url)
+        SnastroDatabase.Schema.migrate(driver, VERSIONE_CONFERMA, VERSIONE_ELIMINA)
+        driver.execute(null, "PRAGMA user_version = $VERSIONE_ELIMINA", 0)
         try {
-            // The LATEST schema version, not the fixed VERSIONE_ELIMINA (5.sqm's own target) — a later
-            // migration (ADR 0022's 6.sqm) moves this DB further still.
-            assertEquals(SnastroDatabase.Schema.version, pragmaLong(driver, "user_version"))
+            assertEquals(VERSIONE_ELIMINA, pragmaLong(driver, "user_version"))
             TABELLE.forEach { assertEquals(prima.getValue(it), contenuto(driver, it), "righe di $it intatte") }
             assertTrue(prima.values.all { it.isNotEmpty() }, "ogni tabella del fixture ha almeno una riga")
-            assertEquals(emptyList(), db.database.eliminazioneInSospesoQueries.elenco().executeAsList())
+            assertEquals(emptyList(), SnastroDatabase(driver).eliminazioneInSospesoQueries.elenco().executeAsList())
             assertEquals("ok", pragmaString(driver, "integrity_check"))
         } finally {
             driver.close()
-            db.chiudi()
         }
     }
 
@@ -131,7 +130,7 @@ class MigrazioneEliminaRegistrazioneTest {
 
     private fun SnastroDatabase.seminaRegistrazioneConTrascritto(registrazioneId: String = "reg-1") {
         if (progettoQueries.trova().executeAsOneOrNull() == null) progettoQueries.inserisci("progetto-1", "Progetto")
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             id = registrazioneId,
             progettoId = "progetto-1",
             titolo = registrazioneId,
@@ -142,7 +141,9 @@ class MigrazioneEliminaRegistrazioneTest {
         )
         elaborazioneQueries.inserisci("$registrazioneId-e1", registrazioneId, "fallita", 0L, 0L, "interrotta", null)
         elaborazioneQueries.inserisci("$registrazioneId-e2", registrazioneId, "completata", 1L, 1L, null, null)
-        trascrittoQueries.inserisci(registrazioneId, 2L, 2L)
+        vociIncontroQueries.inserisci(2L, registrazioneId)
+        trascrittoQueries.inserisci(registrazioneId, 2L)
+        voceIncontroQueries.inserisciSeAssente(1L, registrazioneId)
         voceQueries.inserisci(registrazioneId, 1L)
         segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 900L, "ciao", 0L)
     }

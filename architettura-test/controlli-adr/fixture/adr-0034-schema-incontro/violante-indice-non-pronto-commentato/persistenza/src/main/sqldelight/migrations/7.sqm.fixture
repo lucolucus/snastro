@@ -1,0 +1,27 @@
+-- Minimal 7.sqm: only what adr-0034-schema-incontro looks at.
+CREATE TABLE incontro (
+    id TEXT NOT NULL PRIMARY KEY,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id)
+);
+ALTER TABLE registrazione ADD COLUMN incontro_id TEXT REFERENCES incontro(id);
+CREATE TABLE voci_incontro (
+    incontro_id TEXT NOT NULL PRIMARY KEY REFERENCES incontro(id),
+    prossima_voce INTEGER NOT NULL
+);
+CREATE TABLE voce_incontro (
+    incontro_id TEXT NOT NULL REFERENCES voci_incontro(incontro_id),
+    numero INTEGER NOT NULL,
+    PRIMARY KEY (incontro_id, numero)
+);
+CREATE TABLE riassunto_v8 (
+    id TEXT NOT NULL PRIMARY KEY,
+    incontro_id TEXT NOT NULL REFERENCES incontro(id),
+    stato TEXT NOT NULL
+);
+CREATE TABLE riassunto_fonte_v8 (
+    riassunto_id TEXT NOT NULL,
+    registrazione_id TEXT NOT NULL,                  -- the Parte of the Fonte; NO FK
+    segmento_id INTEGER NOT NULL
+);
+-- CREATE UNIQUE INDEX riassunto_non_pronto_unico ON riassunto(incontro_id) WHERE stato IN ('in_attesa', 'in_corso', 'fallito');
+CREATE UNIQUE INDEX riassunto_pronto_unico ON riassunto(incontro_id) WHERE stato = 'pronto';

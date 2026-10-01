@@ -19,32 +19,33 @@ import snastro.sintesi.dominio.Sommario
 import snastro.sintesi.dominio.StatoRiassunto
 import snastro.sintesi.dominio.TestoConVoci
 import java.time.Instant
-import migrations.Riassunto as RiassuntoRiga
 
 /** The database is trusted, nothing re-validated (CR-15): [Argomento]/[LunghezzaMassimaParole] were already
  * validated by the only writers (their smart constructors) before [RiassuntoRepositorySql] ever stored them. */
 @OptIn(RicostituzioneDaPersistenza::class)
-internal fun inDominio(db: SnastroDatabase, riga: RiassuntoRiga): Riassunto {
+internal fun inDominio(db: SnastroDatabase, riga: RigaRiassunto): Riassunto {
     val figli = leggiFigli(db, RiassuntoId(riga.id))
     return Riassunto.ricostituisci(
         id = RiassuntoId(riga.id),
-        registrazioneId = RegistrazioneId(riga.registrazione_id),
+        registrazioneId = RegistrazioneId(riga.registrazioneId),
         argomento = riga.argomento?.let { a ->
             Argomento.di(a).valoreOppureErrore { "argomento invalido nel database: $a" }
         },
-        lunghezzaMassima = LunghezzaMassimaParole.di(riga.lunghezza_massima_parole.toInt())
-            .valoreOppureErrore { "lunghezza_massima_parole fuori intervallo: ${riga.lunghezza_massima_parole}" },
-        richiestoAlle = Instant.ofEpochMilli(riga.richiesto_alle),
+        lunghezzaMassima = LunghezzaMassimaParole.di(riga.lunghezzaMassimaParole.toInt())
+            .valoreOppureErrore { "lunghezza_massima_parole fuori intervallo: ${riga.lunghezzaMassimaParole}" },
+        richiestoAlle = Instant.ofEpochMilli(riga.richiestoAlle),
         stato = StatoRiassunto.valueOf(riga.stato.uppercase()),
-        avviatoAlle = riga.avviato_alle?.let(Instant::ofEpochMilli),
-        motivoFallimento = riga.motivo_fallimento?.let(::motivoFallimentoDiCodice),
+        avviatoAlle = riga.avviatoAlle?.let(Instant::ofEpochMilli),
+        motivoFallimento = riga.motivoFallimento?.let(::motivoFallimentoDiCodice),
         sommario = riga.sommario?.let { Sommario(testoDiStorage(it)) },
         decisioni = figli.decisioni,
         questioniAperte = figli.questioniAperte,
         azioni = figli.azioni,
         puntiChiave = figli.puntiChiave,
         omessi = riga.omessi?.toInt(),
-        struttura = riga.struttura,
+        // TRANSITION (ADR 0033 §6): the stored key is '<registrazioneId>=<old encoding>' (ADR 0034 §1); the
+        // current domain compares the old encoding, so the prefix is stripped here (incontro-chiavi removes this).
+        struttura = riga.struttura?.substringAfter('='),
     )
 }
 

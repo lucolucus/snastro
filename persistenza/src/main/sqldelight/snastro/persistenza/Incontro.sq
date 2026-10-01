@@ -1,0 +1,16 @@
+-- Queries for `incontro` — schema in migrations/7.sqm (ADR 0034, ADR 0006 Amendment (a)).
+-- Written ONLY by the Progetto adapter (ADR 0034 §5).
+
+inserisci:
+INSERT INTO incontro(id, progetto_id) VALUES (:id, :progettoId);
+
+trovaPerId:
+SELECT * FROM incontro WHERE id = :id;
+
+trovaDelProgetto:
+SELECT * FROM incontro WHERE progetto_id = :progettoId;
+
+-- Transition (ADR 0033 §6): an Incontro ceases with its last Parte. Still referenced (a riassunto, voci_incontro)
+-- the DELETE fails on the immediate FK: a composition that forgot a subscriber fails closed.
+eliminaSeSenzaParti:
+DELETE FROM incontro WHERE id = :id AND NOT EXISTS (SELECT 1 FROM registrazione WHERE incontro_id = :id);

@@ -109,6 +109,7 @@ class MigrazioneSchemaTest {
 
     private val progettoId = "progetto-1"
     private val registrazioneId = "reg-1"
+    private val incontroDiProva = "incontro-di-reg-1" // the id seminaRegistrazioneDiProva gives the Parte's Incontro
     private val parlanteId = "parlante-1"
     private val elaborazioneId = "elab-1"
 
@@ -124,6 +125,8 @@ class MigrazioneSchemaTest {
         db.parlanteQueries.rimuovi(parlanteId)
         db.segmentoQueries.eliminaDiRegistrazione(registrazioneId)
         db.voceQueries.eliminaDiRegistrazione(registrazioneId)
+        db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
+        db.vociIncontroQueries.eliminaSeSenzaTrascritti(registrazioneId)
         eseguiQueryEliminaRegistrazione(db)
     }
 
@@ -132,6 +135,7 @@ class MigrazioneSchemaTest {
         db.trascrittoQueries.elimina(registrazioneId)
         db.elaborazioneQueries.eliminaDiRegistrazione(registrazioneId)
         db.registrazioneQueries.elimina(registrazioneId)
+        db.incontroQueries.eliminaSeSenzaParti(incontroDiProva)
         db.eliminazioneInSospesoQueries.inserisci(registrazioneId, "titolo", "2026-09-23", "audio/reg-1.wav", 0L)
         db.eliminazioneInSospesoQueries.elenco().executeAsOne()
         db.eliminazioneInSospesoQueries.elimina(registrazioneId)
@@ -142,7 +146,7 @@ class MigrazioneSchemaTest {
         assertEquals(progettoId, db.progettoQueries.trova().executeAsOne().id)
         db.progettoQueries.aggiorna("Progetto rinominato", progettoId)
 
-        db.registrazioneQueries.inserisci(
+        db.seminaRegistrazioneDiProva(
             registrazioneId,
             progettoId,
             "titolo",
@@ -151,6 +155,8 @@ class MigrazioneSchemaTest {
             "2026-09-23",
             0L,
         )
+        db.incontroQueries.trovaPerId(incontroDiProva).executeAsOne()
+        db.incontroQueries.trovaDelProgetto(progettoId).executeAsList()
         db.registrazioneQueries.trovaPerId(registrazioneId).executeAsOne()
         db.registrazioneQueries.trovaDelProgetto(progettoId).executeAsList()
         db.registrazioneQueries.aggiorna("titolo rinominato", "2026-09-24", registrazioneId)
@@ -163,12 +169,18 @@ class MigrazioneSchemaTest {
     }
 
     private fun eseguiQueryTrascrittoVoceSegmentoElaborazione(db: SnastroDatabase) {
-        db.trascrittoQueries.inserisci(registrazioneId, 2L, 1L)
+        db.trascrittoQueries.inserisci(registrazioneId, 1L)
+        db.trascrittoQueries.esistePerRegistrazione(registrazioneId).executeAsOne()
+        db.vociIncontroQueries.inserisci(2L, registrazioneId)
+        db.vociIncontroQueries.trovaDiRegistrazione(registrazioneId).executeAsOne()
+        db.vociIncontroQueries.aggiorna(3L, registrazioneId)
         db.trascrittoQueries.trovaPerRegistrazione(registrazioneId).executeAsOne()
         db.trascrittoQueries.trovaRegistrazioniConTrascritto().executeAsList()
-        db.trascrittoQueries.aggiornaContatori(3L, 2L, registrazioneId)
+        db.trascrittoQueries.aggiornaContatori(2L, registrazioneId)
 
+        db.voceIncontroQueries.inserisciSeAssente(1L, registrazioneId)
         db.voceQueries.inserisci(registrazioneId, 1L)
+        db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
         db.voceQueries.trovaDiTrascritto(registrazioneId).executeAsList()
 
         db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)
@@ -224,7 +236,7 @@ class MigrazioneSchemaTest {
         db.riassuntoElementoQueries.inserisci(riassuntoId, "decisione", 0L, "testo", null)
         db.riassuntoElementoQueries.trovaDiRiassunto(riassuntoId).executeAsList()
 
-        db.riassuntoFonteQueries.inserisci(riassuntoId, "decisione", 0L, 1L)
+        db.riassuntoFonteQueries.inserisci(riassuntoId, "decisione", 0L, registrazioneId, 1L)
         db.riassuntoFonteQueries.trovaDiRiassunto(riassuntoId).executeAsList()
 
         db.impostazioniSintesiQueries.sostituisci(progettoId, 2000L)

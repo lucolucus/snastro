@@ -23,8 +23,8 @@ import kotlin.test.assertTrue
  */
 class MigrazioneSintesiTest {
     @Test
-    fun `AC-S36 lo schema sintesi porta la versione corrente a 7`() {
-        assertEquals(7L, SnastroDatabase.Schema.version)
+    fun `AC-S36 lo schema sintesi e alla versione 7 o successiva`() {
+        assertTrue(VERSIONE_SINTESI <= SnastroDatabase.Schema.version)
     }
 
     @Test
@@ -39,8 +39,10 @@ class MigrazioneSintesiTest {
         val prima = TABELLE_PRE_SINTESI.associateWith { contenuto(v6, it) }
         v6.close()
 
-        val db = apriDatabaseProgetto(cartella.toFile())
+        // 6.sqm is the 6 -> 7 step: migrate exactly that one (a later migration rebuilds these tables).
         val driver = driverSqlite(url)
+        SnastroDatabase.Schema.migrate(driver, VERSIONE_ELIMINA_REGISTRAZIONE, VERSIONE_SINTESI)
+        driver.execute(null, "PRAGMA user_version = $VERSIONE_SINTESI", 0)
         try {
             assertEquals(VERSIONE_SINTESI, pragmaLong(driver, "user_version"))
             TABELLE_PRE_SINTESI.forEach {
@@ -52,7 +54,6 @@ class MigrazioneSintesiTest {
             assertEquals(0, contaRighePragma(driver, "foreign_key_check"))
         } finally {
             driver.close()
-            db.chiudi()
         }
     }
 
@@ -170,25 +171,27 @@ class MigrazioneSintesiTest {
         val registrazioneId = db.seminaProgettoERegistrazione()
         db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
         db.riassuntoElementoQueries.inserisci("r-1", "decisione", 0L, "testo", null)
-        db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, 1L)
+        db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, registrazioneId, 1L)
 
         assertFailsWith<SQLException> {
-            db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, 1L)
+            db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, registrazioneId, 1L)
         }
     }
 
     @Test
-    fun `AC-S40 la riga registrazione non si cancella finche esiste un suo riassunto`() {
+    fun `AC-S40 l Incontro non si cancella finche esiste un suo riassunto`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
+        val incontroId = checkNotNull(db.registrazioneQueries.trovaPerId(registrazioneId).executeAsOne().incontro_id)
         db.riassuntoQueries.inserisci(
             "r-1", registrazioneId, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
         )
 
-        assertFailsWith<SQLException> { db.registrazioneQueries.elimina(registrazioneId) }
+        // ADR 0034 §2: riassunto's immediate FK is to incontro, so the Incontro of the last Parte fails closed.
+        db.registrazioneQueries.elimina(registrazioneId)
+        assertFailsWith<SQLException> { db.incontroQueries.eliminaSeSenzaParti(incontroId) }
 
-        assertEquals(registrazioneId, db.registrazioneQueries.trovaPerId(registrazioneId).executeAsOne().id)
-        assertEquals(1, db.riassuntoQueries.trovaDiRegistrazione(registrazioneId).executeAsList().size)
+        assertEquals(incontroId, db.incontroQueries.trovaPerId(incontroId).executeAsOne().id)
     }
 
     @Test
@@ -243,7 +246,7 @@ class MigrazioneSintesiTest {
         val registrazioneId = db.seminaProgettoERegistrazione()
         db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
         db.riassuntoElementoQueries.inserisci("r-1", "decisione", 0L, "testo", null)
-        db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, 1L)
+        db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, registrazioneId, 1L)
 
         // No cascade: the parent cannot go first while a child still references it (immediate FK).
         assertFailsWith<SQLException>("riassunto prima di elemento/fonte") { db.riassuntoQueries.elimina("r-1") }
@@ -269,7 +272,7 @@ class MigrazioneSintesiTest {
     }
 
     private fun SnastroDatabase.seminaRegistrazione(progettoId: String, registrazioneId: String): String {
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             registrazioneId,
             progettoId,
             "titolo",

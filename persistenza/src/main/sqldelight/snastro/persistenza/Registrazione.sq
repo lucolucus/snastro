@@ -1,4 +1,4 @@
--- Queries for `registrazione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+-- Queries for `registrazione` — schema in migrations/1.sqm + 7.sqm (ADR 0006 Amendment (a)).
 
 trovaPerId:
 SELECT * FROM registrazione WHERE id = :id;
@@ -8,8 +8,8 @@ SELECT * FROM registrazione WHERE progetto_id = :progettoId
     ORDER BY data_registrazione DESC, aggiunta_alle DESC;
 
 inserisci:
-INSERT INTO registrazione(id, progetto_id, titolo, riferimento_audio, durata_ms, data_registrazione, aggiunta_alle)
-VALUES (:id, :progettoId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazione, :aggiuntaAlle);
+INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, data_registrazione, aggiunta_alle)
+VALUES (:id, :progettoId, :incontroId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazione, :aggiuntaAlle);
 
 -- The two columns that change after creation: titolo (AC-360) and data_registrazione (INV-2).
 aggiorna:

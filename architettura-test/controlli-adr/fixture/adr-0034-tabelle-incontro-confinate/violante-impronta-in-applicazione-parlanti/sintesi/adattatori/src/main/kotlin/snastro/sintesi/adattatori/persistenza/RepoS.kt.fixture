@@ -1,0 +1,6 @@
+package snastro.sintesi.adattatori.persistenza
+
+class RepoS(private val db: Db) {
+    fun f() = db.riassuntoQueries.elimina("r") + db.riassuntoElementoQueries.eliminaDiRiassunto("r") +
+        db.riassuntoFonteQueries.eliminaDiRiassunto("r")
+}

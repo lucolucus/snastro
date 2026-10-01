@@ -8,6 +8,7 @@ import snastro.kernel.atteso
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
 import java.io.File
@@ -116,7 +117,7 @@ class AnnullaVsPresaSqlTest {
         nome: String,
         creata: Long,
     ): ElaborazioneId {
-        db.registrazioneQueries.inserisci(
+        db.seminaRegistrazioneDiProva(
             id = nome,
             progettoId = "progetto-1",
             titolo = nome,

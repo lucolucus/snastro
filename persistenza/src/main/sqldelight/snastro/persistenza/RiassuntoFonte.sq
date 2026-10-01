@@ -1,11 +1,11 @@
--- Queries for `riassunto_fonte` — schema in migrations/6.sqm (ADR 0022, ADR 0006 Amendment (a)).
+-- Queries for `riassunto_fonte` — schema in migrations/7.sqm (ADR 0034, ADR 0022, ADR 0006 Amendment (a)).
 
 trovaDiRiassunto:
 SELECT * FROM riassunto_fonte WHERE riassunto_id = :riassuntoId ORDER BY tipo, posizione, segmento_id;
 
 inserisci:
-INSERT INTO riassunto_fonte(riassunto_id, tipo, posizione, segmento_id)
-VALUES (:riassuntoId, :tipo, :posizione, :segmentoId);
+INSERT INTO riassunto_fonte(riassunto_id, tipo, posizione, registrazione_id, segmento_id)
+VALUES (:riassuntoId, :tipo, :posizione, :registrazioneId, :segmentoId);
 
 -- First step of the no-cascade removal order (fonte -> elemento -> riassunto, ADR 0022 §2) —
 -- also used by `salva`'s "replace of children" before re-inserting the current set.
@@ -15,4 +15,4 @@ DELETE FROM riassunto_fonte WHERE riassunto_id = :riassuntoId;
 -- ADR 0020 / ADR 0022: every Fonte of every Riassunto of a Registrazione. The caller runs this FIRST
 -- of the three eliminaDiRegistrazione calls (fonte -> elemento -> riassunto, no cascade).
 eliminaDiRegistrazione:
-DELETE FROM riassunto_fonte WHERE riassunto_id IN (SELECT id FROM riassunto WHERE registrazione_id = :registrazioneId);
+DELETE FROM riassunto_fonte WHERE riassunto_id IN (SELECT id FROM riassunto WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId));

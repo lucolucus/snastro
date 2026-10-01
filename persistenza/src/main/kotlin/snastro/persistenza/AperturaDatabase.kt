@@ -67,6 +67,9 @@ internal fun driverSqlite(url: String, osserva: (String) -> Unit = {}): JdbcDriv
 
 private const val BUSY_TIMEOUT_MS = 5_000
 
+/** The schema version `7.sqm` produces (the Incontro, ADR 0034). */
+private const val VERSIONE_INCONTRO = 8L
+
 /**
  * AC-12: refuses a schema newer than [SnastroDatabase.Schema]'s, or exactly [VERSIONE_MAI_RILASCIATA]
  * (a baseline this app never shipped — ADR 0006 Amendment (a)), WITHOUT ever touching the file — a
@@ -115,9 +118,16 @@ private fun allineaSchema(driver: SqlDriver, db: SnastroDatabase) {
             impostaVersioneSchema(driver, versioneAttesa)
         }
 
-        versioneTrovata < versioneAttesa -> db.transaction {
-            SnastroDatabase.Schema.migrate(driver, versioneTrovata, versioneAttesa)
-            impostaVersioneSchema(driver, versioneAttesa)
+        versioneTrovata < versioneAttesa -> {
+            db.transaction {
+                SnastroDatabase.Schema.migrate(driver, versioneTrovata, versioneAttesa)
+                impostaVersioneSchema(driver, versioneAttesa)
+            }
+            // ADR 0034 §3 / ADR 0009: 7.sqm copies every print and drops the old table (secure_delete zeroes the freed
+            // pages); the checkpoint, outside any transaction, keeps the old pages from lingering in the -wal file.
+            if (versioneTrovata < VERSIONE_INCONTRO && versioneAttesa >= VERSIONE_INCONTRO) {
+                db.transazioneQueries.walCheckpointTruncate()
+            }
         }
         // else: versioneTrovata == versioneAttesa, gia allineato.
     }

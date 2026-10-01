@@ -1,0 +1,24 @@
+-- Queries for `voci_incontro` — schema in migrations/7.sqm (ADR 0034). Written ONLY by the Trascrizione adapter.
+-- Transition (ADR 0033 §6): the Incontro is resolved from registrazione_id by SQL join.
+
+trovaDiRegistrazione:
+SELECT v.incontro_id, v.prossima_voce
+FROM voci_incontro AS v INNER JOIN registrazione AS r ON r.incontro_id = v.incontro_id
+WHERE r.id = :registrazioneId;
+
+inserisci:
+INSERT INTO voci_incontro(incontro_id, prossima_voce)
+SELECT incontro_id, :prossimaVoce FROM registrazione WHERE id = :registrazioneId;
+
+aggiorna:
+UPDATE voci_incontro SET prossima_voce = :prossimaVoce
+WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId);
+
+-- The root ceases with the last Parte that has a Trascritto.
+eliminaSeSenzaTrascritti:
+DELETE FROM voci_incontro
+WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId)
+    AND NOT EXISTS (
+        SELECT 1 FROM trascritto AS t INNER JOIN registrazione AS r ON r.id = t.registrazione_id
+        WHERE r.incontro_id = voci_incontro.incontro_id AND t.registrazione_id <> :registrazioneId
+    );

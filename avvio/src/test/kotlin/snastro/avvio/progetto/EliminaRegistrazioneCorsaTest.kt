@@ -3,6 +3,7 @@ package snastro.avvio.progetto
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
@@ -35,7 +36,7 @@ class EliminaRegistrazioneCorsaTest {
             try {
                 val esiti = (1..RIPETIZIONI).map { n ->
                     val id = RegistrazioneId("r-$n")
-                    porte.database.registrazioneQueries.inserisci(
+                    porte.database.seminaRegistrazioneDiProva(
                         id = id.valore,
                         progettoId = ambiente.progetto.progettoId.valore,
                         titolo = "R $n",

@@ -1,0 +1,3 @@
+package x
+
+class Porta { fun f(db: Db) = db.registrazioneQueries.elimina("r") }

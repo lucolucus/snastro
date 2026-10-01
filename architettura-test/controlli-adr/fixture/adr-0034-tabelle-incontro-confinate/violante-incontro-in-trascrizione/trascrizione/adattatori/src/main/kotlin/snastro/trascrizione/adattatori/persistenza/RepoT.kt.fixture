@@ -1,0 +1,6 @@
+package snastro.trascrizione.adattatori.persistenza
+
+class RepoT(private val db: Db) {
+    fun f() = db.vociIncontroQueries.aggiorna(1, "r") + db.voceIncontroQueries.eliminaSenzaPresenza("r") +
+        db.trascrittoQueries.elimina("r") + db.voceQueries.eliminaDiRegistrazione("r") + db.segmentoQueries.eliminaDiRegistrazione("r")
+}

@@ -1,0 +1,5 @@
+package x
+
+import snastro.persistenza.IncontroQueries
+
+class Leak(val q: IncontroQueries)
