@@ -32,6 +32,10 @@
 # AC-I30 moved here from porte-sintesi-incontro). Wave 4/5 rows porte-sintesi-incontro, porte-parlanti-incontro and catalogo-incontro
 # WIDEN those methods instead of adding them. incontro-chiavi's new tests_nl AC-I203..AC-I209 come from the user-accepted option
 # (architect's proposal, ADR 0033 §4.1); its tests_nl_status stays confirmed.
+# AMENDED 2026-10-02 (user, D-0037) — GENERAL RULE for every remaining block: when a block's pinned shapes break callers owned by later
+# blocks, the block itself makes compile-only, behaviour-neutral edits in those callers (any module), as in D-0031/D-0033. Multi-Parte
+# contract cases run on the Finta now and on the real adapter behind an explicit environment capability flag switched on when the I2
+# multi-file import lands (no skipped/aborted tests: the gate fails tests JUnit does not execute). Workers list such edits as DEVIATIONS.
 feature: incontro
 profile: .mismagent/profile.md
 ac_scheme: "AC-I1..AC-I209 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
