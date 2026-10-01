@@ -489,3 +489,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (voci-dell-incontro)
 - Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
 - Revisit: none expected.
+
+### D-0037 · Regola: i blocchi fanno compilare i chiamanti
+- Meta: 2026-10-02; scope: feature; status: accepted
+- Question: Port and aggregate blocks keep bouncing because their pinned shapes break callers owned by later blocks; how should every remaining block handle it?
+- Options: A always the D-0031/D-0033 pattern, compile-only behaviour-neutral caller edits, multi-Parte real-adapter contract cases behind a flag until the I2 import (kept); B ask per block; C re-plan waves merging ports with consumers.
+- Hypothesis: n/a — decided by the user after three BOUNCED blocks, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user after three BOUNCED blocks, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user after three BOUNCED blocks, [manifest](building-blocks.yaml)
+- Debate: incontro-chiavi, riassunto-incontro, porte-sbobinatura-incontro and porte-parlanti-incontro bounced for the same cause.
+- Decision: A for every remaining block; workers list the caller edits as DEVIATIONS, the composer judges them in review and asks the user only for cases outside the rule. Cost: wider diffs overlapping later blocks.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer)
+- Docs: [manifest](building-blocks.yaml)
+- Revisit: a caller edit changes behaviour or a block's diff becomes unreviewable.
