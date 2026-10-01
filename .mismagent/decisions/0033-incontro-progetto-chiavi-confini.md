@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0021 §3 (Sintesi ports re-keyed + new Progetto → Sintesi reader), architecture.md (kernel row, Progetto rows, boundaries), the kernel Published Language (VoceRef re-keyed, IncontroId and SegmentoRef added)
 closes_spike: null
 decided: 2026-10-01 · architect (feature dispatch, incontro) on the user's D-0001, D-0002, D-0008, D-0009, D-0016, D-0018, D-0019 and the tactical model's seam granularity
-amended: 2026-10-01   # build-manifest checkpoint [user]: §6 two blocks in sequence (persistenza-incontro then incontro-chiavi); rule-9 confinement checks below (§7)
+amended: 2026-10-01   # build-manifest checkpoint [user]: §6 two blocks in sequence (persistenza-incontro then incontro-chiavi); rule-9 confinement checks below (§7). Later the same day [user, incontro D-0031]: §4.1 minimal Incontro → Parti reads brought forward into incontro-chiavi; wave-4 port blocks widen them
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0033-incontro-mutato-dalla-radice.sh
     from: incontro
@@ -123,6 +123,49 @@ gate, the real adapter runs it seeded through the supplier's commands, dev-archi
 | Trascrizione → Sintesi | `LettoreTrascritto` (Sintesi) | `VociDelTrascritto` + `StatiElaborazione` | `segmenti(registrazioneId)` unchanged; `elaborazioneAperta` replaced by `statoParte(registrazioneId): StatoParteSintesi` = `DA_TRASCRIVERE` (no `Trascritto`, no run) \| `IN_TRASCRIZIONE` (any run open) \| `NON_RIUSCITA` (no `Trascritto`, latest run `fallita`) \| `TRASCRITTA` (a `Trascritto`, no run open) — the three disabled hints of D-0020 |
 | Parlanti → Sintesi | `LettoreNomi` (Sintesi) | `NomiDelleVoci` | `nomi(incontroId): Map<VoceRef, String>`, attributed only. **"Voce no longer present" is NOT asked to Parlanti** (counter-proposal to the tactical note): Sintesi derives presence from the current structure it already reads through `LettoreTrascritto` (ADR 0037 §6) — a removed `Voce` has no `Attribuzione` anyway, so the names port cannot tell it apart, and Voce existence is Trascrizione's fact |
 
+#### 4.1 The minimal reads that `incontro-chiavi` brings forward *(amended 2026-10-01 [user, incontro D-0031])*
+The sweep (§6 step 2) removes every wave-1 join, but three paths must still go from an `Incontro` to its `Parte`s, before
+the ordered reads of the table above exist (wave 4). Option A of the bounced `incontro-chiavi`: **one minimal method per
+boundary, owned by block `incontro-chiavi`**; the wave-4 port blocks then **widen** these same methods to the shapes in
+the table above, and never add a parallel one.
+
+| Boundary | Method (pinned now) | Published Language | Widened in wave 4 by | to |
+|---|---|---|---|---|
+| Progetto public query (supplier) | `CatalogoRegistrazioni.parti(incontroId: IncontroId): List<RegistrazioneId>?` | kernel ids only | `catalogo-incontro` | `incontro(id): IncontroVista?` (ordered, numbered); `parti` stays as its projection |
+| Progetto → Sintesi | **`LettoreIncontro.parti(incontroId: IncontroId): List<RegistrazioneId>?`** (new Sintesi port) | kernel ids | `porte-sintesi-incontro` | `List<ParteSintesi(registrazioneId, numero)>?`, ordered |
+| Progetto → Parlanti | **`LettoreRegistrazione.parti(incontroId: IncontroId): List<RegistrazioneId>?`** (Parlanti's port) | kernel ids | `porte-parlanti-incontro` | `List<ParteDiIncontroParlanti(registrazioneId, numero, dataRegistrazione)>?`, ordered |
+| Progetto → Trascrizione, Parlanti, Sintesi | `RegistrazioneVista.incontroId: IncontroId` on each consumer's own view of `registrazione(id)` | kernel id | — (final) | — |
+
+Rules of these minimal reads:
+- **Unordered.** The list's order carries no meaning: the order of the `Parte`s belongs to the `incontro` aggregate
+  (wave 3, [INV-I2]). No consumer sorts it or relies on its order. `null` = unknown `Incontro`, or one that ceased (its last
+  `Parte` was deleted); a known `Incontro` always has ≥ 1 element ([INV-I1]).
+- **Parlanti, VoceRef → its `Parte`s:** a `Parlanti` command or read-model holding a `VoceRef(incontroId, voceId)` reads
+  `LettoreRegistrazione.parti(incontroId)`, then the `Voce`s of each `Parte` through its existing per-`Registrazione`
+  `LettoreVoci.voci(r)` (whose `VoceRef`s now carry the `incontroId`), and keeps the `Parte`s where that `voceId` speaks;
+  audio is decoded per `Parte` with the existing `DecodificatoreAudio.campioni(r, …)`. No new Trascrizione method in wave 2.
+- **Sintesi, run and view:** `Riassumi`, `EseguiProssimoRiassunto` and `riassunto-vista` (keyed by `incontroId`) read
+  `LettoreIncontro.parti(incontroId)` and then the existing per-`Parte` `LettoreTrascritto.segmenti(r)` /
+  `elaborazioneAperta(r)`.
+- **Trascrizione: the services resolve, the repository never joins.** Every service and public query that starts from a
+  `registrazioneId` reads `LettoreRegistrazione.registrazione(r).incontroId` first, in its own transaction or snapshot. The
+  `Trascritto` (still the root in wave 2) carries its `incontroId`. `TrascrittoRepository.trova(r: RegistrazioneId, incontroId:
+  IncontroId)` and `rimuovi(r, incontroId)` receive it, and `salva(t)` writes `voci_incontro` / `voce_incontro` with
+  `t.incontroId`. No Trascrizione query reads the `registrazione` table. In wave 3 `VociDellIncontroRepository.trova(incontroId)`
+  replaces this.
+- **Behaviour-neutral:** this holds while every `Incontro` has one `Parte` (§6). With one element, "unordered" cannot
+  change any result.
+- **D-0028 is kept:** no repository UPDATE names `incontro_id` (ADR 0034 §2).
+- **Contract tests** (dev-architecture `#porta-contratto`; Contratto + Finta in each consumer's `testFixtures`; the real
+  adapter runs the same Contratto seeded through Progetto's commands):
+  - `LettoreIncontroContratto` + `LettoreIncontroFinta` (`:sintesi:applicazione`), real `LettoreIncontroDaProgetto`
+    (`:sintesi:adattatori ..porte`). It asserts: the set of the `Incontro`'s `Registrazione`s; `null` for an unknown id;
+    `null` after its only `Parte` is deleted; a `Registrazione` of another `Incontro` is never listed. No order is asserted.
+  - `LettoreRegistrazioneContratto` (Parlanti) gains the same four cases for `parti`. It also asserts that
+    `registrazione(r).incontroId` equals the one set at import.
+  - `LettoreRegistrazioneContratto` (Trascrizione) asserts the same about `registrazione(r).incontroId`.
+  - Supplier test on `CatalogoRegistrazioni.parti` (`:progetto:applicazione`), with the same cases.
+
 Cross-context events re-keyed by Trascrizione and Parlanti are listed in ADR 0035 §5; Sintesi's in ADR 0037 §1.
 **Authorship:** reads consumer-driven, writes producer-driven, as before. Progetto still depends on no context.
 
@@ -150,7 +193,10 @@ any block, in **two blocks in sequence**:
    and for every import until the multi-file import into an `Incontro` (block `aggiungi-registrazione-incontro`,
    release I2) exists. No block that can give an `Incontro` a second `Parte` may land before step 2.
 2. **`incontro-chiavi` (wave 2)** is the compile-checked sweep: it changes the kernel types and every use at once, the
-   repositories write and read the `incontro_id` columns directly, and the wave-1 joins go.
+   repositories write and read the `incontro_id` columns directly, and the wave-1 joins go. Where a path must go from
+   an `Incontro` to its `Parte`s, it uses the minimal unordered reads of §4.1, which this block owns *(amended 2026-10-01
+   [user, incontro D-0031])*. In Trascrizione the services resolve `incontroId` through `LettoreRegistrazione` and pass it
+   to the repository.
 
 On existing data both steps are behaviour-neutral. No deprecated symbol survives step 2, so no `cleanup` node is
 needed. After it, published types evolve additively.

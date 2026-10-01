@@ -13,6 +13,7 @@ consumes:
   - parti-per-trascrizione
   - catalogo-incontro
   - eventi-progetto-incontro
+  - registrazione-incontro-id
 related_adrs:
   - "0029"
   - "0034"
@@ -40,7 +41,7 @@ Implement VociDellIncontroRepository in SQL (the only writer of voci_incontro, v
   - pinned `CatalogoRegistrazioni.incontro`: (id: IncontroId): IncontroVista? — null for an unknown or ceased Incontro
   - pinned `IncontroVista`: (incontroId, progettoId, parti: List<ParteVista>) — ordered and numbered by OrdineDelleParti
   - pinned `ParteVista`: (registrazioneId, numero: Int, titolo: String, dataRegistrazione: LocalDate, oraDiInizio: LocalTime?, durataMs: Long)
-  - pinned `RegistrazioneVista (amended)`: + incontroId: IncontroId, + oraDiInizio: LocalTime?
+  - pinned `RegistrazioneVista (amended)`: + oraDiInizio: LocalTime? (incontroId: boundary registrazione-incontro-id)
   - key `numero`: minted at read time by OrdineDelleParti — never stored; changes when a date/time edit, an import or an elimination reorders
 - `eventi-progetto-incontro` (consumes it; owner `porte-progetto-incontro`) — consumers: `aggiungi-registrazione-incontro`, `modifica-ora-di-inizio`, `elimina-parte`, `eliminazione-parte-trascrizione`, `eliminazione-parte-sintesi`, `rigenerazione-sbobinatura-incontro`, `adattatori-trascrizione-incontro`, `adattatori-sbobinatura-incontro`, `adattatori-sintesi-incontro`, `avvio-incontro`, `avvio-incontro-parti` · contract_test: consumer-driven
   - pinned `RegistrazioneAggiunta`: existing + incontroId: IncontroId — after commit, one per file
@@ -60,6 +61,10 @@ Implement VociDellIncontroRepository in SQL (the only writer of voci_incontro, v
   - pinned `LettoreRegistrazione (Trascrizione)`: registrazione(id) view + incontroId; parti(incontroId: IncontroId): List<ParteDiIncontro>? — ordered by INV-I2, null = unknown Incontro
   - pinned `ParteDiIncontro`: (registrazioneId: RegistrazioneId, numero: Int)
   - key `numero`: as catalogo-incontro
+- `registrazione-incontro-id` (consumes it; owner `incontro-chiavi`) — consumers: `catalogo-incontro`, `porte-trascrizione-incontro`, `porte-parlanti-incontro`, `porte-sintesi-incontro`, `adattatori-trascrizione-incontro`, `adattatori-parlanti-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
+  - pinned `RegistrazioneVista.incontroId`: IncontroId — on Progetto's public view and on each consumer's own view of registrazione(id) (Trascrizione, Parlanti, Sintesi); final shape, no widening
+  - pinned `TrascrittoRepository (transition, wave 2)`: trova(r: RegistrazioneId, incontroId: IncontroId): Trascritto?; rimuovi(r, incontroId); salva(t) writes voci_incontro/voce_incontro with t.incontroId; the Trascritto carries incontroId; replaced by VociDellIncontroRepository.trova(incontroId) in wave 3/4
+  - key `incontroId`: as kernel-incontro; Trascrizione services read it via LettoreRegistrazione.registrazione(r).incontroId before calling the repository; no Trascrizione query reads the registrazione table; no UPDATE names incontro_id (D-0028)
 - `repo-voci-incontro` (consumes it; owner `porte-trascrizione-incontro`) — consumers: `avvia-elaborazioni-incontro`, `esegui-elaborazione-incontro`, `revisione-incontro`, `eliminazione-parte-trascrizione`, `voci-del-trascritto-incontro`, `viste-parte-incontro`, `adattatori-trascrizione-incontro` · contract_test: consumer-driven
   - pinned `VociDellIncontroRepository`: interface { fun trova(id: IncontroId): VociDellIncontro? /* one LetturaCoerente snapshot */; fun salva(root: VociDellIncontro) /* rewrites only changed Parti */; fun rimuovi(id: IncontroId); fun trascritto(r: RegistrazioneId): Trascritto? }
   - key `incontroId`: as kernel-incontro

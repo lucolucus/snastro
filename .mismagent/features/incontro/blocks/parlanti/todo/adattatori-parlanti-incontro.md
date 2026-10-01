@@ -13,6 +13,9 @@ consumes:
   - api-voci-incontro
   - catalogo-incontro
   - eventi-trascrizione-incontro
+  - parti-di-incontro-progetto
+  - parti-per-parlanti
+  - registrazione-incontro-id
 related_adrs:
   - "0030"
   - "0034"
@@ -47,7 +50,7 @@ Map prints per (Parlante, VoceRef, Parte) and Attribuzioni by (incontro_id, voce
   - pinned `CatalogoRegistrazioni.incontro`: (id: IncontroId): IncontroVista? — null for an unknown or ceased Incontro
   - pinned `IncontroVista`: (incontroId, progettoId, parti: List<ParteVista>) — ordered and numbered by OrdineDelleParti
   - pinned `ParteVista`: (registrazioneId, numero: Int, titolo: String, dataRegistrazione: LocalDate, oraDiInizio: LocalTime?, durataMs: Long)
-  - pinned `RegistrazioneVista (amended)`: + incontroId: IncontroId, + oraDiInizio: LocalTime?
+  - pinned `RegistrazioneVista (amended)`: + oraDiInizio: LocalTime? (incontroId: boundary registrazione-incontro-id)
   - key `numero`: minted at read time by OrdineDelleParti — never stored; changes when a date/time edit, an import or an elimination reorders
 - `eventi-trascrizione-incontro` (consumes it; owner `porte-trascrizione-incontro`) — consumers: `avvia-elaborazioni-incontro`, `esegui-elaborazione-incontro`, `revisione-incontro`, `eliminazione-parte-trascrizione`, `politiche-parlanti-incontro`, `rigenerazione-sbobinatura-incontro`, `letture-parlanti-incontro`, `proposta-tra-parti`, `adattatori-parlanti-incontro`, `adattatori-sbobinatura-incontro`, `avvio-incontro`, `avvio-proposta-tra-parti` · contract_test: consumer-driven
   - pinned `ElaborazioneCompletata`: (registrazioneId, incontroId) — after commit
@@ -67,9 +70,19 @@ Map prints per (Parlante, VoceRef, Parte) and Attribuzioni by (incontro_id, voce
   - key `incontroId`: minted by aggiungi-registrazione-incontro via GeneratoreId (UUID v4) for every new Incontro; by 7.sqm for migrated ones (equal to their Registrazione's id, a migration fact no code relies on) — immutable, never reused
   - key `voceId`: minted by voci-dell-incontro from the Incontro counter (prossimaVoce) — unique in the Incontro, never reused (INV-I4)
   - key `segmentoId`: minted by voci-dell-incontro from the Parte's prossimoSegmento — unique in its Registrazione across generations (INV-I16)
+- `parti-di-incontro-progetto` (consumes it; owner `incontro-chiavi`) — consumers: `catalogo-incontro`, `adattatori-sintesi-incontro`, `adattatori-parlanti-incontro` · contract_test: consumer-driven
+  - pinned `CatalogoRegistrazioni.parti`: (incontroId: IncontroId): List<RegistrazioneId>? in :progetto:applicazione ..letture — UNORDERED (no consumer sorts or relies on the order); null = unknown Incontro or one whose last Parte was deleted; a known Incontro has ≥ 1 element (INV-I1). Widened by catalogo-incontro into incontro(id): IncontroVista?, parti stays its projection
+  - key `incontroId`: as kernel-incontro
+- `parti-per-parlanti` (consumes it; owner `incontro-chiavi`) — consumers: `porte-parlanti-incontro`, `politiche-parlanti-incontro`, `attribuzione-incontro`, `letture-parlanti-incontro`, `proposta-tra-parti`, `adattatori-parlanti-incontro` · contract_test: consumer-driven
+  - pinned `LettoreRegistrazione (Parlanti).parti`: (incontroId: IncontroId): List<RegistrazioneId>? — UNORDERED; null = unknown or ceased Incontro. VoceRef → its Parti: parti(incontroId), then the existing per-Parte LettoreVoci.voci(r) (VoceRefs carry the incontroId), keep the Parti where that voceId speaks; audio decoded per Parte with DecodificatoreAudio.campioni(r, …); no new Trascrizione method. Widened by porte-parlanti-incontro to List<ParteDiIncontroParlanti(registrazioneId, numero, dataRegistrazione)>?, ordered
+  - key `incontroId`: as kernel-incontro
+- `registrazione-incontro-id` (consumes it; owner `incontro-chiavi`) — consumers: `catalogo-incontro`, `porte-trascrizione-incontro`, `porte-parlanti-incontro`, `porte-sintesi-incontro`, `adattatori-trascrizione-incontro`, `adattatori-parlanti-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
+  - pinned `RegistrazioneVista.incontroId`: IncontroId — on Progetto's public view and on each consumer's own view of registrazione(id) (Trascrizione, Parlanti, Sintesi); final shape, no widening
+  - pinned `TrascrittoRepository (transition, wave 2)`: trova(r: RegistrazioneId, incontroId: IncontroId): Trascritto?; rimuovi(r, incontroId); salva(t) writes voci_incontro/voce_incontro with t.incontroId; the Trascritto carries incontroId; replaced by VociDellIncontroRepository.trova(incontroId) in wave 3/4
+  - key `incontroId`: as kernel-incontro; Trascrizione services read it via LettoreRegistrazione.registrazione(r).incontroId before calling the repository; no Trascrizione query reads the registrazione table; no UPDATE names incontro_id (D-0028)
 - `voci-per-parlanti` (consumes it; owner `porte-parlanti-incontro`) — consumers: `politiche-parlanti-incontro`, `attribuzione-incontro`, `nomi-delle-voci-incontro`, `letture-parlanti-incontro`, `proposta-tra-parti`, `adattatori-parlanti-incontro` · contract_test: consumer-driven
   - pinned `LettoreVoci (Parlanti)`: voci(incontroId): List<VoceVista>? — VoceVista(voceRef, intervalliPerParte: Map<RegistrazioneId, List<IntervalloMs>>); segmenti(incontroId): List<SegmentoDiVoce>? — SegmentoDiVoce(segmento: SegmentoRef, voceId, intervallo, confermato)
-  - pinned `LettoreRegistrazione (Parlanti)`: registrazione(id) + incontroId; parti(incontroId): List<ParteDiIncontroParlanti>? — (registrazioneId, numero, dataRegistrazione: LocalDate)
+  - pinned `LettoreRegistrazione (Parlanti)`: parti(incontroId) WIDENED from List<RegistrazioneId>? (boundary parti-per-parlanti) to List<ParteDiIncontroParlanti>? — (registrazioneId, numero, dataRegistrazione: LocalDate), ordered by INV-I2; registrazione(id).incontroId as boundary registrazione-incontro-id
   - key `voceRef`: as kernel-incontro
 
 Sources: ADR 0035 §6 · ADR 0038 §2 · ADR 0034 §2

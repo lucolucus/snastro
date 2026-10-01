@@ -12,6 +12,8 @@ consumes:
   - kernel-incontro
   - agg-riassunto-incontro
   - porte-sintesi
+  - lettore-incontro-sintesi
+  - repo-riassunto-incontro
 related_adrs:
   - "0026"
   - "0037"
@@ -46,11 +48,16 @@ Amend EseguiProssimoRiassunto: read the Incontro's ordered Parti when the run is
   - key `incontroId`: minted by aggiungi-registrazione-incontro via GeneratoreId (UUID v4) for every new Incontro; by 7.sqm for migrated ones (equal to their Registrazione's id, a migration fact no code relies on) — immutable, never reused
   - key `voceId`: minted by voci-dell-incontro from the Incontro counter (prossimaVoce) — unique in the Incontro, never reused (INV-I4)
   - key `segmentoId`: minted by voci-dell-incontro from the Parte's prossimoSegmento — unique in its Registrazione across generations (INV-I16)
+- `lettore-incontro-sintesi` (consumes it; owner `incontro-chiavi`) — consumers: `porte-sintesi-incontro`, `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
+  - pinned `LettoreIncontro`: NEW Sintesi-owned port in :sintesi:applicazione ..porte — parti(incontroId: IncontroId): List<RegistrazioneId>? — UNORDERED; null = unknown or ceased Incontro. Real adapter LettoreIncontroDaProgetto (:sintesi:adattatori ..porte) over CatalogoRegistrazioni.parti. Widened by porte-sintesi-incontro to List<ParteSintesi(registrazioneId, numero)>?, ordered
+  - key `incontroId`: as kernel-incontro
 - `porte-sintesi` (consumes it; owner `porte-sintesi-incontro`) — consumers: `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
-  - pinned `LettoreIncontro`: parti(incontroId: IncontroId): List<ParteSintesi>? — ParteSintesi(registrazioneId, numero); null = the Incontro no longer exists
+  - pinned `LettoreIncontro`: parti(incontroId: IncontroId) WIDENED from List<RegistrazioneId>? (boundary lettore-incontro-sintesi) to List<ParteSintesi>? — ParteSintesi(registrazioneId, numero), ordered by INV-I2; null = the Incontro no longer exists
   - pinned `LettoreTrascritto (Sintesi)`: segmenti(r) unchanged; statoParte(r: RegistrazioneId): StatoParteSintesi (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA) — replaces elaborazioneAperta
   - pinned `LettoreNomi (Sintesi)`: nomi(incontroId): Map<VoceRef, String> — attributed only; presence of a Voce is NOT asked here (ADR 0037 §6)
-  - pinned `RiassuntoRepository (amended)`: keyed by incontroId; RiassuntoInCoda(riassuntoId, incontroId, richiestoAlle)
+  - key `incontroId`: as kernel-incontro
+- `repo-riassunto-incontro` (consumes it; owner `incontro-chiavi`) — consumers: `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
+  - pinned `RiassuntoRepository (amended)`: keyed by incontroId (trova(incontroId) → the open or pronto Riassunto of that Incontro); RiassuntoInCoda(riassuntoId, incontroId, richiestoAlle)
   - key `incontroId`: as kernel-incontro
   - key `richiestoAlle`: unchanged (FIFO key, ADR 0023)
 

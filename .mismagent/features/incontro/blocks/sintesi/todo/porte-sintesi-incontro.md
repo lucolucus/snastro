@@ -9,8 +9,8 @@ module: ":sintesi:applicazione ..porte (+ testFixtures)"
 consumes:
   - kernel-incontro
   - agg-riassunto-incontro
-reuses:
-  - sintesi/repo-sintesi
+  - lettore-incontro-sintesi
+  - registrazione-incontro-id
 related_adrs:
   - "0033"
   - "0037"
@@ -20,12 +20,11 @@ tests_nl_status: draft
 # porte-sintesi-incontro
 
 ## What to do
-Add Sintesi's LettoreIncontro.parti(incontroId); replace LettoreTrascritto.elaborazioneAperta with statoParte(registrazioneId) (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA); LettoreNomi.nomi(incontroId); RiassuntoRepository and the queue item keyed by incontroId; Contratto and Finta each.
+WIDEN Sintesi's LettoreIncontro.parti(incontroId) from List<RegistrazioneId>? (unordered, owned by incontro-chiavi, D-0031) to List<ParteSintesi(registrazioneId, numero)>? ordered by INV-I2; replace LettoreTrascritto.elaborazioneAperta with statoParte(registrazioneId) (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA); LettoreNomi.nomi(incontroId); Contratto and Finta each. RiassuntoRepository and the queue item are already keyed by incontroId (incontro-chiavi, repo-riassunto-incontro).
 
 ## Tasks
-- AC-I28 LettoreIncontroContratto: parti ordered and numbered 1..N; a date/time edit reorders; a deleted Parte disappears; null for an unknown or ceased Incontro
+- AC-I28 LettoreIncontroContratto, widened: parti ordered and numbered 1..N; a date/time edit reorders; a deleted Parte disappears; null for an unknown or ceased Incontro (the unordered cases of AC-I204 still hold)
 - AC-I29 LettoreTrascrittoContratto (Sintesi): statoParte gives the four values — no Trascritto and no run → DA_TRASCRIVERE; any run open (also a re-run on a transcribed Parte) → IN_TRASCRIZIONE; no Trascritto and latest run fallita → NON_RIUSCITA; Trascritto and no run open → TRASCRITTA
-- AC-I30 RiassuntoRepositoryContratto: trova by incontroId returns the open or pronto Riassunto of that Incontro only; RiassuntiInAttesa items carry (riassuntoId, incontroId, richiestoAlle)
 
 ## Dependencies
 - `agg-riassunto-incontro` (consumes it; owner `riassunto-incontro`) — consumers: `porte-sintesi-incontro`, `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: invariant-test
@@ -43,12 +42,20 @@ Add Sintesi's LettoreIncontro.parti(incontroId); replace LettoreTrascritto.elabo
   - key `incontroId`: minted by aggiungi-registrazione-incontro via GeneratoreId (UUID v4) for every new Incontro; by 7.sqm for migrated ones (equal to their Registrazione's id, a migration fact no code relies on) — immutable, never reused
   - key `voceId`: minted by voci-dell-incontro from the Incontro counter (prossimaVoce) — unique in the Incontro, never reused (INV-I4)
   - key `segmentoId`: minted by voci-dell-incontro from the Parte's prossimoSegmento — unique in its Registrazione across generations (INV-I16)
+- `lettore-incontro-sintesi` (consumes it; owner `incontro-chiavi`) — consumers: `porte-sintesi-incontro`, `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
+  - pinned `LettoreIncontro`: NEW Sintesi-owned port in :sintesi:applicazione ..porte — parti(incontroId: IncontroId): List<RegistrazioneId>? — UNORDERED; null = unknown or ceased Incontro. Real adapter LettoreIncontroDaProgetto (:sintesi:adattatori ..porte) over CatalogoRegistrazioni.parti. Widened by porte-sintesi-incontro to List<ParteSintesi(registrazioneId, numero)>?, ordered
+  - key `incontroId`: as kernel-incontro
 - `porte-sintesi` (owns it) — consumers: `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
-  - pinned `LettoreIncontro`: parti(incontroId: IncontroId): List<ParteSintesi>? — ParteSintesi(registrazioneId, numero); null = the Incontro no longer exists
+  - pinned `LettoreIncontro`: parti(incontroId: IncontroId) WIDENED from List<RegistrazioneId>? (boundary lettore-incontro-sintesi) to List<ParteSintesi>? — ParteSintesi(registrazioneId, numero), ordered by INV-I2; null = the Incontro no longer exists
   - pinned `LettoreTrascritto (Sintesi)`: segmenti(r) unchanged; statoParte(r: RegistrazioneId): StatoParteSintesi (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA) — replaces elaborazioneAperta
   - pinned `LettoreNomi (Sintesi)`: nomi(incontroId): Map<VoceRef, String> — attributed only; presence of a Voce is NOT asked here (ADR 0037 §6)
-  - pinned `RiassuntoRepository (amended)`: keyed by incontroId; RiassuntoInCoda(riassuntoId, incontroId, richiestoAlle)
   - key `incontroId`: as kernel-incontro
-  - key `richiestoAlle`: unchanged (FIFO key, ADR 0023)
+- `registrazione-incontro-id` (consumes it; owner `incontro-chiavi`) — consumers: `catalogo-incontro`, `porte-trascrizione-incontro`, `porte-parlanti-incontro`, `porte-sintesi-incontro`, `adattatori-trascrizione-incontro`, `adattatori-parlanti-incontro`, `adattatori-sintesi-incontro` · contract_test: consumer-driven
+  - pinned `RegistrazioneVista.incontroId`: IncontroId — on Progetto's public view and on each consumer's own view of registrazione(id) (Trascrizione, Parlanti, Sintesi); final shape, no widening
+  - pinned `TrascrittoRepository (transition, wave 2)`: trova(r: RegistrazioneId, incontroId: IncontroId): Trascritto?; rimuovi(r, incontroId); salva(t) writes voci_incontro/voce_incontro with t.incontroId; the Trascritto carries incontroId; replaced by VociDellIncontroRepository.trova(incontroId) in wave 3/4
+  - key `incontroId`: as kernel-incontro; Trascrizione services read it via LettoreRegistrazione.registrazione(r).incontroId before calling the repository; no Trascrizione query reads the registrazione table; no UPDATE names incontro_id (D-0028)
 
-Sources: ADR 0033 §4 · ADR 0037 §1
+## Notes
+AC-I30 (RiassuntoRepository keyed by incontroId) moved to incontro-chiavi (D-0031).
+
+Sources: ADR 0033 §4, §4.1 · ADR 0037 §1

@@ -411,3 +411,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: Claude (worker-composer); recorded: Claude (worker-composer)
 - Docs: [pre-release](pre-release.md)
 - Revisit: none expected.
+
+### D-0031 · Lettura parti anticipata nel cambio chiavi
+- Meta: 2026-10-01; scope: block:incontro-chiavi; status: accepted
+- Question: The key sweep must remove the wave-1 joins, but Sintesi, Parlanti and Trascrizione still need Incontro → Parti, reserved for wave-4 ports; how to unblock?
+- Options: A bring forward a minimal unordered parti(incontroId) in Progetto plus one consumer method each, widened in wave 4 (kept); B narrow the sweep, temporary shapes reworked later; C sweep after the ports, reversing D-0023.
+- Hypothesis: n/a — decided by the user on the worker's BOUNCED report, [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Check: n/a — decided by the user on the worker's BOUNCED report, [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Result: n/a — decided by the user on the worker's BOUNCED report, [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Debate: the worker bounced with nothing committed; the architect pinned four boundaries owned by incontro-chiavi (ADR 0033 §4.1).
+- Decision: A; wave-4 port blocks widen the methods to ordered, numbered Parti. Cost: incontro-chiavi grows and owns four more boundaries.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (incontro-chiavi), mismagent-architect
+- Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Revisit: none expected.

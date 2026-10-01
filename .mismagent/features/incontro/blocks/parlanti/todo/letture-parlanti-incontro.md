@@ -12,6 +12,7 @@ consumes:
   - agg-impronte-per-parte
   - voci-per-parlanti
   - eventi-trascrizione-incontro
+  - parti-per-parlanti
 related_adrs:
   - "0009"
   - "0012"
@@ -56,6 +57,9 @@ Re-scope the Parlanti read-models to the Incontro: Proposta with a Galleria incl
   - key `incontroId`: minted by aggiungi-registrazione-incontro via GeneratoreId (UUID v4) for every new Incontro; by 7.sqm for migrated ones (equal to their Registrazione's id, a migration fact no code relies on) — immutable, never reused
   - key `voceId`: minted by voci-dell-incontro from the Incontro counter (prossimaVoce) — unique in the Incontro, never reused (INV-I4)
   - key `segmentoId`: minted by voci-dell-incontro from the Parte's prossimoSegmento — unique in its Registrazione across generations (INV-I16)
+- `parti-per-parlanti` (consumes it; owner `incontro-chiavi`) — consumers: `porte-parlanti-incontro`, `politiche-parlanti-incontro`, `attribuzione-incontro`, `letture-parlanti-incontro`, `proposta-tra-parti`, `adattatori-parlanti-incontro` · contract_test: consumer-driven
+  - pinned `LettoreRegistrazione (Parlanti).parti`: (incontroId: IncontroId): List<RegistrazioneId>? — UNORDERED; null = unknown or ceased Incontro. VoceRef → its Parti: parti(incontroId), then the existing per-Parte LettoreVoci.voci(r) (VoceRefs carry the incontroId), keep the Parti where that voceId speaks; audio decoded per Parte with DecodificatoreAudio.campioni(r, …); no new Trascrizione method. Widened by porte-parlanti-incontro to List<ParteDiIncontroParlanti(registrazioneId, numero, dataRegistrazione)>?, ordered
+  - key `incontroId`: as kernel-incontro
 - `viste-parlanti-incontro` (owns it) — consumers: `schermata-incontri`, `pannello-voci-incontro`, `schermata-parlanti-incontri`, `avvio-incontro` · contract_test: consumer-driven
   - pinned `PropostaView`: unchanged shape, keyed by VoceRef(incontroId, voceId)
   - pinned `PropostaUnioneView`: List<(voceA: VoceId, voceB: VoceId, parlanteId, nome)> per incontroId
@@ -64,7 +68,7 @@ Re-scope the Parlanti read-models to the Incontro: Proposta with a Galleria incl
   - key `voceRef`: as kernel-incontro
 - `voci-per-parlanti` (consumes it; owner `porte-parlanti-incontro`) — consumers: `politiche-parlanti-incontro`, `attribuzione-incontro`, `nomi-delle-voci-incontro`, `letture-parlanti-incontro`, `proposta-tra-parti`, `adattatori-parlanti-incontro` · contract_test: consumer-driven
   - pinned `LettoreVoci (Parlanti)`: voci(incontroId): List<VoceVista>? — VoceVista(voceRef, intervalliPerParte: Map<RegistrazioneId, List<IntervalloMs>>); segmenti(incontroId): List<SegmentoDiVoce>? — SegmentoDiVoce(segmento: SegmentoRef, voceId, intervallo, confermato)
-  - pinned `LettoreRegistrazione (Parlanti)`: registrazione(id) + incontroId; parti(incontroId): List<ParteDiIncontroParlanti>? — (registrazioneId, numero, dataRegistrazione: LocalDate)
+  - pinned `LettoreRegistrazione (Parlanti)`: parti(incontroId) WIDENED from List<RegistrazioneId>? (boundary parti-per-parlanti) to List<ParteDiIncontroParlanti>? — (registrazioneId, numero, dataRegistrazione: LocalDate), ordered by INV-I2; registrazione(id).incontroId as boundary registrazione-incontro-id
   - key `voceRef`: as kernel-incontro
 
 Sources: ADR 0035 §6 · tactical-model.md [INV-20], [INV-22], [INV-27], [INV-I17] · ADR 0019 amendment 2026-10-01

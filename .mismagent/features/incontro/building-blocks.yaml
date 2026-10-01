@@ -26,9 +26,15 @@
 # incontro_id keys from registrazione_id by SQL join (valid because, until aggiungi-registrazione-incontro, every Incontro has exactly one
 # Parte — the import creates one per file). incontro-chiavi (wave 2) re-keys the kernel and every use, and removes those joins. No code
 # relies on «incontro.id = registrazione.id» (ADR 0034 §1): the join reads the column.
+# AMENDED 2026-10-01 (user, D-0031; incontro-chiavi BOUNCED, open question answered with option A): the sweep needs an Incontro → Parti
+# read before wave 4, so incontro-chiavi now OWNS the minimal unordered reads of ADR 0033 §4.1 — boundaries parti-di-incontro-progetto,
+# lettore-incontro-sintesi, parti-per-parlanti, registrazione-incontro-id — and the Riassunto re-key (boundary repo-riassunto-incontro,
+# AC-I30 moved here from porte-sintesi-incontro). Wave 4/5 rows porte-sintesi-incontro, porte-parlanti-incontro and catalogo-incontro
+# WIDEN those methods instead of adding them. incontro-chiavi's new tests_nl AC-I203..AC-I209 come from the user-accepted option
+# (architect's proposal, ADR 0033 §4.1); its tests_nl_status stays confirmed.
 feature: incontro
 profile: .mismagent/profile.md
-ac_scheme: "AC-I1..AC-I202 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
+ac_scheme: "AC-I1..AC-I209 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
 blocks:
   # ---------------------------------------------------------------- wave 1: the two owners of the new ADR check scripts
   - id: "persistenza-incontro"
@@ -92,21 +98,31 @@ blocks:
     model_hint: "deep"
     after: ["persistenza-incontro", "riassunto-incontro-politiche"]
     module: ":kernel (Published Language) + every use in :progetto, :trascrizione, :parlanti, :sbobinatura, :sintesi, :ui, :avvio (compile sweep)"
-    what: "Add IncontroId and SegmentoRef to the kernel and re-key VoceRef to (incontroId, voceId); sweep every use in one compile-checked change: Registrazione/RegistrazioneVista carry incontroId (read from registrazione.incontro_id), Attribuzione and prints keyed by the Incontro VoceRef, Riassunto keyed by incontroId, Sbobinatura names by incontroId; the SQL repositories use the incontro_id columns directly and the wave-1 joins go. Behaviour-neutral: every existing Incontro has one Parte."
+    what: "Add IncontroId and SegmentoRef to the kernel and re-key VoceRef to (incontroId, voceId); sweep every use in one compile-checked change: Registrazione/RegistrazioneVista carry incontroId (read from registrazione.incontro_id; a new Incontro id via the GeneratoreId port), Attribuzione and prints keyed by the Incontro VoceRef, Riassunto and its queue item keyed by incontroId, Sbobinatura names by incontroId; the SQL repositories use the incontro_id columns directly and the wave-1 joins go. Where a path must go from an Incontro to its Parti it uses the minimal UNORDERED reads this block owns (ADR 0033 §4.1, D-0031): CatalogoRegistrazioni.parti(incontroId), Sintesi's new LettoreIncontro.parti, Parlanti's LettoreRegistrazione.parti, and RegistrazioneVista.incontroId on each consumer's view; Trascrizione services resolve incontroId through LettoreRegistrazione and pass it to TrascrittoRepository.trova/rimuovi(r, incontroId) (no Trascrizione query reads the registrazione table). Behaviour-neutral: every existing Incontro has one Parte."
     sources:
-      - "ADR 0033 §1, §6"
+      - "ADR 0033 §1, §4.1, §6"
+      - "ADR 0034 §2 (D-0028: no UPDATE names incontro_id)"
       - "tactical-model.md § Seam granularity"
-      - "decisions.md D-0002"
+      - "decisions.md D-0002, D-0023, D-0031"
+      - "open-questions/incontro-chiavi.md (answered: option A)"
     consumes: []
-    reuses: ["trascrizione-con-parlanti/kernel-pl"]
-    related_adrs: ["0002", "0033"]
+    reuses: ["trascrizione-con-parlanti/kernel-pl", "sintesi/repo-sintesi"]
+    related_adrs: ["0002", "0021", "0033", "0034"]
     tests_nl_status: "confirmed"
     tests_nl:
       - "AC-I10 kernel: VoceRef(IncontroId('i1'), VoceId(2)) == VoceRef(IncontroId('i1'), VoceId(2)) and != VoceRef(IncontroId('i2'), VoceId(2)); SegmentoRef equality is by (registrazioneId, segmentoId); IncontroId wraps a non-blank String (blank → require failure)"
       - "AC-I11 no symbol named VoceRef carries a registrazioneId any more (compile sweep; Konsist assertion: VoceRef's constructor has exactly the parameters incontroId and voceId)"
       - "AC-I12 behaviour-neutral on a migrated 1-part DB: the existing e2e flows (transcribe, name a Voce, revise, Riassumi, Elimina) produce the same rows and views as before the sweep, keyed by the Registrazione's incontroId (avvio e2e on real SQLite)"
       - "AC-I13 the wave-1 SQL joins are gone: no repository query resolves incontro_id from registrazione_id (grep in the PR + the repository contract tests pass with the incontro_id columns written directly)"
-    notes: "The kernel-pl boundary of trascrizione-con-parlanti stays the owner of the other kernel types; this block re-pins VoceRef/IncontroId/SegmentoRef as boundary kernel-incontro. No deprecated symbol survives (ADR 0033 §6): no cleanup node. New port METHODS (parti, statoParte, partiConTrascritto, incontriCon) are NOT here: they belong to the port blocks of wave 4."
+      - "AC-I30 RiassuntoRepositoryContratto: trova by incontroId returns the open or pronto Riassunto of that Incontro only; RiassuntiInAttesa items carry (riassuntoId, incontroId, richiestoAlle)"
+      - "AC-I203 CatalogoRegistrazioni.parti(incontroId) (supplier test, :progetto:applicazione) returns exactly the Registrazioni whose incontro_id is that Incontro, in no guaranteed order; null for an unknown IncontroId; null after the only Parte is deleted; never a Registrazione of another Incontro"
+      - "AC-I204 LettoreIncontroContratto (Sintesi) on LettoreIncontroFinta and on the real LettoreIncontroDaProgetto: the four cases of AC-I203; no order asserted"
+      - "AC-I205 LettoreRegistrazioneContratto (Parlanti) gains the four parti cases of AC-I203; LettoreRegistrazioneContratto (Trascrizione and Parlanti): registrazione(r).incontroId equals the IncontroId set at import"
+      - "AC-I206 Parlanti VoceRef → Parti: ConfermaAttribuzione(VoceRef(i, 2)) on a 1-part Incontro extracts the print from that Parte's intervals and stores it with registrazione_id = that Parte; a VoceRef of an unknown Incontro → VoceNonTrovata, nothing written"
+      - "AC-I207 Sintesi keyed by incontroId: Riassumi(incontroId) on a 1-part Incontro reads that Parte's segmenti and elaborazioneAperta through LettoreIncontro.parti; EseguiProssimoRiassunto and riassunto-vista give the same rows and view as before the sweep"
+      - "AC-I208 Trascrizione resolves incontroId through LettoreRegistrazione: TrascrittoRepository.trova(r, incontroId) reads the counter from voci_incontro; no Trascrizione .sq query references the registrazione table (grep in the PR)"
+      - "AC-I209 no repository UPDATE lists incontro_id in its SET (D-0028): the sweep's queries pass the immutability trigger; an attempted UPDATE naming it is refused"
+    notes: "The kernel-pl boundary of trascrizione-con-parlanti stays the owner of the other kernel types; this block re-pins VoceRef/IncontroId/SegmentoRef as boundary kernel-incontro. No deprecated symbol survives (ADR 0033 §6): no cleanup node. Owns the minimal UNORDERED Incontro → Parti reads of ADR 0033 §4.1 (D-0031; boundaries parti-di-incontro-progetto, lettore-incontro-sintesi, parti-per-parlanti, registrazione-incontro-id) and the Riassunto re-key (repo-riassunto-incontro): wave-4/5 blocks widen them (ordered, numbered), never add a parallel method. The other new port METHODS (statoParte, partiConTrascritto, incontriCon, Trascrizione's parti) stay in the port blocks of wave 4. Pre-release I1 transition lines (UUID.randomUUID() for the Incontro id, JOIN reads returning one row per Parte) are fixed here where the sweep reaches them."
   # ---------------------------------------------------------------- wave 3: aggregates
   - id: "incontro"
     type: "aggregate"
@@ -266,7 +282,7 @@ blocks:
     sources:
       - "ADR 0035 §1, §5"
       - "ADR 0033 §4"
-    consumes: ["kernel-incontro", "agg-voci-dell-incontro"]
+    consumes: ["kernel-incontro", "agg-voci-dell-incontro", "registrazione-incontro-id"]
     reuses: ["trascrizione-con-parlanti/eventi-elaborazione", "trascrizione-con-parlanti/eventi-revisione"]
     related_adrs: ["0035", "0033"]
     tests_nl_status: "draft"
@@ -281,16 +297,16 @@ blocks:
     wave: 4
     release: "I1"
     module: ":parlanti:applicazione ..porte (+ testFixtures)"
-    what: "Re-shape the Parlanti consumer ports: LettoreVoci.voci(incontroId) with intervals per Parte and segmenti(incontroId) by SegmentoRef; LettoreRegistrazione (Parlanti) gains parti(incontroId) with dataRegistrazione; each with Contratto and Finta."
+    what: "Re-shape the Parlanti consumer ports: LettoreVoci.voci(incontroId) with intervals per Parte and segmenti(incontroId) by SegmentoRef; WIDEN LettoreRegistrazione (Parlanti).parti(incontroId) from List<RegistrazioneId>? (unordered, owned by incontro-chiavi, D-0031) to List<ParteDiIncontroParlanti(registrazioneId, numero, dataRegistrazione)>? ordered by INV-I2; each with Contratto and Finta."
     sources:
-      - "ADR 0033 §4"
+      - "ADR 0033 §4, §4.1"
       - "ADR 0035 §6"
-    consumes: ["kernel-incontro", "agg-impronte-per-parte"]
+    consumes: ["kernel-incontro", "agg-impronte-per-parte", "parti-per-parlanti", "registrazione-incontro-id"]
     related_adrs: ["0033", "0035"]
     tests_nl_status: "draft"
     tests_nl:
       - "AC-I24 LettoreVociContratto: VoceRefs carry the incontroId; a Voce speaking in two Parti comes once with intervals per Parte; after unire across Parti the survivor holds both Parti's intervals; null when no Parte is transcribed"
-      - "AC-I25 LettoreRegistrazioneContratto (Parlanti): parti(incontroId) ordered with dataRegistrazione of each; the first Parte's date is the Incontro's date; null for an unknown Incontro"
+      - "AC-I25 LettoreRegistrazioneContratto (Parlanti), widened: parti(incontroId) now ordered and numbered 1..N with dataRegistrazione of each; the first Parte's date is the Incontro's date; the four unordered cases of AC-I205 still hold; null for an unknown Incontro"
   - id: "porte-sbobinatura-incontro"
     type: "port"
     context: "sbobinatura"
@@ -315,18 +331,17 @@ blocks:
     wave: 4
     release: "I1"
     module: ":sintesi:applicazione ..porte (+ testFixtures)"
-    what: "Add Sintesi's LettoreIncontro.parti(incontroId); replace LettoreTrascritto.elaborazioneAperta with statoParte(registrazioneId) (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA); LettoreNomi.nomi(incontroId); RiassuntoRepository and the queue item keyed by incontroId; Contratto and Finta each."
+    what: "WIDEN Sintesi's LettoreIncontro.parti(incontroId) from List<RegistrazioneId>? (unordered, owned by incontro-chiavi, D-0031) to List<ParteSintesi(registrazioneId, numero)>? ordered by INV-I2; replace LettoreTrascritto.elaborazioneAperta with statoParte(registrazioneId) (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA); LettoreNomi.nomi(incontroId); Contratto and Finta each. RiassuntoRepository and the queue item are already keyed by incontroId (incontro-chiavi, repo-riassunto-incontro)."
     sources:
-      - "ADR 0033 §4"
+      - "ADR 0033 §4, §4.1"
       - "ADR 0037 §1"
-    consumes: ["kernel-incontro", "agg-riassunto-incontro"]
-    reuses: ["sintesi/repo-sintesi"]
+    consumes: ["kernel-incontro", "agg-riassunto-incontro", "lettore-incontro-sintesi", "registrazione-incontro-id"]
     related_adrs: ["0033", "0037", "0023"]
     tests_nl_status: "draft"
     tests_nl:
-      - "AC-I28 LettoreIncontroContratto: parti ordered and numbered 1..N; a date/time edit reorders; a deleted Parte disappears; null for an unknown or ceased Incontro"
+      - "AC-I28 LettoreIncontroContratto, widened: parti ordered and numbered 1..N; a date/time edit reorders; a deleted Parte disappears; null for an unknown or ceased Incontro (the unordered cases of AC-I204 still hold)"
       - "AC-I29 LettoreTrascrittoContratto (Sintesi): statoParte gives the four values — no Trascritto and no run → DA_TRASCRIVERE; any run open (also a re-run on a transcribed Parte) → IN_TRASCRIZIONE; no Trascritto and latest run fallita → NON_RIUSCITA; Trascritto and no run open → TRASCRITTA"
-      - "AC-I30 RiassuntoRepositoryContratto: trova by incontroId returns the open or pronto Riassunto of that Incontro only; RiassuntiInAttesa items carry (riassuntoId, incontroId, richiestoAlle)"
+    notes: "AC-I30 (RiassuntoRepository keyed by incontroId) moved to incontro-chiavi (D-0031)."
   # ---------------------------------------------------------------- wave 5: application services
   - id: "aggiungi-registrazione-incontro"
     type: "application-service"
@@ -485,7 +500,7 @@ blocks:
       - "ADR 0035 §6"
       - "ADR 0038 §2"
       - "tactical-model.md [INV-I8b], [INV-21]"
-    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "eventi-trascrizione-incontro"]
+    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "eventi-trascrizione-incontro", "parti-per-parlanti"]
     related_adrs: ["0009", "0012", "0035", "0038"]
     commands: ["RiallineaImpronte"]
     tests_nl_status: "confirmed"
@@ -505,7 +520,7 @@ blocks:
     sources:
       - "ADR 0035 §6"
       - "tactical-model.md [INV-I8], [INV-17], [INV-19]"
-    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti"]
+    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "parti-per-parlanti"]
     related_adrs: ["0012", "0035"]
     commands: ["ConfermaAttribuzione", "SaltaVoce"]
     tests_nl_status: "draft"
@@ -543,7 +558,7 @@ blocks:
     sources:
       - "ADR 0037 §2"
       - "decisions.md D-0020"
-    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi"]
+    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "lettore-incontro-sintesi", "repo-riassunto-incontro"]
     related_adrs: ["0037"]
     commands: ["Riassumi"]
     tests_nl_status: "confirmed"
@@ -565,7 +580,7 @@ blocks:
       - "ADR 0037 §3, §4, §8"
       - "tactical-model.md [INV-I12], [INV-I19]"
       - "decisions.md D-0010"
-    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi"]
+    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "lettore-incontro-sintesi", "repo-riassunto-incontro"]
     related_adrs: ["0026", "0037"]
     commands: ["EseguiProssimoRiassunto"]
     tests_nl_status: "confirmed"
@@ -586,7 +601,7 @@ blocks:
       - "ADR 0037 §7"
       - "ADR 0038 §2"
       - "decisions.md D-0003"
-    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "eventi-progetto-incontro"]
+    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "eventi-progetto-incontro", "lettore-incontro-sintesi", "repo-riassunto-incontro"]
     related_adrs: ["0024", "0037", "0038"]
     tests_nl_status: "draft"
     tests_nl:
@@ -600,19 +615,19 @@ blocks:
     wave: 5
     release: "I1"
     module: ":progetto:applicazione ..letture (CatalogoRegistrazioni)"
-    what: "Amend the public query API CatalogoRegistrazioni: incontro(id) returns the Incontro with its Parti ordered and numbered by OrdineDelleParti; RegistrazioneVista carries incontroId and oraDiInizio. The supplier every consumer adapter of parti(incontroId) reads."
+    what: "WIDEN the public query API CatalogoRegistrazioni: the unordered parti(incontroId) of incontro-chiavi (D-0031) becomes a projection of the new incontro(id), which returns the Incontro with its Parti ordered and numbered by OrdineDelleParti; RegistrazioneVista gains oraDiInizio (incontroId is already there, incontro-chiavi). The supplier every consumer adapter of the widened parti(incontroId) reads."
     sources:
-      - "ADR 0033 §1, §4"
-    consumes: ["kernel-incontro", "agg-incontro", "repo-incontro"]
+      - "ADR 0033 §1, §4, §4.1"
+    consumes: ["kernel-incontro", "agg-incontro", "repo-incontro", "parti-di-incontro-progetto", "registrazione-incontro-id"]
     related_adrs: ["0033"]
     view_shape:
       IncontroVista: "{ incontroId, progettoId, parti: [ParteVista] }   // ordered by OrdineDelleParti"
       ParteVista: "{ registrazioneId, numero: Int /* 1..N */, titolo, dataRegistrazione: LocalDate, oraDiInizio: LocalTime?, durataMs: Long }"
-      RegistrazioneVista: "existing fields + incontroId, oraDiInizio?"
+      RegistrazioneVista: "existing fields + oraDiInizio? (incontroId added by incontro-chiavi)"
     tests_nl_status: "draft"
     tests_nl:
       - "INV-I2 incontro(i) with 3 Parti stored out of order returns them ordered and numbered 1..3 by OrdineDelleParti (date, time empty last, aggiuntaAlle, id); after a time edit the numbers change accordingly"
-      - "AC-I37 incontro(unknown) → null; registrazione(r) carries incontroId and oraDiInizio (null when empty)"
+      - "AC-I37 incontro(unknown) → null; registrazione(r) carries oraDiInizio (null when empty); parti(i) equals the registrazioneIds of incontro(i).parti (projection, the unordered cases of AC-I203 still hold)"
   - id: "incontri-del-progetto"
     type: "read-model"
     context: "progetto"
@@ -710,7 +725,7 @@ blocks:
       - "ADR 0035 §6"
       - "tactical-model.md [INV-20], [INV-22], [INV-27], [INV-I17]"
       - "ADR 0019 amendment 2026-10-01"
-    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "eventi-trascrizione-incontro"]
+    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "eventi-trascrizione-incontro", "parti-per-parlanti"]
     related_adrs: ["0009", "0012", "0017", "0019", "0035"]
     view_shape:
       PropostaView: "unchanged shape, per VoceRef(incontroId, voceId); candidati[].estratto: EstrattoRef (registrazioneId of the print's Parte)"
@@ -738,7 +753,7 @@ blocks:
       - "ADR 0036"
       - "tactical-model.md [INV-I18]"
       - "decisions.md D-0017, D-0021"
-    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "eventi-trascrizione-incontro"]
+    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "eventi-trascrizione-incontro", "parti-per-parlanti"]
     related_adrs: ["0009", "0012", "0017", "0036"]
     view_shape:
       PropostaTraParti: "[{ voceA: VoceId, parteA: Int, estrattoA: EstrattoRef, voceB: VoceId, parteB: Int, estrattoB: EstrattoRef }]"
@@ -760,7 +775,7 @@ blocks:
       - "ADR 0037 §1, §6"
       - "tactical-model.md [INV-I13]"
       - "UI/ux-proposal.md § Riassunto tab"
-    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi"]
+    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "lettore-incontro-sintesi", "repo-riassunto-incontro"]
     reuses: ["sintesi/repo-sintesi"]
     related_adrs: ["0023", "0037"]
     view_shape:
@@ -829,7 +844,7 @@ blocks:
       - "ADR 0035 §1"
       - "ADR 0034 §2"
       - "ADR 0033 §4"
-    consumes: ["kernel-incontro", "agg-voci-dell-incontro", "repo-voci-incontro", "parti-per-trascrizione", "catalogo-incontro", "eventi-progetto-incontro"]
+    consumes: ["kernel-incontro", "agg-voci-dell-incontro", "repo-voci-incontro", "parti-per-trascrizione", "catalogo-incontro", "eventi-progetto-incontro", "registrazione-incontro-id"]
     related_adrs: ["0029", "0034", "0035"]
     tests_nl_status: "draft"
     tests_nl:
@@ -848,7 +863,7 @@ blocks:
       - "ADR 0035 §6"
       - "ADR 0038 §2"
       - "ADR 0034 §2"
-    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "api-voci-incontro", "catalogo-incontro", "eventi-trascrizione-incontro"]
+    consumes: ["kernel-incontro", "agg-impronte-per-parte", "voci-per-parlanti", "api-voci-incontro", "catalogo-incontro", "eventi-trascrizione-incontro", "parti-di-incontro-progetto", "parti-per-parlanti", "registrazione-incontro-id"]
     related_adrs: ["0030", "0034", "0035", "0038"]
     tests_nl_status: "draft"
     tests_nl:
@@ -884,7 +899,7 @@ blocks:
       - "ADR 0033 §4"
       - "ADR 0037 §1, §5"
       - "ADR 0034 §1"
-    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "catalogo-incontro", "api-voci-incontro", "nomi-incontro", "eventi-progetto-incontro"]
+    consumes: ["kernel-incontro", "agg-riassunto-incontro", "porte-sintesi", "catalogo-incontro", "api-voci-incontro", "nomi-incontro", "eventi-progetto-incontro", "parti-di-incontro-progetto", "lettore-incontro-sintesi", "registrazione-incontro-id", "repo-riassunto-incontro"]
     reuses: ["sintesi/repo-sintesi"]
     related_adrs: ["0022", "0034", "0037"]
     tests_nl_status: "draft"
@@ -1122,6 +1137,68 @@ boundaries:
     contract_test: "invariant-test"
     related_adrs: ["0033"]
     tests_nl_status: "confirmed"
+  - id: "parti-di-incontro-progetto"
+    owner: "incontro-chiavi"
+    consumers: ["catalogo-incontro", "adattatori-sintesi-incontro", "adattatori-parlanti-incontro"]
+    projection: "in-process"
+    pinned_types:
+      "CatalogoRegistrazioni.parti": "(incontroId: IncontroId): List<RegistrazioneId>? in :progetto:applicazione ..letture — UNORDERED (no consumer sorts or relies on the order); null = unknown Incontro or one whose last Parte was deleted; a known Incontro has ≥ 1 element (INV-I1). Widened by catalogo-incontro into incontro(id): IncontroVista?, parti stays its projection"
+    keys:
+      incontroId: "as kernel-incontro"
+    contract_test: "consumer-driven"
+    related_adrs: ["0033"]
+    tests_nl_status: "confirmed"
+    notes: "Public query, not a port: its supplier test (AC-I203) is the contract the Sintesi and Parlanti real adapters rely on (ADR 0033 §4.1, D-0031)."
+  - id: "lettore-incontro-sintesi"
+    owner: "incontro-chiavi"
+    consumers: ["porte-sintesi-incontro", "riassumi-incontro", "esegui-riassunto-incontro", "eliminazione-parte-sintesi", "riassunto-vista-incontro", "adattatori-sintesi-incontro"]
+    projection: "in-process"
+    pinned_types:
+      LettoreIncontro: "NEW Sintesi-owned port in :sintesi:applicazione ..porte — parti(incontroId: IncontroId): List<RegistrazioneId>? — UNORDERED; null = unknown or ceased Incontro. Real adapter LettoreIncontroDaProgetto (:sintesi:adattatori ..porte) over CatalogoRegistrazioni.parti. Widened by porte-sintesi-incontro to List<ParteSintesi(registrazioneId, numero)>?, ordered"
+    keys:
+      incontroId: "as kernel-incontro"
+    contract_test: "consumer-driven"
+    related_adrs: ["0021", "0033"]
+    tests_nl_status: "confirmed"
+    notes: "LettoreIncontroContratto + LettoreIncontroFinta in :sintesi:applicazione testFixtures (AC-I204)."
+  - id: "parti-per-parlanti"
+    owner: "incontro-chiavi"
+    consumers: ["porte-parlanti-incontro", "politiche-parlanti-incontro", "attribuzione-incontro", "letture-parlanti-incontro", "proposta-tra-parti", "adattatori-parlanti-incontro"]
+    projection: "in-process"
+    pinned_types:
+      "LettoreRegistrazione (Parlanti).parti": "(incontroId: IncontroId): List<RegistrazioneId>? — UNORDERED; null = unknown or ceased Incontro. VoceRef → its Parti: parti(incontroId), then the existing per-Parte LettoreVoci.voci(r) (VoceRefs carry the incontroId), keep the Parti where that voceId speaks; audio decoded per Parte with DecodificatoreAudio.campioni(r, …); no new Trascrizione method. Widened by porte-parlanti-incontro to List<ParteDiIncontroParlanti(registrazioneId, numero, dataRegistrazione)>?, ordered"
+    keys:
+      incontroId: "as kernel-incontro"
+    contract_test: "consumer-driven"
+    related_adrs: ["0033"]
+    tests_nl_status: "confirmed"
+    notes: "The existing LettoreRegistrazioneContratto (Parlanti) gains the four cases; its Finta is extended (AC-I205, AC-I206)."
+  - id: "registrazione-incontro-id"
+    owner: "incontro-chiavi"
+    consumers: ["catalogo-incontro", "porte-trascrizione-incontro", "porte-parlanti-incontro", "porte-sintesi-incontro", "adattatori-trascrizione-incontro", "adattatori-parlanti-incontro", "adattatori-sintesi-incontro"]
+    projection: "in-process"
+    pinned_types:
+      "RegistrazioneVista.incontroId": "IncontroId — on Progetto's public view and on each consumer's own view of registrazione(id) (Trascrizione, Parlanti, Sintesi); final shape, no widening"
+      "TrascrittoRepository (transition, wave 2)": "trova(r: RegistrazioneId, incontroId: IncontroId): Trascritto?; rimuovi(r, incontroId); salva(t) writes voci_incontro/voce_incontro with t.incontroId; the Trascritto carries incontroId; replaced by VociDellIncontroRepository.trova(incontroId) in wave 3/4"
+    keys:
+      incontroId: "as kernel-incontro; Trascrizione services read it via LettoreRegistrazione.registrazione(r).incontroId before calling the repository; no Trascrizione query reads the registrazione table; no UPDATE names incontro_id (D-0028)"
+    contract_test: "consumer-driven"
+    related_adrs: ["0033", "0034"]
+    tests_nl_status: "confirmed"
+    notes: "LettoreRegistrazioneContratto (Trascrizione and Parlanti) asserts registrazione(r).incontroId equals the one set at import (AC-I205, AC-I208)."
+  - id: "repo-riassunto-incontro"
+    owner: "incontro-chiavi"
+    consumers: ["riassumi-incontro", "esegui-riassunto-incontro", "eliminazione-parte-sintesi", "riassunto-vista-incontro", "adattatori-sintesi-incontro"]
+    projection: "in-process"
+    pinned_types:
+      "RiassuntoRepository (amended)": "keyed by incontroId (trova(incontroId) → the open or pronto Riassunto of that Incontro); RiassuntoInCoda(riassuntoId, incontroId, richiestoAlle)"
+    keys:
+      incontroId: "as kernel-incontro"
+      richiestoAlle: "unchanged (FIFO key, ADR 0023)"
+    contract_test: "consumer-driven"
+    related_adrs: ["0022", "0023", "0033", "0037"]
+    tests_nl_status: "confirmed"
+    notes: "Moved from porte-sintesi (porte-sintesi-incontro) to incontro-chiavi by D-0031: the sweep keys the Riassunto by incontroId (AC-I30)."
   - id: "agg-incontro"
     owner: "incontro"
     high_value: true
@@ -1173,7 +1250,7 @@ boundaries:
       "CatalogoRegistrazioni.incontro": "(id: IncontroId): IncontroVista? — null for an unknown or ceased Incontro"
       IncontroVista: "(incontroId, progettoId, parti: List<ParteVista>) — ordered and numbered by OrdineDelleParti"
       ParteVista: "(registrazioneId, numero: Int, titolo: String, dataRegistrazione: LocalDate, oraDiInizio: LocalTime?, durataMs: Long)"
-      "RegistrazioneVista (amended)": "+ incontroId: IncontroId, + oraDiInizio: LocalTime?"
+      "RegistrazioneVista (amended)": "+ oraDiInizio: LocalTime? (incontroId: boundary registrazione-incontro-id)"
     keys:
       numero: "minted at read time by OrdineDelleParti — never stored; changes when a date/time edit, an import or an elimination reorders"
     contract_test: "consumer-driven"
@@ -1273,7 +1350,7 @@ boundaries:
     projection: "in-process"
     pinned_types:
       "LettoreVoci (Parlanti)": "voci(incontroId): List<VoceVista>? — VoceVista(voceRef, intervalliPerParte: Map<RegistrazioneId, List<IntervalloMs>>); segmenti(incontroId): List<SegmentoDiVoce>? — SegmentoDiVoce(segmento: SegmentoRef, voceId, intervallo, confermato)"
-      "LettoreRegistrazione (Parlanti)": "registrazione(id) + incontroId; parti(incontroId): List<ParteDiIncontroParlanti>? — (registrazioneId, numero, dataRegistrazione: LocalDate)"
+      "LettoreRegistrazione (Parlanti)": "parti(incontroId) WIDENED from List<RegistrazioneId>? (boundary parti-per-parlanti) to List<ParteDiIncontroParlanti>? — (registrazioneId, numero, dataRegistrazione: LocalDate), ordered by INV-I2; registrazione(id).incontroId as boundary registrazione-incontro-id"
     keys:
       voceRef: "as kernel-incontro"
     contract_test: "consumer-driven"
@@ -1326,13 +1403,11 @@ boundaries:
     consumers: ["riassumi-incontro", "esegui-riassunto-incontro", "eliminazione-parte-sintesi", "riassunto-vista-incontro", "adattatori-sintesi-incontro"]
     projection: "in-process"
     pinned_types:
-      LettoreIncontro: "parti(incontroId: IncontroId): List<ParteSintesi>? — ParteSintesi(registrazioneId, numero); null = the Incontro no longer exists"
+      LettoreIncontro: "parti(incontroId: IncontroId) WIDENED from List<RegistrazioneId>? (boundary lettore-incontro-sintesi) to List<ParteSintesi>? — ParteSintesi(registrazioneId, numero), ordered by INV-I2; null = the Incontro no longer exists"
       "LettoreTrascritto (Sintesi)": "segmenti(r) unchanged; statoParte(r: RegistrazioneId): StatoParteSintesi (DA_TRASCRIVERE | IN_TRASCRIZIONE | NON_RIUSCITA | TRASCRITTA) — replaces elaborazioneAperta"
       "LettoreNomi (Sintesi)": "nomi(incontroId): Map<VoceRef, String> — attributed only; presence of a Voce is NOT asked here (ADR 0037 §6)"
-      "RiassuntoRepository (amended)": "keyed by incontroId; RiassuntoInCoda(riassuntoId, incontroId, richiestoAlle)"
     keys:
       incontroId: "as kernel-incontro"
-      richiestoAlle: "unchanged (FIFO key, ADR 0023)"
     contract_test: "consumer-driven"
     related_adrs: ["0023", "0033", "0037"]
     tests_nl_status: "draft"
