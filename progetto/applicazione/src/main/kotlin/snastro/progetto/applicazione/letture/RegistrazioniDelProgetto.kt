@@ -2,6 +2,7 @@ package snastro.progetto.applicazione.letture
 
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
+import snastro.progetto.dominio.OrdineDelleRegistrazioni
 import snastro.progetto.dominio.Registrazione
 
 /**
@@ -12,18 +13,9 @@ import snastro.progetto.dominio.Registrazione
  * stays the only owner of INV-1/INV-2.
  */
 public class RegistrazioniDelProgetto(private val registrazioni: RegistrazioneRepository) {
-    /**
-     * The Registrazioni of [progettoId]: newest [Registrazione.dataRegistrazione] first, ties
-     * broken by the most recently added ([Registrazione.aggiuntaAlle] desc); a final tie-break by
-     * [Registrazione.id] keeps the order deterministic and stable across refreshes when both are equal.
-     */
+    /** The Registrazioni of [progettoId] in the S2 order decided by [OrdineDelleRegistrazioni]. */
     public fun delProgetto(progettoId: ProgettoId): List<RegistrazioneDelProgettoVista> =
-        registrazioni.delProgetto(progettoId)
-            .sortedWith(
-                compareByDescending<Registrazione> { it.dataRegistrazione }
-                    .thenByDescending { it.aggiuntaAlle }
-                    .thenBy { it.id.valore },
-            )
+        OrdineDelleRegistrazioni.ordina(registrazioni.delProgetto(progettoId))
             .map {
                 RegistrazioneDelProgettoVista(
                     registrazioneId = it.id,
