@@ -23,19 +23,15 @@ import kotlin.test.fail
  *    tree is materialized under `build/tmp/controlli-adr/`; so no fixture is ever seen by a real scan,
  *    by Konsist or by git. A case holding a `.repository-git` marker is materialized as a git repo.
  * 2. The project tree: every applicable check must PASS. A check with `from:` is applicable once that
- *    block is integrated (`.mismagent/features/<f>/integrated/<from>.json` or
- *    `.mismagent/features/<f>/blocks/<side>/done/<from>.md`, the tool's own rule) or is one of
- *    [BLOCCHI_COSTRUITI_SENZA_MARCATORE]. Before that its result on the tree is reported, not enforced:
- *    the `from` block's own review runs it directly (`sh <script> .`).
+ *    block is integrated ([RegistroControlliAdr.applicabile], the tool's own rule). Before that its
+ *    result on the tree is reported, not enforced: the `from` block's own review runs it directly
+ *    (`sh <script> .`).
+ * 3. Deferred checks (`MM lint --adrs`'s rule, D-0025): a check whose script does not exist yet and whose
+ *    `from` block is not integrated is skipped by 1 and 2 and by the existence test, and only listed.
+ *    An existing script is always tested; a missing one fails once its `from` is integrated, or always
+ *    when it has no `from`.
  */
 class ControlliAdrTest {
-    private data class ControlloAdr(val adr: String, val percorso: String, val from: String?) {
-        val nome: String get() = percorso.substringAfterLast('/').removeSuffix(".sh")
-
-        /** The `<check>` part of the `ADR-NNNN <check>: PASS|FAIL` line the script prints. */
-        val esitoAtteso: String get() = "ADR-$adr ${nome.removePrefix("adr-$adr-")}"
-    }
-
     private val radice: File =
         File(System.getProperty(PROPRIETA_RADICE) ?: "..").canonicalFile
 
@@ -43,12 +39,23 @@ class ControlliAdrTest {
     private val cartellaFixture = File(cartellaControlli, "fixture")
     private val cartellaLavoro = File(radice, "architettura-test/build/tmp/controlli-adr")
 
-    private val controlli: List<ControlloAdr> by lazy { leggiControlliDagliAdr() }
+    private val registro by lazy { RegistroControlliAdr(radice) }
+    private val controlli: List<ControlloAdr> get() = registro.controlli
+
+    /** The checks run here; [RegistroControlliAdr.differiti] are only listed. */
+    private val daVerificare: List<ControlloAdr> get() = registro.daVerificare
+
+    @Test
+    fun `i controlli differiti sono elencati, non verificati`() {
+        registro.differiti.forEach { c ->
+            println("ADR-${c.adr} ${c.nome}: DEFERRED (script not written yet, from: ${c.from} not integrated)")
+        }
+    }
 
     @Test
     fun `ogni check citato da un ADR esiste ed e uno script di controlli-adr`() {
         assertTrue(controlli.isNotEmpty(), "no enforced_by check found in .mismagent/decisions")
-        controlli.forEach { c ->
+        daVerificare.forEach { c ->
             assertTrue(File(radice, c.percorso).isFile, "ADR ${c.adr}: check ${c.percorso} does not exist")
             assertTrue(
                 c.percorso.startsWith("architettura-test/controlli-adr/") && c.percorso.endsWith(".sh"),
@@ -67,7 +74,7 @@ class ControlliAdrTest {
 
     @Test
     fun `ogni controllo ha almeno una fixture conforme e una violante`() {
-        controlli.forEach { c ->
+        daVerificare.forEach { c ->
             val casi = casiDi(c).map { it.name }
             assertTrue(casi.any { it.startsWith(CONFORME) }, "${c.nome}: no conforme* fixture")
             assertTrue(casi.any { it.startsWith(VIOLANTE) }, "${c.nome}: no violante* fixture")
@@ -76,7 +83,7 @@ class ControlliAdrTest {
 
     @TestFactory
     fun `ogni controllo discrimina sulle sue fixture`(): List<DynamicTest> =
-        controlli.flatMap { c ->
+        daVerificare.flatMap { c ->
             casiDi(c).map { caso ->
                 DynamicTest.dynamicTest("ADR-${c.adr} ${c.nome} / ${caso.name}") {
                     val albero = materializza(c, caso)
@@ -98,11 +105,11 @@ class ControlliAdrTest {
 
     @TestFactory
     fun `ogni controllo applicabile passa sull albero del progetto`(): List<DynamicTest> =
-        controlli.map { c ->
+        daVerificare.map { c ->
             DynamicTest.dynamicTest("ADR-${c.adr} ${c.nome} on the project tree") {
                 val esito = esegui(c, radice)
                 println(esito.uscita.trimEnd())
-                if (applicabile(c)) {
+                if (registro.applicabile(c)) {
                     assertTrue(esito.passa, "ADR-${c.adr} ${c.nome} fails on the project tree:\n${esito.uscita}")
                 } else {
                     println(
@@ -112,37 +119,6 @@ class ControlliAdrTest {
                 }
             }
         }
-
-    private fun applicabile(c: ControlloAdr): Boolean {
-        val from = c.from ?: return true
-        val funzionalita = File(radice, ".mismagent/features").listFiles { f -> f.isDirectory }.orEmpty()
-        return from in BLOCCHI_COSTRUITI_SENZA_MARCATORE ||
-            funzionalita.any { f ->
-                val lati = File(f, "blocks").listFiles { d -> d.isDirectory }.orEmpty()
-                File(f, "integrated/$from.json").isFile || lati.any { File(it, "done/$from.md").isFile }
-            }
-    }
-
-    private fun leggiControlliDagliAdr(): List<ControlloAdr> {
-        val adr = File(radice, ".mismagent/decisions").listFiles { f -> f.name.matches(NOME_ADR) }.orEmpty()
-        return adr.sortedBy { it.name }.flatMap { file ->
-            val numero = file.name.take(CIFRE_ADR)
-            val righe = frontmatter(file)
-            righe.mapIndexedNotNull { i, riga ->
-                RIGA_CHECK.find(riga)?.let { m ->
-                    val from = righe.getOrNull(i + 1)?.let { RIGA_FROM.find(it)?.groupValues?.get(1) }
-                    ControlloAdr(numero, m.groupValues[1], from)
-                }
-            }
-        }
-    }
-
-    private fun frontmatter(file: File): List<String> {
-        val righe = file.readLines()
-        if (righe.firstOrNull()?.trim() != "---") return emptyList()
-        val fine = righe.drop(1).indexOfFirst { it.trim() == "---" }
-        return if (fine < 0) emptyList() else righe.subList(1, fine + 1)
-    }
 
     private fun casiDi(c: ControlloAdr): List<File> =
         File(cartellaFixture, c.nome).listFiles { f -> f.isDirectory }.orEmpty().sortedBy { it.name }
@@ -194,21 +170,6 @@ class ControlliAdrTest {
         const val VIOLANTE = "violante"
         const val SUFFISSO = ".fixture"
         const val MARCATORE_GIT = ".repository-git"
-        const val CIFRE_ADR = 4
         const val TIMEOUT_SECONDI = 60L
-        val NOME_ADR = Regex("""^\d{4}-.+\.md$""")
-        val RIGA_CHECK = Regex("""^\s*-\s*check:\s*(\S+)""")
-        val RIGA_FROM = Regex("""^\s+from:\s*(\S+)""")
-
-        /**
-         * `from` blocks of `trascrizione-con-parlanti` (legacy manifest): built and merged, but their
-         * block files never moved to `done/` and no `integrated/` marker exists.
-         */
-        val BLOCCHI_COSTRUITI_SENZA_MARCATORE = setOf(
-            "persistenza-schema",
-            "persistenza-ritrascrivi",
-            "diarizzatore-sherpa",
-            "persistenza-elimina-registrazione",
-        )
     }
 }
