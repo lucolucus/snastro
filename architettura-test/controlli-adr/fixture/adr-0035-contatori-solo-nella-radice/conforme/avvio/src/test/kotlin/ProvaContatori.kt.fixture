@@ -1,0 +1,1 @@
+fun prova(v: VociDellIncontro) = check(v.prossimaVoce == 3 && v.trascritti.first().prossimoSegmento == 41)
