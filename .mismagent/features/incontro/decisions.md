@@ -372,3 +372,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker (riassunto-incontro-politiche, sonnet); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md), [pre-release](pre-release.md)
 - Revisit: the pre-release I1 fix widens the scan.
+
+### D-0028 · Trigger di 7.sqm senza NEW/OLD
+- Meta: 2026-10-01; scope: block:persistenza-incontro; status: accepted; sha: 9b23b476
+- Question: SQLDelight 2.1 (sqlite_3_18 dialect) rejects triggers using NEW/OLD; how are "incontro_id never NULL, never changed" backstopped in 7.sqm?
+- Options: A AFTER INSERT aborting if any row has NULL incontro_id, BEFORE UPDATE OF incontro_id always aborting (kept); B NOT NULL column via table rebuild, which ADR 0034 avoids under immediate FKs.
+- Hypothesis: The rewritten triggers refuse a NULL insert and any change of incontro_id on the migrated schema.
+- Check: MigrazioneIncontroTest AC-I3 on a migrated database: insert with NULL, update to another and the same value.
+- Result: all refused, gate green on the block branch; ADR text amended accordingly; [ADR 0034](../../decisions/0034-persistenza-incontro-7sqm.md).
+- Debate: parked as a DEVIATION on a pinned guarantee; the user accepted it, the update rule is stricter (same value refused too).
+- Decision: A; ADR 0034 §1/§2 amended to the real trigger text. Cost: no UPDATE may ever name incontro_id.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (persistenza-incontro)
+- Docs: [ADR 0034](../../decisions/0034-persistenza-incontro-7sqm.md)
+- Revisit: a later SQLDelight dialect accepts NEW/OLD, or a flow needs to rewrite incontro_id.

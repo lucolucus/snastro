@@ -65,8 +65,10 @@ UPDATE registrazione SET incontro_id = id;
 ALTER TABLE registrazione ADD COLUMN ora_di_inizio TEXT;      -- 'HH:MM:SS' local; NULL = empty (INV-I14); migrated rows empty
 CREATE INDEX registrazione_incontro ON registrazione(incontro_id);
 -- INV-I1 store backstops (the column cannot be NOT NULL without rebuilding registrazione): set at insert, never changed.
-CREATE TRIGGER registrazione_incontro_obbligatorio BEFORE INSERT ON registrazione WHEN NEW.incontro_id IS NULL BEGIN SELECT RAISE(ABORT, 'registrazione.incontro_id obbligatorio'); END;
-CREATE TRIGGER registrazione_incontro_immutabile BEFORE UPDATE OF incontro_id ON registrazione WHEN NEW.incontro_id IS NOT OLD.incontro_id BEGIN SELECT RAISE(ABORT, 'registrazione.incontro_id immutabile'); END;
+-- SQLDelight 2.1 rejects NEW/OLD in a trigger ("No table found with name NEW"), so both are written without them:
+-- after an INSERT no row may have a NULL incontro_id; any UPDATE naming incontro_id is refused (stricter than "changed").
+CREATE TRIGGER registrazione_incontro_obbligatorio AFTER INSERT ON registrazione BEGIN SELECT RAISE(ABORT, 'registrazione.incontro_id obbligatorio') WHERE EXISTS (SELECT 1 FROM registrazione WHERE incontro_id IS NULL); END;
+CREATE TRIGGER registrazione_incontro_immutabile BEFORE UPDATE OF incontro_id ON registrazione BEGIN SELECT RAISE(ABORT, 'registrazione.incontro_id immutabile'); END;
 
 -- Trascrizione (ADR 0035). Root "Voci dell'Incontro": one row from the first completion of any Parte until the
 -- Incontro ceases. prossima_voce = INV-I4 (never reused in the Incontro).
@@ -170,9 +172,15 @@ dropped explicitly (the SQLDelight compiler does not, see `2.sqm`); each partial
 
 ### 2. What each table now means
 - **`registrazione.incontro_id`**: nullable in SQL only because of SQLite; never NULL and never changed — the
-  aggregate ([INV-I1], invariant test), the repository mapping (non-null type) and the two triggers. *If the
-  SQLDelight 2.1 compiler rejects the triggers, the block says so in its PR and the triggers are dropped by an
-  amendment of this ADR; nothing silently.*
+  aggregate ([INV-I1], invariant test), the repository mapping (non-null type) and the two triggers.
+  *(amended 2026-10-01 [user, incontro D-0028]: block `persistenza-incontro` found that SQLDelight 2.1 — dialect
+  `sqlite_3_18` — rejects `NEW`/`OLD` inside a trigger ("No table found with name NEW"). The triggers are therefore
+  written without them, as in §1: `registrazione_incontro_obbligatorio` is an `AFTER INSERT` that aborts when ANY row of
+  `registrazione` has a NULL `incontro_id` (a scan of a per-project table of tens of rows, inside the inserting
+  transaction); `registrazione_incontro_immutabile` is a `BEFORE UPDATE OF incontro_id` that aborts **unconditionally**,
+  stricter than "changed": an UPDATE that merely names the column, even with the same value, is refused — so no
+  repository query may list `incontro_id` in a `SET`. The guarantees (never NULL, never changed) are unchanged and
+  tested by AC-I3.)*
 - **`voce`** keeps its schema; its meaning narrows to "Voce n of the `Incontro` has ≥ 1 `Segmento` in this `Parte`"
   (a per-`Parte` presence row). `segmento`'s deferred FK to it is unchanged, so `segmento` is not rebuilt.
 - **`voce_incontro`** is the `Voce` itself; `attribuzione` and `impronta_vocale` reference it (deferred). Both are
@@ -207,7 +215,7 @@ with a revised `Trascritto` whose `prossima_voce` exceeds its highest `Voce`, `A
 - every `riassunto` row and child row is there with the same values, `Fonte`s carry `registrazione_id`;
 - **the migrated `pronto` `Riassunto` is NOT `superato`**: `StrutturaIncontro` of the unchanged `Trascritto` equals the
   re-encoded `struttura` (ADR 0037 §5) — the pure predicate is run on the migrated rows;
-- a NULL `incontro_id` insert and an `incontro_id` update are refused by the triggers;
+- a NULL `incontro_id` insert and any UPDATE naming `incontro_id` (even with the same value) are refused by the triggers, an UPDATE of other columns passes;
 - `Schema.migrate` from empty equals `Schema.create`, every new query runs once.
 
 ### 5. Rule 9: persistent writes only in the aggregate's adapter *(amended 2026-10-01, build-manifest checkpoint [user])*
