@@ -345,3 +345,17 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (model conductor); consulted: mismagent-architect
 - Docs: [manifest](building-blocks.yaml), [architecture overview](architetture/architecture-overview.md)
 - Revisit: a deferred check is forgotten after its block lands.
+
+### D-0026 · Data e ora da udta/date
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: Where do OraDiInizio and DataRegistrazione come from, given file times are reset by AirDrop and copies (spike ora-di-inizio)?
+- Options: A date and time from the same instant, mp4 udta/date in local time, else time empty (kept); B time from udta/date, date from mvhd as today, may mismatch; C file times, wrong order on both copies.
+- Hypothesis: udta/date, written by Voice Memos at recording start, orders the Parti of a real Incontro correctly where mvhd and file times fail.
+- Check: opt-in prototype on the real two-part Incontro (two copies), every candidate field vs the user's known start and pause.
+- Result: udta/date 22:22 and 22:44 on 21/09, correct; mvhd says 23/09 on part 2; file times wrong order; [spike evidence](spikes/ora-di-inizio.md).
+- Debate: the closure criterion asks for every format and device; only Voice Memos via AirDrop was measured, the user accepted the gap.
+- Decision: A; it also corrects today's date reading (AC-364). Cost: other devices get an empty time until a real sample is measured.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (spike)
+- Docs: [spike evidence](spikes/ora-di-inizio.md)
+- Revisit: a real file from another device or app is imported.
+- Confidence: medium — one device, one real Incontro

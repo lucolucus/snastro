@@ -96,3 +96,10 @@ obfuscation is left to code-review; `--exclude-dir=build` skips any directory na
   jars*. If the user chooses Developer ID signing and notarization (ADR 0016 open decision O-2),
   they must be signed too. This is not verified.
 
+
+## Amendment 2026-10-01 — the probe's recording date and start time ([ADR 0040](0040-data-e-ora-da-udta-date.md)) [user, incontro D-0026]
+The probe's date rule (AC-364) changes. For an mp4/m4a file with `moov/udta/date`, `DataRegistrazione` and the new
+`OraDiInizio` both come from that one instant, converted to local time. FFmpeg's `creation_time` (`mvhd`) proved wrong
+on a re-encoded real file and is now only the first fallback for the date. `udta/date` is read by a small ISO-BMFF box
+reader in `:audio`, with no new dependency (FFmpeg does not expose it). The confinement and this ADR's check are
+unchanged.

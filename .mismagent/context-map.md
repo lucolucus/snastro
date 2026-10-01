@@ -259,7 +259,7 @@
     - the user judges the effort of joining the `Voce`s of a real `Incontro`, against the brief's outcome "nomina ogni persona una volta sola";
     - an ADR records the option, and the thresholds if any.
   - expected side: app — owner: incontro — central: true
-- [ ] ora-di-inizio: *(added 2026-09-30, feature `incontro` [user D-0008, D-0009])*
+- [x] ora-di-inizio: **closed 2026-10-01 by [ADR 0040](decisions/0040-data-e-ora-da-udta-date.md) / [incontro D-0026](features/incontro/decisions.md) [user]** — `DataRegistrazione` and `OraDiInizio` from ONE instant, the mp4 `moov/udta/date` in local time; absent → time empty, date from today's chain. Measured only on Voice Memos via AirDrop (accepted gap). Original: *(added 2026-09-30, feature `incontro` [user D-0008, D-0009])*
   - **Question.** Can `OraDiInizio` be read from the metadata of the user's real files? Candidates: the `.m4a`/`.mp4` `creation_time`; the WAV `bext` origination date/time; the file's creation or modification time minus its duration. Also:
     - how reliable is each (time zone, device clock, a copy that resets the file times);
     - what is the fallback when none is usable.

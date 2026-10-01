@@ -5,7 +5,7 @@
 # Worktree: snastro-wt/incontro (branch feature/incontro). Side `app` only → every boundary is in-process (port + in-process
 # consumer-driven contract test); no OpenAPI. No scaffold: the project builds (rule 13).
 # SPIKES: voci-tra-parti CLOSED (D-0021, ADR 0036) despite the tactical-model header (lines 12-13, stale) — proposta-tra-parti is NOT
-# blocked. ora-di-inizio OPEN (central) → its node's ## Unblocks holds ONLY sonda-ora-di-inizio (release I4).
+# blocked. ora-di-inizio CLOSED 2026-10-01 by ADR 0040 (D-0026): sonda-ora-di-inizio (release I4) reads date AND time from udta/date.
 # AC NUMBERING: incontro-local prefix AC-I1.. (never collides with AC-1..636, AC-S1..S180, AC-C1..C94); invariants INV-I1..INV-I19 from
 # features/incontro/tactical-model.md, plus the amended INV-n / INV-S n they restate. Test names start with the tag followed by a space
 # (`AC-I12 `, `INV-I4 `), JVM-safe (INV_I4 accepted), greppable per block. New items take the next free number; never renumber.
@@ -28,7 +28,7 @@
 # relies on «incontro.id = registrazione.id» (ADR 0034 §1): the join reads the column.
 feature: incontro
 profile: .mismagent/profile.md
-ac_scheme: "AC-I1..AC-I199 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
+ac_scheme: "AC-I1..AC-I202 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
 blocks:
   # ---------------------------------------------------------------- wave 1: the two owners of the new ADR check scripts
   - id: "persistenza-incontro"
@@ -782,18 +782,23 @@ blocks:
     side: "app"
     wave: 5
     release: "I4"
-    module: ":progetto:adattatori ..audio (SondaAudioFfmpeg)"
-    what: "Read OraDiInizio from the file's metadata at import with the rule the ora-di-inizio spike's ADR fixes; anything not trustworthy stays empty. Blocked by spike ora-di-inizio; until it closes the adapter returns null."
+    module: ":audio (snastro.audio: ISO-BMFF box reader, SondaFfmpeg, InfoFile) + :progetto:adattatori (SondaAudioFfmpeg → InfoAudio.oraDiInizio)"
+    what: "Read OraDiInizio AND DataRegistrazione from ONE instant at import, per ADR 0040: the mp4 moov/udta/date (ISO-8601 with offset) through a small read-only box reader in :audio (no new dependency, mdat skipped by seek, malformed = absent), converted with the injected clock's zone. Absent/unparseable/implausible → OraDiInizio empty and the date from today's chain (creation_time, birth, mtime). This also corrects today's date reading (AC-364). Already-imported Registrazioni are not re-probed."
     sources:
+      - "ADR 0040 §1–§3"
+      - "ADR 0005 Amendment 2026-10-01"
       - "ADR 0033 §1 (SondaAudio)"
-      - "tasks/app/backlog/ora-di-inizio.md"
+      - "spikes/ora-di-inizio.md"
     consumes: ["agg-incontro"]
-    related_adrs: ["0005", "0033"]
+    related_adrs: ["0005", "0033", "0040"]
     tests_nl_status: "draft"
     tests_nl:
-      - "AC-I52 on the user's real sample formats (per the spike's ADR) the probe returns the start time the ADR's rule names, compared with the known start; a file with no usable field → null"
-      - "AC-I53 a field the ADR marks untrustworthy (e.g. a reset copy time) → null, never a wrong time; the parsed time satisfies INV-I14 (else null)"
-    notes: "NOT READY until spike ora-di-inizio closes with its ADR (central node tasks/app/backlog/ora-di-inizio.md, ## Unblocks). Release I4 only holds this block, so I1-I3 never wait for the spike."
+      - "AC-I52 the pure rule (table test): udta/date 2026-09-21T20:44:22Z with zone Europe/Rome and creation_time 2026-09-22T22:05:47Z → (21/09/2026, 22:44:22) — the real part-2 case where creation_time says 23/09; a udta/date with offset just before local midnight gives the LOCAL date, consistent with the time"
+      - "AC-I53 udta/date absent, without offset, unparseable, before 1970-01-01T23:59:59Z or in the future → OraDiInizio null and DataRegistrazione from today's chain (creation_time, then birth, then mtime), unchanged from AC-364; the parsed time satisfies INV-I14"
+      - "AC-I200 the box reader on synthetic header fixtures (test resources, never real audio): finds moov/udta/date when moov is after a large mdat (seek, no full read); a truncated box, a size overflow or a missing udta → absent, never an exception that fails the import"
+      - "AC-I201 mvhd creation_time and file times are never used for OraDiInizio (a fixture with creation_time and no udta/date → null); no new library in the version catalog (review criterion, by-construction)"
+      - "AC-I202 [@modelli] on the user's two real Voice Memos files (opt-in, SNASTRO_SPIKE_ORA_DIR): New Recording 4 → 21/09 22:22:13, Via Roquel → 21/09 22:44:22, ordered part 1 then part 2"
+    notes: "Spike ora-di-inizio CLOSED 2026-10-01 by ADR 0040 (D-0026). Accepted gap: only Voice Memos on iPhone via AirDrop measured; other sources not adopted (ADR 0040 §3)."
   # ---------------------------------------------------------------- wave 6: adapters (one block per infrastructure module)
   - id: "adattatori-progetto-incontro"
     type: "adapter"
@@ -1410,7 +1415,6 @@ releases:
     launch: "S3 of Parte 2 of a 2-part Incontro with unnamed Voci → banner 'Voce 5 e Voce 1 (parte 1) sembrano la stessa persona' → Unisci"
     blocks: ["proposta-tra-parti", "banner-proposta-tra-parti", "avvio-proposta-tra-parti"]
   I4:
-    goal: "The start time of a Parte is read from the file's metadata at import, so the Parti come out in the right order without editing the time."
+    goal: "The date and start time of a Parte are read from the same instant in the file (udta/date) at import, so the Parti come out in the right order without editing, and the recording date is no longer wrong after a re-encode (AC-364 corrected)."
     launch: "Import 2 files of the same meeting → S2 shows them ordered by their real start time"
     blocks: ["sonda-ora-di-inizio"]
-    gated_by: "spike ora-di-inizio (open, central) — its ADR fixes the reading rule"

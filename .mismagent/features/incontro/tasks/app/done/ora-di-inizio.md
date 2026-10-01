@@ -6,6 +6,7 @@ repo: .
 depends_on: []
 central: true
 owner: incontro
+resolution: "ADR-0040 (incontro D-0026)"
 ---
 # Spike / Can OraDiInizio be read from the metadata of the user's real files?
 

@@ -66,7 +66,9 @@ persistence is ADR 0034; Trascrizione and Parlanti rules are ADR 0035; the Riass
   `incontro(id): IncontroVista?` (the `Incontro` with its `Parte`s ordered and numbered by `OrdineDelleParti`) and
   `RegistrazioneVista.incontroId` / `oraDiInizio`.
 - **`SondaAudio`'s `InfoAudio`** gains `oraDiInizio: LocalTime?`. The reading rule is spike `ora-di-inizio`'s ADR;
-  **until it closes, the adapter returns `null`** and the import stores an empty `OraDiInizio`. Only that adapter
+  **until it closes, the adapter returns `null`** and the import stores an empty `OraDiInizio`. *(2026-10-01: closed by
+  [ADR 0040](0040-data-e-ora-da-udta-date.md) — `moov/udta/date`, the same instant also giving `DataRegistrazione`;
+  empty otherwise.)* Only that adapter
   change is blocked by the spike; the VO, the order, `ModificaOraDiInizio`, the migration and the import are not.
 - **The "Voci dell'Incontro" root** lives in `:trascrizione:dominio` (ADR 0035). `Parte` gets **no type**: it is a role
   of `Registrazione` [map].

@@ -90,7 +90,8 @@ red window now runs through wave 4, not only wave 1. Either accept that, or rela
 - **Not yet verifiable:** the `Revisione` latency on a 3 h `Incontro` (D-0011 revisit) has no pinned bound; flagged.
 
 ## Open items
-- Spike **`ora-di-inizio`** (open, central): blocks ONLY the `SondaAudio` adapter's reading of `OraDiInizio`; its ADR states
-  the reading rule. Everything else uses an empty `OraDiInizio`.
+- Spike **`ora-di-inizio`**: closed 2026-10-01 by [ADR 0040](../../../decisions/0040-data-e-ora-da-udta-date.md) (D-0026):
+  `DataRegistrazione` and `OraDiInizio` both come from `moov/udta/date`, read by a box reader in `:audio`; block
+  `sonda-ora-di-inizio` also carries the date correction (AC-364). Only Voice Memos via AirDrop was measured (accepted gap).
 - `tactical-model.md` header (lines 12–13) still calls `voci-tra-parti` OPEN at `tasks/app/backlog`: build-manifest should
   read the spike as closed (D-0021, ADR 0036).
