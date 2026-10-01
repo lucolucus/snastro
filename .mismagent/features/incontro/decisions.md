@@ -502,3 +502,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer)
 - Docs: [manifest](building-blocks.yaml)
 - Revisit: a caller edit changes behaviour or a block's diff becomes unreviewable.
+
+### D-0038 · AC-I32 passa all'import
+- Meta: 2026-10-02; scope: block:elimina-parte; status: accepted; sha: 33a3d2bc
+- Question: AC-I32 (an import into an Incontro whose last Parte was just deleted fails) needs the import service, absent when elimina-parte is built.
+- Options: A move AC-I32 to aggiungi-registrazione-incontro, which owns the import side of the race (kept); B write it later as a pre-release item; C hold elimina-parte until the import exists, against the integration order of D-0032.
+- Hypothesis: n/a — decided by the composer on the worker's partial report, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the composer on the worker's partial report, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the composer on the worker's partial report, [manifest](building-blocks.yaml)
+- Debate: none; the serialization it relies on (BEGIN IMMEDIATE) is unchanged by elimina-parte.
+- Decision: A. Cost: elimina-parte lands without the concurrency proof, which arrives with the import block.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: mismagent-worker (elimina-parte)
+- Docs: [manifest](building-blocks.yaml)
+- Revisit: none expected.
