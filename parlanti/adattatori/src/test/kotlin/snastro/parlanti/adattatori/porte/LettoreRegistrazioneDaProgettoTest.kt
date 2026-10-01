@@ -64,6 +64,12 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
         override val lettore: LettoreRegistrazione =
             LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni))
 
+        /** D-0037: off until the I2 multi-file import into an Incontro lands (then seeded through it). */
+        override val piuPartiPerIncontro: Boolean = false
+
+        override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
+            error("Progetto non importa ancora una parte in un Incontro esistente (rilascio I2)")
+
         override fun semina(seme: SemeRegistrazione): RegistrazioneId {
             val percorso = "/sorgenti/${seme.titolo}.${seme.estensione}"
             archivio.conSorgente(percorso)

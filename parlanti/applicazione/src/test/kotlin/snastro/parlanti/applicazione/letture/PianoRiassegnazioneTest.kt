@@ -1,17 +1,20 @@
 package snastro.parlanti.applicazione.letture
 
 import snastro.kernel.CampioniAudio
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianzaFinta
 import snastro.parlanti.applicazione.porte.Classificazione
@@ -20,10 +23,12 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -46,7 +51,7 @@ class PianoRiassegnazioneTest {
 
     @Test
     fun `senza Trascritto restituisce TrascrittoNonTrovato`() {
-        val ambiente = Ambiente(lettoreVoci = LettoreVociFinta())
+        val ambiente = Ambiente(lettoreVoci = lettoreVociDiUnicheParti())
 
         val errore = ambiente.api.calcola(REGISTRAZIONE) { _, _ -> }.erroreAtteso<ErroreParlanti.TrascrittoNonTrovato>()
 
@@ -695,13 +700,14 @@ class PianoRiassegnazioneTest {
         private val segmentiVivi = segmenti.toMutableList()
         private val dati = mutableMapOf(REGISTRAZIONE to segmentiVivi.toList())
         private val lettore: LettoreVoci = lettoreVoci ?: object : LettoreVoci {
-            private val finta get() = LettoreVociFinta(segmenti = dati)
+            private val finta get() = lettoreVociDiUnicheParti(segmenti = dati)
 
             // The Voci of the Parte, derived live from its Segmenti: their VoceRefs key the Attribuzioni (ADR 0033).
-            override fun voci(id: RegistrazioneId): List<VoceVista>? = dati[id]?.groupBy { it.voceId }
-                ?.map { (v, segs) -> VoceVista(VoceRef(unIncontroDi(id), v), segs.map { it.intervallo }) }
+            override fun voci(incontroId: IncontroId): List<VoceVista>? = dati[unicaParteDi(incontroId)]
+                ?.groupBy { it.voceId }
+                ?.map { (v, segs) -> unaVoceVista(VoceRef(incontroId, v), segs.map { it.intervallo }) }
 
-            override fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? = finta.segmenti(id)
+            override fun segmenti(incontroId: IncontroId): List<SegmentoDiVoce>? = finta.segmenti(incontroId)
         }
         val api: PianoRiassegnazioneQuery = PianoRiassegnazioneQuery(
             lettore,
@@ -710,12 +716,13 @@ class PianoRiassegnazioneTest {
             decodificatore(uow),
             estrattore(uow),
             classificatore,
+            ogniRegistrazioneNota(),
         )
 
         /** Moves each spostamento's Segmento onto its `a` Voce (the automatic batch touches no `confermato` flag). */
         fun applica(spostamenti: List<SpostamentoProposto>) {
             spostamenti.forEach { m ->
-                val i = segmentiVivi.indexOfFirst { it.segmentoId == m.segmentoId }
+                val i = segmentiVivi.indexOfFirst { it.segmento.segmentoId == m.segmentoId }
                 segmentiVivi[i] = segmentiVivi[i].copy(voceId = m.a)
             }
             dati[REGISTRAZIONE] = segmentiVivi.toList()
@@ -730,6 +737,11 @@ class PianoRiassegnazioneTest {
             Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(nome).atteso(), tipo).aggregato
 
         fun seg(numero: Int, voce: Int, inizioMs: Long, fineMs: Long, confermato: Boolean = false): SegmentoDiVoce =
-            SegmentoDiVoce(SegmentoId(numero), VoceId(voce), IntervalloMs(inizioMs, fineMs), confermato)
+            SegmentoDiVoce(
+                SegmentoRef(REGISTRAZIONE, SegmentoId(numero)),
+                VoceId(voce),
+                IntervalloMs(inizioMs, fineMs),
+                confermato,
+            )
     }
 }

@@ -15,11 +15,12 @@ import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RigaImpronta
-import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -36,8 +37,8 @@ class RiallineaTutteLeImpronteServizioTest {
     private val parlanti = ParlanteRepositoryFinta()
     private val transazioni = UnitaDiLavoroFinta(parlanti)
     private val eventi = DispatcherEventiFinta(transazioni)
-    private val voci = LettoreVociFinta(
-        listOf(A, B, ALTROVE).associateWith { listOf(VoceVista(VoceRef(unIncontroDi(it), VoceId(1)), INTERVALLI)) },
+    private val voci = lettoreVociDiUnicheParti(
+        listOf(A, B, ALTROVE).associateWith { listOf(unaVoceVista(VoceRef(unIncontroDi(it), VoceId(1)), INTERVALLI)) },
     )
 
     private fun servizio(
@@ -46,6 +47,7 @@ class RiallineaTutteLeImpronteServizioTest {
         val riallinea = RiallineaImpronteServizio(
             eventi.unitaDiLavoro,
             voci,
+            ogniRegistrazioneNota(),
             parlanti,
             decoder,
             EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
@@ -107,6 +109,7 @@ class RiallineaTutteLeImpronteServizioTest {
         val riallinea = RiallineaImpronteServizio(
             eventi.unitaDiLavoro,
             voci,
+            ogniRegistrazioneNota(),
             parlanti,
             DecodificatoreAudioFinta(transazioni),
             EstrattoreImprontaFinta(unitaDiLavoro = transazioni),

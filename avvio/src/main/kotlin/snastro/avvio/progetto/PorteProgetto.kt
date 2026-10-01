@@ -103,7 +103,8 @@ internal class PorteProgetto(
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 
-    val vociPerParlanti: LettoreVociDaTrascrizione = LettoreVociDaTrascrizione(vociDelTrascritto)
+    val vociPerParlanti: LettoreVociDaTrascrizione =
+        LettoreVociDaTrascrizione(vociDelTrascritto, registrazionePerParlanti)
     val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
     val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci)

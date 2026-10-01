@@ -129,8 +129,16 @@ internal class ModuloParlanti(
                 estrattoAudio,
             ),
         )
-        aggiornamenti = AggiornamentiVistaParlanti(proposte, registrazione::parti)
-        val riallinea = RiallineaImpronteServizio(uow, voci, porte.parlanti, decodificatore, ml.estrattore, dispatcher)
+        aggiornamenti = AggiornamentiVistaParlanti(proposte) { i -> registrazione.parti(i)?.map { it.registrazioneId } }
+        val riallinea = RiallineaImpronteServizio(
+            uow,
+            voci,
+            registrazione,
+            porte.parlanti,
+            decodificatore,
+            ml.estrattore,
+            dispatcher,
+        )
         // AC-C54: the ONE JUL-backed Segnalazione of `:avvio`.
         riallineamento = AbbonatoRiallineamentoImpronte(riallinea, segnalazioneApp)
         riallineaTutte = RiallineaTutteLeImpronteServizio(porte.lettura, porte.parlanti, riallinea)
@@ -163,6 +171,7 @@ internal class ModuloParlanti(
             decodificatore,
             ml.estrattore,
             ClassificatoreSomiglianzaCoseno(SoglieSomiglianza(SIMILARITA_MINIMA, MARGINE_MINIMO)),
+            registrazione,
         )
         val frase = ServiziFrase(
             confermaSegmento = trascrizione.confermaSegmento,
@@ -176,13 +185,13 @@ internal class ModuloParlanti(
         val lavoro = scopeProgetto.coroutineContext.job
         collaboratori = CollaboratoriParlanti(
             letture = LettureParlanti(
-                identificazione = IdentificazioneVoci(voci, porte.attribuzioni, porte.parlanti)::voci,
+                identificazione = IdentificazioneVoci(voci, porte.attribuzioni, porte.parlanti, registrazione)::voci,
                 proposta = if (ml.proposte) proposte::perVoce else galleriaVuota,
                 unioni = PropostaUnione(porte.attribuzioni, porte.parlanti, registrazione)::proposte,
                 parlantiAttivi = { attivi.parlanti(progettoId) },
                 estratto = estrattoAudio::estratto,
                 parlantiDelProgetto = { delProgetto.parlanti(progettoId) },
-                identificazioni = IdentificazioneRegistrazioni(voci, porte.attribuzioni)::conteggi,
+                identificazioni = IdentificazioneRegistrazioni(voci, porte.attribuzioni, registrazione)::conteggi,
             ),
             comandi = ComandiVoceProgetto(
                 scopeProgetto,
