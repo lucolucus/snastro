@@ -30,7 +30,6 @@ Amend EliminaRegistrazione: compute incontroCessato in the transaction (no other
 - EliminaRegistrazione of the only Parte → RegistrazioneEliminata(incontroCessato = true), the registrazione and incontro rows gone in one transaction
 - EliminaRegistrazione of Parte 2 of 3 → RegistrazioneEliminata(incontroCessato = false), the Incontro and its other Parti stay
 - INV-I1 a subscriber error (e.g. ElaborazioneGiaAperta veto) → nothing deleted, the Incontro and the Parte stay; an unknown Registrazione → Errore(RegistrazioneNonTrovata)
-- AC-I32 concurrent: an import into an Incontro whose last Parte was deleted first answers IncontroNonTrovato (BEGIN IMMEDIATE serialization; two real-SQLite transactions)
 
 ## Dependencies
 - `agg-incontro` (consumes it; owner `incontro`) — consumers: `porte-progetto-incontro`, `aggiungi-registrazione-incontro`, `modifica-ora-di-inizio`, `elimina-parte`, `catalogo-incontro`, `incontri-del-progetto`, `sonda-ora-di-inizio`, `adattatori-progetto-incontro` · contract_test: invariant-test
