@@ -463,3 +463,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (parlante-impronte-per-parte)
 - Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
 - Revisit: the aliases are still there after those blocks.
+
+### D-0035 · Ordinamento di S2 nel dominio
+- Meta: 2026-10-02; scope: block:incontro; status: accepted; sha: 33dce2c4
+- Question: The ADR 0033 order-in-domain check fails on the S2 list sort, not a Parti order; fix the code or narrow the check?
+- Options: A move the S2 sort into a pure :progetto:dominio function, same order, check unchanged (kept); B exclude RegistrazioniDelProgetto from the check until wave 4, an exception to remember.
+- Hypothesis: n/a — decided by the user on the worker's integration blocker, [rework](rework/incontro-1.md)
+- Check: n/a — decided by the user on the worker's integration blocker, [rework](rework/incontro-1.md)
+- Result: n/a — decided by the user on the worker's integration blocker, [rework](rework/incontro-1.md)
+- Debate: the worker flagged it before integration; its other deviations (OraDiInizio.di(testo) overload, defaulted parameters, one MessaggiErrore line) are additive and accepted by the composer.
+- Decision: A, as rework cycle 1. Cost: a small edit outside the block's module.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (incontro)
+- Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md), [rework](rework/incontro-1.md)
+- Revisit: none expected.
