@@ -9,6 +9,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.ArchivioAudio
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
@@ -139,6 +140,8 @@ class PuliziaRegistrazioneEliminataTest {
             titolo = "Riunione",
             dataRegistrazione = LocalDate.parse("2026-09-12"),
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
+            incontroId = unIncontroDi(id),
+            incontroCessato = true,
         )
     }
 }

@@ -4,6 +4,7 @@ import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
@@ -15,7 +16,7 @@ import kotlin.test.assertNull
 class CatalogoRegistrazioniTest {
     private val progettoId = ProgettoId("progetto-1")
     private val registrazioni = RegistrazioneRepositoryFinta()
-    private val catalogo = CatalogoRegistrazioni(registrazioni)
+    private val catalogo = CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni))
 
     @Test
     fun `AC-97 id noto restituisce la RegistrazioneVista con tutti i campi della Registrazione`() {

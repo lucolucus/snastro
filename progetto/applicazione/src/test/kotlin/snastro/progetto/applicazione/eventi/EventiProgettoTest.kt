@@ -6,6 +6,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -13,6 +14,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -38,30 +40,70 @@ class EventiProgettoTest {
     }
 
     @Test
-    fun `AC-14 RegistrazioneAggiunta ha registrazioneId e progettoId`() {
-        val evento: EventoPubblicato =
-            RegistrazioneAggiunta(registrazioneId = RegistrazioneId("id-2"), progettoId = ProgettoId("id-1"))
-        assertEquals(RegistrazioneAggiunta(RegistrazioneId("id-2"), ProgettoId("id-1")), evento)
+    fun `AC-I20 RegistrazioneAggiunta ha registrazioneId, progettoId e incontroId`() {
+        val evento: EventoPubblicato = RegistrazioneAggiunta(
+            registrazioneId = RegistrazioneId("id-2"),
+            progettoId = ProgettoId("id-1"),
+            incontroId = IncontroId("incontro-1"),
+        )
         assertEquals(
-            listOf("registrazioneId: RegistrazioneId", "progettoId: ProgettoId"),
+            RegistrazioneAggiunta(RegistrazioneId("id-2"), ProgettoId("id-1"), IncontroId("incontro-1")),
+            evento,
+        )
+        assertEquals(
+            listOf("registrazioneId: RegistrazioneId", "progettoId: ProgettoId", "incontroId: IncontroId"),
             formaDi("RegistrazioneAggiunta"),
         )
     }
 
     @Test
-    fun `AC-14 DataRegistrazioneModificata ha registrazioneId, precedente e nuova`() {
+    fun `AC-I20 DataRegistrazioneModificata ha registrazioneId, precedente, nuova e incontroId`() {
         val evento: EventoPubblicato = DataRegistrazioneModificata(
             registrazioneId = RegistrazioneId("id-2"),
             precedente = LocalDate.of(2026, 9, 12),
             nuova = LocalDate.of(2026, 9, 13),
+            incontroId = IncontroId("incontro-1"),
         )
         assertEquals(
-            DataRegistrazioneModificata(RegistrazioneId("id-2"), LocalDate.of(2026, 9, 12), LocalDate.of(2026, 9, 13)),
+            DataRegistrazioneModificata(
+                RegistrazioneId("id-2"),
+                LocalDate.of(2026, 9, 12),
+                LocalDate.of(2026, 9, 13),
+                IncontroId("incontro-1"),
+            ),
             evento,
         )
         assertEquals(
-            listOf("registrazioneId: RegistrazioneId", "precedente: LocalDate", "nuova: LocalDate"),
+            listOf(
+                "registrazioneId: RegistrazioneId",
+                "precedente: LocalDate",
+                "nuova: LocalDate",
+                "incontroId: IncontroId",
+            ),
             formaDi("DataRegistrazioneModificata"),
+        )
+    }
+
+    @Test
+    fun `AC-I20 OraDiInizioModificata ha registrazioneId, incontroId, precedente e nuova`() {
+        val evento: EventoPubblicato = OraDiInizioModificata(
+            registrazioneId = RegistrazioneId("id-2"),
+            incontroId = IncontroId("incontro-1"),
+            precedente = null,
+            nuova = LocalTime.of(9, 30, 15),
+        )
+        assertEquals(
+            OraDiInizioModificata(RegistrazioneId("id-2"), IncontroId("incontro-1"), null, LocalTime.of(9, 30, 15)),
+            evento,
+        )
+        assertEquals(
+            listOf(
+                "registrazioneId: RegistrazioneId",
+                "incontroId: IncontroId",
+                "precedente: LocalTime?",
+                "nuova: LocalTime?",
+            ),
+            formaDi("OraDiInizioModificata"),
         )
     }
 
@@ -77,7 +119,7 @@ class EventiProgettoTest {
     }
 
     @Test
-    fun `AC-618 RegistrazioneEliminata ha registrazioneId, progettoId, titolo, dataRegistrazione e riferimentoAudio`() {
+    fun `AC-I20 RegistrazioneEliminata ha i campi di AC-618 piu incontroId e incontroCessato`() {
         val evento: EventoPubblicato = eliminata()
         assertEquals(
             RegistrazioneEliminata(
@@ -86,6 +128,8 @@ class EventiProgettoTest {
                 "Seduta",
                 LocalDate.of(2026, 9, 12),
                 RiferimentoAudio("audio/id-2.m4a"),
+                IncontroId("incontro-1"),
+                true,
             ),
             evento,
         )
@@ -96,6 +140,8 @@ class EventiProgettoTest {
                 "titolo: String",
                 "dataRegistrazione: LocalDate",
                 "riferimentoAudio: RiferimentoAudio",
+                "incontroId: IncontroId",
+                "incontroCessato: Boolean",
             ),
             formaDi("RegistrazioneEliminata"),
         )
@@ -135,6 +181,8 @@ class EventiProgettoTest {
         titolo = "Seduta",
         dataRegistrazione = LocalDate.of(2026, 9, 12),
         riferimentoAudio = RiferimentoAudio("audio/id-2.m4a"),
+        incontroId = IncontroId("incontro-1"),
+        incontroCessato = true,
     )
 
     @Test
@@ -146,6 +194,7 @@ class EventiProgettoTest {
                 "DataRegistrazioneModificata",
                 "RegistrazioneRinominata",
                 "RegistrazioneEliminata",
+                "OraDiInizioModificata",
             ),
             eventi.map { it.name }.toSet(),
         )

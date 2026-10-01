@@ -1,5 +1,6 @@
 package snastro.sbobinatura.applicazione.politiche
 
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
@@ -37,6 +38,9 @@ class RigenerazioneSbobinaturaPoliticaTest {
     /** A [LettoreTrascritto] that fails the test if read: the removal never reads the Trascritto. */
     private val lettoreVietato = object : LettoreTrascritto {
         override fun trascritto(id: RegistrazioneId): TrascrittoTesto? = error("perRegistrazioneEliminata non legge")
+
+        override fun partiConTrascritto(incontroId: IncontroId): List<RegistrazioneId> =
+            error("perRegistrazioneEliminata non legge")
 
         override fun registrazioniConTrascritto(): List<RegistrazioneId> = error("perRegistrazioneEliminata non legge")
     }

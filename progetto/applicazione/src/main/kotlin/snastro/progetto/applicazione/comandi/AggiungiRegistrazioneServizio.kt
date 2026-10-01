@@ -64,7 +64,7 @@ public class AggiungiRegistrazioneServizio(
                             aggiuntaAlle = clock.instant(),
                         )
                         registrazioni.salva(creato.aggregato)
-                        eventi.pubblica(creato.evento.pubblicato())
+                        eventi.pubblica(creato.evento.pubblicato(creato.aggregato.incontroId))
                         Esito.Ok(Unit)
                     }.also { confermata = it is Esito.Ok }
                 } finally {
@@ -91,5 +91,5 @@ private fun titoloDa(percorsoSorgente: String): String {
         .ifEmpty { "registrazione" }
 }
 
-private fun snastro.progetto.dominio.RegistrazioneAggiunta.pubblicato(): RegistrazioneAggiunta =
-    RegistrazioneAggiunta(registrazioneId = id, progettoId = progettoId)
+private fun snastro.progetto.dominio.RegistrazioneAggiunta.pubblicato(incontroId: IncontroId): RegistrazioneAggiunta =
+    RegistrazioneAggiunta(registrazioneId = id, progettoId = progettoId, incontroId = incontroId)

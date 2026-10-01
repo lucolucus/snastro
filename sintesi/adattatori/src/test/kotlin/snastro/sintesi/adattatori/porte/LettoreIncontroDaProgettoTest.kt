@@ -18,6 +18,7 @@ import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
 import snastro.progetto.applicazione.porte.EliminazioniInSospesoFinta
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
@@ -46,7 +47,8 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
         private val registrazioni = RegistrazioneRepositoryFinta()
         private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, progetti))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo = CatalogoRegistrazioni(registrazioni)
+        private val catalogo =
+            CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni))
         private var contatore = 0
 
         init {

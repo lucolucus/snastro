@@ -1,18 +1,19 @@
 package snastro.sbobinatura.applicazione.porte
 
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
-import snastro.kernel.unIncontroDi
 import java.util.Locale
 
 class LettoreNomiFintaTest : LettoreNomiContratto() {
     override fun ambiente(): AmbienteLettoreNomi = AmbienteFinto()
 
     /**
-     * Plays the supplier: mints ids like it (UUID-like strings, VoceId 1..n) and refuses what the
+     * Plays the supplier: mints ids like it (UUID-like strings, a new Incontro per Registrazione, VoceId from the
+     * Incontro's counter — INV-I4) and refuses what the
      * Parlanti rules refuse (INV-13, INV-16, INV-17), so every seed the contract asks for is one the
      * real supplier accepts. The Finta reads the live maps.
      */
@@ -24,14 +25,19 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
         private val eliminati = mutableSetOf<ParlanteId>()
         private val occasionali = mutableSetOf<ParlanteId>()
 
+        override val piuPartiPerIncontro: Boolean = true
+
         override val lettore: LettoreNomi = LettoreNomiFinta(attribuzioni, nomi)
 
-        override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata {
+        override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata =
+            aggiungiParte(IncontroId(generatore.nuovo()), voci)
+
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata {
             require(voci >= 1)
-            val id = RegistrazioneId(generatore.nuovo())
-            val refs = (1..voci).map { VoceRef(unIncontroDi(id), VoceId(it)) }
+            val gia = this.voci.count { it.incontroId == incontroId }
+            val refs = (gia + 1..gia + voci).map { VoceRef(incontroId, VoceId(it)) }
             this.voci += refs
-            return RegistrazioneConiata(id, refs)
+            return RegistrazioneConiata(RegistrazioneId(generatore.nuovo()), incontroId, refs)
         }
 
         override fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean): ParlanteId {

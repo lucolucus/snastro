@@ -16,6 +16,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
@@ -159,7 +160,7 @@ class AbbonatoSbobinaturaEventiTest {
         // Prima di questa raffica il file davvero sul disco era "2026-09-19 Titolo Vecchio.md" (la
         // vecchia data CON il vecchio titolo): ne' un DataRegistrazioneModificata ne' una
         // RegistrazioneRinominata da soli lo sanno, solo la combinazione dei due precedenti.
-        ambiente.commit(DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData))
+        ambiente.commit(DataRegistrazioneModificata(REG_1, vecchiaData, nuovaData, unIncontroDi(REG_1)))
         ambiente.commit(RegistrazioneRinominata(REG_1, precedente = "Titolo Vecchio", nuovo = "Titolo Nuovo"))
         advanceUntilIdle()
 
@@ -288,7 +289,7 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = Ambiente(testScheduler, mapOf(REG_1 to unTrascritto(REG_1, data = nuovaData)))
         advanceUntilIdle()
 
-        ambiente.commit(DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData))
+        ambiente.commit(DataRegistrazioneModificata(REG_1, vecchiaData, nuovaData, unIncontroDi(REG_1)))
         advanceUntilIdle()
 
         val vecchioFile = ScrittoreSbobinaturaFinta.Operazione.Rimosso("2026-09-19 Riunione.md")
@@ -668,6 +669,9 @@ class AbbonatoSbobinaturaEventiTest {
             override fun trascritto(id: RegistrazioneId) =
                 if (id == REG_1) unTrascritto(REG_1, titolo = "Titolo Nuovo", data = nuovaData) else null
 
+            override fun partiConTrascritto(incontroId: IncontroId): List<RegistrazioneId> =
+                listOf(REG_1).filter { unIncontroDi(it) == incontroId }
+
             override fun registrazioniConTrascritto(): List<RegistrazioneId> = emptyList()
         }
         val politica = RigenerazioneSbobinaturaPolitica(trascritti, LettoreNomiFinta(), scrittore)
@@ -682,7 +686,7 @@ class AbbonatoSbobinaturaEventiTest {
         advanceUntilIdle() // sweep di avvio: non trova nulla
 
         dispatcher.unitaDiLavoro.inTransazione {
-            val evento = DataRegistrazioneModificata(REG_1, precedente = vecchiaData, nuova = nuovaData)
+            val evento = DataRegistrazioneModificata(REG_1, vecchiaData, nuovaData, unIncontroDi(REG_1))
             Esito.Ok(dispatcher.pubblica(evento))
         }
         advanceUntilIdle()
@@ -757,6 +761,10 @@ class AbbonatoSbobinaturaEventiTest {
             if (id == poison) error("guasto permanente per $id")
             return extra[id] ?: delegato.trascritto(id)
         }
+
+        override fun partiConTrascritto(incontroId: IncontroId): List<RegistrazioneId> =
+            delegato.partiConTrascritto(incontroId) + extra.values.filter { it.incontroId == incontroId }
+                .map { it.registrazioneId }
 
         override fun registrazioniConTrascritto(): List<RegistrazioneId> =
             delegato.registrazioniConTrascritto() + extra.keys

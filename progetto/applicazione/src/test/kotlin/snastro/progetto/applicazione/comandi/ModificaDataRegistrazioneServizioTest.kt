@@ -47,7 +47,7 @@ class ModificaDataRegistrazioneServizioTest {
 
         assertEquals(nuovaData, assertNotNull(registrazioni.trova(id)).dataRegistrazione)
         assertEquals(
-            listOf(DataRegistrazioneModificata(id, precedente = dataFile, nuova = nuovaData)),
+            listOf(DataRegistrazioneModificata(id, dataFile, nuovaData, IncontroId("incontro-di-${id.valore}"))),
             eventi.pubblicati,
         )
     }

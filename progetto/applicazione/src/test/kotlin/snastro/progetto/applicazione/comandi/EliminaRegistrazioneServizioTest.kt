@@ -82,6 +82,8 @@ class EliminaRegistrazioneServizioTest {
             "Seduta rinominata",
             DATA_SCELTA,
             RiferimentoAudio("audio/id-1.m4a"),
+            IncontroId("incontro-di-id-1"),
+            incontroCessato = true,
         )
         assertEquals(listOf<EventoPubblicato>(atteso), sincroni)
         assertEquals(listOf<EventoPubblicato>(atteso), dopoCommit)

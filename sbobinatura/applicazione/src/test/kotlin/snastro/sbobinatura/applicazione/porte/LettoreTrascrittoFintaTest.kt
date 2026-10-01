@@ -5,21 +5,24 @@ import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
-import snastro.kernel.unIncontroDi
 
 class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
     override fun ambiente(): AmbienteLettoreTrascritto = AmbienteFinto()
 
     /**
-     * Plays the supplier: mints ids with the pinned keys (VoceId by first appearance, tie on voceIndice;
-     * SegmentoId by inizio then Voce; a new Voce takes the next number) and hands the segmenti to the
-     * Finta in seeding order, so the Finta's own ordering is what the contract checks.
+     * Plays the supplier: mints ids with the pinned keys (a new Incontro per Registrazione, further Parti on demand;
+     * VoceId from the Incontro's counter, by first appearance, tie on voceIndice — INV-I4; SegmentoId by inizio then
+     * Voce), orders the Parti as Progetto does (dataRegistrazione, then the order added — INV-I2) and hands the
+     * segmenti to the Finta in seeding order, so the Finta's own ordering is what the contract checks.
      */
     private class AmbienteFinto : AmbienteLettoreTrascritto {
         private val generatore = GeneratoreIdFinto()
         private val registrazioni = mutableMapOf<RegistrazioneId, SemeRegistrazione>()
+        private val incontri = mutableMapOf<RegistrazioneId, IncontroId>()
         private val trascritti = mutableMapOf<RegistrazioneId, MutableList<SegmentoVista>>()
-        private val prossimaVoce = mutableMapOf<RegistrazioneId, Int>()
+        private val prossimaVoce = mutableMapOf<IncontroId, Int>()
+
+        override val piuPartiPerIncontro: Boolean = true
 
         override val lettore: LettoreTrascritto
             get() = LettoreTrascrittoFinta(
@@ -27,22 +30,33 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
                     val r = registrazioni.getValue(id)
                     TrascrittoTesto(id, incontroDi(id), r.titolo, r.dataRegistrazione, segmenti.toList())
                 },
+                // LinkedHashMap keeps the order added: a stable sort by date leaves ties in that order.
+                registrazioni.keys.groupBy { incontroDi(it) }
+                    .mapValues { (_, parti) -> parti.sortedBy { registrazioni.getValue(it).dataRegistrazione } },
             )
 
-        override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId = unIncontroDi(registrazioneId)
+        override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId = incontri.getValue(registrazioneId)
 
         override fun aggiungiRegistrazione(seme: SemeRegistrazione): RegistrazioneId =
-            RegistrazioneId(generatore.nuovo()).also { registrazioni[it] = seme }
+            aggiungiParte(IncontroId(generatore.nuovo()), seme)
+
+        override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
+            RegistrazioneId(generatore.nuovo()).also {
+                registrazioni[it] = seme
+                incontri[it] = incontroId
+            }
 
         override fun completaElaborazione(
             registrazioneId: RegistrazioneId,
             turni: List<SemeTurno>,
         ): List<SegmentoConiato> {
             require(registrazioneId in registrazioni && registrazioneId !in trascritti && turni.isNotEmpty())
+            val incontro = incontroDi(registrazioneId)
+            val primaVoce = prossimaVoce.getOrDefault(incontro, 1)
             val voceDi = turni.groupBy { it.voceIndice }
                 .mapValues { (_, suoi) -> suoi.minOf { it.intervallo.inizioMs } }
                 .entries.sortedWith(compareBy({ it.value }, { it.key }))
-                .mapIndexed { i, e -> e.key to VoceId(i + 1) }
+                .mapIndexed { i, e -> e.key to VoceId(primaVoce + i) }
                 .toMap()
             val ordine = turni.indices.sortedWith(
                 compareBy({ turni[it].intervallo.inizioMs }, { voceDi.getValue(turni[it].voceIndice).numero }),
@@ -53,7 +67,7 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
             trascritti[registrazioneId] = turni
                 .zip(coniati) { t, c -> SegmentoVista(c.segmentoId, c.voceId, t.intervallo, t.testo) }
                 .toMutableList()
-            prossimaVoce[registrazioneId] = voceDi.size + 1
+            prossimaVoce[incontro] = primaVoce + voceDi.size
             return coniati
         }
 
@@ -66,10 +80,17 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
             segmento: SegmentoId,
             destinazione: VoceId?,
         ): VoceId {
+            val incontro = incontroDi(registrazioneId)
             val segmenti = trascritti.getValue(registrazioneId)
             val i = segmenti.indexOfFirst { it.segmentoId == segmento }
-            val voce = destinazione ?: VoceId(prossimaVoce.getValue(registrazioneId)).also {
-                prossimaVoce[registrazioneId] = it.numero + 1
+            // The supplier's rule: the destination is a Voce of the Incontro (in any of its Parti), or a new one.
+            val vociDellIncontro = incontri.filterValues { it == incontro }.keys
+                .flatMap { trascritti[it].orEmpty() }.map { it.voceId }.toSet()
+            require(destinazione == null || destinazione in vociDellIncontro) {
+                "Voce non dell'Incontro: $destinazione"
+            }
+            val voce = destinazione ?: VoceId(prossimaVoce.getValue(incontro)).also {
+                prossimaVoce[incontro] = it.numero + 1
             }
             segmenti[i] = segmenti[i].copy(voceId = voce)
             return voce

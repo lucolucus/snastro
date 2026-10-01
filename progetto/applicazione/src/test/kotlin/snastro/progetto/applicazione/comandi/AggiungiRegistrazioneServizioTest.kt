@@ -68,7 +68,7 @@ class AggiungiRegistrazioneServizioTest {
         assertEquals(LocalDate.of(2026, 3, 12), salvata.dataRegistrazione)
         assertEquals(progettoId, salvata.progettoId)
         assertEquals(
-            listOf(RegistrazioneAggiunta(RegistrazioneId("id-1"), progettoId)),
+            listOf(RegistrazioneAggiunta(RegistrazioneId("id-1"), progettoId, salvata.incontroId)),
             eventi.pubblicati,
         )
     }

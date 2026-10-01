@@ -14,12 +14,30 @@ public interface AmbienteLettoreTrascritto {
     /** The implementation under contract, reading everything seeded so far. */
     public val lettore: LettoreTrascritto
 
-    /** Adds one Registrazione to the Progetto, with no Elaborazione completata; returns its minted id. */
+    /**
+     * Capability: the supplier can give an Incontro more than one Parte ([aggiungiParte]). The multi-Parte cases of
+     * [LettoreTrascrittoContratto] are registered only when it is `true` (D-0037): the real supplier switches it on
+     * when the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands.
+     */
+    public val piuPartiPerIncontro: Boolean
+
+    /**
+     * Adds one Registrazione to the Progetto as the one Parte of a new Incontro, with no Elaborazione completata;
+     * returns its minted id.
+     */
     public fun aggiungiRegistrazione(seme: SemeRegistrazione): RegistrazioneId
 
     /**
+     * Adds one Registrazione to the Progetto as a further Parte of the existing Incontro [incontroId], with no
+     * Elaborazione completata; returns its minted id. Only called when [piuPartiPerIncontro]. The Parti are ordered
+     * by the supplier's rule (INV-I2): [SemeRegistrazione.dataRegistrazione] first, then the order they were added.
+     */
+    public fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId
+
+    /**
      * Completes the Elaborazione of [registrazioneId] with the non-empty [turni] as its output, so
-     * its Trascritto exists. Returns the ids minted for each turno, in the order of [turni].
+     * its Trascritto exists. Returns the ids minted for each turno, in the order of [turni]: each diarized voice is a
+     * NEW Voce of the Incontro, numbered after every Voce the Incontro ever had (INV-I4).
      * Allowed after a `fallita` Elaborazione of the same Registrazione (a new one is started); never
      * after a completata one.
      */
@@ -32,8 +50,9 @@ public interface AmbienteLettoreTrascritto {
     public fun incontroDi(registrazioneId: RegistrazioneId): IncontroId
 
     /**
-     * Revisione: riassegna [segmento] to [destinazione], or to a new Voce when it is `null` (the
-     * Segmento's current Voce keeps at least one other Segmento). Returns the Voce it belongs to now.
+     * Revisione: riassegna [segmento] of the Parte [registrazioneId] to [destinazione] (any Voce of the Incontro,
+     * also one speaking only in another Parte), or to a new Voce of the Incontro when it is `null` (the Segmento's
+     * current Voce keeps at least one other Segmento). Returns the Voce it belongs to now.
      */
     public fun riassegna(registrazioneId: RegistrazioneId, segmento: SegmentoId, destinazione: VoceId?): VoceId
 }
