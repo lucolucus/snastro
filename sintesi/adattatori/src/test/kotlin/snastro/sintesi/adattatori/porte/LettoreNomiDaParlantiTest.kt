@@ -36,6 +36,7 @@ import snastro.progetto.applicazione.comandi.CreaProgettoServizio
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
@@ -95,7 +96,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
         private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo = CatalogoRegistrazioni(registrazioniProgetto)
+        private val catalogo =
+            CatalogoRegistrazioni(registrazioniProgetto, IncontroRepositoryFinta(registrazioniProgetto))
         private var contatore = 0
 
         init {
