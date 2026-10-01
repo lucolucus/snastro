@@ -14,6 +14,7 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (explore conductor); consulted: mismagent-challenger
 - Docs: [product brief](product-brief.md), [6.sqm](../../../persistenza/src/main/sqldelight/migrations/6.sqm)
 - Revisit: most real meetings turn out to be single-file, or the Riassunto redesign exceeds one release.
+- ADR: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
 
 ### D-0002 · Voci a livello di Incontro
 - Meta: 2026-09-30; scope: feature; status: accepted
@@ -40,6 +41,7 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (explore conductor); consulted: mismagent-challenger
 - Docs: [product brief](product-brief.md), [ADR 0020](../../decisions/0020-elimina-registrazione.md)
 - Revisit: the user expects Elimina to erase every trace of the deleted audio.
+- ADR: [ADR 0038](../../decisions/0038-elimina-parte-dell-incontro.md)
 
 ### D-0004 · Ritrascrivi o riordino: superato, a mano
 - Meta: 2026-09-30; scope: feature; status: accepted
@@ -53,6 +55,7 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (explore conductor); consulted: mismagent-challenger
 - Docs: [product brief](product-brief.md)
 - Revisit: users forget stale Riassunti in practice.
+- ADR: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
 
 ### D-0005 · Ordine automatico e aggancia/stacca
 - Meta: 2026-09-30; scope: feature; status: superseded
@@ -92,6 +95,7 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (explore conductor); consulted: mismagent-analyst
 - Docs: [product brief](product-brief.md), [tactical model](tactical-model.md)
 - Revisit: users find "Voce 7" numbering after re-transcription confusing.
+- ADR: [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
 
 ### D-0008 · Le parti si importano dentro l'Incontro
 - Meta: 2026-09-30; scope: feature; status: accepted
@@ -119,3 +123,225 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (explore conductor); consulted: mismagent-analyst
 - Docs: [product brief](product-brief.md)
 - Revisit: none expected.
+
+### D-0010 · Riassunto dell'Incontro in un passaggio
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: Is an Incontro's Riassunto of 1.5–3 h made in one pass over the concatenated Parti, or split per Parte and recomposed?
+- Options: A one pass on the concatenated input within ADR 0026's per-input context; B split per Parte and recompose, more code and risk of a Decisione counted twice.
+- Hypothesis: One pass over a real 94-min two-part Incontro yields structured elements within ≤ 10 min per hour and no context failure.
+- Check: benchmarkRiassunto, real service, Qwen3.5 9B q4_K_M, M3 Pro; part 2 alone vs concatenated with Voce n labels; deterministic, one run each.
+- Result: concatenated 94 min: 427 s, 12/4/4/10 elements, RSS ≈ 7.3 GB; [spike evidence](spikes/contesto-lungo.md). The ≥ 2 h and 3 h inputs were not run.
+- Debate: the spike's closure criterion asks for a ≥ 2 h input; the user closed it on the 94-min evidence. The 3 h time check moves to the Incontro Riassunto block's tests_nl.
+- Decision: one pass, no split/recompose. The cost is that time and quality above 1.5 h are unmeasured until that block's benchmark.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [spike evidence](spikes/contesto-lungo.md), [ADR 0026](../../decisions/0026-runtime-llm-jni-llama.md)
+- Revisit: a 2–3 h Incontro exceeds 10 min per hour or loses or duplicates Decisioni.
+- Confidence: medium — measured only up to 94 minutes
+- ADR: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+
+### D-0011 · Una radice Voci dell'Incontro
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: With Voci scoped to the Incontro (D-0002), which root keeps Revisione across Parti atomic and INV-6 true?
+- Options: A one root per Incontro holding one Trascritto entity per Parte (kept); B a per-Parte Trascritto root plus a per-Incontro assignment root, two roots to keep consistent in one command.
+- Hypothesis: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Check: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Result: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Debate: none.
+- Decision: root "Voci dell'Incontro" holds the Voce counter and each Parte's Trascritto, removed only with the Incontro. Cost: each Revisione loads all Segmenti (about 3 000 for 3 h); Trascritto stops being a root.
+- By: decided: mismagent-tactical-modeler; recorded: Claude (model conductor)
+- Docs: [tactical model](tactical-model.md), [ADR 0018](../../decisions/0018-ritrascrivi.md)
+- Revisit: a Revisione on a 3 h Incontro is noticeably slow.
+- ADR: [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+
+### D-0012 · segmentoId mai riusati
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: After a Ritrascrivi, may a Segmento id be reused, given a superato Riassunto keeps Fonti pointing at the old ones?
+- Options: A reuse per generation as ADR 0018 does, so an old Fonte can hit an unrelated new Segmento; B never reuse within a Registrazione (kept).
+- Hypothesis: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Check: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Result: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Debate: none.
+- Decision: segmentoId is never reused (INV-I16), like Voce numbers (D-0007). Superato is then detected from ordered Parti plus the per-Parte assignment, with no generation number. Cost: amends ADR 0018; ids grow across re-runs.
+- By: decided: mismagent-tactical-modeler; recorded: Claude (model conductor)
+- Docs: [tactical model](tactical-model.md)
+- Revisit: none expected.
+- ADR: [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+
+### D-0013 · Ordine delle parti: vuote in fondo
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: How are Parti ordered when some have no OraDiInizio (INV-I2)?
+- Options: A compare times only when both have one, not transitive and can loop; B (DataRegistrazione, OraDiInizio empties last, aggiunta_alle, registrazioneId) (kept).
+- Hypothesis: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Check: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Result: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Debate: none.
+- Decision: a total order with empty times last. Cost: a Parte without a time that was really first shows last until the user sets its time (D-0009).
+- By: decided: mismagent-tactical-modeler; recorded: Claude (model conductor)
+- Docs: [tactical model](tactical-model.md)
+- Revisit: the ora-di-inizio spike shows most files have no usable time.
+- ADR: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+
+### D-0014 · Estratto audio da una sola parte
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: A Voce now spans several files: does its EstrattoAudio concatenate Segmenti from different Parti?
+- Options: A concatenate across files, needs a multi-file player and touches ADR 0005; B one Parte: where the Voce speaks most, tie the earlier; for a Candidato, the Parte of its print (kept).
+- Hypothesis: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Check: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Result: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Debate: none.
+- Decision: B (INV-I17). Cost: the user hears the Voce from one Parte only.
+- By: decided: mismagent-tactical-modeler; recorded: Claude (model conductor)
+- Docs: [tactical model](tactical-model.md)
+- Revisit: the user cannot recognize a Voce from one Parte's extract.
+- ADR: [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+
+### D-0015 · Numero di persone uno per Incontro
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: How is the Numero di persone given when an Incontro has several untranscribed Parti, since automatic counting broke the cross-Parte join?
+- Options: A asked per Parte, repetitive; B asked once, "Trascrivi" queues one Elaborazione per untranscribed Parte with that value, in order, one transaction (kept).
+- Hypothesis: A correct count per Parte gives a 1:1 FORTE match between Parti.
+- Check: voci-tra-parti spike, two real Parti (18 and 75 min), automatic count vs 4 persone.
+- Result: automatic 2 and 5 Voci, unusable; with 4, 4/4 FORTE one-to-one; [spike evidence](spikes/voci-tra-parti.md).
+- Debate: none; the value stays stored per Elaborazione (ADR 0014 unchanged), prefilled from the last one used.
+- Decision: B. Cost: a Parte with fewer people may get a spurious extra Voce, fixed by unire or Ritrascrivi with its own value.
+- By: decided: mismagent-tactical-modeler on the user's spike evidence; recorded: Claude (model conductor)
+- Docs: [spike evidence](spikes/voci-tra-parti.md), [tactical model](tactical-model.md)
+- Revisit: Parti of one Incontro often have different numbers of people.
+- ADR: [ADR 0039](../../decisions/0039-trascrivi-incontro-numero-persone.md)
+
+### D-0016 · Import di piu' file: tutto o niente
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: If one file of a multi-file import into an Incontro fails, what is kept?
+- Options: A keep the good files, an Incontro may miss a middle Parte silently; B nothing imported, no Incontro created (kept).
+- Hypothesis: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Check: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Result: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Debate: none.
+- Decision: all or nothing, one transaction. Cost: one bad file blocks the whole import.
+- By: decided: mismagent-tactical-modeler; recorded: Claude (model conductor)
+- Docs: [tactical model](tactical-model.md)
+- Revisit: users are blocked by one unreadable file in real imports.
+- ADR: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+
+### D-0017 · Proposta tra parti solo biunivoca
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: Under working option (a) of voci-tra-parti, when may the app propose joining two Voci of different Parti?
+- Options: A propose every FORTE pair, conflicts shown; B only mutual single FORTE between unattributed Voci sharing no Parte, never automatic (kept).
+- Hypothesis: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Check: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Result: n/a — decided by the tactical modeler, [tactical model](tactical-model.md)
+- Debate: pending the user's listening check that closes spike voci-tra-parti.
+- Decision: B (INV-I18); any conflict proposes nothing and the user uses unire; confirming sends UnisciVoci, the earlier Parte's Voce survives. Cost: ambiguous cases get no help.
+- By: decided: mismagent-tactical-modeler; recorded: Claude (model conductor)
+- Docs: [tactical model](tactical-model.md), [spike evidence](spikes/voci-tra-parti.md)
+- Revisit: the spike closes on a different option, or conflicts are common.
+- Confidence: low — one real Incontro, pairs not yet verified by ear
+- ADR: [ADR 0036](../../decisions/0036-proposta-tra-parti.md)
+
+### D-0018 · Incontro come riga espandibile in S2
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: How does the UI show a multi-part Incontro, given Voci and Riassunto belong to the Incontro while each Parte keeps its own transcript and audio?
+- Options: A S2 row expands into Parti, each Parte opens its own S3 (kept); B an Incontro page with one continuous transcript and Parte dividers; C an Incontro page with Parte tabs.
+- Hypothesis: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Check: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Result: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Debate: Claude recommended B, matching the model's Incontro-wide Voci and Riassunto; the user chose A, closer to today's S2 and S3.
+- Decision: A; S3 shows one Parte, its Voci panel, Riassunto tab and read-only state are the Incontro's, with a Parte switcher. Cost: the same Riassunto and Voci appear on every Parte page.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [ux proposal](UI/ux-proposal.md)
+- Revisit: the user loses track of which Parte is open, or misses cross-part reading.
+
+### D-0019 · Import di piu' file: chiedere
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: With D-0008, importing several files at once from S2 makes what? Today each file becomes its own Registrazione.
+- Options: A always one Incontro, unrelated files imported one at a time; B with 2 or more files ask "Un incontro in N parti" or "N incontri separati" (kept).
+- Hypothesis: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Check: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Result: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Debate: none.
+- Decision: B; one file imports as today, no question; adding Parti to an existing Incontro is "Aggiungi parti…" on its row. Cost: one more dialog on multi-file imports.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [ux proposal](UI/ux-proposal.md)
+- Revisit: none expected.
+- ADR: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+
+### D-0020 · Riassumi solo con tutte le parti
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: May an Incontro be summarized while a Parte has no transcript or a transcription open (INV-I9, A5)?
+- Options: A only when every Parte is transcribed and none is open (kept); B summarize the transcribed Parti, the Riassunto born superato.
+- Hypothesis: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Check: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Result: n/a — decided by the user at the UX checkpoint, [ux proposal](UI/ux-proposal.md)
+- Debate: none.
+- Decision: A; "Riassumi" is disabled with a hint naming the Parte that is missing or in progress. Cost: one failed Parte blocks the Incontro's Riassunto until retried or deleted.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [ux proposal](UI/ux-proposal.md), [tactical model](tactical-model.md)
+- Revisit: users want a partial Riassunto while a Parte is still transcribing.
+- ADR: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+
+### D-0021 · Voci tra parti: proposta per impronta
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: How do the Voci of different Parti become one Voce of the Incontro (spike voci-tra-parti)?
+- Options: A print-based proposal, one user gesture, never automatic (kept); B joint clustering, automatic and costly when wrong; C manual unire only, no help for unnamed guests.
+- Hypothesis: With a correct Numero di persone per Parte, print similarity pairs the Voci of two Parti one to one.
+- Check: SpikeIncontroTest, real two-part Incontro (18 + 75 min, 4 people), Proposta per part-2 Voce, automatic count vs 4.
+- Result: automatic count unusable (2 and 5 Voci); with 4, 4/4 FORTE one-to-one, consistent with the text; [spike evidence](spikes/voci-tra-parti.md).
+- Debate: the closure criterion asks for ≥ 2 Incontri and a listening check of the pairs; the user skipped both and closed on one Incontro.
+- Decision: A, proposal only when mutual and unique (D-0017), Numero di persone once per Incontro (D-0015). Cost: thresholds across files are measured on one Incontro, pairs not verified by ear.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [spike evidence](spikes/voci-tra-parti.md), [D-0017](decisions.md)
+- Revisit: a proposed pair turns out to be two different people.
+- Confidence: low — one Incontro, no listening check
+- ADR: [ADR 0036](../../decisions/0036-proposta-tra-parti.md)
+
+### D-0022 · R0 invisibile: prima le chiavi
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: What is the thinnest first release, given the ADR 0033 re-key breaks every context before any multi-part feature works?
+- Options: A I1 = Incontro underneath, app as today, then I2 multi-part, I3 cross-part proposal, I4 start time from metadata (kept); B I1 and I2 merged into one visible release, one huge diff before the first merge.
+- Hypothesis: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Debate: none; same pattern as sintesi's R3c behaviour-neutral merge point.
+- Decision: A. Cost: I1 delivers nothing visible except the two D-0007 changes.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [manifest](building-blocks.yaml), [architecture overview](architetture/architecture-overview.md)
+- Revisit: I1 drags on and blocks main for long.
+
+### D-0023 · 7.sqm e chiavi in due blocchi
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: Do 7.sqm and the kernel re-key sweep land as one block (ADR 0033 §6 wording) or two in sequence?
+- Options: A one block, huge diff and ADR 0034's from changes; B persistenza-incontro first, repositories join incontro_id from registrazione_id, then incontro-chiavi removes the joins (kept).
+- Hypothesis: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Debate: the join holds only while every Incontro has one Parte, true until the I2 import exists.
+- Decision: B; wave 1 also carries riassunto-incontro-politiche so the ADR check scripts exist early; the gate stays red only until both land, nothing in the gate files changes. Cost: one transient join layer.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [manifest](building-blocks.yaml), [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Revisit: the I2 import lands before incontro-chiavi.
+
+### D-0024 · Controlli di confinamento per ogni aggregato
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: Are the rule-9 confinement checks mechanized for the four aggregates of this feature, or left to review?
+- Options: A ADR amendments with enforced_by checks for Incontro, VociDellIncontro, Parlante prints, Riassunto (kept); B review and tests only.
+- Hypothesis: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Debate: ADR 0034 covered only the incontro queries and the voci tables.
+- Decision: A; the architect amends the owning ADRs, scripts land in the aggregate blocks. Cost: more check scripts in the gate.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor)
+- Docs: [manifest](building-blocks.yaml)
+- Revisit: a check proves brittle on legitimate code.
+
+### D-0025 · Gate: script richiesti solo se integrati
+- Meta: 2026-10-01; scope: feature; status: accepted
+- Question: With the confinement checks owned by wave 3–4 blocks, ControlliAdrTest keeps feature/incontro red until wave 4: accept it or relax the assertion?
+- Options: A red until wave 4, blocks integrated without a green gate; B require a cited script only once its from block is integrated (kept); C placeholder scripts passing on a missing target, against fail-closed.
+- Hypothesis: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user at the build-manifest checkpoint, [manifest](building-blocks.yaml)
+- Debate: the architect recommended B; it supersedes the "wave 1 first" reason of D-0023, the wave order stays.
+- Decision: B, a separate gate commit before wave 1 (like I0): a missing script with an unintegrated from is reported deferred. Cost: a gate file changes, the gate proof is redone once.
+- By: decided: user (Luca Parsani); recorded: Claude (model conductor); consulted: mismagent-architect
+- Docs: [manifest](building-blocks.yaml), [architecture overview](architetture/architecture-overview.md)
+- Revisit: a deferred check is forgotten after its block lands.

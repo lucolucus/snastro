@@ -154,3 +154,9 @@ before this ADR declared it. Correctness never depended on it, as stated above.)
   (`avvio.coda`).
 - **`--smoke`** stays in `main()` (`avvio.smoke`). Moving its Finte out of testFixtures (M2) is a later, separate
   decision.
+
+## Amendment 2026-10-01 — Parlanti's elimination subscription is nested ([ADR 0038](0038-elimina-parte-dell-incontro.md) §2)
+The declared module order **Sintesi → Parlanti → Trascrizione** is unchanged. Parlanti no longer subscribes to
+`RegistrazioneEliminata`: its purge runs on `TrascrittoEliminato`, published by Trascrizione's synchronous subscriber and
+delivered depth-first inside it. `ModuloSintesi` no longer exposes a `TrascrittoSostituito` subscriber (ADR 0037 §7).
+The check is unchanged.

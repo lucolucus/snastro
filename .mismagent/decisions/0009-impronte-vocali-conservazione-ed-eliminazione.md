@@ -86,3 +86,10 @@ project folder) may retain purged prints** — outside the app's control.
   moves, [INV-21], [INV-25], ADR 0018 and ADR 0020 (manifest AC-622).
 - The table `eliminazione_in_sospeso` (ADR 0020 §4) holds no biometric data. The caveat above about copies made
   outside the app is unchanged, and the S2 dialog makes no promise about them.
+
+## Amendment 2026-10-01 — prints per `Parte` (feature `incontro`, [ADR 0035](0035-voci-dell-incontro.md) §6, [ADR 0034](0034-persistenza-incontro-7sqm.md) §3)
+- A print is keyed by (`Parlante`, `VoceRef(incontroId, voceId)`, `Parte`) and records the `registrazioneId` it is sourced from.
+- New removal paths, all through the same deletion (`secure_delete` + after-commit checkpoint): every print sourced from a
+  re-transcribed or eliminated `Parte` ([INV-I8b]); a print whose (`Voce`, `Parte`) slice a `Revisione` emptied.
+- `7.sqm` copies every print into the rebuilt table and drops the old one; the open path checkpoints the WAL after that
+  migration. No other copy is created.

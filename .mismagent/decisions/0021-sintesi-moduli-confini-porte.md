@@ -262,3 +262,11 @@ and §5 fixed provisional values:
   `:modelli` and handed to the `..ml` adapter. `:sintesi:*` still has no edge to `:modelli`.
 - **Unchanged:** §4's port, its contract and everything else here.
 
+
+## Amendment 2026-10-01 — the `Riassunto` of an `Incontro` ([ADR 0033](0033-incontro-progetto-chiavi-confini.md) §4, [ADR 0037](0037-riassunto-dell-incontro.md)) [user D-0001, D-0004, D-0007]
+- §3: every Sintesi port, command, event and the queue listing is keyed by `incontroId`; a new port `LettoreIncontro`
+  (Progetto → Sintesi); `LettoreTrascritto.elaborazioneAperta` becomes `statoParte`. Shapes: ADR 0033 §4.
+- §4: the input line is `[s<k> V<n>] <testo>` with k the 1-based position in the one-pass input; `fonti` are those labels.
+- §6: **the sostituzione-trascritto policy and `AbbonatoTrascrizioneSintesi` are removed**; no automatic "Riassumi" exists.
+- §9: a `Riassunto` is deleted with the `Incontro` (its last `Parte`), never on `TrascrittoSostituito`.
+- This ADR's check is unchanged; ADR 0037 adds the prohibition on `TrascrittoSostituito` in Sintesi.

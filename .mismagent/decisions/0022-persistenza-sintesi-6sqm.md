@@ -187,3 +187,9 @@ Sintesi subscriber registered passes (in the `avvio-sintesi` e2e).
 - Enforcement: `enforced_by` above (presence + prohibition). It is exigible once
   `persistenza-sintesi` merges, and red by design before that. The index → error mapping and the CAS
   are covered by the repository contract. The "never edit a shipped `.sqm`" rule is CR-13 (review).
+
+## Amendment 2026-10-01 — re-keyed by `7.sqm` ([ADR 0034](0034-persistenza-incontro-7sqm.md), [ADR 0037](0037-riassunto-dell-incontro.md) §5)
+- `riassunto.registrazione_id` becomes `incontro_id` (IMMEDIATE FK to `incontro`); both partial unique indexes are on
+  `incontro_id`; `riassunto_fonte` gains `registrazione_id` (no FK); `struttura` is `StrutturaIncontro.chiave`
+  (`<registrazioneId>=<old encoding>` per `Parte`, joined by `;`), re-encoded by the migration so nothing becomes `superato`.
+- This ADR's two checks keep reading `6.sqm`, which is never edited; the live schema is checked by ADR 0034's.

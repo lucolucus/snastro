@@ -102,7 +102,7 @@ canonical terms of `context-map.md` exactly, **ASCII only** (`UltimaAttivita`, n
 technical scaffolding may be English. The context-map's "Not:" synonyms (e.g. `Speaker`, `Cluster`,
 `Transcript`, `Job`, `Utterance`, `Chunk`, `Embedding`, `Voiceprint`, `Score`, `Confidenza`,
 `Merge`, `Mapping`, `Workspace`, `Meeting`; *(2026-09-25, ADR 0021)* Sintesi's `Summary`, `Verbale`, `Report`, `Resoconto`,
-`Minuta`, and the other "Not:" terms of the `Sintesi` section) must not name a declaration in `*:dominio`,
+`Minuta`, and the other "Not:" terms of the `Sintesi` section) *(2026-10-01, feature `incontro`, ADR 0033: and the "Not:" terms of `Incontro`, `Parte` and `OraDiInizio` — e.g. `Riunione`, `Spezzone`, `Orario`; a term that already names a shipped declaration (e.g. `Sessione` in `SessioneProgetto`) stays out of the list; the Konsist list is extended by block `incontro-chiavi`)* must not name a declaration in `*:dominio`,
 `*:applicazione`, `:ui`. → gate lint: Konsist (declaration names vs the synonym list, kept in
 `architettura-test` next to the rule; non-ASCII identifiers rejected).
 

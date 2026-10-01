@@ -274,3 +274,10 @@ falsifiable, so it counts as coverage. The manifest is re-folded by `build-manif
   change.
 - **Wiring.** "Subscribers register on the dispatcher" is done by `:avvio`'s `apriProgetto`, from declared ordered
   lists of subscriber values. Adapters no longer register themselves in `init` (ADR 0030 §1–§2).
+
+## Amendment 2026-10-01 — feature `incontro` ([ADR 0035](0035-voci-dell-incontro.md), [ADR 0038](0038-elimina-parte-dell-incontro.md))
+- (b): `RiallineaImpronte` is keyed by `incontroId`; it still UPDATEs by compare-and-set and **never INSERTs** — a `Parte`
+  slice gained by `unire`/`riassegnare` gets a print only from a later `ConfermaAttribuzione`/`SaltaVoce`.
+- A synchronous subscriber may publish an event whose own synchronous subscribers run nested, depth-first, in the same
+  transaction (already the kernel dispatcher's behaviour): Trascrizione's elimination policy publishes `TrascrittoEliminato`
+  to the Parlanti purge. The `politiche`-never-extract check is unchanged and covers both.

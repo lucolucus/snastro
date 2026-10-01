@@ -4,6 +4,7 @@ type: spike
 side: app
 repo: .
 depends_on: [runtime-llm-in-app-spike]
+resolution: "incontro D-0010 + ADR-0026 §5–§6 (one pass; the 3 h time check is a tests_nl of the Incontro Riassunto block)"
 ---
 # Spike / How is a Registrazione longer than ≈ 1 h 15 summarized?
 

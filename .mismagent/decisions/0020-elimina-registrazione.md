@@ -293,3 +293,11 @@ the `avvio-parlanti` e2e (real SQLite, row counts per table).
 The `riassunto → registrazione` FK is IMMEDIATE, so a missing subscriber fails the delete (fails
 closed), just as the `elaborazione`/`trascritto` FKs do here. Release: R3 (`avvio-sintesi`). The rest
 of this ADR, and its `enforced_by`, are unchanged.
+
+## Amendment 2026-10-01 — eliminating a `Parte` ([ADR 0038](0038-elimina-parte-dell-incontro.md)) [user D-0003]
+- §1: `RegistrazioneEliminata` gains `incontroId` and `incontroCessato`.
+- §2: Parlanti no longer subscribes to `RegistrazioneEliminata`; Trascrizione's policy removes the `Parte` from the Voci
+  dell'Incontro and publishes `TrascrittoEliminato`, whose nested synchronous subscriber is the Parlanti purge; the
+  `incontro` row is removed by Progetto after the `registrazione` row when the last `Parte` goes.
+- §6: the non-last-`Parte` dialog is ADR 0038 §5; §7: [INV-28] is restated in ADR 0038 §3 (a non-last `Parte`'s `Fonte`s
+  survive in a `superato` `Riassunto`). This ADR's checks are unchanged.

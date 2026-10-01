@@ -64,3 +64,9 @@ The round-trip + concurrent-insert proof stays on `repository-sql-trascrizione` 
   `elaborazione_aperta_unica` → `ElaborazioneGiaAperta` only (R19 note above superseded on that point).
 - The Decision bullet "A new `Elaborazione` only if every previous one is `fallita` = both indexes together"
   is superseded by ADR 0018 §1.
+
+## Amendment 2026-10-01 — feature `incontro` ([ADR 0034](0034-persistenza-incontro-7sqm.md))
+- The set rules added since this ADR are re-keyed by `7.sqm`: [INV-S2]/[INV-S3] are now `riassunto_non_pronto_unico` /
+  `riassunto_pronto_unico` on `riassunto(incontro_id)`; "a `Voce` once per `Incontro`" is `voce_incontro`'s primary key;
+  one print per (`Parlante`, `Voce`, `Parte`) is `impronta_vocale`'s UNIQUE. Each partial unique index stays on ONE line.
+- INV-4 and INV-16 and this ADR's check are unchanged.

@@ -836,3 +836,8 @@ exactly: AC-484 and AC-485 are reworded for linkage by piece count and for the s
   - if any person is in the "intera Voce" mode: "Senza una frase confermata uso tutta la voce: il
     risultato può cambiare se ripeti. Conferma una frase per persona per renderlo stabile.";
   - if any attributed `attivo` person is frozen: "Non toccate: <Nomi>".
+
+## Amendment 2026-10-01 — [INV-27] over the `Incontro` ([ADR 0035](0035-voci-dell-incontro.md) §6)
+`PianoRiassegnazione` and the frasi di riferimento are computed over the whole `Incontro`: a reference `Parlante`'s target
+`Voce` is its lowest `voceId` in the `Incontro`; "≥ 1 `Segmento` left" is counted in the `Incontro`. The S3 preview line
+may split counts per `Parte` (UX). Checks unchanged.

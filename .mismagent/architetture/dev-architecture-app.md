@@ -163,6 +163,10 @@ public class Parlante private constructor(
   - *(2026-09-25, [ADR 0021](../decisions/0021-sintesi-moduli-confini-porte.md) §9)* the `Riassunto`: a previous `pronto` replaced on completion, a
     previous `fallito` removed by `Riassumi`, and every `Riassunto` of a `Registrazione` on `TrascrittoSostituito` /
     `RegistrazioneEliminata`.
+  - *(2026-10-01, feature `incontro`, [ADR 0038](../decisions/0038-elimina-parte-dell-incontro.md))* deleting a `Parte`: its
+    `Registrazione`, `Elaborazione`s and `Trascritto` (`rimuoviParte`), the prints sourced from it; with the LAST `Parte`
+    also the `Incontro` row, the Voci dell'Incontro root and every `Riassunto` of the `Incontro`. A `Riassunto` is no longer
+    deleted on `TrascrittoSostituito` ([ADR 0037](../decisions/0037-riassunto-dell-incontro.md) §7).
 
   The aggregate at most returns the domain event (`Registrazione.elimina()`, `Elaborazione.annulla()`).
 - `ricostituisci` is public (repositories live in another module) and gated by the kernel annotation

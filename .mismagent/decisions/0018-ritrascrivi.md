@@ -394,3 +394,14 @@ their behaviour on top.
 - Enforcement is discursive (code review): the cancellation never touches the Trascritto; the
   delete is conditional on `in_attesa` in the SQL itself; the claim reads the head inside its
   transaction.
+
+## Amendment 2026-10-01 — the Voci dell'Incontro (feature `incontro`, [ADR 0035](0035-voci-dell-incontro.md)) [user D-0002, D-0007]
+- §1: [INV-12] "scoped per generation" is replaced by [INV-I4] (a `Voce` number is never reused in the `Incontro`) and
+  [INV-I16] (a `segmentoId` is never reused in its `Registrazione`); the counters never restart. The rejected option
+  "monotonic numbering" is now the rule. The `Trascritto` is an entity of the `VociDellIncontro` root.
+- §3: the purge is per `Parte` ([INV-I8b]): the prints sourced from the re-transcribed `Parte` and the `Attribuzione`s of the
+  `Voce`s the replacement removed; a `Voce` with `Segmento`s in other `Parte`s keeps its name.
+- §4: the multi-part dialog text is ADR 0035 §8; the 1-part text is unchanged.
+- §5: `TrascrittoSostituito(registrazioneId, incontroId, vociRimosse)`; **Sintesi is no longer a consumer** (ADR 0037 §7).
+- Amendment (b) §2: read-only applies to every `Parte` page of the `Incontro` while any `Parte` is re-running (ADR 0035 §4).
+- This ADR's two checks are unchanged.

@@ -230,3 +230,31 @@ One composition, organised by context rather than by release. The release **meth
 - **`verificaDipendenzeModuli`** gains `":llama-jni" to emptySet()` and `:llama-jni` in `:sintesi:adattatori`'s set. It never
   gains an `:llm` row. The library block edits the build files.
 
+
+## Amendment 2026-10-01 (feature `incontro`, ADRs 0033–0039)
+No new module and no new edge; the edges table and `verificaDipendenzeModuli` are unchanged.
+- **`:kernel`** gains `IncontroId` and `SegmentoRef(registrazioneId, segmentoId)`; **`VoceRef` becomes `(incontroId, voceId)`**
+  ([ADR 0033](decisions/0033-incontro-progetto-chiavi-confini.md) §1). `EstrattoRef` is unchanged (one `Parte`).
+- **`:progetto:dominio`** gains the `Incontro` root, the `OraDiInizio` VO and the pure order `OrdineDelleParti` ([INV-I2]);
+  `Registrazione` gains `incontroId` (immutable) and `oraDiInizio`. **`:progetto:applicazione`**: `AggiungiRegistrazione`
+  (one command, destinations `NuovoIncontro | IncontriSeparati | Incontro(id)`), `ModificaOraDiInizio`, `IncontroRepository`,
+  `IncontriDelProgetto` (replaces `RegistrazioniDelProgetto`), `CatalogoRegistrazioni.incontro(id)`.
+- **`:trascrizione:dominio`**: the **`VociDellIncontro`** root (Voce counter + one `Trascritto` entity per transcribed
+  `Parte`; the `Revisione` methods, `completaParte`, `rimuoviParte`), replacing the `Trascritto` root
+  ([ADR 0035](decisions/0035-voci-dell-incontro.md)). `:trascrizione:applicazione`: `VociDellIncontroRepository`,
+  `AvviaElaborazioniDellIncontro` ([ADR 0039](decisions/0039-trascrivi-incontro-numero-persone.md)), `VociIncontro`,
+  `numeroPersonePrecompilato`, event `TrascrittoEliminato`.
+- **`:parlanti:applicazione`**: `PropostaTraParti` ([ADR 0036](decisions/0036-proposta-tra-parti.md)); every read keyed by
+  `incontroId`; prints per `Parte`.
+- **`:sintesi:*`**: the `Riassunto` keyed by `incontroId`, `StrutturaIncontro`, input labels, `LettoreIncontro`; the
+  sostituzione-trascritto policy and `AbbonatoTrascrizioneSintesi` are removed
+  ([ADR 0037](decisions/0037-riassunto-dell-incontro.md)).
+- **Boundaries:** the re-keyed ports are pinned once in ADR 0033 §4; the feature view is
+  `features/incontro/architetture/architecture-overview.md`.
+- **Deleting a `Registrazione`** (§ Transactions and events above) is now deleting a `Parte`
+  ([ADR 0038](decisions/0038-elimina-parte-dell-incontro.md)): Parlanti's purge runs on `TrascrittoEliminato`, nested inside
+  Trascrizione's subscriber; the declared order Sintesi → Parlanti → Trascrizione is unchanged; the `incontro` row goes with
+  the last `Parte`.
+- **Schema:** `7.sqm` (7 → 8) ([ADR 0034](decisions/0034-persistenza-incontro-7sqm.md)).
+- **R1 read-models per owning context** still applies: S2's `Incontro` rows are `IncontriDelProgetto` (Progetto) ⨝
+  `stati-elaborazione` + `VociIncontro` (Trascrizione) ⨝ `identificazione-incontri` (Parlanti) ⨝ `PosizioniNellaCoda`.

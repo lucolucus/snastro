@@ -196,3 +196,8 @@ The LLM runs on the queue's dedicated worker thread (`runInterruptible`, as the 
   broken by a `Campanello` wake-up handle, not by an `AtomicReference`.
 - **Home.** The queue lives in `snastro.avvio.coda`. §4 (the position is computed by the owner) and this ADR's check
   are unchanged.
+
+## Amendment 2026-10-01 — feature `incontro` ([ADR 0037](0037-riassunto-dell-incontro.md) §1, [ADR 0039](0039-trascrivi-incontro-numero-persone.md))
+- §1/§4/§5: `Riassunto` items, `PosizioniNellaCoda.riassunti` and the best-effort cancel are keyed by `incontroId`.
+- §2: the `Elaborazione`s created by one "Trascrivi" on an `Incontro` carry strictly increasing `creataAlle` in `Parte` order,
+  so the unchanged order key serves them in `Parte` order. The check is unchanged.

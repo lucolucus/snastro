@@ -219,3 +219,8 @@ print goes stale (ADR 0012 (b)) whenever the two roles share the id.
 - **Why.** The old setup is unstable: a 10 ms shift changes the split, and stability is 0.63
   (fix-batch-18). The new one scores 0.94. Even the stable setup is not correct on these voices
   [user listening check], hence the semi-automatic flow of ADR 0019 §3–§6.
+
+## Amendment 2026-10-01 — one `Numero di persone` per `Incontro` ([ADR 0039](0039-trascrivi-incontro-numero-persone.md)) [user D-0015]
+"Trascrivi" on an `Incontro` applies ONE optional `Numero di persone` to every untranscribed `Parte`, queued in `Parte` order;
+the prefill of every field of the `Incontro` is the latest value used in it. The value stays stored per `Elaborazione`,
+immutable, 1..10 or absent; "Riprova"/"Ritrascrivi" stay per `Parte`.

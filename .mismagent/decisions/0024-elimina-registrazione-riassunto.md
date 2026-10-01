@@ -100,3 +100,8 @@ refuses the delete on the FK. It fails closed, and the error surfaces as an infr
   manifest delta for ADR 0020 is not edited. This feature's manifest carries the new ACs.
 - **Dependency:** ADR 0020's blocks (`RegistrazioneEliminata`, `5.sqm`) are being built on the
   sibling branch. This feature's subscriber block depends on them.
+
+## Amendment 2026-10-01 — only with the last `Parte` ([ADR 0038](0038-elimina-parte-dell-incontro.md), [ADR 0037](0037-riassunto-dell-incontro.md) §7) [user D-0003]
+- §1: the Sintesi policy removes every `Riassunto` of the `Incontro` iff `incontroCessato`; for a non-last `Parte` it does
+  nothing and the `Riassunto` becomes `superato` by derivation.
+- §2/§3: [INV-28] and the dialog text are ADR 0038 §3 and §5. The fail-closed IMMEDIATE FK now targets `incontro`.
