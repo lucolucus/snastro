@@ -7,7 +7,7 @@ wave: 3
 release: I1
 high_value: true
 model_hint: deep
-module: ":sintesi:dominio"
+module: ":sintesi:dominio + compile-only, behaviour-neutral edits in :sintesi:applicazione, :sintesi:adattatori (RiassuntoMappingSql, RiassuntoRepositorySql.scriviFigli) and :ui (MessaggiErrore) — D-0033"
 consumes:
   - kernel-incontro
 reuses:
@@ -50,7 +50,7 @@ Amend the Riassunto root to the Incontro: Fonti are SegmentoRef, the recorded st
 - INV-I10 an answer citing fonti [3, 9] keeps the Fonte (B,2) and drops label 9 (outside 1..N, counted by the existing rules); a PuntoChiave with Fonti in A and B whose speaker is the Voce of the B Fonte stays bound
 - INV-I10 a Responsabile V9 that is not a Voce of the Incontro as read is unbound (element kept); a text token {V9} drops the element and counts it
 - INV-I11 StrutturaIncontro.chiave of [A: {1→1, 2→2}, B: {1→3}] is 'A=1:1,2:2;B=1:3'; superato false for the same structure; true after a Revisione across Parti, a re-transcription of B (new ids), a reorder (B before A), the removal of B, the import of C (current 'C=' appended); false again when the exact structure is restored; renaming a Parlante never changes it
-- INV-I9 Riassumibilita table test: Parti [TRASCRITTA, DA_TRASCRIVERE] → PartiNonTrascritte(parte 2); [IN_TRASCRIZIONE, TRASCRITTA] → ElaborazioneAperta(parte 1); [NON_RIUSCITA] → PartiFallite(parte 1); several blocking → the first in Parte order; model not installed first; all ok → Ok
+- INV-I9 Riassumibilita table test: Parti [TRASCRITTA, DA_TRASCRIVERE] → PartiNonTrascritte(parte 2); [IN_TRASCRIZIONE, TRASCRITTA] → ElaborazioneGiaAperta(parte 1); [NON_RIUSCITA] → PartiFallite(parte 1); several blocking → the first in Parte order; model not installed first; all ok → Ok
 - AC-I17 a 1-part Incontro: the struttura chiave is '<registrazioneId>=' + the old StrutturaTrascritto encoding (the 7.sqm re-encoding), so an unchanged Trascritto compares equal (INV-I3)
 
 ## Dependencies
@@ -69,5 +69,8 @@ Amend the Riassunto root to the Incontro: Fonti are SegmentoRef, the recorded st
   - key `incontroId`: minted by aggiungi-registrazione-incontro via GeneratoreId (UUID v4) for every new Incontro; by 7.sqm for migrated ones (equal to their Registrazione's id, a migration fact no code relies on) — immutable, never reused
   - key `voceId`: minted by voci-dell-incontro from the Incontro counter (prossimaVoce) — unique in the Incontro, never reused (INV-I4)
   - key `segmentoId`: minted by voci-dell-incontro from the Parte's prossimoSegmento — unique in its Registrazione across generations (INV-I16)
+
+## Notes
+D-0033 (user): the pinned shapes break callers owned by wave-5/6 blocks, so this block also makes them compile with NO behaviour change (each caller wraps its one Parte as a 1-Parte StrutturaIncontro and uses the label table); multi-Parte behaviour stays with riassumi-/esegui-riassunto-/riassunto-vista-incontro and adattatori-sintesi-incontro. The too-long refusal is renamed RegistrazioneTroppoLunga → IngressoTroppoLungo (ADR 0037 §2), user-facing text unchanged. SegmentoIngresso gains registrazioneId (worker decision).
 
 Sources: ADR 0037 §2-§5 · tactical-model.md § Sintesi · decisions.md D-0010, D-0020

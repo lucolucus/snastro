@@ -437,3 +437,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker (incontro-chiavi, opus); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md), [pre-release](pre-release.md)
 - Revisit: a block of I2 is ready before those three are integrated.
+
+### D-0033 · Riassunto-incontro compila i chiamanti
+- Meta: 2026-10-02; scope: block:riassunto-incontro; status: accepted
+- Question: The pinned Riassunto shapes (Fonti as SegmentoRef, new ErroreSintesi cases, new signatures) break callers owned by wave-5/6 blocks; how does the aggregate land green?
+- Options: A widen the block to compile-only, behaviour-neutral edits in sintesi applicazione/adattatori and ui (kept); B keep old shapes beside the new until waves 5/6, pins amended plus a cleanup node; C move parts of four later blocks here.
+- Hypothesis: n/a — decided by the user on the worker's BOUNCED report, [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+- Check: n/a — decided by the user on the worker's BOUNCED report, [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+- Result: n/a — decided by the user on the worker's BOUNCED report, [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+- Debate: same pattern as incontro-chiavi (D-0031); the user also renamed RegistrazioneTroppoLunga to IngressoTroppoLungo as ADR 0037 §2 names it.
+- Decision: A; each caller treats its one Parte as a 1-Parte StrutturaIncontro, multi-Parte behaviour stays in waves 5/6. Cost: a wider diff to review.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (riassunto-incontro)
+- Docs: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+- Revisit: none expected.
