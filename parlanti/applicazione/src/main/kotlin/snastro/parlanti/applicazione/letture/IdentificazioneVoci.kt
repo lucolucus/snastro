@@ -6,8 +6,10 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
+import snastro.parlanti.applicazione.porte.vociDellaParte
 import snastro.parlanti.dominio.TipoParlante
 
 /**
@@ -19,10 +21,11 @@ public class IdentificazioneVoci(
     private val voci: LettoreVoci,
     private val attribuzioni: AttribuzioneRepository,
     private val parlanti: ParlanteRepository,
+    private val registrazioni: LettoreRegistrazione,
 ) {
     /** AC-169: one entry per Voce of [id]'s Trascritto, in [LettoreVoci] order; empty without one. */
     public fun voci(id: RegistrazioneId): List<VoceIdentificata> =
-        (voci.voci(id) ?: emptyList()).map { identifica(it.voceRef) }
+        (voci.vociDellaParte(id, registrazioni) ?: emptyList()).map { identifica(it.voceRef) }
 
     private fun identifica(voceRef: VoceRef): VoceIdentificata {
         val parlante = attribuzioni.trova(voceRef)?.let { parlanti.trova(it.parlanteId) }

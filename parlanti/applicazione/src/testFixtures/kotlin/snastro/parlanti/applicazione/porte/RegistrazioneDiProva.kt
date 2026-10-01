@@ -34,5 +34,6 @@ public fun ogniRegistrazioneNota(progettoId: ProgettoId = ProgettoId("progetto-1
     object : LettoreRegistrazione {
         override fun registrazione(id: RegistrazioneId): RegistrazioneVista = unaRegistrazioneVista(id, progettoId)
 
-        override fun parti(incontroId: IncontroId): List<RegistrazioneId> = listOf(unicaParteDi(incontroId))
+        override fun parti(incontroId: IncontroId): List<ParteDiIncontroParlanti> =
+            unicaParteDi(incontroId).let { listOf(ParteDiIncontroParlanti(it, 1, unaRegistrazioneVista(it).dataRegistrazione)) }
     }

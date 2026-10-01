@@ -5,11 +5,10 @@ import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
-import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AmbienteLettoreVoci
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.LettoreVociContratto
@@ -109,7 +108,14 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
 
         override val lettore: LettoreVoci = LettoreVociDaTrascrizione(
             VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste)),
+            LettoreRegistrazioneDaProgetto(catalogo),
         )
+
+        /** D-0037: off until the I2 multi-file import into an Incontro lands (then seeded through it). */
+        override val piuPartiPerIncontro: Boolean = false
+
+        override fun aggiungiParte(incontroId: IncontroId): RegistrazioneId =
+            error("Progetto non importa ancora una parte in un Incontro esistente (rilascio I2)")
 
         override fun aggiungiRegistrazione(): RegistrazioneId {
             val percorso = "/sorgenti/registrazione-${contatore++}.wav"
@@ -134,7 +140,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             val v = checkNotNull(catalogo.registrazione(id))
             registrazioniViste[id] = RegistrazioneVista(
                 registrazioneId = v.registrazioneId,
-                incontroId = unIncontroDi(v.registrazioneId),
+                incontroId = v.incontroId,
                 progettoId = v.progettoId,
                 titolo = v.titolo,
                 riferimentoAudio = v.riferimentoAudio,
@@ -152,7 +158,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             val diarizzatore = DiarizzatoreFinta(turni.map { Turno(it.intervallo, it.voceIndice) })
             eseguiPipeline(registrazioneId, diarizzatore, AllineatoreConIndice())
 
-            val trascritto = checkNotNull(trascritti.trova(registrazioneId, unIncontroDi(registrazioneId)))
+            val trascritto = checkNotNull(trascritti.trova(registrazioneId, incontroDi(registrazioneId)))
             val perIndice = trascritto.segmenti.associateBy { it.testo.toInt() }
             return turni.indices.map { i ->
                 val segmento = perIndice.getValue(i)
@@ -160,7 +166,9 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             }
         }
 
-        override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId = unIncontroDi(registrazioneId)
+        // The supplier's own public read API: the Incontro AggiungiRegistrazione minted for the Registrazione.
+        override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId =
+            registrazioniViste.getValue(registrazioneId).incontroId
 
         override fun fallisciElaborazione(registrazioneId: RegistrazioneId) {
             avvia(registrazioneId)
@@ -168,7 +176,8 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             eseguiPipeline(registrazioneId, DiarizzatoreFinta(emptyList()), AllineatoreConIndice())
         }
 
-        override fun unisci(registrazioneId: RegistrazioneId, sopravvive: VoceId, rimossa: VoceId) {
+        override fun unisci(incontroId: IncontroId, sopravvive: VoceId, rimossa: VoceId) {
+            val registrazioneId = unicaParte(incontroId)
             UnisciVociServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
@@ -179,40 +188,46 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
                 .atteso()
         }
 
-        override fun dividi(registrazioneId: RegistrazioneId, origine: VoceId, segmenti: Set<SegmentoId>): VoceId {
+        override fun dividi(incontroId: IncontroId, origine: VoceId, segmenti: Set<SegmentoRef>): VoceId {
+            val registrazioneId = unicaParte(incontroId)
+            require(segmenti.all { it.registrazioneId == registrazioneId })
             DividiVoceServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
                 LettoreRegistrazioneFinta(registrazioniViste),
                 eventiTrascrizione,
             )
-                .esegui(DividiVoce(registrazioneId, origine, segmenti))
+                .esegui(DividiVoce(registrazioneId, origine, segmenti.map { it.segmentoId }.toSet()))
                 .atteso()
             return eventiTrascrizione.pubblicati.filterIsInstance<VoceDivisa>().last().nuova
         }
 
-        override fun riassegna(registrazioneId: RegistrazioneId, segmento: SegmentoId, destinazione: VoceId?): VoceId {
+        override fun riassegna(segmento: SegmentoRef, destinazione: VoceId?): VoceId {
             RiassegnaSegmentoServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
                 LettoreRegistrazioneFinta(registrazioniViste),
                 eventiTrascrizione,
             )
-                .esegui(RiassegnaSegmento(registrazioneId, segmento, destinazione))
+                .esegui(RiassegnaSegmento(segmento.registrazioneId, segmento.segmentoId, destinazione))
                 .atteso()
             return eventiTrascrizione.pubblicati.filterIsInstance<SegmentoRiassegnato>().last().a
         }
 
-        override fun conferma(registrazioneId: RegistrazioneId, segmento: SegmentoId) {
+        override fun conferma(segmento: SegmentoRef) {
             ConfermaSegmentoServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
                 LettoreRegistrazioneFinta(registrazioniViste),
                 eventiTrascrizione,
             )
-                .esegui(ConfermaSegmento(registrazioneId, segmento, confermato = true))
+                .esegui(ConfermaSegmento(segmento.registrazioneId, segmento.segmentoId, confermato = true))
                 .atteso()
         }
+
+        /** One Parte per Incontro until the I2 import: the seeded Registrazione of [incontroId]. */
+        private fun unicaParte(incontroId: IncontroId): RegistrazioneId =
+            registrazioniViste.values.single { it.incontroId == incontroId }.registrazioneId
 
         private fun avvia(registrazioneId: RegistrazioneId) {
             AvviaElaborazioneServizio(
