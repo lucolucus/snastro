@@ -1,0 +1,7 @@
+package snastro.trascrizione.dominio
+
+class VociDellIncontro(prossimaVoce: Int) {
+    private var _prossimaVoce = prossimaVoce
+    val prossimaVoce: Int get() = _prossimaVoce
+    val prossimoSegmento: Int = 1
+}

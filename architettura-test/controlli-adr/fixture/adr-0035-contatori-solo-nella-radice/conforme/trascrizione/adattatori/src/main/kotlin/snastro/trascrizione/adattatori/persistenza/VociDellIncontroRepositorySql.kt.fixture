@@ -1,0 +1,3 @@
+package snastro.trascrizione.adattatori.persistenza
+
+fun salva(v: VociDellIncontro) = q.aggiorna(v.incontroId, v.prossimaVoce, v.trascritti.map { it.prossimoSegmento })

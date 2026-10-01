@@ -1,0 +1,8 @@
+package snastro.trascrizione.applicazione.letture
+
+/**
+ * Never decides on prossimaVoce or prossimoSegmento: asks the root.
+ */
+// prossimaVoce is read only by the root
+fun vista(v: VociDellIncontro) = v.voci.map { it.numero } // not v.prossimaVoce
+val prossimaVoceMostrata = 0
