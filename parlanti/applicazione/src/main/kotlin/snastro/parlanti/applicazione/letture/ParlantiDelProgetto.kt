@@ -31,7 +31,10 @@ public class ParlantiDelProgetto(
     private fun riga(p: Parlante): ParlanteDelProgetto {
         // AC-175/AC-176: distinct registrazioneId (una Voce unita/proposta di unione puo dare piu
         // Attribuzioni nella STESSA Registrazione, INV-22) — mai toccate da EliminaParlante.
-        val registrazioniIds = attribuzioni.diParlante(p.id).map { it.voceRef.registrazioneId }.distinct()
+        // ADR 0033 §4.1: an Attribuzione is per Voce of the Incontro; its Registrazioni are the Incontro's Parti.
+        val registrazioniIds = attribuzioni.diParlante(p.id).map { it.voceRef.incontroId }.distinct()
+            .flatMap { registrazioni.parti(it).orEmpty() }
+            .distinct()
         val ultimaApparizione = registrazioniIds
             .mapNotNull { registrazioni.registrazione(it)?.dataRegistrazione }
             .maxOrNull()

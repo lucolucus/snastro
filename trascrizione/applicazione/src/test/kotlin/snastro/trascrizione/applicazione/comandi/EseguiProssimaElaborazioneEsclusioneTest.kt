@@ -9,6 +9,7 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.porte.Allineatore
 import snastro.trascrizione.applicazione.porte.AllineatoreFinta
@@ -115,6 +116,7 @@ class EseguiProssimaElaborazioneEsclusioneTest {
     private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio, durataMs: Long): RegistrazioneVista =
         RegistrazioneVista(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             progettoId = PROGETTO,
             titolo = "Riunione",
             riferimentoAudio = riferimento,

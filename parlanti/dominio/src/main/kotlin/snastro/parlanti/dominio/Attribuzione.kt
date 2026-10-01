@@ -30,13 +30,13 @@ public class Attribuzione private constructor(
 
     /**
      * POLICY-ONLY re-keying ([INV-21] unire inheritance, ADR 0012 Amendment (b) point 4): the same
-     * Parlante and Progetto under key [a] (a Voce of the same Registrazione). Checks NO Parlante state —
+     * Parlante and Progetto under key [a] (a Voce of the same Incontro). Checks NO Parlante state —
      * valid for an `eliminato` tombstone, the explicit [INV-13]/[INV-17] exception — and emits no event.
      * Never used by a command (`ConfermaAttribuzione`, `SaltaVoce`): §14 gate on `comandi/`.
      */
     public fun trasferisci(a: VoceRef): Attribuzione {
-        require(a.registrazioneId == voceRef.registrazioneId) {
-            "trasferisci resta nella Registrazione ${voceRef.registrazioneId}: ricevuto $a"
+        require(a.incontroId == voceRef.incontroId) {
+            "trasferisci resta nell'Incontro ${voceRef.incontroId}: ricevuto $a"
         }
         return Attribuzione(a, progettoId, _parlanteId)
     }

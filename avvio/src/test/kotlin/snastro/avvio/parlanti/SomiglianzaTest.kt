@@ -169,7 +169,7 @@ class SomiglianzaTest {
     /** Segmenti, attribuzioni and print rows of [id] — what "nothing written" compares. */
     private fun righe(a: AmbienteProgetto, id: RegistrazioneId): Triple<Any, Any, Any> = Triple(
         segmenti(a, id),
-        AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id).map { it.voceRef to it.parlanteId },
+        AttribuzioneRepositorySql(a.porte.database).diIncontro(a.incontroDi(id)).map { it.voceRef to it.parlanteId },
         ParlanteRepositorySql(a.porte.database, a.porte.lettura).impronteDiRegistrazione(id).size,
     )
 
@@ -207,7 +207,7 @@ class SomiglianzaTest {
             assertEquals(VoceId(3), voceDi(a, id, 9), "l'incerta resta dov'era")
             assertEquals(listOf(VoceId(4), VoceId(4)), listOf(4, 6).map { voceDi(a, id, it) })
             assertEquals(listOf(1, 2), segmenti(a, id).filter { it.confermato }.map { it.segmentoId.numero })
-            val attribuzioni = AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id)
+            val attribuzioni = AttribuzioneRepositorySql(a.porte.database).diIncontro(a.incontroDi(id))
             assertEquals(listOf(1, 2, 4), attribuzioni.map { it.voceRef.voceId.numero }.sorted(), "Luca tiene Voce 4")
 
             attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rigenerata") {
@@ -319,7 +319,7 @@ class SomiglianzaTest {
             val nuova = voceDi(a, id, 4)
             assertEquals(VoceId(5), nuova)
             assertTrue(segmenti(a, id).single { it.segmentoId == SegmentoId(4) }.confermato)
-            val attribuzione = AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id).single()
+            val attribuzione = AttribuzioneRepositorySql(a.porte.database).diIncontro(a.incontroDi(id)).single()
             assertEquals(nuova, attribuzione.voceRef.voceId)
             val dariano = a.parlanti.letture.parlantiDelProgetto().single { it.nome == "Dario" }
             assertEquals(attribuzione.parlanteId, dariano.parlanteId)
@@ -329,13 +329,13 @@ class SomiglianzaTest {
                 sbobinatura(a, id)?.contains("**Dario**") == true
             }
 
-            val prima = AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id).size
+            val prima = AttribuzioneRepositorySql(a.porte.database).diIncontro(a.incontroDi(id)).size
             val parlanti = a.parlanti.letture.parlantiDelProgetto().size
             val esito = frase(a, id, 6, PassiNominaFrase.NuovaVoce(dario))
             checkNotNull(esito).erroreAtteso<ErroreParlanti.NomeGiaInUso>()
             assertEquals(VoceId(6), voceDi(a, id, 6), "la nuova Voce esiste, senza nome")
             assertTrue(segmenti(a, id).single { it.segmentoId == SegmentoId(6) }.confermato)
-            assertEquals(prima, AttribuzioneRepositorySql(a.porte.database).diRegistrazione(id).size)
+            assertEquals(prima, AttribuzioneRepositorySql(a.porte.database).diIncontro(a.incontroDi(id)).size)
             assertEquals(parlanti, a.parlanti.letture.parlantiDelProgetto().size)
         }
     }

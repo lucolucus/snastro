@@ -11,6 +11,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianzaFinta
 import snastro.parlanti.applicazione.porte.Classificazione
@@ -22,6 +23,7 @@ import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
+import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -458,7 +460,7 @@ class PianoRiassegnazioneTest {
         attribuisci(ambiente, 1, p)
         attribuisci(ambiente, 2, q)
         val parlantiPrima = ambiente.parlanti.delProgetto(PROGETTO).size
-        val attribuzioniPrima = ambiente.attribuzioni.diRegistrazione(REGISTRAZIONE).size
+        val attribuzioniPrima = ambiente.attribuzioni.diIncontro(unIncontroDi(REGISTRAZIONE)).size
 
         ambiente.api.calcola(REGISTRAZIONE) { _, _ -> }.atteso()
         assertEquals(2, estrattoreSpia.chiamate)
@@ -466,7 +468,7 @@ class PianoRiassegnazioneTest {
         assertEquals(4, estrattoreSpia.chiamate, "il secondo calcola estrae di nuovo, nessuna impronta e trattenuta")
 
         assertEquals(parlantiPrima, ambiente.parlanti.delProgetto(PROGETTO).size)
-        assertEquals(attribuzioniPrima, ambiente.attribuzioni.diRegistrazione(REGISTRAZIONE).size)
+        assertEquals(attribuzioniPrima, ambiente.attribuzioni.diIncontro(unIncontroDi(REGISTRAZIONE)).size)
     }
 
     @Test
@@ -649,7 +651,11 @@ class PianoRiassegnazioneTest {
 
     private fun attribuisci(ambiente: Ambiente, voce: Int, parlante: Parlante) {
         ambiente.parlanti.salva(parlante).atteso()
-        val attribuzione = Attribuzione.conferma(VoceRef(REGISTRAZIONE, VoceId(voce)), PROGETTO, parlante.id).aggregato
+        val attribuzione = Attribuzione.conferma(
+            VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(voce)),
+            PROGETTO,
+            parlante.id,
+        ).aggregato
         ambiente.attribuzioni.salva(attribuzione)
     }
 
@@ -688,7 +694,15 @@ class PianoRiassegnazioneTest {
         private val uow = UnitaDiLavoroFinta()
         private val segmentiVivi = segmenti.toMutableList()
         private val dati = mutableMapOf(REGISTRAZIONE to segmentiVivi.toList())
-        private val lettore: LettoreVoci = lettoreVoci ?: LettoreVociFinta(segmenti = dati)
+        private val lettore: LettoreVoci = lettoreVoci ?: object : LettoreVoci {
+            private val finta get() = LettoreVociFinta(segmenti = dati)
+
+            // The Voci of the Parte, derived live from its Segmenti: their VoceRefs key the Attribuzioni (ADR 0033).
+            override fun voci(id: RegistrazioneId): List<VoceVista>? = dati[id]?.groupBy { it.voceId }
+                ?.map { (v, segs) -> VoceVista(VoceRef(unIncontroDi(id), v), segs.map { it.intervallo }) }
+
+            override fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce>? = finta.segmenti(id)
+        }
         val api: PianoRiassegnazioneQuery = PianoRiassegnazioneQuery(
             lettore,
             attribuzioni,

@@ -7,6 +7,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.AllineatoreFinta
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
@@ -61,6 +62,7 @@ class EseguiProssimaElaborazioneNumeroPersoneTest {
 
     private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio) = RegistrazioneVista(
         registrazioneId = id,
+        incontroId = unIncontroDi(id),
         progettoId = ProgettoId("progetto-1"),
         titolo = "Riunione",
         riferimentoAudio = riferimento,

@@ -1,10 +1,14 @@
 package snastro.sintesi.dominio
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import java.time.Instant
+
+/** The one Parte the fixture Riassunti are verified against (ADR 0033 §4.1). */
+internal val PARTE: RegistrazioneId = RegistrazioneId("parte-1")
 
 internal val RICHIESTO_ALLE: Instant = Instant.parse("2026-09-26T10:00:00Z")
 internal val AVVIATO_ALLE: Instant = Instant.parse("2026-09-26T10:01:00Z")
@@ -15,7 +19,7 @@ internal fun unaStruttura(vararg coppie: Pair<Int, Int> = arrayOf(1 to 1, 2 to 2
 
 internal fun unRiassunto(parole: Int = LunghezzaMassimaParole.PREDEFINITA): Riassunto = Riassunto.richiedi(
     RiassuntoId("id-1"),
-    RegistrazioneId("id-2"),
+    IncontroId("id-2"),
     argomento = null,
     lunghezzaMassima = LunghezzaMassimaParole.di(parole).atteso(),
     richiestoAlle = RICHIESTO_ALLE,

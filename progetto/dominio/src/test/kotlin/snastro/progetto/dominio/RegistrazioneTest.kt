@@ -1,5 +1,6 @@
 package snastro.progetto.dominio
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -23,6 +24,7 @@ class RegistrazioneTest {
         Registrazione.aggiungi(
             id = id,
             progettoId = progettoId,
+            incontroId = IncontroId("incontro-di-${id.valore}"),
             titolo = "Intervista Marco",
             riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
             durataMs = 3_600_000L,

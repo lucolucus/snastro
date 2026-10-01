@@ -13,6 +13,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.letture.Candidato
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
@@ -45,7 +47,7 @@ internal val V3 = VoceId(3)
 internal val MARCO = ParlanteAttivo(ParlanteId("p-marco"), "Marco", TipoParlanteVista.RICORRENTE)
 internal val GIULIA = ParlanteAttivo(ParlanteId("p-giulia"), "Giulia", TipoParlanteVista.OCCASIONALE)
 
-internal fun ref(voce: VoceId) = VoceRef(REG, voce)
+internal fun ref(voce: VoceId) = VoceRef(unIncontroDi(REG), voce)
 
 /**
  * A [SorgentiParlanti] a test can pass where the Voci panel itself is not under test (ADR 0030 §1, U1:
@@ -89,6 +91,7 @@ internal fun unTrascritto(
     ),
 ) = TrascrittoView(
     registrazioneId = REG,
+    incontroId = unIncontroDi(REG),
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = LocalDate.of(2026, 3, 12),
     durataMs = 10_000,
@@ -157,7 +160,7 @@ internal class AmbienteVoci(
         },
         unioni = { unioni },
         parlantiAttivi = { attivi },
-        estratto = { r -> EstrattoRef(r.registrazioneId, listOf(IntervalloMs(0, 500))) },
+        estratto = { r -> EstrattoRef(unicaParteDi(r), listOf(IntervalloMs(0, 500))) },
         comandi = comandi,
         unisci = { c -> revisione(c) },
         dividi = { c -> revisione(c) },

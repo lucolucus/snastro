@@ -15,10 +15,11 @@ public class TrascrittoQuery(
 ) {
     /** AC-167: the full view of [registrazioneId]'s Trascritto; AC-168: `null` without one. */
     public fun vista(registrazioneId: RegistrazioneId): TrascrittoView? =
-        trascritti.trova(registrazioneId)?.let { trascritto ->
-            registrazioni.registrazione(registrazioneId)?.let { registrazione ->
+        registrazioni.registrazione(registrazioneId)?.let { registrazione ->
+            trascritti.trova(registrazioneId, registrazione.incontroId)?.let { trascritto ->
                 TrascrittoView(
                     registrazioneId = registrazioneId,
+                    incontroId = trascritto.incontroId,
                     titolo = registrazione.titolo,
                     dataRegistrazione = registrazione.dataRegistrazione,
                     durataMs = registrazione.durataMs,

@@ -6,6 +6,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
@@ -43,7 +44,9 @@ class IdentificazioneVociTest {
         val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoce(1))))
         val marco = unParlante("id-1", "Marco", TipoParlante.RICORRENTE)
         parlanti.salva(marco).atteso()
-        attribuzioni.salva(Attribuzione.conferma(VoceRef(REGISTRAZIONE, VoceId(1)), PROGETTO, marco.id).aggregato)
+        attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)), PROGETTO, marco.id).aggregato,
+        )
         val api = IdentificazioneVoci(voci, attribuzioni, parlanti)
 
         assertEquals(
@@ -57,7 +60,9 @@ class IdentificazioneVociTest {
         val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoce(1))))
         val ospite = unParlante("id-2", "Ospite", TipoParlante.OCCASIONALE)
         parlanti.salva(ospite).atteso()
-        attribuzioni.salva(Attribuzione.conferma(VoceRef(REGISTRAZIONE, VoceId(1)), PROGETTO, ospite.id).aggregato)
+        attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)), PROGETTO, ospite.id).aggregato,
+        )
         val api = IdentificazioneVoci(voci, attribuzioni, parlanti)
 
         assertEquals(TipoParlanteVista.OCCASIONALE, api.voci(REGISTRAZIONE).single().tipoParlante)
@@ -68,7 +73,9 @@ class IdentificazioneVociTest {
         val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoce(1), unaVoce(2), unaVoce(3))))
         val marco = unParlante("id-1", "Marco", TipoParlante.RICORRENTE)
         parlanti.salva(marco).atteso()
-        attribuzioni.salva(Attribuzione.conferma(VoceRef(REGISTRAZIONE, VoceId(2)), PROGETTO, marco.id).aggregato)
+        attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2)), PROGETTO, marco.id).aggregato,
+        )
         val api = IdentificazioneVoci(voci, attribuzioni, parlanti)
 
         assertEquals(
@@ -81,7 +88,7 @@ class IdentificazioneVociTest {
         )
     }
 
-    private fun unaVoce(n: Int): VoceVista = VoceVista(VoceRef(REGISTRAZIONE, VoceId(n)), emptyList())
+    private fun unaVoce(n: Int): VoceVista = VoceVista(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(n)), emptyList())
 
     private fun unParlante(id: String, nome: String, tipo: TipoParlante): Parlante =
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(nome).atteso(), tipo).aggregato

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
@@ -29,8 +30,8 @@ import kotlin.test.fail
  * meaningful only on this real SQL D2 — `databaseInMemoria()` never contends, only a real FILE database
  * makes `BEGIN IMMEDIATE` (`persistenza/AperturaDatabase.kt`) serialise concurrent writers. Two
  * [UnitaDiLavoroSql] threads race [RiassuntoRepositorySql.concludi] (an `in_corso` Riassunto completing
- * to `pronto`) against [RiassuntoRepositorySql.rimuoviDiRegistrazione] (as the eliminazione-registrazione
- * / sostituzione-trascritto policies call it) on the SAME Registrazione, repeated [RIPETIZIONI] times on
+ * to `pronto`) against [RiassuntoRepositorySql.rimuoviDiIncontro] (as the eliminazione-registrazione
+ * policy calls it) on the SAME Incontro, repeated [RIPETIZIONI] times on
  * fresh rows.
  *
  * `riassunto_elemento`/`riassunto_fonte` carry a real, non-deferrable FK to `riassunto`/`riassunto_elemento`
@@ -108,7 +109,7 @@ class RiassuntoRepositorySqlConcorrenzaTest {
             rimozioneEsito.set(
                 runCatching {
                     via.await(ATTESA_S, TimeUnit.SECONDS)
-                    uow.inTransazione { repo.rimuoviDiRegistrazione(registrazioneId) }
+                    uow.inTransazione { repo.rimuoviDiIncontro(unIncontroDi(registrazioneId)) }
                 },
             )
         }
@@ -127,7 +128,7 @@ class RiassuntoRepositorySqlConcorrenzaTest {
         // wins (Ok(false), r absent when concludi re-reads): both `precedente` and `r` are still there
         // when rimuoviDiRegistrazione runs first (2 rows).
         assertEquals(if (concludi) 1 else 2, rimozione, "giro $giro: righe rimosse coerenti con l'esito")
-        assertEquals(emptyList(), repo.diRegistrazione(registrazioneId), "giro $giro: riga resuscitata")
+        assertEquals(emptyList(), repo.trova(unIncontroDi(registrazioneId)), "giro $giro: riga resuscitata")
         assertTrue(elementiOrfani(db, r.id.valore).isEmpty(), "giro $giro: elemento orfano di riassunto-$giro")
         assertTrue(fontiOrfane(db, r.id.valore).isEmpty(), "giro $giro: fonte orfana di riassunto-$giro")
         assertTrue(
@@ -136,7 +137,7 @@ class RiassuntoRepositorySqlConcorrenzaTest {
         )
         assertTrue(fontiOrfane(db, precedente.id.valore).isEmpty(), "giro $giro: fonte orfana di precedente-$giro")
         // A84: the actual "never two pronto" claim — checked directly against the raw row count, not
-        // inferred from diRegistrazione being empty (which would hold even if the assertion above the
+        // inferred from trova(incontroId) being empty (which would hold even if the assertion above the
         // index enforces uniqueness had silently degenerated to something else).
         assertTrue(contaPronto(db, registrazioneId.valore) <= 1, "giro $giro: due pronto contemporanei")
         esiti.merge(if (concludi) "completato-poi-rimosso" else "rimosso-prima-del-completamento", 1, Int::plus)
@@ -148,10 +149,13 @@ class RiassuntoRepositorySqlConcorrenzaTest {
     private fun fontiOrfane(db: SnastroDatabase, riassuntoId: String) =
         db.riassuntoFonteQueries.trovaDiRiassunto(riassuntoId).executeAsList()
 
-    /** A84: the raw count of `pronto` rows of [registrazioneId] — through the already-named `trovaDiRegistrazione`
-     * (ADR 0006 confined SQL: no new query added for this), never `riassuntoQueries.trovaPerId` alone. */
+    /** A84: the raw count of `pronto` rows of the Incontro of [registrazioneId] (seeded `incontro-di-<id>`, see
+     * [seminaFile]) — through the already-named `trovaDiIncontro` (ADR 0006 confined SQL: no new query added for
+     * this), never `riassuntoQueries.trovaPerId` alone. */
     private fun contaPronto(db: SnastroDatabase, registrazioneId: String) =
-        db.riassuntoQueries.trovaDiRegistrazione(registrazioneId).executeAsList().count { it.stato == "pronto" }
+        db.riassuntoQueries.trovaDiIncontro(
+            "incontro-di-$registrazioneId",
+        ).executeAsList().count { it.stato == "pronto" }
 
     /** Never `progettoQueries`/`registrazioneQueries` (ADR 0021 clause 2): a plain JDBC connection to the
      * SAME file, opened/closed BEFORE the race starts. */

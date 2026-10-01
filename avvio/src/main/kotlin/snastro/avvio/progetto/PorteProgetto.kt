@@ -17,6 +17,7 @@ import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.sintesi.adattatori.persistenza.LunghezzaMassimaRiassuntoRepositorySql
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
+import snastro.sintesi.adattatori.porte.LettoreIncontroDaProgetto
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.letture.FasiInCorso
@@ -77,22 +78,31 @@ internal class PorteProgetto(
     val riassunti: RiassuntoRepositorySql = RiassuntoRepositorySql(database, lettura)
     val lunghezze: LunghezzaMassimaRiassuntoRepositorySql = LunghezzaMassimaRiassuntoRepositorySql(database)
 
+    // ADR 0033 §4.1: the readers through which Trascrizione and Parlanti resolve a Parte's Incontro, built before the
+    // queries below that need them.
+    val registrazionePerTrascrizione: LettoreRegistrazioneTrascrizione = LettoreRegistrazioneTrascrizione(catalogo)
+    val registrazionePerParlanti: LettoreRegistrazioneParlanti = LettoreRegistrazioneParlanti(catalogo)
+    val incontroPerSintesi: LettoreIncontroDaProgetto = LettoreIncontroDaProgetto(catalogo)
+
     /** AC-C63: written by the pipeline, read by [statiElaborazione]; shared with Sintesi, never rebuilt. */
     val fasiInCorso: FasiInCorso = FasiInCorso()
 
     /** AC-C63: the project's ONE `StatiElaborazione`: S2 and Sintesi read this SAME instance. */
-    val statiElaborazione: StatiElaborazione = StatiElaborazione(elaborazioni, trascritti, fasiInCorso)
+    val statiElaborazione: StatiElaborazione = StatiElaborazione(
+        elaborazioni,
+        trascritti,
+        registrazionePerTrascrizione,
+        fasiInCorso,
+    )
 
     /** Trascrizione's public read API over [trascritti], shared by every cross-context reader below. */
-    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti)
+    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti, registrazionePerTrascrizione)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Sbobinatura's and Sintesi's readers. */
-    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
+    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, registrazionePerParlanti, lettura)
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 
-    val registrazionePerTrascrizione: LettoreRegistrazioneTrascrizione = LettoreRegistrazioneTrascrizione(catalogo)
-    val registrazionePerParlanti: LettoreRegistrazioneParlanti = LettoreRegistrazioneParlanti(catalogo)
     val vociPerParlanti: LettoreVociDaTrascrizione = LettoreVociDaTrascrizione(vociDelTrascritto)
     val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)

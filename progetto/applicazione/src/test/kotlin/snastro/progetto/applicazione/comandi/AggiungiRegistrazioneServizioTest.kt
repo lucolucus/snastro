@@ -6,6 +6,7 @@ import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -163,13 +164,16 @@ class AggiungiRegistrazioneServizioTest {
         servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
 
         val salvate = registrazioni.delProgetto(progettoId)
-        assertEquals(setOf(RegistrazioneId("id-1"), RegistrazioneId("id-2")), salvate.map { it.id }.toSet())
+        assertEquals(setOf(RegistrazioneId("id-1"), RegistrazioneId("id-3")), salvate.map { it.id }.toSet())
         assertEquals("Seduta del 12 marzo", assertNotNull(registrazioni.trova(RegistrazioneId("id-1"))).titolo)
-        assertEquals("Seduta del 12 marzo (2)", assertNotNull(registrazioni.trova(RegistrazioneId("id-2"))).titolo)
+        assertEquals("Seduta del 12 marzo (2)", assertNotNull(registrazioni.trova(RegistrazioneId("id-3"))).titolo)
         assertEquals(
-            setOf(RiferimentoAudio("audio/id-1.m4a"), RiferimentoAudio("audio/id-2.m4a")),
+            setOf(RiferimentoAudio("audio/id-1.m4a"), RiferimentoAudio("audio/id-3.m4a")),
             archivio.archiviati,
         )
+        // ADR 0033 §4.1: each import is the one Parte of its own new Incontro, its id minted by GeneratoreId
+        assertEquals(IncontroId("id-2"), assertNotNull(registrazioni.trova(RegistrazioneId("id-1"))).incontroId)
+        assertEquals(IncontroId("id-4"), assertNotNull(registrazioni.trova(RegistrazioneId("id-3"))).incontroId)
     }
 
     @Test
@@ -260,6 +264,7 @@ class AggiungiRegistrazioneServizioTest {
         Registrazione.aggiungi(
             id = id,
             progettoId = progetto,
+            incontroId = IncontroId("incontro-di-${id.valore}"),
             titolo = titolo,
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
             durataMs = 1_000L,

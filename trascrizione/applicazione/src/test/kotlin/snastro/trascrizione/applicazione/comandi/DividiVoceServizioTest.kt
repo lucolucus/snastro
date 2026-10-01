@@ -8,8 +8,10 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
@@ -19,7 +21,7 @@ import kotlin.test.assertNotNull
 class DividiVoceServizioTest {
     private val trascritti = TrascrittoRepositoryFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(trascritti))
-    private val servizio = DividiVoceServizio(eventi.unitaDiLavoro, trascritti, eventi)
+    private val servizio = DividiVoceServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
 
     @Test
     fun `AC-78 DividiVoce valido pubblica VoceDivisa con i segmenti spostati in ordine deterministico`() {
@@ -30,7 +32,7 @@ class DividiVoceServizioTest {
         val comando = DividiVoce(REGISTRAZIONE, origine = VoceId(1), segmenti = setOf(SegmentoId(5), SegmentoId(3)))
         servizio.esegui(comando).atteso()
 
-        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE))
+        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         assertEquals(listOf(SegmentoId(1)), trascritto.voci.first { it.id == VoceId(1) }.segmenti.map { it.id })
         val spostati = listOf(SegmentoId(3), SegmentoId(5))
         val atteso = VoceDivisa(REGISTRAZIONE, origine = VoceId(1), nuova = VoceId(3), spostati)
@@ -71,7 +73,10 @@ class DividiVoceServizioTest {
             .erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
 
         assertEquals(VoceId(99), errore.voceId)
-        assertEquals(originale.segmenti, assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti)
+        assertEquals(
+            originale.segmenti,
+            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+        )
         assertEquals(emptyList(), eventi.pubblicati)
     }
 

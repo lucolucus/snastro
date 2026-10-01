@@ -1,9 +1,12 @@
 package snastro.sintesi.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ConclusioneRiassunto
@@ -18,16 +21,29 @@ import kotlin.test.assertIs
 // Riassunto builders for the Sintesi tests: always through the root's own transitions, never `ricostituisci`
 // (reserved to the persistence adapters, CR-15).
 
-/** An `in_attesa` Riassunto, as `Riassunto.richiedi` makes it. */
+/**
+ * An `in_attesa` Riassunto of the Incontro of the one-Parte [registrazioneId] ([unIncontroDi]), as `Riassunto.richiedi`
+ * makes it.
+ */
 public fun unRiassunto(
     id: String,
     registrazioneId: RegistrazioneId,
     argomento: String? = null,
     parole: Int = LunghezzaMassimaParole.PREDEFINITA,
     richiestoAlle: Instant = Instant.parse("2026-09-26T10:00:00.123Z"),
+): Riassunto = unRiassunto(id, unIncontroDi(registrazioneId), argomento, parole, richiestoAlle)
+
+/** An `in_attesa` Riassunto of the Incontro [incontroId] (e.g. one minted by a real import), as `Riassunto.richiedi`
+ * makes it. */
+public fun unRiassunto(
+    id: String,
+    incontroId: IncontroId,
+    argomento: String? = null,
+    parole: Int = LunghezzaMassimaParole.PREDEFINITA,
+    richiestoAlle: Instant = Instant.parse("2026-09-26T10:00:00.123Z"),
 ): Riassunto = Riassunto.richiedi(
     RiassuntoId(id),
-    registrazioneId,
+    incontroId,
     Argomento.di(argomento).atteso(),
     LunghezzaMassimaParole.di(parole).atteso(),
     richiestoAlle,
@@ -41,9 +57,15 @@ public fun Riassunto.conAvvio(alle: Instant = Instant.parse("2026-09-26T10:01:00
 public fun Riassunto.conFallimento(motivo: MotivoFallimento = MotivoFallimento.ERRORE_MODELLO): Riassunto =
     also { fallisci(motivo).atteso() }
 
-/** This `in_corso` Riassunto completed `pronto` from [bozza] verified against [struttura] (never `fallito`). */
-public fun Riassunto.conCompletamento(bozza: BozzaRiassunto, struttura: StrutturaTrascritto): Riassunto =
-    also { assertIs<ConclusioneRiassunto.Pronto>(completa(bozza, struttura).atteso()) }
+/**
+ * This `in_corso` Riassunto completed `pronto` from [bozza] verified against [struttura] of the Parte [parte] (by default
+ * its Incontro's one Parte under the [unicaParteDi] convention) (never `fallito`).
+ */
+public fun Riassunto.conCompletamento(
+    bozza: BozzaRiassunto,
+    struttura: StrutturaTrascritto,
+    parte: RegistrazioneId = unicaParteDi(incontroId),
+): Riassunto = also { assertIs<ConclusioneRiassunto.Pronto>(completa(bozza, parte, struttura).atteso()) }
 
 /** A structure from `segmentoId to voceId` numbers. */
 public fun unaStruttura(vararg coppie: Pair<Int, Int>): StrutturaTrascritto =
@@ -51,6 +73,6 @@ public fun unaStruttura(vararg coppie: Pair<Int, Int>): StrutturaTrascritto =
 
 /** Every observable field of a Riassunto (the root has no value equality), to compare stored and expected. */
 public fun Riassunto.statoOsservabile(): List<Any?> = listOf(
-    id, registrazioneId, argomento, lunghezzaMassima, richiestoAlle, stato, avviatoAlle, motivoFallimento,
+    id, incontroId, argomento, lunghezzaMassima, richiestoAlle, stato, avviatoAlle, motivoFallimento,
     sommario, decisioni.toList(), questioniAperte.toList(), azioni.toList(), puntiChiave.toList(), omessi, struttura,
 )

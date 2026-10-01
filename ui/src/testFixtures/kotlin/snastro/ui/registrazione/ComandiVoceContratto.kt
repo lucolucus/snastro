@@ -17,6 +17,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -42,7 +43,7 @@ abstract class ComandiVoceContratto {
         esecutore: suspend (ComandoVoce) -> Esito<Unit>,
     ): ComandiVoce
 
-    private val voce = VoceRef(RegistrazioneId("id-1"), VoceId(1))
+    private val voce = VoceRef(unIncontroDi(RegistrazioneId("id-1")), VoceId(1))
     private val comando = ComandoVoce.Conferma(voce, ParlanteId("p-1"))
     private val orologio = Clock.fixed(Instant.parse("2026-09-24T10:00:00Z"), ZoneOffset.UTC)
 

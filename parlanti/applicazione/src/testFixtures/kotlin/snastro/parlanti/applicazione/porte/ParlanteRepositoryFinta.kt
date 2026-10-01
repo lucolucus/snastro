@@ -5,6 +5,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
@@ -41,17 +42,24 @@ public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
     }
 
     override fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta> =
-        righeImpronta().filter { it.voceRef.registrazioneId == id }
+        righeImpronta().filter { it.parte == id }
 
     override fun impronteDelProgetto(id: ProgettoId): List<RigaImpronta> =
         righe.values.filter { it.progettoId == id }.flatMap { it.righeImpronta() }
 
-    override fun aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean {
+    override fun aggiornaImpronta(
+        attesa: RigaImpronta,
+        impronta: Impronta,
+        sorgente: String,
+        modello: String,
+    ): Boolean {
         val p = righe[attesa.parlanteId] ?: return false
         val attuale = p.impronte.singleOrNull { it.voceRef == attesa.voceRef } ?: return false
         if (attuale.sorgente != attesa.sorgente || attuale.modello != attesa.modello) return false
         val aggiornato = p.copia()
-        check(aggiornato.registraImpronta(attesa.voceRef, impronta, sorgente, modello) is Esito.Ok)
+        check(
+            aggiornato.registraImpronta(attesa.voceRef, impronta, sorgente, modello, unicaParteDi(attesa.voceRef)) is Esito.Ok,
+        )
         righe[p.id] = aggiornato
         return true
     }
@@ -70,13 +78,13 @@ public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
     private fun righeImpronta(): List<RigaImpronta> = righe.values.flatMap { it.righeImpronta() }
 
     private fun Parlante.righeImpronta(): List<RigaImpronta> =
-        impronte.map { RigaImpronta(id, it.voceRef, it.sorgente, it.modello) }
+        impronte.map { RigaImpronta(id, it.voceRef, it.sorgente, it.modello, it.parte) }
 
     /** A copy rebuilt through the aggregate's own API (reconstitution is reserved to persistence adapters, CR-15). */
     private fun Parlante.copia(): Parlante {
         val copia = Parlante.crea(id, progettoId, nome, tipo).aggregato
         impronte.forEach {
-            check(copia.registraImpronta(it.voceRef, it.impronta, it.sorgente, it.modello) is Esito.Ok)
+            check(copia.registraImpronta(it.voceRef, it.impronta, it.sorgente, it.modello, it.parte) is Esito.Ok)
         }
         if (eliminato) check(copia.elimina() is Esito.Ok)
         return copia

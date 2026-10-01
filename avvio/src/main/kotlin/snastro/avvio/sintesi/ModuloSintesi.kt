@@ -45,7 +45,7 @@ import java.util.logging.Logger
  *   eliminazione policy (ADR 0024 §1). No subscriber reacts to a re-transcription: no automatic Riassumi (ADR 0037 §7);
  * - its after-commit subscriber [AggiornamentiVistaSintesi] (AC-S144): `RiassuntoRichiesto` rings the queue's
  *   [Campanello] (a Riassunto enqueued here wakes the queue, AC-C70), `RiassuntoEliminato` cancels, best effort, the
- *   running Riassunto of that Registrazione through the source's own per-run state (ADR 0023 §5, AC-S63/AC-S161);
+ *   running Riassunto of that Incontro through the source's own per-run state (ADR 0023 §5, AC-S63/AC-S161);
  * - the Riassunto queue source (ADR 0023 §1): `RecuperaRiassuntiInterrotti` + the claim through
  *   `EseguiProssimoRiassunto`, whose LLM ([ComponentiApp.modello]) runs on the queue's worker, outside any transaction.
  * Every command gets the dispatcher's unit of work (the AC-359 pattern).
@@ -61,6 +61,7 @@ internal class ModuloSintesi(
     private val aggiornamenti = AggiornamentiVistaSintesi(
         avanza = campanello::suona,
         annullaInCorso = esecuzioni::annulla,
+        partiDi = porte.catalogo::parti,
     )
     private val fonte: FonteCoda
 
@@ -78,12 +79,18 @@ internal class ModuloSintesi(
         val lunghezze = porte.lunghezze
         val lettoreTrascritto = porte.trascrittoPerSintesi
         val nomi = porte.nomiPerSintesi
-        eliminazione = AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
+        val incontri = porte.incontroPerSintesi
+        val incontroDi = { r: RegistrazioneId -> porte.catalogo.registrazione(r)?.incontroId }
+        eliminazione = AbbonatoProgettoSintesi(
+            ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher),
+            incontroDi,
+        )
         val esegui = EseguiProssimoRiassuntoServizio(
             uow,
             clock,
             RiassuntoRepositoryConReclamo(riassunti, esecuzioni),
             lettoreTrascritto,
+            incontri,
             app.modello,
             app.disponibilita,
             dispatcher,
@@ -93,6 +100,7 @@ internal class ModuloSintesi(
         fonte = fonteCodaRiassunto(
             elenco = RiassuntiInAttesa(riassunti),
             esegui = esegui::esegui,
+            parteDi = { incontroId -> porte.catalogo.parti(incontroId)?.singleOrNull() },
             recupera = {
                 val esito = recupera.esegui(RecuperaRiassuntiInterrotti)
                 if (esito is Esito.Errore) log.warning("recupero dei riassunti interrotti fallito: $esito")
@@ -107,17 +115,29 @@ internal class ModuloSintesi(
             riassunti,
             lunghezze,
             lettoreTrascritto,
+            incontri,
             app.disponibilita,
             dispatcher,
         )
         val modifica = ModificaLunghezzaMassimaRiassuntoServizio(uow, lunghezze, dispatcher)
         val impostazioni = ImpostazioniSintesiLettura(lunghezze)
         // The read-model owns its ONE snapshot (ADR 0029 §5/AC-C32): no composition wrap.
-        val vista = RiassuntoVisteLettura(porte.lettura, riassunti, lettoreTrascritto, nomi, app.disponibilita)
+        val vista = RiassuntoVisteLettura(
+            porte.lettura,
+            riassunti,
+            lettoreTrascritto,
+            incontri,
+            nomi,
+            app.disponibilita,
+        )
         collaboratori = CollaboratoriSintesi(
-            vista = vista::di,
+            // ADR 0033 §4.1: the S3 tab is per Registrazione, the Riassunto is its Incontro's.
+            vista = { r -> incontroDi(r)?.let(vista::di) },
             impostazioni = { impostazioni.di(progettoId) },
-            riassumi = { id, argomento -> riassumi.esegui(Riassumi(id, argomento)).mappa { } },
+            riassumi = { r, argomento ->
+                val incontroId = checkNotNull(incontroDi(r)) { "Riassumi di una Registrazione sconosciuta: $r" }
+                riassumi.esegui(Riassumi(incontroId, argomento)).mappa { }
+            },
             modificaLunghezzaMassima = { parole ->
                 modifica.esegui(ModificaLunghezzaMassimaRiassunto(progettoId, parole))
             },

@@ -28,6 +28,9 @@ dependencies {
     // commands, never its SQL repositories (:sintesi:adattatori has no edge to supplier:adattatori).
     testImplementation(testFixtures(project(":trascrizione:applicazione")))
     testImplementation(testFixtures(project(":parlanti:applicazione")))
+    // Progetto's own commands + port fakes: LettoreIncontroDaProgettoTest (D2) seeds the Incontro through Progetto's
+    // own commands (ADR 0033 §4.1).
+    testImplementation(testFixtures(project(":progetto:applicazione")))
 
     // Port Finte are kernel `Ripristinabile` (roll back with UnitaDiLavoroFinta); `atteso()` unwraps an
     // expected `Esito.Ok` in the test; GeneratoreIdFinto mints deterministic ids.

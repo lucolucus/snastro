@@ -28,7 +28,7 @@ public class RecuperaRiassuntiInterrottiServizio(
     private fun interrompi(r: Riassunto): Esito<Unit> =
         r.fallisci(MotivoFallimento.INTERROTTO).poi { evento ->
             riassunti.salva(r).poi {
-                eventi.pubblica(RiassuntoFallito(evento.registrazioneId, evento.motivo.codice))
+                eventi.pubblica(RiassuntoFallito(evento.incontroId, evento.motivo.codice))
                 Esito.Ok(Unit)
             }
         }

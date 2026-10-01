@@ -1,7 +1,7 @@
 package snastro.parlanti.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
 import snastro.kernel.VoceRef
 import snastro.parlanti.dominio.Attribuzione
@@ -15,8 +15,8 @@ public class AttribuzioneRepositoryFinta : AttribuzioneRepository, Ripristinabil
 
     override fun trova(v: VoceRef): Attribuzione? = righe[v]?.copia()
 
-    override fun diRegistrazione(id: RegistrazioneId): List<Attribuzione> =
-        righe.values.filter { it.voceRef.registrazioneId == id }.map { it.copia() }
+    override fun diIncontro(id: IncontroId): List<Attribuzione> =
+        righe.values.filter { it.voceRef.incontroId == id }.map { it.copia() }
 
     override fun diParlante(id: ParlanteId): List<Attribuzione> =
         righe.values.filter { it.parlanteId == id }.map { it.copia() }

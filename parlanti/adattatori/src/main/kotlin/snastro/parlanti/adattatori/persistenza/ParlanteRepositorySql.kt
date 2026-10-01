@@ -5,6 +5,7 @@ import kotlinx.coroutines.Job
 import org.sqlite.SQLiteErrorCode
 import org.sqlite.SQLiteException
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -142,7 +143,7 @@ public class ParlanteRepositorySql(
             sorgenteImpronta = sorgente,
             modelloImpronta = modello,
             parlanteId = attesa.parlanteId.valore,
-            registrazioneId = attesa.voceRef.registrazioneId.valore,
+            registrazioneId = attesa.parte.valore,
             voceId = attesa.voceRef.voceId.numero.toLong(),
             sorgenteAttesa = attesa.sorgente,
             modelloAtteso = attesa.modello,
@@ -192,12 +193,13 @@ private fun scriviRadice(db: SnastroDatabase, p: Parlante) {
 /** Replaces the prints of [p]; true iff a print that was stored is gone (removed, or moved to another Voce). */
 private fun sostituisciImpronte(db: SnastroDatabase, p: Parlante): Boolean {
     val primaDi = db.improntaVocaleQueries.trovaDiParlante(p.id.valore).executeAsList()
-        .map { VoceRef(RegistrazioneId(it.registrazione_id), VoceId(it.voce_id.toInt())) }
+        .map { VoceRef(IncontroId(it.incontro_id), VoceId(it.voce_id.toInt())) }
     db.improntaVocaleQueries.eliminaDiParlante(p.id.valore)
     p.impronte.forEach { imp ->
         db.improntaVocaleQueries.inserisci(
             parlanteId = p.id.valore,
-            registrazioneId = imp.voceRef.registrazioneId.valore,
+            incontroId = imp.voceRef.incontroId.valore,
+            registrazioneId = imp.parte.valore,
             voceId = imp.voceRef.voceId.numero.toLong(),
             impronta = imp.impronta.aBlob(),
             sorgenteImpronta = imp.sorgente,
@@ -222,24 +224,27 @@ private fun ParlanteRiga.inDominio(impronte: List<ImprontaVocale>): Parlante = P
 )
 
 private fun ImprontaVocaleRiga.inImprontaVocale(): ImprontaVocale = ImprontaVocale(
-    voceRef = VoceRef(RegistrazioneId(registrazione_id), VoceId(voce_id.toInt())),
+    voceRef = VoceRef(IncontroId(incontro_id), VoceId(voce_id.toInt())),
     impronta = impronta.daBlob(),
     sorgente = sorgente_impronta,
     modello = modello_impronta,
+    parte = RegistrazioneId(registrazione_id),
 )
 
 private fun MetadatiDiRegistrazione.inRigaImpronta(): RigaImpronta = RigaImpronta(
     parlanteId = ParlanteId(parlante_id),
-    voceRef = VoceRef(RegistrazioneId(registrazione_id), VoceId(voce_id.toInt())),
+    voceRef = VoceRef(IncontroId(incontro_id), VoceId(voce_id.toInt())),
     sorgente = sorgente_impronta,
     modello = modello_impronta,
+    parte = RegistrazioneId(registrazione_id),
 )
 
 private fun MetadatiDelProgetto.inRigaImpronta(): RigaImpronta = RigaImpronta(
     parlanteId = ParlanteId(parlante_id),
-    voceRef = VoceRef(RegistrazioneId(registrazione_id), VoceId(voce_id.toInt())),
+    voceRef = VoceRef(IncontroId(incontro_id), VoceId(voce_id.toInt())),
     sorgente = sorgente_impronta,
     modello = modello_impronta,
+    parte = RegistrazioneId(registrazione_id),
 )
 
 /** BLOB float32 little-endian (ADR 0009): the app writes no other encoding of a print's values. */

@@ -5,6 +5,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import java.time.LocalDate
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 
 /**
@@ -38,6 +39,7 @@ public abstract class LettoreRegistrazioneContratto {
             RegistrazioneVista(
                 registrazioneId = id,
                 progettoId = ambiente.progettoId,
+                incontroId = ambiente.incontroDi(id),
                 titolo = "Riunione di lunedi",
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
                 dataRegistrazione = LocalDate.of(2026, 9, 21),
@@ -57,6 +59,7 @@ public abstract class LettoreRegistrazioneContratto {
             RegistrazioneVista(
                 registrazioneId = seconda,
                 progettoId = ambiente.progettoId,
+                incontroId = ambiente.incontroDi(seconda),
                 titolo = "Intervista",
                 riferimentoAudio = RiferimentoAudio("audio/${seconda.valore}.mp3"),
                 dataRegistrazione = LocalDate.of(2025, 12, 31),
@@ -81,6 +84,17 @@ public abstract class LettoreRegistrazioneContratto {
         assertEquals(LocalDate.of(2026, 1, 5), ambiente.lettore.registrazione(id)?.dataRegistrazione)
         assertEquals(ambiente.progettoId, ambiente.lettore.registrazione(id)?.progettoId)
         assertEquals(LocalDate.of(2025, 12, 31), ambiente.lettore.registrazione(altra)?.dataRegistrazione)
+    }
+
+    @Test
+    public fun `AC-I205 registrazione restituisce l'incontroId fissato all'import, uno per Registrazione importata`() {
+        val ambiente = ambiente()
+        val prima = ambiente.semina(RIUNIONE)
+        val seconda = ambiente.semina(INTERVISTA)
+
+        assertEquals(ambiente.incontroDi(prima), ambiente.lettore.registrazione(prima)?.incontroId)
+        assertEquals(ambiente.incontroDi(seconda), ambiente.lettore.registrazione(seconda)?.incontroId)
+        assertNotEquals(ambiente.incontroDi(prima), ambiente.incontroDi(seconda))
     }
 
     private companion object {

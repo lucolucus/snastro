@@ -5,7 +5,9 @@ import snastro.kernel.Esito
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
+import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
+import snastro.trascrizione.applicazione.porte.trovaDi
 import snastro.trascrizione.dominio.ErroreTrascrizione.TrascrittoNonTrovato
 
 /**
@@ -18,10 +20,11 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.TrascrittoNonTrovato
 public class DividiVoceServizio(
     private val uow: UnitaDiLavoro,
     private val trascritti: TrascrittoRepository,
+    private val registrazioni: LettoreRegistrazione,
     private val eventi: DispatcherEventi,
 ) {
     public fun esegui(c: DividiVoce): Esito<Unit> = uow.inTransazione {
-        val trascritto = trascritti.trova(c.registrazioneId)
+        val trascritto = trascritti.trovaDi(c.registrazioneId, registrazioni)
             ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
         trascritto.dividi(c.origine, c.segmenti).poi { evento ->
             trascritti.salva(trascritto)

@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 /** INV-S4 through [Riassunto.completa], against the structure {1→V1, 2→V2, 3→V1}. */
 class VerificaDelleFontiTest {
     private fun completa(bozza: BozzaRiassunto): Riassunto =
-        unRiassuntoInCorso().also { it.completa(bozza, unaStruttura()).atteso() }
+        unRiassuntoInCorso().also { it.completa(bozza, PARTE, unaStruttura()).atteso() }
 
     private fun segmenti(vararg n: Int) = n.map(::SegmentoId).toSet()
 
@@ -90,6 +90,7 @@ class VerificaDelleFontiTest {
                 decisioni = listOf(unElemento("x", 9)),
                 azioni = listOf(unElemento("{V9} y", 1)),
             ),
+            PARTE,
             unaStruttura(),
         ).atteso()
 
@@ -105,7 +106,7 @@ class VerificaDelleFontiTest {
     fun `INV-S4 solo un Sommario valido e zero elementi da pronto`() {
         val r = unRiassuntoInCorso()
 
-        val conclusione = r.completa(unaBozza(sommario = "{V1} riassume"), unaStruttura()).atteso()
+        val conclusione = r.completa(unaBozza(sommario = "{V1} riassume"), PARTE, unaStruttura()).atteso()
 
         assertIs<ConclusioneRiassunto.Pronto>(conclusione)
         assertEquals(testo("{V1} riassume"), r.sommario?.testo)
@@ -122,7 +123,7 @@ class VerificaDelleFontiTest {
             puntiChiave = listOf(unElemento("tenuto-p", 3)),
         )
 
-        val conclusione = r.completa(bozza, unaStruttura()).atteso()
+        val conclusione = r.completa(bozza, PARTE, unaStruttura()).atteso()
 
         assertEquals(ConclusioneRiassunto.Pronto(omessi = 3), conclusione)
         assertEquals(3, r.omessi)

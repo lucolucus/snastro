@@ -1,5 +1,6 @@
 package snastro.sbobinatura.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
 
@@ -10,6 +11,7 @@ import java.time.LocalDate
  */
 public data class TrascrittoTesto(
     val registrazioneId: RegistrazioneId,
+    val incontroId: IncontroId,
     val titolo: String,
     val dataRegistrazione: LocalDate,
     val segmenti: List<SegmentoVista>,

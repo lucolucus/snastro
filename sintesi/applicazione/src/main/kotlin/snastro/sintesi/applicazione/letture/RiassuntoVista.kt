@@ -1,6 +1,6 @@
 package snastro.sintesi.applicazione.letture
 
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 
 /**
  * Read-model `vista-riassunto` (AC-S102..S108, boundary owned here): the Riassunto tab's whole data
@@ -8,7 +8,7 @@ import snastro.kernel.RegistrazioneId
  * this type) when the Registrazione has no Trascritto: the tab is not offered.
  */
 public data class RiassuntoVista(
-    val registrazioneId: RegistrazioneId,
+    val incontroId: IncontroId,
     val modello: StatoModelloVista,
     val richiestaAperta: RichiestaApertaVista?,
     val ultimoFallimento: FallimentoVista?,

@@ -1,7 +1,7 @@
 package snastro.parlanti.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
 import snastro.parlanti.dominio.Attribuzione
 
@@ -12,7 +12,8 @@ import snastro.parlanti.dominio.Attribuzione
 public interface AttribuzioneRepository {
     public fun trova(v: VoceRef): Attribuzione?
 
-    public fun diRegistrazione(id: RegistrazioneId): List<Attribuzione>
+    /** Every Attribuzione of a Voce of the Incontro [id]. */
+    public fun diIncontro(id: IncontroId): List<Attribuzione>
 
     public fun diParlante(id: ParlanteId): List<Attribuzione>
 

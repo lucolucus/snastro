@@ -4,6 +4,7 @@ import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.conAvvio
@@ -27,10 +28,10 @@ class RecuperaRiassuntiInterrottiServizioTest {
 
         servizio.esegui(RecuperaRiassuntiInterrotti).atteso()
 
-        val salvato = riassunti.diRegistrazione(id).single()
+        val salvato = riassunti.trova(unIncontroDi(id)).single()
         assertTrue(salvato.fallito, "il Riassunto interrotto deve risultare fallito")
         assertEquals(MotivoFallimento.INTERROTTO, salvato.motivoFallimento)
-        assertEquals(listOf(RiassuntoFallito(id, "interrotto")), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoFallito(unIncontroDi(id), "interrotto")), eventi.pubblicati)
     }
 
     @Test
@@ -46,16 +47,16 @@ class RecuperaRiassuntiInterrottiServizioTest {
         servizio.esegui(RecuperaRiassuntiInterrotti).atteso()
 
         assertEquals(listOf("r1"), riassunti.inAttesa().map { it.id.valore })
-        val eraInCorso = riassunti.diRegistrazione(inCorso).single()
+        val eraInCorso = riassunti.trova(unIncontroDi(inCorso)).single()
         assertTrue(eraInCorso.fallito)
         assertEquals(MotivoFallimento.INTERROTTO, eraInCorso.motivoFallimento)
-        val fallitoOriginario = riassunti.diRegistrazione(giaFallito).single()
+        val fallitoOriginario = riassunti.trova(unIncontroDi(giaFallito)).single()
         assertEquals(MotivoFallimento.ERRORE_MODELLO, fallitoOriginario.motivoFallimento)
-        assertEquals(listOf(RiassuntoFallito(inCorso, "interrotto")), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoFallito(unIncontroDi(inCorso), "interrotto")), eventi.pubblicati)
 
         // AC-S89: running it twice changes nothing more — the now-fallito row is no longer in_corso.
         servizio.esegui(RecuperaRiassuntiInterrotti).atteso()
-        assertEquals(listOf(RiassuntoFallito(inCorso, "interrotto")), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoFallito(unIncontroDi(inCorso), "interrotto")), eventi.pubblicati)
     }
 
     @Test

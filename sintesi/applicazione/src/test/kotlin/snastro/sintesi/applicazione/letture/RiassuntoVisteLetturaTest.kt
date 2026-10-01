@@ -2,6 +2,7 @@ package snastro.sintesi.applicazione.letture
 
 import com.lemonappdev.konsist.api.Konsist
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -9,6 +10,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
 import snastro.sintesi.applicazione.porte.LettoreNomi
@@ -23,6 +25,7 @@ import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
 import snastro.sintesi.applicazione.porte.conFallimento
+import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.applicazione.porte.unaStruttura
 import snastro.sintesi.dominio.BozzaElemento
@@ -48,14 +51,14 @@ class RiassuntoVisteLetturaTest {
     fun `AC-S102 senza Trascritto restituisce null`() {
         val a = unAmbiente(trascritti = LettoreTrascrittoFinta())
 
-        assertNull(a.lettura.di(REGISTRAZIONE))
+        assertNull(a.lettura.di(unIncontroDi(REGISTRAZIONE)))
     }
 
     @Test
     fun `AC-S102 con Trascritto e senza Riassunto, mostrato e richiestaAperta sono null e disponibilita Disponibile`() {
         val a = unAmbiente()
 
-        val vista = checkNotNull(a.lettura.di(REGISTRAZIONE))
+        val vista = checkNotNull(a.lettura.di(unIncontroDi(REGISTRAZIONE)))
 
         assertNull(vista.mostrato)
         assertNull(vista.richiestaAperta)
@@ -83,13 +86,13 @@ class RiassuntoVisteLetturaTest {
         val a = unAmbiente(
             trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to segmenti)),
             nomi = LettoreNomiFinta(
-                attribuzioni = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "parlante-1"),
+                attribuzioni = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "parlante-1"),
                 nomiParlanti = mapOf("parlante-1" to "Marco"),
             ),
         )
         a.riassunti.salva(pronto).atteso()
 
-        val sommario = checkNotNull(checkNotNull(a.lettura.di(REGISTRAZIONE)).mostrato).sommario
+        val sommario = checkNotNull(checkNotNull(a.lettura.di(unIncontroDi(REGISTRAZIONE))).mostrato).sommario
 
         assertEquals(
             listOf(
@@ -117,20 +120,34 @@ class RiassuntoVisteLetturaTest {
         riassunti.salva(pronto).atteso()
         val trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to segmenti))
         val nomi = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "parlante-1"),
+            attribuzioni = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "parlante-1"),
             nomiParlanti = mapOf("parlante-1" to "Marco"),
         )
-        val lettura = RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomi, unModelloInstallato())
+        val lettura = RiassuntoVisteLettura(
+            UnitaDiLavoroFinta(),
+            riassunti,
+            trascritti,
+            ogniIncontroConUnaParte(),
+            nomi,
+            unModelloInstallato(),
+        )
         val primaDellaRinomina = riassunti.trova(RiassuntoId("r-1"))
 
-        val primaVista = checkNotNull(checkNotNull(lettura.di(REGISTRAZIONE)).mostrato).sommario
+        val primaVista = checkNotNull(checkNotNull(lettura.di(unIncontroDi(REGISTRAZIONE))).mostrato).sommario
         val nomiRinominati = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "parlante-1"),
+            attribuzioni = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "parlante-1"),
             nomiParlanti = mapOf("parlante-1" to "Marchetto"),
         )
         val letturaRinominata =
-            RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomiRinominati, unModelloInstallato())
-        val dopoVista = checkNotNull(checkNotNull(letturaRinominata.di(REGISTRAZIONE)).mostrato).sommario
+            RiassuntoVisteLettura(
+                UnitaDiLavoroFinta(),
+                riassunti,
+                trascritti,
+                ogniIncontroConUnaParte(),
+                nomiRinominati,
+                unModelloInstallato(),
+            )
+        val dopoVista = checkNotNull(checkNotNull(letturaRinominata.di(unIncontroDi(REGISTRAZIONE))).mostrato).sommario
 
         assertEquals(
             listOf(ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marco")), ParteTestoVista.Testo(" apre.")),
@@ -166,7 +183,7 @@ class RiassuntoVisteLetturaTest {
         val a = unAmbiente(trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to segmenti)))
         a.riassunti.salva(pronto).atteso()
 
-        val mostrato = checkNotNull(checkNotNull(a.lettura.di(REGISTRAZIONE)).mostrato)
+        val mostrato = checkNotNull(checkNotNull(a.lettura.di(unIncontroDi(REGISTRAZIONE))).mostrato)
 
         assertEquals(listOf(2, 3, 1), mostrato.decisioni[0].fonti.map { it.segmentoId }, "ordine per inizioMs")
         assertEquals(
@@ -199,11 +216,22 @@ class RiassuntoVisteLetturaTest {
         riassunti.salva(pronto).atteso()
         fun lettura(segmenti: List<SegmentoSintesi>, nomi: LettoreNomi = LettoreNomiFinta()): RiassuntoVisteLettura {
             val trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to segmenti))
-            return RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomi, unModelloInstallato())
+            return RiassuntoVisteLettura(
+                UnitaDiLavoroFinta(),
+                riassunti,
+                trascritti,
+                ogniIncontroConUnaParte(),
+                nomi,
+                unModelloInstallato(),
+            )
         }
 
         val subitoDopo = lettura(strutturaIniziale)
-        assertEquals(false, checkNotNull(subitoDopo.di(REGISTRAZIONE)).mostrato?.superato, "subito dopo il run")
+        assertEquals(
+            false,
+            checkNotNull(subitoDopo.di(unIncontroDi(REGISTRAZIONE))).mostrato?.superato,
+            "subito dopo il run",
+        )
 
         // Revisione: il Segmento 2, NON citato, passa alla Voce 3.
         val riassegnato = listOf(
@@ -211,11 +239,19 @@ class RiassuntoVisteLetturaTest {
             unSegmentoSintesi(segmentoId = 2, voceId = 3),
         )
         val dopoRevisione = lettura(riassegnato)
-        assertEquals(true, checkNotNull(dopoRevisione.di(REGISTRAZIONE)).mostrato?.superato, "dopo la riassegnazione")
+        assertEquals(
+            true,
+            checkNotNull(dopoRevisione.di(unIncontroDi(REGISTRAZIONE))).mostrato?.superato,
+            "dopo la riassegnazione",
+        )
 
         // Torna come prima: superato ridiventa false.
         val ripristinato = lettura(strutturaIniziale)
-        assertEquals(false, checkNotNull(ripristinato.di(REGISTRAZIONE)).mostrato?.superato, "dopo il ripristino")
+        assertEquals(
+            false,
+            checkNotNull(ripristinato.di(unIncontroDi(REGISTRAZIONE))).mostrato?.superato,
+            "dopo il ripristino",
+        )
 
         // Revisione: il Segmento 1, CITATO dalla Decisione, passa alla Voce 3 (non solo un non citato lo fa scattare).
         val citatoRiassegnato = listOf(
@@ -225,18 +261,18 @@ class RiassuntoVisteLetturaTest {
         val dopoRiassegnazioneCitata = lettura(citatoRiassegnato)
         assertEquals(
             true,
-            checkNotNull(dopoRiassegnazioneCitata.di(REGISTRAZIONE)).mostrato?.superato,
+            checkNotNull(dopoRiassegnazioneCitata.di(unIncontroDi(REGISTRAZIONE))).mostrato?.superato,
             "riassegnazione di un Segmento citato dalla Decisione",
         )
 
         // Un rename (nomi diversi) non tocca la struttura: superato resta false.
         val nomiConRename = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(REGISTRAZIONE, VoceId(1)) to "p-1"),
+            attribuzioni = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "p-1"),
             nomiParlanti = mapOf("p-1" to "Marco"),
         )
         val conNomi = lettura(strutturaIniziale, nomiConRename)
         val messaggio = "un rename/Attribuzione non tocca superato"
-        assertEquals(false, checkNotNull(conNomi.di(REGISTRAZIONE)).mostrato?.superato, messaggio)
+        assertEquals(false, checkNotNull(conNomi.di(unIncontroDi(REGISTRAZIONE))).mostrato?.superato, messaggio)
     }
 
     @Test
@@ -247,10 +283,11 @@ class RiassuntoVisteLetturaTest {
                 UnitaDiLavoroFinta(),
                 riassunti,
                 trascritti,
+                ogniIncontroConUnaParte(),
                 LettoreNomiFinta(),
                 unModelloInstallato(),
             )
-            return checkNotNull(lettura.di(REGISTRAZIONE))
+            return checkNotNull(lettura.di(unIncontroDi(REGISTRAZIONE)))
         }
 
         val inAttesa = RiassuntoRepositoryFinta()
@@ -284,7 +321,7 @@ class RiassuntoVisteLetturaTest {
         )
         assertEquals(
             DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
-            checkNotNull(aperta.lettura.di(REGISTRAZIONE)).disponibilita,
+            checkNotNull(aperta.lettura.di(unIncontroDi(REGISTRAZIONE))).disponibilita,
         )
 
         val testoLungo = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 3)
@@ -293,7 +330,7 @@ class RiassuntoVisteLetturaTest {
         )
         assertEquals(
             DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.TroppoLunga),
-            checkNotNull(troppoLunga.lettura.di(REGISTRAZIONE)).disponibilita,
+            checkNotNull(troppoLunga.lettura.di(unIncontroDi(REGISTRAZIONE))).disponibilita,
         )
 
         val spia = RiassuntoRepositorySpia(RiassuntoRepositoryFinta())
@@ -302,10 +339,11 @@ class RiassuntoVisteLetturaTest {
             UnitaDiLavoroFinta(),
             spia,
             trascrittiSpia,
+            ogniIncontroConUnaParte(),
             LettoreNomiFinta(),
             unModelloInstallato(),
         )
-        repeat(3) { lettura.di(REGISTRAZIONE) }
+        repeat(3) { lettura.di(unIncontroDi(REGISTRAZIONE)) }
         assertEquals(0, spia.scritture)
 
         val scope = Konsist.scopeFromPackage(PACCHETTO, "sintesi/applicazione", "main")
@@ -315,6 +353,7 @@ class RiassuntoVisteLetturaTest {
                 "LetturaCoerente",
                 "RiassuntoRepository",
                 "LettoreTrascritto",
+                "LettoreIncontro",
                 "LettoreNomi",
                 "DisponibilitaModelloLinguistico",
             ),
@@ -350,12 +389,15 @@ class RiassuntoVisteLetturaTest {
         val a = unAmbiente(
             trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(segmentoAlLimite))),
             nomi = LettoreNomiFinta(
-                attribuzioni = mapOf(VoceRef(REGISTRAZIONE, voce) to "parlante-1"),
+                attribuzioni = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), voce) to "parlante-1"),
                 nomiParlanti = mapOf("parlante-1" to nomeLungo),
             ),
         )
 
-        assertEquals(DisponibilitaVista.Disponibile, checkNotNull(a.lettura.di(REGISTRAZIONE)).disponibilita)
+        assertEquals(
+            DisponibilitaVista.Disponibile,
+            checkNotNull(a.lettura.di(unIncontroDi(REGISTRAZIONE))).disponibilita,
+        )
     }
 
     @Test
@@ -368,7 +410,7 @@ class RiassuntoVisteLetturaTest {
             StatoModelloLinguistico.Installato to StatoModelloVista.Installato,
         ).forEach { (statoPorta, statoAtteso) ->
             val a = unAmbiente(disponibilita = DisponibilitaModelloLinguisticoFinta(statoPorta))
-            assertEquals(statoAtteso, checkNotNull(a.lettura.di(REGISTRAZIONE)).modello, "$statoPorta")
+            assertEquals(statoAtteso, checkNotNull(a.lettura.di(unIncontroDi(REGISTRAZIONE))).modello, "$statoPorta")
         }
 
         val trascritti = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi())))
@@ -377,10 +419,11 @@ class RiassuntoVisteLetturaTest {
                 UnitaDiLavoroFinta(),
                 riassunti,
                 trascritti,
+                ogniIncontroConUnaParte(),
                 LettoreNomiFinta(),
                 unModelloInstallato(),
             )
-            return checkNotNull(lettura.di(REGISTRAZIONE)).argomentoPrecompilato
+            return checkNotNull(lettura.di(unIncontroDi(REGISTRAZIONE))).argomentoPrecompilato
         }
 
         // Solo un pronto.
@@ -442,16 +485,23 @@ class RiassuntoVisteLetturaTest {
         }
         val riassuntiDelega = RiassuntoRepositoryFinta()
         val riassunti = object : RiassuntoRepository by riassuntiDelega {
-            override fun diRegistrazione(r: RegistrazioneId) =
-                riassuntiDelega.diRegistrazione(r).also { viste += uow.letturaAperta }
+            override fun trova(incontroId: IncontroId) =
+                riassuntiDelega.trova(incontroId).also { viste += uow.letturaAperta }
         }
         val nomiDelega = LettoreNomiFinta()
         val nomi = object : LettoreNomi {
             override fun nomi(r: RegistrazioneId) = nomiDelega.nomi(r).also { viste += uow.letturaAperta }
         }
-        val lettura = RiassuntoVisteLettura(uow, riassunti, trascritti, nomi, unModelloInstallato())
+        val lettura = RiassuntoVisteLettura(
+            uow,
+            riassunti,
+            trascritti,
+            ogniIncontroConUnaParte(),
+            nomi,
+            unModelloInstallato(),
+        )
 
-        lettura.di(REGISTRAZIONE)
+        lettura.di(unIncontroDi(REGISTRAZIONE))
 
         assertTrue(viste.isNotEmpty(), "nessuna lettura interna osservata")
         assertTrue(viste.all { it }, "una lettura interna e' girata fuori da inLettura: $viste")
@@ -477,7 +527,7 @@ class RiassuntoVisteLetturaTest {
 
     /** Every observable field but the id, to compare a row before/after an unrelated read (no write happened). */
     private fun Riassunto.statoRigaPerTest(): List<Any?> = listOf(
-        registrazioneId, argomento, lunghezzaMassima, richiestoAlle, stato, avviatoAlle, motivoFallimento, sommario,
+        incontroId, argomento, lunghezzaMassima, richiestoAlle, stato, avviatoAlle, motivoFallimento, sommario,
         decisioni.toList(), questioniAperte.toList(), azioni.toList(), puntiChiave.toList(), omessi, struttura,
     )
 
@@ -500,9 +550,9 @@ class RiassuntoVisteLetturaTest {
             return delega.rimuovi(id)
         }
 
-        override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> {
+        override fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int> {
             scritture++
-            return delega.rimuoviDiRegistrazione(r)
+            return delega.rimuoviDiIncontro(incontroId)
         }
     }
 
@@ -515,7 +565,14 @@ class RiassuntoVisteLetturaTest {
         disponibilita: DisponibilitaModelloLinguistico = unModelloInstallato(),
     ): Ambiente {
         val riassunti = RiassuntoRepositoryFinta()
-        val lettura = RiassuntoVisteLettura(UnitaDiLavoroFinta(), riassunti, trascritti, nomi, disponibilita)
+        val lettura = RiassuntoVisteLettura(
+            UnitaDiLavoroFinta(),
+            riassunti,
+            trascritti,
+            ogniIncontroConUnaParte(),
+            nomi,
+            disponibilita,
+        )
         return Ambiente(lettura, riassunti)
     }
 

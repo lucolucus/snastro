@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -39,6 +40,7 @@ private fun unaVista(
     voci: List<VoceTrascrittoView> = listOf(VoceTrascrittoView(VoceId(1), "Voce 1")),
 ) = TrascrittoView(
     registrazioneId = REG_1,
+    incontroId = unIncontroDi(REG_1),
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = DATA_1,
     durataMs = 125_000,

@@ -66,13 +66,14 @@ class MigrazioneSintesiTest {
         ).forEach { (stato, motivo) ->
             val db = databaseInMemoria()
             val registrazioneId = db.seminaProgettoERegistrazione()
+            val incontro = db.incontroDi(registrazioneId)
             db.riassuntoQueries.inserisci(
-                "r-1", registrazioneId, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
+                "r-1", incontro, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
             )
 
             assertFailsWith<SQLException>("seconda riga $stato") {
                 db.riassuntoQueries.inserisci(
-                    "r-2", registrazioneId, stato, null, 2000L, 1L, null, motivo, null, null, null,
+                    "r-2", incontro, stato, null, 2000L, 1L, null, motivo, null, null, null,
                 )
             }
         }
@@ -82,10 +83,11 @@ class MigrazioneSintesiTest {
     fun `AC-S38 riassunto_pronto_unico rifiuta una seconda riga pronta per la stessa Registrazione`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+        val incontro = db.incontroDi(registrazioneId)
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
 
         assertFailsWith<SQLException> {
-            db.riassuntoQueries.inserisci("r-2", registrazioneId, "pronto", null, 2000L, 1L, 1L, null, "s2", 0L, "2:1")
+            db.riassuntoQueries.inserisci("r-2", incontro, "pronto", null, 2000L, 1L, 1L, null, "s2", 0L, "2:1")
         }
     }
 
@@ -93,23 +95,25 @@ class MigrazioneSintesiTest {
     fun `AC-S38 un pronto e un in_attesa della stessa Registrazione coesistono`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+        val incontro = db.incontroDi(registrazioneId)
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
 
         db.riassuntoQueries.inserisci(
-            "r-2", registrazioneId, "in_attesa", null, 2000L, 1L, null, null, null, null, null,
+            "r-2", incontro, "in_attesa", null, 2000L, 1L, null, null, null, null, null,
         )
 
-        assertEquals(2, db.riassuntoQueries.trovaDiRegistrazione(registrazioneId).executeAsList().size)
+        assertEquals(2, db.riassuntoQueries.trovaDiIncontro(incontro).executeAsList().size)
     }
 
     @Test
     fun `AC-S39 CHECK rifiuta fallito senza motivo_fallimento`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
+        val incontro = db.incontroDi(registrazioneId)
 
         assertFailsWith<SQLException> {
             db.riassuntoQueries.inserisci(
-                "r-1", registrazioneId, "fallito", null, 2000L, 0L, 0L, null, null, null, null,
+                "r-1", incontro, "fallito", null, 2000L, 0L, 0L, null, null, null, null,
             )
         }
     }
@@ -119,13 +123,17 @@ class MigrazioneSintesiTest {
         val db1 = databaseInMemoria()
         val r1 = db1.seminaProgettoERegistrazione()
         assertFailsWith<SQLException>("senza struttura") {
-            db1.riassuntoQueries.inserisci("r-1", r1, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, null)
+            db1.riassuntoQueries.inserisci(
+                "r-1", db1.incontroDi(r1), "pronto", null, 2000L, 0L, 0L, null, "s", 0L, null,
+            )
         }
 
         val db2 = databaseInMemoria()
         val r2 = db2.seminaProgettoERegistrazione()
         assertFailsWith<SQLException>("senza omessi") {
-            db2.riassuntoQueries.inserisci("r-1", r2, "pronto", null, 2000L, 0L, 0L, null, "s", null, "1:1")
+            db2.riassuntoQueries.inserisci(
+                "r-1", db2.incontroDi(r2), "pronto", null, 2000L, 0L, 0L, null, "s", null, "1:1",
+            )
         }
     }
 
@@ -133,10 +141,11 @@ class MigrazioneSintesiTest {
     fun `AC-S39 CHECK rifiuta in_attesa con un sommario`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
+        val incontro = db.incontroDi(registrazioneId)
 
         assertFailsWith<SQLException> {
             db.riassuntoQueries.inserisci(
-                "r-1", registrazioneId, "in_attesa", null, 2000L, 0L, null, null, "sommario indebito", null, null,
+                "r-1", incontro, "in_attesa", null, 2000L, 0L, null, null, "sommario indebito", null, null,
             )
         }
     }
@@ -145,7 +154,8 @@ class MigrazioneSintesiTest {
     fun `AC-S39 CHECK rifiuta un voce_id su un elemento decisione`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+        val incontro = db.incontroDi(registrazioneId)
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
 
         assertFailsWith<SQLException> {
             db.riassuntoElementoQueries.inserisci("r-1", "decisione", 0L, "testo", 1L)
@@ -158,7 +168,8 @@ class MigrazioneSintesiTest {
     fun `AC-S39 CHECK rifiuta un voce_id su un elemento questione_aperta`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+        val incontro = db.incontroDi(registrazioneId)
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
 
         assertFailsWith<SQLException> {
             db.riassuntoElementoQueries.inserisci("r-1", "questione_aperta", 0L, "testo", 1L)
@@ -169,7 +180,8 @@ class MigrazioneSintesiTest {
     fun `AC-S39 riassunto_fonte rifiuta una seconda riga con la stessa chiave`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+        val incontro = db.incontroDi(registrazioneId)
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
         db.riassuntoElementoQueries.inserisci("r-1", "decisione", 0L, "testo", null)
         db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, registrazioneId, 1L)
 
@@ -182,43 +194,44 @@ class MigrazioneSintesiTest {
     fun `AC-S40 l Incontro non si cancella finche esiste un suo riassunto`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        val incontroId = checkNotNull(db.registrazioneQueries.trovaPerId(registrazioneId).executeAsOne().incontro_id)
+        val incontro = db.incontroDi(registrazioneId)
         db.riassuntoQueries.inserisci(
-            "r-1", registrazioneId, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
+            "r-1", incontro, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
         )
 
         // ADR 0034 §2: riassunto's immediate FK is to incontro, so the Incontro of the last Parte fails closed.
         db.registrazioneQueries.elimina(registrazioneId)
-        assertFailsWith<SQLException> { db.incontroQueries.eliminaSeSenzaParti(incontroId) }
+        assertFailsWith<SQLException> { db.incontroQueries.eliminaSeSenzaParti(incontro) }
 
-        assertEquals(incontroId, db.incontroQueries.trovaPerId(incontroId).executeAsOne().id)
+        assertEquals(incontro, db.incontroQueries.trovaPerId(incontro).executeAsOne().id)
     }
 
     @Test
     fun `AC-S41 concludi tocca 0 righe se lo stato non e in_corso o la riga non esiste, 1 se lo e`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
+        val incontro = db.incontroDi(registrazioneId)
 
         assertEquals(0L, db.riassuntoQueries.concludi("pronto", null, "s", 0L, "1:1", "assente").value, "assente")
 
         db.riassuntoQueries.inserisci(
-            "r-1", registrazioneId, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
+            "r-1", incontro, "in_attesa", null, 2000L, 0L, null, null, null, null, null,
         )
         assertEquals(0L, db.riassuntoQueries.concludi("pronto", null, "s", 0L, "1:1", "r-1").value, "in_attesa")
 
         db.riassuntoQueries.elimina("r-1")
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s0", 0L, "1:1")
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s0", 0L, "1:1")
         assertEquals(0L, db.riassuntoQueries.concludi("pronto", null, "s", 0L, "1:1", "r-1").value, "pronto")
 
         db.riassuntoQueries.elimina("r-1")
         db.riassuntoQueries.inserisci(
-            "r-1", registrazioneId, "fallito", null, 2000L, 0L, 0L, "errore_modello", null, null, null,
+            "r-1", incontro, "fallito", null, 2000L, 0L, 0L, "errore_modello", null, null, null,
         )
         assertEquals(0L, db.riassuntoQueries.concludi("pronto", null, "s", 0L, "1:1", "r-1").value, "fallito")
 
         db.riassuntoQueries.elimina("r-1")
         db.riassuntoQueries.inserisci(
-            "r-1", registrazioneId, "in_corso", null, 2000L, 0L, 0L, null, null, null, null,
+            "r-1", incontro, "in_corso", null, 2000L, 0L, 0L, null, null, null, null,
         )
         assertEquals(1L, db.riassuntoQueries.concludi("pronto", null, "sommario", 0L, "1:1", "r-1").value, "in_corso")
         assertEquals("pronto", db.riassuntoQueries.trovaPerId("r-1").executeAsOne().stato)
@@ -233,9 +246,15 @@ class MigrazioneSintesiTest {
         val r2 = db.seminaRegistrazione(progettoId, "reg-2")
         val r3 = db.seminaRegistrazione(progettoId, "reg-3")
 
-        db.riassuntoQueries.inserisci("r-b", r2, "in_attesa", null, 2000L, 20L, null, null, null, null, null)
-        db.riassuntoQueries.inserisci("r-c", r3, "in_attesa", null, 2000L, 10L, null, null, null, null, null)
-        db.riassuntoQueries.inserisci("r-a", r1, "in_attesa", null, 2000L, 20L, null, null, null, null, null)
+        db.riassuntoQueries.inserisci(
+            "r-b", db.incontroDi(r2), "in_attesa", null, 2000L, 20L, null, null, null, null, null,
+        )
+        db.riassuntoQueries.inserisci(
+            "r-c", db.incontroDi(r3), "in_attesa", null, 2000L, 10L, null, null, null, null, null,
+        )
+        db.riassuntoQueries.inserisci(
+            "r-a", db.incontroDi(r1), "in_attesa", null, 2000L, 20L, null, null, null, null, null,
+        )
 
         assertEquals(listOf("r-c", "r-a", "r-b"), db.riassuntoQueries.trovaInAttesa().executeAsList().map { it.id })
     }
@@ -244,7 +263,8 @@ class MigrazioneSintesiTest {
     fun `AC-S41 le righe figlie si cancellano solo nell ordine fonte poi elemento poi riassunto`() {
         val db = databaseInMemoria()
         val registrazioneId = db.seminaProgettoERegistrazione()
-        db.riassuntoQueries.inserisci("r-1", registrazioneId, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
+        val incontro = db.incontroDi(registrazioneId)
+        db.riassuntoQueries.inserisci("r-1", incontro, "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "1:1")
         db.riassuntoElementoQueries.inserisci("r-1", "decisione", 0L, "testo", null)
         db.riassuntoFonteQueries.inserisci("r-1", "decisione", 0L, registrazioneId, 1L)
 

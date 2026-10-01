@@ -1,6 +1,8 @@
 package snastro.avvio.parlanti
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.poi
@@ -24,18 +26,21 @@ internal class ServiziFrase(
     private val confermaSegmento: (ConfermaSegmento) -> Esito<Unit>,
     private val riassegnaSegmento: (RiassegnaSegmento) -> Esito<VoceId>,
     private val confermaAttribuzione: (ConfermaAttribuzione) -> Esito<Unit>,
+    /** ADR 0033 §4.1: the Incontro the Registrazione of a frase is a Parte of — the key of its Voci. */
+    private val incontroDi: (RegistrazioneId) -> IncontroId?,
 ) {
     fun esegui(frase: FraseRef, passi: PassiNominaFrase): Esito<Unit> {
         val id = frase.registrazioneId
+        val incontroId = { checkNotNull(incontroDi(id)) { "frase di una Registrazione sconosciuta: $id" } }
         val conferma = { confermaSegmento(ConfermaSegmento(id, frase.segmentoId, confermato = true)) }
         return when (passi) {
             PassiNominaFrase.SoloConferma -> conferma()
             is PassiNominaFrase.AttribuisciVoce ->
-                attribuisci(VoceRef(id, passi.voceId), passi.obiettivo).poi { conferma() }
+                attribuisci(VoceRef(incontroId(), passi.voceId), passi.obiettivo).poi { conferma() }
             is PassiNominaFrase.Sposta ->
                 riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, passi.voceId)).poi { Esito.Ok(Unit) }
             is PassiNominaFrase.NuovaVoce -> riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, null))
-                .poi { nuova -> attribuisci(VoceRef(id, nuova), passi.obiettivo) }
+                .poi { nuova -> attribuisci(VoceRef(incontroId(), nuova), passi.obiettivo) }
         }
     }
 

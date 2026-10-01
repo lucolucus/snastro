@@ -1,6 +1,5 @@
 package snastro.avvio.parlanti
 
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.letture.Proposta
 import snastro.parlanti.applicazione.letture.PropostaVista
@@ -27,13 +26,13 @@ import java.util.concurrent.locks.ReentrantLock
 internal class ProposteSerializzate(private val proposta: Proposta) {
     private val lock = ReentrantLock(true)
     private val daInvalidare = AtomicBoolean(false)
-    private val inCache = mutableSetOf<RegistrazioneId>() // guarded by lock
+    private val inCache = mutableSetOf<VoceRef>() // guarded by lock
 
     fun perVoce(voceRef: VoceRef): PropostaVista? {
         lock.lockInterruptibly()
         try {
             applicaInvalidazione()
-            inCache += voceRef.registrazioneId
+            inCache += voceRef
             return proposta.perVoce(voceRef).also { applicaInvalidazione() }
         } finally {
             lock.unlock()

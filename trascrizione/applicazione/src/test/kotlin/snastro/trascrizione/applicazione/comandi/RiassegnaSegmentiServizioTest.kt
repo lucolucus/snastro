@@ -10,9 +10,11 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
 import snastro.trascrizione.dominio.Trascritto
@@ -26,7 +28,7 @@ class RiassegnaSegmentiServizioTest {
     private val trascritti = SalvataggiContati(finta)
     private val uow = UnitaDiLavoroFinta(finta)
     private val eventi = DispatcherEventiFinta(uow)
-    private val servizio = RiassegnaSegmentiServizio(eventi.unitaDiLavoro, trascritti, eventi)
+    private val servizio = RiassegnaSegmentiServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
     private val sincroni = mutableListOf<Pair<EventoPubblicato, Boolean>>()
 
     init {
@@ -53,7 +55,10 @@ class RiassegnaSegmentiServizioTest {
         assertEquals(attesi.map { it to true }, sincroni.map { (e, dentro) -> e as SegmentoRiassegnato to dentro })
         assertEquals(attesi, eventi.pubblicati)
         assertEquals(1, trascritti.salvataggi)
-        assertEquals(listOf(1, 2, 4), assertNotNull(finta.trova(REGISTRAZIONE)).voci.map { it.id.numero })
+        assertEquals(
+            listOf(1, 2, 4),
+            assertNotNull(finta.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).voci.map { it.id.numero },
+        )
     }
 
     @Test
@@ -68,7 +73,7 @@ class RiassegnaSegmentiServizioTest {
 
         servizio.esegui(RiassegnaSegmenti(REGISTRAZIONE, piano)).erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
 
-        val dopo = assertNotNull(finta.trova(REGISTRAZIONE))
+        val dopo = assertNotNull(finta.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         assertEquals(originale.segmenti, dopo.segmenti)
         assertEquals(originale.prossimaVoce, dopo.prossimaVoce)
         assertEquals(emptyList(), eventi.pubblicati)
@@ -97,7 +102,10 @@ class RiassegnaSegmentiServizioTest {
             .erroreAtteso<ErroreTrascrizione.TrascrittoCambiato>()
 
         assertEquals(salvataggi, trascritti.salvataggi)
-        assertEquals(confermato.segmenti, assertNotNull(finta.trova(REGISTRAZIONE)).segmenti)
+        assertEquals(
+            confermato.segmenti,
+            assertNotNull(finta.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+        )
         assertEquals(emptyList(), eventi.pubblicati)
         assertEquals(emptyList(), sincroni)
     }

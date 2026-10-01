@@ -116,8 +116,14 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 .atteso()
         }
 
-        override val lettore: LettoreNomi =
-            LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, uowParlanti))
+        override val lettore: LettoreNomi = LettoreNomiDaParlanti(
+            NomiDelleVoci(
+                attribuzioni,
+                parlanti,
+                LettoreRegistrazioneFintaParlanti(registrazioniVisteParlanti),
+                uowParlanti,
+            ),
+        )
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventiParlanti.unitaDiLavoro,
@@ -162,6 +168,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             registrazioniVisteTrascrizione[id] = RegistrazioneVistaTrascrizione(
                 registrazioneId = v.registrazioneId,
                 progettoId = v.progettoId,
+                incontroId = v.incontroId,
                 titolo = v.titolo,
                 riferimentoAudio = v.riferimentoAudio,
                 dataRegistrazione = v.dataRegistrazione,
@@ -170,6 +177,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             registrazioniVisteParlanti[id] = RegistrazioneVistaParlanti(
                 registrazioneId = v.registrazioneId,
                 progettoId = v.progettoId,
+                incontroId = v.incontroId,
                 titolo = v.titolo,
                 riferimentoAudio = v.riferimentoAudio,
                 dataRegistrazione = v.dataRegistrazione,
@@ -208,11 +216,11 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 eventiTrascrizione,
             ).esegui(EseguiProssimaElaborazione()).atteso()
 
-            val trascritto = checkNotNull(trascritti.trova(id))
+            val trascritto = checkNotNull(trascritti.trova(id, registrazioniVisteTrascrizione.getValue(id).incontroId))
             vociVisteParlanti[id] = trascritto.voci.map { voce ->
-                VoceVistaParlanti(VoceRef(id, voce.id), voce.segmenti.map { it.intervallo })
+                VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), voce.segmenti.map { it.intervallo })
             }
-            return RegistrazioneConiata(id, trascritto.voci.map { VoceRef(id, it.id) })
+            return RegistrazioneConiata(id, trascritto.voci.map { VoceRef(trascritto.incontroId, it.id) })
         }
 
         override fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean): ParlanteId {

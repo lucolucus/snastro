@@ -11,6 +11,7 @@ import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -32,6 +33,7 @@ private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 
 private fun unaVista(generazione: Int = 1) = TrascrittoView(
     registrazioneId = REG_1,
+    incontroId = unIncontroDi(REG_1),
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = DATA_1,
     durataMs = 125_000,

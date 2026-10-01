@@ -13,6 +13,7 @@ import com.lemonappdev.konsist.api.provider.KoNameProvider
 import com.lemonappdev.konsist.api.verify.assertFalse
 import com.lemonappdev.konsist.api.verify.assertTrue
 import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * Proiezione eseguibile delle regole meccaniche di `code-rules.md` CR-1..CR-5, CR-8, CR-10, CR-14..CR-17
@@ -43,6 +44,18 @@ class RegoleArchitetturaliTest {
             pkg.startsWith("snastro.kernel.") ||
             Regex("""^snastro\.[a-z]+\.dominio(\..+)?$""").matches(pkg) ||
             Regex("""^snastro\.[a-z]+\.applicazione(\..+)?$""").matches(pkg)
+    }
+
+    // --- ADR 0033 §1 (incontro-chiavi) - the Voce is keyed by its Incontro --------------------------------------
+
+    @Test
+    fun `AC-I11 VoceRef ha nel costruttore esattamente incontroId e voceId, nessun registrazioneId`() {
+        val voceRef = progetto.classes().filter { it.name == "VoceRef" && it.packagee?.name == "snastro.kernel" }
+        assertEquals(1, voceRef.size, "un solo VoceRef, in :kernel")
+        val parametri = checkNotNull(
+            voceRef.single().primaryConstructor,
+        ).parameters.map { "${it.name}: ${it.type.text}" }
+        assertEquals(listOf("incontroId: IncontroId", "voceId: VoceId"), parametri)
     }
 
     // --- CR-1 - Dependency rule --------------------------------------------------------------

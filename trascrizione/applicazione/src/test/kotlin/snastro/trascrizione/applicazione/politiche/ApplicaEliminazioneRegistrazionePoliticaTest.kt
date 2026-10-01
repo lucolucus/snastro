@@ -1,9 +1,11 @@
 package snastro.trascrizione.applicazione.politiche
 
 import snastro.kernel.ElaborazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
@@ -37,11 +39,11 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
                 salva(aperta, "aperta-$r", r, DOPO)
                 trascritti.salva(unTrascritto(registrazioneId = r))
 
-                val errore = politica.applica(r).erroreAtteso<ElaborazioneGiaAperta>()
+                val errore = politica.applica(r, unIncontroDi(r)).erroreAtteso<ElaborazioneGiaAperta>()
 
                 assertEquals(ElaborazioneGiaAperta(r), errore)
                 assertEquals(if (conCompletata) 2 else 1, elaborazioni.diRegistrazione(r).size)
-                assertNotNull(trascritti.trova(r))
+                assertNotNull(trascritti.trova(r, unIncontroDi(r)))
             }
         }
         assertEquals(0, elaborazioni.rimozioni + trascritti.rimozioni, "rimuovi / rimuoviDiRegistrazione mai chiamati")
@@ -56,20 +58,20 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
         salva(IN_ATTESA, "altra-in-attesa", ALTRA, DOPO)
         trascritti.salva(unTrascritto(registrazioneId = ALTRA))
 
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
 
         assertEquals(emptyList(), elaborazioni.diRegistrazione(R))
-        assertNull(trascritti.trova(R))
+        assertNull(trascritti.trova(R, unIncontroDi(R)))
         assertEquals(
             setOf("altra-completata", "altra-in-attesa"),
             elaborazioni.diRegistrazione(ALTRA).map { it.id.valore }.toSet(),
         )
-        assertNotNull(trascritti.trova(ALTRA))
+        assertNotNull(trascritti.trova(ALTRA, unIncontroDi(ALTRA)))
     }
 
     @Test
     fun `AC-610 senza Elaborazione e senza Trascritto e Ok e nessuna chiamata rimuove qualcosa`() {
-        politica.applica(R).atteso()
+        politica.applica(R, unIncontroDi(R)).atteso()
 
         assertEquals(0, elaborazioni.rimozioni + trascritti.rimozioni)
     }
@@ -102,9 +104,9 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
         TrascrittoRepository by delegata {
         var rimozioni = 0
 
-        override fun rimuovi(id: RegistrazioneId) {
+        override fun rimuovi(id: RegistrazioneId, incontroId: IncontroId) {
             rimozioni++
-            delegata.rimuovi(id)
+            delegata.rimuovi(id, incontroId)
         }
     }
 

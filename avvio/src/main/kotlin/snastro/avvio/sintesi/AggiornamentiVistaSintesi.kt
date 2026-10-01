@@ -4,6 +4,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.sintesi.applicazione.eventi.LunghezzaMassimaRiassuntoModificata
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
@@ -28,23 +29,29 @@ import snastro.ui.Cambiamento
  */
 internal class AggiornamentiVistaSintesi(
     private val avanza: () -> Unit,
-    private val annullaInCorso: (RegistrazioneId) -> Unit,
+    private val annullaInCorso: (IncontroId) -> Unit,
+    /** ADR 0033 §4.1: the Parti of an Incontro (each has its own S3 tab), `null` once it ceased. */
+    private val partiDi: (IncontroId) -> List<RegistrazioneId>?,
 ) : AggiornamentiVista, AbbonatoDopoCommit {
     private val _cambiamenti = MutableSharedFlow<Cambiamento>(replay = 1, extraBufferCapacity = EXTRA_BUFFER)
     override val cambiamenti = _cambiamenti.asSharedFlow()
 
     override fun ricevi(evento: EventoPubblicato) {
-        val cambiamento = when (evento) {
-            is RiassuntoRichiesto -> Cambiamento(evento.registrazioneId).also { avanza() }
-            is RiassuntoEliminato -> Cambiamento(evento.registrazioneId).also { annullaInCorso(evento.registrazioneId) }
-            is RiassuntoAvviato -> Cambiamento(evento.registrazioneId)
-            is RiassuntoPronto -> Cambiamento(evento.registrazioneId)
-            is RiassuntoFallito -> Cambiamento(evento.registrazioneId)
-            is LunghezzaMassimaRiassuntoModificata -> Cambiamento(null)
+        val cambiamenti = when (evento) {
+            is RiassuntoRichiesto -> cambiamentiDi(evento.incontroId).also { avanza() }
+            is RiassuntoEliminato -> cambiamentiDi(evento.incontroId).also { annullaInCorso(evento.incontroId) }
+            is RiassuntoAvviato -> cambiamentiDi(evento.incontroId)
+            is RiassuntoPronto -> cambiamentiDi(evento.incontroId)
+            is RiassuntoFallito -> cambiamentiDi(evento.incontroId)
+            is LunghezzaMassimaRiassuntoModificata -> listOf(Cambiamento(null))
             else -> return
         }
-        _cambiamenti.tryEmit(cambiamento)
+        cambiamenti.forEach { _cambiamenti.tryEmit(it) }
     }
+
+    /** One change per Parte of [incontroId]; an Incontro that ceased (its last Parte deleted) refreshes everything. */
+    private fun cambiamentiDi(incontroId: IncontroId): List<Cambiamento> =
+        partiDi(incontroId)?.map(::Cambiamento) ?: listOf(Cambiamento(null))
 
     private companion object {
         const val EXTRA_BUFFER = 8

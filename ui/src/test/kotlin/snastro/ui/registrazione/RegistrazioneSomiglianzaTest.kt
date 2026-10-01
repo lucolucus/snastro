@@ -19,6 +19,7 @@ import snastro.kernel.Esito
 import snastro.kernel.ParlanteId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.supporto.test.attendiFinche
@@ -66,6 +67,7 @@ private fun trascrittoRiferimenti(): TrascrittoView {
     )
     return TrascrittoView(
         REG,
+        unIncontroDi(REG),
         "Seduta",
         LocalDate.of(2026, 3, 12),
         8_000,

@@ -74,7 +74,7 @@ class SpikeIncontroTest {
             val trascritti = ids.map { checkNotNull(c.trascrizione.trascritto(it)) }
 
             // 2. every Voce of part 1 becomes its own Parlante "P1-Voce n": each attribution extracts a print.
-            val voci1 = trascritti[0].voci.map { VoceRef(ids[0], it.voceId) }
+            val voci1 = trascritti[0].voci.map { VoceRef(trascritti[0].incontroId, it.voceId) }
             runBlocking {
                 voci1.forEach { v -> c.parlanti.comandi.esegui(ComandoVoce.Nuovo(v, "P1-Voce ${v.voceId.numero}")) }
             }
@@ -85,7 +85,7 @@ class SpikeIncontroTest {
 
             // 3. the app's own Proposta for every Voce of part 2.
             val proposte = trascritti[1].voci.associate { v ->
-                v.voceId to c.parlanti.letture.proposta(VoceRef(ids[1], v.voceId))
+                v.voceId to c.parlanti.letture.proposta(VoceRef(trascritti[1].incontroId, v.voceId))
             }
 
             val sbobinature = Path.of(progetto.percorso).resolve("sbobinature")

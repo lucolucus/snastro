@@ -30,6 +30,7 @@ class AbbonatoSbobinaturaEventiAvvioTest {
         val abbonato = AbbonatoSbobinaturaEventi(
             politica,
             { emptyList<RegistrazioneId>().also { elencate.incrementAndGet() } },
+            { null },
             Segnalazione { _, _ -> },
         )
 

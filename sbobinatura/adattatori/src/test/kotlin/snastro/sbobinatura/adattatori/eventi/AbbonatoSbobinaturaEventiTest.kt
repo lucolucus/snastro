@@ -23,6 +23,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
 import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
@@ -132,7 +133,7 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = Ambiente(
             testScheduler,
             mapOf(REG_1 to unTrascritto(REG_1)),
-            LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
+            LettoreNomiFinta(mapOf(VoceRef(unIncontroDi(REG_1), VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
         )
         advanceUntilIdle() // startup sweep settles
         val primaDellaRaffica = ambiente.operazioni().size
@@ -140,7 +141,7 @@ class AbbonatoSbobinaturaEventiTest {
         // Tre eventi della STESSA Registrazione, tutti pubblicati prima che il worker abbia la
         // possibilita' di girare (nessun advance* tra un commit e l'altro).
         ambiente.commit(ElaborazioneCompletata(REG_1))
-        ambiente.commit(AttribuzioneConfermata(VoceRef(REG_1, VoceId(1)), PARLANTE, precedente = null))
+        ambiente.commit(AttribuzioneConfermata(VoceRef(unIncontroDi(REG_1), VoceId(1)), PARLANTE, precedente = null))
         ambiente.commit(VociUnite(REG_1, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         advanceUntilIdle()
 
@@ -275,7 +276,9 @@ class AbbonatoSbobinaturaEventiTest {
 
     @Test
     fun `AC-186 AttribuzioneConfermata attiva la Rigenerazione`() = runTest {
-        assertEventoRigenera(AttribuzioneConfermata(VoceRef(REG_1, VoceId(1)), PARLANTE, precedente = null))
+        assertEventoRigenera(
+            AttribuzioneConfermata(VoceRef(unIncontroDi(REG_1), VoceId(1)), PARLANTE, precedente = null),
+        )
     }
 
     @Test
@@ -316,7 +319,10 @@ class AbbonatoSbobinaturaEventiTest {
                 conAttribuzione to unTrascritto(conAttribuzione, titolo = "Uno"),
                 senzaAttribuzione to unTrascritto(senzaAttribuzione, titolo = "Due"),
             ),
-            LettoreNomiFinta(mapOf(VoceRef(conAttribuzione, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco Rossi")),
+            LettoreNomiFinta(
+                mapOf(VoceRef(unIncontroDi(conAttribuzione), VoceId(1)) to PARLANTE),
+                mapOf(PARLANTE to "Marco Rossi"),
+            ),
         )
         advanceUntilIdle()
         val primaDelRename = ambiente.operazioni().size
@@ -335,7 +341,7 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = Ambiente(
             testScheduler,
             mapOf(REG_1 to unTrascritto(REG_1)),
-            LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
+            LettoreNomiFinta(mapOf(VoceRef(unIncontroDi(REG_1), VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
         )
         advanceUntilIdle()
         val prima = ambiente.operazioni().size
@@ -351,7 +357,7 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = Ambiente(
             testScheduler,
             mapOf(REG_1 to unTrascritto(REG_1)),
-            LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
+            LettoreNomiFinta(mapOf(VoceRef(unIncontroDi(REG_1), VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
         )
         advanceUntilIdle()
         val prima = ambiente.operazioni().size
@@ -593,7 +599,10 @@ class AbbonatoSbobinaturaEventiTest {
             val trascritti = LettoreTrascrittoFinta(
                 mapOf(REG_1 to unTrascritto(REG_1), reg2 to unTrascritto(reg2, titolo = "Due")),
             )
-            val nomi = LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco"))
+            val nomi = LettoreNomiFinta(
+                mapOf(VoceRef(unIncontroDi(REG_1), VoceId(1)) to PARLANTE),
+                mapOf(PARLANTE to "Marco"),
+            )
             val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
             val politica = RigenerazioneSbobinaturaPolitica(trascritti, nomi, scrittore)
             abbonaSbobinatura(
@@ -698,7 +707,7 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = Ambiente(
             testScheduler,
             mapOf(REG_1 to unTrascritto(REG_1)),
-            LettoreNomiFinta(mapOf(VoceRef(REG_1, VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
+            LettoreNomiFinta(mapOf(VoceRef(unIncontroDi(REG_1), VoceId(1)) to PARLANTE), mapOf(PARLANTE to "Marco")),
         )
         advanceUntilIdle()
         val prima = ambiente.operazioni().size
@@ -817,6 +826,7 @@ class AbbonatoSbobinaturaEventiTest {
             data: LocalDate = LocalDate.of(2026, 9, 12),
         ) = TrascrittoTesto(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             titolo = titolo,
             dataRegistrazione = data,
             segmenti = listOf(SegmentoVista(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "Ciao.")),

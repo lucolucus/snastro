@@ -11,6 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -56,6 +57,13 @@ internal class StatoVoci(
 ) {
     /** The trascritto the panel is built on; set by the presenter's own load, refreshed after a Revisione. */
     var vista: TrascrittoView? = null
+
+    /** ADR 0033 §4.1: the Voci are the Incontro's, so their VoceRef carries the Incontro of the trascritto shown. */
+    private val incontroId: IncontroId?
+        get() = (vista ?: trascritto())?.incontroId
+
+    private fun voceRef(voceId: VoceId): VoceRef =
+        VoceRef(checkNotNull(incontroId) { "Voce $voceId senza trascritto caricato" }, voceId)
 
     /**
      * ADR 0018 Amendment (b) §2 (AC-454/455/461): read live from the presenter's own published [stato]
@@ -212,7 +220,7 @@ internal class StatoVoci(
     }
 
     private suspend fun calcola(voceId: VoceId): StatoProposta = try {
-        val vista = runInterruptible(io) { sorgenti.proposta(VoceRef(registrazioneId, voceId)) }
+        val vista = runInterruptible(io) { sorgenti.proposta(voceRef(voceId)) }
         val candidati = vista?.candidati.orEmpty()
         // AC-213: all 'nessuna' → the list is still shown, 'nuovo…' is the preferred action.
         StatoProposta.Pronta(candidati, candidati.isNotEmpty() && candidati.all { it.fascia == Fascia.NESSUNA })
@@ -231,7 +239,7 @@ internal class StatoVoci(
      * (sent by an earlier S3 visit) → re-read the panel, so its outcome (the Nome) shows here too.
      */
     private suspend fun rifletti(mappa: Map<VoceRef, StatoComando>) {
-        val mie = mappa.filterKeys { it.registrazioneId == registrazioneId }.mapValues { it.value.avviatoAlle }
+        val mie = mappa.filterKeys { it.incontroId == incontroId }.mapValues { it.value.avviatoAlle }
         val conclusiAltrove = inCorsoAltrove.keys - mie.keys - invii.keys
         inCorsoAltrove = mie
         mie.forEach { (ref, inizio) -> programmaSoglia(ref, inizio) }
@@ -287,7 +295,7 @@ internal class StatoVoci(
         // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' send no command while read-only —
         // `azioniAbilitate` already folds in `soloLettura` (CartaVoce, built by pannelloDi below).
         val carta = cartaDi(voceId)?.takeIf { it.azioniAbilitate } ?: return
-        val ref = VoceRef(registrazioneId, voceId)
+        val ref = voceRef(voceId)
         val inizio = sorgenti.clock.instant()
         invii[ref] = inizio
         erroriCarta.remove(voceId)
@@ -336,7 +344,7 @@ internal class StatoVoci(
     }
 
     /** AC-413: 'Annulla' — cancels the pending command; not a domain command, never an error. */
-    fun annulla(voceId: VoceId) = sorgenti.comandi.annulla(VoceRef(registrazioneId, voceId))
+    fun annulla(voceId: VoceId) = sorgenti.comandi.annulla(voceRef(voceId))
 
     fun chiudiErrore(voceId: VoceId) {
         erroriCarta.remove(voceId)
@@ -558,7 +566,7 @@ internal class StatoVoci(
                     voceId = voce.voceId,
                     titolo = voce.etichetta,
                     contenuto = contenutoDi(voce.voceId),
-                    inCorso = attesaDi(VoceRef(registrazioneId, voce.voceId)),
+                    inCorso = attesaDi(VoceRef(v.incontroId, voce.voceId)),
                     errore = erroriCarta[voce.voceId],
                     altreVoci = tutte.filter { it.voceId != voce.voceId },
                     // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' disabled while read-only —

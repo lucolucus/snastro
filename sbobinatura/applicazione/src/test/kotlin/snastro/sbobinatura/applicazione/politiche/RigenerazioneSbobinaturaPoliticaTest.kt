@@ -8,6 +8,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.sbobinatura.applicazione.porte.ErroreApplicazioneSbobinatura
 import snastro.sbobinatura.applicazione.porte.LettoreNomiFinta
 import snastro.sbobinatura.applicazione.porte.LettoreTrascritto
@@ -102,7 +103,7 @@ class RigenerazioneSbobinaturaPoliticaTest {
         val id = RegistrazioneId("reg-1")
         val trascritti = LettoreTrascrittoFinta(mapOf(id to unTrascritto(id, titolo = "Riunione")))
         val nomi = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(id, VoceId(1)) to PARLANTE),
+            attribuzioni = mapOf(VoceRef(unIncontroDi(id), VoceId(1)) to PARLANTE),
             nomiParlanti = mapOf(PARLANTE to "Marco"),
         )
         val scrittore = ScrittoreSbobinaturaFinta()
@@ -268,9 +269,9 @@ class RigenerazioneSbobinaturaPoliticaTest {
         )
         val nomi = LettoreNomiFinta(
             attribuzioni = mapOf(
-                VoceRef(conAttribuzione1, VoceId(1)) to PARLANTE,
-                VoceRef(conAttribuzione2, VoceId(1)) to PARLANTE,
-                VoceRef(senzaAttribuzione, VoceId(1)) to altroParlante,
+                VoceRef(unIncontroDi(conAttribuzione1), VoceId(1)) to PARLANTE,
+                VoceRef(unIncontroDi(conAttribuzione2), VoceId(1)) to PARLANTE,
+                VoceRef(unIncontroDi(senzaAttribuzione), VoceId(1)) to altroParlante,
             ),
             nomiParlanti = mapOf(PARLANTE to "Marco Rossi", altroParlante to "Anna"),
         )
@@ -287,7 +288,7 @@ class RigenerazioneSbobinaturaPoliticaTest {
         val id = RegistrazioneId("con-attribuzione")
         val trascritti = LettoreTrascrittoFinta(mapOf(id to unTrascritto(id)))
         val nomi = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(id, VoceId(1)) to PARLANTE),
+            attribuzioni = mapOf(VoceRef(unIncontroDi(id), VoceId(1)) to PARLANTE),
             nomiParlanti = mapOf(PARLANTE to "Marco"),
         )
         val scrittore = ScrittoreSbobinaturaFinta()
@@ -303,7 +304,7 @@ class RigenerazioneSbobinaturaPoliticaTest {
         val id = RegistrazioneId("con-attribuzione")
         val trascritti = LettoreTrascrittoFinta(mapOf(id to unTrascritto(id)))
         val nomi = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(id, VoceId(1)) to PARLANTE),
+            attribuzioni = mapOf(VoceRef(unIncontroDi(id), VoceId(1)) to PARLANTE),
             nomiParlanti = mapOf(PARLANTE to "Marco"),
         )
         val scrittore = ScrittoreSbobinaturaFinta()
@@ -367,7 +368,10 @@ class RigenerazioneSbobinaturaPoliticaTest {
             mapOf(prima to unTrascritto(prima, titolo = "Prima"), seconda to unTrascritto(seconda, titolo = "Seconda")),
         )
         val nomi = LettoreNomiFinta(
-            attribuzioni = mapOf(VoceRef(prima, VoceId(1)) to PARLANTE, VoceRef(seconda, VoceId(1)) to PARLANTE),
+            attribuzioni = mapOf(
+                VoceRef(unIncontroDi(prima), VoceId(1)) to PARLANTE,
+                VoceRef(unIncontroDi(seconda), VoceId(1)) to PARLANTE,
+            ),
             nomiParlanti = mapOf(PARLANTE to "Marco Rossi"),
         )
         val scrittore = ScrittoreSbobinaturaFinta()
@@ -391,6 +395,7 @@ class RigenerazioneSbobinaturaPoliticaTest {
             data: LocalDate = LocalDate.of(2026, 9, 12),
         ) = TrascrittoTesto(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             titolo = titolo,
             dataRegistrazione = data,
             segmenti = listOf(SegmentoVista(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "Ciao.")),

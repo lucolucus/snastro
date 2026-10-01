@@ -1,10 +1,11 @@
 package snastro.sintesi.applicazione.porte
 
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.Ripristinabile
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unicaParteDi
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi
@@ -29,8 +30,11 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
 
     override fun trova(id: RiassuntoId): Riassunto? = righe[id]?.inDominio()
 
-    override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> =
-        righe.values.filter { it.registrazioneId == r }.map { it.inDominio() }
+    override fun trova(incontroId: IncontroId): List<Riassunto> =
+        righe.values.filter { it.incontroId == incontroId }.sortedWith(
+            compareBy({ it.richiestoAlle }, { it.id.valore }),
+        )
+            .map { it.inDominio() }
 
     override fun inAttesa(): List<Riassunto> =
         righe.values.filter { it.inAttesa }.sortedWith(compareBy({ it.richiestoAlle }, { it.id.valore }))
@@ -40,8 +44,8 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
 
     @Synchronized
     override fun salva(r: Riassunto): Esito<Unit> {
-        val altre = righe.values.filter { it.registrazioneId == r.registrazioneId && it.id != r.id }
-        if (altre.any { it.pronto == r.pronto }) return Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(r.registrazioneId))
+        val altre = righe.values.filter { it.incontroId == r.incontroId && it.id != r.id }
+        if (altre.any { it.pronto == r.pronto }) return Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(r.incontroId))
         righe = righe + (r.id to Riga(r))
         return Esito.Ok(Unit)
     }
@@ -51,7 +55,7 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
         require(r.pronto || r.fallito) { "concludi di un Riassunto non concluso: ${r.id}" }
         if (righe[r.id]?.inCorso != true) return Esito.Ok(false)
         val senzaPrecedente =
-            if (r.pronto) righe.filterValues { !(it.pronto && it.registrazioneId == r.registrazioneId) } else righe
+            if (r.pronto) righe.filterValues { !(it.pronto && it.incontroId == r.incontroId) } else righe
         righe = senzaPrecedente + (r.id to Riga(r))
         return Esito.Ok(true)
     }
@@ -63,9 +67,9 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
     }
 
     @Synchronized
-    override fun rimuoviDiRegistrazione(r: RegistrazioneId): Esito<Int> {
+    override fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int> {
         val prima = righe.size
-        righe = righe.filterValues { it.registrazioneId != r }
+        righe = righe.filterValues { it.incontroId != incontroId }
         return Esito.Ok(prima - righe.size)
     }
 
@@ -77,7 +81,7 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
     /** The persisted fields of one `riassunto` row and its `riassunto_elemento` / `riassunto_fonte` children. */
     private class Riga(r: Riassunto) {
         val id = r.id
-        val registrazioneId = r.registrazioneId
+        val incontroId = r.incontroId
         val argomento = r.argomento?.valore
         val parole = r.lunghezzaMassima.valore
         val richiestoAlle = r.richiestoAlle
@@ -95,7 +99,7 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
         val struttura = r.struttura
 
         fun inDominio(): Riassunto {
-            val riassunto = unRiassunto(id.valore, registrazioneId, argomento, parole, richiestoAlle)
+            val riassunto = unRiassunto(id.valore, unicaParteDi(incontroId), argomento, parole, richiestoAlle)
             if (inAttesa) return riassunto
             riassunto.conAvvio(checkNotNull(avviatoAlle))
             return when {
@@ -119,8 +123,9 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
         private fun elemento(testo: String, fonti: Set<SegmentoId>, voce: VoceId?): BozzaElemento =
             BozzaElemento(testo, fonti.map { it.numero }, voce?.numero)
 
+        // The stored key is '<registrazioneId>=<StrutturaTrascritto.chiave>' (ADR 0034 §1): the Parte prefix goes.
         private fun strutturaDa(chiave: String): StrutturaTrascritto = StrutturaTrascritto.di(
-            chiave.split(',').filter { it.isNotEmpty() }.map { coppia ->
+            chiave.substringAfter('=').split(",").filter { it.isNotEmpty() }.map { coppia ->
                 val (segmento, voce) = coppia.split(':')
                 SegmentoId(segmento.toInt()) to VoceId(voce.toInt())
             },

@@ -17,6 +17,7 @@ import snastro.kernel.EstrattoRef
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -44,6 +45,7 @@ private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
 
 private fun unaVista(segmenti: List<SegmentoTrascrittoView>) = TrascrittoView(
     registrazioneId = REG_1,
+    incontroId = unIncontroDi(REG_1),
     titolo = "Seduta del 12 marzo",
     dataRegistrazione = DATA_1,
     durataMs = 10_000,

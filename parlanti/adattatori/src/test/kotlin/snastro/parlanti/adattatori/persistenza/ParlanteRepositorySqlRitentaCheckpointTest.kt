@@ -14,6 +14,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -89,8 +91,8 @@ class ParlanteRepositorySqlRitentaCheckpointTest {
     private fun unParlanteConImpronta(repo: ParlanteRepositorySql, uow: UnitaDiLavoroSql): Parlante {
         val p = Parlante.crea(ParlanteId("id-1"), PROGETTO, Nome.di("Marco").atteso(), TipoParlante.RICORRENTE)
             .aggregato
-        p.registraImpronta(V1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1").atteso()
-        p.registraImpronta(V2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "modello-1").atteso()
+        p.registraImpronta(V1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1", unicaParteDi(V1)).atteso()
+        p.registraImpronta(V2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "modello-1", unicaParteDi(V2)).atteso()
         uow.inTransazione { repo.salva(p) }.atteso()
         return p
     }
@@ -126,8 +128,8 @@ class ParlanteRepositorySqlRitentaCheckpointTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val R = RegistrazioneId("registrazione-1")
-        val V1 = VoceRef(R, VoceId(1))
-        val V2 = VoceRef(R, VoceId(2))
+        val V1 = VoceRef(unIncontroDi(R), VoceId(1))
+        val V2 = VoceRef(unIncontroDi(R), VoceId(2))
 
         fun driverInMemoria(): SqlDriver {
             val config = SQLiteConfig().apply { enforceForeignKeys(true) }

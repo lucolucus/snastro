@@ -3,12 +3,14 @@ package snastro.ui.testi
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.ErroreDominio
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.dominio.ErroreProgetto
@@ -167,13 +169,13 @@ class MessaggiErroreTest {
             listOf(
                 ErroreParlanti.ParlanteNonTrovato(ParlanteId("id-1")),
                 ErroreParlanti.TrascrittoNonTrovato(RegistrazioneId("id-1")),
-                ErroreParlanti.VoceNonTrovata(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
+                ErroreParlanti.VoceNonTrovata(VoceRef(unIncontroDi(RegistrazioneId("id-1")), VoceId(1))),
                 ErroreParlanti.ParlanteEliminatoNonModificabile(ParlanteId("id-1")),
                 ErroreParlanti.PromozioneNonAmmessa(ParlanteId("id-1")),
                 ErroreParlanti.NomeGiaInUso("Marco"),
                 ErroreParlanti.NomeVuoto,
-                ErroreParlanti.VoceGiaAttribuita(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
-                ErroreParlanti.VoceCambiata(VoceRef(RegistrazioneId("id-1"), VoceId(1))),
+                ErroreParlanti.VoceGiaAttribuita(VoceRef(unIncontroDi(RegistrazioneId("id-1")), VoceId(1))),
+                ErroreParlanti.VoceCambiata(VoceRef(unIncontroDi(RegistrazioneId("id-1")), VoceId(1))),
                 ErroreParlanti.RiferimentiInsufficienti(RegistrazioneId("id-1")),
             ),
         ) { messaggioPer(it) }
@@ -212,10 +214,10 @@ class MessaggiErroreTest {
         verificaCopertura(
             ErroreSintesi::class.java,
             listOf(
-                ErroreSintesi.RiassuntoGiaAperto(RegistrazioneId("id-1")),
+                ErroreSintesi.RiassuntoGiaAperto(IncontroId("id-1")),
                 ErroreSintesi.ModelloNonInstallato,
-                ErroreSintesi.TrascrittoNonDisponibile(RegistrazioneId("id-1")),
-                ErroreSintesi.ElaborazioneGiaAperta(RegistrazioneId("id-1")),
+                ErroreSintesi.TrascrittoNonDisponibile(IncontroId("id-1")),
+                ErroreSintesi.ElaborazioneGiaAperta(IncontroId("id-1")),
                 ErroreSintesi.RegistrazioneTroppoLunga(30_000, 28_000),
                 ErroreSintesi.ArgomentoTroppoLungo(210, 200),
                 ErroreSintesi.LunghezzaMassimaFuoriIntervallo(299, 300, 2500),

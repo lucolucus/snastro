@@ -21,7 +21,7 @@ public class RiallineaTutteLeImpronteServizio(
 ) {
     public fun esegui(c: RiallineaTutteLeImpronte): Esito<Unit> =
         Esito.Ok(lettura.inLettura { parlanti.impronteDelProgetto(c.progettoId) })
-            .poi { righe -> riallineaOgnuna(righe.map { it.voceRef.registrazioneId }.distinct()) }
+            .poi { righe -> riallineaOgnuna(righe.map { it.parte }.distinct()) }
 
     private fun riallineaOgnuna(ids: List<RegistrazioneId>): Esito<Unit> {
         var primoErrore: Esito.Errore? = null

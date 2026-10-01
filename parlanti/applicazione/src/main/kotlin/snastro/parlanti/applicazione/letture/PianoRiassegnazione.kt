@@ -72,7 +72,9 @@ public class PianoRiassegnazioneQuery(
         segmenti: List<SegmentoDiVoce>,
         progresso: (fatti: Int, totale: Int) -> Unit,
     ): Esito<PianoRiassegnazione> {
-        val vociDi: Map<ParlanteId, List<VoceId>> = attribuzioni.diRegistrazione(id)
+        // ADR 0033 §4.1: the Attribuzioni of the Voci of this Parte (an Attribuzione is per Voce of the Incontro).
+        val vociDi: Map<ParlanteId, List<VoceId>> = voci.voci(id).orEmpty()
+            .mapNotNull { attribuzioni.trova(it.voceRef) }
             .groupBy({ it.parlanteId }, { it.voceRef.voceId })
         val segmentiPerVoce: Map<VoceId, List<SegmentoDiVoce>> = segmenti.groupBy { it.voceId }
 

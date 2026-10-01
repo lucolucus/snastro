@@ -7,6 +7,10 @@ trovaDelProgetto:
 SELECT * FROM registrazione WHERE progetto_id = :progettoId
     ORDER BY data_registrazione DESC, aggiunta_alle DESC;
 
+-- ADR 0033 §4.1: the Parti of an Incontro, in no guaranteed order.
+trovaDiIncontro:
+SELECT * FROM registrazione WHERE incontro_id = :incontroId;
+
 inserisci:
 INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, data_registrazione, aggiunta_alle)
 VALUES (:id, :progettoId, :incontroId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazione, :aggiuntaAlle);

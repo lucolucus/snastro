@@ -2,6 +2,7 @@ package snastro.sintesi.dominio
 
 import snastro.kernel.Creato
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.mappa
@@ -12,7 +13,8 @@ import snastro.sintesi.dominio.StatoRiassunto.PRONTO
 import java.time.Instant
 
 /**
- * One request to summarise a Registrazione. Owns INV-S1 (lifecycle; content iff `pronto`, motivo iff `fallito`),
+ * One request to summarise an Incontro (ADR 0037 §1, keyed by [incontroId]). Owns INV-S1 (lifecycle; content iff
+ * `pronto`, motivo iff `fallito`),
  * INV-S4 (`pronto` only through the Verifica delle fonti), INV-S5 (speakers only as Voce references),
  * INV-S7 ([superato] derived from the stored [struttura]) and INV-S10 ([lunghezzaMassima] fixed at request).
  * No deletion method: physical removals are repository operations (ADR 0021 §9).
@@ -21,7 +23,7 @@ import java.time.Instant
 @Suppress("LongParameterList") // one parameter per field of the root
 public class Riassunto internal constructor(
     public val id: RiassuntoId,
-    public val registrazioneId: RegistrazioneId,
+    public val incontroId: IncontroId,
     public val argomento: Argomento?,
     public val lunghezzaMassima: LunghezzaMassimaParole,
     public val richiestoAlle: Instant,
@@ -62,8 +64,15 @@ public class Riassunto internal constructor(
     /** Elements (+ a Sommario) dropped by the Verifica delle fonti; null unless `pronto`. */
     public val omessi: Int? get() = _contenuto?.omessi
 
-    /** [StrutturaTrascritto.chiave] of the structure the content was verified against; null unless `pronto`. */
+    /**
+     * The key of the structure the content was verified against, `<registrazioneId>=<StrutturaTrascritto.chiave>` of
+     * the Parte read (ADR 0034 §1: StrutturaIncontro.chiave for one Parte); null unless `pronto`. TRANSITION (ADR 0033
+     * §4.1): one Parte per run until riassunto-incontro brings StrutturaIncontro.
+     */
     public val struttura: String? get() = _struttura
+
+    /** The Parte the content was verified against (its Fonti's Registrazione); null unless `pronto`. */
+    public val parte: RegistrazioneId? get() = _struttura?.substringBefore(SEPARATORE_PARTE)?.let(::RegistrazioneId)
 
     /** `in_attesa` or `in_corso`. */
     public val aperto: Boolean get() = stato == IN_ATTESA || stato == IN_CORSO
@@ -72,20 +81,28 @@ public class Riassunto internal constructor(
     public val pronto: Boolean get() = stato == PRONTO
     public val fallito: Boolean get() = stato == FALLITO
 
-    /** INV-S7: a `pronto` Riassunto whose structure differs from the [corrente] one; false unless `pronto`. */
-    public fun superato(corrente: StrutturaTrascritto): Boolean = pronto && corrente.chiave != struttura
+    /**
+     * INV-S7: a `pronto` Riassunto whose structure differs from the [corrente] one of the Parte [parte]; false unless
+     * `pronto`.
+     */
+    public fun superato(parte: RegistrazioneId, corrente: StrutturaTrascritto): Boolean =
+        pronto && chiave(parte, corrente) != struttura
 
     public fun avvia(alle: Instant): Esito<RiassuntoAvviatoDominio> =
         transizione(da = IN_ATTESA, verso = IN_CORSO) {
             _avviatoAlle = alle
-            RiassuntoAvviatoDominio(id, registrazioneId, alle)
+            RiassuntoAvviatoDominio(id, incontroId, alle)
         }
 
     /**
-     * INV-S4: verifies [bozza] against [struttura] (the one read for this run). Some content left → `pronto`
-     * (kept whole, never truncated: INV-S10); nothing left → `fallito` NESSUN_CONTENUTO_VERIFICABILE.
+     * INV-S4: verifies [bozza] against [struttura] (the one read for this run, of the Parte [parte]). Some content
+     * left → `pronto` (kept whole, never truncated: INV-S10); nothing left → `fallito` NESSUN_CONTENUTO_VERIFICABILE.
      */
-    public fun completa(bozza: BozzaRiassunto, struttura: StrutturaTrascritto): Esito<ConclusioneRiassunto> {
+    public fun completa(
+        bozza: BozzaRiassunto,
+        parte: RegistrazioneId,
+        struttura: StrutturaTrascritto,
+    ): Esito<ConclusioneRiassunto> {
         if (stato != IN_CORSO) return nonAmmessa(PRONTO)
         val verificato = VerificaDelleFonti(struttura).applica(bozza)
         return if (verificato.vuoto) {
@@ -93,7 +110,7 @@ public class Riassunto internal constructor(
         } else {
             transizione(da = IN_CORSO, verso = PRONTO) {
                 _contenuto = verificato
-                _struttura = struttura.chiave
+                _struttura = chiave(parte, struttura)
                 ConclusioneRiassunto.Pronto(verificato.omessi)
             }
         }
@@ -102,7 +119,7 @@ public class Riassunto internal constructor(
     public fun fallisci(motivo: MotivoFallimento): Esito<RiassuntoFallitoDominio> =
         transizione(da = IN_CORSO, verso = FALLITO) {
             _motivoFallimento = motivo
-            RiassuntoFallitoDominio(id, registrazioneId, motivo)
+            RiassuntoFallitoDominio(id, incontroId, motivo)
         }
 
     private inline fun <E> transizione(da: StatoRiassunto, verso: StatoRiassunto, effetto: () -> E): Esito<E> {
@@ -116,18 +133,24 @@ public class Riassunto internal constructor(
         Esito.Errore(ErroreSintesi.TransizioneNonAmmessa(stato.codice, verso.codice))
 
     public companion object {
+        private const val SEPARATORE_PARTE = '='
+
+        /** `<registrazioneId>=<StrutturaTrascritto.chiave>`: the 7.sqm re-encoding of ADR 0034 §1, one Parte. */
+        private fun chiave(parte: RegistrazioneId, struttura: StrutturaTrascritto): String =
+            "${parte.valore}$SEPARATORE_PARTE${struttura.chiave}"
+
         public fun richiedi(
             id: RiassuntoId,
-            registrazioneId: RegistrazioneId,
+            incontroId: IncontroId,
             argomento: Argomento?,
             lunghezzaMassima: LunghezzaMassimaParole,
             richiestoAlle: Instant,
         ): Creato<Riassunto, RiassuntoRichiestoDominio> = Creato(
             Riassunto(
-                id, registrazioneId, argomento, lunghezzaMassima, richiestoAlle,
+                id, incontroId, argomento, lunghezzaMassima, richiestoAlle,
                 IN_ATTESA, avviatoAlle = null, motivoFallimento = null, contenuto = null, struttura = null,
             ),
-            RiassuntoRichiestoDominio(id, registrazioneId, richiestoAlle),
+            RiassuntoRichiestoDominio(id, incontroId, richiestoAlle),
         )
 
         /**
@@ -137,7 +160,7 @@ public class Riassunto internal constructor(
         @RicostituzioneDaPersistenza
         public fun ricostituisci(
             id: RiassuntoId,
-            registrazioneId: RegistrazioneId,
+            incontroId: IncontroId,
             argomento: Argomento?,
             lunghezzaMassima: LunghezzaMassimaParole,
             richiestoAlle: Instant,
@@ -167,7 +190,7 @@ public class Riassunto internal constructor(
                 )
             }
             return Riassunto(
-                id, registrazioneId, argomento, lunghezzaMassima, richiestoAlle,
+                id, incontroId, argomento, lunghezzaMassima, richiestoAlle,
                 stato, avviatoAlle, motivoFallimento, contenuto, struttura,
             )
         }

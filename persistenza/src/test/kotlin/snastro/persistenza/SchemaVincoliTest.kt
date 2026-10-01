@@ -98,8 +98,16 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
-        db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
-        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+        db.attribuzioneQueries.inserisci(db.incontroDi(registrazioneId), 1L, progettoId, "parlante-1")
+        db.improntaVocaleQueries.inserisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            1L,
+            byteArrayOf(1),
+            "0-1000",
+            "modello-1",
+        )
         db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)
 
         // Trascritto's documented salva: DELETE voce ... then re-insert, in ONE transaction that
@@ -111,7 +119,7 @@ class SchemaVincoliTest {
             db.voceQueries.inserisci(registrazioneId, 1L)
         }
 
-        assertEquals(1, db.attribuzioneQueries.trovaDiRegistrazione(registrazioneId).executeAsList().size)
+        assertEquals(1, db.attribuzioneQueries.trovaDiIncontro(db.incontroDi(registrazioneId)).executeAsList().size)
         assertEquals(1, db.improntaVocaleQueries.trovaDiParlante("parlante-1").executeAsList().size)
         assertEquals(1, db.segmentoQueries.trovaDiTrascritto(registrazioneId).executeAsList().size)
     }
@@ -124,12 +132,12 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
-        db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
+        db.attribuzioneQueries.inserisci(db.incontroDi(registrazioneId), 1L, progettoId, "parlante-1")
 
         assertFailsWith<SQLException> {
             db.transaction {
                 db.voceQueries.eliminaDiRegistrazione(registrazioneId)
-                db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
+                db.voceIncontroQueries.eliminaSenzaPresenza(db.incontroDi(registrazioneId), registrazioneId)
                 // niente reinserimento: attribuzione resta orfana quando la transazione fa commit.
             }
         }
@@ -143,7 +151,15 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
-        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+        db.improntaVocaleQueries.inserisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            1L,
+            byteArrayOf(1),
+            "0-1000",
+            "modello-1",
+        )
 
         // La Voce resta nell'Incontro (voce_incontro), ma non ha piu presenza nella Parte da cui l'impronta e tratta.
         assertFailsWith<SQLException> {
@@ -214,10 +230,10 @@ class SchemaVincoliTest {
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.parlanteQueries.inserisci("parlante-2", progettoId, "Luca", "luca", "ricorrente", "attivo")
-        db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-1")
+        db.attribuzioneQueries.inserisci(db.incontroDi(registrazioneId), 1L, progettoId, "parlante-1")
 
         assertFailsWith<SQLException> {
-            db.attribuzioneQueries.inserisci(registrazioneId, 1L, progettoId, "parlante-2")
+            db.attribuzioneQueries.inserisci(db.incontroDi(registrazioneId), 1L, progettoId, "parlante-2")
         }
     }
 
@@ -231,6 +247,7 @@ class SchemaVincoliTest {
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.improntaVocaleQueries.inserisci(
             "parlante-1",
+            db.incontroDi(registrazioneId),
             registrazioneId,
             1L,
             byteArrayOf(1, 2, 3),
@@ -241,6 +258,7 @@ class SchemaVincoliTest {
         assertFailsWith<SQLException> {
             db.improntaVocaleQueries.inserisci(
                 "parlante-1",
+                db.incontroDi(registrazioneId),
                 registrazioneId,
                 1L,
                 byteArrayOf(4, 5, 6),
@@ -297,10 +315,34 @@ class SchemaVincoliTest {
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 2L, creaTrascritto = false)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
-        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
-        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 2L, byteArrayOf(2), "0-1000", "modello-1")
+        db.improntaVocaleQueries.inserisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            1L,
+            byteArrayOf(1),
+            "0-1000",
+            "modello-1",
+        )
+        db.improntaVocaleQueries.inserisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            2L,
+            byteArrayOf(2),
+            "0-1000",
+            "modello-1",
+        )
 
-        db.improntaVocaleQueries.sostituisci("parlante-1", registrazioneId, 1L, byteArrayOf(9), "0-2000", "modello-2")
+        db.improntaVocaleQueries.sostituisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            1L,
+            byteArrayOf(9),
+            "0-2000",
+            "modello-2",
+        )
 
         val impronte = db.improntaVocaleQueries.trovaDiParlante("parlante-1").executeAsList()
         assertEquals(
@@ -319,6 +361,7 @@ class SchemaVincoliTest {
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.improntaVocaleQueries.inserisci(
             "parlante-1",
+            db.incontroDi(registrazioneId),
             registrazioneId,
             1L,
             byteArrayOf(1, 2, 3),
@@ -345,7 +388,15 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
-        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+        db.improntaVocaleQueries.inserisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            1L,
+            byteArrayOf(1),
+            "0-1000",
+            "modello-1",
+        )
 
         val righeAggiornate = db.improntaVocaleQueries.aggiornaCompareAndSet(
             impronta = byteArrayOf(9),
@@ -372,7 +423,15 @@ class SchemaVincoliTest {
         val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
         db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
         db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
-        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+        db.improntaVocaleQueries.inserisci(
+            "parlante-1",
+            db.incontroDi(registrazioneId),
+            registrazioneId,
+            1L,
+            byteArrayOf(1),
+            "0-1000",
+            "modello-1",
+        )
 
         val righeAggiornate = db.improntaVocaleQueries.aggiornaCompareAndSet(
             impronta = byteArrayOf(9),
@@ -427,10 +486,10 @@ class SchemaVincoliTest {
         creaTrascritto: Boolean = true,
     ) {
         if (creaTrascritto) {
-            vociIncontroQueries.inserisci(numeroVoce + 1, registrazioneId)
+            vociIncontroQueries.inserisci(incontroDi(registrazioneId), numeroVoce + 1)
             trascrittoQueries.inserisci(registrazioneId, 1L)
         }
-        voceIncontroQueries.inserisciSeAssente(numeroVoce, registrazioneId)
+        voceIncontroQueries.inserisciSeAssente(incontroDi(registrazioneId), numeroVoce)
         voceQueries.inserisci(registrazioneId, numeroVoce)
     }
 }

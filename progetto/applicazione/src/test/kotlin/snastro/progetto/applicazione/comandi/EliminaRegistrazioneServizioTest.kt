@@ -5,6 +5,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -149,6 +150,7 @@ class EliminaRegistrazioneServizioTest {
     ): Registrazione = Registrazione.aggiungi(
         id = registrazioneId,
         progettoId = progettoId,
+        incontroId = IncontroId("incontro-di-${registrazioneId.valore}"),
         titolo = titolo,
         riferimentoAudio = RiferimentoAudio("audio/${registrazioneId.valore}.m4a"),
         durataMs = 3_600_000,

@@ -12,6 +12,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
 import snastro.sintesi.applicazione.eventi.RiassuntoFallito
 import snastro.sintesi.applicazione.eventi.RiassuntoPronto
@@ -32,6 +33,7 @@ import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
+import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
 import snastro.sintesi.applicazione.porte.statoOsservabile
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.applicazione.porte.unaStruttura
@@ -74,6 +76,7 @@ class EseguiProssimoRiassuntoServizioTest {
             orologio,
             riassunti,
             trascritti,
+            ogniIncontroConUnaParte(),
             modello,
             disponibilita,
             eventi,
@@ -94,7 +97,7 @@ class EseguiProssimoRiassuntoServizioTest {
         assertEquals(RisultatoRiassunto.Avviato(RiassuntoId("r1")), esito.atteso())
         assertEquals(ADESSO, checkNotNull(riassunti.trova(RiassuntoId("r1"))).avviatoAlle)
         assertEquals(listOf("r2"), riassunti.inAttesa().map { it.id.valore })
-        assertTrue(eventi.pubblicati.contains(RiassuntoAvviato(REG1)))
+        assertTrue(eventi.pubblicati.contains(RiassuntoAvviato(unIncontroDi(REG1))))
     }
 
     @Test
@@ -195,6 +198,7 @@ class EseguiProssimoRiassuntoServizioTest {
             orologio,
             repoSpia,
             LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)),
+            ogniIncontroConUnaParte(),
             ModelloLinguisticoFinto(transazioniSpia),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventiSpia,
@@ -207,11 +211,11 @@ class EseguiProssimoRiassuntoServizioTest {
         servizioSpia.esegui(EseguiProssimoRiassunto()).atteso()
 
         verify(exactly = 0) { repoSpia.rimuovi(any()) }
-        verify(exactly = 0) { repoSpia.rimuoviDiRegistrazione(any()) }
+        verify(exactly = 0) { repoSpia.rimuoviDiIncontro(any()) }
         verify(exactly = 1) { repoSpia.concludi(any()) }
-        val pronti = repoSpia.diRegistrazione(REG1).filter { it.pronto }
+        val pronti = repoSpia.trova(unIncontroDi(REG1)).filter { it.pronto }
         assertEquals(listOf("r1"), pronti.map { it.id.valore })
-        assertTrue(eventiSpia.pubblicati.contains(RiassuntoPronto(REG1)))
+        assertTrue(eventiSpia.pubblicati.contains(RiassuntoPronto(unIncontroDi(REG1))))
     }
 
     @Test
@@ -228,7 +232,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.fallito)
         assertEquals(MotivoFallimento.MODELLO_NON_DISPONIBILE, concluso.motivoFallimento)
-        assertTrue(eventi.pubblicati.contains(RiassuntoFallito(REG1, "modello_non_disponibile")))
+        assertTrue(eventi.pubblicati.contains(RiassuntoFallito(unIncontroDi(REG1), "modello_non_disponibile")))
     }
 
     @Test
@@ -257,7 +261,10 @@ class EseguiProssimoRiassuntoServizioTest {
 
             val concluso = checkNotNull(riassunti.trova(RiassuntoId("r-caso-$indice")))
             assertEquals(motivoAtteso, concluso.motivoFallimento, "caso $errore")
-            assertTrue(eventi.pubblicati.contains(RiassuntoFallito(reg, motivoAtteso.codice)), "evento caso $errore")
+            assertTrue(
+                eventi.pubblicati.contains(RiassuntoFallito(unIncontroDi(reg), motivoAtteso.codice)),
+                "evento caso $errore",
+            )
             assertEquals(
                 precedentePrima,
                 checkNotNull(riassunti.trova(precedente.id)).statoOsservabile(),
@@ -284,7 +291,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.fallito)
         assertEquals(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE, concluso.motivoFallimento)
-        assertTrue(eventi.pubblicati.contains(RiassuntoFallito(REG1, "nessun_contenuto_verificabile")))
+        assertTrue(eventi.pubblicati.contains(RiassuntoFallito(unIncontroDi(REG1), "nessun_contenuto_verificabile")))
     }
 
     @Test
@@ -351,7 +358,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val riassunto = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(riassunto.inCorso, "resta in_corso: nessuna conclusione scritta")
         // Il claim pubblica comunque RiassuntoAvviato (AC-S83); solo la conclusione e' saltata, come Annullato.
-        assertEquals(listOf(RiassuntoAvviato(REG1)), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoAvviato(unIncontroDi(REG1))), eventi.pubblicati)
     }
 
     @Test
@@ -365,6 +372,7 @@ class EseguiProssimoRiassuntoServizioTest {
             orologio,
             concludiGuasto,
             LettoreTrascrittoFinta(mapOf(REG1 to SEGMENTI)),
+            ogniIncontroConUnaParte(),
             modello,
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             eventi,
@@ -374,7 +382,7 @@ class EseguiProssimoRiassuntoServizioTest {
 
         assertEquals(ErroreDiProva.Fallito("concludi"), esito.erroreAtteso<ErroreDiProva.Fallito>())
         assertTrue(checkNotNull(riassunti.trova(RiassuntoId("r1"))).inCorso, "rollback: resta in_corso")
-        assertEquals(listOf(RiassuntoAvviato(REG1)), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoAvviato(unIncontroDi(REG1))), eventi.pubblicati)
     }
 
     @Test
@@ -387,7 +395,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val riassunto = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(riassunto.inCorso, "resta in_corso: nessuna conclusione scritta")
         // The claim itself still publishes RiassuntoAvviato (AC-S83); only the conclusion is skipped.
-        assertEquals(listOf(RiassuntoAvviato(REG1)), eventi.pubblicati)
+        assertEquals(listOf(RiassuntoAvviato(unIncontroDi(REG1))), eventi.pubblicati)
     }
 
     @Test
@@ -405,9 +413,9 @@ class EseguiProssimoRiassuntoServizioTest {
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.pronto)
         val strutturaLettaNelRun = unaStruttura(1 to 1, 2 to 2, 3 to 1) // SEGMENTI, as the run's OWN read saw it
-        assertEquals(strutturaLettaNelRun.chiave, concluso.struttura)
+        assertEquals("${REG1.valore}=${strutturaLettaNelRun.chiave}", concluso.struttura)
         val strutturaCorrenteDelLettore = unaStruttura(1 to 2, 2 to 1, 3 to 2) // what a fresh read gives NOW
-        assertTrue(concluso.superato(strutturaCorrenteDelLettore))
+        assertTrue(concluso.superato(REG1, strutturaCorrenteDelLettore))
     }
 
     @Test
@@ -425,7 +433,11 @@ class EseguiProssimoRiassuntoServizioTest {
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.pronto)
         val strutturaRivista = unaStruttura(1 to 3, 2 to 2, 3 to 3)
-        assertEquals(strutturaRivista.chiave, concluso.struttura, "il run vede la revisione, non uno stato precedente")
+        assertEquals(
+            "${REG1.valore}=${strutturaRivista.chiave}",
+            concluso.struttura,
+            "il run vede la revisione, non uno stato precedente",
+        )
     }
 
     private companion object {

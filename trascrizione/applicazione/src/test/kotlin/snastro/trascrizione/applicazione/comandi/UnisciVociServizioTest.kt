@@ -7,8 +7,10 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
@@ -18,7 +20,7 @@ import kotlin.test.assertNotNull
 class UnisciVociServizioTest {
     private val trascritti = TrascrittoRepositoryFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(trascritti))
-    private val servizio = UnisciVociServizio(eventi.unitaDiLavoro, trascritti, eventi)
+    private val servizio = UnisciVociServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
 
     @Test
     fun `AC-76 UnisciVoci valido sposta i Segmenti su sopravvive e pubblica VociUnite esattamente una volta`() {
@@ -26,7 +28,7 @@ class UnisciVociServizioTest {
 
         servizio.esegui(UnisciVoci(REGISTRAZIONE, sopravvive = VoceId(1), rimossa = VoceId(2))).atteso()
 
-        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE))
+        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
         assertEquals(listOf(VoceId(1)), trascritto.voci.map { it.id })
         assertEquals(
             listOf(VociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2))),
@@ -64,7 +66,10 @@ class UnisciVociServizioTest {
             .erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
 
         assertEquals(VoceId(99), errore.voceId)
-        assertEquals(originale.segmenti, assertNotNull(trascritti.trova(REGISTRAZIONE)).segmenti)
+        assertEquals(
+            originale.segmenti,
+            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+        )
         assertEquals(emptyList(), eventi.pubblicati)
     }
 

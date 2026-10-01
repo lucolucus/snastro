@@ -1,37 +1,23 @@
 -- Queries for `riassunto` — schema in migrations/7.sqm (ADR 0034, ADR 0022, ADR 0006 Amendment (a)).
--- TRANSITION (ADR 0033 §6, removed by incontro-chiavi): the domain still carries a registrazione_id, so the
--- Incontro is resolved from it by SQL join and rows are projected back with the Parte's registrazione_id; the
--- stored `struttura` carries the '<registrazioneId>=' prefix of ADR 0034 §1, added and stripped by the repository.
+-- Keyed by incontro_id directly (ADR 0033 §4.1, ADR 0037 §1): no query reads `registrazione`.
 
 trovaPerId:
-SELECT r.id, g.id AS registrazione_id, r.stato, r.argomento, r.lunghezza_massima_parole, r.richiesto_alle, r.avviato_alle,
-    r.motivo_fallimento, r.sommario, r.omessi, r.struttura
-FROM riassunto AS r INNER JOIN registrazione AS g ON g.incontro_id = r.incontro_id
-WHERE r.id = :id;
+SELECT * FROM riassunto WHERE id = :id;
 
-trovaDiRegistrazione:
-SELECT r.id, g.id AS registrazione_id, r.stato, r.argomento, r.lunghezza_massima_parole, r.richiesto_alle, r.avviato_alle,
-    r.motivo_fallimento, r.sommario, r.omessi, r.struttura
-FROM riassunto AS r INNER JOIN registrazione AS g ON g.incontro_id = r.incontro_id
-WHERE g.id = :registrazioneId ORDER BY r.richiesto_alle, r.id;
+trovaDiIncontro:
+SELECT * FROM riassunto WHERE incontro_id = :incontroId ORDER BY richiesto_alle, id;
 
 -- ADR 0022 §4 / ADR 0023: FIFO order of the shared queue.
 trovaInAttesa:
-SELECT r.id, g.id AS registrazione_id, r.stato, r.argomento, r.lunghezza_massima_parole, r.richiesto_alle, r.avviato_alle,
-    r.motivo_fallimento, r.sommario, r.omessi, r.struttura
-FROM riassunto AS r INNER JOIN registrazione AS g ON g.incontro_id = r.incontro_id
-WHERE r.stato = 'in_attesa' ORDER BY r.richiesto_alle, r.id;
+SELECT * FROM riassunto WHERE stato = 'in_attesa' ORDER BY richiesto_alle, id;
 
 trovaInCorso:
-SELECT r.id, g.id AS registrazione_id, r.stato, r.argomento, r.lunghezza_massima_parole, r.richiesto_alle, r.avviato_alle,
-    r.motivo_fallimento, r.sommario, r.omessi, r.struttura
-FROM riassunto AS r INNER JOIN registrazione AS g ON g.incontro_id = r.incontro_id
-WHERE r.stato = 'in_corso' ORDER BY r.richiesto_alle, r.id;
+SELECT * FROM riassunto WHERE stato = 'in_corso' ORDER BY richiesto_alle, id;
 
 inserisci:
 INSERT INTO riassunto(id, incontro_id, stato, argomento, lunghezza_massima_parole, richiesto_alle,
     avviato_alle, motivo_fallimento, sommario, omessi, struttura)
-VALUES (:id, (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId), :stato, :argomento, :lunghezzaMassimaParole, :richiestoAlle,
+VALUES (:id, :incontroId, :stato, :argomento, :lunghezzaMassimaParole, :richiestoAlle,
     :avviatoAlle, :motivoFallimento, :sommario, :omessi, :struttura);
 
 -- A46: the queue's claim, in_attesa -> in_corso, IS its own CAS — the unique index only stops a second
@@ -52,7 +38,7 @@ UPDATE riassunto SET stato = :stato, motivo_fallimento = :motivoFallimento, somm
 elimina:
 DELETE FROM riassunto WHERE id = :id;
 
--- ADR 0020 / ADR 0022: every Riassunto of the Incontro of a Registrazione (TrascrittoSostituito, RegistrazioneEliminata).
--- The caller deletes riassunto_fonte then riassunto_elemento (their eliminaDiRegistrazione) first.
-eliminaDiRegistrazione:
-DELETE FROM riassunto WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId);
+-- ADR 0020 / ADR 0022: every Riassunto of the Incontro (RegistrazioneEliminata of its last Parte).
+-- The caller deletes riassunto_fonte then riassunto_elemento (their eliminaDiIncontro) first.
+eliminaDiIncontro:
+DELETE FROM riassunto WHERE incontro_id = :incontroId;

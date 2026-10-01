@@ -6,6 +6,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,7 +28,12 @@ class TrascrittoTest {
             unSegmentoIniziale(voceIndice = 5, inizioMs = 0, fineMs = 400, testo = "a"),
         )
 
-        val creato = Trascritto.crea(registrazioneId, DURATA_TRASCRITTO_MS, turni).atteso()
+        val creato = Trascritto.crea(
+            registrazioneId,
+            unIncontroDi(registrazioneId),
+            DURATA_TRASCRITTO_MS,
+            turni,
+        ).atteso()
 
         val t = creato.aggregato
         assertEquals(TrascrittoCreato(registrazioneId), creato.evento)
@@ -53,7 +59,7 @@ class TrascrittoTest {
 
     @Test
     fun `AC-21 crea con zero segmenti restituisce NessunParlatoRilevato`() {
-        Trascritto.crea(registrazioneId, DURATA_TRASCRITTO_MS, emptyList())
+        Trascritto.crea(registrazioneId, unIncontroDi(registrazioneId), DURATA_TRASCRITTO_MS, emptyList())
             .erroreAtteso<ErroreTrascrizione.NessunParlatoRilevato>()
     }
 
@@ -87,7 +93,12 @@ class TrascrittoTest {
             unSegmentoIniziale(voceIndice = 1, inizioMs = 1_000, fineMs = 4_000), // S4 V2, overlaps S2
             unSegmentoIniziale(voceIndice = 0, inizioMs = 500, fineMs = 2_500), // S3 V1, overlaps S1
         )
-        val t = Trascritto.crea(registrazioneId, DURATA_TRASCRITTO_MS, turni).atteso().aggregato
+        val t = Trascritto.crea(
+            registrazioneId,
+            unIncontroDi(registrazioneId),
+            DURATA_TRASCRITTO_MS,
+            turni,
+        ).atteso().aggregato
         assertEquals(listOf(1, 3), t.voce(1))
         assertEquals(listOf(2, 4), t.voce(2))
 
@@ -106,12 +117,12 @@ class TrascrittoTest {
     @Test
     fun `INV-7 crea rifiuta un Segmento che finisce oltre la durata e accetta fine uguale alla durata`() {
         val oltre = listOf(unSegmentoIniziale(voceIndice = 0, inizioMs = 9_000, fineMs = 10_001))
-        val errore = Trascritto.crea(registrazioneId, 10_000, oltre)
+        val errore = Trascritto.crea(registrazioneId, unIncontroDi(registrazioneId), 10_000, oltre)
             .erroreAtteso<ErroreTrascrizione.SegmentoOltreLaDurata>()
         assertEquals(ErroreTrascrizione.SegmentoOltreLaDurata(IntervalloMs(9_000, 10_001), 10_000), errore)
 
         val alLimite = listOf(unSegmentoIniziale(voceIndice = 0, inizioMs = 9_000, fineMs = 10_000))
-        Trascritto.crea(registrazioneId, 10_000, alLimite).atteso()
+        Trascritto.crea(registrazioneId, unIncontroDi(registrazioneId), 10_000, alLimite).atteso()
     }
 
     // --- INV-8 ------------------------------------------------------------------------------------

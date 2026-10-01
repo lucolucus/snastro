@@ -1,6 +1,7 @@
 package snastro.progetto.applicazione.comandi
 
 import snastro.kernel.DispatcherEventiFinta
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -26,6 +27,7 @@ class ModificaDataRegistrazioneServizioTest {
             Registrazione.aggiungi(
                 id = id,
                 progettoId = progettoId,
+                incontroId = IncontroId("incontro-di-${id.valore}"),
                 titolo = "Seduta del 12 marzo",
                 riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
                 durataMs = 3_600_000,

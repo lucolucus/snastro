@@ -17,9 +17,10 @@ public class IdentificazioneRegistrazioni(
     /** AC-166: one entry per Registrazione of [registrazioneIds] with a Trascritto, in the given order. */
     public fun conteggi(registrazioneIds: List<RegistrazioneId>): List<ConteggioIdentificazione> =
         registrazioneIds.mapNotNull { id ->
-            val numVoci = voci.voci(id)?.size ?: return@mapNotNull null
-            val numAttribuite = attribuzioni.diRegistrazione(id).size
-            ConteggioIdentificazione(id, numVoci - numAttribuite)
+            val vociDellaParte = voci.voci(id) ?: return@mapNotNull null
+            // ADR 0033 §4.1: an Attribuzione is per Voce of the Incontro: count those of this Parte's Voci.
+            val numAttribuite = vociDellaParte.count { attribuzioni.trova(it.voceRef) != null }
+            ConteggioIdentificazione(id, vociDellaParte.size - numAttribuite)
         }
 }
 

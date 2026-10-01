@@ -2,7 +2,7 @@ package snastro.sintesi.applicazione.politiche
 
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.poi
 import snastro.sintesi.applicazione.eventi.RiassuntoEliminato
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
@@ -27,9 +27,14 @@ public class ApplicaEliminazioneRegistrazioneSintesiPolitica(
     private val riassunti: RiassuntoRepository,
     private val eventi: DispatcherEventi,
 ) {
-    public fun applica(registrazioneId: RegistrazioneId): Esito<Unit> =
-        riassunti.rimuoviDiRegistrazione(registrazioneId).poi { rimossi ->
-            if (rimossi > 0) eventi.pubblica(RiassuntoEliminato(registrazioneId))
+    /**
+     * [incontroId] is the Incontro of the deleted Registrazione, resolved by the caller (ADR 0033 §4.1). TRANSITION:
+     * every Riassunto of the Incontro goes, exact while every Incontro has one Parte (its deletion ends the Incontro,
+     * ADR 0038); the non-last-Parte rule (D-0003) comes with eliminazione-parte-sintesi (wave 4).
+     */
+    public fun applica(incontroId: IncontroId): Esito<Unit> =
+        riassunti.rimuoviDiIncontro(incontroId).poi { rimossi ->
+            if (rimossi > 0) eventi.pubblica(RiassuntoEliminato(incontroId))
             Esito.Ok(Unit)
         }
 }

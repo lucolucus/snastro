@@ -3,6 +3,7 @@ package snastro.progetto.applicazione.comandi
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
@@ -50,6 +51,8 @@ public class AggiungiRegistrazioneServizio(
                         val creato = Registrazione.aggiungi(
                             id = id,
                             progettoId = progetto.id,
+                            // ADR 0033 §4.1: one new Incontro per imported file until the multi-file import (I2)
+                            incontroId = IncontroId(generatoreId.nuovo()),
                             // AC-322: read + insert in this same transaction; one writer per project (ADR 0010 .lock)
                             titolo = TitoloRegistrazione.unico(
                                 base = titoloDa(c.percorsoSorgente),

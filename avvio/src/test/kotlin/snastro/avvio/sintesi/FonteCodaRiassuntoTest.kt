@@ -12,6 +12,8 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
@@ -24,6 +26,7 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.dominio.RiassuntoId
 import java.time.Clock
@@ -66,12 +69,13 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
         Clock.fixed(Instant.parse("2026-09-26T11:00:00Z"), ZoneOffset.UTC),
         RiassuntoRepositoryConReclamo(repo, esecuzioni),
         LettoreTrascrittoFinta(listOf(R1, R2, R3).associateWith { listOf(SEGMENTO) }),
+        ogniIncontroConUnaParte(),
         modello,
         DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
         eventi,
         esecuzioni.annullato,
     )
-    private val fonte = fonteCodaRiassunto(RiassuntiInAttesa(repo), servizio::esegui, {}, esecuzioni)
+    private val fonte = fonteCodaRiassunto(RiassuntiInAttesa(repo), servizio::esegui, {}, esecuzioni, ::unicaParteDi)
 
     private fun semina() {
         repo.salva(unRiassunto("A", R1, richiestoAlle = T1))
@@ -119,6 +123,7 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
             esegui = { Esito.Errore(ErroreApplicazioneSintesi.ErroreRuntime("guasto di prova")) },
             recupera = {},
             esecuzioni,
+            ::unicaParteDi,
         )
         assertNull(esecuzioni.ultimoReclamato, "nessun reclamo salvato prima dell'errore")
 
@@ -143,13 +148,13 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
     @Test
     fun `AC-S63 la cancellazione agisce solo sul Riassunto in corso di quella Registrazione, mai a vuoto`() {
         semina()
-        esecuzioni.annulla(R1) // nothing running (an Elaborazione runs, or the queue is idle): no effect
+        esecuzioni.annulla(unIncontroDi(R1)) // nothing running (an Elaborazione runs, or the queue is idle): no effect
         val durante = mutableListOf<Boolean>()
         this.durante = { annullato ->
             repo.rimuovi(RiassuntoId("A")) // deleted with R1 (ADR 0024 §1)
-            esecuzioni.annulla(R2) // another Registrazione: never the running one
+            esecuzioni.annulla(unIncontroDi(R2)) // another Registrazione: never the running one
             durante += annullato()
-            esecuzioni.annulla(R1) // the running Riassunto's own Registrazione, its row gone: cancelled
+            esecuzioni.annulla(unIncontroDi(R1)) // the running Riassunto's own Registrazione, its row gone: cancelled
             durante += annullato()
         }
         fonte.prossima(emptySet(), null)
@@ -161,10 +166,10 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
         semina()
         val durante = mutableListOf<Boolean>()
         this.durante = { annullato ->
-            esecuzioni.annulla(R1) // late/duplicate Eliminato: A still exists
+            esecuzioni.annulla(unIncontroDi(R1)) // late/duplicate Eliminato: A still exists
             durante += annullato()
             repo.rimuovi(RiassuntoId("A")) // now it is really gone
-            esecuzioni.annulla(R1)
+            esecuzioni.annulla(unIncontroDi(R1))
             durante += annullato()
         }
         fonte.prossima(emptySet(), null)
@@ -190,7 +195,7 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
         fonte.prossima(emptySet(), null)
         assertEquals(false, letture.last())
         fonte.interrompi() // nothing running: no effect on anything
-        esecuzioni.annulla(R3)
+        esecuzioni.annulla(unIncontroDi(R3))
         assertTrue(fonte.teste(emptySet())?.id == "C")
     }
 

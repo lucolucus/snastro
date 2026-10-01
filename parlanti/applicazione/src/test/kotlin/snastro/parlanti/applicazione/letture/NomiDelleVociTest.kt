@@ -7,9 +7,11 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -25,7 +27,12 @@ import kotlin.test.assertTrue
 class NomiDelleVociTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()
     private val parlanti = ParlanteRepositoryFinta()
-    private val api = NomiDelleVoci(attribuzioni, parlanti, UnitaDiLavoroFinta(attribuzioni, parlanti))
+    private val api = NomiDelleVoci(
+        attribuzioni,
+        parlanti,
+        ogniRegistrazioneNota(),
+        UnitaDiLavoroFinta(attribuzioni, parlanti),
+    )
 
     /** B33: [NomiDelleVoci.nomi] wraps its `attribuzioni` read and every `parlanti.trova` in ONE [lettura]
      * snapshot — a throwaway probe removing the `inLettura` wrap makes [uow]'s `letturaAperta` false during
@@ -40,7 +47,7 @@ class NomiDelleVociTest {
                 return parlanti.trova(id)
             }
         }
-        val apiOsservata = NomiDelleVoci(attribuzioni, parlantiOsservato, uow)
+        val apiOsservata = NomiDelleVoci(attribuzioni, parlantiOsservato, ogniRegistrazioneNota(), uow)
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
@@ -116,7 +123,9 @@ class NomiDelleVociTest {
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
         // Due Voci della stessa Registrazione allo stesso Parlante (INV-22): non duplica la Registrazione.
         attribuzioni.salva(Attribuzione.conferma(VOCE_3, PROGETTO, marco.id).aggregato)
-        attribuzioni.salva(Attribuzione.conferma(VoceRef(ALTRA_REGISTRAZIONE, VoceId(1)), PROGETTO, marco.id).aggregato)
+        attribuzioni.salva(
+            Attribuzione.conferma(VoceRef(unIncontroDi(ALTRA_REGISTRAZIONE), VoceId(1)), PROGETTO, marco.id).aggregato,
+        )
         attribuzioni.salva(Attribuzione.conferma(VOCE_2, PROGETTO, giulia.id).aggregato)
 
         assertEquals(setOf(REGISTRAZIONE, ALTRA_REGISTRAZIONE), api.registrazioniCon(marco.id).toSet())
@@ -160,8 +169,8 @@ class NomiDelleVociTest {
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
         val ALTRA_REGISTRAZIONE = RegistrazioneId("registrazione-2")
         val SCONOSCIUTA = RegistrazioneId("registrazione-sconosciuta")
-        val VOCE_1 = VoceRef(REGISTRAZIONE, VoceId(1))
-        val VOCE_2 = VoceRef(REGISTRAZIONE, VoceId(2))
-        val VOCE_3 = VoceRef(REGISTRAZIONE, VoceId(3))
+        val VOCE_1 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
+        val VOCE_2 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2))
+        val VOCE_3 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(3))
     }
 }

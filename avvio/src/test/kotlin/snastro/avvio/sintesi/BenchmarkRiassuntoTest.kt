@@ -25,6 +25,7 @@ import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.dominio.LunghezzaMassimaParole
 import snastro.sintesi.dominio.Riassunto
@@ -72,6 +73,7 @@ class BenchmarkRiassuntoTest {
             Clock.systemUTC(),
             riassunti,
             LettoreTrascrittoFinta(mapOf(registrazione to segmenti)),
+            ogniIncontroConUnaParte(),
             ModelloLinguisticoLlama({ cartellaNativiLlama() }, { fileModello() }, misure = { misure += it }),
             DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
             dispatcher,
@@ -88,8 +90,13 @@ class BenchmarkRiassuntoTest {
         val secondi = pronto?.let { (it - avviato) / NANOS_PER_SECONDO.toDouble() }
         println(
             """
-            benchmarkRiassunto — ${campione.fileName}: ${segmenti.size} segmenti, ${nomi.size} nomi (ignorati: il modello vede solo Voce n, ADR 0032)
-              esito: ${riassunto.stato} ${riassunto.motivoFallimento ?: ""} (eventi: ${eventi.map { it.first::class.simpleName }})
+            benchmarkRiassunto — ${campione.fileName}: ${segmenti.size} segmenti, ${nomi.size} nomi (
+                ignorati: il modello vede solo Voce n,
+                ADR 0032,
+            )
+              esito: ${riassunto.stato} ${riassunto.motivoFallimento ?: ""} (
+                  eventi: ${eventi.map { it.first::class.simpleName }},
+              )
               RiassuntoAvviato -> RiassuntoPronto: ${secondi?.let { "%.1f s".format(it) } ?: "-"} (limite 600 s)
               misure: ${misure.singleOrNull()}
               elementi: decisioni ${riassunto.decisioni.size}, questioni ${riassunto.questioniAperte.size}, azioni ${riassunto.azioni.size}, punti chiave ${riassunto.puntiChiave.size}, omessi ${riassunto.omessi}

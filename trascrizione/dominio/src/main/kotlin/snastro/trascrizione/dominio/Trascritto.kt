@@ -2,6 +2,7 @@ package snastro.trascrizione.dominio
 
 import snastro.kernel.Creato
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
@@ -16,7 +17,8 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.UnioneNonAmmessa
 import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
 
 /**
- * The transcript of one `Registrazione` (identity [registrazioneId]): its Voci and Segmenti, and the
+ * The transcript of one `Registrazione` (identity [registrazioneId]), a Parte of the Incontro [incontroId] (ADR 0033
+ * §4.1: carried, never decided on; its Voce counter is stored per Incontro): its Voci and Segmenti, and the
  * `Revisione` operations [unisci], [dividi], [riassegna], [riassegnaInBlocco], [confermaSegmento].
  * Owns INV-6…INV-12 and INV-26.
  *
@@ -27,6 +29,7 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
  */
 public class Trascritto private constructor(
     public val registrazioneId: RegistrazioneId,
+    public val incontroId: IncontroId,
     segmenti: List<Segmento>,
     prossimaVoce: Int,
     prossimoSegmento: Int,
@@ -197,6 +200,7 @@ public class Trascritto private constructor(
          */
         public fun crea(
             registrazioneId: RegistrazioneId,
+            incontroId: IncontroId,
             durataMs: Long,
             segmenti: List<SegmentoIniziale>,
         ): Esito<Creato<Trascritto, TrascrittoCreato>> {
@@ -217,7 +221,13 @@ public class Trascritto private constructor(
                         .mapIndexed { i, s ->
                             Segmento(SegmentoId(i + 1), voceDi.getValue(s.voceIndice), s.intervallo, s.testo)
                         }
-                    val trascritto = Trascritto(registrazioneId, numerati, voceDi.size + 1, numerati.size + 1)
+                    val trascritto = Trascritto(
+                        registrazioneId,
+                        incontroId,
+                        numerati,
+                        voceDi.size + 1,
+                        numerati.size + 1,
+                    )
                     Esito.Ok(Creato(trascritto, TrascrittoCreato(registrazioneId)))
                 }
             }
@@ -241,6 +251,7 @@ public class Trascritto private constructor(
         @RicostituzioneDaPersistenza
         public fun ricostituisci(
             registrazioneId: RegistrazioneId,
+            incontroId: IncontroId,
             segmenti: List<Segmento>,
             prossimaVoce: Int,
             prossimoSegmento: Int,
@@ -250,7 +261,7 @@ public class Trascritto private constructor(
             require(segmenti.all { it.id.numero < prossimoSegmento }) {
                 "prossimoSegmento $prossimoSegmento non oltre i Segmenti"
             }
-            return Trascritto(registrazioneId, segmenti, prossimaVoce, prossimoSegmento)
+            return Trascritto(registrazioneId, incontroId, segmenti, prossimaVoce, prossimoSegmento)
         }
     }
 }

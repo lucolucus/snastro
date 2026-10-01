@@ -12,6 +12,7 @@ import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
@@ -273,6 +274,7 @@ class AvviaElaborazioneServizioTest {
 
         fun unaVista(id: RegistrazioneId = REGISTRAZIONE): RegistrazioneVista = RegistrazioneVista(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             progettoId = ProgettoId("progetto-1"),
             titolo = "Riunione di lunedi",
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),

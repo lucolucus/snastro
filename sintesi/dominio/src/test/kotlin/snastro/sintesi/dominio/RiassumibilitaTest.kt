@@ -2,12 +2,12 @@ package snastro.sintesi.dominio
 
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RiassumibilitaTest {
-    private val id = RegistrazioneId("id-2")
+    private val id = IncontroId("id-2")
 
     private data class Condizioni(
         val modello: Boolean = true,

@@ -9,6 +9,8 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
@@ -39,13 +41,13 @@ class ApplicaRevisionePoliticaTest {
     private fun unParlante(id: String, tipo: TipoParlante = TipoParlante.RICORRENTE): Parlante =
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), tipo).aggregato
 
-    private fun unaVoce(n: Int): VoceRef = VoceRef(REGISTRAZIONE, VoceId(n))
+    private fun unaVoce(n: Int): VoceRef = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(n))
 
     /** Attributes [voceRef] to [parlante] with a print extracted from [SORGENTE_INIZIALE], as a command would. */
     private fun attribuisci(voceRef: VoceRef, parlante: Parlante, valore: Float = voceRef.voceId.numero.toFloat()) {
         if (parlante.attivo) {
             val impronta = Impronta(floatArrayOf(valore))
-            parlante.registraImpronta(voceRef, impronta, SORGENTE_INIZIALE, MODELLO).atteso()
+            parlante.registraImpronta(voceRef, impronta, SORGENTE_INIZIALE, MODELLO, unicaParteDi(voceRef)).atteso()
         }
         parlanti.salva(parlante).atteso()
         attribuzioni.salva(Attribuzione.conferma(voceRef, PROGETTO, parlante.id).aggregato)
@@ -62,7 +64,7 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(2), pb)
         val rigaA = impronteDi(pa).single()
 
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(attribuzioni.trova(unaVoce(2)), "B perde l'Attribuzione")
         assertEquals(emptyList(), impronteDi(pb), "l'impronta derivata da B e cancellata")
@@ -77,7 +79,7 @@ class ApplicaRevisionePoliticaTest {
         val rigaPrima = impronteDi(pa).single()
         val intervalliUniti = listOf(IntervalloMs(0, 1_000), IntervalloMs(2_000, 5_000))
 
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(attribuzioni.trova(unaVoce(2)))
         assertEquals(pa.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
@@ -95,12 +97,12 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(2), p, valore = 8f)
         val rigaB = impronteDi(p).single()
 
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(attribuzioni.trova(unaVoce(2)), "nessuna Attribuzione per B")
         assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId, "Attribuzione(A) = P")
         assertEquals(
-            listOf(ImprontaVocale(unaVoce(1), rigaB.impronta, rigaB.sorgente, rigaB.modello)),
+            listOf(ImprontaVocale(unaVoce(1), rigaB.impronta, rigaB.sorgente, rigaB.modello, unicaParteDi(unaVoce(1)))),
             impronteDi(p),
             "la riga di B e ri-chiavata su A conservando impronta, sorgente e modello (quindi obsoleta)",
         )
@@ -114,7 +116,7 @@ class ApplicaRevisionePoliticaTest {
         p.elimina().atteso()
         parlanti.salva(p).atteso()
 
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(attribuzioni.trova(unaVoce(2)), "B perde l'Attribuzione")
         assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId, "A eredita il tombstone")
@@ -129,7 +131,7 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(2), p)
         val rigaA = impronteDi(p).single { it.voceRef == unaVoce(1) }
 
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(attribuzioni.trova(unaVoce(2)), "B perde l'Attribuzione")
         assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
@@ -143,7 +145,7 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(1), pa)
         val rigaPrima = impronteDi(pa).single()
 
-        politica.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)).atteso()
+        politica.applicaVoceDivisa(unIncontroDi(REGISTRAZIONE), origine = VoceId(1)).atteso()
 
         assertNull(attribuzioni.trova(unaVoce(2)), "A' nasce senza Attribuzione")
         assertEquals(pa.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
@@ -156,7 +158,7 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(1), pda)
 
         politica.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             da = VoceId(1),
             a = VoceId(2),
             daRimossa = true,
@@ -178,7 +180,7 @@ class ApplicaRevisionePoliticaTest {
         val righePrima = impronteDi(pda) + impronteDi(pa)
 
         politica.applicaSegmentoRiassegnato(
-            REGISTRAZIONE,
+            unIncontroDi(REGISTRAZIONE),
             da = VoceId(1),
             a = VoceId(2),
             daRimossa = false,
@@ -197,9 +199,21 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(1), occasionale)
         attribuisci(unaVoce(2), ricorrente)
 
-        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(1), VoceId(97), daRimossa = true, aNuova = true)
+        politica.applicaSegmentoRiassegnato(
+            unIncontroDi(REGISTRAZIONE),
+            VoceId(1),
+            VoceId(97),
+            daRimossa = true,
+            aNuova = true,
+        )
             .atteso()
-        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(2), VoceId(98), daRimossa = true, aNuova = true)
+        politica.applicaSegmentoRiassegnato(
+            unIncontroDi(REGISTRAZIONE),
+            VoceId(2),
+            VoceId(98),
+            daRimossa = true,
+            aNuova = true,
+        )
             .atteso()
 
         assertNull(parlanti.trova(occasionale.id), "l'occasionale rimasto senza Attribuzioni cessa di esistere")
@@ -214,7 +228,7 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(1), pa)
         attribuisci(unaVoce(2), pb)
 
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
 
         assertNull(parlanti.trova(pb.id), "l'occasionale di B, senza piu Attribuzioni, cessa")
     }
@@ -222,11 +236,17 @@ class ApplicaRevisionePoliticaTest {
     @Test
     fun `INV-25 un occasionale con altre Attribuzioni non cessa`() {
         val occasionale = unParlante("id-occ", tipo = TipoParlante.OCCASIONALE)
-        val voceAltrove = VoceRef(RegistrazioneId("registrazione-2"), VoceId(1))
+        val voceAltrove = VoceRef(unIncontroDi(RegistrazioneId("registrazione-2")), VoceId(1))
         attribuisci(unaVoce(1), occasionale)
         attribuzioni.salva(Attribuzione.conferma(voceAltrove, PROGETTO, occasionale.id).aggregato)
 
-        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(1), VoceId(2), daRimossa = true, aNuova = true)
+        politica.applicaSegmentoRiassegnato(
+            unIncontroDi(REGISTRAZIONE),
+            VoceId(1),
+            VoceId(2),
+            daRimossa = true,
+            aNuova = true,
+        )
             .atteso()
 
         assertNull(attribuzioni.trova(unaVoce(1)), "la sorgente svuotata perde questa Attribuzione")
@@ -241,7 +261,13 @@ class ApplicaRevisionePoliticaTest {
         val politicaConGuasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
 
         val errore = politicaConGuasto
-            .applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(1), VoceId(2), daRimossa = true, aNuova = true)
+            .applicaSegmentoRiassegnato(
+                unIncontroDi(REGISTRAZIONE),
+                VoceId(1),
+                VoceId(2),
+                daRimossa = true,
+                aNuova = true,
+            )
             .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
 
         assertEquals(ErroreParlanti.NomeGiaInUso(p.nome.valore), errore)
@@ -253,7 +279,7 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(2), p)
         val politicaConGuasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
 
-        politicaConGuasto.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2))
+        politicaConGuasto.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2))
             .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
     }
 
@@ -266,10 +292,16 @@ class ApplicaRevisionePoliticaTest {
         attribuisci(unaVoce(4), q)
         val impronteIniziali = (impronteDi(p) + impronteDi(q)).map { it.impronta }.toSet()
 
-        politica.applicaVoceDivisa(REGISTRAZIONE, origine = VoceId(1)).atteso()
-        politica.applicaSegmentoRiassegnato(REGISTRAZIONE, VoceId(3), VoceId(4), daRimossa = false, aNuova = false)
+        politica.applicaVoceDivisa(unIncontroDi(REGISTRAZIONE), origine = VoceId(1)).atteso()
+        politica.applicaSegmentoRiassegnato(
+            unIncontroDi(REGISTRAZIONE),
+            VoceId(3),
+            VoceId(4),
+            daRimossa = false,
+            aNuova = false,
+        )
             .atteso()
-        politica.applicaVociUnite(REGISTRAZIONE, sopravvissuta = VoceId(5), rimossa = VoceId(1)).atteso()
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(5), rimossa = VoceId(1)).atteso()
 
         val righe = impronteDi(p) + impronteDi(q)
         assertEquals(3, righe.size, "nessuna riga creata")

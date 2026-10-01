@@ -4,6 +4,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
@@ -24,7 +25,7 @@ class ConfermatoRepositorySqlTest {
         t.confermaSegmento(SegmentoId(6), true).atteso()
         repo.salva(t)
 
-        val riletto = checkNotNull(repo.trova(R))
+        val riletto = checkNotNull(repo.trova(R, unIncontroDi(R)))
 
         assertEquals(t.segmenti, riletto.segmenti)
         assertEquals(listOf(0L, 0L, 1L, 0L, 0L, 1L), colonnaConfermato())
@@ -50,7 +51,7 @@ class ConfermatoRepositorySqlTest {
         repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = R))
 
         assertEquals(List(4) { 0L }, colonnaConfermato())
-        assertEquals(emptyList(), checkNotNull(repo.trova(R)).segmenti.filter { it.confermato })
+        assertEquals(emptyList(), checkNotNull(repo.trova(R, unIncontroDi(R))).segmenti.filter { it.confermato })
     }
 
     private fun colonnaConfermato(): List<Long> =

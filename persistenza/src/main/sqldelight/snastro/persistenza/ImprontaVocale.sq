@@ -10,24 +10,24 @@ SELECT * FROM impronta_vocale WHERE parlante_id = :parlanteId;
 -- AC-267: metadata only (no BLOB) — every print of a Registrazione, across every Parlante (a
 -- P->Q re-attribution can briefly leave v's print on both within one transaction).
 metadatiDiRegistrazione:
-SELECT parlante_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta
+SELECT parlante_id, incontro_id, registrazione_id, voce_id, sorgente_impronta, modello_impronta
 FROM impronta_vocale WHERE registrazione_id = :registrazioneId;
 
 -- AC-267: metadata only (no BLOB) — every print owned by any Parlante of a Progetto.
 metadatiDelProgetto:
-SELECT iv.parlante_id, iv.registrazione_id, iv.voce_id, iv.sorgente_impronta, iv.modello_impronta
+SELECT iv.parlante_id, iv.incontro_id, iv.registrazione_id, iv.voce_id, iv.sorgente_impronta, iv.modello_impronta
 FROM impronta_vocale AS iv
 INNER JOIN parlante AS p ON p.id = iv.parlante_id
 WHERE p.progetto_id = :progettoId;
 
--- TRANSITION (ADR 0033 §6): incontro_id is resolved from registrazione_id by SQL join.
+-- incontro_id + voce_id = the Voce (VoceRef), registrazione_id = the Parte the print is sourced from (INV-I8).
 inserisci:
 INSERT INTO impronta_vocale(parlante_id, incontro_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
-VALUES (:parlanteId, (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId), :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
+VALUES (:parlanteId, :incontroId, :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
 
 sostituisci:
 INSERT OR REPLACE INTO impronta_vocale(parlante_id, incontro_id, registrazione_id, voce_id, impronta, sorgente_impronta, modello_impronta)
-VALUES (:parlanteId, (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId), :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
+VALUES (:parlanteId, :incontroId, :registrazioneId, :voceId, :impronta, :sorgenteImpronta, :modelloImpronta);
 
 -- AC-267: compare-and-set UPDATE of the ONE row — no INSERT branch, ever (no resurrection).
 -- affectedRows() == 0 iff the row was removed or its sorgente/modello moved on since it was read.

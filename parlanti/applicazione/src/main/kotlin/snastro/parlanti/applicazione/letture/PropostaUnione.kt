@@ -4,6 +4,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.dominio.Attribuzione
 
@@ -16,9 +17,13 @@ import snastro.parlanti.dominio.Attribuzione
 public class PropostaUnione(
     private val attribuzioni: AttribuzioneRepository,
     private val parlanti: ParlanteRepository,
+    private val registrazioni: LettoreRegistrazione,
 ) {
+    /** ADR 0033 §4.1: the Attribuzioni of the Voci of the Incontro the Registrazione [id] is a Parte of. */
     public fun proposte(id: RegistrazioneId): List<PropostaDiUnione> =
-        attribuzioni.diRegistrazione(id)
+        registrazioni.registrazione(id)?.incontroId.let { incontroId ->
+            if (incontroId == null) emptyList() else attribuzioni.diIncontro(incontroId)
+        }
             .groupBy { it.parlanteId }
             .flatMap { (parlanteId, attribuite) -> coppie(parlanteId, attribuite) }
 

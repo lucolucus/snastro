@@ -1,7 +1,7 @@
 package snastro.sintesi.dominio
 
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
@@ -19,7 +19,7 @@ class RiassuntoTest {
     private fun inStato(stato: StatoRiassunto): Riassunto = when (stato) {
         StatoRiassunto.IN_ATTESA -> unRiassunto()
         StatoRiassunto.IN_CORSO -> unRiassuntoInCorso()
-        StatoRiassunto.PRONTO -> unRiassuntoInCorso().also { it.completa(bozzaValida, unaStruttura()).atteso() }
+        StatoRiassunto.PRONTO -> unRiassuntoInCorso().also { it.completa(bozzaValida, PARTE, unaStruttura()).atteso() }
         StatoRiassunto.FALLITO -> unRiassuntoInCorso().also { it.fallisci(MotivoFallimento.ERRORE_MODELLO).atteso() }
     }
 
@@ -27,14 +27,14 @@ class RiassuntoTest {
     fun `INV-S1 richiedi crea un Riassunto in_attesa aperto e restituisce RiassuntoRichiestoDominio`() {
         val creato = Riassunto.richiedi(
             RiassuntoId("id-1"),
-            RegistrazioneId("id-2"),
+            IncontroId("id-2"),
             Argomento.di("budget").atteso(),
             LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA).atteso(),
             RICHIESTO_ALLE,
         )
 
         val r = creato.aggregato
-        val atteso = RiassuntoRichiestoDominio(RiassuntoId("id-1"), RegistrazioneId("id-2"), RICHIESTO_ALLE)
+        val atteso = RiassuntoRichiestoDominio(RiassuntoId("id-1"), IncontroId("id-2"), RICHIESTO_ALLE)
         assertEquals(atteso, creato.evento)
         assertEquals(StatoRiassunto.IN_ATTESA, r.stato)
         assertEquals("budget", r.argomento?.valore)
@@ -48,7 +48,7 @@ class RiassuntoTest {
 
         val evento = r.avvia(AVVIATO_ALLE).atteso()
 
-        assertEquals(RiassuntoAvviatoDominio(r.id, r.registrazioneId, AVVIATO_ALLE), evento)
+        assertEquals(RiassuntoAvviatoDominio(r.id, r.incontroId, AVVIATO_ALLE), evento)
         assertEquals(AVVIATO_ALLE, r.avviatoAlle)
         assertTrue(r.aperto && r.inCorso && !r.inAttesa)
     }
@@ -57,7 +57,7 @@ class RiassuntoTest {
     fun `INV-S1 da in_corso completa porta a pronto terminale`() {
         val r = unRiassuntoInCorso()
 
-        val conclusione = r.completa(bozzaValida, unaStruttura()).atteso()
+        val conclusione = r.completa(bozzaValida, PARTE, unaStruttura()).atteso()
 
         assertEquals(ConclusioneRiassunto.Pronto(omessi = 0), conclusione)
         assertTrue(r.pronto && !r.aperto && !r.fallito)
@@ -67,7 +67,7 @@ class RiassuntoTest {
     fun `INV-S1 da in_corso completa senza contenuto verificabile porta a fallito`() {
         val r = unRiassuntoInCorso()
 
-        val conclusione = r.completa(unaBozza(), unaStruttura()).atteso()
+        val conclusione = r.completa(unaBozza(), PARTE, unaStruttura()).atteso()
 
         assertEquals(ConclusioneRiassunto.Fallito(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE), conclusione)
         assertTrue(r.fallito && !r.aperto)
@@ -80,7 +80,7 @@ class RiassuntoTest {
 
         val evento = r.fallisci(MotivoFallimento.INTERROTTO).atteso()
 
-        assertEquals(RiassuntoFallitoDominio(r.id, r.registrazioneId, MotivoFallimento.INTERROTTO), evento)
+        assertEquals(RiassuntoFallitoDominio(r.id, r.incontroId, MotivoFallimento.INTERROTTO), evento)
         assertTrue(r.fallito)
         assertEquals(MotivoFallimento.INTERROTTO, r.motivoFallimento)
     }
@@ -90,7 +90,7 @@ class RiassuntoTest {
     @Test
     fun `INV-S1 ogni altra mossa e TransizioneNonAmmessa e lascia stato e campi invariati`() {
         val avvia = { r: Riassunto -> r.avvia(AVVIATO_ALLE) }
-        val completa = { r: Riassunto -> r.completa(bozzaValida, unaStruttura()) }
+        val completa = { r: Riassunto -> r.completa(bozzaValida, PARTE, unaStruttura()) }
         val fallisci = { r: Riassunto -> r.fallisci(MotivoFallimento.ERRORE_MODELLO) }
         val mosse = listOf(
             Mossa(StatoRiassunto.IN_ATTESA, StatoRiassunto.PRONTO, completa),
@@ -156,7 +156,7 @@ class RiassuntoTest {
         struttura: String? = null,
         avviatoAlle: java.time.Instant? = AVVIATO_ALLE,
     ): Riassunto = Riassunto(
-        RiassuntoId("id-1"), RegistrazioneId("id-2"), null,
+        RiassuntoId("id-1"), IncontroId("id-2"), null,
         LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA).atteso(), RICHIESTO_ALLE,
         stato, avviatoAlle, motivo, contenuto, struttura,
     )
@@ -174,7 +174,7 @@ class RiassuntoTest {
         val r = unRiassuntoInCorso(parole = 2000)
         val lungo = List(3000) { "parola" }.joinToString(" ")
 
-        val conclusione = r.completa(unaBozza(sommario = lungo), unaStruttura()).atteso()
+        val conclusione = r.completa(unaBozza(sommario = lungo), PARTE, unaStruttura()).atteso()
 
         assertEquals(ConclusioneRiassunto.Pronto(omessi = 0), conclusione)
         assertEquals(lungo, r.sommario?.testo?.codifica())
@@ -184,20 +184,21 @@ class RiassuntoTest {
     @Test
     fun `INV-S7 superato confronta la struttura corrente con quella memorizzata`() {
         val r = unRiassuntoInCorso()
-        assertFalse(r.superato(unaStruttura()), "non pronto: mai superato")
-        r.completa(bozzaValida, unaStruttura(1 to 1, 2 to 2, 3 to 1)).atteso()
+        assertFalse(r.superato(PARTE, unaStruttura()), "non pronto: mai superato")
+        r.completa(bozzaValida, PARTE, unaStruttura(1 to 1, 2 to 2, 3 to 1)).atteso()
 
-        assertEquals("1:1,2:2,3:1", r.struttura)
-        assertFalse(r.superato(unaStruttura(3 to 1, 1 to 1, 2 to 2)), "stessa assegnazione")
-        assertTrue(r.superato(unaStruttura(1 to 1, 2 to 1, 3 to 1)), "segmento 2 passa da V2 a V1")
-        assertFalse(r.superato(unaStruttura(1 to 1, 2 to 2, 3 to 1)), "segmento 2 torna a V2")
+        assertEquals("parte-1=1:1,2:2,3:1", r.struttura)
+        assertEquals(PARTE, r.parte)
+        assertFalse(r.superato(PARTE, unaStruttura(3 to 1, 1 to 1, 2 to 2)), "stessa assegnazione")
+        assertTrue(r.superato(PARTE, unaStruttura(1 to 1, 2 to 1, 3 to 1)), "segmento 2 passa da V2 a V1")
+        assertFalse(r.superato(PARTE, unaStruttura(1 to 1, 2 to 2, 3 to 1)), "segmento 2 torna a V2")
     }
 
     @Test
     fun `INV-S7 un Riassunto fallito non e mai superato`() {
         val r = unRiassuntoInCorso().also { it.fallisci(MotivoFallimento.ERRORE_MODELLO).atteso() }
 
-        assertFalse(r.superato(StrutturaTrascritto.di(listOf(SegmentoId(9) to VoceId(9)))))
+        assertFalse(r.superato(PARTE, StrutturaTrascritto.di(listOf(SegmentoId(9) to VoceId(9)))))
         assertNull(r.struttura)
     }
 
@@ -206,7 +207,7 @@ class RiassuntoTest {
         val decisioni = mutableListOf(Decisione(testo("tiene"), setOf(SegmentoId(1))))
         val contenuto = EsitoVerifica(null, decisioni, emptyList(), emptyList(), emptyList(), omessi = 0)
         val r = Riassunto(
-            RiassuntoId("id-1"), RegistrazioneId("id-2"), null,
+            RiassuntoId("id-1"), IncontroId("id-2"), null,
             LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA).atteso(), RICHIESTO_ALLE,
             StatoRiassunto.PRONTO, AVVIATO_ALLE, null, contenuto, "1:1",
         )

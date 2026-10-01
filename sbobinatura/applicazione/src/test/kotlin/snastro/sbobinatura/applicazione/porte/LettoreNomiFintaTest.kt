@@ -5,6 +5,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.unIncontroDi
 import java.util.Locale
 
 class LettoreNomiFintaTest : LettoreNomiContratto() {
@@ -28,7 +29,7 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata {
             require(voci >= 1)
             val id = RegistrazioneId(generatore.nuovo())
-            val refs = (1..voci).map { VoceRef(id, VoceId(it)) }
+            val refs = (1..voci).map { VoceRef(unIncontroDi(id), VoceId(it)) }
             this.voci += refs
             return RegistrazioneConiata(id, refs)
         }

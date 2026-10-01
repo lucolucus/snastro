@@ -9,6 +9,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.Allineatore
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
@@ -69,7 +70,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         val salvata = elaborazioni.diRegistrazione(id).single()
         assertTrue(salvata.fallita)
         assertEquals("nessun parlato rilevato", salvata.motivoFallimento)
-        assertNull(trascritti.trova(id), "AC-386: nessun Trascritto esiste")
+        assertNull(trascritti.trova(id, unIncontroDi(id)), "AC-386: nessun Trascritto esiste")
         assertEquals(emptyList(), trascritti.conTrascritto())
     }
 
@@ -102,7 +103,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
         assertTrue(elaborazioni.diRegistrazione(id).single().completata)
-        val trascritto = checkNotNull(trascritti.trova(id))
+        val trascritto = checkNotNull(trascritti.trova(id, unIncontroDi(id)))
         assertEquals(2, trascritto.voci.size, "AC-387: Voci diverse restano distinte, nessuna fusione")
         assertEquals(
             listOf(IntervalloMs(0, 1_000), IntervalloMs(500, 1_500)),
@@ -116,6 +117,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
 
     private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio): RegistrazioneVista = RegistrazioneVista(
         registrazioneId = id,
+        incontroId = unIncontroDi(id),
         progettoId = ProgettoId("progetto-1"),
         titolo = "Riunione",
         riferimentoAudio = riferimento,

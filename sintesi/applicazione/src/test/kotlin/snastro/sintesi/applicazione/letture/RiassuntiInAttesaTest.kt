@@ -2,6 +2,7 @@ package snastro.sintesi.applicazione.letture
 
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
+import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
@@ -24,7 +25,7 @@ class RiassuntiInAttesaTest {
     private val coda = RiassuntiInAttesa(riassunti)
 
     @Test
-    fun `AC-S110 elenca solo le in_attesa, FIFO per richiestoAlle poi id, con riassuntoId come stringa`() {
+    fun `AC-I30 AC-S110 elenca solo le in_attesa, FIFO, con riassuntoId come stringa e l incontroId`() {
         val prima = RegistrazioneId("registrazione-1")
         val seconda = RegistrazioneId("registrazione-2")
         // salvati fuori ordine: l'elenco deve comunque uscire FIFO
@@ -43,8 +44,8 @@ class RiassuntiInAttesaTest {
 
         assertEquals(
             listOf(
-                RiassuntoInCoda("riassunto-1", prima, t(0)),
-                RiassuntoInCoda("riassunto-2", seconda, t(1)),
+                RiassuntoInCoda("riassunto-1", unIncontroDi(prima), t(0)),
+                RiassuntoInCoda("riassunto-2", unIncontroDi(seconda), t(1)),
             ),
             elenco,
             "solo le in_attesa, in ordine FIFO — in_corso/pronto/fallito non appaiono",

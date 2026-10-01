@@ -4,6 +4,7 @@ import snastro.kernel.CampioniAudio
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -15,6 +16,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
 import snastro.parlanti.applicazione.eventi.ParlanteCreato
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
@@ -350,14 +352,29 @@ class ConfermaAttribuzioneServizioTest {
     }
 
     @Test
-    fun `INV-17 una Registrazione sconosciuta viene rifiutata come TrascrittoNonTrovato`() {
+    fun `AC-I206 un VoceRef di un Incontro sconosciuto e VoceNonTrovata e nulla e scritto`() {
         val ambiente = Ambiente(registrazioni = LettoreRegistrazioneFinta())
 
         val errore = ambiente.servizio.esegui(
             ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Marco")),
-        ).erroreAtteso<ErroreParlanti.TrascrittoNonTrovato>()
+        ).erroreAtteso<ErroreParlanti.VoceNonTrovata>()
 
-        assertEquals(ErroreParlanti.TrascrittoNonTrovato(REGISTRAZIONE), errore)
+        assertEquals(ErroreParlanti.VoceNonTrovata(VOCE_1), errore)
+        assertNull(ambiente.attribuzioni.trova(VOCE_1))
+        assertEquals(emptyList(), ambiente.parlanti.impronteDiRegistrazione(REGISTRAZIONE))
+        assertEquals(0, ambiente.transazioniAperte)
+    }
+
+    @Test
+    fun `AC-I206 ConfermaAttribuzione su un Incontro di una Parte salva l impronta con la Parte come sorgente`() {
+        val ambiente = Ambiente()
+
+        ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Marco"))).atteso()
+
+        val riga = ambiente.parlanti.impronteDiRegistrazione(REGISTRAZIONE).single()
+        assertEquals(VOCE_1, riga.voceRef)
+        assertEquals(REGISTRAZIONE, riga.parte)
+        assertEquals(SorgenteImpronta.di(unaVoceVista(1).intervalli).chiave, riga.sorgente)
     }
 
     @Test
@@ -657,7 +674,7 @@ class ConfermaAttribuzioneServizioTest {
     ) : AttribuzioneRepository, snastro.kernel.Ripristinabile {
         override fun trova(v: VoceRef) = delegato.trova(v)
 
-        override fun diRegistrazione(id: RegistrazioneId) = delegato.diRegistrazione(id)
+        override fun diIncontro(id: IncontroId) = delegato.diIncontro(id)
 
         override fun diParlante(id: ParlanteId) = delegato.diParlante(id)
 
@@ -760,16 +777,17 @@ class ConfermaAttribuzioneServizioTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
-        val VOCE_1 = VoceRef(REGISTRAZIONE, VoceId(1))
-        val VOCE_2 = VoceRef(REGISTRAZIONE, VoceId(2))
+        val VOCE_1 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
+        val VOCE_2 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2))
 
-        fun unaVoce(n: Int): VoceRef = VoceRef(REGISTRAZIONE, VoceId(n))
+        fun unaVoce(n: Int): VoceRef = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(n))
 
         fun unaRegistrazioneVista(
             progettoId: ProgettoId = PROGETTO,
             id: RegistrazioneId = REGISTRAZIONE,
         ): RegistrazioneVista = RegistrazioneVista(
             registrazioneId = id,
+            incontroId = unIncontroDi(id),
             progettoId = progettoId,
             titolo = "Seduta",
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),

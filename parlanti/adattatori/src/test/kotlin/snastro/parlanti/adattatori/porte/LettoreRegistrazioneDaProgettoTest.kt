@@ -2,6 +2,7 @@ package snastro.parlanti.adattatori.porte
 
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoroFinta
@@ -14,12 +15,15 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
+import snastro.progetto.applicazione.comandi.EliminaRegistrazione
+import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazioneServizio
 import snastro.progetto.applicazione.eventi.ProgettoCreato
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
+import snastro.progetto.applicazione.porte.EliminazioniInSospesoFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
@@ -80,6 +84,15 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
             servizio.esegui(AggiungiRegistrazione(percorso)).atteso()
 
             return eventi.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
+        }
+
+        // The supplier's own public read API: the id AggiungiRegistrazione minted through GeneratoreId.
+        override fun incontroDi(id: RegistrazioneId): IncontroId =
+            checkNotNull(CatalogoRegistrazioni(registrazioni).registrazione(id)).incontroId
+
+        override fun elimina(id: RegistrazioneId) {
+            EliminaRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, EliminazioniInSospesoFinta(), eventi)
+                .esegui(EliminaRegistrazione(id)).atteso()
         }
 
         override fun modificaData(id: RegistrazioneId, data: LocalDate) {

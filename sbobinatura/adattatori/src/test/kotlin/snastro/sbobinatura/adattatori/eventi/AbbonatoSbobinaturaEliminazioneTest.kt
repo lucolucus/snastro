@@ -17,6 +17,7 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
@@ -229,6 +230,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
 
         fun unTrascritto() = TrascrittoTesto(
             registrazioneId = REG,
+            incontroId = unIncontroDi(REG),
             titolo = TITOLO,
             dataRegistrazione = DATA,
             segmenti = listOf(SegmentoVista(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "Ciao.")),

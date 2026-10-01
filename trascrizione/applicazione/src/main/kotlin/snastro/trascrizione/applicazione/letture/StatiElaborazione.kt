@@ -2,7 +2,9 @@ package snastro.trascrizione.applicazione.letture
 
 import snastro.kernel.RegistrazioneId
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
+import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.TrascrittoRepository
+import snastro.trascrizione.applicazione.porte.trovaDi
 import snastro.trascrizione.dominio.Elaborazione
 
 /**
@@ -19,6 +21,7 @@ import snastro.trascrizione.dominio.Elaborazione
 public class StatiElaborazione(
     private val elaborazioni: ElaborazioneRepository,
     private val trascritti: TrascrittoRepository,
+    private val registrazioni: LettoreRegistrazione,
     private val fasi: FasiInCorso,
 ) {
     /** AC-162: one row per id of [registrazioneIds], same order, each built from its LATEST Elaborazione. */
@@ -27,7 +30,10 @@ public class StatiElaborazione(
 
     private fun riga(id: RegistrazioneId): StatoRegistrazioneVista {
         val ultima = ultima(id)
-        val trascritto = trascritti.trova(id) // ADR 0018: whatever the latest run's state (AC-165/AC-447)
+        val trascritto = trascritti.trovaDi(
+            id,
+            registrazioni,
+        ) // ADR 0018: whatever the latest run's state (AC-165/AC-447)
         val stato = when {
             ultima == null -> StatoElaborazioneVista.NON_AVVIATA
             ultima.completata -> StatoElaborazioneVista.COMPLETATA

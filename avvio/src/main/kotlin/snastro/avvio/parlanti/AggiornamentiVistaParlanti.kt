@@ -4,6 +4,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.eventi.AttribuzioneConfermata
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
 import snastro.parlanti.applicazione.eventi.ParlanteCreato
@@ -44,23 +46,26 @@ import snastro.ui.Cambiamento
  */
 internal class AggiornamentiVistaParlanti(
     private val proposte: ProposteSerializzate,
+    /** ADR 0033 §4.1: the Parti of an Incontro (an Attribuzione is per Voce of the Incontro), `null` once it ceased. */
+    private val partiDi: (IncontroId) -> List<RegistrazioneId>?,
 ) : AggiornamentiVista, AbbonatoDopoCommit {
     private val _cambiamenti = MutableSharedFlow<Cambiamento>(replay = 1, extraBufferCapacity = EXTRA_BUFFER)
     override val cambiamenti = _cambiamenti.asSharedFlow()
 
     override fun ricevi(evento: EventoPubblicato) {
-        val cambiamento = when (evento) {
-            is AttribuzioneConfermata -> Cambiamento(evento.voceRef.registrazioneId)
-            is ImpronteRiallineate -> Cambiamento(evento.registrazioneId)
+        val cambiamenti = when (evento) {
+            is AttribuzioneConfermata ->
+                partiDi(evento.voceRef.incontroId)?.map(::Cambiamento) ?: listOf(Cambiamento(null))
+            is ImpronteRiallineate -> listOf(Cambiamento(evento.registrazioneId))
             is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato,
             is TrascrittoSostituito, is RegistrazioneEliminata,
-            -> Cambiamento(null)
-            is SegmentoConfermato -> Cambiamento(evento.registrazioneId)
-            is VociUnite, is VoceDivisa, is SegmentoRiassegnato -> null
+            -> listOf(Cambiamento(null))
+            is SegmentoConfermato -> listOf(Cambiamento(evento.registrazioneId))
+            is VociUnite, is VoceDivisa, is SegmentoRiassegnato -> emptyList()
             else -> return
         }
         proposte.invalidaTutte()
-        cambiamento?.let(_cambiamenti::tryEmit)
+        cambiamenti.forEach(_cambiamenti::tryEmit)
     }
 
     private companion object {

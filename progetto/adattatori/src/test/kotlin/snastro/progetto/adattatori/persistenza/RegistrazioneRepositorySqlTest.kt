@@ -3,6 +3,7 @@ package snastro.progetto.adattatori.persistenza
 import org.junit.jupiter.api.Test
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -109,6 +110,7 @@ class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
         Registrazione.aggiungi(
             id = id,
             progettoId = progetto,
+            incontroId = IncontroId("incontro-di-${id.valore}"),
             titolo = "Seduta di marzo",
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
             durataMs = 3_600_000,

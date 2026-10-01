@@ -45,6 +45,7 @@ public abstract class LettoreTrascrittoContratto {
         assertEquals(
             TrascrittoTesto(
                 registrazioneId = id,
+                incontroId = a.incontroDi(id),
                 titolo = RIUNIONE.titolo,
                 dataRegistrazione = RIUNIONE.dataRegistrazione,
                 segmenti = listOf(1, 3, 0, 2).map { vista(turni[it], c[it]) },
@@ -109,6 +110,7 @@ public abstract class LettoreTrascrittoContratto {
         assertEquals(
             TrascrittoTesto(
                 intervista,
+                a.incontroDi(intervista),
                 INTERVISTA.titolo,
                 INTERVISTA.dataRegistrazione,
                 listOf(vista(turnoIntervista, cIntervista[0])),
@@ -118,6 +120,7 @@ public abstract class LettoreTrascrittoContratto {
         assertEquals(
             TrascrittoTesto(
                 riunione,
+                a.incontroDi(riunione),
                 RIUNIONE.titolo,
                 RIUNIONE.dataRegistrazione,
                 listOf(vista(turnoRiunione, cRiunione[0])),
@@ -164,7 +167,13 @@ public abstract class LettoreTrascrittoContratto {
         val c = a.completaElaborazione(id, listOf(turno))
 
         assertEquals(
-            TrascrittoTesto(id, RIUNIONE.titolo, RIUNIONE.dataRegistrazione, listOf(vista(turno, c[0]))),
+            TrascrittoTesto(
+                id,
+                a.incontroDi(id),
+                RIUNIONE.titolo,
+                RIUNIONE.dataRegistrazione,
+                listOf(vista(turno, c[0])),
+            ),
             a.lettore.trascritto(id),
         )
         assertEquals(listOf(id), a.lettore.registrazioniConTrascritto())

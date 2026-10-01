@@ -1,15 +1,14 @@
 -- Queries for `voce_incontro` — schema in migrations/7.sqm (ADR 0034). Written ONLY by the Trascrizione adapter.
+-- Keyed by incontro_id directly (ADR 0033 §4.1): the caller resolved it, no query reads `registrazione`.
 
 inserisciSeAssente:
-INSERT OR IGNORE INTO voce_incontro(incontro_id, numero)
-SELECT incontro_id, :numero FROM registrazione WHERE id = :registrazioneId;
+INSERT OR IGNORE INTO voce_incontro(incontro_id, numero) VALUES (:incontroId, :numero);
 
--- A Voce exists iff >= 1 Segmento in some Parte (INV-6): after the Parte's voce rows are replaced, drop the
--- Voci of its Incontro that no Parte of it has any more (their Parlanti FKs then fail the COMMIT, fail closed).
+-- A Voce exists iff >= 1 Segmento in some Parte (INV-6): after the Parte's voce rows are replaced, drop the Voci of its
+-- Incontro it no longer has (their Parlanti FKs then fail the COMMIT, fail closed). TRANSITION (ADR 0033 §6, D-0023):
+-- presence is read from this Parte only, exact while every Incontro has one Parte; the Voci dell'Incontro repository
+-- (wave 3) reads it across the Parti.
 eliminaSenzaPresenza:
 DELETE FROM voce_incontro
-WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId)
-    AND NOT EXISTS (
-        SELECT 1 FROM voce AS v INNER JOIN registrazione AS r ON r.id = v.registrazione_id
-        WHERE r.incontro_id = voce_incontro.incontro_id AND v.numero = voce_incontro.numero
-    );
+WHERE incontro_id = :incontroId
+    AND numero NOT IN (SELECT numero FROM voce WHERE registrazione_id = :registrazioneId);

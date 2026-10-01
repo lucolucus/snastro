@@ -1,6 +1,7 @@
 package snastro.trascrizione.applicazione.porte
 
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -24,6 +25,7 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
             registrazioni[id] = RegistrazioneVista(
                 registrazioneId = id,
                 progettoId = progettoId,
+                incontroId = IncontroId(generatore.nuovo()),
                 titolo = seme.titolo,
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.${seme.estensione.lowercase(Locale.ROOT)}"),
                 dataRegistrazione = seme.dataRegistrazione,
@@ -31,6 +33,8 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
             )
             return id
         }
+
+        override fun incontroDi(id: RegistrazioneId): IncontroId = registrazioni.getValue(id).incontroId
 
         override fun modificaData(id: RegistrazioneId, data: LocalDate) {
             registrazioni.computeIfPresent(id) { _, vista -> vista.copy(dataRegistrazione = data) }

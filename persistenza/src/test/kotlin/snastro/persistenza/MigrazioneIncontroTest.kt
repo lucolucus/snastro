@@ -133,12 +133,13 @@ class MigrazioneIncontroTest {
             assertEquals(listOf("riassunto"), tabelleReferenziate(d, "riassunto_elemento"))
             assertEquals(listOf("riassunto_elemento"), tabelleReferenziate(d, "riassunto_fonte"))
             assertEquals(listOf("incontro"), tabelleReferenziate(d, "riassunto"))
-            // Every changed query still runs against the MIGRATED database, resolving the Incontro by join.
+            // Every changed query still runs against the MIGRATED database, keyed by the migrated incontro_id.
             val db = aperto.database
-            assertEquals(2, db.riassuntoQueries.trovaDiRegistrazione("reg-1").executeAsList().size)
-            assertEquals("reg-1", db.attribuzioneQueries.trova("reg-1", 1L).executeAsOne().registrazione_id)
+            val incontro = db.incontroDi("reg-1")
+            assertEquals(2, db.riassuntoQueries.trovaDiIncontro(incontro).executeAsList().size)
+            assertEquals(incontro, db.attribuzioneQueries.trova(incontro, 1L).executeAsOne().incontro_id)
             assertEquals(1L, db.improntaVocaleQueries.metadatiDiRegistrazione("reg-1").executeAsList().first().voce_id)
-            assertEquals(7L, db.trascrittoQueries.trovaPerRegistrazione("reg-1").executeAsOne().prossima_voce)
+            assertEquals(7L, db.vociIncontroQueries.trovaPerIncontro(incontro).executeAsOne().prossima_voce)
         } finally {
             aperto.chiudi()
         }
@@ -191,6 +192,10 @@ class MigrazioneIncontroTest {
         assertFailsWith<SQLException>("UPDATE di incontro_id") {
             driver.execute(null, "UPDATE registrazione SET incontro_id = 'i-2' WHERE id = 'r-1'", 0)
         }
+        // D-0028 (AC-I209): naming the column is refused even with the SAME value.
+        assertFailsWith<SQLException>("UPDATE di incontro_id con lo stesso valore") {
+            driver.execute(null, "UPDATE registrazione SET incontro_id = 'i-1' WHERE id = 'r-1'", 0)
+        }
         db.registrazioneQueries.aggiorna("titolo nuovo", "2026-10-02", "r-1")
         assertEquals(listOf("'titolo nuovo'|'i-1'"), tabella(driver, "registrazione", "titolo, incontro_id"))
     }
@@ -209,22 +214,22 @@ class MigrazioneIncontroTest {
                 0,
             )
         }
-        db.riassuntoQueries.inserisci("rias-1", "r-a", "in_attesa", null, 2000L, 0L, null, null, null, null, null)
+        db.riassuntoQueries.inserisci("rias-1", "i-1", "in_attesa", null, 2000L, 0L, null, null, null, null, null)
         assertFailsWith<SQLException>("secondo in_attesa dalla Parte b") {
-            db.riassuntoQueries.inserisci("rias-2", "r-b", "in_attesa", null, 2000L, 1L, null, null, null, null, null)
+            db.riassuntoQueries.inserisci("rias-2", "i-1", "in_attesa", null, 2000L, 1L, null, null, null, null, null)
         }
 
-        db.riassuntoQueries.inserisci("rias-p1", "r-a", "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "r-a=1:1")
+        db.riassuntoQueries.inserisci("rias-p1", "i-1", "pronto", null, 2000L, 0L, 0L, null, "s", 0L, "r-a=1:1")
         assertFailsWith<SQLException>("secondo pronto dalla Parte b") {
-            db.riassuntoQueries.inserisci("rias-p2", "r-b", "pronto", null, 2000L, 1L, 1L, null, "s", 0L, "r-b=1:1")
+            db.riassuntoQueries.inserisci("rias-p2", "i-1", "pronto", null, 2000L, 1L, 1L, null, "s", 0L, "r-b=1:1")
         }
 
         db.parlanteQueries.inserisci("parlante-1", "p", "Marco", "marco", "ricorrente", "attivo")
         db.seminaTrascrittoDiProva("r-a")
         db.seminaVoceDiProva("r-a", 1L)
-        db.improntaVocaleQueries.inserisci("parlante-1", "r-a", 1L, byteArrayOf(1), "0-1", "m")
+        db.improntaVocaleQueries.inserisci("parlante-1", "i-1", "r-a", 1L, byteArrayOf(1), "0-1", "m")
         assertFailsWith<SQLException>("seconda impronta per (parlante, incontro, voce, registrazione)") {
-            db.improntaVocaleQueries.inserisci("parlante-1", "r-a", 1L, byteArrayOf(2), "0-2", "m")
+            db.improntaVocaleQueries.inserisci("parlante-1", "i-1", "r-a", 1L, byteArrayOf(2), "0-2", "m")
         }
     }
 

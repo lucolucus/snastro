@@ -19,6 +19,7 @@ import snastro.avvio.trascrizione.CollaboratoriTrascrizione
 import snastro.kernel.CampioniAudio
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdUuid
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -223,6 +224,7 @@ internal class AmbienteProgetto(
         val prima = collaboratori.registrazioni().map { it.registrazioneId }.toSet()
         collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(sorgente.toString())).atteso()
         val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
+        incontroDi(id) // remembered for voce(), and for a test reading rows after the deletion
         rendiLeggibile(id)
         return id
     }
@@ -260,8 +262,16 @@ internal class AmbienteProgetto(
         sintesi.riassumi(id, argomento).atteso()
     }
 
+    /**
+     * The Incontro the import made [id] a Parte of (ADR 0033 §4.1), read through Progetto's catalogue and remembered:
+     * it never changes, so a test still knows it after the Registrazione is deleted.
+     */
+    fun incontroDi(id: RegistrazioneId): IncontroId = incontriNoti.getOrPut(id) {
+        checkNotNull(porte.catalogo.registrazione(id)) { "Registrazione $id sconosciuta al catalogo" }.incontroId
+    }
+
     /** ADR 0029 §5: the SQL repository reads the root and its children from ONE snapshot — no wrap needed here. */
-    fun diRegistrazione(id: RegistrazioneId): List<Riassunto> = porte.riassunti.diRegistrazione(id)
+    fun diRegistrazione(id: RegistrazioneId): List<Riassunto> = porte.riassunti.trova(incontroDi(id))
 
     fun attendiPronto(id: RegistrazioneId) =
         attendiFinche(timeout = 10.seconds, messaggio = "Riassunto pronto") {
@@ -271,7 +281,7 @@ internal class AmbienteProgetto(
     /** Parlanti rows of the open project, read through its own repositories. */
     fun conteggi(id: RegistrazioneId): Conteggi = Conteggi(
         parlanti = porte.parlanti.delProgetto(progetto.progettoId).size,
-        attribuzioni = porte.attribuzioni.diRegistrazione(id).size,
+        attribuzioni = porte.attribuzioni.diIncontro(incontroDi(id)).size,
         impronte = porte.parlanti.impronteDelProgetto(progetto.progettoId).size,
     )
 
@@ -328,7 +338,18 @@ internal class AmbienteProgetto(
     }
 }
 
-internal fun voce(id: RegistrazioneId, n: Int) = VoceRef(id, VoceId(n))
+/**
+ * The Incontro of every Registrazione an [AmbienteProgetto] has seen (ids are UUIDs, so one map serves every
+ * environment of the JVM): ADR 0033 §4.1, a Voce is keyed by its Incontro, minted by the import.
+ */
+private val incontriNoti = java.util.concurrent.ConcurrentHashMap<RegistrazioneId, IncontroId>()
+
+/** The one Parte of a test Incontro [incontroId] (inverse of [incontriNoti]), `null` if never seen. */
+internal fun parteDi(incontroId: IncontroId): RegistrazioneId? =
+    incontriNoti.entries.firstOrNull { it.value == incontroId }?.key
+
+internal fun voce(id: RegistrazioneId, n: Int) =
+    VoceRef(checkNotNull(incontriNoti[id]) { "Registrazione $id mai importata dall'ambiente" }, VoceId(n))
 
 /** [DecodificatoreTrascrizione] recording in [decodificate] the id of every [decodifica]: the start of a run. */
 private class RegistraDecodifiche(

@@ -6,6 +6,7 @@ import snastro.kernel.DispatcherEventi
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.mappa
@@ -130,7 +131,7 @@ public class EseguiProssimaElaborazioneServizio(
                 concludi(registrazioneId, elaborazioneId) { fresca ->
                     when (risultato) {
                         is RisultatoPipeline.Successo ->
-                            concludiConSuccesso(fresca, risultato.durataMs, risultato.segmenti)
+                            concludiConSuccesso(fresca, risultato.incontroId, risultato.durataMs, risultato.segmenti)
                         is RisultatoPipeline.Fallita -> concludiConFallimento(fresca, risultato.motivo)
                     }
                 }
@@ -179,7 +180,7 @@ public class EseguiProssimaElaborazioneServizio(
         eseguiFase { pipeline.segnalatore.fase(id, ALLINEAMENTO) }
             ?: return RisultatoPipeline.Fallita(MOTIVO_ALLINEAMENTO)
         val segmenti = grezzi.map { SegmentoIniziale(it.voceIndice, it.intervallo, it.testo) } // AC-71: voceIndice kept
-        return RisultatoPipeline.Successo(durataDecodificata(campioni), segmenti)
+        return RisultatoPipeline.Successo(vista.incontroId, durataDecodificata(campioni), segmenti)
     }
 
     /**
@@ -249,10 +250,11 @@ public class EseguiProssimaElaborazioneServizio(
 
     private fun concludiConSuccesso(
         elaborazione: Elaborazione,
+        incontroId: IncontroId,
         durataMs: Long,
         segmenti: List<SegmentoIniziale>,
     ): Esito<Unit> =
-        when (val creato = Trascritto.crea(elaborazione.registrazioneId, durataMs, segmenti)) {
+        when (val creato = Trascritto.crea(elaborazione.registrazioneId, incontroId, durataMs, segmenti)) {
             is Esito.Ok -> completa(elaborazione, creato.valore)
             is Esito.Errore -> {
                 // F-D: Trascritto.crea only returns ErroreTrascrizione; any other ErroreDominio is a
@@ -270,7 +272,7 @@ public class EseguiProssimaElaborazioneServizio(
      */
     private fun completa(elaborazione: Elaborazione, creato: Creato<Trascritto, TrascrittoCreato>): Esito<Unit> =
         elaborazione.completa().poi { evento ->
-            val sostituisce = trascritti.trova(elaborazione.registrazioneId) != null
+            val sostituisce = trascritti.trova(elaborazione.registrazioneId, creato.aggregato.incontroId) != null
             trascritti.salva(creato.aggregato) // stessa transazione del salva sotto: INV-5
             elaborazioni.salva(elaborazione).poi {
                 if (sostituisce) eventi.pubblica(TrascrittoSostituito(elaborazione.registrazioneId))
@@ -394,7 +396,11 @@ private class TransazioneRifiutata(quale: String, errore: ErroreDominio) :
 
 /** The pipeline's outcome (never inside a transaction): a Trascritto candidate, or a fixed `motivo`. */
 private sealed interface RisultatoPipeline {
-    data class Successo(val durataMs: Long, val segmenti: List<SegmentoIniziale>) : RisultatoPipeline
+    data class Successo(
+        val incontroId: IncontroId,
+        val durataMs: Long,
+        val segmenti: List<SegmentoIniziale>,
+    ) : RisultatoPipeline
     data class Fallita(val motivo: String) : RisultatoPipeline
 }
 

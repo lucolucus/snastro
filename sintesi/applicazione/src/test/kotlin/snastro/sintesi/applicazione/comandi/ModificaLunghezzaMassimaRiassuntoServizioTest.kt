@@ -108,13 +108,13 @@ class ModificaLunghezzaMassimaRiassuntoServizioTest {
         listOf(inAttesa, inCorso, pronto).forEach { riassunti.salva(it).atteso() }
         val id = listOf(inAttesa.id, inCorso.id, pronto.id)
         val prima = stati(riassunti, id)
-        val prontoSuperatoPrima = checkNotNull(riassunti.trova(pronto.id)).superato(struttura)
+        val prontoSuperatoPrima = checkNotNull(riassunti.trova(pronto.id)).superato(REGISTRAZIONE_3, struttura)
         val a = unAmbiente(riassunti = riassunti)
 
         a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, 1900)).atteso()
 
         assertEquals(prima, stati(riassunti, id))
-        assertEquals(prontoSuperatoPrima, checkNotNull(riassunti.trova(pronto.id)).superato(struttura))
+        assertEquals(prontoSuperatoPrima, checkNotNull(riassunti.trova(pronto.id)).superato(REGISTRAZIONE_3, struttura))
     }
 
     private fun stati(riassunti: RiassuntoRepositoryFinta, id: List<RiassuntoId>): List<List<Any?>> =
