@@ -1,0 +1,3 @@
+package x
+
+class Schermata { fun f(db: Db) = db.vociIncontroQueries.aggiorna(1, "r") }

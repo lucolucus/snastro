@@ -20,6 +20,7 @@ import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.persistenza.seminaTrascrittoDiProva
 import snastro.persistenza.seminaVoceDiProva
 import snastro.supporto.Segnalazione
@@ -96,7 +97,7 @@ class ParlanteRepositorySqlRitentaCheckpointTest {
 
     private fun SnastroDatabase.seminato(): SnastroDatabase = apply {
         progettoQueries.inserisci(PROGETTO.valore, "Progetto di prova")
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             id = R.valore,
             progettoId = PROGETTO.valore,
             titolo = "Registrazione",

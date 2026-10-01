@@ -1,0 +1,3 @@
+package x
+
+class Lettura { fun f(db: Db) = db.riassuntoElementoQueries.trovaDiRiassunto("r") }

@@ -2,6 +2,7 @@ package snastro.avvio.trascrizione
 
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.letture.ElaborazioniInAttesaContratto
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
@@ -23,7 +24,7 @@ class ElaborazioniInAttesaDaSqlTest : ElaborazioniInAttesaContratto() {
     override fun predisponi(predisposizione: PredisposizioneTrascrizione) {
         predisposizione.progetti.forEach { db.progettoQueries.inserisci(it.valore, "Progetto di prova") }
         predisposizione.registrazioni.forEach { (registrazioneId, progettoId) ->
-            db.registrazioneQueries.inserisci(
+            db.seminaRegistrazioneDiProva(
                 id = registrazioneId.valore,
                 progettoId = progettoId.valore,
                 titolo = "Registrazione di prova",

@@ -72,7 +72,7 @@ class RiassuntoRepositorySqlTest : RiassuntoRepositoryContratto() {
 
     @Test
     fun `AC-S112 un vincolo diverso dagli indici parziali non e mappato e arriva grezzo`() {
-        // No registrazione seeded: the immediate FK riassunto.registrazione_id -> registrazione(id) refuses it,
+        // No registrazione seeded: no Incontro to resolve, riassunto.incontro_id would be NULL and NOT NULL refuses it,
         // a constraint the Finta (RiassuntoRepositoryFinta) has no concept of.
         val db = databaseInMemoria()
         val repo = RiassuntoRepositorySql(db, UnitaDiLavoroSql(db))

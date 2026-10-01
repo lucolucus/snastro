@@ -1,0 +1,3 @@
+package x
+
+class Composizione { fun f(db: Db) = db.segmentoQueries.eliminaDiRegistrazione("r") }

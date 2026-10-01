@@ -1,0 +1,2 @@
+-- 6.sqm only: 7.sqm is absent
+CREATE TABLE riassunto (id TEXT);

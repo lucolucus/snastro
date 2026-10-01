@@ -5,6 +5,7 @@ import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
 import snastro.trascrizione.dominio.unaElaborazione
 import java.io.File
@@ -31,7 +32,7 @@ class ElaborazioneRepositorySqlConcorrenzaTest {
         val database = apriDatabaseProgetto(cartella)
         try {
             database.database.progettoQueries.inserisci("progetto-1", "Progetto di prova")
-            database.database.registrazioneQueries.inserisci(
+            database.database.seminaRegistrazioneDiProva(
                 id = "registrazione-1",
                 progettoId = "progetto-1",
                 titolo = "Registrazione di prova",

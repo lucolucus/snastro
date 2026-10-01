@@ -23,6 +23,7 @@ import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.persistenza.seminaTrascrittoDiProva
 import snastro.persistenza.seminaVoceDiProva
 import snastro.supporto.test.attendiFinche
@@ -52,7 +53,7 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
     override fun predisponi(predisposizione: PredisposizioneParlanti) {
         predisposizione.progetti.forEach { db.progettoQueries.inserisci(it.valore, "Progetto di prova") }
         predisposizione.registrazioni.forEach { (registrazioneId, progettoId) ->
-            db.registrazioneQueries.inserisci(
+            db.seminaRegistrazioneDiProva(
                 id = registrazioneId.valore,
                 progettoId = progettoId.valore,
                 titolo = "Registrazione di prova",
@@ -123,7 +124,7 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
 
     private fun predisponiConcorrenza(db: SnastroDatabase) {
         db.progettoQueries.inserisci(PROGETTO.valore, "Progetto di prova")
-        db.registrazioneQueries.inserisci(
+        db.seminaRegistrazioneDiProva(
             id = REGISTRAZIONE.valore,
             progettoId = PROGETTO.valore,
             titolo = "Registrazione di prova",

@@ -1,0 +1,5 @@
+package snastro.progetto.adattatori.persistenza
+
+class RepoR(private val db: Db) {
+    fun f() = db.incontroQueries.inserisci("i", "p") + db.registrazioneQueries.elimina("r")
+}

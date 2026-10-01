@@ -1,17 +1,25 @@
 -- Queries for `trascritto` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
 
+-- trascritto.prossima_voce is retired (ADR 0034 §2): the Voce counter is voci_incontro's, joined by SQL (TRANSITION).
 trovaPerRegistrazione:
-SELECT * FROM trascritto WHERE registrazione_id = :registrazioneId;
+SELECT t.registrazione_id, v.prossima_voce, t.prossimo_segmento
+FROM trascritto AS t
+INNER JOIN registrazione AS r ON r.id = t.registrazione_id
+INNER JOIN voci_incontro AS v ON v.incontro_id = r.incontro_id
+WHERE t.registrazione_id = :registrazioneId;
+
+esistePerRegistrazione:
+SELECT registrazione_id FROM trascritto WHERE registrazione_id = :registrazioneId;
 
 trovaRegistrazioniConTrascritto:
 SELECT registrazione_id FROM trascritto;
 
 inserisci:
 INSERT INTO trascritto(registrazione_id, prossima_voce, prossimo_segmento)
-VALUES (:registrazioneId, :prossimaVoce, :prossimoSegmento);
+VALUES (:registrazioneId, 0, :prossimoSegmento);
 
 aggiornaContatori:
-UPDATE trascritto SET prossima_voce = :prossimaVoce, prossimo_segmento = :prossimoSegmento
+UPDATE trascritto SET prossimo_segmento = :prossimoSegmento
     WHERE registrazione_id = :registrazioneId;
 
 -- ADR 0020: the trascritto row of a deleted Registrazione; its segmento and voce rows go first (voce FK is immediate).

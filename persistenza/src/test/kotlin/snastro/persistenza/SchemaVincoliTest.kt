@@ -129,8 +129,25 @@ class SchemaVincoliTest {
         assertFailsWith<SQLException> {
             db.transaction {
                 db.voceQueries.eliminaDiRegistrazione(registrazioneId)
+                db.voceIncontroQueries.eliminaSenzaPresenza(registrazioneId)
                 // niente reinserimento: attribuzione resta orfana quando la transazione fa commit.
             }
+        }
+    }
+
+    @Test
+    fun `AC-I4 un impronta resta orfana della presenza della Voce nella sua Parte e il commit fallisce`() {
+        val db = databaseInMemoria()
+        val progettoId = "progetto-1"
+        db.progettoQueries.inserisci(progettoId, "Progetto di prova")
+        val registrazioneId = db.seminaRegistrazione(progettoId, "reg-1")
+        db.seminaTrascrittoConVoce(registrazioneId, numeroVoce = 1L)
+        db.parlanteQueries.inserisci("parlante-1", progettoId, "Marco", "marco", "ricorrente", "attivo")
+        db.improntaVocaleQueries.inserisci("parlante-1", registrazioneId, 1L, byteArrayOf(1), "0-1000", "modello-1")
+
+        // La Voce resta nell'Incontro (voce_incontro), ma non ha piu presenza nella Parte da cui l'impronta e tratta.
+        assertFailsWith<SQLException> {
+            db.transaction { db.voceQueries.eliminaDiRegistrazione(registrazioneId) }
         }
     }
 
@@ -392,7 +409,7 @@ class SchemaVincoliTest {
     }
 
     private fun SnastroDatabase.seminaRegistrazione(progettoId: String, registrazioneId: String): String {
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             registrazioneId,
             progettoId,
             "titolo",
@@ -409,7 +426,11 @@ class SchemaVincoliTest {
         numeroVoce: Long,
         creaTrascritto: Boolean = true,
     ) {
-        if (creaTrascritto) trascrittoQueries.inserisci(registrazioneId, numeroVoce + 1, 1L)
+        if (creaTrascritto) {
+            vociIncontroQueries.inserisci(numeroVoce + 1, registrazioneId)
+            trascrittoQueries.inserisci(registrazioneId, 1L)
+        }
+        voceIncontroQueries.inserisciSeAssente(numeroVoce, registrazioneId)
         voceQueries.inserisci(registrazioneId, numeroVoce)
     }
 }

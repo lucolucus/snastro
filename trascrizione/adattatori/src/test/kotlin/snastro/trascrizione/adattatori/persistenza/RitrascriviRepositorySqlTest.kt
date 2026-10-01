@@ -15,6 +15,7 @@ import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.SegmentoIniziale
@@ -118,7 +119,12 @@ class RitrascriviRepositorySqlTest {
         seminaAttribuzioneSuVoce5(driver)
 
         uow.inTransazione {
-            driver.execute(null, "DELETE FROM attribuzione WHERE registrazione_id = '${R.valore}'", 0)
+            driver.execute(
+                null,
+                "DELETE FROM attribuzione WHERE incontro_id = " +
+                    "(SELECT incontro_id FROM registrazione WHERE id = '${R.valore}')",
+                0,
+            )
             repo.salva(NUOVO)
             Esito.Ok(Unit)
         }.atteso()
@@ -147,7 +153,7 @@ class RitrascriviRepositorySqlTest {
 
     private fun SnastroDatabase.seminato(): SnastroDatabase = apply {
         progettoQueries.inserisci("progetto-1", "Progetto di prova")
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             id = R.valore,
             progettoId = "progetto-1",
             titolo = "Registrazione di prova",
@@ -195,8 +201,9 @@ class RitrascriviRepositorySqlTest {
         val ATTRIBUZIONE_SU_VOCE_5 = listOf(
             "INSERT INTO parlante(id, progetto_id, nome, nome_normalizzato, tipo, stato) " +
                 "VALUES ('parlante-1', 'progetto-1', 'Marco', 'marco', 'ricorrente', 'attivo')",
-            "INSERT INTO attribuzione(registrazione_id, voce_id, progetto_id, parlante_id) " +
-                "VALUES ('${R.valore}', 5, 'progetto-1', 'parlante-1')",
+            "INSERT INTO attribuzione(incontro_id, voce_id, progetto_id, parlante_id) " +
+                "VALUES ((SELECT incontro_id FROM registrazione WHERE id = '${R.valore}'), " +
+                "5, 'progetto-1', 'parlante-1')",
         )
 
         /** 5 Voci over 39 Segmenti: counters 6 / 40. */

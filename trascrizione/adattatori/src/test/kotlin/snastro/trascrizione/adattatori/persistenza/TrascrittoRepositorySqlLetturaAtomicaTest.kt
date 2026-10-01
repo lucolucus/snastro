@@ -14,6 +14,7 @@ import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unTrascritto
@@ -107,8 +108,8 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
             val rilascia = CountDownLatch(1)
             val scrittoreThread = thread(name = "scrittore-immediate-non-committato") {
                 uowScrittore.inTransazione {
+                    scrittore.vociIncontroQueries.aggiorna(prossimaVoce = 99L, registrazioneId = R.valore)
                     scrittore.trascrittoQueries.aggiornaContatori(
-                        prossimaVoce = 99L,
                         prossimoSegmento = 99L,
                         registrazioneId = R.valore,
                     )
@@ -159,7 +160,7 @@ class TrascrittoRepositorySqlLetturaAtomicaTest {
 
     private fun predisponi(db: SnastroDatabase) {
         db.progettoQueries.inserisci("progetto-1", "Progetto di prova")
-        db.registrazioneQueries.inserisci(
+        db.seminaRegistrazioneDiProva(
             id = R.valore,
             progettoId = "progetto-1",
             titolo = "Registrazione di prova",

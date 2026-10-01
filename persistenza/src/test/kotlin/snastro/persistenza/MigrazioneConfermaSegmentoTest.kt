@@ -64,8 +64,8 @@ class MigrazioneConfermaSegmentoTest {
     fun `AC-521 confermato accetta 0 e 1 e rifiuta 2`() {
         val db = databaseInMemoria()
         db.progettoQueries.inserisci("progetto-1", "Progetto")
-        db.registrazioneQueries.inserisci("reg-1", "progetto-1", "t", "audio/r.wav", 5000L, "2026-09-24", 0L)
-        db.trascrittoQueries.inserisci("reg-1", 2L, 4L)
+        db.seminaRegistrazioneDiProva("reg-1", "progetto-1", "t", "audio/r.wav", 5000L, "2026-09-24", 0L)
+        db.trascrittoQueries.inserisci("reg-1", 4L)
         db.voceQueries.inserisci("reg-1", 1L)
 
         db.segmentoQueries.inserisci("reg-1", 1L, 1L, 0L, 1000L, "a", 0L)

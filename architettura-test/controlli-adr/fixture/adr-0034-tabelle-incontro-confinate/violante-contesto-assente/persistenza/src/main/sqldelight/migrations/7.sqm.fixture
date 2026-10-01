@@ -1,0 +1,16 @@
+-- Minimal 7.sqm: attribuzione keeps parlante_id (a Parlanti table), the riassunto tables never name a speaker.
+CREATE TABLE attribuzione_v8 (
+    incontro_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    PRIMARY KEY (incontro_id, voce_id)
+);
+CREATE TABLE riassunto_v8 (
+    id TEXT NOT NULL PRIMARY KEY,
+    incontro_id TEXT NOT NULL REFERENCES incontro(id)
+);
+CREATE TABLE riassunto_elemento_v8 (
+    riassunto_id TEXT NOT NULL REFERENCES riassunto_v8(id),
+    testo TEXT NOT NULL,
+    voce_id INTEGER
+);

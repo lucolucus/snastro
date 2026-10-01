@@ -1,20 +1,30 @@
--- Queries for `attribuzione` — schema in migrations/1.sqm (ADR 0006 Amendment (a)).
+-- Queries for `attribuzione` — schema in migrations/7.sqm (ADR 0034; ADR 0006 Amendment (a)).
+-- TRANSITION (ADR 0033 §6, removed by incontro-chiavi): the domain still keys by registrazione_id, so the
+-- Incontro is resolved from it by SQL join and the rows are projected back with the Parte's registrazione_id.
 
 trova:
-SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+SELECT r.id AS registrazione_id, a.voce_id, a.progetto_id, a.parlante_id
+FROM attribuzione AS a INNER JOIN registrazione AS r ON r.incontro_id = a.incontro_id
+WHERE r.id = :registrazioneId AND a.voce_id = :voceId;
 
 trovaDiRegistrazione:
-SELECT * FROM attribuzione WHERE registrazione_id = :registrazioneId;
+SELECT r.id AS registrazione_id, a.voce_id, a.progetto_id, a.parlante_id
+FROM attribuzione AS a INNER JOIN registrazione AS r ON r.incontro_id = a.incontro_id
+WHERE r.id = :registrazioneId;
 
 trovaDiParlante:
-SELECT * FROM attribuzione WHERE parlante_id = :parlanteId;
+SELECT r.id AS registrazione_id, a.voce_id, a.progetto_id, a.parlante_id
+FROM attribuzione AS a INNER JOIN registrazione AS r ON r.incontro_id = a.incontro_id
+WHERE a.parlante_id = :parlanteId;
 
 inserisci:
-INSERT INTO attribuzione(registrazione_id, voce_id, progetto_id, parlante_id)
-VALUES (:registrazioneId, :voceId, :progettoId, :parlanteId);
+INSERT INTO attribuzione(incontro_id, voce_id, progetto_id, parlante_id)
+VALUES ((SELECT incontro_id FROM registrazione WHERE id = :registrazioneId), :voceId, :progettoId, :parlanteId);
 
 aggiornaParlante:
-UPDATE attribuzione SET parlante_id = :parlanteId WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+UPDATE attribuzione SET parlante_id = :parlanteId
+WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId) AND voce_id = :voceId;
 
 rimuovi:
-DELETE FROM attribuzione WHERE registrazione_id = :registrazioneId AND voce_id = :voceId;
+DELETE FROM attribuzione
+WHERE incontro_id = (SELECT incontro_id FROM registrazione WHERE id = :registrazioneId) AND voce_id = :voceId;

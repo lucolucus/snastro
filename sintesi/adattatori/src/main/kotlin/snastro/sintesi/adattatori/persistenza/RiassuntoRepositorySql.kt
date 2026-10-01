@@ -59,23 +59,23 @@ public class RiassuntoRepositorySql(
     /** ADR 0029 §5/ADR 0022 §4: the root row and its children (elementi/fonti, via [inDominio]) from ONE
      * snapshot — never the root outside it (AC-C30). */
     override fun trova(id: RiassuntoId): Riassunto? = lettura.inLettura {
-        db.riassuntoQueries.trovaPerId(id.valore).executeAsOneOrNull()?.let { inDominio(db, it) }
+        db.riassuntoQueries.trovaPerId(id.valore, ::rigaRiassunto).executeAsOneOrNull()?.let { inDominio(db, it) }
     }
 
     override fun diRegistrazione(r: RegistrazioneId): List<Riassunto> = lettura.inLettura {
-        db.riassuntoQueries.trovaDiRegistrazione(r.valore).executeAsList().map { inDominio(db, it) }
+        db.riassuntoQueries.trovaDiRegistrazione(r.valore, ::rigaRiassunto).executeAsList().map { inDominio(db, it) }
     }
 
     override fun inAttesa(): List<Riassunto> = lettura.inLettura {
-        db.riassuntoQueries.trovaInAttesa().executeAsList().map { inDominio(db, it) }
+        db.riassuntoQueries.trovaInAttesa(::rigaRiassunto).executeAsList().map { inDominio(db, it) }
     }
 
     override fun inCorso(): List<Riassunto> = lettura.inLettura {
-        db.riassuntoQueries.trovaInCorso().executeAsList().map { inDominio(db, it) }
+        db.riassuntoQueries.trovaInCorso(::rigaRiassunto).executeAsList().map { inDominio(db, it) }
     }
 
     override fun salva(r: Riassunto): Esito<Unit> = try {
-        val esistente = db.riassuntoQueries.trovaPerId(r.id.valore).executeAsOneOrNull()
+        val esistente = db.riassuntoQueries.trovaPerId(r.id.valore, ::rigaRiassunto).executeAsOneOrNull()
         if (esistente == null) {
             scriviRadiceNuova(db, r)
         } else {
@@ -91,7 +91,7 @@ public class RiassuntoRepositorySql(
     @Suppress("ReturnCount") // ADR 0022 §4's own three numbered steps, each a guard clause — clearer than nesting
     override fun concludi(r: Riassunto): Esito<Boolean> {
         require(r.pronto || r.fallito) { "concludi di un Riassunto non concluso: ${r.id}" }
-        val esistente = db.riassuntoQueries.trovaPerId(r.id.valore).executeAsOneOrNull()
+        val esistente = db.riassuntoQueries.trovaPerId(r.id.valore, ::rigaRiassunto).executeAsOneOrNull()
         if (esistente == null || esistente.stato != CODICE_IN_CORSO) return Esito.Ok(false)
         return try {
             if (r.pronto) rimuoviPrecedentePronto(db, r.registrazioneId)
@@ -127,7 +127,6 @@ public class RiassuntoRepositorySql(
 private fun scriviRadiceNuova(db: SnastroDatabase, r: Riassunto) {
     db.riassuntoQueries.inserisci(
         id = r.id.valore,
-        registrazioneId = r.registrazioneId.valore,
         stato = r.stato.codice,
         argomento = r.argomento?.valore,
         lunghezzaMassimaParole = r.lunghezzaMassima.valore.toLong(),
@@ -136,7 +135,8 @@ private fun scriviRadiceNuova(db: SnastroDatabase, r: Riassunto) {
         motivoFallimento = r.motivoFallimento?.codice,
         sommario = r.sommario?.testo?.codifica(),
         omessi = r.omessi?.toLong(),
-        struttura = r.struttura,
+        struttura = r.struttura?.let { "${r.registrazioneId.valore}=$it" },
+        registrazioneId = r.registrazioneId.valore,
     )
 }
 
@@ -174,13 +174,13 @@ private fun eseguiConcludi(db: SnastroDatabase, r: Riassunto): Long =
         motivoFallimento = r.motivoFallimento?.codice,
         sommario = r.sommario?.testo?.codifica(),
         omessi = r.omessi?.toLong(),
-        struttura = r.struttura,
+        struttura = r.struttura?.let { "${r.registrazioneId.valore}=$it" },
         id = r.id.valore,
     ).value
 
 /** D-0003: only [RiassuntoRepositorySql.concludi] removes the previous `pronto` of [registrazioneId]. */
 private fun rimuoviPrecedentePronto(db: SnastroDatabase, registrazioneId: RegistrazioneId) {
-    val precedente = db.riassuntoQueries.trovaDiRegistrazione(registrazioneId.valore).executeAsList()
+    val precedente = db.riassuntoQueries.trovaDiRegistrazione(registrazioneId.valore, ::rigaRiassunto).executeAsList()
         .firstOrNull { it.stato == CODICE_PRONTO } ?: return
     eliminaFigli(db, RiassuntoId(precedente.id))
     db.riassuntoQueries.elimina(precedente.id)
@@ -193,13 +193,17 @@ private fun eliminaFigli(db: SnastroDatabase, id: RiassuntoId) {
 }
 
 private fun scriviFigli(db: SnastroDatabase, r: Riassunto) {
-    r.decisioni.forEachIndexed { i, e -> scriviElemento(db, r.id, TIPO_DECISIONE, i, e.testo, e.fonti, voce = null) }
-    r.questioniAperte.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_QUESTIONE_APERTA, i, e.testo, e.fonti, voce = null)
+    r.decisioni.forEachIndexed { i, e ->
+        scriviElemento(db, r.id, TIPO_DECISIONE, i, e.testo, e.fonti, voce = null, r.registrazioneId)
     }
-    r.azioni.forEachIndexed { i, e -> scriviElemento(db, r.id, TIPO_AZIONE, i, e.testo, e.fonti, e.responsabile) }
+    r.questioniAperte.forEachIndexed { i, e ->
+        scriviElemento(db, r.id, TIPO_QUESTIONE_APERTA, i, e.testo, e.fonti, voce = null, r.registrazioneId)
+    }
+    r.azioni.forEachIndexed { i, e ->
+        scriviElemento(db, r.id, TIPO_AZIONE, i, e.testo, e.fonti, e.responsabile, r.registrazioneId)
+    }
     r.puntiChiave.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_PUNTO_CHIAVE, i, e.testo, e.fonti, e.parlante)
+        scriviElemento(db, r.id, TIPO_PUNTO_CHIAVE, i, e.testo, e.fonti, e.parlante, r.registrazioneId)
     }
 }
 
@@ -212,6 +216,7 @@ private fun scriviElemento(
     testo: TestoConVoci,
     fonti: Set<SegmentoId>,
     voce: VoceId?,
+    registrazioneId: RegistrazioneId,
 ) {
     db.riassuntoElementoQueries.inserisci(
         riassuntoId = id.valore,
@@ -225,6 +230,7 @@ private fun scriviElemento(
             riassuntoId = id.valore,
             tipo = tipo,
             posizione = posizione.toLong(),
+            registrazioneId = registrazioneId.valore,
             segmentoId = f.numero.toLong(),
         )
     }

@@ -9,24 +9,26 @@ import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.dominio.Attribuzione
 import snastro.persistenza.SnastroDatabase
-import migrations.Attribuzione as AttribuzioneRiga
 
 /**
  * [AttribuzioneRepository] on the generated [SnastroDatabase] queries (dev-architecture-app.md#repository,
- * ADR 0007): keyed by [VoceRef] — `attribuzione`'s PRIMARY KEY `(registrazione_id, voce_id)` makes "at
+ * ADR 0007): keyed by [VoceRef] — `attribuzione`'s PRIMARY KEY `(incontro_id, voce_id)` (the Incontro is resolved from
+ * the Parte by SQL join, ADR 0033 §6 transition) makes "at
  * most one row per Voce" structural. [salva] is an upsert (`inserisci` or `aggiornaParlante`), never
  * opening a transaction (ADR 0012).
  */
 public class AttribuzioneRepositorySql(private val db: SnastroDatabase) : AttribuzioneRepository {
     override fun trova(v: VoceRef): Attribuzione? =
         db.attribuzioneQueries.trova(v.registrazioneId.valore, v.voceId.numero.toLong())
-            .executeAsOneOrNull()?.inDominio()
+            .executeAsOneOrNull()?.let { inDominio(it.registrazione_id, it.voce_id, it.progetto_id, it.parlante_id) }
 
     override fun diRegistrazione(id: RegistrazioneId): List<Attribuzione> =
-        db.attribuzioneQueries.trovaDiRegistrazione(id.valore).executeAsList().map { it.inDominio() }
+        db.attribuzioneQueries.trovaDiRegistrazione(id.valore).executeAsList()
+            .map { inDominio(it.registrazione_id, it.voce_id, it.progetto_id, it.parlante_id) }
 
     override fun diParlante(id: ParlanteId): List<Attribuzione> =
-        db.attribuzioneQueries.trovaDiParlante(id.valore).executeAsList().map { it.inDominio() }
+        db.attribuzioneQueries.trovaDiParlante(id.valore).executeAsList()
+            .map { inDominio(it.registrazione_id, it.voce_id, it.progetto_id, it.parlante_id) }
 
     override fun salva(a: Attribuzione) {
         val registrazioneId = a.voceRef.registrazioneId.valore
@@ -54,8 +56,9 @@ public class AttribuzioneRepositorySql(private val db: SnastroDatabase) : Attrib
 
 /** The database is trusted, nothing is re-validated (CR-15). */
 @OptIn(RicostituzioneDaPersistenza::class)
-private fun AttribuzioneRiga.inDominio(): Attribuzione = Attribuzione.ricostituisci(
-    voceRef = VoceRef(RegistrazioneId(registrazione_id), VoceId(voce_id.toInt())),
-    progettoId = ProgettoId(progetto_id),
-    parlanteId = ParlanteId(parlante_id),
-)
+private fun inDominio(registrazioneId: String, voceId: Long, progettoId: String, parlanteId: String): Attribuzione =
+    Attribuzione.ricostituisci(
+        voceRef = VoceRef(RegistrazioneId(registrazioneId), VoceId(voceId.toInt())),
+        progettoId = ProgettoId(progettoId),
+        parlanteId = ParlanteId(parlanteId),
+    )

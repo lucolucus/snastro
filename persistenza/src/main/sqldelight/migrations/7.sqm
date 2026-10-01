@@ -1,0 +1,126 @@
+-- Schema 7 -> 8 (ADR 0034 "persistenza-incontro", ADR 0006 (a)): forward-only — schema 7 (6.sqm) is never edited.
+-- One Incontro per existing Registrazione; Voci keyed per Incontro; the Riassunto re-keyed with nothing becoming superato.
+
+-- Progetto (ADR 0033). Thin root: identity + Progetto; order, title, date are derived at read time.
+CREATE TABLE incontro (
+    id TEXT NOT NULL PRIMARY KEY,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id)
+);
+CREATE INDEX incontro_progetto ON incontro(progetto_id);
+-- One Incontro per existing Registrazione; its id IS that Registrazione's id (a migration fact: no code relies on it).
+INSERT INTO incontro(id, progetto_id) SELECT id, progetto_id FROM registrazione;
+
+ALTER TABLE registrazione ADD COLUMN incontro_id TEXT REFERENCES incontro(id);
+UPDATE registrazione SET incontro_id = id;
+ALTER TABLE registrazione ADD COLUMN ora_di_inizio TEXT;      -- 'HH:MM:SS' local; NULL = empty (INV-I14); migrated rows empty
+CREATE INDEX registrazione_incontro ON registrazione(incontro_id);
+-- INV-I1 store backstops (the column cannot be NOT NULL without rebuilding registrazione): set at insert, never changed.
+-- SQLDelight 2.1 rejects NEW/OLD in a trigger ("No table found with name NEW"), so both are written without them:
+-- after an INSERT no row may have a NULL incontro_id; any UPDATE naming incontro_id is refused (stricter than "changed").
+CREATE TRIGGER registrazione_incontro_obbligatorio AFTER INSERT ON registrazione BEGIN SELECT RAISE(ABORT, 'registrazione.incontro_id obbligatorio') WHERE EXISTS (SELECT 1 FROM registrazione WHERE incontro_id IS NULL); END;
+CREATE TRIGGER registrazione_incontro_immutabile BEFORE UPDATE OF incontro_id ON registrazione BEGIN SELECT RAISE(ABORT, 'registrazione.incontro_id immutabile'); END;
+
+-- Trascrizione (ADR 0035). Root "Voci dell'Incontro": one row from the first completion of any Parte until the
+-- Incontro ceases. prossima_voce = INV-I4 (never reused in the Incontro).
+CREATE TABLE voci_incontro (
+    incontro_id TEXT NOT NULL PRIMARY KEY REFERENCES incontro(id),
+    prossima_voce INTEGER NOT NULL
+);
+INSERT INTO voci_incontro(incontro_id, prossima_voce) SELECT registrazione_id, prossima_voce FROM trascritto;
+-- A Voce of the Incontro (exists iff >= 1 Segmento in some Parte, INV-6). Target of the Parlanti FKs.
+CREATE TABLE voce_incontro (
+    incontro_id TEXT NOT NULL REFERENCES voci_incontro(incontro_id),
+    numero INTEGER NOT NULL,
+    PRIMARY KEY (incontro_id, numero)
+);
+INSERT INTO voce_incontro(incontro_id, numero) SELECT registrazione_id, numero FROM voce;
+
+-- Parlanti: leaves rebuilt with the Incontro key.
+CREATE TABLE attribuzione_v8 (
+    incontro_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    progetto_id TEXT NOT NULL REFERENCES progetto(id),
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    PRIMARY KEY (incontro_id, voce_id),
+    FOREIGN KEY (incontro_id, voce_id) REFERENCES voce_incontro(incontro_id, numero) DEFERRABLE INITIALLY DEFERRED
+);
+INSERT INTO attribuzione_v8(incontro_id, voce_id, progetto_id, parlante_id)
+SELECT registrazione_id, voce_id, progetto_id, parlante_id FROM attribuzione;
+DROP INDEX attribuzione_parlante;
+DROP TABLE attribuzione;
+ALTER TABLE attribuzione_v8 RENAME TO attribuzione;
+CREATE INDEX attribuzione_parlante ON attribuzione(parlante_id);
+
+CREATE TABLE impronta_vocale_v8 (
+    parlante_id TEXT NOT NULL REFERENCES parlante(id),
+    incontro_id TEXT NOT NULL,
+    voce_id INTEGER NOT NULL,
+    registrazione_id TEXT NOT NULL,                 -- the Parte the print is sourced from (INV-I8)
+    impronta BLOB NOT NULL,
+    sorgente_impronta TEXT NOT NULL,
+    modello_impronta TEXT NOT NULL,
+    FOREIGN KEY (incontro_id, voce_id) REFERENCES voce_incontro(incontro_id, numero) DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY (registrazione_id, voce_id) REFERENCES voce(registrazione_id, numero) DEFERRABLE INITIALLY DEFERRED,
+    UNIQUE (parlante_id, incontro_id, voce_id, registrazione_id)
+);
+INSERT INTO impronta_vocale_v8(parlante_id, incontro_id, voce_id, registrazione_id, impronta, sorgente_impronta, modello_impronta)
+SELECT parlante_id, registrazione_id, voce_id, registrazione_id, impronta, sorgente_impronta, modello_impronta FROM impronta_vocale;
+DROP INDEX impronta_vocale_voce;
+DROP TABLE impronta_vocale;
+ALTER TABLE impronta_vocale_v8 RENAME TO impronta_vocale;
+CREATE INDEX impronta_vocale_voce ON impronta_vocale(incontro_id, voce_id);
+CREATE INDEX impronta_vocale_parte ON impronta_vocale(registrazione_id);
+
+-- Sintesi (ADR 0037): the three tables rebuilt as a group, children dropped first.
+CREATE TABLE riassunto_v8 (
+    id TEXT NOT NULL PRIMARY KEY,
+    incontro_id TEXT NOT NULL REFERENCES incontro(id),
+    stato TEXT NOT NULL CHECK (stato IN ('in_attesa', 'in_corso', 'pronto', 'fallito')),
+    argomento TEXT,
+    lunghezza_massima_parole INTEGER NOT NULL CHECK (lunghezza_massima_parole > 0),
+    richiesto_alle INTEGER NOT NULL,
+    avviato_alle INTEGER,
+    motivo_fallimento TEXT,
+    sommario TEXT,
+    omessi INTEGER,
+    struttura TEXT,                                  -- StrutturaIncontro.chiave (ADR 0037 §5), NOT NULL iff pronto
+    CHECK ((stato = 'fallito') = (motivo_fallimento IS NOT NULL)),
+    CHECK ((stato = 'pronto') = (struttura IS NOT NULL AND omessi IS NOT NULL)),
+    CHECK (stato = 'pronto' OR sommario IS NULL)
+);
+INSERT INTO riassunto_v8 SELECT id, registrazione_id, stato, argomento, lunghezza_massima_parole, richiesto_alle, avviato_alle,
+    motivo_fallimento, sommario, omessi, CASE WHEN struttura IS NULL THEN NULL ELSE registrazione_id || '=' || struttura END
+FROM riassunto;
+CREATE TABLE riassunto_elemento_v8 (
+    riassunto_id TEXT NOT NULL REFERENCES riassunto_v8(id),
+    tipo TEXT NOT NULL CHECK (tipo IN ('decisione', 'questione_aperta', 'azione', 'punto_chiave')),
+    posizione INTEGER NOT NULL,
+    testo TEXT NOT NULL,                             -- plain text with {V<n>} tokens (FTS-ready)
+    voce_id INTEGER,                                 -- Responsabile (azione) / speaker (punto_chiave); NULL otherwise or unbound
+    PRIMARY KEY (riassunto_id, tipo, posizione),
+    CHECK (voce_id IS NULL OR tipo IN ('azione', 'punto_chiave'))
+);
+INSERT INTO riassunto_elemento_v8 SELECT * FROM riassunto_elemento;
+CREATE TABLE riassunto_fonte_v8 (
+    riassunto_id TEXT NOT NULL,
+    tipo TEXT NOT NULL,
+    posizione INTEGER NOT NULL,
+    registrazione_id TEXT NOT NULL,                  -- the Parte of the Fonte; NO FK: survives a non-last Parte's deletion (D-0003)
+    segmento_id INTEGER NOT NULL,
+    PRIMARY KEY (riassunto_id, tipo, posizione, registrazione_id, segmento_id),
+    FOREIGN KEY (riassunto_id, tipo, posizione) REFERENCES riassunto_elemento_v8(riassunto_id, tipo, posizione)
+);
+INSERT INTO riassunto_fonte_v8 SELECT f.riassunto_id, f.tipo, f.posizione, r.registrazione_id, f.segmento_id
+FROM riassunto_fonte AS f INNER JOIN riassunto AS r ON r.id = f.riassunto_id;
+DROP TABLE riassunto_fonte;
+DROP TABLE riassunto_elemento;
+DROP INDEX riassunto_registrazione;
+DROP INDEX riassunto_non_pronto_unico;
+DROP INDEX riassunto_pronto_unico;
+DROP TABLE riassunto;
+ALTER TABLE riassunto_v8 RENAME TO riassunto;
+ALTER TABLE riassunto_elemento_v8 RENAME TO riassunto_elemento;
+ALTER TABLE riassunto_fonte_v8 RENAME TO riassunto_fonte;
+CREATE INDEX riassunto_incontro ON riassunto(incontro_id);
+CREATE UNIQUE INDEX riassunto_non_pronto_unico ON riassunto(incontro_id) WHERE stato IN ('in_attesa', 'in_corso', 'fallito');
+CREATE UNIQUE INDEX riassunto_pronto_unico ON riassunto(incontro_id) WHERE stato = 'pronto';

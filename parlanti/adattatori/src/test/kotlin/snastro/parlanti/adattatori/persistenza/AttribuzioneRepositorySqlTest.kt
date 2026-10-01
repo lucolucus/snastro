@@ -5,6 +5,7 @@ import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryContratto
 import snastro.parlanti.applicazione.porte.PredisposizioneParlanti
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.persistenza.seminaTrascrittoDiProva
 import snastro.persistenza.seminaVoceDiProva
 
@@ -24,7 +25,7 @@ class AttribuzioneRepositorySqlTest : AttribuzioneRepositoryContratto() {
     override fun predisponi(predisposizione: PredisposizioneParlanti) {
         predisposizione.progetti.forEach { db.progettoQueries.inserisci(it.valore, "Progetto di prova") }
         predisposizione.registrazioni.forEach { (registrazioneId, progettoId) ->
-            db.registrazioneQueries.inserisci(
+            db.seminaRegistrazioneDiProva(
                 id = registrazioneId.valore,
                 progettoId = progettoId.valore,
                 titolo = "Registrazione di prova",

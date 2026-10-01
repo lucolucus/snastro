@@ -8,6 +8,7 @@ import snastro.kernel.erroreAtteso
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
@@ -77,7 +78,7 @@ class EliminazioneRegistrazioneSqlTest {
 internal fun SnastroDatabase.seminato(registrazioni: List<RegistrazioneId>): SnastroDatabase = apply {
     progettoQueries.inserisci("progetto-1", "Progetto di prova")
     registrazioni.forEach {
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             id = it.valore,
             progettoId = "progetto-1",
             titolo = "Registrazione ${it.valore}",

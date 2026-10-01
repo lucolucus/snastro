@@ -7,6 +7,7 @@ import snastro.kernel.atteso
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
+import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.unTrascritto
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -57,7 +58,7 @@ class ConfermatoRepositorySqlTest {
 
     private fun SnastroDatabase.seminato(): SnastroDatabase = apply {
         progettoQueries.inserisci("progetto-1", "Progetto di prova")
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             id = R.valore,
             progettoId = "progetto-1",
             titolo = "Registrazione di prova",

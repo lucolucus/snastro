@@ -43,10 +43,12 @@ class MigrazioneRitrascriviTest {
         val prima = TABELLE.associateWith { contenuto(v3, it, colonneV3.getValue(it)) }
         v3.close()
 
-        val db = apriDatabaseProgetto(cartella.toFile())
+        // 3.sqm is the 3 -> 4 step: migrate exactly that one (later migrations rebuild some of these tables).
         val driver = driverSqlite(url)
+        SnastroDatabase.Schema.migrate(driver, VERSIONE_R1, VERSIONE_RITRASCRIVI)
+        driver.execute(null, "PRAGMA user_version = $VERSIONE_RITRASCRIVI", 0)
         try {
-            assertEquals(SnastroDatabase.Schema.version, pragmaLong(driver, "user_version"))
+            assertEquals(VERSIONE_RITRASCRIVI, pragmaLong(driver, "user_version"))
             TABELLE.forEach {
                 assertEquals(prima.getValue(it), contenuto(driver, it, colonneV3.getValue(it)), "righe di $it intatte")
             }
@@ -58,7 +60,6 @@ class MigrazioneRitrascriviTest {
             assertEquals("ok", pragmaString(driver, "integrity_check"))
         } finally {
             driver.close()
-            db.chiudi()
         }
     }
 
@@ -113,7 +114,7 @@ class MigrazioneRitrascriviTest {
 
     private fun SnastroDatabase.seminaRegistrazione(registrazioneId: String = "reg-1"): String {
         if (progettoQueries.trova().executeAsOneOrNull() == null) progettoQueries.inserisci("progetto-1", "Progetto")
-        registrazioneQueries.inserisci(
+        seminaRegistrazioneDiProva(
             id = registrazioneId,
             progettoId = "progetto-1",
             titolo = registrazioneId,

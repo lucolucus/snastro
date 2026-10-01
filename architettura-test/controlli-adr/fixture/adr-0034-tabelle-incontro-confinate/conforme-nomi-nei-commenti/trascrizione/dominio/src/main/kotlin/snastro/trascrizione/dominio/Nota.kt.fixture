@@ -1,0 +1,8 @@
+package snastro.trascrizione.dominio
+
+// the Parlanti adapter writes improntaVocaleQueries; Sintesi owns riassuntoQueries
+/**
+ * incontroQueries and segmentoQueries are named here only in KDoc
+ */
+/* voceIncontroQueries */
+class Nota
