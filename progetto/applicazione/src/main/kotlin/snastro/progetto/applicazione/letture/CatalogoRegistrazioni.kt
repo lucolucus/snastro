@@ -4,6 +4,8 @@ import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.porte.IncontroRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
+import snastro.progetto.dominio.OrdineDelleParti
+import snastro.progetto.dominio.ParteDaOrdinare
 
 /**
  * The Progetto context's public read API (AC-97): a plain projection over [RegistrazioneRepository],
@@ -25,15 +27,36 @@ public class CatalogoRegistrazioni(
                 titolo = r.titolo,
                 riferimentoAudio = r.riferimentoAudio,
                 dataRegistrazione = r.dataRegistrazione,
+                oraDiInizio = r.oraDiInizio?.valore,
                 durataMs = r.durataMs,
             )
         }
 
     /**
-     * The Parti (Registrazioni) of the Incontro [incontroId], UNORDERED: the order of the Parti belongs to the
-     * `incontro` aggregate, so no caller sorts this list nor relies on its order (ADR 0033 §4.1, D-0031). `null` for an
-     * unknown Incontro, or one that ceased with its last Parte; a known Incontro has at least one Parte (INV-I1).
+     * The Incontro [id] with its Parti ordered and numbered by `OrdineDelleParti` (INV-I2, the only place the order is
+     * computed). `null` for an unknown Incontro or one that ceased with its last Parte.
+     */
+    public fun incontro(id: IncontroId): IncontroVista? {
+        val parti = incontri.partiDi(id).mapNotNull(registrazioni::trova)
+        if (parti.isEmpty()) return null
+        val numeri = OrdineDelleParti.ordina(
+            parti.map { ParteDaOrdinare(it.id, it.dataRegistrazione, it.oraDiInizio, it.aggiuntaAlle) },
+        )
+        val perId = parti.associateBy { it.id }
+        return IncontroVista(
+            incontroId = id,
+            progettoId = parti.first().progettoId,
+            parti = numeri.map { (rid, numero) ->
+                val r = perId.getValue(rid)
+                ParteVista(rid, numero, r.titolo, r.dataRegistrazione, r.oraDiInizio?.valore, r.durataMs)
+            },
+        )
+    }
+
+    /**
+     * Projection of [incontro]: the ids of its Parti, UNORDERED by contract (callers never rely on the order).
+     * `null` as [incontro].
      */
     public fun parti(incontroId: IncontroId): List<RegistrazioneId>? =
-        incontri.partiDi(incontroId).ifEmpty { null }
+        incontro(incontroId)?.parti?.map { it.registrazioneId }
 }
