@@ -359,3 +359,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - Docs: [spike evidence](spikes/ora-di-inizio.md)
 - Revisit: a real file from another device or app is imported.
 - Confidence: medium — one device, one real Incontro
+
+### D-0027 · Controllo ADR 0037 solo su sintesi/src/main
+- Meta: 2026-10-01; scope: block:riassunto-incontro-politiche; status: accepted; sha: cc51db0142b1dae6957f74e8d4eeae8210f88833
+- Question: Where must the check "no Sintesi subscriber of TrascrittoSostituito" look, given Sintesi tests still legitimately name the event?
+- Options: A every Sintesi source including tests, red on legitimate read-port tests; B sintesi/*/src/main only, simple and qualified names, comments ignored (kept).
+- Hypothesis: Scanning sintesi main sources catches every Sintesi subscriber of TrascrittoSostituito.
+- Check: four violating and two conforming fixtures plus the project tree, run by ControlliAdrTest; code-review evasion probes.
+- Result: fixtures discriminate; review found the scan misses Sintesi's wiring in avvio and some comment forms, deferred to pre-release I1; [pre-release](pre-release.md).
+- Debate: code-review (MED) asked to also scan avvio/src/main/kotlin/snastro/avvio/sintesi and fail on an empty glob; deferred, not HIGH.
+- Decision: B for now. Cost: a re-wiring in avvio is caught only by the INV-I12b runtime test until the pre-release fix.
+- By: decided: mismagent-worker (riassunto-incontro-politiche, sonnet); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md), [pre-release](pre-release.md)
+- Revisit: the pre-release I1 fix widens the scan.
