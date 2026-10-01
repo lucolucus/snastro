@@ -476,3 +476,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (incontro)
 - Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md), [rework](rework/incontro-1.md)
 - Revisit: none expected.
+
+### D-0036 · completaParte riceve la durata
+- Meta: 2026-10-02; scope: block:voci-dell-incontro; status: accepted; sha: 7f4c3bfb
+- Question: The pinned completaParte(registrazioneId, segmentiIniziali) cannot keep INV-7 (segments within the recording's duration), which Trascritto.crea checks today with the duration.
+- Options: A add durataMs to completaParte, the caller already has it (kept); B keep the pin and check INV-7 in the service, outside the root.
+- Hypothesis: n/a — decided by the user on the worker's DEVIATION, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user on the worker's DEVIATION, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user on the worker's DEVIATION, [manifest](building-blocks.yaml)
+- Debate: none; the worker's other choices (legacy Trascritto API kept public until the callers move, reused errors, nested EventoRevisione) touch no pinned shape.
+- Decision: A; the agg-voci-dell-incontro pin is amended. Cost: none.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (voci-dell-incontro)
+- Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+- Revisit: none expected.
