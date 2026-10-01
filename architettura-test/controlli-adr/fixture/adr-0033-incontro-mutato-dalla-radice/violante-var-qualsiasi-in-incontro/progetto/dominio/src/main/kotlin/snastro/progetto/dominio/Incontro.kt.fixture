@@ -1,0 +1,5 @@
+package snastro.progetto.dominio
+
+public class Incontro(public val id: IncontroId, public val progettoId: ProgettoId) {
+    private var titolo: String = ""
+}

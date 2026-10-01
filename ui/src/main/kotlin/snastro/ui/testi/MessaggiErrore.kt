@@ -52,6 +52,7 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
     ErroreProgetto.TitoloVuoto -> "Il titolo della registrazione non può essere vuoto."
     is ErroreProgetto.TitoloGiaUsato ->
         "Il titolo \"${errore.titolo}\" è già usato da un'altra registrazione di questo progetto."
+    ErroreProgetto.OraDiInizioNonValida -> "L'ora di inizio deve essere un'ora del giorno, da 00:00:00 a 23:59:59."
 }
 
 @Suppress("CyclomaticComplexMethod") // one flat branch per ErroreTrascrizione member, no else (RC-4)

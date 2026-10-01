@@ -1,6 +1,7 @@
 package snastro.progetto.dominio
 
 import snastro.kernel.EventoDominio
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -33,4 +34,15 @@ public data class RegistrazioneEliminata(
     val titolo: String,
     val dataRegistrazione: LocalDate,
     val riferimentoAudio: RiferimentoAudio,
+) : EventoDominio
+
+/**
+ * The user set, changed or cleared the OraDiInizio of a [Registrazione] (AC-I14): `null` is the empty time. The
+ * published `OraDiInizioModificata` is built from it by the service.
+ */
+public data class OraDiInizioModificataDominio(
+    val id: RegistrazioneId,
+    val incontroId: IncontroId,
+    val precedente: OraDiInizio?,
+    val nuova: OraDiInizio?,
 ) : EventoDominio

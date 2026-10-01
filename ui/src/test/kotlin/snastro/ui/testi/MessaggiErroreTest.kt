@@ -105,6 +105,7 @@ class MessaggiErroreTest {
                 ErroreProgetto.RegistrazioneNonTrovata(RegistrazioneId("id-1")),
                 ErroreProgetto.TitoloVuoto,
                 ErroreProgetto.TitoloGiaUsato("Seduta"),
+                ErroreProgetto.OraDiInizioNonValida,
             ),
         ) { messaggioPer(it) }
     }

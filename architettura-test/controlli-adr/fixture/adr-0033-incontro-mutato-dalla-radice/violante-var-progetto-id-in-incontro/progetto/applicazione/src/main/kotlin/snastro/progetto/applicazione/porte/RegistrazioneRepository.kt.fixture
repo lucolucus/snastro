@@ -1,0 +1,7 @@
+package snastro.progetto.applicazione.porte
+
+public interface RegistrazioneRepository {
+    /** No fun aggiornaOraDiInizio( here: the only writes are salva and rimuovi. */
+    public fun salva(r: Registrazione)
+    public fun rimuovi(id: RegistrazioneId)
+}
