@@ -1,0 +1,6 @@
+package snastro.parlanti.applicazione.politiche
+/** p.impronte is never read here. */
+fun f(p: Parlante, r: RegistrazioneId) {
+    val righe = parlanti.impronteDiRegistrazione(r)
+    p.rimuoviImpronteDellaParte(r)
+}

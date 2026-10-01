@@ -11,7 +11,6 @@ import snastro.kernel.unIncontroDi
 import snastro.kernel.unicaParteDi
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -228,14 +227,17 @@ class ParlanteTest {
     }
 
     @Test
-    fun `INV-14 trasferisciImpronta su un a che ha gia un impronta e un errore di programmazione`() {
+    fun `INV-21 trasferisciImpronta su un a che ha gia l impronta della stessa Parte tiene quella di a`() {
         val p = unParlante()
         p.registraImpronta(unaVoce(1), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
         p.registraImpronta(unaVoce(2), unaImpronta(2f), SORGENTE, MODELLO, unicaParteDi(unaVoce(2))).atteso()
 
-        assertFailsWith<IllegalArgumentException> { p.trasferisciImpronta(da = unaVoce(2), a = unaVoce(1)) }
+        p.trasferisciImpronta(da = unaVoce(2), a = unaVoce(1))
 
-        assertEquals(2, p.impronte.size)
+        assertEquals(
+            listOf(ImprontaVocale(unaVoce(1), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1)))),
+            p.impronte,
+        )
     }
 
     @Test
