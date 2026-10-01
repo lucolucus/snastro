@@ -1,0 +1,5 @@
+package x
+fun f(e: Any) = when (e) {
+    is TrascrittoSostituito -> 1
+    else -> 0
+}

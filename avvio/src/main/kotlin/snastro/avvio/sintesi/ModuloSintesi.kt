@@ -15,7 +15,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.mappa
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.sintesi.adattatori.eventi.AbbonatoProgettoSintesi
-import snastro.sintesi.adattatori.eventi.AbbonatoTrascrizioneSintesi
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.comandi.ModificaLunghezzaMassimaRiassunto
 import snastro.sintesi.applicazione.comandi.ModificaLunghezzaMassimaRiassuntoServizio
@@ -35,8 +34,6 @@ import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
 import snastro.sintesi.applicazione.letture.RiassuntoVista
 import snastro.sintesi.applicazione.letture.RiassuntoVisteLettura
 import snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSintesiPolitica
-import snastro.sintesi.applicazione.politiche.ApplicaSostituzioneTrascrittoSintesiPolitica
-import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.ui.AggiornamentiVista
 import java.util.logging.Logger
 
@@ -44,8 +41,8 @@ import java.util.logging.Logger
  * Sintesi's part of the single composition (ADR 0021 §10 as amended by ADR 0030), built from [PorteProgetto] only
  * (its two repositories, the project's ONE `StatiElaborazione` through Sintesi's own Trascrizione reader, AC-C63,
  * and its Parlanti names reader):
- * - its two SYNCHRONOUS subscribers, first in the declared list (ADR 0030 §2): `TrascrittoSostituito` → the
- *   sostituzione policy (ADR 0021 §6) and `RegistrazioneEliminata` → the eliminazione policy (ADR 0024 §1);
+ * - its SYNCHRONOUS subscriber, first in the declared list (ADR 0030 §2): `RegistrazioneEliminata` → the
+ *   eliminazione policy (ADR 0024 §1). No subscriber reacts to a re-transcription: no automatic Riassumi (ADR 0037 §7);
  * - its after-commit subscriber [AggiornamentiVistaSintesi] (AC-S144): `RiassuntoRichiesto` rings the queue's
  *   [Campanello] (a Riassunto enqueued here wakes the queue, AC-C70), `RiassuntoEliminato` cancels, best effort, the
  *   running Riassunto of that Registrazione through the source's own per-run state (ADR 0023 §5, AC-S63/AC-S161);
@@ -60,7 +57,6 @@ internal class ModuloSintesi(
     campanello: Campanello,
 ) : ModuloComposizione {
     private val esecuzioni = EsecuzioniRiassunto(porte.riassunti)
-    private val sostituzione: AbbonatoTrascrizioneSintesi
     private val eliminazione: AbbonatoProgettoSintesi
     private val aggiornamenti = AggiornamentiVistaSintesi(
         avanza = campanello::suona,
@@ -82,18 +78,6 @@ internal class ModuloSintesi(
         val lunghezze = porte.lunghezze
         val lettoreTrascritto = porte.trascrittoPerSintesi
         val nomi = porte.nomiPerSintesi
-        sostituzione = AbbonatoTrascrizioneSintesi(
-            ApplicaSostituzioneTrascrittoSintesiPolitica(
-                apertura.generatoreId,
-                clock,
-                progettoId,
-                riassunti,
-                lunghezze,
-                lettoreTrascritto,
-                app.disponibilita,
-                dispatcher,
-            ),
-        )
         eliminazione = AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
         val esegui = EseguiProssimoRiassuntoServizio(
             uow,
@@ -141,8 +125,7 @@ internal class ModuloSintesi(
     }
 
     override fun abbonatiSincroni(): List<Abbonamento<AbbonatoSincrono>> =
-        abbonamenti(sostituzione, TrascrittoSostituito::class) +
-            abbonamenti(eliminazione, RegistrazioneEliminata::class)
+        abbonamenti(eliminazione, RegistrazioneEliminata::class)
 
     override fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = abbonamenti(
         aggiornamenti,

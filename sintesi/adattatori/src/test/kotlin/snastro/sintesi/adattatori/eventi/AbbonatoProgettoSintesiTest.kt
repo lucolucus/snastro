@@ -29,7 +29,7 @@ import kotlin.test.assertIs
  * whose participant is the `Ripristinabile` [RiassuntoRepositoryFinta], so a doomed transaction is genuinely rolled
  * back; the policy's own rule coverage is [ApplicaEliminazioneRegistrazioneSintesiPolitica]'s own test — this
  * proves the value's shape, routing, transaction placement and doom, mirroring
- * `AbbonatoEliminazioneRegistrazioneTest` (Trascrizione) and `AbbonatoTrascrizioneSintesiTest` (this module).
+ * `AbbonatoEliminazioneRegistrazioneTest` (Trascrizione).
  */
 class AbbonatoProgettoSintesiTest {
     @Test
