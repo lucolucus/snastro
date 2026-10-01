@@ -1,5 +1,6 @@
 package snastro.sbobinatura.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.VoceRef
 
@@ -15,10 +16,24 @@ public interface AmbienteLettoreNomi {
     public val lettore: LettoreNomi
 
     /**
-     * Adds one Registrazione to the Progetto and completes its Elaborazione with a Trascritto of
-     * [voci] (>= 1) Voci, none attributed. Returns the minted ids.
+     * Capability: the supplier can give an Incontro more than one Parte ([aggiungiParte]). The multi-Parte cases of
+     * [LettoreNomiContratto] are registered only when it is `true` (D-0037): the real supplier switches it on when
+     * the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands.
+     */
+    public val piuPartiPerIncontro: Boolean
+
+    /**
+     * Adds one Registrazione to the Progetto as the one Parte of a new Incontro and completes its Elaborazione with
+     * a Trascritto of [voci] (>= 1) Voci, none attributed. Returns the minted ids.
      */
     public fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata
+
+    /**
+     * Adds one Registrazione to the Progetto as a further Parte of the existing Incontro [incontroId] and completes
+     * its Elaborazione with [voci] (>= 1) NEW Voci of that Incontro (numbered after its existing ones, INV-I4), none
+     * attributed. Only called when [piuPartiPerIncontro]. Returns the minted ids.
+     */
+    public fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata
 
     /**
      * ConfermaAttribuzione of [voce] (attributed or not) to a NEW Parlante named [nome], ricorrente or,
