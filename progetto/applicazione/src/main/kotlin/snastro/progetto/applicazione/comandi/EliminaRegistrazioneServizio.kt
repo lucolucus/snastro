@@ -7,6 +7,7 @@ import snastro.kernel.UnitaDiLavoro
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.EliminazioneInSospeso
 import snastro.progetto.applicazione.porte.EliminazioniInSospeso
+import snastro.progetto.applicazione.porte.IncontroRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.dominio.ErroreProgetto
 
@@ -17,13 +18,16 @@ import snastro.progetto.dominio.ErroreProgetto
  * 3. the pending-cleanup row, so it exists iff the deletion commits (ADR 0020 §4);
  * 4. `pubblica`: the SYNCHRONOUS subscribers run here — the Trascrizione veto (`ElaborazioneGiaAperta`, returned
  *    unchanged: the dispatcher dooms the transaction) + purge, and the Parlanti purge + INV-25;
- * 5. `rimuovi` of the registrazione row — AFTER 4: the elaborazione / trascritto FKs are immediate.
+ * 5. `rimuovi` of the registrazione row — AFTER 4: the elaborazione / trascritto FKs are immediate;
+ * 6. `incontri.rimuovi` — AFTER 5, the `registrazione → incontro` FK is immediate
+ *    (every Incontro has exactly one Parte until I2).
  *
  * No file I/O here: the files go after commit, each with its owner's subscriber. No Trascrizione / Parlanti query.
  */
 public class EliminaRegistrazioneServizio(
     private val uow: UnitaDiLavoro,
     private val registrazioni: RegistrazioneRepository,
+    private val incontri: IncontroRepository,
     private val inSospeso: EliminazioniInSospeso,
     private val eventi: DispatcherEventi,
 ) {
@@ -36,6 +40,7 @@ public class EliminaRegistrazioneServizio(
         )
         eventi.pubblica(evento.pubblicato(registrazione.incontroId))
         registrazioni.rimuovi(evento.id)
+        incontri.rimuovi(registrazione.incontroId)
         Esito.Ok(Unit)
     }
 }

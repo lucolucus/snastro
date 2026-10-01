@@ -17,6 +17,8 @@ import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.porte.EliminazioneInSospeso
 import snastro.progetto.applicazione.porte.EliminazioniInSospeso
 import snastro.progetto.applicazione.porte.EliminazioniInSospesoFinta
+import snastro.progetto.applicazione.porte.IncontroRepository
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.dominio.ErroreProgetto
@@ -51,6 +53,7 @@ class EliminaRegistrazioneServizioTest {
     private val servizio = EliminaRegistrazioneServizio(
         dispatcher.unitaDiLavoro,
         RegistrazioniRegistrate(registrazioni, passi) { elaborazioneAperta },
+        IncontroRepositoryFinta(registrazioni),
         InSospesoRegistrate(inSospeso, passi),
         dispatcher,
     )
@@ -128,6 +131,7 @@ class EliminaRegistrazioneServizioTest {
             listOf(
                 UnitaDiLavoro::class.java,
                 RegistrazioneRepository::class.java,
+                IncontroRepository::class.java,
                 EliminazioniInSospeso::class.java,
                 DispatcherEventi::class.java,
             ),

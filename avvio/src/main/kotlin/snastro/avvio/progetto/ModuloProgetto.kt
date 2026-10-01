@@ -86,12 +86,19 @@ internal class ModuloProgetto(
             apertura.clock,
             porte.progetti,
             registrazioni,
+            porte.incontri,
             apertura.sondaAudio,
             archivio,
             dispatcher,
         )
         val delProgetto = RegistrazioniDelProgetto(registrazioni)
-        val elimina = EliminaRegistrazioneServizio(uow, registrazioni, porte.eliminazioniInSospeso, dispatcher)
+        val elimina = EliminaRegistrazioneServizio(
+            uow,
+            registrazioni,
+            porte.incontri,
+            porte.eliminazioniInSospeso,
+            dispatcher,
+        )
         collaboratori = CollaboratoriRegistrazioni(
             registrazioni = { delProgetto.delProgetto(apertura.progettoId) },
             aggiungiRegistrazione = aggiungi::esegui,

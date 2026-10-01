@@ -53,5 +53,6 @@ public fun SnastroDatabase.seminaRegistrazioneDiProva(
         durataMs = durataMs,
         dataRegistrazione = dataRegistrazione,
         aggiuntaAlle = aggiuntaAlle,
+        oraDiInizio = null,
     )
 }

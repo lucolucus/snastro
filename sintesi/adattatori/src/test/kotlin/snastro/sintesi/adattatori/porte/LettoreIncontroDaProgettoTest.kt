@@ -65,6 +65,7 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
                 clock,
                 progetti,
                 registrazioni,
+                IncontroRepositoryFinta(registrazioni),
                 sonda,
                 archivio,
                 eventi,
@@ -76,7 +77,13 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
             checkNotNull(catalogo.registrazione(registrazioneId)).incontroId
 
         override fun elimina(registrazioneId: RegistrazioneId) {
-            EliminaRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, EliminazioniInSospesoFinta(), eventi)
+            EliminaRegistrazioneServizio(
+                eventi.unitaDiLavoro,
+                registrazioni,
+                IncontroRepositoryFinta(registrazioni),
+                EliminazioniInSospesoFinta(),
+                eventi,
+            )
                 .esegui(EliminaRegistrazione(registrazioneId)).atteso()
         }
     }

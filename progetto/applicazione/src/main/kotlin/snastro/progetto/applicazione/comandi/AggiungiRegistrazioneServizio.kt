@@ -9,9 +9,11 @@ import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.porte.ArchivioAudio
+import snastro.progetto.applicazione.porte.IncontroRepository
 import snastro.progetto.applicazione.porte.ProgettoRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.SondaAudio
+import snastro.progetto.dominio.Incontro
 import snastro.progetto.dominio.Registrazione
 import java.text.Normalizer
 import java.time.Clock
@@ -29,13 +31,14 @@ import java.time.Clock
  * its Registrazione; the discard runs from a `finally` so it still happens when the transaction
  * throws instead of returning.
  */
-@Suppress("LongParameterList") // one parameter per collaborator: uow, id/clock, 2 repos, 2 technical ports, eventi
+@Suppress("LongParameterList") // one parameter per collaborator: uow, id/clock, 3 repos, 2 technical ports, eventi
 public class AggiungiRegistrazioneServizio(
     private val uow: UnitaDiLavoro,
     private val generatoreId: GeneratoreId,
     private val clock: Clock,
     private val progetti: ProgettoRepository,
     private val registrazioni: RegistrazioneRepository,
+    private val incontri: IncontroRepository,
     private val sonda: SondaAudio,
     private val archivio: ArchivioAudio,
     private val eventi: DispatcherEventi,
@@ -63,6 +66,8 @@ public class AggiungiRegistrazioneServizio(
                             dataRegistrazione = info.dataFile,
                             aggiuntaAlle = clock.instant(),
                         )
+                        // The Incontro is saved before its Parte (IncontroRepository is its only writer, AC-I55).
+                        incontri.salva(Incontro.nuovo(creato.aggregato.incontroId, progetto.id))
                         registrazioni.salva(creato.aggregato)
                         eventi.pubblica(creato.evento.pubblicato(creato.aggregato.incontroId))
                         Esito.Ok(Unit)

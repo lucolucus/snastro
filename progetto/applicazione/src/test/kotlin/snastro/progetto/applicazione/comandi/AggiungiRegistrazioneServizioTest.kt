@@ -16,6 +16,7 @@ import snastro.kernel.erroreAtteso
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
@@ -41,8 +42,9 @@ class AggiungiRegistrazioneServizioTest {
         salva(Progetto.crea(progettoId, NomeProgetto.di("Consiglio comunale").atteso()).aggregato)
     }
     private val registrazioni = RegistrazioneRepositoryFinta()
+    private val incontri = IncontroRepositoryFinta(registrazioni)
     private val generatoreId = GeneratoreIdFinto()
-    private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni))
+    private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, incontri))
     private val sonda = SondaAudioFinta(
         leggibili = mapOf(SORGENTE to InfoAudio(durataMs = 3_600_000, dataFile = LocalDate.of(2026, 3, 12))),
     )
@@ -53,6 +55,7 @@ class AggiungiRegistrazioneServizioTest {
         clock,
         progetti,
         registrazioni,
+        incontri,
         sonda,
         archivio,
         eventi,
@@ -74,6 +77,15 @@ class AggiungiRegistrazioneServizioTest {
     }
 
     @Test
+    fun `AC-I55 l'import salva l'Incontro della Parte attraverso la porta, nella stessa transazione`() {
+        servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
+
+        val salvata = assertNotNull(registrazioni.trova(RegistrazioneId("id-1")))
+        assertEquals(progettoId, assertNotNull(incontri.trova(salvata.incontroId)).progettoId)
+        assertEquals(listOf(salvata.id), incontri.partiDi(salvata.incontroId))
+    }
+
+    @Test
     fun `AC-57 un file illeggibile non crea nulla e non lascia file in audio`() {
         servizio.esegui(AggiungiRegistrazione("/sorgenti/sconosciuto.m4a"))
             .erroreAtteso<ErroreApplicazioneProgetto.AudioNonLeggibile>()
@@ -91,6 +103,7 @@ class AggiungiRegistrazioneServizioTest {
             clock,
             progetti,
             registrazioni,
+            IncontroRepositoryFinta(registrazioni),
             sondaFormato,
             archivio,
             eventi,
@@ -112,6 +125,7 @@ class AggiungiRegistrazioneServizioTest {
             clock,
             progetti,
             registrazioni,
+            IncontroRepositoryFinta(registrazioni),
             sonda,
             archivioGuasto,
             eventi,
@@ -296,6 +310,7 @@ class AggiungiRegistrazioneServizioTest {
             clock,
             progettiLocali,
             registrazioniLocali,
+            IncontroRepositoryFinta(registrazioniLocali),
             SondaAudioFinta(
                 leggibili = mapOf(
                     percorsoSorgente to InfoAudio(durataMs = 1_000L, dataFile = LocalDate.of(2026, 1, 1)),
