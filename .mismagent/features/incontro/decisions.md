@@ -515,3 +515,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: mismagent-worker (elimina-parte)
 - Docs: [manifest](building-blocks.yaml)
 - Revisit: none expected.
+
+### D-0039 · L'import multi-parte entra per ultimo
+- Meta: 2026-10-02; scope: block:aggiungi-registrazione-incontro; status: accepted
+- Question: aggiungi-registrazione-incontro can create Incontri with several Parti; which deletion paths must already be per-Parte when it lands?
+- Options: A after elimina-parte, eliminazione-parte-sintesi, politiche-parlanti-incontro, enforced by after: (kept); B rely on the composer's memory of the review notes.
+- Hypothesis: n/a — decided by the composer on the reviews of porte-progetto-incontro and elimina-parte, [pre-release](pre-release.md)
+- Check: n/a — decided by the composer on the reviews of porte-progetto-incontro and elimina-parte, [pre-release](pre-release.md)
+- Result: n/a — decided by the composer on the reviews of porte-progetto-incontro and elimina-parte, [pre-release](pre-release.md)
+- Debate: reviews found that deleting a non-last Parte would wipe the Incontro's Riassunto (Sintesi) and all its Attribuzioni (Parlanti) until those blocks land (D-0003, INV-28).
+- Decision: A, mechanical via the manifest. Cost: the import block waits for three more blocks.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: code-review (elimina-parte, porte-progetto-incontro)
+- Docs: [manifest](building-blocks.yaml), [pre-release](pre-release.md)
+- Revisit: none expected.

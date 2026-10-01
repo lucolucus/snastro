@@ -361,6 +361,7 @@ blocks:
       - "ADR 0033 §2"
       - "tactical-model.md § Progetto commands"
       - "decisions.md D-0008, D-0016, D-0019"
+    after: ["elimina-parte", "eliminazione-parte-sintesi", "politiche-parlanti-incontro"]  # D-0039: no multi-Parte Incontro before the per-Parte deletion paths
     consumes: ["kernel-incontro", "agg-incontro", "repo-incontro", "eventi-progetto-incontro"]
     related_adrs: ["0012", "0033"]
     commands: ["AggiungiRegistrazione"]
