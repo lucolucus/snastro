@@ -50,9 +50,8 @@ class SpikeIncontroTest {
         check(parti.size == 2) { "servono audio/parte-1 e audio/parte-2: $parti" }
         // Optional Numero di persone for both parts (the user's own knowledge of the meeting); null = automatic.
         val persone = System.getenv(VARIABILE_PERSONE)?.toInt()
-        val esito = Files.createDirectories(cartella.resolve(if (persone == null) "esito" else "esito-persone-$persone"))
-        val grafo = costruisciGrafo(Files.createTempDirectory("spike-incontro-registro"), SceltaMl.REALI)
-        val sessione = grafo.sessione
+        val esito = Files.createDirectories(cartella.resolve(persone?.let { "esito-persone-$it" } ?: "esito"))
+        val sessione = costruisciGrafo(Files.createTempDirectory("spike-incontro-registro"), SceltaMl.REALI).sessione
         val cronometro = TimeSource.Monotonic.markNow()
         try {
             val progetto = sessione.crea(esito.toString(), "Spike Incontro").atteso()
