@@ -1,0 +1,15 @@
+package snastro.sintesi.dominio
+
+public data class StrutturaIncontro(val parti: List<Pair<RegistrazioneId, StrutturaTrascritto?>>) {
+    public val chiave: String get() = parti.joinToString(";")
+
+    public fun contiene(ref: SegmentoRef): Boolean = true
+
+    internal fun conTrascritto(): StrutturaIncontro = this
+
+    private fun controlla(): Esito<Unit> = Esito.Ok(Unit)
+
+    private fun controllaSuPiuRighe(
+        ref: SegmentoRef,
+    ): Esito<Unit> = Esito.Ok(Unit)
+}

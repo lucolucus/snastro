@@ -1,0 +1,3 @@
+package snastro.sintesi.dominio
+
+public data class Decisione(var testo: TestoConVoci, val fonti: Set<SegmentoRef>)

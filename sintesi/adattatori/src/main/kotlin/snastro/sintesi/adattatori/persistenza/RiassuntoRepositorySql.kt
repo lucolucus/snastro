@@ -5,8 +5,7 @@ import org.sqlite.SQLiteException
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
-import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.persistenza.SnastroDatabase
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
@@ -194,23 +193,19 @@ private fun eliminaFigli(db: SnastroDatabase, id: RiassuntoId) {
     db.riassuntoElementoQueries.eliminaDiRiassunto(id.valore)
 }
 
-/**
- * TRANSITION (ADR 0033 §4.1): the Fonti are SegmentoIds of the ONE Parte the content was verified against
- * ([Riassunto.parte]); riassunto-incontro makes them SegmentoRefs.
- */
+/** Each Fonte is a [SegmentoRef]: stored as `(registrazione_id, segmento_id)` (ADR 0037 §4, ADR 0034). */
 private fun scriviFigli(db: SnastroDatabase, r: Riassunto) {
-    val parte = checkNotNull(r.parte) { "Riassunto pronto senza struttura: ${r.id}" }
     r.decisioni.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_DECISIONE, i, e.testo, e.fonti, voce = null, parte)
+        scriviElemento(db, r.id, TIPO_DECISIONE, i, e.testo, e.fonti, voce = null)
     }
     r.questioniAperte.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_QUESTIONE_APERTA, i, e.testo, e.fonti, voce = null, parte)
+        scriviElemento(db, r.id, TIPO_QUESTIONE_APERTA, i, e.testo, e.fonti, voce = null)
     }
     r.azioni.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_AZIONE, i, e.testo, e.fonti, e.responsabile, parte)
+        scriviElemento(db, r.id, TIPO_AZIONE, i, e.testo, e.fonti, e.responsabile)
     }
     r.puntiChiave.forEachIndexed { i, e ->
-        scriviElemento(db, r.id, TIPO_PUNTO_CHIAVE, i, e.testo, e.fonti, e.parlante, parte)
+        scriviElemento(db, r.id, TIPO_PUNTO_CHIAVE, i, e.testo, e.fonti, e.parlante)
     }
 }
 
@@ -221,9 +216,8 @@ private fun scriviElemento(
     tipo: String,
     posizione: Int,
     testo: TestoConVoci,
-    fonti: Set<SegmentoId>,
+    fonti: Set<SegmentoRef>,
     voce: VoceId?,
-    registrazioneId: RegistrazioneId,
 ) {
     db.riassuntoElementoQueries.inserisci(
         riassuntoId = id.valore,
@@ -237,8 +231,8 @@ private fun scriviElemento(
             riassuntoId = id.valore,
             tipo = tipo,
             posizione = posizione.toLong(),
-            registrazioneId = registrazioneId.valore,
-            segmentoId = f.numero.toLong(),
+            registrazioneId = f.registrazioneId.valore,
+            segmentoId = f.segmentoId.numero.toLong(),
         )
     }
 }

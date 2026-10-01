@@ -1,8 +1,10 @@
 package snastro.sintesi.adattatori.persistenza
 
 import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.atteso
 import snastro.sintesi.dominio.Azione
 import snastro.sintesi.dominio.Decisione
@@ -31,6 +33,8 @@ class RiassuntoRicostituisciTest {
     private val parole = LunghezzaMassimaParole.di(LunghezzaMassimaParole.PREDEFINITA).atteso()
     private val richiestoAlle: Instant = Instant.parse("2026-09-26T10:00:00Z")
 
+    private fun fonte(segmento: Int) = SegmentoRef(RegistrazioneId("parte-1"), SegmentoId(segmento))
+
     private fun testo(s: String): TestoConVoci = checkNotNull(TestoConVoci.decodifica(s)) { s }
 
     @Suppress("LongParameterList") // one parameter per Riassunto.ricostituisci argument it forwards (see Riassunto.kt)
@@ -51,7 +55,7 @@ class RiassuntoRicostituisciTest {
     @Test
     fun `A27 contenuto senza omessi fallisce il require proprio di ricostituisci`() {
         assertFailsWith<IllegalArgumentException> {
-            ricostituisci(decisioni = listOf(Decisione(testo("tiene"), setOf(SegmentoId(1)))), omessi = null)
+            ricostituisci(decisioni = listOf(Decisione(testo("tiene"), setOf(fonte(1)))), omessi = null)
         }
     }
 
@@ -59,27 +63,27 @@ class RiassuntoRicostituisciTest {
     fun `A27 ricostituisci mappa ogni lista di elementi sul contenuto esposto dagli accessor`() {
         val r = ricostituisci(
             sommario = Sommario(testo("apre")),
-            decisioni = listOf(Decisione(testo("d"), setOf(SegmentoId(1)))),
-            questioniAperte = listOf(QuestioneAperta(testo("q"), setOf(SegmentoId(2)))),
-            azioni = listOf(Azione(testo("a"), setOf(SegmentoId(3)), responsabile = null)),
-            puntiChiave = listOf(PuntoChiave(testo("p"), setOf(SegmentoId(4)), parlante = null)),
+            decisioni = listOf(Decisione(testo("d"), setOf(fonte(1)))),
+            questioniAperte = listOf(QuestioneAperta(testo("q"), setOf(fonte(2)))),
+            azioni = listOf(Azione(testo("a"), setOf(fonte(3)), responsabile = null)),
+            puntiChiave = listOf(PuntoChiave(testo("p"), setOf(fonte(4)), parlante = null)),
             omessi = 2,
         )
 
         assertEquals(testo("apre"), r.sommario?.testo)
-        assertEquals(listOf(Decisione(testo("d"), setOf(SegmentoId(1)))), r.decisioni)
-        assertEquals(listOf(QuestioneAperta(testo("q"), setOf(SegmentoId(2)))), r.questioniAperte)
-        assertEquals(listOf(Azione(testo("a"), setOf(SegmentoId(3)), null)), r.azioni)
-        assertEquals(listOf(PuntoChiave(testo("p"), setOf(SegmentoId(4)), null)), r.puntiChiave)
+        assertEquals(listOf(Decisione(testo("d"), setOf(fonte(1)))), r.decisioni)
+        assertEquals(listOf(QuestioneAperta(testo("q"), setOf(fonte(2)))), r.questioniAperte)
+        assertEquals(listOf(Azione(testo("a"), setOf(fonte(3)), null)), r.azioni)
+        assertEquals(listOf(PuntoChiave(testo("p"), setOf(fonte(4)), null)), r.puntiChiave)
         assertEquals(2, r.omessi)
     }
 
     @Test
     fun `A26 ricostituisci copia le liste del chiamante, mutarle dopo la chiamata non cambia lo stato`() {
-        val decisioni = mutableListOf(Decisione(testo("tiene"), setOf(SegmentoId(1))))
+        val decisioni = mutableListOf(Decisione(testo("tiene"), setOf(fonte(1))))
 
         val r = ricostituisci(decisioni = decisioni, omessi = 0)
-        decisioni.add(Decisione(testo("aggiunta dopo ricostituisci"), setOf(SegmentoId(2))))
+        decisioni.add(Decisione(testo("aggiunta dopo ricostituisci"), setOf(fonte(2))))
 
         assertEquals(1, r.decisioni.size, "la lista del chiamante non deve restare aliasata dal Riassunto")
     }

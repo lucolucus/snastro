@@ -43,6 +43,7 @@ import snastro.sintesi.dominio.MotivoFallimento
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import snastro.sintesi.dominio.SegmentoIngresso
+import snastro.sintesi.dominio.StrutturaIncontro
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -183,9 +184,9 @@ class EseguiProssimoRiassuntoServizioTest {
         assertEquals("il combattimento", inviata.argomento)
         assertEquals(1500, inviata.lunghezzaMassimaParole)
         val atteso = IngressoRiassunto.costruisci(
-            SEGMENTI.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
+            listOf(SEGMENTI.map { SegmentoIngresso(REG1, it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) }),
         )
-        assertEquals(atteso, inviata.ingresso)
+        assertEquals(atteso.testo, inviata.ingresso)
     }
 
     @Test
@@ -415,7 +416,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val strutturaLettaNelRun = unaStruttura(1 to 1, 2 to 2, 3 to 1) // SEGMENTI, as the run's OWN read saw it
         assertEquals("${REG1.valore}=${strutturaLettaNelRun.chiave}", concluso.struttura)
         val strutturaCorrenteDelLettore = unaStruttura(1 to 2, 2 to 1, 3 to 2) // what a fresh read gives NOW
-        assertTrue(concluso.superato(REG1, strutturaCorrenteDelLettore))
+        assertTrue(concluso.superato(StrutturaIncontro(listOf(REG1 to strutturaCorrenteDelLettore))))
     }
 
     @Test

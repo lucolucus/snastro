@@ -19,6 +19,7 @@ import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.LunghezzaMassimaParole
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.StrutturaIncontro
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -98,23 +99,23 @@ class ModificaLunghezzaMassimaRiassuntoServizioTest {
 
     @Test
     fun `INV-S10 un in_attesa un in_corso e un pronto mantengono il proprio tetto, il pronto resta non superato`() {
-        val struttura = unaStruttura(1 to 1)
+        val struttura = StrutturaIncontro(listOf(REGISTRAZIONE_3 to unaStruttura(1 to 1)))
         val inAttesa = unRiassunto("r-attesa", REGISTRAZIONE_1, parole = 500)
         val inCorso = unRiassunto("r-corso", REGISTRAZIONE_2, parole = 800).conAvvio()
         val pronto = unRiassunto("r-pronto", REGISTRAZIONE_3, parole = 1200)
             .conAvvio()
-            .conCompletamento(unaBozzaMinima(), struttura)
+            .conCompletamento(unaBozzaMinima(), unaStruttura(1 to 1))
         val riassunti = RiassuntoRepositoryFinta()
         listOf(inAttesa, inCorso, pronto).forEach { riassunti.salva(it).atteso() }
         val id = listOf(inAttesa.id, inCorso.id, pronto.id)
         val prima = stati(riassunti, id)
-        val prontoSuperatoPrima = checkNotNull(riassunti.trova(pronto.id)).superato(REGISTRAZIONE_3, struttura)
+        val prontoSuperatoPrima = checkNotNull(riassunti.trova(pronto.id)).superato(struttura)
         val a = unAmbiente(riassunti = riassunti)
 
         a.servizio.esegui(ModificaLunghezzaMassimaRiassunto(PROGETTO, 1900)).atteso()
 
         assertEquals(prima, stati(riassunti, id))
-        assertEquals(prontoSuperatoPrima, checkNotNull(riassunti.trova(pronto.id)).superato(REGISTRAZIONE_3, struttura))
+        assertEquals(prontoSuperatoPrima, checkNotNull(riassunti.trova(pronto.id)).superato(struttura))
     }
 
     private fun stati(riassunti: RiassuntoRepositoryFinta, id: List<RiassuntoId>): List<List<Any?>> =

@@ -1,0 +1,10 @@
+package snastro.sintesi.applicazione.porte
+
+public interface RiassuntoRepository {
+    public fun salva(r: Riassunto): Esito<Unit>
+
+    public fun concludi(r: Riassunto): Esito<Boolean>
+
+    // fun aggiornaStruttura( is not a port write
+    public fun rimuovi(id: RiassuntoId): Esito<Unit>
+}

@@ -1,0 +1,6 @@
+package snastro.sintesi.applicazione.letture
+
+internal fun superatoDi(riassunto: Riassunto, corrente: StrutturaIncontro): Boolean = riassunto.superato(corrente)
+
+internal fun superatoAMano(riassunto: Riassunto, corrente: StrutturaIncontro): Boolean =
+    riassunto.struttura != corrente.chiave
