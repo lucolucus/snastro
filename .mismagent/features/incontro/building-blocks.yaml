@@ -1337,8 +1337,8 @@ boundaries:
     consumers: ["porte-parlanti-incontro", "politiche-parlanti-incontro", "attribuzione-incontro", "letture-parlanti-incontro", "proposta-tra-parti", "adattatori-parlanti-incontro"]
     projection: "in-process"
     pinned_types:
-      "Parlante (amended)": "aggiungiImpronta(voce: VoceRef, parte: RegistrazioneId, impronta: ImprontaVocale) /* replaces the one for (voce, parte) */; rimuoviImpronteDellaParte(parte: RegistrazioneId); rimuoviImpronta(voce, parte); riassegnaImpronte(da: VoceRef, a: VoceRef) /* INV-21 rules */; impronte: List<ImprontaDiParte>"
-      ImprontaDiParte: "(voce: VoceRef, parte: RegistrazioneId, impronta: ImprontaVocale, sorgente: SorgenteImpronta, modello: String)"
+      "Parlante (amended)": "aggiungiImpronta(voce: VoceRef, parte: RegistrazioneId, impronta: Impronta, sorgente: String, modello: String): Esito<Unit> /* replaces the one for (voce, parte), adds otherwise; refused when eliminato */; rimuoviImpronteDellaParte(parte: RegistrazioneId); rimuoviImpronta(voce: VoceRef, parte: RegistrazioneId); riassegnaImpronte(da: VoceRef, a: VoceRef) /* INV-21 rules, also inheritance */; impronte: List<ImprontaVocale> /* a copy */ — AMENDED 2026-10-02 (user, D-0034) to the realized shape; transitional delegates registraImpronta / trasferisciImpronta / rimuoviImpronta(voce) kept until attribuzione-incontro and politiche-parlanti-incontro move to these names and delete them"
+      ImprontaVocale: "(voceRef: VoceRef, impronta: Impronta, sorgente: String /* SorgenteImpronta.chiave, ADR 0012 (b) */, modello: String, parte: RegistrazioneId) — the existing type, gained parte in incontro-chiavi (replaces the earlier ImprontaDiParte pin)"
     keys:
       "(parlanteId, voceRef, parte)": "unique per print (INV-I8; impronta_vocale UNIQUE)"
     contract_test: "invariant-test"

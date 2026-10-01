@@ -450,3 +450,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (riassunto-incontro)
 - Docs: [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
 - Revisit: none expected.
+
+### D-0034 · Impronte per parte sul tipo esistente
+- Meta: 2026-10-02; scope: block:parlante-impronte-per-parte; status: accepted; sha: bcbed334
+- Question: The pinned aggiungiImpronta(voce, parte, ImprontaVocale) and a new ImprontaDiParte repeat voce and parte and clash with existing types; keep the pin or the realized shape?
+- Options: A realized shape: aggiungiImpronta with separate fields, impronte as List<ImprontaVocale> (already carrying parte), trasferisciImpronta following INV-21 (kept); B rework to the pin, one more type and a conversion.
+- Hypothesis: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Debate: parked as DEVIATIONS on a pinned signature; the user accepted, the boundary agg-impronte-per-parte is amended.
+- Decision: A; transitional delegates stay until attribuzione-incontro and politiche-parlanti-incontro adopt the pinned names. Cost: two aliases for a while.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (parlante-impronte-per-parte)
+- Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+- Revisit: the aliases are still there after those blocks.
