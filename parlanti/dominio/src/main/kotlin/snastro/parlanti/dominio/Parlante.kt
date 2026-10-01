@@ -9,9 +9,13 @@ import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.VoceRef
 
 /**
- * Aggregate root of the Parlanti context: owns [INV-13], [INV-14], [INV-18]. The set rule INV-16
+ * Aggregate root of the Parlanti context: owns [INV-13], [INV-I8] (prints per (VoceRef, Parte), which amends [INV-14]),
+ * [INV-18], and the print re-keying of [INV-21]. The set rule INV-16
  * (unique active [Nome] per Progetto) is NOT checked here (service + index, ADR 0007).
  */
+// TooManyFunctions: registraImpronta and trasferisciImpronta are the pre-Incontro spellings of aggiungiImpronta and
+// riassegnaImpronte, kept only until their callers (attribuzione-incontro, politiche-parlanti-incontro) move over.
+@Suppress("TooManyFunctions")
 public class Parlante private constructor(
     public val id: ParlanteId,
     public val progettoId: ProgettoId,
@@ -28,7 +32,7 @@ public class Parlante private constructor(
     public val stato: StatoParlante get() = _stato
     private val _impronte: MutableList<ImprontaVocale> = impronte.toMutableList()
 
-    /** The prints, one per [VoceRef] ([INV-14]); a copy. */
+    /** The prints, at most one per ([VoceRef], Parte) ([INV-I8]), each recording its Parte; a copy. */
     public val impronte: List<ImprontaVocale> get() = _impronte.toList()
 
     public val attivo: Boolean get() = stato == StatoParlante.ATTIVO
@@ -64,39 +68,60 @@ public class Parlante private constructor(
         }
 
     /**
-     * [INV-14] inserts, or replaces the ONE print of [voceRef]; the others are never touched.
-     * [sorgente] = `SorgenteImpronta.chiave`, [modello] = `EstrattoreImpronta.modello`, [parte] = the Parte the
-     * print was extracted from.
+     * [INV-I8] inserts, or replaces the ONE print of ([voce], [parte]); prints of the same Voce in other Parti and of
+     * other Voci are never touched. [parte] = the Parte (Registrazione) the print was extracted from,
+     * [sorgente] = `SorgenteImpronta.chiave`, [modello] = `EstrattoreImpronta.modello` (ADR 0012 (b)).
      */
+    public fun aggiungiImpronta(
+        voce: VoceRef,
+        parte: RegistrazioneId,
+        impronta: Impronta,
+        sorgente: String,
+        modello: String,
+    ): Esito<Unit> =
+        seModificabile {
+            val nuova = ImprontaVocale(voce, impronta, sorgente, modello, parte)
+            val indice = _impronte.indexOfFirst { it.voceRef == voce && it.parte == parte }
+            if (indice >= 0) _impronte[indice] = nuova else _impronte.add(nuova)
+        }
+
+    /** The pre-Incontro spelling of [aggiungiImpronta], kept for its callers until they move to it. */
     public fun registraImpronta(
         voceRef: VoceRef,
         impronta: Impronta,
         sorgente: String,
         modello: String,
         parte: RegistrazioneId,
-    ): Esito<Unit> =
-        seModificabile { metti(ImprontaVocale(voceRef, impronta, sorgente, modello, parte)) }
+    ): Esito<Unit> = aggiungiImpronta(voceRef, parte, impronta, sorgente, modello)
 
     /**
-     * POLICY-ONLY ([INV-21] unire inheritance): re-keys the print of [da] onto [a], keeping impronta,
-     * sorgente and modello — stale by construction, refreshed after commit by `RiallineaImpronte`.
-     * No print for [da] → no-op (always so for an `eliminato`: it holds none, [INV-13]).
+     * POLICY-ONLY ([INV-21] `unire(A = [a], B = [da])`): each print of [da] is re-keyed onto [a] keeping its Parte,
+     * impronta, sorgente and modello (stale by construction, refreshed after commit by `RiallineaImpronte`) — unless [a]
+     * already has a print in that Parte: then [a]'s is kept and [da]'s dropped. Covers the inheritance case ([a] holds
+     * none). No print for [da] → no-op (always so for an `eliminato`: it holds none, [INV-13]).
      */
-    public fun trasferisciImpronta(da: VoceRef, a: VoceRef) {
-        val indice = _impronte.indexOfFirst { it.voceRef == da }
-        if (indice < 0) return
-        require(_impronte.none { it.voceRef == a }) { "il Parlante $id ha gia un'impronta per $a" }
-        _impronte[indice] = _impronte[indice].copy(voceRef = a)
+    public fun riassegnaImpronte(da: VoceRef, a: VoceRef) {
+        val partiDiA = _impronte.filter { it.voceRef == a }.map { it.parte }.toSet()
+        _impronte.removeAll { it.voceRef == da && it.parte in partiDiA }
+        _impronte.replaceAll { if (it.voceRef == da) it.copy(voceRef = a) else it }
     }
 
-    private fun metti(nuova: ImprontaVocale) {
-        val indice = _impronte.indexOfFirst { it.voceRef == nuova.voceRef }
-        if (indice >= 0) _impronte[indice] = nuova else _impronte.add(nuova)
-    }
+    /** The pre-Incontro spelling of [riassegnaImpronte], kept for its caller until it moves to it. */
+    public fun trasferisciImpronta(da: VoceRef, a: VoceRef): Unit = riassegnaImpronte(da, a)
 
-    /** Removes the print of [voceRef], if any (a physical removal: biometric rows, ADR 0009). */
+    /** Removes every print of [voceRef], in every Parte (a physical removal: biometric rows, ADR 0009). */
     public fun rimuoviImpronta(voceRef: VoceRef) {
         _impronte.removeAll { it.voceRef == voceRef }
+    }
+
+    /** Removes the print of ([voce], [parte]), if any; the same Voce keeps its prints of the other Parti. */
+    public fun rimuoviImpronta(voce: VoceRef, parte: RegistrazioneId) {
+        _impronte.removeAll { it.voceRef == voce && it.parte == parte }
+    }
+
+    /** [INV-I8b] removes every print sourced from [parte], of any Voce; the other Parti's prints stay. */
+    public fun rimuoviImpronteDellaParte(parte: RegistrazioneId) {
+        _impronte.removeAll { it.parte == parte }
     }
 
     private inline fun <T> seModificabile(modifica: () -> T): Esito<T> =

@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.politiche
+fun f(ref: VoceRef) = listOf(ImprontaVocale(ref, impronta, "s", "m", parte))

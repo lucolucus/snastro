@@ -1,0 +1,2 @@
+package snastro.avvio
+val i = snastro.parlanti.dominio.ImprontaVocale(ref, impronta, "s", "m", parte)

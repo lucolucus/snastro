@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.politiche
+fun f(p: Parlante, r: RegistrazioneId) = p.impronte.filter { it.registrazioneId == r }
