@@ -97,6 +97,13 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 .atteso()
         }
 
+        /**
+         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
+         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
+         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
+         */
+        override val piuPartiPerIncontro: Boolean = false
+
         override val lettore: LettoreTrascritto =
             LettoreTrascrittoDaTrascrizione(
                 VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste)),
@@ -133,6 +140,9 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             )
             return id
         }
+
+        override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
+            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
 
         override fun completaElaborazione(
             registrazioneId: RegistrazioneId,

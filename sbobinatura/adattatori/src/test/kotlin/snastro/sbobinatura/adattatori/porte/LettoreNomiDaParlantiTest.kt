@@ -2,6 +2,7 @@ package snastro.sbobinatura.adattatori.porte
 
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
@@ -118,6 +119,13 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 .atteso()
         }
 
+        /**
+         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
+         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
+         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
+         */
+        override val piuPartiPerIncontro: Boolean = false
+
         override val lettore: LettoreNomi = LettoreNomiDaParlanti(
             NomiDelleVoci(
                 attribuzioni,
@@ -125,6 +133,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 LettoreRegistrazioneFintaParlanti(registrazioniVisteParlanti),
                 uowParlanti,
             ),
+            catalogo,
         )
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
@@ -145,6 +154,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
             return completaElaborazione(aggiungiRegistrazioneProgetto(), voci)
         }
+
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata =
+            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
 
         /** Progetto: CreaProgetto (già in [init]) + AggiungiRegistrazione, poi le due viste dello stesso dato. */
         private fun aggiungiRegistrazioneProgetto(): RegistrazioneId {
@@ -222,7 +234,11 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             vociVisteParlanti[id] = trascritto.voci.map { voce ->
                 VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), voce.segmenti.map { it.intervallo })
             }
-            return RegistrazioneConiata(id, trascritto.voci.map { VoceRef(trascritto.incontroId, it.id) })
+            return RegistrazioneConiata(
+                id,
+                trascritto.incontroId,
+                trascritto.voci.map { VoceRef(trascritto.incontroId, it.id) },
+            )
         }
 
         override fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean): ParlanteId {

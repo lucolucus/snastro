@@ -16,6 +16,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
@@ -668,6 +669,9 @@ class AbbonatoSbobinaturaEventiTest {
             override fun trascritto(id: RegistrazioneId) =
                 if (id == REG_1) unTrascritto(REG_1, titolo = "Titolo Nuovo", data = nuovaData) else null
 
+            override fun partiConTrascritto(incontroId: IncontroId): List<RegistrazioneId> =
+                listOf(REG_1).filter { unIncontroDi(it) == incontroId }
+
             override fun registrazioniConTrascritto(): List<RegistrazioneId> = emptyList()
         }
         val politica = RigenerazioneSbobinaturaPolitica(trascritti, LettoreNomiFinta(), scrittore)
@@ -757,6 +761,10 @@ class AbbonatoSbobinaturaEventiTest {
             if (id == poison) error("guasto permanente per $id")
             return extra[id] ?: delegato.trascritto(id)
         }
+
+        override fun partiConTrascritto(incontroId: IncontroId): List<RegistrazioneId> =
+            delegato.partiConTrascritto(incontroId) + extra.values.filter { it.incontroId == incontroId }
+                .map { it.registrazioneId }
 
         override fun registrazioniConTrascritto(): List<RegistrazioneId> =
             delegato.registrazioniConTrascritto() + extra.keys

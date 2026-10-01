@@ -10,6 +10,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -57,6 +58,9 @@ class AbbonatoSbobinaturaEliminazioneTest {
         init {
             val lettore = object : LettoreTrascritto {
                 override fun trascritto(id: RegistrazioneId) = trascritti[id]
+
+                override fun partiConTrascritto(incontroId: IncontroId) =
+                    trascritti.values.filter { it.incontroId == incontroId }.map { it.registrazioneId }
 
                 override fun registrazioniConTrascritto() = trascritti.keys.toList()
             }

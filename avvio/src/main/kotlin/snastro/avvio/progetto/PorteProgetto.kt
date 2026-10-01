@@ -107,7 +107,7 @@ internal class PorteProgetto(
     val vociPerParlanti: LettoreVociDaTrascrizione = LettoreVociDaTrascrizione(vociDelTrascritto)
     val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
-    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci)
+    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci, catalogo)
     val trascrittoPerSintesi: LettoreTrascrittoSintesi = LettoreTrascrittoSintesi(vociDelTrascritto, statiElaborazione)
     val nomiPerSintesi: LettoreNomiSintesi = LettoreNomiSintesi(nomiDelleVoci)
 
