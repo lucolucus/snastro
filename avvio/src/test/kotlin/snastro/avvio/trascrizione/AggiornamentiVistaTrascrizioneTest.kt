@@ -4,10 +4,14 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAnnullata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
@@ -26,7 +30,8 @@ import kotlin.test.assertNull
 
 /**
  * AC-354/AC-478: every Elaborazione/Revisione event (ElaborazioneAnnullata and TrascrittoSostituito
- * included, ADR 0018) and every phase change of FasiInCorso is a Cambiamento.
+ * included, ADR 0018) and every phase change of FasiInCorso is a Cambiamento; a Revisione event (keyed by its
+ * Incontro, ADR 0035 §5) is one for each Parte of the Incontro.
  */
 class AggiornamentiVistaTrascrizioneTest {
     private val id = RegistrazioneId("rec-1")
@@ -35,18 +40,25 @@ class AggiornamentiVistaTrascrizioneTest {
     fun `AC-354 AC-478 ogni evento di Elaborazione e di Revisione produce un Cambiamento dopo il commit`() {
         val eventi: List<EventoPubblicato> = listOf(
             ElaborazioneAvviata(id, Instant.parse("2026-01-01T10:00:00Z")),
-            ElaborazioneCompletata(id),
+            ElaborazioneCompletata(id, unIncontroDi(id)),
             ElaborazioneFallita(id, "interrotta"),
             ElaborazioneAnnullata(id),
-            TrascrittoSostituito(id),
-            VociUnite(id, VoceId(1), VoceId(2)),
-            VoceDivisa(id, VoceId(1), VoceId(3), listOf(SegmentoId(1))),
-            SegmentoRiassegnato(id, SegmentoId(1), VoceId(1), VoceId(2), daRimossa = false, aNuova = false),
+            TrascrittoSostituito(id, unIncontroDi(id), emptySet()),
+            VociUnite(unIncontroDi(id), VoceId(1), VoceId(2)),
+            VoceDivisa(unIncontroDi(id), VoceId(1), VoceId(3), listOf(SegmentoRef(id, SegmentoId(1)))),
+            SegmentoRiassegnato(
+                unIncontroDi(id),
+                SegmentoRef(id, SegmentoId(1)),
+                VoceId(1),
+                VoceId(2),
+                daRimossa = false,
+                aNuova = false,
+            ),
         )
 
         eventi.forEach { evento ->
             val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
-            val aggiornamenti = AggiornamentiVistaTrascrizione().also(dispatcher::registraDopoCommit)
+            val aggiornamenti = AggiornamentiVistaTrascrizione(PARTE_UNICA).also(dispatcher::registraDopoCommit)
 
             dispatcher.unitaDiLavoro.inTransazione { dispatcher.pubblica(evento).let { Esito.Ok(Unit) } }
 
@@ -55,12 +67,28 @@ class AggiornamentiVistaTrascrizioneTest {
     }
 
     @Test
-    fun `AC-354 nessun Cambiamento se il comando e annullato`() {
+    fun `AC-354 una Revisione dell'Incontro produce un Cambiamento per ogni sua Parte`() {
+        val altra = RegistrazioneId("rec-2")
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
-        val aggiornamenti = AggiornamentiVistaTrascrizione().also(dispatcher::registraDopoCommit)
+        val aggiornamenti = AggiornamentiVistaTrascrizione { listOf(id, altra) }.also(dispatcher::registraDopoCommit)
+        val raccolti = mutableListOf<Cambiamento>()
 
         dispatcher.unitaDiLavoro.inTransazione {
-            dispatcher.pubblica(ElaborazioneCompletata(id))
+            dispatcher.pubblica(VociUnite(IncontroId("incontro-a-b"), VoceId(1), VoceId(2)))
+            Esito.Ok(Unit)
+        }
+        raccolti += aggiornamenti.cambiamenti.replayCache
+
+        assertEquals(listOf(Cambiamento(altra)), raccolti, "replay = 1 keeps the last one; one per Parte was emitted")
+    }
+
+    @Test
+    fun `AC-354 nessun Cambiamento se il comando e annullato`() {
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val aggiornamenti = AggiornamentiVistaTrascrizione(PARTE_UNICA).also(dispatcher::registraDopoCommit)
+
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(ElaborazioneCompletata(id, unIncontroDi(id)))
             Esito.Errore(ErroreDiProva.Fallito("rollback"))
         }
 
@@ -70,7 +98,7 @@ class AggiornamentiVistaTrascrizioneTest {
     @Test
     fun `AC-353 AC-354 un cambio di fase scrive nella FasiInCorso condivisa e produce un Cambiamento`() {
         val fasi = FasiInCorso()
-        val aggiornamenti = AggiornamentiVistaTrascrizione()
+        val aggiornamenti = AggiornamentiVistaTrascrizione(PARTE_UNICA)
         val segnalatore = SegnalatoreFaseConCambiamenti(fasi, aggiornamenti::cambiata)
 
         segnalatore.fase(id, FaseElaborazione.DIARIZZAZIONE)
@@ -80,5 +108,10 @@ class AggiornamentiVistaTrascrizioneTest {
         segnalatore.terminata(RegistrazioneId("rec-2").also { fasi.fase(it, FaseElaborazione.DECODIFICA) })
         assertNull(fasi.faseDi(RegistrazioneId("rec-2")))
         assertEquals(listOf(Cambiamento(RegistrazioneId("rec-2"))), aggiornamenti.cambiamenti.replayCache)
+    }
+
+    private companion object {
+        /** Each Incontro has one Parte, as `unIncontroDi` builds them. */
+        val PARTE_UNICA: (IncontroId) -> List<RegistrazioneId> = { listOf(unicaParteDi(it)) }
     }
 }

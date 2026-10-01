@@ -29,7 +29,6 @@ import snastro.sbobinatura.applicazione.letture.Sbobinatura
 import snastro.supporto.test.attendiFinche
 import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
@@ -334,7 +333,7 @@ class EliminaRegistrazioneTest {
     private fun righe(ambiente: AmbienteProgetto, id: RegistrazioneId): Map<String, Int> {
         val db = ambiente.porte.database
         val lettura = ambiente.porte.lettura
-        val trascritto = TrascrittoRepositorySql(db, lettura).trova(id, ambiente.incontroDi(id))
+        val trascritto = ambiente.porte.trascritti.trascritto(id)
         return mapOf(
             "registrazione" to listOfNotNull(RegistrazioneRepositorySql(db).trova(id)).size,
             "elaborazione" to ElaborazioneRepositorySql(db).diRegistrazione(id).size,

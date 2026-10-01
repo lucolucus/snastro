@@ -91,5 +91,15 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
             ModificaDataRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, eventi)
                 .esegui(ModificaDataRegistrazione(id, data)).atteso()
         }
+
+        // D-0037: Progetto gives an Incontro a second Parte only with the I2 multi-file import (aggiungi-registrazione-
+        // incontro); until then every import is a one-Parte Incontro, and the multi-Parte contract cases stay off here.
+        override val piuPartiPerIncontro: Boolean = false
+
+        override fun seminaIncontro(semi: List<SemeRegistrazione>): IncontroId =
+            error("nessun import a piu' Parti prima di I2 (D-0037)")
+
+        override fun ordineDelleParti(incontroId: IncontroId): List<RegistrazioneId> =
+            error("nessun Incontro a piu' Parti prima di I2 (D-0037)")
     }
 }

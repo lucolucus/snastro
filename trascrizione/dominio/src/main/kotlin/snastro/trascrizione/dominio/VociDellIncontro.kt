@@ -16,7 +16,8 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.UnioneNonAmmessa
 import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
 
 /**
- * The Voci dell'Incontro (ADR 0035 §1, root, identity [incontroId]): the Voce counter of the Incontro and one [Trascritto]
+ * The Voci dell'Incontro (ADR 0035 §1, root, identity [incontroId]): the Voce counter of the Incontro and one
+ * [Trascritto]
  * entity per transcribed Parte. Owns INV-6 and INV-8 at Incontro scope, INV-I4…INV-I7 and INV-I16; the `Revisione`
  * operations relate Voci and Segmenti of any Parte of THIS Incontro (INV-I7).
  *
@@ -52,6 +53,12 @@ public class VociDellIncontro private constructor(
 
     /** A detached copy of the Trascritto of [registrazioneId], or null if it is not a transcribed Parte. */
     public fun trascritto(registrazioneId: RegistrazioneId): Trascritto? = parti[registrazioneId]?.copia(_prossimaVoce)
+
+    /**
+     * A detached copy of the whole root (same Parti in the same order, same counter): changing either never changes the
+     * other. For in-memory stores, which may not reconstitute (CR-15) yet must never alias what they keep.
+     */
+    public fun copia(): VociDellIncontro = VociDellIncontro(incontroId, trascritti, _prossimaVoce)
 
     /**
      * INV-I5: the first transcription (or a replacement) of the Parte [registrazioneId] from the pipeline's turns. Only

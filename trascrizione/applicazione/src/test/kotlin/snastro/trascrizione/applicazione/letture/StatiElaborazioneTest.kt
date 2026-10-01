@@ -5,16 +5,15 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
-import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_CORSO
-import snastro.trascrizione.dominio.unTrascritto
 import snastro.trascrizione.dominio.unaElaborazione
+import snastro.trascrizione.dominio.unaRadice
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -22,9 +21,9 @@ import kotlin.test.assertNull
 
 class StatiElaborazioneTest {
     private val elaborazioni = ElaborazioneRepositoryFinta()
-    private val trascritti = TrascrittoRepositoryFinta()
+    private val trascritti = VociDellIncontroRepositoryFinta()
     private val fasi = FasiInCorso()
-    private val stati = StatiElaborazione(elaborazioni, trascritti, ogniRegistrazioneNota(), fasi)
+    private val stati = StatiElaborazione(elaborazioni, trascritti, fasi)
 
     @Test
     fun `AC-162 una Registrazione senza Elaborazione e non avviata con ogni altro campo nullo`() {
@@ -110,7 +109,7 @@ class StatiElaborazioneTest {
     @Test
     fun `AC-165 numVoci conta le Voci del Trascritto quando esiste`() {
         elaborazioni.salva(unaElaborazione(COMPLETATA, registrazioneId = REGISTRAZIONE))
-        trascritti.salva(unTrascritto(voci = 3, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))
+        trascritti.salva(unaRadice(voci = 3, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))
 
         val riga = stati.stati(listOf(REGISTRAZIONE)).single()
 
@@ -251,7 +250,7 @@ class StatiElaborazioneTest {
                 unaElaborazione(stato, idDi("$caso-$i"), r(caso), creataAlle = t(i.toLong()), motivo = MOTIVO),
             ).atteso()
         }
-        trascritto?.let { trascritti.salva(unTrascritto(voci = it, segmentiPerVoce = 1, registrazioneId = r(caso))) }
+        trascritto?.let { trascritti.salva(unaRadice(voci = it, segmentiPerVoce = 1, registrazioneId = r(caso))) }
     }
 
     private companion object {

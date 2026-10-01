@@ -132,7 +132,7 @@ internal class ModuloParlanti(
         aggiornamenti = AggiornamentiVistaParlanti(proposte, registrazione::parti)
         val riallinea = RiallineaImpronteServizio(uow, voci, porte.parlanti, decodificatore, ml.estrattore, dispatcher)
         // AC-C54: the ONE JUL-backed Segnalazione of `:avvio`.
-        riallineamento = AbbonatoRiallineamentoImpronte(riallinea, segnalazioneApp)
+        riallineamento = AbbonatoRiallineamentoImpronte(riallinea, registrazione::parti, segnalazioneApp)
         riallineaTutte = RiallineaTutteLeImpronteServizio(porte.lettura, porte.parlanti, riallinea)
         val conferma = ConfermaAttribuzioneServizio(
             uow,

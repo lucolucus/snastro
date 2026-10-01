@@ -114,7 +114,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
         // Both queued before the worker runs; the Finta still "has" the Trascritto until the deletion's commit, and
         // the pending Rigenerazione must not be run at all (not merely find nothing).
         ambiente.dispatcher.unitaDiLavoro.inTransazione {
-            ambiente.dispatcher.pubblica(ElaborazioneCompletata(REG))
+            ambiente.dispatcher.pubblica(ElaborazioneCompletata(REG, unIncontroDi(REG)))
             Esito.Ok(Unit)
         }
         ambiente.dispatcher.unitaDiLavoro.inTransazione {
@@ -154,7 +154,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
         val prima = ambiente.operazioni().size
         scrittore.durante = { ambiente.commit(eliminata()) } // the deletion commits while the write is in flight
 
-        ambiente.commit(ElaborazioneCompletata(REG))
+        ambiente.commit(ElaborazioneCompletata(REG, unIncontroDi(REG)))
         advanceUntilIdle()
 
         assertEquals(listOf(Scritto(NOME), Rimosso(NOME)), ambiente.operazioni().drop(prima))
@@ -172,7 +172,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
             throw IOException("guasto durante la scrittura")
         }
 
-        ambiente.commit(ElaborazioneCompletata(REG))
+        ambiente.commit(ElaborazioneCompletata(REG, unIncontroDi(REG)))
         advanceUntilIdle()
 
         assertEquals(listOf(Rimosso(NOME)), ambiente.operazioni().drop(prima))
@@ -188,7 +188,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
         // worker giri: primaArrivata deve tenere l'eliminata della voce gia' pendente (prioritaria), mai quella
         // del nuovo evento (altra, che qui e' null) — altrimenti la rimozione tornerebbe una scrittura.
         ambiente.commit(eliminata())
-        ambiente.commit(ElaborazioneCompletata(REG))
+        ambiente.commit(ElaborazioneCompletata(REG, unIncontroDi(REG)))
         advanceUntilIdle()
 
         assertEquals(listOf(Rimosso(NOME)), ambiente.operazioni().drop(prima))

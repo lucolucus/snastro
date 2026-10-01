@@ -1,0 +1,7 @@
+package snastro.trascrizione.applicazione.porte
+
+public interface TrascrittoRepository {
+    public fun salva(
+        t: Trascritto,
+    )
+}

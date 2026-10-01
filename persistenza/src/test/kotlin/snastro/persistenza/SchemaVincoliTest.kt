@@ -137,7 +137,7 @@ class SchemaVincoliTest {
         assertFailsWith<SQLException> {
             db.transaction {
                 db.voceQueries.eliminaDiRegistrazione(registrazioneId)
-                db.voceIncontroQueries.eliminaSenzaPresenza(db.incontroDi(registrazioneId), registrazioneId)
+                db.voceIncontroQueries.elimina(db.incontroDi(registrazioneId), 1L)
                 // niente reinserimento: attribuzione resta orfana quando la transazione fa commit.
             }
         }

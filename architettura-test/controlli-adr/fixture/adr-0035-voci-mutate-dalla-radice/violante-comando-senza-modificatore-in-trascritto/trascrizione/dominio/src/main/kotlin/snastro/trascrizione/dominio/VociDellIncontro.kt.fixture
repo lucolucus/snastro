@@ -1,0 +1,10 @@
+package snastro.trascrizione.dominio
+
+public class VociDellIncontro private constructor(public val incontroId: IncontroId) {
+    public fun unisci(sopravvive: VoceId, rimossa: VoceId): Esito<EventoRevisione.VociUnite> = TODO()
+
+    public fun completaParte(
+        registrazioneId: RegistrazioneId,
+        segmentiIniziali: List<SegmentoIniziale>,
+    ): Esito<ConclusioneParte> = TODO()
+}

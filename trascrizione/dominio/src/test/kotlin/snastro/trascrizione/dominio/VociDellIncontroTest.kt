@@ -240,6 +240,23 @@ class VociDellIncontroTest {
         assertEquals(prima, v.istantanea())
     }
 
+    @Test
+    fun `INV-I4 la copia della radice ha lo stesso stato e nessuna delle due cambia l'altra`() {
+        val v = dueParti()
+        v.unisci(VoceId(1), VoceId(3)).atteso()
+        val prima = v.istantanea()
+
+        val copia = v.copia()
+
+        assertEquals(incontroId, copia.incontroId)
+        assertEquals(prima, copia.istantanea())
+        copia.completaParte(a, turni(0), DURATA_TRASCRITTO_MS).atteso()
+        assertEquals(prima, v.istantanea(), "the copy's new Voce never reaches the original")
+        v.rimuoviParte(b).atteso()
+        assertEquals(setOf(a, b), copia.trascritti.map { it.registrazioneId }.toSet(), "the removal stays there")
+        assertEquals(7, copia.prossimaVoce)
+    }
+
     // --- fixtures -------------------------------------------------------------------------------------------------
 
     /** A root whose Parte A has Voci 1, 2 and Parte B Voci 3, 4, 5, two Segmenti each. */

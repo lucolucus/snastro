@@ -18,8 +18,8 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import java.time.Clock
 import java.time.Instant
@@ -42,7 +42,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -70,7 +70,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         val salvata = elaborazioni.diRegistrazione(id).single()
         assertTrue(salvata.fallita)
         assertEquals("nessun parlato rilevato", salvata.motivoFallimento)
-        assertNull(trascritti.trova(id, unIncontroDi(id)), "AC-386: nessun Trascritto esiste")
+        assertNull(trascritti.trascritto(id), "AC-386: nessun Trascritto esiste")
         assertEquals(emptyList(), trascritti.conTrascritto())
     }
 
@@ -79,7 +79,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         val id = RegistrazioneId("registrazione-2")
         val riferimento = RiferimentoAudio("audio/registrazione-2.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -103,7 +103,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
         servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
         assertTrue(elaborazioni.diRegistrazione(id).single().completata)
-        val trascritto = checkNotNull(trascritti.trova(id, unIncontroDi(id)))
+        val trascritto = checkNotNull(trascritti.trascritto(id))
         assertEquals(2, trascritto.voci.size, "AC-387: Voci diverse restano distinte, nessuna fusione")
         assertEquals(
             listOf(IntervalloMs(0, 1_000), IntervalloMs(500, 1_500)),

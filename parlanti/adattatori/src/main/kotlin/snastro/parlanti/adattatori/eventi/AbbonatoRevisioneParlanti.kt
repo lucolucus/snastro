@@ -37,16 +37,12 @@ public class AbbonatoRevisioneParlanti(
     private val registrazioni: LettoreRegistrazione,
 ) : AbbonatoSincrono {
     override fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
-        is VociUnite -> conIncontro(evento.registrazioneId) {
-            politica.applicaVociUnite(it, evento.sopravvissuta, evento.rimossa)
-        }
-        is VoceDivisa -> conIncontro(evento.registrazioneId) { politica.applicaVoceDivisa(it, evento.origine) }
-        is SegmentoRiassegnato -> conIncontro(evento.registrazioneId) {
-            politica.applicaSegmentoRiassegnato(it, evento.da, evento.a, evento.daRimossa, evento.aNuova)
-        }
-        is TrascrittoSostituito -> conIncontro(evento.registrazioneId) {
-            politicaSostituzione.applica(evento.registrazioneId, it)
-        }
+        // ADR 0035 §5: the Revisione events and TrascrittoSostituito carry the Incontro of their Voci.
+        is VociUnite -> politica.applicaVociUnite(evento.incontroId, evento.sopravvissuta, evento.rimossa)
+        is VoceDivisa -> politica.applicaVoceDivisa(evento.incontroId, evento.origine)
+        is SegmentoRiassegnato ->
+            politica.applicaSegmentoRiassegnato(evento.incontroId, evento.da, evento.a, evento.daRimossa, evento.aNuova)
+        is TrascrittoSostituito -> politicaSostituzione.applica(evento.registrazioneId, evento.incontroId)
         is RegistrazioneEliminata -> conIncontro(evento.registrazioneId) {
             politicaSostituzione.applica(evento.registrazioneId, it)
         }
@@ -54,8 +50,8 @@ public class AbbonatoRevisioneParlanti(
     }
 
     /**
-     * ADR 0033 §4.1: the Voci are the Incontro's, resolved from the Parte through [registrazioni]. Every event here is
-     * delivered inside its command's transaction, before a deleted Registrazione's row goes (ADR 0020 §2); an id the
+     * ADR 0033 §4.1: the Voci of a deleted Parte are its Incontro's, resolved through [registrazioni]. The event is
+     * delivered inside the deleting transaction, before the Registrazione's row goes (ADR 0020 §2); an id the
      * catalogue does not know has no Voce, so nothing to apply.
      */
     private fun conIncontro(id: RegistrazioneId, applica: (IncontroId) -> Esito<Unit>): Esito<Unit> =
