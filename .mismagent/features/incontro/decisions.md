@@ -385,3 +385,29 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (persistenza-incontro)
 - Docs: [ADR 0034](../../decisions/0034-persistenza-incontro-7sqm.md)
 - Revisit: a later SQLDelight dialect accepts NEW/OLD, or a flow needs to rewrite incontro_id.
+
+### D-0029 · Struttura con prefisso nella transizione
+- Meta: 2026-10-01; scope: block:persistenza-incontro; status: accepted; sha: 9b23b4766836673adf598e77778cc3bf07ec747b
+- Question: Before riassunto-incontro lands, how does the repository store the 7.sqm-encoded struttura while the current domain still compares the old key?
+- Options: A write <registrazioneId>= plus the old key and strip the prefix on read (kept); B keep the old encoding until riassunto-incontro, so migrated and new rows disagree.
+- Hypothesis: Prefix on write and strip on read keep a migrated pronto Riassunto not superato and new rows consistent with 7.sqm.
+- Check: RiassuntoRepositoryContratto round-trip on the SQL adapter, MigrazioneIncontroTest INV-I3, deep review with a migration probe.
+- Result: green; review notes INV-I3 rebuilds the key in SQL rather than running the domain, deferred; [pre-release](pre-release.md).
+- Debate: verifier and code-review (MED) want the domain predicate run on migrated rows (ADR 0034 §4).
+- Decision: A. Cost: one transient encode/strip pair that riassunto-incontro and incontro-chiavi replace.
+- By: decided: mismagent-worker (persistenza-incontro, sonnet); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [ADR 0034](../../decisions/0034-persistenza-incontro-7sqm.md), [pre-release](pre-release.md)
+- Revisit: riassunto-incontro lands with StrutturaIncontro.
+
+### D-0030 · Revisione deep per la migrazione
+- Meta: 2026-10-01; scope: block:persistenza-incontro; status: accepted
+- Question: An adapter gets a standard review (one verifier); is that enough for 7.sqm, which migrates the user's real project databases?
+- Options: A standard, one verifier, as the method's table says; B deep, verifier plus code-review on the strongest model (kept).
+- Hypothesis: n/a — decided by the composer's escalation judgement, [pre-release](pre-release.md)
+- Check: n/a — decided by the composer's escalation judgement, [pre-release](pre-release.md)
+- Result: n/a — decided by the composer's escalation judgement, [pre-release](pre-release.md)
+- Debate: none; the code-review added a probe on a seeded schema-7 copy and the counter finding.
+- Decision: B for this block; data-migrating adapters get deep review. Cost: one more reviewer run.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer)
+- Docs: [pre-release](pre-release.md)
+- Revisit: none expected.
