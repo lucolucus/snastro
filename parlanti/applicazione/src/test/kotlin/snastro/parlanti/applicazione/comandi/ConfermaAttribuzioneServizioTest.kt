@@ -29,13 +29,14 @@ import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.RigaImpronta
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -135,7 +136,7 @@ class ConfermaAttribuzioneServizioTest {
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
             LettoreRegistrazioneFinta(mapOf(REGISTRAZIONE to unaRegistrazioneVista())),
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
+            lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
             ParlanteRepositoryCheSegnalaLaGara(),
             attribuzioni,
             DecodificatoreAudioFinta(uow),
@@ -160,7 +161,7 @@ class ConfermaAttribuzioneServizioTest {
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
             LettoreRegistrazioneFinta(mapOf(REGISTRAZIONE to unaRegistrazioneVista())),
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
+            lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
             stub,
             attribuzioni,
             DecodificatoreAudioFinta(uow),
@@ -184,7 +185,7 @@ class ConfermaAttribuzioneServizioTest {
         }
         val ambiente = Ambiente(
             parlanti = parlanti,
-            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2)))),
+            lettoreVoci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2)))),
         )
         ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
         ambiente.servizio.esegui(ConfermaAttribuzione(VOCE_2, ObiettivoAttribuzione.ParlanteEsistente(p.id))).atteso()
@@ -256,7 +257,7 @@ class ConfermaAttribuzioneServizioTest {
         }
         val ambiente = Ambiente(
             parlanti = parlanti,
-            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2)))),
+            lettoreVoci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2)))),
         )
         ambiente.servizio.esegui(
             ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.ParlanteEsistente(occasionale.id)),
@@ -331,7 +332,7 @@ class ConfermaAttribuzioneServizioTest {
 
     @Test
     fun `INV-17 una Voce inesistente nel Trascritto viene rifiutata`() {
-        val ambiente = Ambiente(lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))))
+        val ambiente = Ambiente(lettoreVoci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))))
 
         val errore = ambiente.servizio.esegui(
             ConfermaAttribuzione(unaVoce(9), ObiettivoAttribuzione.NuovoParlante("Marco")),
@@ -342,7 +343,7 @@ class ConfermaAttribuzioneServizioTest {
 
     @Test
     fun `INV-17 una Registrazione senza Trascritto viene rifiutata`() {
-        val ambiente = Ambiente(lettoreVoci = LettoreVociFinta())
+        val ambiente = Ambiente(lettoreVoci = lettoreVociDiUnicheParti())
 
         val errore = ambiente.servizio.esegui(
             ConfermaAttribuzione(VOCE_1, ObiettivoAttribuzione.NuovoParlante("Marco")),
@@ -374,7 +375,8 @@ class ConfermaAttribuzioneServizioTest {
         val riga = ambiente.parlanti.impronteDiRegistrazione(REGISTRAZIONE).single()
         assertEquals(VOCE_1, riga.voceRef)
         assertEquals(REGISTRAZIONE, riga.parte)
-        assertEquals(SorgenteImpronta.di(unaVoceVista(1).intervalli).chiave, riga.sorgente)
+        val intervalli = unaVoceVista(1).intervalliPerParte.getValue(REGISTRAZIONE)
+        assertEquals(SorgenteImpronta.di(intervalli).chiave, riga.sorgente)
     }
 
     @Test
@@ -448,7 +450,7 @@ class ConfermaAttribuzioneServizioTest {
         lateinit var decodificatore: DecodificatoreAudioCheRegistra
         val ambiente = Ambiente(
             parlanti = ParlanteRepositoryFinta().apply { salva(p).atteso() },
-            lettoreVoci = LettoreVociFinta(
+            lettoreVoci = lettoreVociDiUnicheParti(
                 mapOf(REGISTRAZIONE to listOf(unaVoceVista(1), unaVoceVista(2, intervalliVoce2))),
             ),
             decodificatore = { uow ->
@@ -475,7 +477,7 @@ class ConfermaAttribuzioneServizioTest {
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
             LettoreRegistrazioneFinta(mapOf(REGISTRAZIONE to unaRegistrazioneVista())),
-            LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
+            lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
             parlanti,
             attribuzioni,
             DecodificatoreAudioFinta(uow),
@@ -552,7 +554,7 @@ class ConfermaAttribuzioneServizioTest {
         val intervalliVoce = listOf(IntervalloMs(0, 20_000), IntervalloMs(25_000, 45_000), IntervalloMs(50_000, 50_500))
         lateinit var decodificatore: DecodificatoreAudioCheRegistra
         val ambiente = Ambiente(
-            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1, intervalliVoce)))),
+            lettoreVoci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1, intervalliVoce)))),
             decodificatore = { uow ->
                 DecodificatoreAudioCheRegistra(DecodificatoreAudioFinta(uow)).also { decodificatore = it }
             },
@@ -588,7 +590,7 @@ class ConfermaAttribuzioneServizioTest {
                 salva(p).atteso()
                 salva(q).atteso()
             },
-            lettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1, intervalli)))),
+            lettoreVoci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1, intervalli)))),
             estrattore = { uow -> EstrattoreImprontaFinta(unitaDiLavoro = uow, modello = "modello-x") },
         )
 
@@ -735,9 +737,9 @@ class ConfermaAttribuzioneServizioTest {
     ) : LettoreVoci {
         private var letture = 0
 
-        override fun voci(id: RegistrazioneId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
+        override fun voci(incontroId: IncontroId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
 
-        override fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce> = error("non usato da questo test (AC-494)")
+        override fun segmenti(incontroId: IncontroId): List<SegmentoDiVoce> = error("non usato da questo test (AC-494)")
     }
 
     /**
@@ -752,7 +754,7 @@ class ConfermaAttribuzioneServizioTest {
         registrazioni: LettoreRegistrazione = LettoreRegistrazioneFinta(
             mapOf(REGISTRAZIONE to unaRegistrazioneVista()),
         ),
-        lettoreVoci: LettoreVoci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
+        lettoreVoci: LettoreVoci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(1)))),
         generatoreId: GeneratoreIdFinto = GeneratoreIdFinto(),
         decodificatore: (UnitaDiLavoroFinta) -> DecodificatoreAudio = { DecodificatoreAudioFinta(it) },
         estrattore: (UnitaDiLavoroFinta) -> EstrattoreImpronta = { EstrattoreImprontaFinta(unitaDiLavoro = it) },
@@ -796,7 +798,7 @@ class ConfermaAttribuzioneServizioTest {
         )
 
         fun unaVoceVista(n: Int, intervalli: List<IntervalloMs> = listOf(IntervalloMs(0, 1000))): VoceVista =
-            VoceVista(unaVoce(n), intervalli)
+            unaVoceVista(unaVoce(n), intervalli)
 
         fun unParlante(
             id: ParlanteId,

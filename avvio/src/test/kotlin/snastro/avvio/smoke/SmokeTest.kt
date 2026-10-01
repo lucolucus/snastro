@@ -25,6 +25,7 @@ import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
@@ -133,7 +134,8 @@ class SmokeTest {
         )
         val radice = VociDellIncontro.crea(registrazione.aggregato.incontroId)
         radice.completaParte(registrazioneId, segmenti, durataMs = 60_000).atteso()
-        val lettore = LettoreRegistrazioneTrascrizione(CatalogoRegistrazioni(registrazioni))
+        val catalogo = CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(db.database))
+        val lettore = LettoreRegistrazioneTrascrizione(catalogo)
         VociDellIncontroRepositorySql(db.database, UnitaDiLavoroSql(db.database), lettore).salva(radice)
 
         // AC-357: Voce 1 is 'Anna' (S2 badge '2 voci · 1 da identificare', S3 Nome, one S4 row).
@@ -164,15 +166,18 @@ class SmokeTest {
         return ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
-            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
+            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),
             LettoreVociDaTrascrizione(
                 VociDelTrascritto(
                     VociDellIncontroRepositorySql(
                         database,
                         unitaDiLavoroSql,
-                        LettoreRegistrazioneTrascrizione(CatalogoRegistrazioni(registrazioni)),
+                        LettoreRegistrazioneTrascrizione(
+                            CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
+                        ),
                     ),
                 ),
+                LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),
             ),
             ParlanteRepositorySql(database, unitaDiLavoroSql),
             AttribuzioneRepositorySql(database),

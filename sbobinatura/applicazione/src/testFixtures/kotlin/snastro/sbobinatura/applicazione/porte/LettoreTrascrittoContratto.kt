@@ -1,8 +1,13 @@
 package snastro.sbobinatura.applicazione.porte
 
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestFactory
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.VoceId
 import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -10,9 +15,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Consumer-driven contract of [LettoreTrascritto] (boundary `trascritto-per-sbobinatura`): one
- * subclass per implementation — [LettoreTrascrittoFinta] (D1) and `lettore-trascritto-da-trascrizione`
- * (D2, real-on-real).
+ * Consumer-driven contract of [LettoreTrascritto] (boundary `porte-sbobinatura`): one
+ * subclass per implementation — [LettoreTrascrittoFinta] (D1) and `LettoreTrascrittoDaTrascrizione`
+ * (D2, real-on-real). The multi-Parte cases are registered only when
+ * [AmbienteLettoreTrascritto.piuPartiPerIncontro] (D-0037), never skipped.
  */
 public abstract class LettoreTrascrittoContratto {
     /** A fresh supplier: one Progetto, no Registrazione. */
@@ -180,6 +186,96 @@ public abstract class LettoreTrascrittoContratto {
         assertOgniElencataHaTrascritto(a.lettore)
     }
 
+    @Test
+    public fun `AC-I26 partiConTrascritto elenca la Parte solo quando ha un Trascritto`() {
+        val a = ambiente()
+        val mai = a.aggiungiRegistrazione(RIUNIONE)
+        val fallita = a.aggiungiRegistrazione(INTERVISTA)
+        val trascritta = a.aggiungiRegistrazione(INTERVISTA)
+        a.fallisciElaborazione(fallita)
+        assertEquals(emptyList(), a.lettore.partiConTrascritto(INCONTRO_SCONOSCIUTO))
+        assertEquals(emptyList(), a.lettore.partiConTrascritto(a.incontroDi(trascritta)))
+
+        a.completaElaborazione(trascritta, listOf(SemeTurno(0, IntervalloMs(0, 1_000), "Uno.")))
+
+        assertEquals(listOf(trascritta), a.lettore.partiConTrascritto(a.incontroDi(trascritta)))
+        assertEquals(emptyList(), a.lettore.partiConTrascritto(a.incontroDi(mai)))
+        assertEquals(emptyList(), a.lettore.partiConTrascritto(a.incontroDi(fallita)))
+        assertEquals(a.incontroDi(trascritta), a.lettore.trascritto(trascritta)?.incontroId)
+        assertEquals(3, setOf(a.incontroDi(mai), a.incontroDi(fallita), a.incontroDi(trascritta)).size)
+    }
+
+    /** AC-I26 on an Incontro of several Parti (registered only when the supplier can seed one, D-0037). */
+    @TestFactory
+    public fun `AC-I26 Incontro con piu Parti`(): List<DynamicTest> =
+        if (!ambiente().piuPartiPerIncontro) {
+            emptyList()
+        } else {
+            listOf(
+                dynamicTest("AC-I26 partiConTrascritto elenca solo le Parti trascritte nell ordine delle Parti") {
+                    soloLePartiTrascritteInOrdine()
+                },
+                dynamicTest("AC-I26 ogni Parte porta l Incontro e i numeri di Voce dell Incontro") {
+                    numeriDiVoceDellIncontro()
+                },
+            )
+        }
+
+    private fun soloLePartiTrascritteInOrdine() {
+        val a = ambiente()
+        val seconda = a.aggiungiRegistrazione(RIUNIONE.copy(dataRegistrazione = LocalDate.of(2026, 9, 22)))
+        val incontro = a.incontroDi(seconda)
+        val prima = a.aggiungiParte(incontro, RIUNIONE.copy(dataRegistrazione = LocalDate.of(2026, 9, 21)))
+        val terza = a.aggiungiParte(incontro, RIUNIONE.copy(dataRegistrazione = LocalDate.of(2026, 9, 23)))
+        val altra = a.aggiungiRegistrazione(INTERVISTA)
+        val turno = listOf(SemeTurno(0, IntervalloMs(0, 1_000), "Uno."))
+        a.completaElaborazione(altra, turno)
+        a.completaElaborazione(terza, turno)
+        a.completaElaborazione(seconda, turno)
+
+        assertEquals(listOf(seconda, terza), a.lettore.partiConTrascritto(incontro))
+
+        a.completaElaborazione(prima, turno)
+
+        assertEquals(listOf(prima, seconda, terza), a.lettore.partiConTrascritto(incontro))
+        assertEquals(listOf(altra), a.lettore.partiConTrascritto(a.incontroDi(altra)))
+    }
+
+    private fun numeriDiVoceDellIncontro() {
+        val a = ambiente()
+        val prima = a.aggiungiRegistrazione(RIUNIONE)
+        val incontro = a.incontroDi(prima)
+        val seconda = a.aggiungiParte(incontro, RIUNIONE.copy(dataRegistrazione = LocalDate.of(2026, 9, 22)))
+        val cPrima = a.completaElaborazione(
+            prima,
+            listOf(
+                SemeTurno(0, IntervalloMs(0, 1_000), "Buongiorno."),
+                SemeTurno(1, IntervalloMs(1_000, 2_000), "Ciao."),
+            ),
+        )
+        val turniSeconda = listOf(
+            SemeTurno(0, IntervalloMs(0, 1_000), "Riprendiamo."),
+            SemeTurno(0, IntervalloMs(1_000, 2_000), "Dicevo."),
+        )
+        val cSeconda = a.completaElaborazione(seconda, turniSeconda)
+
+        assertEquals(incontro, a.incontroDi(seconda))
+        assertEquals(incontro, a.lettore.trascritto(seconda)?.incontroId)
+        assertTrue(cSeconda.none { c -> cPrima.any { it.voceId == c.voceId } }, "Voce nuova dell Incontro: $cSeconda")
+
+        // Riassegnato a una Voce dell'Incontro che parla solo nella prima Parte: la seconda porta il suo numero.
+        val voceDellaPrima: VoceId = cPrima[0].voceId
+        assertEquals(voceDellaPrima, a.riassegna(seconda, cSeconda[1].segmentoId, voceDellaPrima))
+
+        assertEquals(
+            listOf(
+                vista(turniSeconda[0], cSeconda[0]),
+                vista(turniSeconda[1], cSeconda[1].copy(voceId = voceDellaPrima)),
+            ),
+            a.lettore.trascritto(seconda)?.segmenti,
+        )
+    }
+
     private fun assertOgniElencataHaTrascritto(lettore: LettoreTrascritto) {
         lettore.registrazioniConTrascritto().forEach {
             assertNotNull(lettore.trascritto(it), "elencata senza Trascritto: ${it.valore}")
@@ -191,6 +287,7 @@ public abstract class LettoreTrascrittoContratto {
 
     private companion object {
         val SCONOSCIUTA = RegistrazioneId("registrazione-sconosciuta")
+        val INCONTRO_SCONOSCIUTO = IncontroId("incontro-sconosciuto")
         val RIUNIONE = SemeRegistrazione("Riunione di progetto", LocalDate.of(2026, 9, 21), 60_000L)
         val INTERVISTA = SemeRegistrazione("Intervista", LocalDate.of(2025, 12, 31), 30_000L)
     }

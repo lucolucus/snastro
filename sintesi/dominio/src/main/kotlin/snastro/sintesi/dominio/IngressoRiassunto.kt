@@ -1,16 +1,27 @@
 package snastro.sintesi.dominio
 
+import snastro.kernel.SegmentoRef
+
 /**
- * Builds the labelled LLM input (ADR 0021 §4 as amended 2026-09-26, pure): one line `[s<segmentoId> V<voceId>] <testo>`
- * per Segmento in the given order, with no timestamp ([SegmentoIngresso.inizioMs] is not written), then a legend
- * `V<n> = Voce n` per Voce of the input, ascending by n. It takes no Nomi at all (ADR 0032): with names in the legend
- * the model returned no elements; Nomi are applied only when the Riassunto is shown.
+ * Builds the labelled LLM input in ONE pass (INV-I19, ADR 0037 §3, pure): the Parti in the given (INV-I2) order, each
+ * Parte's Segmenti in the given (INV-7, time) order, no Parte separator line; one line `[s<k> V<n>] <testo>` per
+ * Segmento, k its 1-based position in the whole input and n its Incontro Voce, with no timestamp
+ * ([SegmentoIngresso.inizioMs] is not written); then a legend `V<n> = Voce n` per Voce of the input, ascending by n.
+ * It takes no Nomi at all (ADR 0032): Nomi are applied only when the Riassunto is shown.
  */
 public object IngressoRiassunto {
-    public fun costruisci(segmenti: List<SegmentoIngresso>): String {
-        val righe = segmenti.map { "[s${it.segmentoId.numero} V${it.voceId.numero}] ${it.testo}" }
+    public fun costruisci(parti: List<List<SegmentoIngresso>>): IngressoEtichettato {
+        val segmenti = parti.flatten()
+        require(segmenti.map { it.ref }.toSet().size == segmenti.size) { "Segmento ripetuto nell'ingresso" }
+        val righe = segmenti.mapIndexed { i, s -> "[s${i + 1} V${s.voceId.numero}] ${s.testo}" }
         val legenda = segmenti.map { it.voceId }.distinct().sortedBy { it.numero }
             .map { v -> "V${v.numero} = Voce ${v.numero}" }
-        return (righe + legenda).joinToString("\n")
+        return IngressoEtichettato((righe + legenda).joinToString("\n"), segmenti.map { it.ref })
     }
 }
+
+/**
+ * The input [testo] and its label table: label k ↔ `etichette[k-1]`. The table lives in memory for the run only (key
+ * `k`, ADR 0037 §3): it maps the model's `fonti` back to Segmenti ([Riassunto.completa]).
+ */
+public data class IngressoEtichettato(val testo: String, val etichette: List<SegmentoRef>)

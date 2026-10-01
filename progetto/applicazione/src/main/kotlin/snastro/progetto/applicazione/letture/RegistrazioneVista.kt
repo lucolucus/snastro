@@ -5,6 +5,7 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * Read view of a [snastro.progetto.dominio.Registrazione] (AC-97): the pinned Published Language
@@ -20,5 +21,6 @@ public data class RegistrazioneVista(
     val titolo: String,
     val riferimentoAudio: RiferimentoAudio,
     val dataRegistrazione: LocalDate,
+    val oraDiInizio: LocalTime?,
     val durataMs: Long,
 )

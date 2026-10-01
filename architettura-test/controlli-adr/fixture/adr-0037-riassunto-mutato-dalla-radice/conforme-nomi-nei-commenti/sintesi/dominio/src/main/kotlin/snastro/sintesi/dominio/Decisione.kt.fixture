@@ -1,0 +1,5 @@
+package snastro.sintesi.dominio
+
+// var testo: a Decisione never changes; public fun verifica(): Esito<Unit> lives in the root.
+/** No `var`, no `fun aggiornaTesto(`: only the root changes state. */
+public data class Decisione(val testo: TestoConVoci, val fonti: Set<SegmentoRef>) // var x

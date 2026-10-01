@@ -2,6 +2,7 @@ package snastro.progetto.applicazione.comandi
 
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
@@ -23,11 +24,13 @@ public class ModificaDataRegistrazioneServizio(
             ?: return@inTransazione Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(c.registrazioneId))
         registrazione.modificaData(c.nuovaData).poi { evento ->
             registrazioni.salva(registrazione)
-            eventi.pubblica(evento.pubblicato())
+            eventi.pubblica(evento.pubblicato(registrazione.incontroId))
             Esito.Ok(Unit)
         }
     }
 }
 
-private fun snastro.progetto.dominio.DataRegistrazioneModificata.pubblicato(): DataRegistrazioneModificata =
-    DataRegistrazioneModificata(registrazioneId = id, precedente = precedente, nuova = nuova)
+private fun snastro.progetto.dominio.DataRegistrazioneModificata.pubblicato(
+    incontroId: IncontroId,
+): DataRegistrazioneModificata =
+    DataRegistrazioneModificata(registrazioneId = id, precedente = precedente, nuova = nuova, incontroId = incontroId)

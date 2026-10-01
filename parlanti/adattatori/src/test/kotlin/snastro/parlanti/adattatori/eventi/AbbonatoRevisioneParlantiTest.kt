@@ -247,6 +247,8 @@ class AbbonatoRevisioneParlantiTest {
         "Seduta",
         LocalDate.of(2026, 9, 25),
         RiferimentoAudio("audio/${r.valore}.m4a"),
+        unIncontroDi(r),
+        incontroCessato = true,
     )
 
     /** [ParlanteRepository] whose [salva] always fails, like ADR 0007's unique index (mirrors AC-96). */

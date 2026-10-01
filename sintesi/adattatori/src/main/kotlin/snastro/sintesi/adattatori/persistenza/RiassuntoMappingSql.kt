@@ -1,8 +1,10 @@
 package snastro.sintesi.adattatori.persistenza
 
 import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.valoreOppureErrore
 import snastro.persistenza.SnastroDatabase
@@ -43,7 +45,7 @@ internal fun inDominio(db: SnastroDatabase, riga: RigaRiassunto): Riassunto {
         azioni = figli.azioni,
         puntiChiave = figli.puntiChiave,
         omessi = riga.omessi?.toInt(),
-        // The stored key is the domain's own '<registrazioneId>=<StrutturaTrascritto.chiave>' (ADR 0034 §1): verbatim.
+        // The stored key is the domain's own StrutturaIncontro.chiave (ADR 0034 §1, ADR 0037 §5): verbatim.
         struttura = riga.struttura,
     )
 }
@@ -52,7 +54,9 @@ private fun leggiFigli(db: SnastroDatabase, id: RiassuntoId): Figli {
     val elementi = db.riassuntoElementoQueries.trovaDiRiassunto(id.valore).executeAsList()
     val fontiPerElemento = db.riassuntoFonteQueries.trovaDiRiassunto(id.valore).executeAsList()
         .groupBy { it.tipo to it.posizione }
-        .mapValues { (_, righe) -> righe.map { SegmentoId(it.segmento_id.toInt()) }.toSet() }
+        .mapValues { (_, righe) ->
+            righe.map { SegmentoRef(RegistrazioneId(it.registrazione_id), SegmentoId(it.segmento_id.toInt())) }.toSet()
+        }
     fun fontiDi(tipo: String, posizione: Long) = fontiPerElemento[tipo to posizione].orEmpty()
     return Figli(
         decisioni = elementi.filter { it.tipo == TIPO_DECISIONE }

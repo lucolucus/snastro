@@ -28,11 +28,7 @@ public class LettoreRegistrazioneDaProgetto(
             )
         }
 
-    /**
-     * TRANSITION (D-0037, until `adattatori-trascrizione-incontro` reads Progetto's ordered Parti): numbered in the
-     * order of Progetto's UNORDERED `parti` — exact while every Incontro has one Parte (no import gives it a second one
-     * before I2), which is why the multi-Parte contract cases stay off for this adapter.
-     */
+    /** The Parti of [incontroId] as Progetto orders and numbers them (INV-I2, `CatalogoRegistrazioni.incontro`). */
     override fun parti(incontroId: IncontroId): List<ParteDiIncontro>? =
-        catalogo.parti(incontroId)?.mapIndexed { i, r -> ParteDiIncontro(r, i + 1) }
+        catalogo.incontro(incontroId)?.parti?.map { ParteDiIncontro(it.registrazioneId, it.numero) }
 }

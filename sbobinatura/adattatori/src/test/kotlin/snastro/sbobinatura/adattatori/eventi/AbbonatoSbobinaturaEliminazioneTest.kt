@@ -10,6 +10,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -57,6 +58,9 @@ class AbbonatoSbobinaturaEliminazioneTest {
         init {
             val lettore = object : LettoreTrascritto {
                 override fun trascritto(id: RegistrazioneId) = trascritti[id]
+
+                override fun partiConTrascritto(incontroId: IncontroId) =
+                    trascritti.values.filter { it.incontroId == incontroId }.map { it.registrazioneId }
 
                 override fun registrazioniConTrascritto() = trascritti.keys.toList()
             }
@@ -133,7 +137,7 @@ class AbbonatoSbobinaturaEliminazioneTest {
         val prima = ambiente.operazioni().size
 
         ambiente.commit(RegistrazioneRinominata(REG, precedente = "Vecchia", nuovo = TITOLO))
-        ambiente.commit(DataRegistrazioneModificata(REG, precedente = DATA.minusDays(1), nuova = DATA))
+        ambiente.commit(DataRegistrazioneModificata(REG, DATA.minusDays(1), DATA, unIncontroDi(REG)))
         ambiente.commit(eliminata())
         advanceUntilIdle()
 
@@ -226,7 +230,15 @@ class AbbonatoSbobinaturaEliminazioneTest {
         const val NOME = "2026-09-12 Riunione.md"
 
         fun eliminata() =
-            RegistrazioneEliminata(REG, ProgettoId("p"), TITOLO, DATA, RiferimentoAudio("audio/reg-1.m4a"))
+            RegistrazioneEliminata(
+                REG,
+                ProgettoId("p"),
+                TITOLO,
+                DATA,
+                RiferimentoAudio("audio/reg-1.m4a"),
+                unIncontroDi(REG),
+                incontroCessato = true,
+            )
 
         fun unTrascritto() = TrascrittoTesto(
             registrazioneId = REG,

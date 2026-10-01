@@ -217,9 +217,10 @@ class MessaggiErroreTest {
             listOf(
                 ErroreSintesi.RiassuntoGiaAperto(IncontroId("id-1")),
                 ErroreSintesi.ModelloNonInstallato,
-                ErroreSintesi.TrascrittoNonDisponibile(IncontroId("id-1")),
-                ErroreSintesi.ElaborazioneGiaAperta(IncontroId("id-1")),
-                ErroreSintesi.RegistrazioneTroppoLunga(30_000, 28_000),
+                ErroreSintesi.PartiNonTrascritte(1),
+                ErroreSintesi.ElaborazioneGiaAperta(1),
+                ErroreSintesi.PartiFallite(1),
+                ErroreSintesi.IngressoTroppoLungo(30_000, 28_000),
                 ErroreSintesi.ArgomentoTroppoLungo(210, 200),
                 ErroreSintesi.LunghezzaMassimaFuoriIntervallo(299, 300, 2500),
                 ErroreSintesi.TransizioneNonAmmessa("in_attesa", "in_corso"),

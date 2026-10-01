@@ -93,10 +93,10 @@ class RiassumiServizioTest {
     }
 
     @Test
-    fun `AC-S78 senza Trascritto rifiuta con TrascrittoNonDisponibile e non scrive`() {
+    fun `AC-S78 senza Trascritto rifiuta con PartiNonTrascritte e non scrive`() {
         val a = unAmbiente(trascritti = LettoreTrascrittoFinta())
 
-        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.TrascrittoNonDisponibile>()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.PartiNonTrascritte>()
 
         assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), a.eventi.pubblicati)
@@ -134,14 +134,14 @@ class RiassumiServizioTest {
     }
 
     @Test
-    fun `AC-S78 un ingresso stimato oltre il limite rifiuta con RegistrazioneTroppoLunga`() {
+    fun `AC-S78 un ingresso stimato oltre il limite rifiuta con IngressoTroppoLungo`() {
         val testoLungo = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 3)
         val trascritti = LettoreTrascrittoFinta(
             mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi(testo = testoLungo))),
         )
         val a = unAmbiente(trascritti = trascritti)
 
-        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.RegistrazioneTroppoLunga>()
+        a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).erroreAtteso<ErroreSintesi.IngressoTroppoLungo>()
 
         assertEquals(emptyList(), a.riassunti.trova(unIncontroDi(REGISTRAZIONE)))
         assertEquals(emptyList(), a.eventi.pubblicati)

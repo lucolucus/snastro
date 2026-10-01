@@ -23,11 +23,11 @@ import snastro.parlanti.applicazione.porte.Fascia
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
-import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
 import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -60,16 +60,16 @@ class PropostaTest {
 
     @Test
     fun `una Registrazione senza Trascritto non genera una Proposta`() {
-        val ambiente = Ambiente(lettoreVoci = LettoreVociFinta())
+        val ambiente = Ambiente(lettoreVoci = lettoreVociDiUnicheParti())
 
         assertNull(ambiente.api.perVoce(VOCE_1))
     }
 
     @Test
     fun `una Voce senza piu alcun intervallo non genera una Proposta`() {
-        val vuota = mapOf(REGISTRAZIONE to listOf(VoceVista(VOCE_1, emptyList())))
+        val vuota = mapOf(REGISTRAZIONE to listOf(unaVoceVista(VOCE_1, emptyList())))
 
-        val ambiente = Ambiente(lettoreVoci = LettoreVociFinta(vuota))
+        val ambiente = Ambiente(lettoreVoci = lettoreVociDiUnicheParti(vuota))
 
         assertNull(ambiente.api.perVoce(VOCE_1))
     }
@@ -415,9 +415,9 @@ class PropostaTest {
 
         /** [REGISTRAZIONE]'s Voce 1 (under Proposta) plus 5 Voci of [STORICA] (the Candidati' print sources). */
         fun lettoreVociScenario(voce1Intervalli: List<IntervalloMs> = listOf(IntervalloMs(0, 2_000))): LettoreVoci {
-            val storiche = (1..5).map { VoceVista(voceStorica(it), listOf(IntervalloMs(0, 2_000))) }
-            val voci = mapOf(REGISTRAZIONE to listOf(VoceVista(VOCE_1, voce1Intervalli)), STORICA to storiche)
-            return LettoreVociFinta(voci)
+            val storiche = (1..5).map { unaVoceVista(voceStorica(it), listOf(IntervalloMs(0, 2_000))) }
+            val voci = mapOf(REGISTRAZIONE to listOf(unaVoceVista(VOCE_1, voce1Intervalli)), STORICA to storiche)
+            return lettoreVociDiUnicheParti(voci)
         }
     }
 }

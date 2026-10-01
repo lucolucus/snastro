@@ -1,0 +1,5 @@
+package snastro.sintesi.dominio
+
+public data class Azione(val testo: TestoConVoci, val fonti: Set<SegmentoRef>) {
+    private var responsabile: VoceId? = null
+}

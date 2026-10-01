@@ -6,9 +6,9 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.unIncontroDi
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
-import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
 import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.BUDGET_ESTRATTO_MS
 import snastro.parlanti.dominio.MAX_INTERVALLI_ESTRATTO
 import snastro.parlanti.dominio.selezionaIntervalli
@@ -56,7 +56,7 @@ class EstrattoAudioTest {
 
     @Test
     fun `AC-107 una Registrazione senza Trascritto non ha estratto`() {
-        val estratto = EstrattoAudio(LettoreVociFinta(emptyMap()), ogniRegistrazioneNota()).estratto(VOCE)
+        val estratto = EstrattoAudio(lettoreVociDiUnicheParti(emptyMap()), ogniRegistrazioneNota()).estratto(VOCE)
 
         assertNull(estratto)
     }
@@ -69,8 +69,8 @@ class EstrattoAudioTest {
     }
 
     private fun estrattoAudio(vararg voci: Pair<VoceRef, List<IntervalloMs>>): EstrattoAudio {
-        val viste = voci.map { (voceRef, intervalli) -> VoceVista(voceRef, intervalli) }
-        return EstrattoAudio(LettoreVociFinta(mapOf(REGISTRAZIONE to viste)), ogniRegistrazioneNota())
+        val viste = voci.map { (voceRef, intervalli) -> unaVoceVista(voceRef, intervalli) }
+        return EstrattoAudio(lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to viste)), ogniRegistrazioneNota())
     }
 
     private companion object {

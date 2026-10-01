@@ -11,6 +11,7 @@ import snastro.parlanti.applicazione.letture.NomiDelleVoci
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql
+import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
@@ -65,7 +66,7 @@ internal class PorteProgetto(
     val registrazioni: RegistrazioneRepository = costruisciRegistrazioni(database)
     val progetti: ProgettoRepositorySql = ProgettoRepositorySql(database)
     val eliminazioniInSospeso: EliminazioniInSospesoSql = EliminazioniInSospesoSql(database, clock)
-    val catalogo: CatalogoRegistrazioni = CatalogoRegistrazioni(registrazioni)
+    val catalogo: CatalogoRegistrazioni = CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))
     val elaborazioni: ElaborazioneRepositorySql = ElaborazioneRepositorySql(database)
     val parlanti: ParlanteRepositorySql = ParlanteRepositorySql(
         database,
@@ -101,10 +102,11 @@ internal class PorteProgetto(
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 
-    val vociPerParlanti: LettoreVociDaTrascrizione = LettoreVociDaTrascrizione(vociDelTrascritto)
+    val vociPerParlanti: LettoreVociDaTrascrizione =
+        LettoreVociDaTrascrizione(vociDelTrascritto, registrazionePerParlanti)
     val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
-    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci)
+    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci, catalogo)
     val trascrittoPerSintesi: LettoreTrascrittoSintesi = LettoreTrascrittoSintesi(vociDelTrascritto, statiElaborazione)
     val nomiPerSintesi: LettoreNomiSintesi = LettoreNomiSintesi(nomiDelleVoci)
 

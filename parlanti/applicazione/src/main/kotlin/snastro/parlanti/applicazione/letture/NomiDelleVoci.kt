@@ -43,6 +43,6 @@ public class NomiDelleVoci(
      */
     public fun registrazioniCon(parlanteId: ParlanteId): List<RegistrazioneId> =
         attribuzioni.diParlante(parlanteId).map { it.voceRef.incontroId }.distinct()
-            .flatMap { registrazioni.parti(it).orEmpty() }
+            .flatMap { registrazioni.parti(it).orEmpty().map { parte -> parte.registrazioneId } }
             .distinct()
 }

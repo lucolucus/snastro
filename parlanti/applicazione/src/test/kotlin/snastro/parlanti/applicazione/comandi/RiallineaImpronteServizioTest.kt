@@ -20,11 +20,13 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RigaImpronta
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.ImprontaVocale
 import snastro.parlanti.dominio.Nome
@@ -53,7 +55,15 @@ class RiallineaImpronteServizioTest {
         decoder: DecodificatoreAudio = decodificatore,
         estrattore: EstrattoreImpronta = this.estrattore,
     ): RiallineaImpronteServizio =
-        RiallineaImpronteServizio(eventi.unitaDiLavoro, LettoreVociFinta(voci), parlanti, decoder, estrattore, eventi)
+        RiallineaImpronteServizio(
+            eventi.unitaDiLavoro,
+            lettoreVociDiUnicheParti(voci),
+            ogniRegistrazioneNota(),
+            parlanti,
+            decoder,
+            estrattore,
+            eventi,
+        )
 
     private fun esegui(servizio: RiallineaImpronteServizio = servizio()) =
         servizio.esegui(RiallineaImpronte(REGISTRAZIONE))
@@ -135,7 +145,8 @@ class RiallineaImpronteServizioTest {
         val osservato = ParlanteRepositoryOsservato(parlanti) { transazioni.transazioneAperta }
         val servizio = RiallineaImpronteServizio(
             eventi.unitaDiLavoro,
-            LettoreVociFinta(voci),
+            lettoreVociDiUnicheParti(voci),
+            ogniRegistrazioneNota(),
             osservato,
             decodificatore,
             estrattore,
@@ -391,7 +402,7 @@ class RiallineaImpronteServizioTest {
 
         fun ref(voce: Int): VoceRef = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(voce))
 
-        fun unaVoce(voce: Int, intervalli: List<IntervalloMs>): VoceVista = VoceVista(ref(voce), intervalli)
+        fun unaVoce(voce: Int, intervalli: List<IntervalloMs>): VoceVista = unaVoceVista(ref(voce), intervalli)
 
         fun chiave(intervalli: List<IntervalloMs>): String = SorgenteImpronta.di(intervalli).chiave
     }

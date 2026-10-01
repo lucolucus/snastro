@@ -12,9 +12,9 @@ public interface LettoreRegistrazione {
     public fun registrazione(id: RegistrazioneId): RegistrazioneVista?
 
     /**
-     * The Parti (Registrazioni) of the Incontro [incontroId], UNORDERED: no caller sorts this list nor relies on its
-     * order (ADR 0033 §4.1, D-0031; ordered and numbered in wave 4). `null` for an unknown Incontro or one that ceased
-     * with its last Parte; a known Incontro has at least one Parte.
+     * The Parti of the Incontro [incontroId] in its order ([INV-I2], Progetto's), numbered 1..N, each with its current
+     * dataRegistrazione (ADR 0033 §4, widened from the unordered read of §4.1). `null` for an unknown Incontro or one
+     * that ceased with its last Parte; a known Incontro has at least one Parte.
      */
-    public fun parti(incontroId: IncontroId): List<RegistrazioneId>?
+    public fun parti(incontroId: IncontroId): List<ParteDiIncontroParlanti>?
 }

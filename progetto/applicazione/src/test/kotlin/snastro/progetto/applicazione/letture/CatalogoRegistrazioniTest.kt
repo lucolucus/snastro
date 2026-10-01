@@ -1,13 +1,17 @@
 package snastro.progetto.applicazione.letture
 
+import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
+import snastro.progetto.dominio.OraDiInizio
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -15,7 +19,7 @@ import kotlin.test.assertNull
 class CatalogoRegistrazioniTest {
     private val progettoId = ProgettoId("progetto-1")
     private val registrazioni = RegistrazioneRepositoryFinta()
-    private val catalogo = CatalogoRegistrazioni(registrazioni)
+    private val catalogo = CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni))
 
     @Test
     fun `AC-97 id noto restituisce la RegistrazioneVista con tutti i campi della Registrazione`() {
@@ -30,6 +34,7 @@ class CatalogoRegistrazioniTest {
                 titolo = "Seduta del 12 marzo",
                 riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
                 dataRegistrazione = LocalDate.of(2026, 3, 12),
+                oraDiInizio = null,
                 durataMs = 3_600_000L,
             ),
             catalogo.registrazione(id),
@@ -86,10 +91,59 @@ class CatalogoRegistrazioniTest {
         assertEquals(a.incontroId, catalogo.registrazione(a.id)?.incontroId)
     }
 
+    @Test
+    fun `INV-I2 incontro con 3 Parti in disordine le restituisce ordinate 1-3 e una modifica d'ora cambia i numeri`() {
+        val inc = IncontroId("incontro-a")
+        val tarda = unaRegistrazione(RegistrazioneId("c"), "Tarda", inc, ora = LocalTime.of(15, 0))
+        val senzaOra = unaRegistrazione(RegistrazioneId("b"), "Senza ora", inc)
+        val presto = unaRegistrazione(RegistrazioneId("a"), "Presto", inc, ora = LocalTime.of(9, 30))
+        listOf(tarda, senzaOra, presto).forEach(registrazioni::salva)
+
+        val vista = catalogo.incontro(inc)!!
+        assertEquals(inc, vista.incontroId)
+        assertEquals(progettoId, vista.progettoId)
+        assertEquals(listOf("a" to 1, "c" to 2, "b" to 3), numeri(inc))
+        assertEquals(LocalTime.of(9, 30), vista.parti[0].oraDiInizio)
+        assertEquals(
+            ParteVista(RegistrazioneId("b"), 3, "Senza ora", LocalDate.of(2026, 3, 12), null, 3_600_000L),
+            vista.parti[2],
+        )
+
+        presto.modificaOraDiInizio(oraDi(LocalTime.of(16, 0)))
+        registrazioni.salva(presto)
+        assertEquals(listOf("c" to 1, "a" to 2, "b" to 3), numeri(inc))
+    }
+
+    @Test
+    fun `AC-I37 incontro sconosciuto o cessato restituisce null`() {
+        assertNull(catalogo.incontro(IncontroId("sconosciuto")))
+        val r = unaRegistrazione(RegistrazioneId("id-1"), "Seduta")
+        registrazioni.salva(r)
+        registrazioni.rimuovi(r.id)
+        assertNull(catalogo.incontro(r.incontroId))
+    }
+
+    @Test
+    fun `AC-I37 registrazione porta oraDiInizio e parti e la proiezione di incontro`() {
+        val inc = IncontroId("incontro-a")
+        val con = unaRegistrazione(RegistrazioneId("id-1"), "A", inc, ora = LocalTime.of(10, 0, 5))
+        registrazioni.salva(con)
+        registrazioni.salva(unaRegistrazione(RegistrazioneId("id-2"), "B", inc))
+        assertEquals(LocalTime.of(10, 0, 5), catalogo.registrazione(con.id)?.oraDiInizio)
+        assertNull(catalogo.registrazione(RegistrazioneId("id-2"))?.oraDiInizio)
+        assertEquals(catalogo.incontro(inc)!!.parti.map { it.registrazioneId }, catalogo.parti(inc))
+    }
+
+    private fun numeri(inc: IncontroId) =
+        catalogo.incontro(inc)!!.parti.map { it.registrazioneId.valore to it.numero }
+
+    private fun oraDi(t: LocalTime): OraDiInizio = (OraDiInizio.di(t) as Esito.Ok).valore
+
     private fun unaRegistrazione(
         id: RegistrazioneId,
         titolo: String,
         incontroId: IncontroId = IncontroId("incontro-di-${id.valore}"),
+        ora: LocalTime? = null,
     ): Registrazione =
         Registrazione.aggiungi(
             id = id,
@@ -100,5 +154,6 @@ class CatalogoRegistrazioniTest {
             durataMs = 3_600_000L,
             dataRegistrazione = LocalDate.of(2026, 3, 12),
             aggiuntaAlle = Instant.parse("2026-09-23T10:00:00Z"),
+            oraDiInizio = ora?.let(::oraDi),
         ).aggregato
 }

@@ -42,6 +42,8 @@ import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
+import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.ImprontaVocale
 import snastro.parlanti.dominio.Nome
@@ -95,7 +97,8 @@ class AbbonatoRiallineamentoImpronteTest {
         val riallinea = decoratore(
             RiallineaImpronteServizio(
                 dispatcher.unitaDiLavoro,
-                LettoreVociFinta(voci),
+                lettoreVociDiUnicheParti(voci),
+                ogniRegistrazioneNota(),
                 parlanti,
                 decodificatore ?: DecodificatoreAudioFinta(unitaDiLavoro = transazioni),
                 estrattore ?: EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
@@ -152,6 +155,7 @@ class AbbonatoRiallineamentoImpronteTest {
             RiallineaImpronteServizio(
                 dispatcher.unitaDiLavoro,
                 LettoreVociFinta(emptyMap()),
+                ogniRegistrazioneNota(),
                 parlanti,
                 DecodificatoreAudioFinta(unitaDiLavoro = transazioni),
                 EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
@@ -462,7 +466,7 @@ class AbbonatoRiallineamentoImpronteTest {
     }
 
     private fun unaVoce(voce: Int, intervalli: List<IntervalloMs>, registrazioneId: RegistrazioneId = REG): VoceVista =
-        VoceVista(VoceRef(unIncontroDi(registrazioneId), VoceId(voce)), intervalli)
+        VoceVista(VoceRef(unIncontroDi(registrazioneId), VoceId(voce)), mapOf(registrazioneId to intervalli))
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")

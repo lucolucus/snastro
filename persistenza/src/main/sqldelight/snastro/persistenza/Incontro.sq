@@ -14,3 +14,7 @@ SELECT * FROM incontro WHERE progetto_id = :progettoId;
 -- the DELETE fails on the immediate FK: a composition that forgot a subscriber fails closed.
 eliminaSeSenzaParti:
 DELETE FROM incontro WHERE id = :id AND NOT EXISTS (SELECT 1 FROM registrazione WHERE incontro_id = :id);
+
+-- IncontroRepository.rimuovi: refused while a Parte is left by the immediate FK registrazione.incontro_id (INV-I1).
+elimina:
+DELETE FROM incontro WHERE id = :id;

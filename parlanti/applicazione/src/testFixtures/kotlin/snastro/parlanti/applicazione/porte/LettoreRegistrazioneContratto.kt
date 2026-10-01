@@ -1,6 +1,9 @@
 package snastro.parlanti.applicazione.porte
 
+import org.junit.jupiter.api.DynamicTest
+import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestFactory
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -13,7 +16,8 @@ import kotlin.test.assertNull
  * Consumer-driven contract of Parlanti's own [LettoreRegistrazione] (boundary
  * `registrazione-per-parlanti`): one subclass per implementation — the fake (D1) and
  * `registrazione-da-progetto-pa` (D2). Parlanti relies on `progettoId` (INV-17 scope) and on the
- * CURRENT `dataRegistrazione` ('Ospite del dd/MM/yyyy', INV-19).
+ * CURRENT `dataRegistrazione` ('Ospite del dd/MM/yyyy', INV-19), and on [LettoreRegistrazione.parti] for the
+ * Incontro's Parti in order, numbered, with their dates (AC-I205, AC-I25).
  */
 public abstract class LettoreRegistrazioneContratto {
     /** A fresh supplier with one Progetto and no Registrazione. */
@@ -104,7 +108,7 @@ public abstract class LettoreRegistrazioneContratto {
         val ambiente = ambiente()
         val id = ambiente.semina(RIUNIONE)
 
-        assertEquals(setOf(id), ambiente.lettore.parti(ambiente.incontroDi(id))?.toSet())
+        assertEquals(setOf(id), ambiente.lettore.parti(ambiente.incontroDi(id))?.map { it.registrazioneId }?.toSet())
     }
 
     @Test
@@ -132,8 +136,88 @@ public abstract class LettoreRegistrazioneContratto {
         val prima = ambiente.semina(RIUNIONE)
         val seconda = ambiente.semina(INTERVISTA)
 
-        assertEquals(listOf(prima), ambiente.lettore.parti(ambiente.incontroDi(prima)))
-        assertEquals(listOf(seconda), ambiente.lettore.parti(ambiente.incontroDi(seconda)))
+        assertEquals(listOf(prima), ambiente.lettore.parti(ambiente.incontroDi(prima))?.map { it.registrazioneId })
+        assertEquals(listOf(seconda), ambiente.lettore.parti(ambiente.incontroDi(seconda))?.map { it.registrazioneId })
+    }
+
+    @Test
+    public fun `AC-I25 l'unica Parte di un Incontro e la numero 1 con la sua data corrente`() {
+        val ambiente = ambiente()
+        val id = ambiente.semina(RIUNIONE)
+        val lettore = ambiente.lettore
+        assertEquals(listOf(ParteDiIncontroParlanti(id, 1, RIUNIONE.dataRegistrazione)), lettore.parti(ambiente.incontroDi(id)))
+
+        ambiente.modificaData(id, LocalDate.of(2026, 1, 5))
+
+        assertEquals(listOf(ParteDiIncontroParlanti(id, 1, LocalDate.of(2026, 1, 5))), lettore.parti(ambiente.incontroDi(id)))
+    }
+
+    /**
+     * AC-I25 on an Incontro with several Parti: registered only where [AmbienteLettoreRegistrazione.piuPartiPerIncontro]
+     * holds (D-0037: the fake now, the real adapter once the I2 import lands) — dynamic tests, never a skipped one.
+     */
+    @TestFactory
+    public fun `AC-I25 casi con piu Parti`(): List<DynamicTest> {
+        if (!ambiente().piuPartiPerIncontro) return emptyList()
+        return listOf(
+            dynamicTest("AC-I25 parti ordinate per data e import, numerate 1..N con la data di ciascuna") {
+                val ambiente = ambiente()
+                val tarda = ambiente.semina(RIUNIONE) // 12/09/2026, imported first
+                val incontro = ambiente.incontroDi(tarda)
+                val presto = ambiente.aggiungiParte(incontro, INTERVISTA) // 31/12/2025
+                val pari = ambiente.aggiungiParte(incontro, INTERVISTA.copy(titolo = "Seguito")) // same date, later import
+                val altra = ambiente.semina(RIUNIONE)
+
+                val parti = ambiente.lettore.parti(incontro)
+
+                assertEquals(
+                    listOf(
+                        ParteDiIncontroParlanti(presto, 1, INTERVISTA.dataRegistrazione),
+                        ParteDiIncontroParlanti(pari, 2, INTERVISTA.dataRegistrazione),
+                        ParteDiIncontroParlanti(tarda, 3, RIUNIONE.dataRegistrazione),
+                    ),
+                    parti,
+                )
+                assertEquals(parti?.minOf { it.dataRegistrazione }, parti?.first()?.dataRegistrazione, "data dell'Incontro")
+                assertEquals(listOf(altra), ambiente.lettore.parti(ambiente.incontroDi(altra))?.map { it.registrazioneId })
+            },
+            dynamicTest("AC-I25 dopo una modifica della data ordine e numeri seguono la data corrente") {
+                val ambiente = ambiente()
+                val prima = ambiente.semina(INTERVISTA)
+                val incontro = ambiente.incontroDi(prima)
+                val seconda = ambiente.aggiungiParte(incontro, RIUNIONE)
+                val lettore = ambiente.lettore
+                assertEquals(listOf(prima, seconda), lettore.parti(incontro)?.map { it.registrazioneId })
+
+                ambiente.modificaData(prima, LocalDate.of(2026, 12, 1))
+
+                assertEquals(
+                    listOf(
+                        ParteDiIncontroParlanti(seconda, 1, RIUNIONE.dataRegistrazione),
+                        ParteDiIncontroParlanti(prima, 2, LocalDate.of(2026, 12, 1)),
+                    ),
+                    lettore.parti(incontro),
+                )
+            },
+            dynamicTest("AC-I25 eliminata una Parte le altre restano numerate 1..N e l'Incontro non cessa") {
+                val ambiente = ambiente()
+                val prima = ambiente.semina(INTERVISTA)
+                val incontro = ambiente.incontroDi(prima)
+                val seconda = ambiente.aggiungiParte(incontro, INTERVISTA.copy(titolo = "Seguito"))
+                val terza = ambiente.aggiungiParte(incontro, RIUNIONE)
+
+                ambiente.elimina(seconda)
+
+                assertEquals(
+                    listOf(
+                        ParteDiIncontroParlanti(prima, 1, INTERVISTA.dataRegistrazione),
+                        ParteDiIncontroParlanti(terza, 2, RIUNIONE.dataRegistrazione),
+                    ),
+                    ambiente.lettore.parti(incontro),
+                )
+                assertEquals(incontro, ambiente.lettore.registrazione(terza)?.incontroId)
+            },
+        )
     }
 
     private companion object {

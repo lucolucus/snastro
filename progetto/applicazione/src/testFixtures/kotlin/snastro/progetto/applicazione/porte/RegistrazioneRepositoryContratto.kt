@@ -10,9 +10,11 @@ import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
+import snastro.progetto.dominio.OraDiInizio
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -105,21 +107,42 @@ public abstract class RegistrazioneRepositoryContratto {
     }
 
     @Test
-    public fun `AC-I203 diIncontro restituisce tutte e sole le Parti dell'Incontro, con il suo incontroId`() {
+    public fun `AC-I19 un'OraDiInizio fa il round-trip, anche dopo una modifica e una cancellazione`() {
+        val a = ambiente()
+        val r = unaRegistrazione(a.progettoId, oraDiInizio = ora(9, 30, 15))
+        a.salva(r)
+        assertEquals(ora(9, 30, 15), assertNotNull(a.registrazioni.trova(r.id)).oraDiInizio)
+
+        r.modificaOraDiInizio(ora(23, 59, 59)).atteso()
+        a.salva(r)
+        assertEquals(ora(23, 59, 59), assertNotNull(a.registrazioni.trova(r.id)).oraDiInizio)
+
+        r.modificaOraDiInizio(null).atteso()
+        a.salva(r)
+        assertNull(assertNotNull(a.registrazioni.trova(r.id)).oraDiInizio)
+    }
+
+    @Test
+    public fun `AC-I19 un'OraDiInizio vuota fa il round-trip come vuota`() {
+        val a = ambiente()
+        val r = unaRegistrazione(a.progettoId, oraDiInizio = null)
+        a.salva(r)
+        assertNull(assertNotNull(a.registrazioni.trova(r.id)).oraDiInizio)
+        assertEquals(listOf(null), a.registrazioni.delProgetto(a.progettoId).map { it.oraDiInizio })
+    }
+
+    @Test
+    public fun `AC-I19 l'incontroId fa il round-trip invariato, anche dopo una modifica salvata`() {
         val a = ambiente()
         val incontro = IncontroId("incontro-a")
-        val prima = unaRegistrazione(a.progettoId, RegistrazioneId("id-2"), "Parte 1", incontroId = incontro)
-        val seconda = unaRegistrazione(a.progettoId, RegistrazioneId("id-3"), "Parte 2", incontroId = incontro)
-        val altra = unaRegistrazione(a.progettoId, RegistrazioneId("id-4"), "Altro incontro")
-        a.salva(prima)
-        a.salva(seconda)
-        a.salva(altra)
-        assertEquals(
-            setOf(prima.stato(), seconda.stato()),
-            a.registrazioni.diIncontro(incontro).map { it.stato() }.toSet(),
-        )
-        assertEquals(listOf(altra.stato()), a.registrazioni.diIncontro(altra.incontroId).map { it.stato() })
-        assertEquals(emptyList(), a.registrazioni.diIncontro(IncontroId("incontro-sconosciuto")))
+        val r = unaRegistrazione(a.progettoId, incontroId = incontro, oraDiInizio = ora(10, 0, 0))
+        a.salva(r)
+        r.modificaData(LocalDate.of(2026, 3, 1)).atteso()
+        r.rinomina("Consiglio di marzo").atteso()
+        r.modificaOraDiInizio(null).atteso()
+        a.salva(r)
+        assertEquals(incontro, assertNotNull(a.registrazioni.trova(r.id)).incontroId)
+        assertEquals(listOf(incontro), a.registrazioni.delProgetto(a.progettoId).map { it.incontroId })
     }
 
     @Test
@@ -214,6 +237,7 @@ public abstract class RegistrazioneRepositoryContratto {
         titolo: String = "Seduta di marzo",
         aggiuntaAlle: Instant = Instant.parse("2026-09-23T10:15:30.123Z"),
         incontroId: IncontroId = IncontroId("incontro-di-${id.valore}"),
+        oraDiInizio: OraDiInizio? = null,
     ): Registrazione =
         Registrazione.aggiungi(
             id = id,
@@ -224,11 +248,17 @@ public abstract class RegistrazioneRepositoryContratto {
             durataMs = 3_600_000,
             dataRegistrazione = DATA_DEL_FILE,
             aggiuntaAlle = aggiuntaAlle,
+            oraDiInizio = oraDiInizio,
         ).aggregato
 
+    private fun ora(ore: Int, minuti: Int, secondi: Int): OraDiInizio =
+        OraDiInizio.di(LocalTime.of(ore, minuti, secondi)).atteso()
+
     /** Every observable field of a Registrazione (the aggregate has no value equality). */
-    private fun Registrazione.stato(): List<Any> =
-        listOf(id, progettoId, incontroId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle)
+    private fun Registrazione.stato(): List<Any?> =
+        listOf(
+            id, progettoId, incontroId, titolo, riferimentoAudio, durataMs, dataRegistrazione, aggiuntaAlle, oraDiInizio,
+        )
 
     private companion object {
         val DATA_DEL_FILE: LocalDate = LocalDate.of(2026, 2, 12)

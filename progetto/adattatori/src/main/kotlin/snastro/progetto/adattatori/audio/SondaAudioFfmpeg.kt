@@ -25,7 +25,12 @@ public class SondaAudioFfmpeg(private val sonda: SondaFfmpeg = SondaFfmpeg()) : 
     override fun sonda(percorsoSorgente: String): Esito<InfoAudio> = try {
         val info = sonda.sonda(Path.of(percorsoSorgente))
         if (info.durataMs > 0) {
-            Esito.Ok(InfoAudio(durataMs = info.durataMs, dataFile = info.dataRegistrazione))
+            val infoAudio = InfoAudio(
+                durataMs = info.durataMs,
+                dataFile = info.dataRegistrazione,
+                oraDiInizio = info.oraDiInizio,
+            )
+            Esito.Ok(infoAudio)
         } else {
             Esito.Errore(ErroreApplicazioneProgetto.FormatoNonSupportato(percorsoSorgente))
         }

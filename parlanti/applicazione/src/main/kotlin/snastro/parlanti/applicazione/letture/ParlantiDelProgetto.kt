@@ -33,7 +33,7 @@ public class ParlantiDelProgetto(
         // Attribuzioni nella STESSA Registrazione, INV-22) — mai toccate da EliminaParlante.
         // ADR 0033 §4.1: an Attribuzione is per Voce of the Incontro; its Registrazioni are the Incontro's Parti.
         val registrazioniIds = attribuzioni.diParlante(p.id).map { it.voceRef.incontroId }.distinct()
-            .flatMap { registrazioni.parti(it).orEmpty() }
+            .flatMap { registrazioni.parti(it).orEmpty().map { parte -> parte.registrazioneId } }
             .distinct()
         val ultimaApparizione = registrazioniIds
             .mapNotNull { registrazioni.registrazione(it)?.dataRegistrazione }
