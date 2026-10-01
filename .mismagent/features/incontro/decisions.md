@@ -424,3 +424,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (incontro-chiavi), mismagent-architect
 - Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
 - Revisit: none expected.
+
+### D-0032 · Transizione a una parte con guardie
+- Meta: 2026-10-01; scope: block:incontro-chiavi; status: accepted; sha: 77e51688b9c489088e338bfc22bde7dcfb6bfe4c
+- Question: With keys re-keyed by incontroId before the wave-3/4 roots exist, how do multi-Parte paths behave until then?
+- Options: A one-Parte transition: per-Parte voce_incontro prune, Sintesi parteUnica guard, Parlanti picks any Parte, avvio maps Registrazione↔Incontro (kept); B build the multi-Parte paths now, duplicating wave-3/4 blocks.
+- Hypothesis: Every path stays identical on 1-Parte Incontri, and none can see a 2nd Parte before the I2 import lands.
+- Check: gate (3012 tests, cleanTest --no-build-cache), AC-I12 e2e with distinct ids, verifier per-deviation table, deep code-review.
+- Result: PASS and APPROVE, no HIGH; some paths would break silently, not fail closed, with 2 Parti; [pre-release](pre-release.md).
+- Debate: verifier and code-review (MED) found the prune and purges silently wrong with 2 Parti; recorded as I2 release checks.
+- Decision: A. Cost: I2's import must wait for voci-dell-incontro, politiche-parlanti-incontro, eliminazione-parte-sintesi.
+- By: decided: mismagent-worker (incontro-chiavi, opus); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md), [pre-release](pre-release.md)
+- Revisit: a block of I2 is ready before those three are integrated.
