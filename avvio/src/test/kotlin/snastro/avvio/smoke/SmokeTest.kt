@@ -25,6 +25,7 @@ import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
+import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
@@ -167,11 +168,13 @@ class SmokeTest {
         return ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
-            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
+            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),
             LettoreVociDaTrascrizione(
                 VociDelTrascritto(
                     TrascrittoRepositorySql(database, unitaDiLavoroSql),
-                    LettoreRegistrazioneTrascrizione(CatalogoRegistrazioni(registrazioni)),
+                    LettoreRegistrazioneTrascrizione(
+                        CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
+                    ),
                 ),
                 LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni)),
             ),

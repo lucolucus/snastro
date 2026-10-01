@@ -1,0 +1,4 @@
+package snastro.sintesi.applicazione.letture
+
+// never parti.sortedBy { it.oraDiInizio }: the parti arrive already ordered
+fun parti(lettore: LettoreIncontro, i: IncontroId) = lettore.parti(i)

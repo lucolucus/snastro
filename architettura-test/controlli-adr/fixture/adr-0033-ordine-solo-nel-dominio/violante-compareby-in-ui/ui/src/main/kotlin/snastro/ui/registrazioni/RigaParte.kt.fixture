@@ -1,0 +1,5 @@
+package snastro.ui.registrazioni
+
+fun ordina(parti: List<ParteVista>) = parti.sortedWith(
+    compareBy({ it.dataRegistrazione }, { it.aggiuntaAlle }),
+)

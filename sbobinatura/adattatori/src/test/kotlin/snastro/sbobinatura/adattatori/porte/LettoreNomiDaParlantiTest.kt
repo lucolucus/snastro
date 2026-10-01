@@ -29,6 +29,7 @@ import snastro.progetto.applicazione.comandi.CreaProgettoServizio
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
@@ -89,7 +90,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
         private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo = CatalogoRegistrazioni(registrazioniProgetto)
+        private val catalogo =
+            CatalogoRegistrazioni(registrazioniProgetto, IncontroRepositoryFinta(registrazioniProgetto))
 
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio
         // (to mint real Voci — Parlanti's Attribuzioni need real VoceRefs).
@@ -117,6 +119,13 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 .atteso()
         }
 
+        /**
+         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
+         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
+         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
+         */
+        override val piuPartiPerIncontro: Boolean = false
+
         override val lettore: LettoreNomi = LettoreNomiDaParlanti(
             NomiDelleVoci(
                 attribuzioni,
@@ -124,6 +133,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 LettoreRegistrazioneFintaParlanti(registrazioniVisteParlanti),
                 uowParlanti,
             ),
+            catalogo,
         )
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
@@ -144,6 +154,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
             return completaElaborazione(aggiungiRegistrazioneProgetto(), voci)
         }
+
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata =
+            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
 
         /** Progetto: CreaProgetto (già in [init]) + AggiungiRegistrazione, poi le due viste dello stesso dato. */
         private fun aggiungiRegistrazioneProgetto(): RegistrazioneId {
@@ -222,7 +235,11 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 val intervalli = voce.segmenti.map { it.intervallo }
                 VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), mapOf(id to intervalli))
             }
-            return RegistrazioneConiata(id, trascritto.voci.map { VoceRef(trascritto.incontroId, it.id) })
+            return RegistrazioneConiata(
+                id,
+                trascritto.incontroId,
+                trascritto.voci.map { VoceRef(trascritto.incontroId, it.id) },
+            )
         }
 
         override fun confermaNuovoParlante(voce: VoceRef, nome: String, occasionale: Boolean): ParlanteId {

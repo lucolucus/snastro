@@ -2,8 +2,10 @@ package snastro.sintesi.applicazione.porte
 
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.unicaParteDi
 import snastro.sintesi.dominio.BozzaElemento
@@ -11,6 +13,7 @@ import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.StrutturaIncontro
 import snastro.sintesi.dominio.StrutturaTrascritto
 
 /**
@@ -104,11 +107,16 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
             riassunto.conAvvio(checkNotNull(avviatoAlle))
             return when {
                 motivo != null -> riassunto.conFallimento(motivo)
-                struttura != null -> riassunto.conCompletamento(bozza(), strutturaDa(struttura))
+                struttura != null -> riassunto.conCompletamento(bozza(), strutturaDa(struttura), etichette)
                     .also { check(it.omessi == omessi) { "omessi non riprodotti per $id" } }
                 else -> riassunto
             }
         }
+
+        /** The stored Fonti as the label table the rebuilt draft cites (label k ↔ `etichette[k-1]`). */
+        private val etichette: List<SegmentoRef> =
+            (decisioni.flatMap { it.fonti } + questioniAperte.flatMap { it.fonti } + azioni.flatMap { it.fonti } +
+                puntiChiave.flatMap { it.fonti }).distinct()
 
         /** The already-verified content as a draft the Verifica keeps whole, padded to reproduce [omessi]. */
         private fun bozza(): BozzaRiassunto = BozzaRiassunto(
@@ -120,14 +128,19 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
             puntiChiave = puntiChiave.map { elemento(it.testo.codifica(), it.fonti, it.parlante) },
         )
 
-        private fun elemento(testo: String, fonti: Set<SegmentoId>, voce: VoceId?): BozzaElemento =
-            BozzaElemento(testo, fonti.map { it.numero }, voce?.numero)
+        private fun elemento(testo: String, fonti: Set<SegmentoRef>, voce: VoceId?): BozzaElemento =
+            BozzaElemento(testo, fonti.map { etichette.indexOf(it) + 1 }, voce?.numero)
 
-        // The stored key is '<registrazioneId>=<StrutturaTrascritto.chiave>' (ADR 0034 §1): the Parte prefix goes.
-        private fun strutturaDa(chiave: String): StrutturaTrascritto = StrutturaTrascritto.di(
-            chiave.substringAfter('=').split(",").filter { it.isNotEmpty() }.map { coppia ->
-                val (segmento, voce) = coppia.split(':')
-                SegmentoId(segmento.toInt()) to VoceId(voce.toInt())
+        // The stored key is StrutturaIncontro.chiave, '<registrazioneId>=<StrutturaTrascritto.chiave>' per Parte joined
+        // by ';' (ADR 0037 §5): parsed back Parte by Parte (a recorded Parte always had a Trascritto).
+        private fun strutturaDa(chiave: String): StrutturaIncontro = StrutturaIncontro(
+            chiave.split(';').map { parte ->
+                RegistrazioneId(parte.substringBefore('=')) to StrutturaTrascritto.di(
+                    parte.substringAfter('=').split(",").filter { it.isNotEmpty() }.map { coppia ->
+                        val (segmento, voce) = coppia.split(':')
+                        SegmentoId(segmento.toInt()) to VoceId(voce.toInt())
+                    },
+                )
             },
         )
     }

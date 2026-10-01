@@ -7,6 +7,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.kernel.mappa
 import snastro.trascrizione.dominio.ErroreTrascrizione.DivisioneNonAmmessa
 import snastro.trascrizione.dominio.ErroreTrascrizione.NessunParlatoRilevato
 import snastro.trascrizione.dominio.ErroreTrascrizione.RiassegnazioneNonAmmessa
@@ -26,7 +27,12 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
  * Voce exists iff at least one Segmento is assigned to it, so no Voce is ever empty (INV-6) by
  * construction; Segmenti are never created after [crea] nor edited except for their Voce and their
  * flag (INV-8); new Voci take [prossimaVoce]`++`, so a `VoceId` is never reused nor renumbered (INV-12).
+ *
+ * ADR 0035 §1: it is also the per-Parte ENTITY of [VociDellIncontro] (its internal operations below, called only by
+ * that root); there its [prossimaVoce] is the Incontro's counter. The per-Registrazione root API above stays until
+ * the ADR 0033 §6 sweep moves its callers onto the root.
  */
+@Suppress("TooManyFunctions") // the legacy root API (retired in the ADR 0033 §6 sweep) + the entity operations
 public class Trascritto private constructor(
     public val registrazioneId: RegistrazioneId,
     public val incontroId: IncontroId,
@@ -189,6 +195,20 @@ public class Trascritto private constructor(
         }
     }
 
+    // --- entity of VociDellIncontro (ADR 0035 §1): mutated only by the root, which checks the Incontro-wide rules ---
+
+    /** The Segmento [id] of this Parte, or null. */
+    internal fun segmento(id: SegmentoId): Segmento? = _segmenti[id]
+
+    /** Puts [id] on [voce] with flag [confermato]; id, intervallo, testo and Parte never change (INV-8). */
+    internal fun assegna(id: SegmentoId, voce: VoceId, confermato: Boolean) {
+        _segmenti[id] = _segmenti.getValue(id).copy(voceId = voce, confermato = confermato)
+    }
+
+    /** A detached copy carrying the Incontro's Voce counter [prossimaVoce]: what the root hands out. */
+    internal fun copia(prossimaVoce: Int): Trascritto =
+        Trascritto(registrazioneId, incontroId, segmenti, prossimaVoce, prossimoSegmento)
+
     public companion object {
         private val ORDINE_NELLA_VOCE = compareBy<Segmento>({ it.intervallo.inizioMs }, { it.id.numero })
 
@@ -203,13 +223,30 @@ public class Trascritto private constructor(
             incontroId: IncontroId,
             durataMs: Long,
             segmenti: List<SegmentoIniziale>,
-        ): Esito<Creato<Trascritto, TrascrittoCreato>> {
+        ): Esito<Creato<Trascritto, TrascrittoCreato>> =
+            generazione(registrazioneId, incontroId, durataMs, segmenti, primaVoce = 1, primoSegmento = 1)
+                .mappa { Creato(it, TrascrittoCreato(registrazioneId)) }
+
+        /**
+         * One generation of a Parte's Segmenti (AC-20/21, INV-7): Voci numbered from [primaVoce] by first appearance,
+         * Segmenti from [primoSegmento] by (inizio, Voce, fine). Used by [crea] (from 1) and by
+         * [VociDellIncontro.completaParte] (from the Incontro's Voce counter and the Parte's Segmento counter).
+         */
+        @Suppress("LongParameterList") // the Parte, its Incontro, the turns and the two counters to number from
+        internal fun generazione(
+            registrazioneId: RegistrazioneId,
+            incontroId: IncontroId,
+            durataMs: Long,
+            segmenti: List<SegmentoIniziale>,
+            primaVoce: Int,
+            primoSegmento: Int,
+        ): Esito<Trascritto> {
             val oltre = segmenti.firstOrNull { it.intervallo.fineMs > durataMs }
             return when {
                 segmenti.isEmpty() -> Esito.Errore(NessunParlatoRilevato)
                 oltre != null -> Esito.Errore(SegmentoOltreLaDurata(oltre.intervallo, durataMs))
                 else -> {
-                    val voceDi = numeraPerPrimaApparizione(segmenti)
+                    val voceDi = numeraPerPrimaApparizione(segmenti, primaVoce)
                     val numerati = segmenti
                         .sortedWith(
                             compareBy(
@@ -219,27 +256,29 @@ public class Trascritto private constructor(
                             ),
                         )
                         .mapIndexed { i, s ->
-                            Segmento(SegmentoId(i + 1), voceDi.getValue(s.voceIndice), s.intervallo, s.testo)
+                            val id = SegmentoId(primoSegmento + i)
+                            Segmento(id, voceDi.getValue(s.voceIndice), s.intervallo, s.testo)
                         }
-                    val trascritto = Trascritto(
-                        registrazioneId,
-                        incontroId,
-                        numerati,
-                        voceDi.size + 1,
-                        numerati.size + 1,
+                    Esito.Ok(
+                        Trascritto(
+                            registrazioneId,
+                            incontroId,
+                            numerati,
+                            primaVoce + voceDi.size,
+                            primoSegmento + numerati.size,
+                        ),
                     )
-                    Esito.Ok(Creato(trascritto, TrascrittoCreato(registrazioneId)))
                 }
             }
         }
 
-        private fun numeraPerPrimaApparizione(segmenti: List<SegmentoIniziale>): Map<Int, VoceId> =
+        private fun numeraPerPrimaApparizione(segmenti: List<SegmentoIniziale>, primaVoce: Int): Map<Int, VoceId> =
             segmenti
                 .groupBy { it.voceIndice }
                 .mapValues { (_, turni) -> turni.minOf { it.intervallo.inizioMs } }
                 .entries
                 .sortedWith(compareBy({ it.value }, { it.key }))
-                .mapIndexed { i, (voceIndice, _) -> voceIndice to VoceId(i + 1) }
+                .mapIndexed { i, (voceIndice, _) -> voceIndice to VoceId(primaVoce + i) }
                 .toMap()
 
         /**

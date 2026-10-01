@@ -1,15 +1,17 @@
 package snastro.progetto.applicazione.eventi
 
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 
 /**
- * Published Language of the domain event `RegistrazioneAggiunta` (boundary `eventi-progetto`).
- * After-commit consumers only (view refresh): no synchronous subscriber, and importing never starts an
- * `Elaborazione` (ADR 0014, ADR 0012 Amendment (c)).
+ * Published Language of the domain event `RegistrazioneAggiunta` (boundary `eventi-progetto`, + [incontroId] ADR 0033
+ * §3), one per imported file. After-commit consumers only (view refresh): no synchronous subscriber, and importing
+ * never starts an `Elaborazione` (ADR 0014, ADR 0012 Amendment (c)).
  */
 public data class RegistrazioneAggiunta(
     val registrazioneId: RegistrazioneId,
     val progettoId: ProgettoId,
+    val incontroId: IncontroId,
 ) : EventoPubblicato

@@ -1,0 +1,6 @@
+package snastro.progetto.dominio
+
+public object OrdineDelleParti {
+    private val ordine = compareBy<ParteDaOrdinare>({ it.dataRegistrazione }, { it.aggiuntaAlle })
+    public fun ordina(parti: List<ParteDaOrdinare>) = parti.sortedBy { it.oraDiInizio?.valore }.sortedWith(ordine)
+}

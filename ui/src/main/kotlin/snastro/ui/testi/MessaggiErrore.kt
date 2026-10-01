@@ -52,6 +52,7 @@ fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
     ErroreProgetto.TitoloVuoto -> "Il titolo della registrazione non può essere vuoto."
     is ErroreProgetto.TitoloGiaUsato ->
         "Il titolo \"${errore.titolo}\" è già usato da un'altra registrazione di questo progetto."
+    ErroreProgetto.OraDiInizioNonValida -> "L'ora di inizio deve essere un'ora del giorno, da 00:00:00 a 23:59:59."
 }
 
 @Suppress("CyclomaticComplexMethod") // one flat branch per ErroreTrascrizione member, no else (RC-4)
@@ -111,7 +112,7 @@ fun messaggioPer(errore: ErroreComandoVoce): String = when (errore) {
 }
 
 /**
- * AC-S139: `Riassumi`/`ModificaLunghezzaMassimaRiassunto`'s own error hierarchy (9 members, D-0002) —
+ * AC-S139: `Riassumi`/`ModificaLunghezzaMassimaRiassunto`'s own error hierarchy (10 members, D-0002) —
  * mostly races the tab's own guards already avoid in the common case ([ErroreSintesi.RiassuntoGiaAperto]
  * being the one AC-S139 names), so a plain, honest sentence is enough; the field-level errors
  * ([ErroreSintesi.ArgomentoTroppoLungo], [ErroreSintesi.LunghezzaMassimaFuoriIntervallo]) reuse the SAME
@@ -120,9 +121,12 @@ fun messaggioPer(errore: ErroreComandoVoce): String = when (errore) {
 fun messaggioPer(errore: ErroreSintesi): String = when (errore) {
     is ErroreSintesi.RiassuntoGiaAperto -> "C'è già un riassunto in coda o in corso per questa registrazione."
     ErroreSintesi.ModelloNonInstallato -> "Il modello di linguaggio non è installato."
-    is ErroreSintesi.TrascrittoNonDisponibile -> "Questa registrazione non ha ancora una trascrizione."
+    // TRANSITION (D-0033): one Parte per Incontro, so the texts stay those of the Registrazione; the per-Parte hints
+    // ("Manca la trascrizione della parte n", D-0020) come with the Incontro screens.
+    is ErroreSintesi.PartiNonTrascritte -> "Questa registrazione non ha ancora una trascrizione."
     is ErroreSintesi.ElaborazioneGiaAperta -> "Aspetta la fine della trascrizione."
-    is ErroreSintesi.RegistrazioneTroppoLunga -> "La registrazione è troppo lunga per il riassunto."
+    is ErroreSintesi.PartiFallite -> "Parte ${errore.parte} non riuscita: riprova o eliminala."
+    is ErroreSintesi.IngressoTroppoLungo -> "La registrazione è troppo lunga per il riassunto."
     is ErroreSintesi.ArgomentoTroppoLungo -> "Al massimo ${errore.massimo} caratteri."
     is ErroreSintesi.LunghezzaMassimaFuoriIntervallo -> erroreLunghezzaMassima(errore.minimo, errore.massimo)
     // Internal invariant breach (ADR 0003), not something the user can act on: a generic message that

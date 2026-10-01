@@ -1,0 +1,6 @@
+package snastro.progetto.applicazione.letture
+
+fun parti(r: List<Registrazione>) = r.sortedWith(
+    compareBy<Registrazione> { it.dataRegistrazione }
+        .thenByDescending { it.aggiuntaAlle },
+)

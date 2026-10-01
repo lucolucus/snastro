@@ -41,7 +41,7 @@ public class RigenerazioneSbobinaturaPolitica(
      */
     public fun esegui(c: RigeneraSbobinatura): Esito<Unit> {
         val trascritto = trascritti.trascritto(c.registrazioneId) ?: return Esito.Ok(Unit)
-        val vista = Sbobinatura.proietta(trascritto, nomi.nomi(c.registrazioneId))
+        val vista = Sbobinatura.proietta(trascritto, nomi.nomi(trascritto.incontroId))
         return scriviERimuoviSePrecedente(vista.nomeFile, vista.markdown, c.nomeFilePrecedente)
     }
 
@@ -67,13 +67,15 @@ public class RigenerazioneSbobinaturaPolitica(
         )
     }
 
-    /** `ParlanteRinominato` (AC-156): every Registrazione with an Attribuzione to [parlanteId], and no other. */
-    public fun perParlanteRinominato(parlanteId: ParlanteId): Esito<Unit> =
-        rigeneraOgnuna(nomi.registrazioniCon(parlanteId))
+    /**
+     * `ParlanteRinominato` (AC-156): every transcribed Parte of each Incontro with an Attribuzione to [parlanteId],
+     * and no other (ADR 0035 §7).
+     */
+    public fun perParlanteRinominato(parlanteId: ParlanteId): Esito<Unit> = rigeneraOgnuna(partiCon(parlanteId))
 
     /** `ParlantePromosso` (AC-156): only the rendered Nome could change, and only if it actually did. */
     public fun perParlantePromosso(parlanteId: ParlanteId, nomeCambiato: Boolean): Esito<Unit> =
-        if (nomeCambiato) rigeneraOgnuna(nomi.registrazioniCon(parlanteId)) else Esito.Ok(Unit)
+        if (nomeCambiato) rigeneraOgnuna(partiCon(parlanteId)) else Esito.Ok(Unit)
 
     /**
      * `ParlanteEliminato` (AC-156): mirrors the event 1:1 for `abbonato-sbobinatura` so it can call one
@@ -110,6 +112,9 @@ public class RigenerazioneSbobinaturaPolitica(
         }
         return Esito.Ok(Unit)
     }
+
+    private fun partiCon(parlanteId: ParlanteId): List<RegistrazioneId> =
+        nomi.incontriCon(parlanteId).flatMap { trascritti.partiConTrascritto(it) }
 
     private fun rigeneraOgnuna(registrazioni: List<RegistrazioneId>): Esito<Unit> =
         registrazioni.fold<RegistrazioneId, Esito<Unit>>(Esito.Ok(Unit)) { esito, id ->

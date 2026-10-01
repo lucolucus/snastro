@@ -58,6 +58,15 @@ class RegoleArchitetturaliTest {
         assertEquals(listOf("incontroId: IncontroId", "voceId: VoceId"), parametri)
     }
 
+    @Test
+    fun `AC-I15 Incontro ha solo identita e progettoId, nessun titolo, data, numero o conteggio di parti`() {
+        val incontro = progetto.classes()
+            .filter { it.name == "Incontro" && it.packagee?.name == "snastro.progetto.dominio" }
+        assertEquals(1, incontro.size, "un solo Incontro, in :progetto:dominio")
+        val proprieta = incontro.single().properties(includeNested = false).map { "${it.name}: ${it.type?.text}" }
+        assertEquals(listOf("id: IncontroId", "progettoId: ProgettoId"), proprieta)
+    }
+
     // --- CR-1 - Dependency rule --------------------------------------------------------------
 
     @Test
@@ -245,6 +254,7 @@ class RegoleArchitetturaliTest {
     private val radiciAggregato = setOf(
         "Progetto",
         "Registrazione",
+        "Incontro",
         "Elaborazione",
         "Trascritto",
         "Parlante",

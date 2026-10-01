@@ -1,0 +1,3 @@
+package snastro.trascrizione.applicazione.letture
+
+fun prossimoNumero(voci: VociDellIncontro): Int = voci.prossimaVoce

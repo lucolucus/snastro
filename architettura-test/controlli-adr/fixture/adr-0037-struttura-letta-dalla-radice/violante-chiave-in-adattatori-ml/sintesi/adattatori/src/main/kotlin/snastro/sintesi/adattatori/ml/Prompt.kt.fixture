@@ -1,0 +1,3 @@
+package snastro.sintesi.adattatori.ml
+
+internal fun etichetta(s: StrutturaTrascritto): String = "chiave " + s.chiave // a trailing comment

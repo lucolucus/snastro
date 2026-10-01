@@ -1,5 +1,6 @@
 package snastro.progetto.adattatori.persistenza
 
+import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -7,16 +8,18 @@ import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.RiferimentoAudio
 import snastro.persistenza.SnastroDatabase
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
+import snastro.progetto.dominio.OraDiInizio
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 import migrations.Registrazione as RegistrazioneRiga
 
 /**
  * [RegistrazioneRepository] on the generated [SnastroDatabase] queries (dev-architecture-app.md#repository).
  * [salva] never opens its own transaction — the caller's [snastro.kernel.UnitaDiLavoro] does
- * (ADR 0012). Only `titolo` (AC-360) and `dataRegistrazione` (INV-2) change after creation (INV-1),
- * so an update touches just those two columns ([SnastroDatabase.registrazioneQueries]'s `aggiorna`).
+ * (ADR 0012). Only `titolo` (AC-360), `dataRegistrazione` (INV-2) and `oraDiInizio` (INV-I14, 'HH:MM:SS' or NULL)
+ * change after creation (INV-1); `incontro_id` is never updated (D-0028).
  */
 public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : RegistrazioneRepository {
     override fun trova(id: RegistrazioneId): Registrazione? =
@@ -24,9 +27,6 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
 
     override fun delProgetto(id: ProgettoId): List<Registrazione> =
         db.registrazioneQueries.trovaDelProgetto(id.valore).executeAsList().map { it.inDominio() }
-
-    override fun diIncontro(id: IncontroId): List<Registrazione> =
-        db.registrazioneQueries.trovaDiIncontro(id.valore).executeAsList().map { it.inDominio() }
 
     // AC-326: reads the sole `titolo` column — no row-object holds the other columns, so this
     // path can never reconstitute a Registrazione (no rule to duplicate, RC-1).
@@ -59,6 +59,7 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
                 id = r.id.valore,
             )
         }
+        db.registrazioneQueries.scriviOraDiInizio(oraDiInizio = r.oraDiInizio?.valore?.format(ORA), id = r.id.valore)
     }
 
     // ADR 0020: the elaborazione / trascritto FKs are immediate — their rows must already be gone.
@@ -81,4 +82,13 @@ private fun RegistrazioneRiga.inDominio(): Registrazione = Registrazione.ricosti
     durataMs = durata_ms,
     dataRegistrazione = LocalDate.parse(data_registrazione),
     aggiuntaAlle = Instant.ofEpochMilli(aggiunta_alle),
+    oraDiInizio = ora_di_inizio?.let { testo ->
+        when (val ora = OraDiInizio.di(testo)) {
+            is Esito.Ok -> ora.valore
+            is Esito.Errore -> error("registrazione $id con ora_di_inizio non valida: $testo")
+        }
+    },
 )
+
+/** 'HH:MM:SS', the stored form of an OraDiInizio (7.sqm). */
+private val ORA: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")

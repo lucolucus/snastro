@@ -1,0 +1,6 @@
+package snastro.ui.registrazioni
+
+@Composable
+fun RigaParte(parte: ParteVista) {
+    Text(parte.oraDiInizio?.toString() ?: "")
+}

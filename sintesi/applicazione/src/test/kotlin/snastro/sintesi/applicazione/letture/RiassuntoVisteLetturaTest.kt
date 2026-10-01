@@ -366,8 +366,8 @@ class RiassuntoVisteLetturaTest {
     fun `AC-S107 la stima senza nomi e' fissata al limite, un Nome lungo non la fa passare a NonDisponibile`() {
         val voce = VoceId(1)
         fun ingressoSenzaNomi(testo: String) = IngressoRiassunto.costruisci(
-            listOf(SegmentoIngresso(SegmentoId(1), voce, 0, testo)),
-        )
+            listOf(listOf(SegmentoIngresso(REGISTRAZIONE, SegmentoId(1), voce, 0, testo))),
+        ).testo
         // Il piu' lungo testo il cui ingresso NAME-FREE resta esattamente a LIMITE_TOKEN (ricerca sulla formula
         // pura, cosi' il confine resta esatto anche se il testo di contorno di IngressoRiassunto cambiasse).
         var basso = 0

@@ -1,29 +1,40 @@
 package snastro.sintesi.dominio
 
 import snastro.kernel.Esito
-import snastro.kernel.IncontroId
 
 /**
- * INV-S6, pure (no port, no clock): shared by the Riassumi command and the Riassunto view. Preconditions are
- * evaluated in this order and the first failing one is returned.
+ * INV-I9 (amends INV-S6), pure (no port, no clock): shared by the Riassumi command and the Riassunto view.
+ * Preconditions are evaluated in this order and the first failing one is returned: the model, then the first blocking
+ * Parte by its number (INV-I2 order), then an open Riassunto, then the size of the whole input.
  */
 public object Riassumibilita {
-    /** [stimaToken] is [LimiteIngresso.stimaToken] of the labelled input; null when there is no Trascritto. */
-    @Suppress("LongParameterList") // one flag per INV-S6 precondition, pinned (agg-riassunto)
+    /**
+     * [stati] are `numero to stato` for every Parte of the Incontro (never empty: an Incontro has ≥ 1 Parte);
+     * [stimaToken] is [LimiteIngresso.stimaToken] of the whole labelled input, null when it was not built.
+     */
     public fun valuta(
-        incontroId: IncontroId,
         modelloInstallato: Boolean,
-        trascrittoPresente: Boolean,
-        elaborazioneAperta: Boolean,
+        stati: List<Pair<Int, StatoParte>>,
         riassuntoAperto: Boolean,
         stimaToken: Int?,
-    ): Esito<Unit> = when {
-        !modelloInstallato -> Esito.Errore(ErroreSintesi.ModelloNonInstallato)
-        !trascrittoPresente -> Esito.Errore(ErroreSintesi.TrascrittoNonDisponibile(incontroId))
-        elaborazioneAperta -> Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(incontroId))
-        riassuntoAperto -> Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(incontroId))
-        stimaToken != null && stimaToken > LimiteIngresso.LIMITE_TOKEN ->
-            Esito.Errore(ErroreSintesi.RegistrazioneTroppoLunga(stimaToken, LimiteIngresso.LIMITE_TOKEN))
-        else -> Esito.Ok(Unit)
+    ): Esito<Unit> {
+        require(stati.isNotEmpty()) { "un Incontro ha almeno una Parte" }
+        val bloccante = stati.sortedBy { it.first }.firstNotNullOfOrNull { (parte, stato) -> bloccoDi(parte, stato) }
+        return when {
+            !modelloInstallato -> Esito.Errore(ErroreSintesi.ModelloNonInstallato)
+            bloccante != null -> Esito.Errore(bloccante)
+            riassuntoAperto -> Esito.Errore(ErroreSintesi.RiassuntoGiaAperto())
+            stimaToken != null && stimaToken > LimiteIngresso.LIMITE_TOKEN ->
+                Esito.Errore(ErroreSintesi.IngressoTroppoLungo(stimaToken, LimiteIngresso.LIMITE_TOKEN))
+            else -> Esito.Ok(Unit)
+        }
+    }
+
+    /** Why Parte [parte] blocks the Riassunto, null when it is [StatoParte.TRASCRITTA]. */
+    private fun bloccoDi(parte: Int, stato: StatoParte): ErroreSintesi? = when (stato) {
+        StatoParte.DA_TRASCRIVERE -> ErroreSintesi.PartiNonTrascritte(parte)
+        StatoParte.IN_TRASCRIZIONE -> ErroreSintesi.ElaborazioneGiaAperta(parte)
+        StatoParte.NON_RIUSCITA -> ErroreSintesi.PartiFallite(parte)
+        StatoParte.TRASCRITTA -> null
     }
 }

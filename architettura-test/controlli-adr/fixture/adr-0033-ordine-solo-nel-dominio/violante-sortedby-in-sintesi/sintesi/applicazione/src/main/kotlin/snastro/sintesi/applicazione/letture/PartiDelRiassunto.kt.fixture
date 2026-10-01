@@ -1,0 +1,3 @@
+package snastro.sintesi.applicazione.letture
+
+fun parti(lettore: LettoreIncontro, i: IncontroId) = lettore.parti(i).sortedBy { it.oraDiInizio }

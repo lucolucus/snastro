@@ -2,6 +2,7 @@ package snastro.progetto.applicazione.letture
 
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
+import snastro.progetto.applicazione.porte.IncontroRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 
 /**
@@ -10,7 +11,10 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepository
  * INV-1/INV-2). Other contexts' adapters (`registrazione-da-progetto-tr`, `-pa`, `-doc`, future
  * blocks) call it directly — the allowed `consumer:adattatori -> supplier:applicazione` edge (CR-1).
  */
-public class CatalogoRegistrazioni(private val registrazioni: RegistrazioneRepository) {
+public class CatalogoRegistrazioni(
+    private val registrazioni: RegistrazioneRepository,
+    private val incontri: IncontroRepository,
+) {
     /** The Registrazione [id] as a [RegistrazioneVista], or `null` if the catalogue does not know it. */
     public fun registrazione(id: RegistrazioneId): RegistrazioneVista? =
         registrazioni.trova(id)?.let { r ->
@@ -31,5 +35,5 @@ public class CatalogoRegistrazioni(private val registrazioni: RegistrazioneRepos
      * unknown Incontro, or one that ceased with its last Parte; a known Incontro has at least one Parte (INV-I1).
      */
     public fun parti(incontroId: IncontroId): List<RegistrazioneId>? =
-        registrazioni.diIncontro(incontroId).map { it.id }.ifEmpty { null }
+        incontri.partiDi(incontroId).ifEmpty { null }
 }

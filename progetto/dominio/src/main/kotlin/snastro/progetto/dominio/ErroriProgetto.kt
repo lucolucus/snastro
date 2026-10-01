@@ -19,4 +19,7 @@ public sealed interface ErroreProgetto : ErroreDominio {
 
     /** Another Registrazione of the same Progetto already has a titolo with this key (AC-361, AC-322). */
     public data class TitoloGiaUsato(val titolo: String) : ErroreProgetto
+
+    /** INV-I14: the text or value given is not a time of day to the second in [00:00:00, 24:00:00). */
+    public data object OraDiInizioNonValida : ErroreProgetto
 }

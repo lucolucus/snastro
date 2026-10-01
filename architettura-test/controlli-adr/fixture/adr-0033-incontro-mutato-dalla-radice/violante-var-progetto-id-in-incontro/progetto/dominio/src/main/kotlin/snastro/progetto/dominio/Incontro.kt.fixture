@@ -1,0 +1,6 @@
+package snastro.progetto.dominio
+
+public class Incontro(public val id: IncontroId, progettoId: ProgettoId) {
+    public var progettoId: ProgettoId = progettoId
+        private set
+}

@@ -1,0 +1,3 @@
+package snastro.trascrizione.applicazione.letture
+
+val dopo = t.prossimoSegmento // the next id, for the Fonte check
