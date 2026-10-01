@@ -3,6 +3,7 @@ package snastro.sintesi.applicazione.porte
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
@@ -14,6 +15,7 @@ import snastro.sintesi.dominio.LunghezzaMassimaParole
 import snastro.sintesi.dominio.MotivoFallimento
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.StrutturaIncontro
 import snastro.sintesi.dominio.StrutturaTrascritto
 import java.time.Instant
 import kotlin.test.assertIs
@@ -58,14 +60,29 @@ public fun Riassunto.conFallimento(motivo: MotivoFallimento = MotivoFallimento.E
     also { fallisci(motivo).atteso() }
 
 /**
- * This `in_corso` Riassunto completed `pronto` from [bozza] verified against [struttura] of the Parte [parte] (by default
- * its Incontro's one Parte under the [unicaParteDi] convention) (never `fallito`).
+ * This `in_corso` Riassunto completed `pronto` from [bozza] verified against [struttura] of the Parte [parte] (by
+ * default its Incontro's one Parte under the [unicaParteDi] convention) (never `fallito`). The bozza's `fonti` are
+ * segmentoId numbers of [parte]: the label table is the identity (label k = Segmento k of [parte]).
  */
 public fun Riassunto.conCompletamento(
     bozza: BozzaRiassunto,
     struttura: StrutturaTrascritto,
     parte: RegistrazioneId = unicaParteDi(incontroId),
-): Riassunto = also { assertIs<ConclusioneRiassunto.Pronto>(completa(bozza, parte, struttura).atteso()) }
+): Riassunto = conCompletamento(bozza, StrutturaIncontro(listOf(parte to struttura)), etichetteIdentita(bozza, parte))
+
+/** This `in_corso` Riassunto completed `pronto` from [bozza] against [struttura] through [etichette]. */
+public fun Riassunto.conCompletamento(
+    bozza: BozzaRiassunto,
+    struttura: StrutturaIncontro,
+    etichette: List<SegmentoRef>,
+): Riassunto = also { assertIs<ConclusioneRiassunto.Pronto>(completa(bozza, struttura, etichette).atteso()) }
+
+/** Label k = Segmento k of [parte], for k up to the highest label [bozza] cites. */
+public fun etichetteIdentita(bozza: BozzaRiassunto, parte: RegistrazioneId): List<SegmentoRef> {
+    val elementi = bozza.decisioni + bozza.questioniAperte + bozza.azioni + bozza.puntiChiave
+    val massima = elementi.flatMap { it.fonti }.maxOrNull() ?: 0
+    return (1..massima).map { SegmentoRef(parte, SegmentoId(it)) }
+}
 
 /** A structure from `segmentoId to voceId` numbers. */
 public fun unaStruttura(vararg coppie: Pair<Int, Int>): StrutturaTrascritto =

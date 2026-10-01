@@ -1,6 +1,6 @@
 package snastro.sintesi.dominio
 
-import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 
 /** What survives the Verifica delle fonti (INV-S4); dropped texts are never kept, only [omessi]. */
@@ -17,12 +17,18 @@ internal data class EsitoVerifica(
 }
 
 /**
- * INV-S4, applied by [Riassunto.completa] to the raw answer against the structure read for the run:
- * invalid Fonti dropped and duplicates collapsed; an element with no valid Fonte, or with an invalid/malformed
- * speaker token, dropped and counted; a Sommario with such a token dropped and counted; an invalid Responsabile /
- * PuntoChiave speaker binding removed (element kept).
+ * INV-I10 (amends INV-S4), applied by [Riassunto.completa] to the raw answer against the Incontro structure read for
+ * the run: each label is mapped through the run's [etichette] (label k ↔ `etichette[k-1]`); a label outside 1…N, or a
+ * Segmento that is not in its Parte's Trascritto as read, is an invalid Fonte, dropped; duplicates collapse; an element
+ * with no valid Fonte, or with an invalid/malformed speaker token, is dropped and counted; a Sommario with such a token
+ * is dropped and counted; a Responsabile that is not a Voce of the Incontro, or a PuntoChiave speaker that is not the
+ * Voce of one of its valid Fonti (in any Parte), is unbound (element kept).
  */
-internal class VerificaDelleFonti(private val struttura: StrutturaTrascritto) {
+internal class VerificaDelleFonti(
+    private val struttura: StrutturaIncontro,
+    private val etichette: List<SegmentoRef>,
+) {
+    private val voci = struttura.voci
     private var omessi = 0
 
     fun applica(bozza: BozzaRiassunto): EsitoVerifica {
@@ -30,7 +36,7 @@ internal class VerificaDelleFonti(private val struttura: StrutturaTrascritto) {
         val decisioni = bozza.decisioni.mapNotNull { e -> verifica(e) { t, f -> Decisione(t, f) } }
         val questioniAperte = bozza.questioniAperte.mapNotNull { e -> verifica(e) { t, f -> QuestioneAperta(t, f) } }
         val azioni = bozza.azioni.mapNotNull { e ->
-            verifica(e) { t, f -> Azione(t, f, responsabile = e.voce?.let(::VoceId)?.takeIf { it in struttura.voci }) }
+            verifica(e) { t, f -> Azione(t, f, responsabile = e.voce?.let(::VoceId)?.takeIf { it in voci }) }
         }
         val puntiChiave = bozza.puntiChiave.mapNotNull { e ->
             verifica(e) { t, f ->
@@ -40,8 +46,8 @@ internal class VerificaDelleFonti(private val struttura: StrutturaTrascritto) {
         return EsitoVerifica(sommario, decisioni, questioniAperte, azioni, puntiChiave, omessi)
     }
 
-    private fun <E> verifica(elemento: BozzaElemento, crea: (TestoConVoci, Set<SegmentoId>) -> E): E? {
-        val fonti = elemento.fonti.map(::SegmentoId).filter(struttura::contiene).toSet()
+    private fun <E> verifica(elemento: BozzaElemento, crea: (TestoConVoci, Set<SegmentoRef>) -> E): E? {
+        val fonti = elemento.fonti.mapNotNull { k -> etichette.getOrNull(k - 1) }.filter(struttura::contiene).toSet()
         if (fonti.isEmpty()) {
             omessi++
             return null
@@ -53,7 +59,7 @@ internal class VerificaDelleFonti(private val struttura: StrutturaTrascritto) {
 
     /** The decoded text if every token is well-formed and a Voce of the structure; else counts it and null. */
     private fun testoValido(s: String): TestoConVoci? {
-        val testo = TestoConVoci.decodifica(s)?.takeIf { struttura.voci.containsAll(it.voci) }
+        val testo = TestoConVoci.decodifica(s)?.takeIf { voci.containsAll(it.voci) }
         if (testo == null) omessi++
         return testo
     }

@@ -3,7 +3,7 @@ package snastro.sintesi.applicazione.comandi
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.mappa
 import snastro.kernel.poi
@@ -18,15 +18,15 @@ import snastro.sintesi.applicazione.porte.ModelloLinguistico
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
-import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.inIngresso
 import snastro.sintesi.applicazione.porte.parteUnica
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.MotivoFallimento
 import snastro.sintesi.dominio.Riassunto
-import snastro.sintesi.dominio.SegmentoIngresso
+import snastro.sintesi.dominio.StrutturaIncontro
 import snastro.sintesi.dominio.StrutturaTrascritto
 import java.time.Clock
 import java.time.Instant
@@ -97,7 +97,7 @@ public class EseguiProssimoRiassuntoServizio(
             EsecuzioneModello.Annullata -> Esito.Ok(Unit) // INV-S8: nothing written, nothing published
             is EsecuzioneModello.Fallita -> concludi(riassunto) { riassunto.fallisci(esecuzione.motivo) }
             is EsecuzioneModello.Completata ->
-                concludi(riassunto) { riassunto.completa(esecuzione.bozza, esecuzione.parte, esecuzione.struttura) }
+                concludi(riassunto) { riassunto.completa(esecuzione.bozza, esecuzione.struttura, esecuzione.etichette) }
         }
 
     /** AC-S84: no transaction is open here. AC-S87: [ModelloLinguistico] is skipped when not Installato. */
@@ -110,11 +110,15 @@ public class EseguiProssimoRiassuntoServizio(
         // vanish between the claim and here (outside any transaction, e.g. a concurrent EliminaRegistrazione) —
         // treated like a CAS=false, not a programmer error:
         // nothing written, nothing published (the row itself is already gone or about to be, ADR 0022 §4).
+        // TRANSITION (D-0033): the one Parte as a 1-Parte StrutturaIncontro (multi-Parte: esegui-riassunto-incontro).
         val parte = incontri.parteUnica(riassunto.incontroId) ?: return EsecuzioneModello.Annullata
         val segmenti = trascritti.segmenti(parte) ?: return EsecuzioneModello.Annullata
-        val struttura = StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })
-        return when (val risposta = modello.riassumi(richiesta(riassunto, segmenti), annullato)) {
-            is Esito.Ok -> EsecuzioneModello.Completata(risposta.valore.inBozza(), parte, struttura)
+        val struttura = StrutturaIncontro(
+            listOf(parte to StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })),
+        )
+        val ingresso = IngressoRiassunto.costruisci(listOf(segmenti.map { it.inIngresso(parte) }))
+        return when (val risposta = modello.riassumi(richiesta(riassunto, ingresso.testo), annullato)) {
+            is Esito.Ok -> EsecuzioneModello.Completata(risposta.valore.inBozza(), struttura, ingresso.etichette)
             is Esito.Errore -> mappaErrore(risposta.errore)
         }
     }
@@ -124,12 +128,8 @@ public class EseguiProssimoRiassuntoServizio(
      * no elements at all, spike 2026-09-30); Nomi are applied only when the Riassunto is shown. The cap is the
      * Riassunto's OWN.
      */
-    private fun richiesta(riassunto: Riassunto, segmenti: List<SegmentoSintesi>): RichiestaRiassunto {
-        val ingresso = IngressoRiassunto.costruisci(
-            segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-        )
-        return RichiestaRiassunto(ingresso, riassunto.argomento?.valore, riassunto.lunghezzaMassima.valore)
-    }
+    private fun richiesta(riassunto: Riassunto, ingresso: String): RichiestaRiassunto =
+        RichiestaRiassunto(ingresso, riassunto.argomento?.valore, riassunto.lunghezzaMassima.valore)
 
     /**
      * The completion compare-and-set (ADR 0022 §4, D-0003): [transizione] runs on OUR OWN in-memory
@@ -158,10 +158,11 @@ public class EseguiProssimoRiassuntoServizio(
 
 /** What [ModelloLinguistico] produced for phase 3, mapped from [ErroreApplicazioneSintesi] (ADR 0021 §4). */
 private sealed interface EsecuzioneModello {
+    /** [etichette]: the run's label table (ADR 0037 §3), held in memory for this run only. */
     data class Completata(
         val bozza: BozzaRiassunto,
-        val parte: RegistrazioneId,
-        val struttura: StrutturaTrascritto,
+        val struttura: StrutturaIncontro,
+        val etichette: List<SegmentoRef>,
     ) : EsecuzioneModello
     data class Fallita(val motivo: MotivoFallimento) : EsecuzioneModello
     data object Annullata : EsecuzioneModello

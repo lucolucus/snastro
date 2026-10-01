@@ -19,7 +19,7 @@ class RiassuntoTest {
     private fun inStato(stato: StatoRiassunto): Riassunto = when (stato) {
         StatoRiassunto.IN_ATTESA -> unRiassunto()
         StatoRiassunto.IN_CORSO -> unRiassuntoInCorso()
-        StatoRiassunto.PRONTO -> unRiassuntoInCorso().also { it.completa(bozzaValida, PARTE, unaStruttura()).atteso() }
+        StatoRiassunto.PRONTO -> unRiassuntoInCorso().also { it.completaInUnaParte(bozzaValida).atteso() }
         StatoRiassunto.FALLITO -> unRiassuntoInCorso().also { it.fallisci(MotivoFallimento.ERRORE_MODELLO).atteso() }
     }
 
@@ -57,7 +57,7 @@ class RiassuntoTest {
     fun `INV-S1 da in_corso completa porta a pronto terminale`() {
         val r = unRiassuntoInCorso()
 
-        val conclusione = r.completa(bozzaValida, PARTE, unaStruttura()).atteso()
+        val conclusione = r.completaInUnaParte(bozzaValida).atteso()
 
         assertEquals(ConclusioneRiassunto.Pronto(omessi = 0), conclusione)
         assertTrue(r.pronto && !r.aperto && !r.fallito)
@@ -67,7 +67,7 @@ class RiassuntoTest {
     fun `INV-S1 da in_corso completa senza contenuto verificabile porta a fallito`() {
         val r = unRiassuntoInCorso()
 
-        val conclusione = r.completa(unaBozza(), PARTE, unaStruttura()).atteso()
+        val conclusione = r.completaInUnaParte(unaBozza()).atteso()
 
         assertEquals(ConclusioneRiassunto.Fallito(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE), conclusione)
         assertTrue(r.fallito && !r.aperto)
@@ -90,7 +90,7 @@ class RiassuntoTest {
     @Test
     fun `INV-S1 ogni altra mossa e TransizioneNonAmmessa e lascia stato e campi invariati`() {
         val avvia = { r: Riassunto -> r.avvia(AVVIATO_ALLE) }
-        val completa = { r: Riassunto -> r.completa(bozzaValida, PARTE, unaStruttura()) }
+        val completa = { r: Riassunto -> r.completaInUnaParte(bozzaValida) }
         val fallisci = { r: Riassunto -> r.fallisci(MotivoFallimento.ERRORE_MODELLO) }
         val mosse = listOf(
             Mossa(StatoRiassunto.IN_ATTESA, StatoRiassunto.PRONTO, completa),
@@ -174,7 +174,7 @@ class RiassuntoTest {
         val r = unRiassuntoInCorso(parole = 2000)
         val lungo = List(3000) { "parola" }.joinToString(" ")
 
-        val conclusione = r.completa(unaBozza(sommario = lungo), PARTE, unaStruttura()).atteso()
+        val conclusione = r.completaInUnaParte(unaBozza(sommario = lungo)).atteso()
 
         assertEquals(ConclusioneRiassunto.Pronto(omessi = 0), conclusione)
         assertEquals(lungo, r.sommario?.testo?.codifica())
@@ -182,29 +182,29 @@ class RiassuntoTest {
     }
 
     @Test
-    fun `INV-S7 superato confronta la struttura corrente con quella memorizzata`() {
+    fun `INV-I11 superato confronta la struttura corrente con quella registrata`() {
         val r = unRiassuntoInCorso()
-        assertFalse(r.superato(PARTE, unaStruttura()), "non pronto: mai superato")
-        r.completa(bozzaValida, PARTE, unaStruttura(1 to 1, 2 to 2, 3 to 1)).atteso()
+        assertFalse(r.superato(inUnaParte()), "non pronto: mai superato")
+        r.completaInUnaParte(bozzaValida, unaStruttura(1 to 1, 2 to 2, 3 to 1)).atteso()
 
         assertEquals("parte-1=1:1,2:2,3:1", r.struttura)
         assertEquals(PARTE, r.parte)
-        assertFalse(r.superato(PARTE, unaStruttura(3 to 1, 1 to 1, 2 to 2)), "stessa assegnazione")
-        assertTrue(r.superato(PARTE, unaStruttura(1 to 1, 2 to 1, 3 to 1)), "segmento 2 passa da V2 a V1")
-        assertFalse(r.superato(PARTE, unaStruttura(1 to 1, 2 to 2, 3 to 1)), "segmento 2 torna a V2")
+        assertFalse(r.superato(inUnaParte(unaStruttura(3 to 1, 1 to 1, 2 to 2))), "stessa assegnazione")
+        assertTrue(r.superato(inUnaParte(unaStruttura(1 to 1, 2 to 1, 3 to 1))), "segmento 2 passa da V2 a V1")
+        assertFalse(r.superato(inUnaParte(unaStruttura(1 to 1, 2 to 2, 3 to 1))), "segmento 2 torna a V2")
     }
 
     @Test
-    fun `INV-S7 un Riassunto fallito non e mai superato`() {
+    fun `INV-I11 un Riassunto fallito non e mai superato`() {
         val r = unRiassuntoInCorso().also { it.fallisci(MotivoFallimento.ERRORE_MODELLO).atteso() }
 
-        assertFalse(r.superato(PARTE, StrutturaTrascritto.di(listOf(SegmentoId(9) to VoceId(9)))))
+        assertFalse(r.superato(inUnaParte(StrutturaTrascritto.di(listOf(SegmentoId(9) to VoceId(9))))))
         assertNull(r.struttura)
     }
 
     @Test
     fun `A26 gli accessor delle liste restituiscono una copia, non la collezione interna`() {
-        val decisioni = mutableListOf(Decisione(testo("tiene"), setOf(SegmentoId(1))))
+        val decisioni = mutableListOf(Decisione(testo("tiene"), setOf(ref(PARTE, 1))))
         val contenuto = EsitoVerifica(null, decisioni, emptyList(), emptyList(), emptyList(), omessi = 0)
         val r = Riassunto(
             RiassuntoId("id-1"), IncontroId("id-2"), null,
@@ -213,7 +213,7 @@ class RiassuntoTest {
         )
 
         val letta = r.decisioni
-        decisioni.add(Decisione(testo("aggiunta dopo la lettura"), setOf(SegmentoId(2))))
+        decisioni.add(Decisione(testo("aggiunta dopo la lettura"), setOf(ref(PARTE, 2))))
 
         assertEquals(1, letta.size, "la lista gia letta non deve vedere una mutazione esterna successiva")
     }

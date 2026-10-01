@@ -5,6 +5,7 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
 import snastro.sintesi.applicazione.eventi.RiassuntoRichiesto
@@ -12,10 +13,13 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
+import snastro.sintesi.applicazione.porte.PRIMA_PARTE
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.inIngresso
 import snastro.sintesi.applicazione.porte.parteUnica
+import snastro.sintesi.applicazione.porte.statoParte
 import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.LimiteIngresso
@@ -23,14 +27,13 @@ import snastro.sintesi.dominio.Riassumibilita
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import snastro.sintesi.dominio.RiassuntoRichiestoDominio
-import snastro.sintesi.dominio.SegmentoIngresso
 import java.time.Clock
 
 /**
  * Use-case `Riassumi` (AC-S77..S82; INV-S2, INV-S3, INV-S6, INV-S10; ADR 0021 §3). One transaction:
- * - reads every [Riassumibilita] guard (model `Installato`, Trascritto present, no open Elaborazione,
- *   no open Riassunto, the labelled input's estimate within the limit — the same rule `riassunto-vista`
- *   shares) — INV-S6;
+ * - reads every [Riassumibilita] guard (model `Installato`, the Parte `TRASCRITTA` — Trascritto present, no open
+ *   Elaborazione —, no open Riassunto, the labelled input's estimate within the limit — the same rule
+ *   `riassunto-vista` shares) — INV-I9;
  * - validates the [Argomento] (AFTER the guards: `What to do`);
  * - reads the Progetto's current lunghezza massima and fixes it on the new Riassunto (INV-S10);
  * - removes a previous `fallito` of the Incontro in this same transaction, leaving a `pronto`
@@ -56,14 +59,17 @@ public class RiassumiServizio(
 ) {
     public fun esegui(c: Riassumi): Esito<RiassuntoId> = uow.inTransazione {
         // ADR 0033 §4.1: the Incontro's Parte, then its per-Parte reads; an unknown Incontro has no Trascritto.
+        // TRANSITION (D-0033): the one Parte is Parte 1; multi-Parte reads come with riassumi-incontro.
         val parte = incontri.parteUnica(c.incontroId)
         val segmenti = parte?.let(trascritti::segmenti)
-        val stimaToken = segmenti?.let { LimiteIngresso.stimaToken(ingressoDi(it)) }
+        val stimaToken = if (parte != null && segmenti != null) {
+            LimiteIngresso.stimaToken(ingressoDi(parte, segmenti))
+        } else {
+            null
+        }
         Riassumibilita.valuta(
-            incontroId = c.incontroId,
             modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
-            trascrittoPresente = segmenti != null,
-            elaborazioneAperta = parte != null && trascritti.elaborazioneAperta(parte),
+            stati = listOf(PRIMA_PARTE to trascritti.statoParte(parte, segmenti)),
             riassuntoAperto = riassunti.trova(c.incontroId).any { it.aperto },
             stimaToken = stimaToken,
         )
@@ -89,11 +95,9 @@ public class RiassumiServizio(
         }
     }
 
-    /** The pure labelled input ([IngressoRiassunto]), without names: [riassumi] has no `LettoreNomi` (not in its
-     * consumes — the legend falls back to "Voce n", which does not change the token estimate's purpose: a guard). */
-    private fun ingressoDi(segmenti: List<SegmentoSintesi>): String = IngressoRiassunto.costruisci(
-        segmenti.map { SegmentoIngresso(it.segmentoId, it.voceId, it.intervallo.inizioMs, it.testo) },
-    )
+    /** The pure labelled input ([IngressoRiassunto]), without names (ADR 0032), of the one Parte. */
+    private fun ingressoDi(parte: RegistrazioneId, segmenti: List<SegmentoSintesi>): String =
+        IngressoRiassunto.costruisci(listOf(segmenti.map { it.inIngresso(parte) })).testo
 }
 
 private fun RiassuntoRichiestoDominio.pubblicato(): RiassuntoRichiesto = RiassuntoRichiesto(incontroId)

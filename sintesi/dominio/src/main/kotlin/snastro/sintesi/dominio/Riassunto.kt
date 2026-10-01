@@ -5,6 +5,7 @@ import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
+import snastro.kernel.SegmentoRef
 import snastro.kernel.mappa
 import snastro.sintesi.dominio.StatoRiassunto.FALLITO
 import snastro.sintesi.dominio.StatoRiassunto.IN_ATTESA
@@ -14,9 +15,9 @@ import java.time.Instant
 
 /**
  * One request to summarise an Incontro (ADR 0037 §1, keyed by [incontroId]). Owns INV-S1 (lifecycle; content iff
- * `pronto`, motivo iff `fallito`),
- * INV-S4 (`pronto` only through the Verifica delle fonti), INV-S5 (speakers only as Voce references),
- * INV-S7 ([superato] derived from the stored [struttura]) and INV-S10 ([lunghezzaMassima] fixed at request).
+ * `pronto`, motivo iff `fallito`), INV-I10 (`pronto` only through the Verifica delle fonti per Parte; Fonti are
+ * [snastro.kernel.SegmentoRef]s), INV-S5 (speakers only as Voce references), INV-I11 ([superato] derived from the
+ * recorded [StrutturaIncontro.chiave]) and INV-S10 ([lunghezzaMassima] fixed at request).
  * No deletion method: physical removals are repository operations (ADR 0021 §9).
  */
 // Constructor internal, not private: tests exercise the INV-S1 guard without opting in to ricostituisci (CR-15).
@@ -65,14 +66,19 @@ public class Riassunto internal constructor(
     public val omessi: Int? get() = _contenuto?.omessi
 
     /**
-     * The key of the structure the content was verified against, `<registrazioneId>=<StrutturaTrascritto.chiave>` of
-     * the Parte read (ADR 0034 §1: StrutturaIncontro.chiave for one Parte); null unless `pronto`. TRANSITION (ADR 0033
-     * §4.1): one Parte per run until riassunto-incontro brings StrutturaIncontro.
+     * The recorded [StrutturaIncontro.chiave]: the Parti with a Trascritto the content was verified against (ADR 0037
+     * §5); null unless `pronto`. For the persistence adapter only: `superato` is decided by [superato].
      */
     public val struttura: String? get() = _struttura
 
-    /** The Parte the content was verified against (its Fonti's Registrazione); null unless `pronto`. */
-    public val parte: RegistrazioneId? get() = _struttura?.substringBefore(SEPARATORE_PARTE)?.let(::RegistrazioneId)
+    /**
+     * TRANSITION (ADR 0033 §4.1): the Parte of a one-Parte recorded structure; null unless `pronto`, or when the
+     * structure has several Parti. Only an I1 end-to-end test reads it; the wave-5/6 blocks drop it.
+     */
+    public val parte: RegistrazioneId?
+        get() = _struttura?.takeUnless { SEPARATORE_PARTI in it }
+            ?.substringBefore(SEPARATORE_PARTE)
+            ?.let(::RegistrazioneId)
 
     /** `in_attesa` or `in_corso`. */
     public val aperto: Boolean get() = stato == IN_ATTESA || stato == IN_CORSO
@@ -82,11 +88,11 @@ public class Riassunto internal constructor(
     public val fallito: Boolean get() = stato == FALLITO
 
     /**
-     * INV-S7: a `pronto` Riassunto whose structure differs from the [corrente] one of the Parte [parte]; false unless
-     * `pronto`.
+     * INV-I11: a `pronto` Riassunto whose recorded structure differs from the [corrente] one (every Parte of the
+     * Incontro now, a Parte without Trascritto as null); false unless `pronto`. Names and Attribuzioni are not in it,
+     * so they never change it; restoring the exact structure clears it.
      */
-    public fun superato(parte: RegistrazioneId, corrente: StrutturaTrascritto): Boolean =
-        pronto && chiave(parte, corrente) != struttura
+    public fun superato(corrente: StrutturaIncontro): Boolean = pronto && corrente.chiave != _struttura
 
     public fun avvia(alle: Instant): Esito<RiassuntoAvviatoDominio> =
         transizione(da = IN_ATTESA, verso = IN_CORSO) {
@@ -95,22 +101,24 @@ public class Riassunto internal constructor(
         }
 
     /**
-     * INV-S4: verifies [bozza] against [struttura] (the one read for this run, of the Parte [parte]). Some content
-     * left → `pronto` (kept whole, never truncated: INV-S10); nothing left → `fallito` NESSUN_CONTENUTO_VERIFICABILE.
+     * INV-I10: verifies [bozza] against [struttura] (the Parti read for this run) through the run's label table
+     * [etichette] ([IngressoEtichettato.etichette]). Some content left → `pronto` (kept whole, never truncated:
+     * INV-S10), recording the Parti of [struttura] that had a Trascritto (a Parte without one makes it born `superato`,
+     * ADR 0037 §8); nothing left → `fallito` NESSUN_CONTENUTO_VERIFICABILE.
      */
     public fun completa(
         bozza: BozzaRiassunto,
-        parte: RegistrazioneId,
-        struttura: StrutturaTrascritto,
+        struttura: StrutturaIncontro,
+        etichette: List<SegmentoRef>,
     ): Esito<ConclusioneRiassunto> {
         if (stato != IN_CORSO) return nonAmmessa(PRONTO)
-        val verificato = VerificaDelleFonti(struttura).applica(bozza)
+        val verificato = VerificaDelleFonti(struttura, etichette).applica(bozza)
         return if (verificato.vuoto) {
             fallisci(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE).mappa { ConclusioneRiassunto.Fallito(it.motivo) }
         } else {
             transizione(da = IN_CORSO, verso = PRONTO) {
                 _contenuto = verificato
-                _struttura = chiave(parte, struttura)
+                _struttura = struttura.conTrascritto().chiave
                 ConclusioneRiassunto.Pronto(verificato.omessi)
             }
         }
@@ -134,10 +142,7 @@ public class Riassunto internal constructor(
 
     public companion object {
         private const val SEPARATORE_PARTE = '='
-
-        /** `<registrazioneId>=<StrutturaTrascritto.chiave>`: the 7.sqm re-encoding of ADR 0034 §1, one Parte. */
-        private fun chiave(parte: RegistrazioneId, struttura: StrutturaTrascritto): String =
-            "${parte.valore}$SEPARATORE_PARTE${struttura.chiave}"
+        private const val SEPARATORE_PARTI = ';'
 
         public fun richiedi(
             id: RiassuntoId,
