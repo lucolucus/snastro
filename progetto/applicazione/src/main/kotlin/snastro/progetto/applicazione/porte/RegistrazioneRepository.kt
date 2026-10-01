@@ -1,19 +1,19 @@
 package snastro.progetto.applicazione.porte
 
-import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.dominio.Registrazione
 
-/** Repository port of the [Registrazione] aggregate. */
+/**
+ * Repository port of the [Registrazione] aggregate. It maps every field of the root, `incontroId` (written once, never
+ * updated, D-0028) and `oraDiInizio` (nullable) included (boundary `repo-incontro`). The Parti of an Incontro are read
+ * through [IncontroRepository.partiDi].
+ */
 public interface RegistrazioneRepository {
     public fun trova(id: RegistrazioneId): Registrazione?
 
     /** Every Registrazione of the Progetto [id], in no guaranteed order. */
     public fun delProgetto(id: ProgettoId): List<Registrazione>
-
-    /** Every Registrazione (Parte) of the Incontro [id], in no guaranteed order; empty for an unknown Incontro. */
-    public fun diIncontro(id: IncontroId): List<Registrazione>
 
     /**
      * The titolo of every Registrazione of the Progetto [id], in no guaranteed order (empty if none)

@@ -353,7 +353,15 @@ class EliminaRegistrazioneTest {
     private fun eliminataDi(ambiente: AmbienteProgetto, id: RegistrazioneId): RegistrazioneEliminata {
         val r = ambiente.collaboratori.registrazioni().single { v -> v.registrazioneId == id }
         val progetto = ambiente.progetto.progettoId
-        return RegistrazioneEliminata(id, progetto, r.titolo, r.dataRegistrazione, RiferimentoAudio(audio(id)))
+        return RegistrazioneEliminata(
+            id,
+            progetto,
+            r.titolo,
+            r.dataRegistrazione,
+            RiferimentoAudio(audio(id)),
+            ambiente.incontroDi(id),
+            incontroCessato = true,
+        )
     }
 
     private fun presenterS2(ambiente: AmbienteProgetto): RegistrazioniPresenter =

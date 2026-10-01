@@ -6,6 +6,7 @@ import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoroFinta
+import snastro.kernel.unIncontroDi
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.ProgettoCreato
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
@@ -25,7 +26,7 @@ class AggiornamentiVistaEventiTest {
     fun `AC-242 RegistrazioneAggiunta dopo il commit produce un Cambiamento per la sua Registrazione`() {
         val id = RegistrazioneId("id-1")
         delegata.unitaDiLavoro.inTransazione {
-            delegata.pubblica(RegistrazioneAggiunta(id, ProgettoId("p-1")))
+            delegata.pubblica(RegistrazioneAggiunta(id, ProgettoId("p-1"), unIncontroDi(id)))
             Esito.Ok(Unit)
         }
 
@@ -38,7 +39,7 @@ class AggiornamentiVistaEventiTest {
         val precedente = LocalDate.parse("2026-01-01")
         val nuova = LocalDate.parse("2026-02-02")
         delegata.unitaDiLavoro.inTransazione {
-            delegata.pubblica(DataRegistrazioneModificata(id, precedente, nuova))
+            delegata.pubblica(DataRegistrazioneModificata(id, precedente, nuova, unIncontroDi(id)))
             Esito.Ok(Unit)
         }
 
@@ -60,7 +61,7 @@ class AggiornamentiVistaEventiTest {
     fun `AC-242 nessun Cambiamento su rollback`() {
         val id = RegistrazioneId("id-3")
         delegata.unitaDiLavoro.inTransazione {
-            delegata.pubblica(RegistrazioneAggiunta(id, ProgettoId("p-1")))
+            delegata.pubblica(RegistrazioneAggiunta(id, ProgettoId("p-1"), unIncontroDi(id)))
             Esito.Errore(ErroreDiProva.Fallito("boom"))
         }
 

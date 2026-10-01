@@ -19,8 +19,8 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
     override fun delProgetto(id: ProgettoId): List<Registrazione> =
         righe.values.filter { it.progettoId == id }.map { it.copia() }
 
-    override fun diIncontro(id: IncontroId): List<Registrazione> =
-        righe.values.filter { it.incontroId == id }.map { it.copia() }
+    /** The Parti of the Incontro [id], for [IncontroRepositoryFinta.partiDi] (one state, two ports). */
+    public fun partiDi(id: IncontroId): List<RegistrazioneId> = righe.values.filter { it.incontroId == id }.map { it.id }
 
     override fun titoliDelProgetto(id: ProgettoId): List<String> =
         righe.values.filter { it.progettoId == id }.map { it.titolo }
@@ -55,5 +55,6 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
             durataMs,
             dataRegistrazione,
             Instant.ofEpochMilli(aggiuntaAlle.toEpochMilli()),
+            oraDiInizio,
         ).aggregato
 }
