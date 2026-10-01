@@ -1,0 +1,6 @@
+package snastro.progetto.dominio
+
+public class Registrazione private constructor(public val incontroId: IncontroId, oraDiInizio: OraDiInizio?) {
+    private var _oraDiInizio: OraDiInizio? = oraDiInizio
+    private var _incontroId: IncontroId = incontroId
+}

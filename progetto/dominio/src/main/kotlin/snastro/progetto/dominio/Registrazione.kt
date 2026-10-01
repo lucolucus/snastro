@@ -29,12 +29,18 @@ private constructor(
     public val durataMs: Long,
     dataRegistrazione: LocalDate,
     public val aggiuntaAlle: Instant,
+    oraDiInizio: OraDiInizio?,
 ) {
     private var _dataRegistrazione: LocalDate = dataRegistrazione
     public val dataRegistrazione: LocalDate get() = _dataRegistrazione
 
     private var _titolo: String = titolo
     public val titolo: String get() = _titolo
+
+    private var _oraDiInizio: OraDiInizio? = oraDiInizio
+
+    /** INV-I14: the time of day this Parte starts, `null` when unknown; only [modificaOraDiInizio] changes it. */
+    public val oraDiInizio: OraDiInizio? get() = _oraDiInizio
 
     /**
      * AC-360: renames the Registrazione to [nuovoTitolo], trimmed. Blank → [ErroreProgetto.TitoloVuoto];
@@ -62,6 +68,17 @@ private constructor(
     }
 
     /**
+     * AC-I14: replaces the OraDiInizio with [ora] chosen by the user; `null` clears it (INV-I14, empty is legal).
+     * The same value, also empty on empty, → `Esito.Ok(null)`, a no-op with no event.
+     */
+    public fun modificaOraDiInizio(ora: OraDiInizio?): Esito<OraDiInizioModificataDominio?> {
+        val precedente = _oraDiInizio
+        if (ora == precedente) return Esito.Ok(null)
+        _oraDiInizio = ora
+        return Esito.Ok(OraDiInizioModificataDominio(id, incontroId, precedente, ora))
+    }
+
+    /**
      * ADR 0020: a pure check returning the event with the CURRENT titolo and date — no state change, no guard
      * (INV-28's "no open Elaborazione" is Trascrizione's, checked by its synchronous subscriber). The physical
      * deletion is `RegistrazioneRepository.rimuovi`.
@@ -81,6 +98,7 @@ private constructor(
             durataMs: Long,
             dataRegistrazione: LocalDate,
             aggiuntaAlle: Instant,
+            oraDiInizio: OraDiInizio? = null,
         ): Creato<Registrazione, RegistrazioneAggiunta> =
             Creato(
                 Registrazione(
@@ -92,12 +110,14 @@ private constructor(
                     durataMs,
                     dataRegistrazione,
                     aggiuntaAlle,
+                    oraDiInizio,
                 ),
                 RegistrazioneAggiunta(id, progettoId),
             )
 
         /** Rebuilds a persisted Registrazione; the database is trusted, nothing is re-validated (CR-15). */
         @RicostituzioneDaPersistenza
+        @Suppress("LongParameterList") // one parameter per persisted field
         public fun ricostituisci(
             id: RegistrazioneId,
             progettoId: ProgettoId,
@@ -107,6 +127,7 @@ private constructor(
             durataMs: Long,
             dataRegistrazione: LocalDate,
             aggiuntaAlle: Instant,
+            oraDiInizio: OraDiInizio? = null,
         ): Registrazione =
             Registrazione(
                 id,
@@ -117,6 +138,7 @@ private constructor(
                 durataMs,
                 dataRegistrazione,
                 aggiuntaAlle,
+                oraDiInizio,
             )
     }
 }

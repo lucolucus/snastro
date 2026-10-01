@@ -9,6 +9,7 @@ import snastro.kernel.erroreAtteso
 import java.lang.reflect.Modifier
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -155,5 +156,78 @@ class RegistrazioneTest {
         assertEquals("Seduta di marzo", registrazione.titolo)
         assertEquals(dataScelta, registrazione.dataRegistrazione)
         assertEquals(progettoId, registrazione.progettoId)
+    }
+
+    // --- ADR 0033 §1: incontroId (INV-I1) and OraDiInizio (AC-I14) -------------------------------
+
+    private val incontroId = IncontroId("incontro-di-id-1")
+
+    private fun ora(testo: String): OraDiInizio = OraDiInizio.di(LocalTime.parse(testo)).atteso()
+
+    @Test
+    fun `INV-I1 incontroId e fissato da aggiungi e nessun metodo mutante lo cambia`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        registrazione.rinomina("Altro titolo").atteso()
+        registrazione.modificaData(dataScelta).atteso()
+        registrazione.modificaOraDiInizio(ora("10:25:00")).atteso()
+        registrazione.modificaOraDiInizio(null).atteso()
+        registrazione.elimina()
+
+        assertEquals(incontroId, registrazione.incontroId)
+        val campo = Registrazione::class.java.getDeclaredField("incontroId")
+        assertTrue(Modifier.isFinal(campo.modifiers), "incontroId deve essere immutabile")
+        val setter = Registrazione::class.java.methods.filter { it.name.startsWith("set") }
+        assertEquals(emptyList(), setter.map { it.name }, "nessun setter pubblico")
+    }
+
+    @Test
+    fun `INV-I14 aggiungi senza ora lascia l ora di inizio vuota, con un ora la fissa`() {
+        assertNull(unaRegistrazione().aggregato.oraDiInizio)
+
+        val conOra = Registrazione.aggiungi(
+            id = id,
+            progettoId = progettoId,
+            incontroId = incontroId,
+            titolo = "Intervista Marco",
+            riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
+            durataMs = 1L,
+            dataRegistrazione = dataFile,
+            aggiuntaAlle = Instant.EPOCH,
+            oraDiInizio = ora("09:00:00"),
+        ).aggregato
+
+        assertEquals(ora("09:00:00"), conOra.oraDiInizio)
+    }
+
+    @Test
+    fun `AC-I14 modificaOraDiInizio fissa la nuova ora ed emette OraDiInizioModificata con precedente e nuova`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        val evento = registrazione.modificaOraDiInizio(ora("10:25:00")).atteso()
+
+        assertEquals(OraDiInizioModificataDominio(id, incontroId, precedente = null, nuova = ora("10:25:00")), evento)
+        assertEquals(ora("10:25:00"), registrazione.oraDiInizio)
+    }
+
+    @Test
+    fun `AC-I14 la stessa ora, anche vuota su vuota, non emette evento`() {
+        val registrazione = unaRegistrazione().aggregato
+
+        assertNull(registrazione.modificaOraDiInizio(null).atteso())
+        registrazione.modificaOraDiInizio(ora("10:25:00")).atteso()
+        assertNull(registrazione.modificaOraDiInizio(ora("10:25:00")).atteso())
+        assertEquals(ora("10:25:00"), registrazione.oraDiInizio)
+    }
+
+    @Test
+    fun `AC-I14 togliere un ora fissata e ammesso ed emette l evento`() {
+        val registrazione = unaRegistrazione().aggregato
+        registrazione.modificaOraDiInizio(ora("10:25:00")).atteso()
+
+        val evento = registrazione.modificaOraDiInizio(null).atteso()
+
+        assertEquals(OraDiInizioModificataDominio(id, incontroId, precedente = ora("10:25:00"), nuova = null), evento)
+        assertNull(registrazione.oraDiInizio)
     }
 }
