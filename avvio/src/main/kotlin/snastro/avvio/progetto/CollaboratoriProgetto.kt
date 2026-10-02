@@ -10,6 +10,7 @@ import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
+import snastro.progetto.applicazione.comandi.ModificaOraDiInizio
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
@@ -34,6 +35,7 @@ internal class CollaboratoriProgetto(
     val incontri: () -> List<IncontroDelProgettoVista>,
     val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
+    val modificaOraDiInizio: (ModificaOraDiInizio) -> Esito<Unit>,
     val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,
     val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
     val lettoreAudio: LettoreAudio,

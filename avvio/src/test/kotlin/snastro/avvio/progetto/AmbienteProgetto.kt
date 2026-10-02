@@ -75,6 +75,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Clock
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -126,6 +127,13 @@ internal class AmbienteProgetto(
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
+
+    /** A second source file, probed with a start time of 10:00: its Parte precedes the one without time (D-0013). */
+    val sorgenteConOra: Path = radice.resolve("riunione-ore-10.wav")
+        .also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
+
+    /** Both source files, in the order a user could select them: the one without time first. */
+    val sorgentiDaImportare: List<String> get() = listOf(sorgente.toString(), sorgenteConOra.toString())
     private val esecutoreUi = Executors.newSingleThreadExecutor { r -> Thread(r, THREAD_UI) }
     private val esecutoreIo = Executors.newFixedThreadPool(THREAD_IO) { r -> Thread(r, "io-di-prova") }
 
@@ -165,7 +173,13 @@ internal class AmbienteProgetto(
             costruisciRegistrazioni = costruisciRegistrazioni,
             chiudiDatabase = chiudiDatabase,
             sondaAudio = {
-                SondaAudioFinta(mapOf(sorgente.toString() to InfoAudio(durataMs, LocalDate.parse("2026-01-01"))))
+                SondaAudioFinta(
+                    mapOf(
+                        sorgente.toString() to InfoAudio(durataMs, LocalDate.parse("2026-01-01")),
+                        sorgenteConOra.toString() to
+                            InfoAudio(durataMs, LocalDate.parse("2026-01-01"), LocalTime.of(10, 0)),
+                    ),
+                )
             },
             fontiCodaAggiuntive = fontiCoda,
         ),

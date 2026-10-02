@@ -36,11 +36,14 @@ private const val LARGHEZZA_SMOKE_PX = 1280
 private const val ALTEZZA_SMOKE_PX = 800
 private const val ATTESA_SMOKE_TIMEOUT_MS = 10_000L
 private const val ATTESA_SMOKE_PASSO_MS = 20L
+private const val VOCI = 4
+private const val DA_NOMINARE = 3
 
 /**
- * AC-237 + AC-351 + AC-357 + AC-S151: S1, S2 (with the identification badge), then S3 of the fixture's first
- * COMPLETATA Registrazione with its Voci panel — reached through S2's own row click, the real wiring — and with
- * its Riassunto tab selected (the fixture's pronto Riassunto), then S4 through the shell's Parlanti section,
+ * AC-237 + AC-351 + AC-357 + AC-S151 + AC-I91: S1, S2 over the fixture's 2-Parti Incontro (collapsed with its
+ * identification badge, then expanded), then S3 of each Parte with its Voci panel — Parte 1 reached through S2's own
+ * sub-row click, the real wiring, Parte 2 through the Parte switcher — and with the Riassunto tab selected (the
+ * fixture's pronto Riassunto of the Incontro), then S4 through the shell's Parlanti section,
  * then S5 through the sidebar footer, over the REAL model catalogue on
  * the empty isolated cache (fix-batch-16 LOW-1: the entries missing, 'Scarica'). Isolated registry and
  * model cache, pipeline and print extractor on the ML Finte: nothing of the developer's own machine is
@@ -85,22 +88,7 @@ internal fun eseguiSmoke(fixtureDir: String) {
             // item away (rework cycle 1, HIGH #9: navigation is the sidebar, not a standalone top bar).
             attendi { esisteTag("shell-nav-registrazioni") }
             onAllNodesWithText(etichetta(DestinazioneShell.REGISTRAZIONI))[0].performClick()
-            val completata = checkNotNull(grafo.primaRegistrazioneCompletata()) {
-                "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
-            }
-            // AC-357: the badge — the fixture's Trascritto has 2 Voci, 1 of them named.
-            attendi { esisteTag("registrazioni-lista") && esisteTesto(etichettaIdentificazione(2, 1)) }
-            salvaSchermata(outputDir, "s2")
-
-            onNodeWithTag("registrazioni-riga-${completata.valore}").performSemanticsAction(SemanticsActions.OnClick)
-            // AC-402/AC-405: the Voci panel, Voce 1 named after its Parlante, Voce 2 still to identify.
-            attendi { esisteTag("registrazione-lista") && esisteTag("voci-pannello") && esisteTag("voce-1-nome") }
-            salvaSchermata(outputDir, "s3")
-
-            // AC-S151: the Riassunto tab selected, the fixture's pronto Riassunto shown.
-            onNodeWithTag("scheda-1").performClick()
-            attendi { esisteTag("riassunto-contenuto") }
-            salvaSchermata(outputDir, "s3-riassunto")
+            percorriIncontro(grafo, fixtureDir, outputDir)
 
             onAllNodesWithText(etichetta(DestinazioneShell.PARLANTI))[0].performClick()
             attendi { esisteTag("parlanti-lista") }
@@ -125,12 +113,55 @@ internal fun eseguiSmoke(fixtureDir: String) {
     }
 }
 
+/**
+ * AC-I91: S2 over the fixture's 2-Parti Incontro (collapsed with its identification badge over both Parti, then
+ * expanded), S3 of Parte 1 through its sub-row, S3 of Parte 2 through the switcher, and the Riassunto tab.
+ */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.percorriIncontro(grafo: Grafo, fixtureDir: String, outputDir: File) {
+    val incontro = checkNotNull(grafo.sessione.collaboratoriCorrenti()?.incontri()?.singleOrNull()) {
+        "smoke: il progetto fixture '$fixtureDir' deve avere un solo Incontro"
+    }
+    check(incontro.parti.size >= 2) { "smoke: l'Incontro del fixture ha ${incontro.parti.size} Parti, ne servono 2" }
+    val idIncontro = incontro.incontroId.valore
+    val parte1 = incontro.parti[0].registrazioneId
+    checkNotNull(grafo.primaRegistrazioneCompletata()) {
+        "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
+    }
+    // The fixture has 4 Voci, 1 of them named (AC-357 over the Incontro).
+    attendi {
+        esisteTag("registrazioni-incontro-$idIncontro") && esisteTesto(etichettaIdentificazione(VOCI, DA_NOMINARE))
+    }
+    salvaSchermata(outputDir, "s2")
+
+    onNodeWithTag("registrazioni-incontro-chevron-$idIncontro").performClick()
+    attendi { esisteTag("registrazioni-incontro-parti-$idIncontro") }
+    salvaSchermata(outputDir, "s2-espansa")
+
+    onNodeWithTag("registrazioni-riga-${parte1.valore}").performSemanticsAction(SemanticsActions.OnClick)
+    // AC-402/AC-405: the Voci panel, Voce 1 named after its Parlante, Voce 2 still to identify.
+    attendi {
+        esisteTag("registrazione-lista") && esisteTag("voci-pannello") && esisteTag("voce-1-nome") &&
+            esisteTag("registrazione-parti")
+    }
+    salvaSchermata(outputDir, "s3-parte-1")
+
+    onNodeWithTag("parte-1").performClick()
+    attendi { esisteTesto("Parte 2 di 2", sottostringa = true) && esisteTag("voci-pannello") }
+    salvaSchermata(outputDir, "s3-parte-2")
+
+    // AC-S151/AC-I91: the Riassunto tab selected, the fixture's pronto Riassunto of the Incontro shown.
+    onNodeWithTag("scheda-1").performClick()
+    attendi { esisteTag("riassunto-contenuto") }
+    salvaSchermata(outputDir, "s3-riassunto")
+}
+
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.esisteTag(tag: String): Boolean = onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()
 
 @OptIn(ExperimentalTestApi::class)
-private fun ComposeUiTest.esisteTesto(testo: String): Boolean =
-    onAllNodesWithText(testo).fetchSemanticsNodes().isNotEmpty()
+private fun ComposeUiTest.esisteTesto(testo: String, sottostringa: Boolean = false): Boolean =
+    onAllNodesWithText(testo, substring = sottostringa).fetchSemanticsNodes().isNotEmpty()
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.attendi(condizione: () -> Boolean) {

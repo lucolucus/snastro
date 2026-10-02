@@ -23,9 +23,12 @@ import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazioneServizio
+import snastro.progetto.applicazione.comandi.ModificaOraDiInizio
+import snastro.progetto.applicazione.comandi.ModificaOraDiInizioServizio
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazioneServizio
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
+import snastro.progetto.applicazione.eventi.OraDiInizioModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
@@ -60,7 +63,7 @@ internal class ModuloProgetto(
     rigenerazioneSbobinatura: RigenerazioneSbobinaturaPolitica,
 ) : ModuloComposizione {
     private val archivio = ArchivioAudioFile(apertura.cartella)
-    private val aggiornamenti = AggiornamentiVistaEventi()
+    private val aggiornamenti = AggiornamentiVistaEventi(porte.catalogo::parti)
     private val completa = CompletaEliminazioniRegistrazioniServizio(
         porte.unitaDiLavoro,
         porte.eliminazioniInSospeso,
@@ -107,6 +110,7 @@ internal class ModuloProgetto(
             incontri = { incontriDelProgetto.delProgetto(apertura.progettoId) },
             aggiungiRegistrazione = aggiungi::esegui,
             modificaDataRegistrazione = ModificaDataRegistrazioneServizio(uow, registrazioni, dispatcher)::esegui,
+            modificaOraDiInizio = ModificaOraDiInizioServizio(uow, registrazioni, dispatcher)::esegui,
             rinominaRegistrazione = RinominaRegistrazioneServizio(uow, registrazioni, dispatcher)::esegui,
             eliminaRegistrazione = elimina::esegui,
         )
@@ -116,6 +120,7 @@ internal class ModuloProgetto(
         aggiornamenti,
         RegistrazioneAggiunta::class,
         DataRegistrazioneModificata::class,
+        OraDiInizioModificata::class,
         RegistrazioneRinominata::class,
     ) + abbonamenti(pulizia, RegistrazioneEliminata::class)
 
@@ -147,11 +152,13 @@ internal class ModuloProgetto(
 }
 
 /** Progetto's collaborators of ONE open project: S2's list and its Registrazione commands (plain functions, CR-1). */
+@Suppress("LongParameterList") // one function per S2 command
 internal class CollaboratoriRegistrazioni(
     val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
     val incontri: () -> List<IncontroDelProgettoVista>,
     val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
+    val modificaOraDiInizio: (ModificaOraDiInizio) -> Esito<Unit>,
     val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,
     val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
 )
