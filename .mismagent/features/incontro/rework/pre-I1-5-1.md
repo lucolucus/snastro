@@ -1,0 +1,15 @@
+# pre-I1-5 — sbobinatura: open I1 pre-release lines
+
+Fix every line below (MED and LOW) in this group's modules, or, for a line you judge wrong or not worth fixing, say why under DECISIONS so the composer can waive it with the user. Each fix with a test where the line is about behaviour or test discrimination.
+
+Blocks involved (specs: .mismagent/features/incontro/blocks/*/done/<id>.md): adattatori-sbobinatura-incontro, porte-sbobinatura-incontro, rigenerazione-sbobinatura-incontro
+
+## Lines (pre-release.md line number: text)
+- L73: I1 · porte-sbobinatura-incontro · LOW · sbobinatura/applicazione/src/test/kotlin/snastro/sbobinatura/applicazione/porte/LettoreNomiFintaTest.kt · aggiungiParte does not refuse an unknown incontroId (looser than the supplier) · verifier (opus) · 2026-10-02
+- L134: I1 · rigenerazione-sbobinatura-incontro · LOW · sbobinatura/adattatori/src/test/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaEventiTest.kt:456 · INV-23 test never asserts a write happened (passes if nothing regenerates) · code-review+verifier · 2026-10-02
+- L141: I1 · rigenerazione-sbobinatura-incontro · LOW · sbobinatura/adattatori/src/test/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaEventiTest.kt:393-397 · assertRigeneraSoloLeParti compares toSet(): a duplicate write is hidden · code-review · 2026-10-02
+- L142: I1 · rigenerazione-sbobinatura-incontro · LOW · sbobinatura/adattatori/src/test/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaEventiTest.kt:380 · SegmentoRiassegnato has no "nessuna di un altro" Incontro case · code-review · 2026-10-02
+- L186: I1 · adattatori-sbobinatura-incontro · LOW · sbobinatura/adattatori/src/main/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaEventi.kt:196-204 · fanOutParti returns true even on a no-op run; KDoc should say a drained PerIncontro run counts as done · verifier · 2026-10-02
+- L195: I1 · adattatori-sbobinatura-incontro · MED · sbobinatura/adattatori/src/main/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaEventi.kt:197-204 · a step-back returns true, so RitentaConBackoff counts it as success for a still-failing Registrazione: false "riuscito dopo n tentativi" log, backoff counter reset, scheduled retry replaced by an immediate one; keep the failure state on a step-back (postpone result) or skip the step-back for a key with a recorded failure · verifier · 2026-10-02
+- L196: I1 · adattatori-sbobinatura-incontro · LOW · sbobinatura/adattatori/src/main/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaEventi.kt:145/197 · incontriDaElencare is global: any pending Incontro fan-out pushes every Registrazione back one round; progress holds in practice, no test pins the step-back bound · verifier · 2026-10-02
+- L197: I1 · adattatori-sbobinatura-incontro · LOW · sbobinatura/adattatori/src/test/kotlin/snastro/sbobinatura/adattatori/eventi/AbbonatoSbobinaturaIncontroTest.kt (AC-C46) · scope.cancel() before the assert, not in finally (adapter lesson) · verifier · 2026-10-02
