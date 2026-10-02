@@ -13,6 +13,7 @@ import snastro.kernel.VoceRef
  * [INV-18], and the print re-keying of [INV-21]. The set rule INV-16
  * (unique active [Nome] per Progetto) is NOT checked here (service + index, ADR 0007).
  */
+@Suppress("TooManyFunctions") // the root owns every print operation (INV-I8/I8b/21): one command per rule, RC-1
 public class Parlante private constructor(
     public val id: ParlanteId,
     public val progettoId: ProgettoId,
