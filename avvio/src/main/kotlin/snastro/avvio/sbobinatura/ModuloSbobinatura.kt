@@ -28,6 +28,7 @@ import snastro.sbobinatura.applicazione.politiche.RigenerazioneSbobinaturaPoliti
 import snastro.supporto.figlioDi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import java.nio.file.Files
@@ -77,6 +78,7 @@ internal class ModuloSbobinatura(
         VoceDivisa::class,
         SegmentoRiassegnato::class,
         AttribuzioneConfermata::class,
+        TrascrittoEliminato::class,
         DataRegistrazioneModificata::class,
         RegistrazioneRinominata::class,
         RegistrazioneEliminata::class,

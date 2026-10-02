@@ -151,9 +151,11 @@ class AbbonatoSbobinaturaEventiTest {
 
         // Tre eventi della STESSA Registrazione, tutti pubblicati prima che il worker abbia la
         // possibilita' di girare (nessun advance* tra un commit e l'altro).
-        ambiente.commit(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
+        // Gli eventi dell'Incontro passano da un'unita' PerIncontro che elenca le Parti dentro il retry (mai sul thread
+        // del comando): arrivano prima, cosi' il fan-out trova gia' in coda la chiave della Registrazione e la fonde.
         ambiente.commit(AttribuzioneConfermata(VoceRef(unIncontroDi(REG_1), VoceId(1)), PARLANTE, precedente = null))
         ambiente.commit(VociUnite(unIncontroDi(REG_1), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        ambiente.commit(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
         advanceUntilIdle()
 
         assertEquals(1, ambiente.operazioni().size - primaDellaRaffica)
@@ -568,7 +570,7 @@ class AbbonatoSbobinaturaEventiTest {
         assertEquals(prima, ambiente.operazioni().size)
     }
 
-    // --- AC-C45 (structural): one RitentaConBackoff, one sealed key with exactly three cases -----------
+    // --- AC-C45 (structural): one RitentaConBackoff, one sealed key with exactly four cases -----------
 
     /**
      * By REFLECTION, never by reading the module's own source text: ADR 0010's `enforced_by` forbids any
@@ -579,14 +581,15 @@ class AbbonatoSbobinaturaEventiTest {
      * (AC-C46..C49/AC-C92/C94) on the NEW single-worker design.
      */
     @Test
-    fun `AC-C45 AbbonatoSbobinaturaEventi ha un solo RitentaConBackoff e una chiave sigillata a tre casi`() {
+    fun `AC-C45 AbbonatoSbobinaturaEventi ha un solo RitentaConBackoff e una chiave sigillata a quattro casi`() {
         val chiave = AbbonatoSbobinaturaEventi::class.java.declaredClasses.single { it.simpleName == "Chiave" }
         val casi = chiave.declaredClasses.filter { it != chiave && chiave.isAssignableFrom(it) }
 
-        assertEquals(setOf("PerRegistrazione", "PerParlante", "Sweep"), casi.map { it.simpleName }.toSet())
+        val attesi = setOf("PerRegistrazione", "PerParlante", "PerIncontro", "Sweep")
+        assertEquals(attesi, casi.map { it.simpleName }.toSet())
         val campiRitentaConBackoff = AbbonatoSbobinaturaEventi::class.java.declaredFields
             .count { it.type == RitentaConBackoff::class.java }
-        assertEquals(1, campiRitentaConBackoff, "un solo campo RitentaConBackoff: le tre specie lo condividono")
+        assertEquals(1, campiRitentaConBackoff, "un solo campo RitentaConBackoff: le quattro specie lo condividono")
     }
 
     // --- AC-C46/AC-C47: a poisoned unit never blocks another's own progress ---------------------------
