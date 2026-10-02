@@ -32,15 +32,22 @@ internal class ServiziFrase(
     fun esegui(frase: FraseRef, passi: PassiNominaFrase): Esito<Unit> {
         val id = frase.registrazioneId
         val incontroId = { checkNotNull(incontroDi(id)) { "frase di una Registrazione sconosciuta: $id" } }
-        val conferma = { confermaSegmento(ConfermaSegmento(id, frase.segmentoId, confermato = true)) }
+        // INV-I7: the commands carry the Incontro the frase was read from, so a Voce of another one is refused.
+        val conferma = {
+            confermaSegmento(
+                ConfermaSegmento(id, frase.segmentoId, confermato = true, incontroDelleVoci = incontroId()),
+            )
+        }
+        val riassegna = { destinazione: VoceId? ->
+            riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, destinazione, incontroId()))
+        }
         return when (passi) {
             PassiNominaFrase.SoloConferma -> conferma()
             is PassiNominaFrase.AttribuisciVoce ->
                 attribuisci(VoceRef(incontroId(), passi.voceId), passi.obiettivo).poi { conferma() }
-            is PassiNominaFrase.Sposta ->
-                riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, passi.voceId)).poi { Esito.Ok(Unit) }
-            is PassiNominaFrase.NuovaVoce -> riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, null))
-                .poi { nuova -> attribuisci(VoceRef(incontroId(), nuova), passi.obiettivo) }
+            is PassiNominaFrase.Sposta -> riassegna(passi.voceId).poi { Esito.Ok(Unit) }
+            is PassiNominaFrase.NuovaVoce ->
+                riassegna(null).poi { nuova -> attribuisci(VoceRef(incontroId(), nuova), passi.obiettivo) }
         }
     }
 

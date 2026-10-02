@@ -5,6 +5,7 @@ import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
+import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontro
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -20,6 +21,8 @@ import snastro.trascrizione.applicazione.letture.VociIncontro
 internal class CollaboratoriTrascrizione(
     val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
     val avviaElaborazione: (AvviaElaborazione) -> Esito<Unit>,
+    val avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
+    val numeroPersonePrecompilato: (IncontroId) -> Int?,
     val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
     val trascritto: (RegistrazioneId) -> TrascrittoView?,
     val revisione: ComandiRevisione,

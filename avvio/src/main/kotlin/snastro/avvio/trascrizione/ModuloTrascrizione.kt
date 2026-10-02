@@ -16,6 +16,7 @@ import snastro.trascrizione.adattatori.eventi.AbbonatoEliminazioneRegistrazione
 import snastro.trascrizione.adattatori.ml.AllineatorePerTurno
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
+import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontroServizio
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmentoServizio
 import snastro.trascrizione.applicazione.comandi.DividiVoceServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazioneServizio
@@ -105,6 +106,16 @@ internal class ModuloTrascrizione(
             porte.registrazionePerTrascrizione,
             porte.elaborazioni,
         )
+        // ADR 0039: 'Trascrivi N parti', one command over the Incontro's untranscribed Parti, in Parte order.
+        val avviaIncontro = AvviaElaborazioniDellIncontroServizio(
+            uow,
+            apertura.generatoreId,
+            clock,
+            porte.registrazionePerTrascrizione,
+            porte.elaborazioni,
+            porte.trascritti,
+            dispatcher,
+        )
         val trascrittoQuery = TrascrittoQuery(porte.trascritti, porte.registrazionePerTrascrizione, porte.elaborazioni)
         // ADR 0033 §4.1: every Revisione resolves the Parte's Incontro through the same reader.
         val registrazioni = porte.registrazionePerTrascrizione
@@ -113,6 +124,11 @@ internal class ModuloTrascrizione(
             statiElaborazione = porte.statiElaborazione::stati,
             // 'Trascrivi'/'Riprova' (ADR 0014): enqueues, then rings the queue so the run starts at once.
             avviaElaborazione = { comando -> avvia.esegui(comando).also { if (it is Esito.Ok) campanello.suona() } },
+            // ADR 0039: same ring as above, else the queued Parti wait for the next poll.
+            avviaElaborazioniDellIncontro = { comando ->
+                avviaIncontro.esegui(comando).also { if (it is Esito.Ok) campanello.suona() }
+            },
+            numeroPersonePrecompilato = trascrittoQuery::numeroPersonePrecompilato,
             // AC-478: no ring — a cancellation never makes work available (ADR 0018 Amendment (b) §3).
             annullaElaborazione = AnnullaElaborazioneServizio(uow, porte.elaborazioni, dispatcher)::esegui,
             trascritto = trascrittoQuery::vista,

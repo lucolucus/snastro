@@ -78,6 +78,16 @@ class CablaggioTrascrizioneTest {
     }
 
     @Test
+    fun `AC-I89 Trascrivi N parti suona il Campanello come Trascrivi, e S2 riceve il comando dell Incontro`() {
+        val modulo = File("src/main/kotlin/snastro/avvio/trascrizione/ModuloTrascrizione.kt").readText()
+        val lambda = modulo.substringAfter("avviaElaborazioniDellIncontro = {")
+            .substringBefore("numeroPersonePrecompilato")
+        assertTrue("campanello.suona()" in lambda, "le Parti accodate svegliano la coda: $lambda")
+        val s2 = "avviaElaborazioniDellIncontro = collaboratori.trascrizione.avviaElaborazioniDellIncontro"
+        assertEquals(1, righeCon(s2).size)
+    }
+
+    @Test
     fun `AC-341 AC-355 la shell e una sola, con Registrazioni e Parlanti`() {
         assertEquals(setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI), SEZIONI_SHELL)
         assertEquals(1, righeCon("val SEZIONI_SHELL").size, "nessun SEZIONI_SHELL per release")
