@@ -27,6 +27,7 @@ tests_nl_status: confirmed
 Amend EseguiProssimoRiassunto: read the Incontro's ordered Parti when the run is claimed, the Segmenti of each TRASCRITTA Parte, build the one-pass input with its label table, call the LLM outside any transaction, apply the Verifica per Parte and complete by compare-and-set; handle the races of INV-I12.
 
 ## Tasks
+- AC-I210 a non-last Parte eliminated while the Incontro's Riassunto is in_attesa or in_corso (added 2026-10-02 from the eliminazione-parte-sintesi review): the run never leaves the row in_corso or loops through RecuperaRiassuntiInterrotti — it completes born superato over the remaining Parti, or ends fallito nessun_contenuto_verificabile (INV-I12)
 - EseguiProssimoRiassunto on a 2-Parte Incontro sends the fake ModelloLinguistico ONE input with labels s1..sN over both Parti and stores the kept Fonti as SegmentoRef of the right Parte
 - INV-I12 a queued Riassunto whose Parte 2 lost its Trascritto before the claim → run on Parte 1 only, born superato; no Parte with a Trascritto → fallito nessun_contenuto_verificabile
 - INV-I12 a Revisione across Parti during the run → the Riassunto completes born superato; the Incontro ceases during the run → the compare-and-set finds no row and writes nothing
