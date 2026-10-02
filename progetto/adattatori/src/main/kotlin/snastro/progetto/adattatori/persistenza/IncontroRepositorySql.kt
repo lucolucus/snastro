@@ -17,8 +17,13 @@ public class IncontroRepositorySql(private val db: SnastroDatabase) : IncontroRe
         db.incontroQueries.trovaPerId(id.valore).executeAsOneOrNull()
             ?.let { Incontro.nuovo(IncontroId(it.id), ProgettoId(it.progetto_id)) }
 
-    // Immutable root (AC-I15): saving it again writes nothing (INSERT OR IGNORE).
+    // Immutable root (AC-I15): saving it again writes nothing (INSERT OR IGNORE). Precondition: an existing Incontro
+    // belongs to the same Progetto; INSERT OR IGNORE would silently keep the other row, so it fails loudly instead.
     override fun salva(i: Incontro) {
+        val esistente = db.incontroQueries.trovaPerId(i.id.valore).executeAsOneOrNull()
+        check(esistente == null || esistente.progetto_id == i.progettoId.valore) {
+            "Incontro ${i.id.valore} appartiene gia' a un altro Progetto (${esistente?.progetto_id})"
+        }
         db.incontroQueries.inserisci(id = i.id.valore, progettoId = i.progettoId.valore)
     }
 
