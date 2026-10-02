@@ -5,7 +5,6 @@ import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoParteSintesi
 import snastro.trascrizione.applicazione.letture.StatiElaborazione
-import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 
 /**
@@ -23,18 +22,6 @@ public class LettoreTrascrittoDaTrascrizione(
     override fun segmenti(r: RegistrazioneId): List<SegmentoSintesi>? =
         voci.segmenti(r)?.map { SegmentoSintesi(it.segmentoId, it.voceId, it.intervallo, it.testo) }
 
-    /** ADR 0033 §4: an open run wins (a re-run of a transcribed Parte too), then the Trascritto, then a failed run. */
-    override fun statoParte(r: RegistrazioneId): StatoParteSintesi {
-        val ultima = stati.stati(listOf(r)).single().stato
-        return when {
-            ultima in APERTI -> StatoParteSintesi.IN_TRASCRIZIONE
-            voci.segmenti(r) != null -> StatoParteSintesi.TRASCRITTA
-            ultima == StatoElaborazioneVista.FALLITA -> StatoParteSintesi.NON_RIUSCITA
-            else -> StatoParteSintesi.DA_TRASCRIVERE
-        }
-    }
-
-    private companion object {
-        val APERTI = setOf(StatoElaborazioneVista.IN_ATTESA, StatoElaborazioneVista.IN_CORSO)
-    }
+    /** ADR 0033 §4: the supplier's own `statoParte` (open run, then Trascritto, then failed run), mapped by name. */
+    override fun statoParte(r: RegistrazioneId): StatoParteSintesi = StatoParteSintesi.valueOf(stati.statoParte(r).name)
 }
