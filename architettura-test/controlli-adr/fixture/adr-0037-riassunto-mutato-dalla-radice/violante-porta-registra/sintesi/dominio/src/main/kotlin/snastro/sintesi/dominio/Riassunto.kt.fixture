@@ -1,0 +1,7 @@
+package snastro.sintesi.dominio
+
+public class Riassunto internal constructor(stato: String) {
+    private var _stato = stato
+
+    public fun completa(bozza: String, struttura: StrutturaIncontro): Esito<Unit> = Esito.Ok(Unit)
+}

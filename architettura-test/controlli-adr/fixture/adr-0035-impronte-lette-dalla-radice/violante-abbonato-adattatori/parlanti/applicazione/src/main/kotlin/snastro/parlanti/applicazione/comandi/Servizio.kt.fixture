@@ -1,0 +1,3 @@
+package snastro.parlanti.applicazione.comandi
+// parlante.impronte.size is decided by the root
+fun f(p: Parlante, v: VoceRef) = p.rimuoviImpronta(v) // not p.impronte

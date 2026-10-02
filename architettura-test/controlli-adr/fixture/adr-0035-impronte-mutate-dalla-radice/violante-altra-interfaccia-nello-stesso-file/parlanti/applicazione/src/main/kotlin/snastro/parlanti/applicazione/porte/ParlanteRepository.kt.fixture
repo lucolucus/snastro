@@ -1,0 +1,7 @@
+package snastro.parlanti.applicazione.porte
+public interface ParlanteRepository {
+    public fun trova(id: ParlanteId): Parlante?
+}
+public interface ScrittoreImpronte {
+    public fun cancella(id: ParlanteId)
+}

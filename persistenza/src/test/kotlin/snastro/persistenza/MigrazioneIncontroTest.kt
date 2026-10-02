@@ -174,6 +174,64 @@ class MigrazioneIncontroTest {
         }
     }
 
+    /**
+     * ADR 0009: the migrated print exists once (the new table); the old `impronta_vocale` pages (dropped, zeroed by
+     * secure_delete) and every older WAL frame of them must be gone from `progetto.db` AND `-wal`. A second
+     * connection kept open stops SQLite's own last-close checkpoint, so only the open path's checkpoint can do it.
+     */
+    @Test
+    fun `AC-I7 dopo la migrazione i byte della vecchia impronta non restano ne nel file ne nel WAL`(
+        @TempDir cartella: Path,
+    ) {
+        val file = File(cartella.toFile(), "progetto.db")
+        val url = "jdbc:sqlite:${file.absolutePath}"
+        val segnale = ByteArray(IMPRONTA_RICONOSCIBILE) { (0xA0 + it % 16).toByte() }
+        JdbcSqliteDriver(url).also { v7 ->
+            SnastroDatabase.Schema.migrate(v7, 1L, VERSIONE_PRE_INCONTRO)
+            v7.execute(null, "PRAGMA user_version = $VERSIONE_PRE_INCONTRO", 0)
+            RIGHE_V7.forEach { v7.execute(null, it, 0) }
+            v7.execute(null, "UPDATE impronta_vocale SET impronta = X'${segnale.toHex()}' WHERE voce_id = 2", 0)
+            v7.execute(null, "PRAGMA journal_mode = WAL", 0)
+            v7.close()
+        }
+        DriverManager.getConnection(url).use { connessioneInattiva ->
+            connessioneInattiva.createStatement().use { it.execute("SELECT 1") }
+            val progetto = apriDatabaseProgetto(cartella.toFile())
+            try {
+                val byte = listOf(file, File(cartella.toFile(), "progetto.db-wal")).filter { it.exists() }
+                    .sumOf { occorrenze(it.readBytes(), segnale) }
+                assertEquals(1, byte, "la sola copia e quella della nuova tabella")
+            } finally {
+                progetto.chiudi()
+            }
+        }
+    }
+
+    /** A process killed after the migration's COMMIT left its -wal: the next open finishes the checkpoint. */
+    @Test
+    fun `AC-I7 un WAL lasciato da un processo interrotto e troncato alla riapertura`(@TempDir cartella: Path) {
+        apriDatabaseProgetto(cartella.toFile()).chiudi()
+        val file = File(cartella.toFile(), "progetto.db")
+        val url = "jdbc:sqlite:${file.absolutePath}"
+        DriverManager.getConnection(url).use { interrotto ->
+            interrotto.createStatement().use {
+                it.execute("PRAGMA wal_autocheckpoint = 0")
+                it.execute("INSERT INTO progetto(id, nome) VALUES ('p', 'P')")
+            }
+            val wal = File(cartella.toFile(), "progetto.db-wal")
+            assertTrue(wal.length() > 0L, "premessa: il -wal non e vuoto")
+            apriDatabaseProgetto(cartella.toFile()).also {
+                assertEquals(0L, wal.length(), "il -wal residuo e troncato all'apertura")
+                it.chiudi()
+            }
+        }
+    }
+
+    private fun ByteArray.toHex(): String = joinToString("") { "%02X".format(it) }
+
+    private fun occorrenze(contenuto: ByteArray, ago: ByteArray): Int =
+        (0..contenuto.size - ago.size).count { da -> ago.indices.all { contenuto[da + it] == ago[it] } }
+
     @Test
     fun `AC-I3 i trigger rifiutano un INSERT senza incontro_id e un UPDATE che lo cambia, non le altre colonne`() {
         val (db, driver) = databaseEDriver()
@@ -284,6 +342,7 @@ class MigrazioneIncontroTest {
 
     private companion object {
         const val VERSIONE_PRE_INCONTRO = 7L
+        const val IMPRONTA_RICONOSCIBILE = 64
 
         /**
          * Registrazione reg-1: a revised Trascritto (highest Voce 3, `prossima_voce` 7 > 4), two Attribuzioni, two

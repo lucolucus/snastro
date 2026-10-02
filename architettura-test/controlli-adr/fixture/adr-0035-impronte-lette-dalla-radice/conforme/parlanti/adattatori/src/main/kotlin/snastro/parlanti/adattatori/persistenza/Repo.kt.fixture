@@ -1,0 +1,2 @@
+package snastro.parlanti.adattatori.persistenza
+fun salva(p: Parlante) = p.impronte.forEach { }

@@ -1,0 +1,2 @@
+package x
+fun f() = 1
