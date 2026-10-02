@@ -271,33 +271,6 @@ class RegistrazioniPresenterTest {
     }
 
     @Test
-    fun `LOW un drop multiplo importa ogni file in sequenza e riporta gli errori per singolo file`() = runTest {
-        val chiamate = mutableListOf<String>()
-        val presenter = presentatore(
-            this,
-            aggiungi = { c ->
-                chiamate += c.file.single()
-                if (c.file.single().endsWith("b.m4a")) {
-                    Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(c.file.single()))
-                } else {
-                    Esito.Ok(Unit)
-                }
-            },
-        )
-        advanceUntilIdle()
-
-        presenter.azioni.importa(listOf("/sorgenti/a.m4a", "/sorgenti/b.m4a", "/sorgenti/c.m4a"))
-        advanceUntilIdle()
-
-        // sequential: every file was attempted, in order, even though the second one failed
-        assertEquals(listOf("/sorgenti/a.m4a", "/sorgenti/b.m4a", "/sorgenti/c.m4a"), chiamate)
-        val dati = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value)
-        assertEquals(false, dati.importoInCorso)
-        assertNotNull(dati.errore)
-        assertEquals(true, dati.errore!!.contains("b.m4a"))
-    }
-
-    @Test
     fun `M3 due importa ravvicinati eseguono aggiungiRegistrazione una sola volta`() = runTest {
         var chiamate = 0
         val presenter = presentatore(

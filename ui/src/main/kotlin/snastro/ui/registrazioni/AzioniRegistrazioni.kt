@@ -1,5 +1,6 @@
 package snastro.ui.registrazioni
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
 
@@ -17,6 +18,9 @@ import java.time.LocalDate
  * ADR 0020 §6: `elimina` opens the row's confirmation (AC-626, a no-op on a disabled `StatoEliminazione`);
  * `annullaElimina` closes it with no command; `confermaElimina` sends the ONE `EliminaRegistrazione`
  * (AC-626/627/628). `chiudiAvviso` dismisses the post-elimination success notice (AC-627).
+ *
+ * ADR 0033 §2 / AC-I70..I71: `scegliImporta`/`confermaImporta`/`annullaImporta` drive the 2+ files import dialog;
+ * `aggiungiParti` is "Aggiungi parti…" on an Incontro's row, called with the files the view's picker returned.
  */
 data class AzioniRegistrazioni(
     val importa: (percorsi: List<String>) -> Unit,
@@ -38,4 +42,8 @@ data class AzioniRegistrazioni(
     val annullaElimina: (RegistrazioneId) -> Unit,
     val confermaElimina: (RegistrazioneId) -> Unit,
     val chiudiAvviso: () -> Unit,
+    val aggiungiParti: (IncontroId, titolo: String, percorsi: List<String>) -> Unit,
+    val scegliImporta: (SceltaImporta) -> Unit,
+    val confermaImporta: () -> Unit,
+    val annullaImporta: () -> Unit,
 )
