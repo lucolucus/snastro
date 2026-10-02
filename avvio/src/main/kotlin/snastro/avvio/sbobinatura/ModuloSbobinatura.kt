@@ -60,7 +60,7 @@ internal class ModuloSbobinatura(
     private val abbonato = AbbonatoSbobinaturaEventi(
         politica,
         porte.trascrittoPerSbobinatura::registrazioniConTrascritto,
-        porte.catalogo::parti,
+        porte.trascrittoPerSbobinatura::partiConTrascritto,
         segnalazioneApp,
     )
 

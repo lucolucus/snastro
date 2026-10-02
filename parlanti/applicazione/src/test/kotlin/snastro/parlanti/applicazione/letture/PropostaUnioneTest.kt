@@ -1,15 +1,13 @@
 package snastro.parlanti.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
-import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
-import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -21,11 +19,11 @@ import kotlin.test.assertEquals
 class PropostaUnioneTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()
     private val parlanti = ParlanteRepositoryFinta()
-    private val api = PropostaUnione(attribuzioni, parlanti, ogniRegistrazioneNota())
+    private val api = PropostaUnione(attribuzioni, parlanti)
 
     @Test
     fun `senza Attribuzioni non c'e alcuna proposta`() {
-        assertEquals(emptyList(), api.proposte(REGISTRAZIONE))
+        assertEquals(emptyList(), api.proposte(INCONTRO))
     }
 
     @Test
@@ -37,8 +35,20 @@ class PropostaUnioneTest {
 
         assertEquals(
             listOf(PropostaDiUnione(VoceId(1), VoceId(2), marco.id, "Marco")),
-            api.proposte(REGISTRAZIONE),
+            api.proposte(INCONTRO),
         )
+    }
+
+    @Test
+    fun `INV-22 Voci delle parti 1 e 2 dello stesso Incontro attribuite a Marco, una proposta, mai tra Incontri`() {
+        val marco = unParlante("id-1", "Marco")
+        parlanti.salva(marco).atteso()
+        attribuzioni.salva(unAttribuzione(1, marco.id)) // Voce 1: parla nella parte 1
+        attribuzioni.salva(unAttribuzione(5, marco.id)) // Voce 5: parla nella parte 2
+        attribuzioni.salva(Attribuzione.conferma(VoceRef(ALTRO_INCONTRO, VoceId(2)), PROGETTO, marco.id).aggregato)
+
+        assertEquals(listOf(PropostaDiUnione(VoceId(1), VoceId(5), marco.id, "Marco")), api.proposte(INCONTRO))
+        assertEquals(emptyList(), api.proposte(ALTRO_INCONTRO), "una sola Voce di Marco nell'altro Incontro")
     }
 
     @Test
@@ -50,7 +60,7 @@ class PropostaUnioneTest {
         attribuzioni.salva(unAttribuzione(1, marco.id))
         attribuzioni.salva(unAttribuzione(2, giulia.id))
 
-        assertEquals(emptyList(), api.proposte(REGISTRAZIONE))
+        assertEquals(emptyList(), api.proposte(INCONTRO))
     }
 
     @Test
@@ -67,22 +77,22 @@ class PropostaUnioneTest {
                 PropostaDiUnione(VoceId(1), VoceId(3), marco.id, "Marco"),
                 PropostaDiUnione(VoceId(2), VoceId(3), marco.id, "Marco"),
             ),
-            api.proposte(REGISTRAZIONE),
+            api.proposte(INCONTRO),
         )
     }
 
     @Test
-    fun `una coppia di un'altra Registrazione non compare`() {
+    fun `una coppia di un altro Incontro non compare`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(
-            Attribuzione.conferma(VoceRef(unIncontroDi(ALTRA_REGISTRAZIONE), VoceId(1)), PROGETTO, marco.id).aggregato,
+            Attribuzione.conferma(VoceRef(ALTRO_INCONTRO, VoceId(1)), PROGETTO, marco.id).aggregato,
         )
         attribuzioni.salva(
-            Attribuzione.conferma(VoceRef(unIncontroDi(ALTRA_REGISTRAZIONE), VoceId(2)), PROGETTO, marco.id).aggregato,
+            Attribuzione.conferma(VoceRef(ALTRO_INCONTRO, VoceId(2)), PROGETTO, marco.id).aggregato,
         )
 
-        assertEquals(emptyList(), api.proposte(REGISTRAZIONE))
+        assertEquals(emptyList(), api.proposte(INCONTRO))
     }
 
     @Test
@@ -94,12 +104,12 @@ class PropostaUnioneTest {
         attribuzioni.salva(unAttribuzione(1, marco.id))
         val seconda = unAttribuzione(2, marco.id)
         attribuzioni.salva(seconda)
-        assertEquals(1, api.proposte(REGISTRAZIONE).size)
+        assertEquals(1, api.proposte(INCONTRO).size)
 
         seconda.cambia(giulia.id).atteso()
         attribuzioni.salva(seconda)
 
-        assertEquals(emptyList(), api.proposte(REGISTRAZIONE))
+        assertEquals(emptyList(), api.proposte(INCONTRO))
     }
 
     @Test
@@ -110,22 +120,22 @@ class PropostaUnioneTest {
         val seconda = unAttribuzione(2, marco.id)
         attribuzioni.salva(prima)
         attribuzioni.salva(seconda)
-        assertEquals(1, api.proposte(REGISTRAZIONE).size)
+        assertEquals(1, api.proposte(INCONTRO).size)
 
         attribuzioni.rimuovi(seconda.voceRef)
 
-        assertEquals(emptyList(), api.proposte(REGISTRAZIONE))
+        assertEquals(emptyList(), api.proposte(INCONTRO))
     }
 
     private fun unParlante(id: String, nome: String): Parlante =
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(nome).atteso(), TipoParlante.RICORRENTE).aggregato
 
     private fun unAttribuzione(voceN: Int, parlanteId: ParlanteId): Attribuzione =
-        Attribuzione.conferma(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(voceN)), PROGETTO, parlanteId).aggregato
+        Attribuzione.conferma(VoceRef(INCONTRO, VoceId(voceN)), PROGETTO, parlanteId).aggregato
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
-        val REGISTRAZIONE = RegistrazioneId("registrazione-1")
-        val ALTRA_REGISTRAZIONE = RegistrazioneId("registrazione-2")
+        val INCONTRO = IncontroId("incontro-1")
+        val ALTRO_INCONTRO = IncontroId("incontro-2")
     }
 }

@@ -11,7 +11,9 @@ import snastro.kernel.Esito
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
+import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.letture.PianoRiassegnazione
 import snastro.parlanti.applicazione.letture.SpostamentoProposto
 import snastro.parlanti.dominio.ErroreParlanti
@@ -47,10 +49,10 @@ private fun pianoDi(id: RegistrazioneId, gruppi: List<GruppoSpostamenti>, incert
     val spostamenti = gruppi.flatMap { g ->
         List(g.frasi) {
             n++
-            SpostamentoProposto(SegmentoId(n), g.da, g.a, IntervalloMs(n * 1_000L, n * 1_000L + 900))
+            SpostamentoProposto(SegmentoRef(id, SegmentoId(n)), g.da, g.a, IntervalloMs(n * 1_000L, n * 1_000L + 900))
         }
     }
-    return PianoRiassegnazione(id, spostamenti.sortedBy { it.intervallo.inizioMs }, incerte)
+    return PianoRiassegnazione(unIncontroDi(id), spostamenti.sortedBy { it.intervallo.inizioMs }, incerte)
 }
 
 /** D2: the per-project glue honours the consumer's [snastro.ui.registrazione.AzioniSomiglianza] contract. */
@@ -109,7 +111,7 @@ class AzioniSomiglianzaProgettoTest {
             progresso(1, 3)
             via.await(5, TimeUnit.SECONDS)
             progresso(3, 3)
-            Esito.Ok(piano.copy(registrazioneId = id))
+            Esito.Ok(piano.copy(incontroId = unIncontroDi(id)))
         }
         p.calcola(REG)
         attendiFinche(timeout = 10.seconds, messaggio = "avanzamento") {
@@ -166,7 +168,7 @@ class AzioniSomiglianzaProgettoTest {
         attendiFinche(timeout = 10.seconds, messaggio = "esito") { p.stato.value[REG] is StatoSomiglianza.Esito }
         assertEquals(StatoSomiglianza.Esito(3, 1), p.stato.value[REG])
         assertEquals(1, calcoli.get())
-        val atteso = piano.spostamenti.map { SpostamentoSegmento(it.segmentoId, it.da, it.a, it.intervallo) }
+        val atteso = piano.spostamenti.map { SpostamentoSegmento(it.segmento.segmentoId, it.da, it.a, it.intervallo) }
         assertEquals(listOf(RiassegnaSegmenti(REG, atteso)), applicati.toList())
         p.applica(REG)
         assertEquals(1, applicati.size)
@@ -197,7 +199,7 @@ class AzioniSomiglianzaProgettoTest {
 
     @Test
     fun `AC-549 con N zero applica non invia nulla, annulla e Ritrascrivi scartano l anteprima`() {
-        val vuota = porta { id, _ -> Esito.Ok(PianoRiassegnazione(id, emptyList(), 2)) }.inAnteprima()
+        val vuota = porta { id, _ -> Esito.Ok(PianoRiassegnazione(unIncontroDi(id), emptyList(), 2)) }.inAnteprima()
         vuota.applica(REG)
         assertIs<StatoSomiglianza.Anteprima>(vuota.stato.value[REG])
 

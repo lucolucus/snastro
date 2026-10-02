@@ -110,7 +110,7 @@ class ParlantiPresenter(
         nome = v.nome,
         tipoParlante = v.tipoParlante,
         numImpronte = v.numImpronte,
-        numRegistrazioni = v.numRegistrazioni,
+        numRegistrazioni = v.numIncontri,
         ultimaApparizione = v.ultimaApparizione,
         riproduzioneAbilitata = v.estratto != null,
         operazioneInCorso = precedente?.operazioneInCorso ?: false,

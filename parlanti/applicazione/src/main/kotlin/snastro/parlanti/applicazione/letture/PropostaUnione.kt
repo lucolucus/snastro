@@ -1,15 +1,14 @@
 package snastro.parlanti.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
-import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.dominio.Attribuzione
 
 /**
- * `proposta-unione`: [INV-22] two Voci of the SAME Registrazione attributed to the same Parlante is
+ * `proposta-unione`: [INV-22] two Voci of the SAME Incontro attributed to the same Parlante is
  * allowed, never blocked, never auto-merged — it yields a Proposta di unione (A, B) while the
  * condition holds. Read-only, recomputed live: a union or a re-attribution makes the pair
  * disappear on its own, this view never merges anything.
@@ -17,13 +16,13 @@ import snastro.parlanti.dominio.Attribuzione
 public class PropostaUnione(
     private val attribuzioni: AttribuzioneRepository,
     private val parlanti: ParlanteRepository,
-    private val registrazioni: LettoreRegistrazione,
 ) {
-    /** ADR 0033 §4.1: the Attribuzioni of the Voci of the Incontro the Registrazione [id] is a Parte of. */
-    public fun proposte(id: RegistrazioneId): List<PropostaDiUnione> =
-        registrazioni.registrazione(id)?.incontroId.let { incontroId ->
-            if (incontroId == null) emptyList() else attribuzioni.diIncontro(incontroId)
-        }
+    /**
+     * [INV-22] per Incontro: every pair of Voci of the Incontro [id] — in the same or different Parti — attributed to
+     * the same Parlante; never a pair across two Incontri (an Attribuzione is keyed by the Incontro's VoceRef).
+     */
+    public fun proposte(id: IncontroId): List<PropostaDiUnione> =
+        attribuzioni.diIncontro(id)
             .groupBy { it.parlanteId }
             .flatMap { (parlanteId, attribuite) -> coppie(parlanteId, attribuite) }
 
