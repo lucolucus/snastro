@@ -20,10 +20,12 @@ import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.ParteDiIncontroParlanti
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
 import snastro.parlanti.applicazione.porte.VoceVista
@@ -71,8 +73,11 @@ class AttribuzioneIncontroTest {
 
     private fun lettoreVoci() = LettoreVociFinta(voci)
 
-    private fun conferma(lettore: LettoreVoci = lettoreVoci()) = ConfermaAttribuzioneServizio(
-        eventi.unitaDiLavoro, GeneratoreIdFinto(), lettoreRegistrazione(), lettore, parlanti, attribuzioni,
+    private fun conferma(
+        lettore: LettoreVoci = lettoreVoci(),
+        catalogo: LettoreRegistrazione = lettoreRegistrazione(),
+    ) = ConfermaAttribuzioneServizio(
+        eventi.unitaDiLavoro, GeneratoreIdFinto(), catalogo, lettore, parlanti, attribuzioni,
         decodificatore, estrattore, eventi,
     )
 
@@ -144,6 +149,40 @@ class AttribuzioneIncontroTest {
         assertNull(attribuzioni.trova(voce(1)))
         assertEquals(emptyList(), assertNotNull(parlanti.trova(anna.id)).impronte)
         assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-282 le Parti rilette in un altro ordine nella transazione non sono VoceCambiata`() {
+        val anna = unParlante("Anna")
+        val riordinato = object : LettoreRegistrazione by lettoreRegistrazione() {
+            private var letture = 0
+
+            override fun parti(incontroId: IncontroId) =
+                lettoreRegistrazione().parti(incontroId)?.let { if (letture++ == 0) it else it.reversed() }
+        }
+
+        conferma(catalogo = riordinato)
+            .esegui(ConfermaAttribuzione(voce(1), ObiettivoAttribuzione.ParlanteEsistente(anna.id)))
+            .atteso()
+
+        assertEquals(anna.id, attribuzioni.trova(voce(1))?.parlanteId)
+        assertEquals(setOf(A, B), assertNotNull(parlanti.trova(anna.id)).impronte.map { it.parte }.toSet())
+    }
+
+    @Test
+    fun `AC-I206 un Incontro elencato senza Parti e VoceNonTrovata e nulla e scritto`() {
+        val anna = unParlante("Anna")
+        val senzaParti = object : LettoreRegistrazione by lettoreRegistrazione() {
+            override fun parti(incontroId: IncontroId) = emptyList<ParteDiIncontroParlanti>()
+        }
+
+        val errore = conferma(catalogo = senzaParti)
+            .esegui(ConfermaAttribuzione(voce(1), ObiettivoAttribuzione.ParlanteEsistente(anna.id)))
+            .erroreAtteso<ErroreParlanti.VoceNonTrovata>()
+
+        assertEquals(ErroreParlanti.VoceNonTrovata(voce(1)), errore)
+        assertNull(attribuzioni.trova(voce(1)))
+        assertEquals(emptyList(), decodificate)
     }
 
     @Test
