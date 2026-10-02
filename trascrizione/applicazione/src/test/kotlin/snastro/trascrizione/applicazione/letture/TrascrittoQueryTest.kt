@@ -200,10 +200,13 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-I44 la prima trascrizione di una Parte appena importata non rende sola lettura`() {
-        val (_, query, elaborazioni) = treParti()
-        elaborazioni.salva(unaElaborazione(registrazioneId = RegistrazioneId("p4")))
+        val p4 = RegistrazioneId("p4")
+        val (_, query, elaborazioni) = treParti(ordine = listOf(P1, P2, P3, p4))
+        elaborazioni.salva(unaElaborazione(registrazioneId = p4))
 
-        assertNull(query.vista(P1)?.solaLettura)
+        val vista = checkNotNull(query.vista(P1))
+        assertNull(vista.solaLettura)
+        assertEquals(4, vista.parti.single { it.registrazioneId == p4 }.numero)
     }
 
     @Test
@@ -239,7 +242,9 @@ class TrascrittoQueryTest {
         assertEquals(3, query.numeroPersonePrecompilato(INCONTRO))
     }
 
-    private fun treParti(): Triple<VociDellIncontro, TrascrittoQuery, ElaborazioneRepositoryFinta> {
+    private fun treParti(
+        ordine: List<RegistrazioneId> = listOf(P1, P2, P3),
+    ): Triple<VociDellIncontro, TrascrittoQuery, ElaborazioneRepositoryFinta> {
         val radice = VociDellIncontro.crea(INCONTRO)
         listOf(P1, P2, P3).forEach { r ->
             radice.completaParte(
@@ -256,7 +261,7 @@ class TrascrittoQueryTest {
         val el = ElaborazioneRepositoryFinta()
         val lettore = LettoreRegistrazioneFinta(
             listOf(P1, P2, P3, RegistrazioneId("p4")).associateWith { unaVistaDi(it) },
-            ordine = mapOf(INCONTRO to listOf(P1, P2, P3)),
+            ordine = mapOf(INCONTRO to ordine),
         )
         return Triple(radice, TrascrittoQuery(repo, lettore, el), el)
     }
