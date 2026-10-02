@@ -30,7 +30,6 @@ import snastro.parlanti.dominio.SorgenteImpronta
 import snastro.parlanti.dominio.TipoParlante
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -242,17 +241,40 @@ class ApplicaRevisionePoliticaTest {
     }
 
     @Test
-    fun `INV-21 unire con A senza Attribuzione ma con un impronta propria e uno stato corrotto`() {
+    fun `INV-21 unire con A senza Attribuzione ma con un impronta vagante dello stesso Parlante non fallisce`() {
         val p = unParlante("id-p")
-        val q = unParlante("id-q")
         attribuisci(unaVoce(2), p)
-        q.aggiungiImpronta(unaVoce(1), REGISTRAZIONE, Impronta(floatArrayOf(1f)), SORGENTE_INIZIALE, MODELLO).atteso()
-        p.aggiungiImpronta(unaVoce(1), REGISTRAZIONE, Impronta(floatArrayOf(1f)), SORGENTE_INIZIALE, MODELLO).atteso()
+        val vagante = Impronta(floatArrayOf(9f))
+        p.aggiungiImpronta(unaVoce(1), REGISTRAZIONE, vagante, SORGENTE_INIZIALE, MODELLO).atteso()
         parlanti.salva(p).atteso()
 
-        assertFailsWith<IllegalStateException> {
-            politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2))
-        }
+        politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+
+        assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId, "A eredita il Parlante di B")
+        assertNull(attribuzioni.trova(unaVoce(2)))
+        val righe = impronteDi(p)
+        assertEquals(listOf(unaVoce(1) to REGISTRAZIONE), righe.map { it.voceRef to it.parte }, "una riga per Parte")
+        assertEquals(vagante, righe.single().impronta, "nella stessa Parte resta quella di A")
+    }
+
+    @Test
+    fun `INV-21 una Revisione che non svuota nessuna fetta non salva il Parlante`() {
+        val p = unParlante("id-p")
+        val voce = unaVoce(1)
+        attribuisci(voce, p)
+        val lettore = LettoreVociFinta(
+            mapOf(voce.incontroId to listOf(VoceVista(voce, mapOf(REGISTRAZIONE to listOf(IntervalloMs(0, 500)))))),
+        )
+        val salvataggi = ContaSalvataggi(parlanti)
+        val politicaContata = ApplicaRevisionePolitica(salvataggi, attribuzioni, lettore)
+
+        politicaContata.applicaVoceDivisa(voce.incontroId, voce.voceId).atteso()
+        politicaContata
+            .applicaSegmentoRiassegnato(voce.incontroId, voce.voceId, VoceId(2), daRimossa = false, aNuova = true)
+            .atteso()
+
+        assertEquals(0, salvataggi.salva, "nessuna impronta tolta: nessun salva")
+        assertEquals(listOf(REGISTRAZIONE), impronteDi(p).map { it.parte })
     }
 
     @Test
@@ -433,6 +455,13 @@ class ApplicaRevisionePoliticaTest {
             righe.all { it.impronta in impronteIniziali && it.sorgente == SORGENTE_INIZIALE },
             "nulla ri-estratto",
         )
+    }
+
+    /** [ParlanteRepository] counting its [salva] calls. */
+    private class ContaSalvataggi(private val delegato: ParlanteRepository) : ParlanteRepository by delegato {
+        var salva = 0
+
+        override fun salva(p: Parlante): Esito<Unit> = delegato.salva(p).also { salva++ }
     }
 
     /** [ParlanteRepository] whose [salva] always fails, like ADR 0007's unique index (AC-96). */

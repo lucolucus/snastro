@@ -3,7 +3,8 @@ package snastro.progetto.dominio
 /**
  * INV-I2, the ONLY place the order of the Parti of an Incontro is computed (ADR 0033 §1): every other context receives
  * it already ordered and numbered. A total order on (dataRegistrazione, oraDiInizio with the empty ones last,
- * aggiuntaAlle, registrazioneId); the numero della parte is the 1-based rank.
+ * aggiuntaAlle, registrazioneId); the numero della parte is the 1-based rank. The Parti of ONE import get increasing
+ * aggiuntaAlle in the user's selection order (one instant + 1 ms per file), so registrazioneId only breaks true ties.
  */
 public object OrdineDelleParti {
     private val ordine: Comparator<ParteDaOrdinare> =

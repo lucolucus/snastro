@@ -18,9 +18,12 @@ public class IncontriDelProgetto(
      * of Registrazioni, applied to each Incontro's first Parte, so a 1-part Incontro keeps its row position (INV-I3).
      */
     public fun delProgetto(progettoId: ProgettoId): List<IncontroDelProgettoVista> {
-        val perIncontro = registrazioni.delProgetto(progettoId).groupBy { it.incontroId }
-        val righe = perIncontro.keys.mapNotNull(catalogo::incontro).associateBy { it.parti.first().registrazioneId }
-        val prime = righe.keys.mapNotNull { id -> perIncontro.values.flatten().firstOrNull { it.id == id } }
+        val tutte = registrazioni.delProgetto(progettoId)
+        val perId = tutte.associateBy { it.id }
+        // An Incontro the catalogo no longer knows (ceased between the two reads) has no row: nothing to show.
+        val righe = tutte.map { it.incontroId }.distinct().mapNotNull(catalogo::incontro)
+            .associateBy { it.parti.first().registrazioneId }
+        val prime = righe.keys.mapNotNull(perId::get)
         return OrdineDelleRegistrazioni.ordina(prime).map { riga(righe.getValue(it.id)) }
     }
 

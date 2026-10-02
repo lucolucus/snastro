@@ -302,15 +302,15 @@ class AbbonatoSbobinaturaIncontroTest {
                 }
                 advanceTimeBy(120.seconds)
                 runCurrent()
+
+                assertEquals(
+                    listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte B.md")),
+                    scrittore.operazioni,
+                    "X gia in ritento: $xGiaInRitento",
+                )
             } finally {
                 scope.cancel() // X retries forever: stop it, or runTest's final drain chases it endlessly
             }
-
-            assertEquals(
-                listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte B.md")),
-                scrittore.operazioni,
-                "X gia in ritento: $xGiaInRitento",
-            )
         }
     }
 

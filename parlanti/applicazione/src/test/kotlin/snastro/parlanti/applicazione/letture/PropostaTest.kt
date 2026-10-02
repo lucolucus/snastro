@@ -296,9 +296,57 @@ class PropostaTest {
         val ancoraDallaCache = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.size
         assertEquals(2, ancoraDallaCache, "ancora dalla cache")
 
-        ambiente.api.invalida(REGISTRAZIONE)
-        val dopoInvalidaRegistrazione = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.size
-        assertEquals(3, dopoInvalidaRegistrazione, "invalida(RegistrazioneId): una Revisione o ImpronteRiallineate")
+        ambiente.api.invalida(VOCE_1.incontroId)
+        val dopoInvalidaIncontro = assertNotNull(ambiente.api.perVoce(VOCE_1)).candidati.size
+        assertEquals(3, dopoInvalidaIncontro, "invalida(IncontroId): una Revisione o ImpronteRiallineate")
+    }
+
+    @Test
+    fun `AC-173 invalida per Incontro svuota la cache anche quando la Parte non e piu nel catalogo`() {
+        val catalogo = mutableMapOf(REGISTRAZIONE to unaRegistrazioneVista())
+        val ambiente = Ambiente(registrazioni = LettoreRegistrazioneFinta(catalogo))
+        assertNotNull(ambiente.api.perVoce(VOCE_1))
+        catalogo.clear() // la Parte e stata eliminata (ADR 0038): la Voce non ha piu Parti
+
+        ambiente.api.invalida(VOCE_1.incontroId)
+
+        assertNull(ambiente.api.perVoce(VOCE_1), "ricalcolata: nessuna fetta resta, nessuna Proposta dalla cache")
+    }
+
+    @Test
+    fun `INV-20 la Fascia migliore porta l estratto della propria impronta, mai di una peggiore elencata prima`() {
+        val debole = impronta(40f)
+        val forte = impronta(41f)
+        val ambiente = AmbienteDueParti(
+            voce5 = mapOf(PARTE_2 to listOf(IntervalloMs(0, 4_000))),
+            confronto = ConfrontoImpronteFinta(mapOf(debole to Fascia.DEBOLE, forte to Fascia.FORTE)),
+        )
+        val anna = unParlante("p-anna", "Anna")
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_1, debole, "s1", MODELLO).atteso() // prima, con estratto
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_2, forte, "s2", MODELLO).atteso()
+        ambiente.parlanti.salva(anna).atteso()
+
+        val candidato = assertNotNull(ambiente.api.perVoce(VOCE_5)).candidati.single()
+
+        assertEquals(Fascia.FORTE, candidato.fascia)
+        assertEquals(ambiente.estrattoAudio.estratto(VOCE_ANNA, PARTE_2), candidato.estratto, "dalla FORTE")
+    }
+
+    @Test
+    fun `INV-20 un Parlante le cui impronte migliori sono senza estratto non e Candidato, mai con Fascia peggiore`() {
+        val forteSenzaFetta = impronta(40f)
+        val debole = impronta(41f)
+        val ambiente = AmbienteDueParti(
+            voce5 = mapOf(PARTE_2 to listOf(IntervalloMs(0, 4_000))),
+            confronto = ConfrontoImpronteFinta(mapOf(forteSenzaFetta to Fascia.FORTE, debole to Fascia.DEBOLE)),
+        )
+        val anna = unParlante("p-anna", "Anna")
+        // la Voce 7 non parla piu in nessuna Parte: la sua impronta FORTE non ha estratto
+        anna.aggiungiImpronta(VoceRef(INCONTRO, VoceId(7)), PARTE_1, forteSenzaFetta, "s7", MODELLO).atteso()
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_2, debole, "s2", MODELLO).atteso()
+        ambiente.parlanti.salva(anna).atteso()
+
+        assertEquals(emptyList(), assertNotNull(ambiente.api.perVoce(VOCE_5)).candidati)
     }
 
     @Test

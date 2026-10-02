@@ -20,6 +20,8 @@ public value class OraDiInizio private constructor(public val valore: LocalTime)
         /**
          * INV-I14 from user text `HH:mm:ss`: `null` → `Ok(null)`, the empty time; anything that is not a time of day in
          * [00:00:00, 24:00:00) (e.g. `24:00:00`, `12:60:00`, `""`) → [ErroreProgetto.OraDiInizioNonValida].
+         * Strict: no trimming, no padding (`" 09:05:00"`, `"9:05:00"` are refused) — it also reads the stored text, so
+         * a UI maps its own input (blank → `null`, trim, pad) before calling it.
          */
         public fun di(testo: String?): Esito<OraDiInizio?> {
             val parti = testo?.let { FORMATO.matchEntire(it)?.destructured }

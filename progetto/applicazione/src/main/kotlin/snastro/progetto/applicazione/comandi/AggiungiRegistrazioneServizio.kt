@@ -35,10 +35,11 @@ import java.time.temporal.ChronoUnit
  * ADR 0012). If the transaction does not commit after a successful copy — ANY sync subscriber's
  * `Esito.Errore` (AC-60) or a thrown exception (sync subscriber throw, or any
  * SQLite/IO fault at save/commit) — the copied file is discarded so no file is left behind without
- * its Registrazione; the discard runs from a `finally` so it still happens when the transaction
- * throws instead of returning. An after-commit subscriber's throw comes AFTER the commit: once the
- * transaction's block has returned Ok, a copy whose Registrazione is stored is kept (never lose the audio
- * of a committed Registrazione).
+ * its Registrazione; the discard runs from a `use` (a `finally`) so it still happens when the transaction
+ * throws instead of returning. If that check of the stored rows fails too, every copy is kept (an orphan file
+ * rather than lost audio) and the original exception propagates. An after-commit subscriber's throw comes AFTER the
+ * commit: once the transaction's block has returned Ok, a copy whose Registrazione is stored is kept (never lose
+ * the audio of a committed Registrazione).
  */
 @Suppress("LongParameterList") // one parameter per collaborator: uow, id/clock, 3 repos, 2 technical ports, eventi
 public class AggiungiRegistrazioneServizio(
@@ -59,10 +60,19 @@ public class AggiungiRegistrazioneServizio(
         val copie = mutableListOf<FileCopiato>()
         var confermata = false
         var importata = false
-        try {
+        // AC-60: no file without its row, whether the transaction returns Errore or throws; after an Ok block the
+        // throw may come after the commit (an after-commit subscriber): the rows say which copies are committed.
+        // `use` runs this like a `finally`, but a failure of the cleanup itself (the row check failing on the same DB
+        // fault) is added to the original exception as suppressed instead of masking it, and no copy is discarded.
+        val scartaNonConfermate = AutoCloseable {
+            if (!confermata) {
+                val salvate = if (importata) copie.filter { registrazioni.trova(it.id) != null } else emptyList()
+                (copie - salvate.toSet()).forEach { archivio.scarta(it.riferimento) }
+            }
+        }
+        scartaNonConfermate.use {
             // Probe and copy every file OUTSIDE the transaction (ADR 0012); the first failure stops the import.
-            for (file in c.file) {
-                val percorso = file
+            for (percorso in c.file) {
                 val copiato = sonda.sonda(percorso).poi { info ->
                     oraDi(info).poi { ora ->
                         val id = RegistrazioneId(generatoreId.nuovo())
@@ -76,13 +86,6 @@ public class AggiungiRegistrazioneServizio(
             }
             return uow.inTransazione { importa(progetto.id, c.destinazione, copie).also { importata = it is Esito.Ok } }
                 .also { confermata = it is Esito.Ok }
-        } finally {
-            // AC-60: no file without its row, whether the transaction returns Errore or throws; after an Ok block the
-            // throw may come after the commit (an after-commit subscriber): the rows say which copies are committed.
-            if (!confermata) {
-                copie.filterNot { importata && registrazioni.trova(it.id) != null }
-                    .forEach { archivio.scarta(it.riferimento) }
-            }
         }
     }
 
@@ -96,7 +99,10 @@ public class AggiungiRegistrazioneServizio(
         val titoli = registrazioni.titoliDelProgetto(progettoId).toMutableList()
         var incontroComune = incontroEsistente?.id
         val eventiDaPubblicare = mutableListOf<RegistrazioneAggiunta>()
-        for (copia in copie) {
+        // INV-I2 (ADR 0033 §2): ONE instant per import, +1 ms per file in the user's selection order, so Parti with
+        // the same data and no OraDiInizio follow that order (a per-file clock.instant() ties at the stored ms).
+        val aggiuntaAlle = clock.instant()
+        for ((indice, copia) in copie.withIndex()) {
             val incontroId = incontroComune ?: IncontroId(generatoreId.nuovo()).also { nuovo ->
                 incontri.salva(Incontro.nuovo(nuovo, progettoId)) // saved before its Parte (AC-I55)
                 if (destinazione is Destinazione.NuovoIncontro) incontroComune = nuovo
@@ -111,7 +117,7 @@ public class AggiungiRegistrazioneServizio(
                 riferimentoAudio = copia.riferimento,
                 durataMs = copia.info.durataMs,
                 dataRegistrazione = copia.info.dataFile,
-                aggiuntaAlle = clock.instant(),
+                aggiuntaAlle = aggiuntaAlle.plusMillis(indice.toLong()),
                 oraDiInizio = copia.ora,
             )
             registrazioni.salva(creato.aggregato)

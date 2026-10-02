@@ -23,6 +23,7 @@ import snastro.trascrizione.dominio.unaRadiceDa
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
 class TrascrittoQueryTest {
@@ -176,7 +177,7 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-I43 la Parte 2 di 3 ha numeroParte, parti e solo le Voci che vi parlano, la Voce 2 con altreParti 1 e 3`() {
-        val (radice, query) = treParti()
+        val (_, query) = treParti()
 
         val vista = checkNotNull(query.vista(P2))
 
@@ -186,7 +187,17 @@ class TrascrittoQueryTest {
         assertEquals(listOf(VoceId(2), VoceId(3)), vista.voci.map { it.voceId })
         assertEquals(listOf(listOf(1, 3), emptyList()), vista.voci.map { it.altreParti })
         assertEquals(setOf(VoceId(2), VoceId(3)), vista.segmenti.map { it.voceId }.toSet())
-        check(radice.haParte(P2))
+    }
+
+    @Test
+    fun `una vista che non e' di una Parte del suo Incontro e' rifiutata`() {
+        fun vista(numero: Int, parti: List<ParteRef>) = TrascrittoView(
+            P2, INCONTRO, "t", LocalDate.of(2026, 10, 3), 1_000, emptyList(), emptyList(), numero, parti,
+        )
+
+        assertFailsWith<IllegalArgumentException> { vista(1, emptyList()) }
+        assertFailsWith<IllegalArgumentException> { vista(1, listOf(ParteRef(P1, 1), ParteRef(P2, 2))) }
+        assertEquals(2, vista(2, listOf(ParteRef(P1, 1), ParteRef(P2, 2))).numeroParte)
     }
 
     @Test

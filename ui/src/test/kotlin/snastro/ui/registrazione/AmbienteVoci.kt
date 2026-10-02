@@ -28,6 +28,7 @@ import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -108,6 +109,8 @@ internal fun unTrascritto(
     segmenti = segmenti,
     voci = segmenti.map { it.voceId }.distinct().sortedBy { it.numero }
         .map { VoceTrascrittoView(it, "Voce ${it.numero}") },
+    numeroParte = 1,
+    parti = listOf(ParteRef(REG, 1)),
 )
 
 internal fun spostato(vista: TrascrittoView, segmento: Int, voce: VoceId) = unTrascritto(

@@ -4,6 +4,7 @@ import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.GeneratoreId
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
@@ -14,10 +15,14 @@ import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.letture.ElaborazioniInAttesa
+import snastro.trascrizione.applicazione.porte.AllineatoreFinta
+import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
+import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
+import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
@@ -152,6 +157,43 @@ class AvviaElaborazioniDellIncontroServizioTest {
 
         assertEquals(listOf(A, B, C), coda.map { it.registrazioneId })
         assertEquals(listOf(T, T.plusMillis(1), T.plusMillis(2)), coda.map { it.creataAlle })
+    }
+
+    @Test
+    fun `AC-I33 con un orologio fermo e id in ordine inverso la vera presa avvia A, poi B, poi C`() {
+        val idInversi = ArrayDeque(listOf("elab-z", "elab-y", "elab-x")) // the id tie-break alone would pick C first
+        val accoda = AvviaElaborazioniDellIncontroServizio(
+            eventi.unitaDiLavoro,
+            object : GeneratoreId {
+                override fun nuovo(): String = idInversi.removeFirst()
+            },
+            Clock.fixed(T, ZoneOffset.UTC),
+            lettore,
+            elaborazioni,
+            trascritti,
+            eventi,
+        )
+        accoda.esegui(AvviaElaborazioniDellIncontro(INCONTRO)).atteso()
+        val pipeline = PortePipeline(
+            LettoreRegistrazioneFinta(), // no Registrazione: each claimed run then fails, only the claim matters here
+            DecodificatoreAudioFinta(emptyMap()),
+            DiarizzatoreFinta(),
+            AllineatoreFinta(),
+            SegnalatoreFaseFinta(),
+        )
+        val presa = EseguiProssimaElaborazioneServizio(
+            eventi.unitaDiLavoro,
+            OROLOGIO,
+            elaborazioni,
+            trascritti,
+            pipeline,
+            eventi,
+        )
+
+        val avviate = List(3) { presa.esegui(EseguiProssimaElaborazione()).atteso() }
+
+        val idDi = listOf(A, B, C).map { RisultatoAvanzamento.Avviata(elaborazioni.diRegistrazione(it).single().id) }
+        assertEquals(idDi, avviate)
     }
 
     private companion object {

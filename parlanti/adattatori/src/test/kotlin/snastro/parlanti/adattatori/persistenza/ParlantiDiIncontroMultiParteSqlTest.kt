@@ -135,8 +135,13 @@ class ParlantiDiIncontroMultiParteSqlTest {
         assertNotNull(parlanti.trova(mario.id))
     }
 
+    /**
+     * Parlanti's half only: the hand-published event ends every Voce, the Incontro rows stay (Trascrizione and Progetto
+     * delete them in the real unit). The ceased Incontro with no row left in any table is `EliminaParteIncontroTest`
+     * AC-I86 in `:avvio`, on the real composition.
+     */
     @Test
-    fun `ADR 0038 eliminare l'ultima Parte purga ogni impronta e Attribuzione dell'Incontro cessato`() {
+    fun `ADR 0038 la purga dell'ultima Parte che finisce ogni Voce toglie ogni impronta e Attribuzione`() {
         seminaIncontro(mapOf(P1 to listOf(1L, 2L)))
         val mario = parlante("mario", TipoParlante.RICORRENTE)
         val ospite = parlante("ospite", TipoParlante.OCCASIONALE)
