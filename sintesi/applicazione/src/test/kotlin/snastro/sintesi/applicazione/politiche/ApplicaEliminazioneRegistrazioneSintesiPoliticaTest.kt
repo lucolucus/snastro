@@ -96,6 +96,30 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
     }
 
     @Test
+    fun `INV-I12b incontroCessato false non tocca nulla in nessuno stato e non pubblica`() {
+        val r = RegistrazioneId("reg-parte")
+        val pronto = unRiassuntoPronto("pronto", r)
+        riassunti.salva(pronto).atteso()
+        val prima = riassunti.trova(unIncontroDi(r)).map { it.statoOsservabile() }
+
+        assertEquals(Esito.Ok(Unit), applica(r, cessato = false))
+
+        assertEquals(prima, riassunti.trova(unIncontroDi(r)).map { it.statoOsservabile() })
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `INV-I12b incontroCessato false lascia anche un Riassunto in corso, il suo completamento resta valido`() {
+        val r = RegistrazioneId("reg-corso")
+        riassunti.salva(unRiassunto("in-corso", r).conAvvio()).atteso()
+
+        assertEquals(Esito.Ok(Unit), applica(r, cessato = false))
+
+        assertEquals(1, riassunti.trova(unIncontroDi(r)).size)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
     fun `AC-S101 un Errore del repository e restituito invariato e nessun evento e pubblicato`() {
         val guasto = Esito.Errore(ErroreSintesi.RiassuntoNonTrovato("x"))
         val politicaGuasta = ApplicaEliminazioneRegistrazioneSintesiPolitica(
@@ -103,7 +127,7 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
             eventi,
         )
 
-        val esito = eventi.unitaDiLavoro.inTransazione { politicaGuasta.applica(unIncontroDi(REGISTRAZIONE)) }
+        val esito = eventi.unitaDiLavoro.inTransazione { politicaGuasta.applica(unIncontroDi(REGISTRAZIONE), true) }
 
         assertEquals(guasto, esito)
         assertEquals(emptyList(), eventi.pubblicati)
@@ -111,7 +135,8 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
 
     private fun applica(
         r: RegistrazioneId,
-    ): Esito<Unit> = eventi.unitaDiLavoro.inTransazione { politica.applica(unIncontroDi(r)) }
+        cessato: Boolean = true,
+    ): Esito<Unit> = eventi.unitaDiLavoro.inTransazione { politica.applica(unIncontroDi(r), cessato) }
 
     /** A `pronto` Riassunto with a real Decisione + Fonte, to prove "elements and Fonti" are gone, not just the row. */
     private fun unRiassuntoPronto(id: String, r: RegistrazioneId): Riassunto {
