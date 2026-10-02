@@ -75,6 +75,7 @@ internal fun apriProgetto(
 
     val collaboratoriProgetto = progetto.collaboratori
     val collaboratori = CollaboratoriProgetto(
+        progettoId = apertura.progettoId,
         registrazioni = collaboratoriProgetto.registrazioni,
         aggiungiRegistrazione = collaboratoriProgetto.aggiungiRegistrazione,
         modificaDataRegistrazione = collaboratoriProgetto.modificaDataRegistrazione,

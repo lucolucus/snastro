@@ -23,8 +23,8 @@ import migrations.Segmento as SegmentoRiga
  *
  * The Parti of an Incontro are read through [registrazioni] (ADR 0033 §4.1: no Trascrizione query reads the
  * `registrazione` table), in the Incontro's order: a stored Parte is one that has a `trascritto` row. [salva] replaces
- * the owned rows of every Parte the root holds (delete then re-insert), deletes those of a Parte it no longer holds,
- * and keeps `voce_incontro` equal to the root's Voci.
+ * the owned rows of every Parte the root holds whose stored rows differ (delete then re-insert), deletes those of a
+ * Parte it no longer holds, and keeps `voce_incontro` equal to the root's Voci.
  *
  * Delete order is CHILD (`segmento`) then PARENT (`voce`, then `trascritto`); insert order is PARENT then CHILD: the
  * FKs to `voce`/`voce_incontro` from `segmento` and from Parlanti's `attribuzione`/`impronta_vocale` are DEFERRABLE
@@ -70,7 +70,11 @@ public class VociDellIncontroRepositorySql(
         partiDi(root.incontroId).filterNot { it in tenute }.forEach(::eliminaParte)
         val voci = root.voci.mapTo(HashSet()) { it.numero.toLong() }
         voci.forEach { db.voceIncontroQueries.inserisciSeAssente(incontroId, it) }
-        trascritti.forEach(::scriviParte)
+        trascritti.forEach { t ->
+            // Only a Parte whose rows differ from the root's is rewritten (ADR 0035 §1): its stored copy is compared.
+            val salvato = leggi(t.registrazioneId, root.incontroId, root.prossimaVoce)
+            if (salvato?.stessoContenutoDi(t) != true) scriviParte(t)
+        }
         db.voceIncontroQueries.numeriDiIncontro(incontroId).executeAsList()
             .filterNot { it in voci }
             .forEach { db.voceIncontroQueries.elimina(incontroId, it) }
@@ -123,6 +127,9 @@ public class VociDellIncontroRepositorySql(
         db.trascrittoQueries.elimina(r.valore)
     }
 }
+
+private fun Trascritto.stessoContenutoDi(altro: Trascritto): Boolean =
+    prossimoSegmento == altro.prossimoSegmento && segmenti == altro.segmenti
 
 /** [Segmento] is a plain read-copy VO (CR-15 gates only the aggregate's own `ricostituisci`). */
 private fun SegmentoRiga.inDominio(): Segmento =

@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
@@ -74,6 +75,7 @@ class RegistrazioniNumeroPersoneTest {
         return RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = registrazioni,
             aggiungiRegistrazione = aggiungi,
             modificaDataRegistrazione = { error("modificaData non atteso in questo test") },
