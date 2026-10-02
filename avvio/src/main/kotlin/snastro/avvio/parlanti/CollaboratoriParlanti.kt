@@ -3,12 +3,14 @@ package snastro.avvio.parlanti
 import kotlinx.coroutines.CoroutineScope
 import snastro.kernel.Esito
 import snastro.kernel.EstrattoRef
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.comandi.EliminaParlante
 import snastro.parlanti.applicazione.comandi.PromuoviParlante
 import snastro.parlanti.applicazione.comandi.RinominaParlante
 import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
+import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
@@ -25,6 +27,8 @@ internal class LettureParlanti(
     val estratto: (VoceRef) -> EstrattoRef?,
     val parlantiDelProgetto: () -> List<ParlanteDelProgetto>,
     val identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione>,
+    /** `viste-parlanti-incontro` (AC-I47): bound by the Incontri screens; [identificazioni] goes with S2's rows. */
+    val identificazioniIncontri: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro>,
 )
 
 /** S4's commands of the open project, each built with the dispatcher's unit of work (AC-359). */

@@ -19,6 +19,7 @@ import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
+import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
@@ -101,6 +102,7 @@ class RegistrazioniPresenter(
     io: CoroutineDispatcher,
     private val progettoId: ProgettoId,
     private val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
+    private val incontri: () -> List<IncontroDelProgettoVista>,
     private val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     private val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
     private val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,
@@ -227,6 +229,7 @@ class RegistrazioniPresenter(
 
     private fun costruisciRighe(): List<RigaRegistrazione> {
         val progetto = registrazioni()
+        val parti = partiDiIncontriMultipli()
         val ids = progetto.map { it.registrazioneId }
         val stati = statiElaborazione(ids).associateBy { it.registrazioneId }
         val conteggiIdentificazione = conteggiIdentificazione(ids)
@@ -263,9 +266,17 @@ class RegistrazioniPresenter(
                 ritrascrizioneFallita = ritrascrizioneFallita,
                 annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa,
                 eliminazione = eliminazioneDi(elaborazioneRiga),
+                parte = parti[r.registrazioneId],
             )
         }
     }
+
+    /** ADR 0038 §5: the Parti of every Incontro with two or more Parti, by their Registrazione — a 1-part Incontro
+     * (or the last Parte left) has no entry and keeps today's Elimina dialog. */
+    private fun partiDiIncontriMultipli(): Map<RegistrazioneId, ParteDiIncontro> =
+        incontri().filter { it.numParti > 1 }.flatMap { i ->
+            i.parti.map { it.registrazioneId to ParteDiIncontro(it.numero, i.titolo) }
+        }.toMap()
 
     /** ADR 0020 §6/AC-625: disabled with its caption on an open Elaborazione (IN_ATTESA/IN_CORSO, plain
      * or re-run) — every other state (no Elaborazione yet, FALLITA, Completata) is

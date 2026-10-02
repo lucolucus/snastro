@@ -42,6 +42,7 @@ import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.parlanti.applicazione.letture.EstrattoAudio
+import snastro.parlanti.applicazione.letture.IdentificazioneIncontri
 import snastro.parlanti.applicazione.letture.IdentificazioneRegistrazioni
 import snastro.parlanti.applicazione.letture.IdentificazioneVoci
 import snastro.parlanti.applicazione.letture.ParlantiAttivi
@@ -70,8 +71,9 @@ import java.util.logging.Logger
  * Parlanti's part of the single composition (ADR 0030 §1), built from [PorteProgetto] only (its repositories and
  * cross-context readers), plus Trascrizione's typed collaborators its glue composes ([trascrizione]):
  * - its SYNCHRONOUS subscriber [AbbonatoRevisioneParlanti]: the revisione-policy on every Revisione (AC-359), the
- *   purge on `TrascrittoSostituito` (ADR 0018 §3, AC-457) and on `TrascrittoEliminato` (ADR 0038 §2; no
- *   `RegistrazioneEliminata` subscriber, AC-I61);
+ *   purge on `TrascrittoSostituito` (ADR 0018 §3, AC-457) and on `TrascrittoEliminato`, published by the Trascrizione
+ *   elimination policy inside the deleting unit, nested and depth-first (ADR 0038 §2, AC-I87, AC-I61): none on
+ *   `RegistrazioneEliminata`;
  * - its after-commit subscribers: [AggiornamentiVistaParlanti] (Proposta invalidation + `Cambiamento`, AC-317) and
  *   [AbbonatoRiallineamentoImpronte] (AC-315), whose worker starts at [avvia];
  * - at [avvia], in the background, `RiallineaTutteLeImpronte` of the project (AC-316): `apriProgetto` ran the queue's
@@ -194,6 +196,7 @@ internal class ModuloParlanti(
                 estratto = estrattoAudio::estratto,
                 parlantiDelProgetto = { delProgetto.parlanti(progettoId) },
                 identificazioni = IdentificazioneRegistrazioni(voci, porte.attribuzioni, registrazione)::conteggi,
+                identificazioniIncontri = IdentificazioneIncontri(voci, porte.attribuzioni)::conteggi,
             ),
             comandi = ComandiVoceProgetto(
                 scopeProgetto,
