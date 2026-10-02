@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +46,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.letture.Candidato
+import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.ui.formattaDurata
@@ -83,6 +85,7 @@ import snastro.ui.testi.MESSAGGIO_PROPOSTA_IN_ATTESA
 import snastro.ui.testi.SUGGERIMENTO_PRIMA_REGISTRAZIONE
 import snastro.ui.testi.TITOLO_PANNELLO_VOCI
 import snastro.ui.testi.testoConferma
+import snastro.ui.testi.testoTraParti
 import snastro.ui.testi.testoUnione
 
 private val DIMENSIONE_INDICATORE = 18.dp
@@ -174,9 +177,7 @@ internal fun PannelloVociVista(
                     )
                 }
             }
-            items(pannello.unioni, key = { "unione-${it.voceA.numero}-${it.voceB.numero}" }) { unione ->
-                BannerUnione(unione, pannello.unioneAbilitata, azioni)
-            }
+            bannerUnioni(pannello, azioni)
             items(pannello.carte, key = { it.voceId.numero }) { carta ->
                 CartaVoceVista(
                     carta,
@@ -186,6 +187,18 @@ internal fun PannelloVociVista(
                     azioni,
                 )
             }
+        }
+    }
+}
+
+/** The merge banners: the Proposta di unione first, then the cross-Parte one (at most one per screen, AC-I84). */
+private fun LazyListScope.bannerUnioni(pannello: PannelloVoci, azioni: AzioniRegistrazione) {
+    items(pannello.unioni, key = { "unione-${it.voceA.numero}-${it.voceB.numero}" }) { unione ->
+        BannerUnione(unione, pannello.unioneAbilitata, azioni)
+    }
+    pannello.traParti?.let { coppia ->
+        item(key = "tra-parti-${coppia.voceA.numero}-${coppia.voceB.numero}") {
+            BannerTraParti(coppia, pannello, azioni)
         }
     }
 }
@@ -201,6 +214,43 @@ private fun BannerUnione(unione: PropostaDiUnione, abilitata: Boolean, azioni: A
         testo = "",
         modifier = Modifier.testTag("voci-unione-${unione.voceA.numero}-${unione.voceB.numero}"),
         azione = AzioneBanner(ETICHETTA_UNISCI) { azioni.unisci(unione.voceA, unione.voceB) }.takeIf { abilitata },
+    )
+}
+
+/** AC-I83: never automatic, no 'No'; one '▶' per Voce plays its own estratto; the earlier Parte's Voce survives. */
+@Composable
+private fun BannerTraParti(coppia: CoppiaTraParti, pannello: PannelloVoci, azioni: AzioniRegistrazione) {
+    val a = coppia.voceA.numero
+    val b = coppia.voceB.numero
+    BannerSn(
+        tipo = TipoBanner.Info,
+        titolo = testoTraParti(a, coppia.parteA, b),
+        testo = "",
+        modifier = Modifier.testTag("voci-tra-parti-$a-$b"),
+        azione = AzioneBanner(ETICHETTA_UNISCI) { azioni.unisci(coppia.voceA, coppia.voceB) }
+            .takeIf { pannello.unioneAbilitata },
+        extra = {
+            Row(horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2)) {
+                BottoneSn(
+                    "Voce $b",
+                    onClick = { azioni.riproduciEstratto(coppia.estrattoB) },
+                    abilitato = pannello.estrattiDisponibili,
+                    variante = VarianteBottone.Fantasma,
+                    piccolo = true,
+                    icona = Icona.Listen,
+                    modifier = Modifier.testTag("voci-tra-parti-estratto-$b"),
+                )
+                BottoneSn(
+                    "Voce $a",
+                    onClick = { azioni.riproduciEstratto(coppia.estrattoA) },
+                    abilitato = pannello.estrattiDisponibili,
+                    variante = VarianteBottone.Fantasma,
+                    piccolo = true,
+                    icona = Icona.Listen,
+                    modifier = Modifier.testTag("voci-tra-parti-estratto-$a"),
+                )
+            }
+        },
     )
 }
 

@@ -133,6 +133,8 @@ internal fun costruisciRegistrazionePresenter(
             clock = grafo.clock,
             confermaSegmento = trascrizione.confermaSegmento,
             somiglianza = parlanti.somiglianza,
+            // compile-only (D-0037): PropostaTraParti is wired by avvio-proposta-tra-parti; until then no pair.
+            traParti = { emptyList() },
         ),
         stati = { trascrizione.statiElaborazione(listOf(id)).firstOrNull() },
         aggiornamenti = collaboratori.aggiornamentiVista,
@@ -175,6 +177,10 @@ internal fun costruisciRiassuntoPresenter(
     idModelloLinguistico = ID_MODELLO_LINGUISTICO,
     dimensioneModelloLinguisticoByte = DIMENSIONE_MODELLO_LINGUISTICO_BYTE,
     limiteCaratteriArgomento = Argomento.MASSIMO_CARATTERI,
+    // TRANSITION (D-0037): the Parte switch is `schermata-parte`'s (it owns the page and keeps the tab);
+    // until it lands there is one Parte per page, so a chip only plays.
+    vaiAllaParte = {},
+    riproduciDa = collaboratori.lettoreAudio::riproduciDa,
 )
 
 /** `ui-schede-registrazione`'s slot: [presenter]'s tab body, and the tab mark read on its own lifecycle (AC-S122). */

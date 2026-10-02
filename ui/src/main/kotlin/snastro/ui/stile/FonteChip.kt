@@ -1,5 +1,6 @@
 package snastro.ui.stile
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,26 +39,49 @@ private val PADDING_VERTICALE: Dp = 3.dp
  */
 @Composable
 public fun FonteChip(voceId: Int, nome: String?, inizioMs: Long, modifier: Modifier = Modifier) {
+    FonteChip(FonteChipDati(voceId, nome, inizioMs), onClick = null, modifier = modifier)
+}
+
+/**
+ * The Incontro form of [FonteChip] ([FonteChipDati]'s additions): the same layout, with an optional
+ * voice part and a [FonteChipDati.tempoTesto] in place of the bare timecode. [onClick] `null` = not
+ * interactive (a plain [Surface] with no click action).
+ */
+@Composable
+public fun FonteChip(dati: FonteChipDati, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
+    val voceId = dati.voceId
+    val nomeVisibile = if (dati.voceNonPresente) null else dati.nome
     Surface(
-        modifier = modifier,
+        modifier = if (onClick != null) modifier.clickable(onClick = onClick) else modifier,
         shape = SnastroMisure.radiusPill,
         color = colori.sunken,
     ) {
         RigaChip(
             modifier = Modifier.padding(horizontal = PADDING_ORIZZONTALE, vertical = PADDING_VERTICALE),
-            pallino = { PallinoVoce(voceId = VoceId(voceId), conNome = nome != null) },
-            nome = {
-                Text(
-                    text = nome ?: "Voce $voceId",
-                    style = tipografia.label,
-                    color = if (nome != null) colori.ink else colori.inkMuted,
-                )
+            pallino = if (voceId != null && !dati.voceNonPresente) {
+                { PallinoVoce(voceId = VoceId(voceId), conNome = nomeVisibile != null) }
+            } else {
+                null
+            },
+            nome = if (voceId != null) {
+                {
+                    Text(
+                        text = when {
+                            dati.voceNonPresente -> "Voce $voceId · $TESTO_NON_PIU_PRESENTE"
+                            else -> nomeVisibile ?: "Voce $voceId"
+                        },
+                        style = tipografia.label,
+                        color = if (nomeVisibile != null) colori.ink else colori.inkMuted,
+                    )
+                }
+            } else {
+                null
             },
             timecode = {
                 Text(
-                    text = formattaDurata(inizioMs),
+                    text = dati.tempoTesto,
                     modifier = Modifier.testTag(TAG_FONTE_CHIP_TIMECODE),
                     style = tipografia.timecode,
                     color = colori.inkMuted,
@@ -76,31 +100,38 @@ public fun FonteChip(voceId: Int, nome: String?, inizioMs: Long, modifier: Modif
 @Composable
 private fun RigaChip(
     modifier: Modifier,
-    pallino: @Composable () -> Unit,
-    nome: @Composable () -> Unit,
+    pallino: (@Composable () -> Unit)?,
+    nome: (@Composable () -> Unit)?,
     timecode: @Composable () -> Unit,
 ) {
-    Layout(contents = listOf(pallino, nome, timecode), modifier = modifier) { misure, vincoli ->
+    val vuoto: @Composable () -> Unit = {}
+    Layout(contents = listOf(pallino ?: vuoto, nome ?: vuoto, timecode), modifier = modifier) { misure, vincoli ->
         val (misurePallino, misureNome, misureTimecode) = misure
         val scarto = SnastroMisure.space1.roundToPx()
         val sciolti = vincoli.copy(minWidth = 0, minHeight = 0)
-        val pallinoP = misurePallino.single().measure(sciolti)
+        val pallinoP = misurePallino.singleOrNull()?.measure(sciolti)
         val timecodeP = misureTimecode.single().measure(sciolti)
-        val larghezzaFissa = pallinoP.width + scarto + timecodeP.width + scarto
+        val larghezzaPallino = pallinoP?.let { it.width + scarto } ?: 0
+        val larghezzaFissa = larghezzaPallino + timecodeP.width + scarto
         val vincoliNome = if (vincoli.hasBoundedWidth) {
             sciolti.copy(maxWidth = (vincoli.maxWidth - larghezzaFissa).coerceAtLeast(0))
         } else {
             sciolti.copy(maxWidth = Constraints.Infinity)
         }
-        val nomeP = misureNome.single().measure(vincoliNome)
-        val larghezzaTotale = pallinoP.width + scarto + nomeP.width + scarto + timecodeP.width
-        val altezza = maxOf(pallinoP.height, nomeP.height, timecodeP.height)
+        val nomeP = misureNome.singleOrNull()?.measure(vincoliNome)
+        val larghezzaNome = nomeP?.let { it.width + scarto } ?: 0
+        val larghezzaTotale = larghezzaPallino + larghezzaNome + timecodeP.width
+        val altezza = maxOf(pallinoP?.height ?: 0, nomeP?.height ?: 0, timecodeP.height)
         layout(larghezzaTotale, altezza) {
             var x = 0
-            pallinoP.placeRelative(x, (altezza - pallinoP.height) / 2)
-            x += pallinoP.width + scarto
-            nomeP.placeRelative(x, (altezza - nomeP.height) / 2)
-            x += nomeP.width + scarto
+            pallinoP?.let {
+                it.placeRelative(x, (altezza - it.height) / 2)
+                x += larghezzaPallino
+            }
+            nomeP?.let {
+                it.placeRelative(x, (altezza - it.height) / 2)
+                x += larghezzaNome
+            }
             timecodeP.placeRelative(x, (altezza - timecodeP.height) / 2)
         }
     }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.TestCoroutineScheduler
 import snastro.kernel.Esito
 import snastro.kernel.EstrattoRef
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
@@ -17,6 +18,7 @@ import snastro.kernel.unIncontroDi
 import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.letture.Candidato
+import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
@@ -68,6 +70,7 @@ internal fun unaSorgentiParlantiInerte(scope: CoroutineScope, clock: Clock = Clo
     clock = clock,
     confermaSegmento = { Esito.Ok(Unit) },
     somiglianza = AzioniSomiglianzaFinta(clock),
+    traParti = { emptyList() },
 )
 
 internal fun unCandidato(parlante: ParlanteAttivo = MARCO, fascia: Fascia = Fascia.FORTE) = Candidato(
@@ -134,6 +137,11 @@ internal class AmbienteVoci(
     var esitoComando: (ComandoVoce) -> Esito<Unit> = { Esito.Ok(Unit) }
     var identificazioneRotta = false
 
+    /** ADR 0036: what `PropostaTraParti.perIncontro` answers; [chiamateTraParti] records each computation. */
+    var traParti: List<CoppiaTraParti> = emptyList()
+    var traPartiRotta = false
+    val chiamateTraParti: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
+
     /** ADR 0018 Amendment (b) §2 (AC-452/454): `null` unless a test opts in via `presenter(conStati = true)`. */
     var statoElaborazione: StatoRegistrazioneVista? = null
     val aggiornamenti = AggiornamentiVistaFinta()
@@ -169,6 +177,11 @@ internal class AmbienteVoci(
         clock = clock,
         confermaSegmento = { c -> revisione(c) },
         somiglianza = somiglianza,
+        traParti = { incontro ->
+            chiamateTraParti += incontro
+            check(!traPartiRotta) { "estrazione fallita" }
+            traParti
+        },
     )
 
     private fun revisione(c: Any): Esito<Unit> {
