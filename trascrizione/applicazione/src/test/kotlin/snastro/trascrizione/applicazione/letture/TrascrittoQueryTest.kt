@@ -1,5 +1,6 @@
 package snastro.trascrizione.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -8,11 +9,14 @@ import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
+import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
+import snastro.trascrizione.dominio.VociDellIncontro
 import snastro.trascrizione.dominio.unSegmentoIniziale
+import snastro.trascrizione.dominio.unaElaborazione
 import snastro.trascrizione.dominio.unaRadice
 import snastro.trascrizione.dominio.unaRadiceDa
 import java.time.LocalDate
@@ -23,7 +27,8 @@ import kotlin.test.assertNull
 class TrascrittoQueryTest {
     private val trascritti = VociDellIncontroRepositoryFinta()
     private val registrazioni = LettoreRegistrazioneFinta(mapOf(REGISTRAZIONE to UNA_REGISTRAZIONE))
-    private val query = TrascrittoQuery(trascritti, registrazioni)
+    private val elaborazioni = ElaborazioneRepositoryFinta()
+    private val query = TrascrittoQuery(trascritti, registrazioni, elaborazioni)
 
     @Test
     fun `AC-167 vista espone i campi della Registrazione, i segmenti in ordine di tempo e le voci etichettate`() {
@@ -45,6 +50,9 @@ class TrascrittoQueryTest {
             TrascrittoView(
                 registrazioneId = REGISTRAZIONE,
                 incontroId = unIncontroDi(REGISTRAZIONE),
+                numeroParte = 1,
+                parti = listOf(ParteRef(REGISTRAZIONE, 1)),
+                solaLettura = null,
                 titolo = "Intervista",
                 dataRegistrazione = LocalDate.of(2026, 9, 1),
                 durataMs = 120_000,
@@ -54,8 +62,8 @@ class TrascrittoQueryTest {
                     SegmentoTrascrittoView(SegmentoId(3), VoceId(2), 4_500, 5_000, "terza battuta"),
                 ),
                 voci = listOf(
-                    VoceTrascrittoView(VoceId(1), "Voce 1"),
-                    VoceTrascrittoView(VoceId(2), "Voce 2"),
+                    VoceTrascrittoView(VoceId(1), "Voce 1", emptyList()),
+                    VoceTrascrittoView(VoceId(2), "Voce 2", emptyList()),
                 ),
             ),
             vista,
@@ -111,8 +119,8 @@ class TrascrittoQueryTest {
         // Labelling by position ("Voce ${i+1}") would yield "Voce 1"/"Voce 2": this asserts the VoceId.
         assertEquals(
             listOf(
-                VoceTrascrittoView(VoceId(2), "Voce 2"),
-                VoceTrascrittoView(VoceId(3), "Voce 3"),
+                VoceTrascrittoView(VoceId(2), "Voce 2", emptyList()),
+                VoceTrascrittoView(VoceId(3), "Voce 3", emptyList()),
             ),
             vista?.voci,
         )
@@ -165,7 +173,91 @@ class TrascrittoQueryTest {
         assertNull(query.vista(ALTRA_REGISTRAZIONE))
     }
 
+    @Test
+    fun `AC-I43 la Parte 2 di 3 ha numeroParte, parti e solo le Voci che vi parlano, la Voce 2 con altreParti 1 e 3`() {
+        val (radice, query) = treParti()
+
+        val vista = checkNotNull(query.vista(P2))
+
+        assertEquals(2, vista.numeroParte)
+        assertEquals(listOf(1, 2, 3), vista.parti.map { it.numero })
+        assertEquals(listOf(P1, P2, P3), vista.parti.map { it.registrazioneId })
+        assertEquals(listOf(VoceId(2), VoceId(3)), vista.voci.map { it.voceId })
+        assertEquals(listOf(listOf(1, 3), emptyList()), vista.voci.map { it.altreParti })
+        assertEquals(setOf(VoceId(2), VoceId(3)), vista.segmenti.map { it.voceId }.toSet())
+        check(radice.haParte(P2))
+    }
+
+    @Test
+    fun `AC-I44 un Ritrascrivi in coda sulla Parte 3 rende sola lettura anche la Parte 1`() {
+        val (_, query, elaborazioni) = treParti()
+        elaborazioni.salva(unaElaborazione(registrazioneId = P3))
+
+        assertEquals(RitrascrizioneInCorso(3), query.vista(P1)?.solaLettura)
+        assertEquals(RitrascrizioneInCorso(3), query.vista(P3)?.solaLettura)
+    }
+
+    @Test
+    fun `AC-I44 la prima trascrizione di una Parte appena importata non rende sola lettura`() {
+        val (_, query, elaborazioni) = treParti()
+        elaborazioni.salva(unaElaborazione(registrazioneId = RegistrazioneId("p4")))
+
+        assertNull(query.vista(P1)?.solaLettura)
+    }
+
+    @Test
+    fun `INV-I3 la vista di un Incontro di una sola Parte ha una parte e solaLettura con parte null`() {
+        trascritti.salva(unaRadice(voci = 1, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))
+        elaborazioni.salva(unaElaborazione(registrazioneId = REGISTRAZIONE))
+
+        val vista = checkNotNull(query.vista(REGISTRAZIONE))
+
+        assertEquals(listOf(ParteRef(REGISTRAZIONE, 1)), vista.parti)
+        assertEquals(1, vista.numeroParte)
+        assertEquals(RitrascrizioneInCorso(null), vista.solaLettura)
+        assertEquals(emptyList(), vista.voci.single().altreParti)
+    }
+
+    @Test
+    fun `AC-I45 VociIncontro elenca ogni Voce con le Parti in cui parla, per voceId crescente, e numVoci torna`() {
+        val (_, query) = treParti()
+
+        val voci = checkNotNull(query.vociIncontro(INCONTRO))
+
+        assertEquals(listOf(1, 2, 3, 5).map { VoceId(it) }, voci.voci.map { it.voceId })
+        assertEquals(listOf(listOf(1), listOf(1, 2, 3), listOf(2), listOf(3)), voci.voci.map { it.parti })
+        assertEquals(4, voci.numVoci)
+    }
+
+    private fun treParti(): Triple<VociDellIncontro, TrascrittoQuery, ElaborazioneRepositoryFinta> {
+        val radice = VociDellIncontro.crea(INCONTRO)
+        listOf(P1, P2, P3).forEach { r ->
+            radice.completaParte(
+                r,
+                listOf(unSegmentoIniziale(0, 0), unSegmentoIniziale(1, 2_000)),
+                DURATA_TRASCRITTO_MS,
+            ).atteso()
+        }
+        // Voci 1,2 | 3,4 | 5,6 -> Voce 2 speaks in all three Parti (merged by the user), 4 and 6 are gone.
+        radice.unisci(VoceId(2), VoceId(4)).atteso()
+        radice.unisci(VoceId(2), VoceId(6)).atteso()
+        val repo = VociDellIncontroRepositoryFinta()
+        repo.salva(radice)
+        val el = ElaborazioneRepositoryFinta()
+        val lettore = LettoreRegistrazioneFinta(
+            listOf(P1, P2, P3, RegistrazioneId("p4")).associateWith { unaVistaDi(it) },
+            ordine = mapOf(INCONTRO to listOf(P1, P2, P3)),
+        )
+        return Triple(radice, TrascrittoQuery(repo, lettore, el), el)
+    }
+
+    private fun unaVistaDi(r: RegistrazioneId) = UNA_REGISTRAZIONE.copy(registrazioneId = r, incontroId = INCONTRO)
+
     private companion object {
+        val INCONTRO = IncontroId("incontro-3-parti")
+        val P1 = RegistrazioneId("p1")
+        val P2 = RegistrazioneId("p2")
+        val P3 = RegistrazioneId("p3")
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
         val ALTRA_REGISTRAZIONE = RegistrazioneId("registrazione-2")
         val UNA_REGISTRAZIONE = RegistrazioneVista(
