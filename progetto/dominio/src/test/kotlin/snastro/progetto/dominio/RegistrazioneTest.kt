@@ -77,7 +77,7 @@ class RegistrazioneTest {
         val conNanosecondi = Registrazione.aggiungi(
             id = id,
             progettoId = progettoId,
-            incontroId = IncontroId("incontro-di-${'$'}{id.valore}"),
+            incontroId = IncontroId("incontro-di-${id.valore}"),
             titolo = "Intervista Marco",
             riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
             durataMs = 1L,
