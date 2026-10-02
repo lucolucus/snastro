@@ -671,3 +671,29 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [release decisions](release-decisions/I1.md)
 - Revisit: one of the waived points causes a defect.
+
+### D-0051 · Una Parte non trascritta ha la sua pagina
+- Meta: 2026-10-03; scope: block:schermata-parte; status: accepted; sha: 782228f2
+- Question: What does S3 show when the switcher opens a Parte still queued or in transcription?
+- Options: A a dedicated "Parte in attesa" state with the switcher still visible (kept); B keep the generic load error; C hide such Parti from the switcher.
+- Hypothesis: n/a — decided by the user at the I2 start, [pre-release](pre-release.md)
+- Check: n/a — decided by the user at the I2 start, [pre-release](pre-release.md)
+- Result: n/a — decided by the user at the I2 start, [pre-release](pre-release.md)
+- Debate: the verifier flagged that the generic "Impossibile caricare" is misleading for a normal state; the spec was silent.
+- Decision: A, built in an I2 fix group. Cost: one more S3 state to render and test.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: users want to open the transcript while it is still running.
+
+### D-0052 · Eccezione stretta a AC-183 accettata
+- Meta: 2026-10-03; scope: block:adattatori-sbobinatura-incontro; status: accepted; sha: 782228f2
+- Question: Accept two identical Sbobinatura writes when a recovering Registrazione's own event precedes an Incontro fan-out in one burst?
+- Options: A accept the narrow exception to AC-183 (kept); B change the pinned RitentaConBackoff in :supporto to support a neutral postpone.
+- Hypothesis: n/a — decided by the user at the I2 start, [pre-release](pre-release.md)
+- Check: n/a — decided by the user at the I2 start, [pre-release](pre-release.md)
+- Result: n/a — decided by the user at the I2 start, [pre-release](pre-release.md)
+- Debate: the alternative inside the adapter logs a false failure; the write is byte-identical (INV-23).
+- Decision: A. Cost: one redundant write in a rare recovery case.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: the redundant write becomes visible to the user.
