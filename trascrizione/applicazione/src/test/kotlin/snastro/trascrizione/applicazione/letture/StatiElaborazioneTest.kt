@@ -5,6 +5,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.atteso
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
@@ -12,6 +13,7 @@ import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_CORSO
+import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unaElaborazione
 import snastro.trascrizione.dominio.unaRadice
 import java.time.Instant
@@ -130,6 +132,27 @@ class StatiElaborazioneTest {
             ),
             listOf(daFare, inCorso, rifatta, fallita, trascritta).map(stati::statoParte),
         )
+    }
+
+    @Test
+    fun `AC-I41 statoParte non carica mai un Trascritto e ne verifica l esistenza solo senza un run aperto`() {
+        val letture = mutableListOf<String>()
+        val contati = object : VociDellIncontroRepository by trascritti {
+            override fun trascritto(r: RegistrazioneId): Trascritto? =
+                trascritti.trascritto(r).also { letture += "load" }
+            override fun conTrascritto(): List<RegistrazioneId> = trascritti.conTrascritto().also { letture += "ids" }
+        }
+        val stati = StatiElaborazione(elaborazioni, contati, fasi)
+        val aperta = RegistrazioneId("p-aperta")
+        val trascritta = RegistrazioneId("p-trascritta")
+        elaborazioni.salva(unaElaborazione(IN_ATTESA, id = idDi("el-1"), registrazioneId = aperta))
+        trascritti.salva(unaRadice(registrazioneId = aperta))
+        trascritti.salva(unaRadice(registrazioneId = trascritta))
+
+        assertEquals(StatoParte.IN_TRASCRIZIONE, stati.statoParte(aperta))
+        assertEquals(emptyList(), letture, "an open run wins without any Trascritto read")
+        assertEquals(StatoParte.TRASCRITTA, stati.statoParte(trascritta))
+        assertEquals(listOf("ids"), letture, "existence only: no full load")
     }
 
     @Test

@@ -16,9 +16,6 @@ class IncontroRepositorySqlTest : IncontroRepositoryContratto() {
             override val registrazioni = RegistrazioneRepositorySql(db)
             override val unitaDiLavoro = UnitaDiLavoroSql(db)
             override val progettoId = progetto
-
-            // Switched on when the multi-file import lands (I2, ADR 0033 §6).
-            override val incontriConPiuParti = false
         }
     }
 }

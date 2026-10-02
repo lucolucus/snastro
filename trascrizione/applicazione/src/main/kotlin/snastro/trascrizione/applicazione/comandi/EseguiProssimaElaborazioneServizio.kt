@@ -131,7 +131,7 @@ public class EseguiProssimaElaborazioneServizio(
                 concludi(registrazioneId, elaborazioneId) { fresca ->
                     when (risultato) {
                         is RisultatoPipeline.Successo ->
-                            concludiConSuccesso(fresca, risultato.incontroId, risultato.durataMs, risultato.segmenti)
+                            concludiConSuccesso(fresca, risultato.durataMs, risultato.segmenti)
                         is RisultatoPipeline.Fallita -> concludiConFallimento(fresca, risultato.motivo)
                     }
                 }
@@ -180,7 +180,7 @@ public class EseguiProssimaElaborazioneServizio(
         eseguiFase { pipeline.segnalatore.fase(id, ALLINEAMENTO) }
             ?: return RisultatoPipeline.Fallita(MOTIVO_ALLINEAMENTO)
         val segmenti = grezzi.map { SegmentoIniziale(it.voceIndice, it.intervallo, it.testo) } // AC-71: voceIndice kept
-        return RisultatoPipeline.Successo(vista.incontroId, durataDecodificata(campioni), segmenti)
+        return RisultatoPipeline.Successo(durataDecodificata(campioni), segmenti)
     }
 
     /**
@@ -249,21 +249,25 @@ public class EseguiProssimaElaborazioneServizio(
     }
 
     /**
-     * ADR 0035 §3: the root of the Parte's Incontro is re-read HERE, inside the completion transaction (created empty
-     * at the first completion of any Parte of the Incontro), and [VociDellIncontro.completaParte] numbers the new Voci
-     * from its counter and the Segmenti after every id the Parte ever used (INV-I4, INV-I16).
+     * ADR 0035 §3: the Parte's Registrazione is looked up again and the root of ITS Incontro (from this fresh lookup,
+     * never the one read before the pipeline) is re-read HERE, inside the completion transaction (created empty at the
+     * first completion of any Parte of the Incontro); [VociDellIncontro.completaParte] numbers the new Voci from its
+     * counter and the Segmenti after every id the Parte ever used (INV-I4, INV-I16).
      */
+    @Suppress("ReturnCount") // one guard per lookup outcome (fault, miss), each with its own fixed motivo
     private fun concludiConSuccesso(
         elaborazione: Elaborazione,
-        incontroId: IncontroId,
         durataMs: Long,
         segmenti: List<SegmentoIniziale>,
     ): Esito<Unit> {
-        // INV-I16: a removed Parte loses its Segmento counter with its Trascritto, so a completion that outlives
-        // its Registrazione (deleted while the pipeline ran) is refused, never re-created from id 1.
-        if (pipeline.registrazioni.registrazione(elaborazione.registrazioneId) == null) {
-            return concludiConFallimento(elaborazione, MOTIVO_REGISTRAZIONE_MANCANTE)
-        }
+        // INV-I16, defensive: unreachable in production today (the deletion is vetoed while this Elaborazione is
+        // aperta, and removes the Elaborazioni with the Parte), it keeps a completion that outlived its Registrazione
+        // from re-creating the Parte with Segmenti from id 1. As in the pipeline's lookup, a port fault has its own
+        // motivo.
+        val letta = eseguiFase { Lettura(pipeline.registrazioni.registrazione(elaborazione.registrazioneId)) }
+            ?: return concludiConFallimento(elaborazione, MOTIVO_LETTURA_REGISTRAZIONE)
+        val incontroId = letta.vista?.incontroId
+            ?: return concludiConFallimento(elaborazione, MOTIVO_REGISTRAZIONE_MANCANTE)
         val radice = trascritti.trova(incontroId) ?: VociDellIncontro.crea(incontroId)
         return when (val conclusione = radice.completaParte(elaborazione.registrazioneId, segmenti, durataMs)) {
             is Esito.Ok -> completa(elaborazione, radice, conclusione.valore)
@@ -420,7 +424,6 @@ private class TransazioneRifiutata(quale: String, errore: ErroreDominio) :
 /** The pipeline's outcome (never inside a transaction): a Trascritto candidate, or a fixed `motivo`. */
 private sealed interface RisultatoPipeline {
     data class Successo(
-        val incontroId: IncontroId,
         val durataMs: Long,
         val segmenti: List<SegmentoIniziale>,
     ) : RisultatoPipeline

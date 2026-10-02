@@ -143,6 +143,14 @@ public class AbbonatoSbobinaturaEventi(
      * holds up any Registrazione's run (AC-C46).
      */
     private val incontriDaElencare = ConcurrentHashMap.newKeySet<IncontroId>()
+
+    /**
+     * Registrazioni whose LAST run failed. Such a key never steps back behind an Incontro fan-out: [RitentaConBackoff]
+     * would count the step-back (`true`) as a success — a false "riuscito dopo n tentativi", the backoff counter reset
+     * and the scheduled retry replaced by an immediate one. It runs (and may fail again) so the failure state stays
+     * with [ritenta]; the fan-out's extra write for it is the price, paid only while it keeps failing.
+     */
+    private val fallite = ConcurrentHashMap.newKeySet<RegistrazioneId>()
     private val ritenta = RitentaConBackoff<Chiave>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     init {
@@ -194,12 +202,13 @@ public class AbbonatoSbobinaturaEventi(
         Chiave.Sweep -> avviaSweep()
         is Chiave.PerParlante -> politica.perParlanteRinominato(chiave.id) is Esito.Ok
         is Chiave.PerIncontro -> fanOutParti(chiave.id)
-        is Chiave.PerRegistrazione -> if (incontriDaElencare.isEmpty()) {
+        is Chiave.PerRegistrazione -> if (incontriDaElencare.isEmpty() || chiave.id in fallite) {
             eseguiRegistrazione(chiave.id)
         } else {
             // AC-183 for ANY burst order: an Incontro fan-out requested and not yet attempted is already queued in
             // [ritenta] — this key goes back behind it, so the fan-out merges into the ONE run that follows. The
-            // listing never runs here: a failing Incontro leaves [incontriDaElencare] once attempted (AC-C46).
+            // listing never runs here: a failing Incontro leaves [incontriDaElencare] once attempted (AC-C46), so a
+            // key steps back at most once per pending fan-out (global set: any pending Incontro defers every key).
             ritenta.richiedi(chiave)
             true
         }
@@ -207,7 +216,8 @@ public class AbbonatoSbobinaturaEventi(
 
     /**
      * Like [avviaSweep]: only LISTS the Parti and fans each into its OWN [Chiave.PerRegistrazione]; never writes.
-     * A throwing listing is retried by [ritenta] under this [Chiave.PerIncontro] alone.
+     * A throwing listing is retried by [ritenta] under this [Chiave.PerIncontro] alone. Always `true` once the
+     * listing returned: a drained run, even one that listed no Parte (or an unknown Incontro), counts as done.
      */
     private fun fanOutParti(incontroId: IncontroId): Boolean {
         incontriDaElencare.remove(incontroId) // attempted: from now on no Registrazione waits for it
@@ -240,6 +250,9 @@ public class AbbonatoSbobinaturaEventi(
         } finally {
             if (esito !is Esito.Ok) {
                 pendenti.merge(id, lavoro) { accumulato, fallito -> primaArrivata(fallito, accumulato) }
+                fallite.add(id)
+            } else {
+                fallite.remove(id)
             }
         }
         return esito is Esito.Ok

@@ -75,7 +75,8 @@ class RiassegnaSegmentoServizioTest {
 
         val errore = servizio.esegui(comando).erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>()
 
-        assertEquals(ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), VoceId(1)), errore)
+        val atteso = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(REGISTRAZIONE, SegmentoId(1)), VoceId(1))
+        assertEquals(atteso, errore)
         assertEquals(emptyList(), eventi.pubblicati)
     }
 

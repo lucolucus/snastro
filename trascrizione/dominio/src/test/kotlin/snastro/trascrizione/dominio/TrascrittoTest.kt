@@ -222,7 +222,7 @@ class TrascrittoTest {
         val t = unTrascritto(voci = 2, segmentiPerVoce = 2) // V1:S1,S3 V2:S2,S4
 
         assertEquals(
-            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), VoceId(1)),
+            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(t.registrazioneId, SegmentoId(1)), VoceId(1)),
             t.riassegna(SegmentoId(1), VoceId(1)).erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>(),
         )
         t.riassegna(SegmentoId(1), VoceId(8)).erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
@@ -271,7 +271,7 @@ class TrascrittoTest {
         val prossimaVoce = t.prossimaVoce
 
         assertEquals(
-            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(2), null),
+            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(t.registrazioneId, SegmentoId(2)), null),
             t.riassegna(SegmentoId(2), null).erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>(),
         )
 

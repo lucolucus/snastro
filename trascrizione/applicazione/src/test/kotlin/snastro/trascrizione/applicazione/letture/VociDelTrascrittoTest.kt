@@ -5,11 +5,14 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.SegmentoRef
+import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
+import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
+import snastro.trascrizione.applicazione.porte.ParteDiIncontro
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
@@ -24,7 +27,8 @@ import kotlin.test.assertNull
 class VociDelTrascrittoTest {
     private val trascritti = VociDellIncontroRepositoryFinta()
     private val ordine = mutableMapOf<IncontroId, List<RegistrazioneId>>()
-    private val api = VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(emptyMap(), ordine))
+    private val uow = UnitaDiLavoroFinta(trascritti)
+    private val api = VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(emptyMap(), ordine), uow)
 
     /** A one-second turn of diarizer voice [voce] starting at [inizioMs]. */
     private fun turno(voce: Int, inizioMs: Long) = unSegmentoIniziale(voce, inizioMs, inizioMs + 1_000)
@@ -242,13 +246,35 @@ class VociDelTrascrittoTest {
     fun `AC-I42 ogni lettura per Incontro legge la radice una volta sola`() {
         incontroConParti(listOf(PARTE_1, PARTE_2))
         val contati = ContaTrova(trascritti)
-        val api = VociDelTrascritto(contati, LettoreRegistrazioneFinta(emptyMap(), ordine))
+        val api = VociDelTrascritto(contati, LettoreRegistrazioneFinta(emptyMap(), ordine), uow)
 
         api.voci(INCONTRO)
         api.segmenti(INCONTRO)
         api.partiConTrascritto(INCONTRO)
 
         assertEquals(3, contati.trova) // one `trova` (one LetturaCoerente snapshot) per call
+    }
+
+    @Test
+    fun `AC-I42 l ordine delle Parti e la radice sono letti nella stessa lettura coerente`() {
+        incontroConParti(listOf(PARTE_1, PARTE_2))
+        val dentro = mutableListOf<Boolean>()
+        val finta = LettoreRegistrazioneFinta(emptyMap(), ordine)
+        val parti = object : LettoreRegistrazione by finta {
+            override fun parti(incontroId: IncontroId): List<ParteDiIncontro>? =
+                finta.parti(incontroId).also { dentro += uow.letturaAperta }
+        }
+        val radice = object : VociDellIncontroRepository by trascritti {
+            override fun trova(id: IncontroId): VociDellIncontro? =
+                trascritti.trova(id).also { dentro += uow.letturaAperta }
+        }
+        val api = VociDelTrascritto(radice, parti, uow)
+
+        api.voci(INCONTRO)
+        api.segmenti(INCONTRO)
+        api.partiConTrascritto(INCONTRO)
+
+        assertEquals(List(6) { true }, dentro)
     }
 
     private class ContaTrova(private val dentro: VociDellIncontroRepository) : VociDellIncontroRepository by dentro {

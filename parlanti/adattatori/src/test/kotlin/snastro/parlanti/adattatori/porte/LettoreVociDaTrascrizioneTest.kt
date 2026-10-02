@@ -108,7 +108,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
         }
 
         override val lettore: LettoreVoci = LettoreVociDaTrascrizione(
-            VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste)),
+            VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste), UnitaDiLavoroFinta()),
         )
 
         /** D-0037: off until the I2 multi-file import into an Incontro lands (then seeded through it). */

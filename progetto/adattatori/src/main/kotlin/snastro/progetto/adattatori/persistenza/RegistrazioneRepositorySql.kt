@@ -65,7 +65,10 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
     }
 }
 
-/** The database is trusted (CR-15): nothing is re-validated, and one bad row never breaks a list. */
+/**
+ * The database is trusted (dev-architecture-app.md#aggregato: `ricostituisci` re-validates nothing), and one bad row
+ * never breaks a list.
+ */
 @OptIn(RicostituzioneDaPersistenza::class)
 private fun RegistrazioneRiga.inDominio(): Registrazione = Registrazione.ricostituisci(
     id = RegistrazioneId(id),
@@ -76,7 +79,9 @@ private fun RegistrazioneRiga.inDominio(): Registrazione = Registrazione.ricosti
     durataMs = durata_ms,
     dataRegistrazione = LocalDate.parse(data_registrazione),
     aggiuntaAlle = Instant.ofEpochMilli(aggiunta_alle),
-    // The VO has no trusted factory: an unreadable text (never written by this repository) is the empty time.
+    // OraDiInizio has no unchecked factory, so the stored text goes through OraDiInizio.di. This repository only ever
+    // writes 'HH:MM:SS' or NULL: an unreadable text (written by something else) reads as the empty time, and the next
+    // save of this Registrazione stores that empty time.
     oraDiInizio = (OraDiInizio.di(ora_di_inizio) as? Esito.Ok)?.valore,
 )
 

@@ -3,12 +3,25 @@ package snastro.sintesi.applicazione.porte
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.unIncontroDi
 import java.time.LocalDate
 import java.time.LocalTime
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 /** D1: [LettoreIncontroFinta] passes [LettoreIncontroContratto]; ids minted like the supplier (GeneratoreId). */
 class LettoreIncontroFintaTest : LettoreIncontroContratto() {
     override fun ambiente(): AmbienteLettoreIncontro = AmbienteFinto()
+
+    @Test
+    fun `ogniIncontroConUnaParte risponde solo agli Incontri della convenzione, null altrimenti come il fornitore`() {
+        val lettore = ogniIncontroConUnaParte()
+        val r = RegistrazioneId("reg-1")
+
+        assertEquals(listOf(ParteSintesi(r, 1)), lettore.parti(unIncontroDi(r)))
+        assertNull(lettore.parti(IncontroId("incontro-ignoto")))
+    }
 
     /**
      * Plays the supplier: keeps each Incontro's Parti in INV-I2 order (date, OraDiInizio with an empty one last,

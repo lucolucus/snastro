@@ -3,8 +3,6 @@ package snastro.sintesi.adattatori.eventi
 import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
-import snastro.kernel.IncontroId
-import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSintesiPolitica
 
@@ -27,16 +25,11 @@ import snastro.sintesi.applicazione.politiche.ApplicaEliminazioneRegistrazioneSi
  */
 public class AbbonatoProgettoSintesi(
     private val politica: ApplicaEliminazioneRegistrazioneSintesiPolitica,
-    /** The Incontro of a Registrazione as Progetto's catalogue reads it (ADR 0033 §4.1), bound at `:avvio`. */
-    private val incontroDi: (RegistrazioneId) -> IncontroId?,
 ) : AbbonatoSincrono {
     override fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
-        is RegistrazioneEliminata -> applica(evento)
+        // ADR 0033 §4.1, ADR 0038 §1: the Riassunti are the Incontro's, and the event carries it — no lookup that
+        // could miss and silently skip a ceased Incontro's purge.
+        is RegistrazioneEliminata -> politica.applica(evento.incontroId, evento.incontroCessato)
         else -> Esito.Ok(Unit)
     }
-
-    // ADR 0033 §4.1: the Riassunti are the Incontro's. Delivered before Progetto removes the row (ADR 0020 §2), so the
-    // catalogue still knows the Parte; an id it does not know has no Incontro, so no Riassunto.
-    private fun applica(evento: RegistrazioneEliminata): Esito<Unit> =
-        incontroDi(evento.registrazioneId)?.let { politica.applica(it, evento.incontroCessato) } ?: Esito.Ok(Unit)
 }

@@ -4,6 +4,7 @@ import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.poi
 import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
@@ -17,12 +18,12 @@ import snastro.trascrizione.dominio.ErroreTrascrizione
  *
  * It re-reads the Elaborazioni INSIDE the transaction: any `aperta` one (the aggregate's predicate) vetoes the
  * deletion with `ElaborazioneGiaAperta`, removing nothing — the deletion never cancels a queued Elaborazione
- * [user default]. Otherwise the Parte leaves the Voci dell'Incontro (`VociDellIncontro.rimuoviParte`, INV-I6) and
- * EVERY Elaborazione of it goes, history included. The root itself is removed only when the Incontro ceases with
- * this Parte, its last one (ADR 0035 §1: the counter survives every other removal, INV-I4) — the caller
- * passes `RegistrazioneEliminata.incontroCessato`, minted by `elimina-parte`. When the Parte had a Trascritto,
- * [TrascrittoEliminato] is published inside the unit (ADR 0038 §2, INV-I6), after the root is written and before
- * Progetto removes the rows (ADR 0020 §2). Structural only: it never decodes nor extracts
+ * [user default]. Otherwise EVERY Elaborazione of the Parte goes first, history included, then the Parte leaves the
+ * Voci dell'Incontro (`VociDellIncontro.rimuoviParte`, INV-I6), in ADR 0038 §2's order. The root itself is removed
+ * only when the Incontro ceases with this Parte, its last one (ADR 0035 §1: the counter survives every other removal,
+ * INV-I4) — the caller passes `RegistrazioneEliminata.incontroCessato`, minted by `elimina-parte`. When the Parte had
+ * a Trascritto, [TrascrittoEliminato] is published inside the unit (ADR 0038 §2, INV-I6), after the root is written
+ * (or removed) and before Progetto removes the rows (ADR 0020 §2). Structural only: it never decodes nor extracts
  * (ADR 0012 Amendment (d)).
  */
 public class ApplicaEliminazioneRegistrazionePolitica(
@@ -40,17 +41,19 @@ public class ApplicaEliminazioneRegistrazionePolitica(
         if (diRegistrazione.any { it.aperta }) {
             return Esito.Errore(ErroreTrascrizione.ElaborazioneGiaAperta(registrazioneId))
         }
-        trascritti.trova(incontroId)?.let { radice ->
-            val vociRimosse = if (radice.haParte(registrazioneId)) {
-                (radice.rimuoviParte(registrazioneId) as Esito.Ok).valore // haParte: never refused
-            } else {
-                null
-            }
-            if (incontroCessato) trascritti.rimuovi(incontroId) else if (vociRimosse != null) trascritti.salva(radice)
-            if (vociRimosse != null) eventi.pubblica(TrascrittoEliminato(registrazioneId, incontroId, vociRimosse))
-        }
         // INV-5: a Trascritto exists only with a completata Elaborazione — none at all, nothing more to remove.
         if (diRegistrazione.isNotEmpty()) elaborazioni.rimuoviDiRegistrazione(registrazioneId)
-        return Esito.Ok(Unit)
+        val radice = trascritti.trova(incontroId)
+        // haParte first: the refusal of rimuoviParte is not expected, but it travels as its named error, never a cast.
+        val rimozione = radice?.takeIf { it.haParte(registrazioneId) }?.rimuoviParte(registrazioneId) ?: Esito.Ok(null)
+        return rimozione.poi { vociRimosse ->
+            if (radice != null && incontroCessato) {
+                trascritti.rimuovi(incontroId)
+            } else if (radice != null && vociRimosse != null) {
+                trascritti.salva(radice)
+            }
+            if (vociRimosse != null) eventi.pubblica(TrascrittoEliminato(registrazioneId, incontroId, vociRimosse))
+            Esito.Ok(Unit)
+        }
     }
 }

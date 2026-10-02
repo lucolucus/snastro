@@ -36,7 +36,9 @@ import java.time.temporal.ChronoUnit
  * `Esito.Errore` (AC-60) or a thrown exception (sync subscriber throw, or any
  * SQLite/IO fault at save/commit) — the copied file is discarded so no file is left behind without
  * its Registrazione; the discard runs from a `finally` so it still happens when the transaction
- * throws instead of returning.
+ * throws instead of returning. An after-commit subscriber's throw comes AFTER the commit: once the
+ * transaction's block has returned Ok, a copy whose Registrazione is stored is kept (never lose the audio
+ * of a committed Registrazione).
  */
 @Suppress("LongParameterList") // one parameter per collaborator: uow, id/clock, 3 repos, 2 technical ports, eventi
 public class AggiungiRegistrazioneServizio(
@@ -56,6 +58,7 @@ public class AggiungiRegistrazioneServizio(
         require(c.file.isNotEmpty()) { "AggiungiRegistrazione richiede almeno un file" }
         val copie = mutableListOf<FileCopiato>()
         var confermata = false
+        var importata = false
         try {
             // Probe and copy every file OUTSIDE the transaction (ADR 0012); the first failure stops the import.
             for (file in c.file) {
@@ -71,11 +74,15 @@ public class AggiungiRegistrazioneServizio(
                     is Esito.Errore -> return copiato
                 }
             }
-            return uow.inTransazione { importa(progetto.id, c.destinazione, copie) }
+            return uow.inTransazione { importa(progetto.id, c.destinazione, copie).also { importata = it is Esito.Ok } }
                 .also { confermata = it is Esito.Ok }
         } finally {
-            // AC-60: no file without its row, whether the transaction returns Errore or throws
-            if (!confermata) copie.forEach { archivio.scarta(it.riferimento) }
+            // AC-60: no file without its row, whether the transaction returns Errore or throws; after an Ok block the
+            // throw may come after the commit (an after-commit subscriber): the rows say which copies are committed.
+            if (!confermata) {
+                copie.filterNot { importata && registrazioni.trova(it.id) != null }
+                    .forEach { archivio.scarta(it.riferimento) }
+            }
         }
     }
 

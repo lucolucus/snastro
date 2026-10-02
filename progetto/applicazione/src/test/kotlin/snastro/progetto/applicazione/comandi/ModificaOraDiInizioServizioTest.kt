@@ -10,6 +10,7 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.progetto.applicazione.eventi.OraDiInizioModificata
+import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.progetto.dominio.OraDiInizio
@@ -40,7 +41,17 @@ class ModificaOraDiInizioServizioTest {
         )
     }
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni))
-    private val servizio = ModificaOraDiInizioServizio(eventi.unitaDiLavoro, registrazioni, eventi)
+    private var scritture = 0
+    private val servizio = ModificaOraDiInizioServizio(
+        eventi.unitaDiLavoro,
+        object : RegistrazioneRepository by registrazioni {
+            override fun salva(r: Registrazione) {
+                scritture++
+                registrazioni.salva(r)
+            }
+        },
+        eventi,
+    )
 
     private fun ora(testo: String): OraDiInizio = assertNotNull(OraDiInizio.di(testo).atteso())
 
@@ -75,13 +86,15 @@ class ModificaOraDiInizioServizioTest {
 
         assertEquals(Esito.Ok(Unit), servizio.esegui(ModificaOraDiInizio(id, ora("10:25:00"))))
         assertEquals(dopoLaPrima, eventi.pubblicati.size)
+        assertEquals(1, scritture, "la seconda non scrive")
     }
 
     @Test
-    fun `l'ora vuota su un'ora vuota non pubblica nulla`() {
+    fun `l'ora vuota su un'ora vuota non pubblica e non scrive nulla`() {
         servizio.esegui(ModificaOraDiInizio(id, null)).atteso()
 
         assertEquals(emptyList(), eventi.pubblicati)
+        assertEquals(0, scritture)
     }
 
     @Test
@@ -93,6 +106,7 @@ class ModificaOraDiInizioServizioTest {
 
         assertEquals(sconosciuta, errore.id)
         assertEquals(emptyList(), eventi.pubblicati)
+        assertEquals(0, scritture)
     }
 
     @Test

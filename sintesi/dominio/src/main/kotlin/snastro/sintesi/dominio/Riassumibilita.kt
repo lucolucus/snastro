@@ -9,7 +9,8 @@ import snastro.kernel.Esito
  */
 public object Riassumibilita {
     /**
-     * [stati] are `numero to stato` for every Parte of the Incontro (never empty: an Incontro has ≥ 1 Parte);
+     * [stati] are `numero to stato` for every Parte of the Incontro (never empty: an Incontro has ≥ 1 Parte; each
+     * numero once);
      * [stimaToken] is [LimiteIngresso.stimaToken] of the whole labelled input, null when it was not built.
      */
     public fun valuta(
@@ -19,6 +20,7 @@ public object Riassumibilita {
         stimaToken: Int?,
     ): Esito<Unit> {
         require(stati.isNotEmpty()) { "un Incontro ha almeno una Parte" }
+        require(stati.map { it.first }.toSet().size == stati.size) { "numero di Parte ripetuto: $stati" }
         val bloccante = stati.sortedBy { it.first }.firstNotNullOfOrNull { (parte, stato) -> bloccoDi(parte, stato) }
         return when {
             !modelloInstallato -> Esito.Errore(ErroreSintesi.ModelloNonInstallato)

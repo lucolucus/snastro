@@ -23,11 +23,9 @@ import snastro.ui.Cambiamento
  * `ElaborazioneAvviata`/`Completata`/`Fallita`/`Annullata` (ADR 0018 Amendment (b), AC-478: S2 reloads the whole
  * list, so every other queued row's position too, and S3 leaves read-only), `TrascrittoSostituito` (ADR 0018),
  * `VociUnite`, `VoceDivisa`, `SegmentoRiassegnato` (one per Parte of their Incontro); and [cambiata] is what every
- * phase
- * change of the shared `FasiInCorso` calls ([SegnalatoreFaseConCambiamenti]). Each produces one [Cambiamento] for its
- * Registrazione, so S2
- * updates state and phase without polling. `replay = 1`: same reason as `AggiornamentiVistaEventi` (a screen mounted
- * right after a change still refreshes once).
+ * phase change of the shared `FasiInCorso` calls ([SegnalatoreFaseConCambiamenti]). Each produces one [Cambiamento]
+ * for its Registrazione, so S2 updates state and phase without polling. `replay = 1`: same reason as
+ * `AggiornamentiVistaEventi` (a screen mounted right after a change still refreshes once).
  */
 internal class AggiornamentiVistaTrascrizione(
     /** ADR 0033 §4.1: the Parti of an Incontro (a Revisione event names the Incontro), `null` once it ceased. */
