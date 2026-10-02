@@ -723,3 +723,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier
 - Docs: [pre-release](pre-release.md)
 - Revisit: a caller needs to drop the prints of only some Parti.
+
+### D-0055 · Via i flag piuPartiPerIncontro
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: d61d50ca
+- Question: Every real-adapter Ambiente now seeds several Parti through the import; keep the D-0037 capability flags defaulting to true, or remove them?
+- Options: A remove the flags and the one-Parte fallback branches; multi-Parte cases unconditional; real Ambienti use an advancing clock (kept); B keep the flags defaulting to true.
+- Hypothesis: n/a — decided by the worker in fix group pre-I2-8, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I2-8, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I2-8, [pre-release](pre-release.md)
+- Debate: verifier: 16 multi-Parte contract cases run on the real adapters; the removed fallbacks are covered by AC-I22, AC-I205 and AC-30; the advancing clock removes a test-only id tie-break artefact.
+- Decision: A; D-0037's flag clause is closed. Cost: none.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: a new Ambiente cannot seed several Parti.
