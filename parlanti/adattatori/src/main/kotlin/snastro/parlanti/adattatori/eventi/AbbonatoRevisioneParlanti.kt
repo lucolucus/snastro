@@ -3,13 +3,11 @@ package snastro.parlanti.adattatori.eventi
 import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
-import snastro.kernel.IncontroId
-import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
 import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
-import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
@@ -19,7 +17,8 @@ import snastro.trascrizione.applicazione.eventi.VociUnite
  * Trascrizione Revisione (block `abbonato-revisione-parlanti`, AC-142/AC-143), and (ADR 0018 §3 +
  * Amendment 2026-09-24 (b) §1, AC-446) the [INV-15]/[INV-25] purge on [TrascrittoSostituito]:
  * translates [VociUnite]/[VoceDivisa]/[SegmentoRiassegnato] 1:1 into an [ApplicaRevisionePolitica]
- * call, and [TrascrittoSostituito] into an [ApplicaSostituzioneTrascrittoPolitica] call — run INSIDE
+ * call, and [TrascrittoSostituito] / [TrascrittoEliminato] (ADR 0035 §6, [INV-I8b]) into an
+ * [ApplicaSostituzioneTrascrittoPolitica] call — run INSIDE
  * the publishing command's transaction in both cases — an [Esito.Errore] from either policy dooms and
  * rolls back the whole transaction (the kernel dispatcher's rule). ADR 0020 §2 step 4 (AC-621):
  * Progetto's [RegistrazioneEliminata] is translated into the SAME [ApplicaSostituzioneTrascrittoPolitica]
@@ -34,7 +33,6 @@ import snastro.trascrizione.applicazione.eventi.VociUnite
 public class AbbonatoRevisioneParlanti(
     private val politica: ApplicaRevisionePolitica,
     private val politicaSostituzione: ApplicaSostituzioneTrascrittoPolitica,
-    private val registrazioni: LettoreRegistrazione,
 ) : AbbonatoSincrono {
     override fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
         // ADR 0035 §5: the Revisione events and TrascrittoSostituito carry the Incontro of their Voci.
@@ -42,18 +40,16 @@ public class AbbonatoRevisioneParlanti(
         is VoceDivisa -> politica.applicaVoceDivisa(evento.incontroId, evento.origine)
         is SegmentoRiassegnato ->
             politica.applicaSegmentoRiassegnato(evento.incontroId, evento.da, evento.a, evento.daRimossa, evento.aNuova)
-        is TrascrittoSostituito -> politicaSostituzione.applica(evento.registrazioneId, evento.incontroId)
-        is RegistrazioneEliminata -> conIncontro(evento.registrazioneId) {
-            politicaSostituzione.applica(evento.registrazioneId, it)
-        }
+        is TrascrittoSostituito ->
+            politicaSostituzione.applica(evento.registrazioneId, evento.incontroId, evento.vociRimosse)
+        is TrascrittoEliminato ->
+            politicaSostituzione.applica(evento.registrazioneId, evento.incontroId, evento.vociRimosse)
+        // TRANSITIONAL (ADR 0038 §2): removed when eliminazione-parte-trascrizione publishes TrascrittoEliminato.
+        is RegistrazioneEliminata -> politicaSostituzione.applicaEliminazioneRegistrazione(
+            evento.registrazioneId,
+            evento.incontroId,
+            evento.incontroCessato,
+        )
         else -> Esito.Ok(Unit)
     }
-
-    /**
-     * ADR 0033 §4.1: the Voci of a deleted Parte are its Incontro's, resolved through [registrazioni]. The event is
-     * delivered inside the deleting transaction, before the Registrazione's row goes (ADR 0020 §2); an id the
-     * catalogue does not know has no Voce, so nothing to apply.
-     */
-    private fun conIncontro(id: RegistrazioneId, applica: (IncontroId) -> Esito<Unit>): Esito<Unit> =
-        registrazioni.registrazione(id)?.let { applica(it.incontroId) } ?: Esito.Ok(Unit)
 }

@@ -473,7 +473,7 @@ class ComposizioneSintesiTest {
 
         /** ADR 0030 §2: Sintesi → Parlanti → Trascrizione, each module's pairs in its own declared order. */
         val SINCRONI_DICHIARATI = listOf("AbbonatoProgettoSintesi") +
-            List(5) { "AbbonatoRevisioneParlanti" } + "AbbonatoEliminazioneRegistrazione"
+            List(6) { "AbbonatoRevisioneParlanti" } + "AbbonatoEliminazioneRegistrazione"
         const val TIMEOUT_STOP_MS = 5_000L
         const val NANO_PER_MS = 1_000_000L
 

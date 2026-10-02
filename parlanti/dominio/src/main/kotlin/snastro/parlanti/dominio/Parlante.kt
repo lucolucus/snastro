@@ -13,6 +13,7 @@ import snastro.kernel.VoceRef
  * [INV-18], and the print re-keying of [INV-21]. The set rule INV-16
  * (unique active [Nome] per Progetto) is NOT checked here (service + index, ADR 0007).
  */
+@Suppress("TooManyFunctions") // the root owns every print operation (INV-I8/I8b/21): one command per rule, RC-1
 public class Parlante private constructor(
     public val id: ParlanteId,
     public val progettoId: ProgettoId,
@@ -86,9 +87,10 @@ public class Parlante private constructor(
      * POLICY-ONLY ([INV-21] `unire(A = [a], B = [da])`): each print of [da] is re-keyed onto [a] keeping its Parte,
      * impronta, sorgente and modello (stale by construction, refreshed after commit by `RiallineaImpronte`) — unless [a]
      * already has a print in that Parte: then [a]'s is kept and [da]'s dropped. Covers the inheritance case ([a] holds
-     * none). No print for [da] → no-op (always so for an `eliminato`: it holds none, [INV-13]).
+     * none). No print for [da], or [da] == [a] → no-op (the former always so for an `eliminato`, [INV-13]).
      */
     public fun riassegnaImpronte(da: VoceRef, a: VoceRef) {
+        if (da == a) return // re-keying a Voce onto itself changes nothing (never drop its prints)
         val partiDiA = _impronte.filter { it.voceRef == a }.map { it.parte }.toSet()
         _impronte.removeAll { it.voceRef == da && it.parte in partiDiA }
         _impronte.replaceAll { if (it.voceRef == da) it.copy(voceRef = a) else it }
@@ -105,6 +107,17 @@ public class Parlante private constructor(
     /** Removes the print of ([voce], [parte]), if any; the same Voce keeps its prints of the other Parti. */
     public fun rimuoviImpronta(voce: VoceRef, parte: RegistrazioneId) {
         _impronte.removeAll { it.voceRef == voce && it.parte == parte }
+    }
+
+    /** Whether this Parlante holds at least one print of [voce], in any Parte. */
+    public fun haImprontaDi(voce: VoceRef): Boolean = _impronte.any { it.voceRef == voce }
+
+    /**
+     * [INV-21] a Revisione emptied the slices of [voce] outside [partiConFetta]: the prints of [voce] sourced from any
+     * other Parte have no source left and go; those of [partiConFetta] and of other Voci stay.
+     */
+    public fun rimuoviImpronteSenzaFetta(voce: VoceRef, partiConFetta: Set<RegistrazioneId>) {
+        _impronte.removeAll { it.voceRef == voce && it.parte !in partiConFetta }
     }
 
     /** [INV-I8b] removes every print sourced from [parte], of any Voce; the other Parti's prints stay. */

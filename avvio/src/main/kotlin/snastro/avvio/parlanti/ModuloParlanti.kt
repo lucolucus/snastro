@@ -58,6 +58,7 @@ import snastro.supporto.catturaNonFatale
 import snastro.supporto.figlioDi
 import snastro.trascrizione.applicazione.eventi.SegmentoConfermato
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
@@ -92,9 +93,8 @@ internal class ModuloParlanti(
      * parameter (unused past construction otherwise). */
     private val parlanti = porte.parlanti
     private val revisione = AbbonatoRevisioneParlanti(
-        ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni),
+        ApplicaRevisionePolitica(porte.parlanti, porte.attribuzioni, porte.vociPerParlanti),
         ApplicaSostituzioneTrascrittoPolitica(porte.parlanti, porte.attribuzioni),
-        porte.registrazionePerParlanti,
     )
     private val aggiornamenti: AggiornamentiVistaParlanti
     private val riallineamento: AbbonatoRiallineamentoImpronte
@@ -225,6 +225,7 @@ internal class ModuloParlanti(
         VoceDivisa::class,
         SegmentoRiassegnato::class,
         TrascrittoSostituito::class,
+        TrascrittoEliminato::class,
         RegistrazioneEliminata::class,
     )
 
