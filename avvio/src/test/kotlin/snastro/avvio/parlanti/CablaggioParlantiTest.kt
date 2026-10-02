@@ -65,13 +65,13 @@ class CablaggioParlantiTest {
     }
 
     @Test
-    fun `AC-630 le purghe sincrone di RegistrazioneEliminata precedono la coda, e S2 riceve Elimina`() {
+    fun `AC-630 AC-I61 le purghe di RegistrazioneEliminata precedono la coda, senza Parlanti, e S2 riceve Elimina`() {
         AmbienteProgetto(radice).use {
             val purghe = it.composto.ordineSincroni.flatMap { m -> m.abbonatiSincroni() }
                 .filter { a -> a.evento == RegistrazioneEliminata::class }
                 .map { a -> a.abbonato::class.simpleName }
             assertEquals(
-                listOf("AbbonatoProgettoSintesi", "AbbonatoRevisioneParlanti", "AbbonatoEliminazioneRegistrazione"),
+                listOf("AbbonatoProgettoSintesi", "AbbonatoEliminazioneRegistrazione"),
                 purghe,
             )
             assertTrue(registrazioniPrimaDellaCoda(it.costruzioniApertura), "registrate prima della coda")

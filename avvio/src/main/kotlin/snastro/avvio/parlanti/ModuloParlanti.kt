@@ -70,7 +70,8 @@ import java.util.logging.Logger
  * Parlanti's part of the single composition (ADR 0030 §1), built from [PorteProgetto] only (its repositories and
  * cross-context readers), plus Trascrizione's typed collaborators its glue composes ([trascrizione]):
  * - its SYNCHRONOUS subscriber [AbbonatoRevisioneParlanti]: the revisione-policy on every Revisione (AC-359), the
- *   purge on `TrascrittoSostituito` (ADR 0018 §3, AC-457) and on `RegistrazioneEliminata` (ADR 0020 §2);
+ *   purge on `TrascrittoSostituito` (ADR 0018 §3, AC-457) and on `TrascrittoEliminato` (ADR 0038 §2; no
+ *   `RegistrazioneEliminata` subscriber, AC-I61);
  * - its after-commit subscribers: [AggiornamentiVistaParlanti] (Proposta invalidation + `Cambiamento`, AC-317) and
  *   [AbbonatoRiallineamentoImpronte] (AC-315), whose worker starts at [avvia];
  * - at [avvia], in the background, `RiallineaTutteLeImpronte` of the project (AC-316): `apriProgetto` ran the queue's
@@ -227,7 +228,6 @@ internal class ModuloParlanti(
         SegmentoRiassegnato::class,
         TrascrittoSostituito::class,
         TrascrittoEliminato::class,
-        RegistrazioneEliminata::class,
     )
 
     override fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = abbonamenti(
