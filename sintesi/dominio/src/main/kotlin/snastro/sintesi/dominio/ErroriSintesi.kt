@@ -39,6 +39,9 @@ public sealed interface ErroreSintesi : ErroreDominio {
     /** INV-S1: the Riassunto cannot move from [da] to [verso] (canonical state codes); nothing changed. */
     public data class TransizioneNonAmmessa(val da: String, val verso: String) : ErroreSintesi
 
+    /** `Riassumi` named an Incontro the Progetto does not know (or that ceased with its last Parte). */
+    public data class IncontroNonTrovato(val incontroId: IncontroId) : ErroreSintesi
+
     /** No Riassunto with this id. */
     public data class RiassuntoNonTrovato(val id: String) : ErroreSintesi
 }
