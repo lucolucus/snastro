@@ -48,12 +48,14 @@ import snastro.ui.stile.CampoSn
 import snastro.ui.stile.ChipStato
 import snastro.ui.stile.EmptyState
 import snastro.ui.stile.EtichettaVoce
+import snastro.ui.stile.FonteChipDati
 import snastro.ui.stile.GruppoFonti
 import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.SnastroMisure
+import snastro.ui.stile.TESTO_NON_PIU_PRESENTE
 import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.testi.AVVISO_SUPERATO
@@ -95,6 +97,8 @@ private const val TAG_SOMMARIO = "riassunto-sommario"
 private const val TAG_OMESSI = "riassunto-omessi"
 private const val TAG_METADATI = "riassunto-metadati"
 private const val TAG_SUPERATO = "riassunto-superato"
+private const val TAG_VOCE_NON_PRESENTE = "riassunto-voce-non-presente"
+private const val TAG_INTESTAZIONE = "riassunto-intestazione"
 private const val TAG_ARGOMENTO = "riassunto-argomento"
 private const val TAG_BOTTONE_RIASSUMI = "riassunto-bottone-principale"
 private const val TAG_SCARICA_MODELLO = "riassunto-scarica-modello"
@@ -182,8 +186,9 @@ private fun ContenutoTab(stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto, 
         }
         MessaggioErroreVista(stato.messaggioErrore)
         contenuto?.let {
+            stato.intestazioneTesto?.let { testo -> IntestazioneIncontro(testo) }
             if (it.superato) AvvisoSuperato()
-            SelectionContainer { TestoContenuto(it) }
+            SelectionContainer { TestoContenuto(it, azioni) }
         }
         Text(
             text = PRIVACY_RIASSUNTO,
@@ -199,6 +204,17 @@ private fun MessaggioErroreVista(messaggio: String?) {
     messaggio?.let {
         MessaggioTonale(it, LocalSnastroColori.current.danger, Icona.Alert, Modifier.testTag(TAG_MESSAGGIO_ERRORE))
     }
+}
+
+/** Multi-part only: "Riassunto dell'incontro · N parti", above the shown Riassunto's text. */
+@Composable
+private fun IntestazioneIncontro(testo: String) {
+    Text(
+        text = testo,
+        style = LocalSnastroTipografia.current.heading,
+        color = LocalSnastroColori.current.ink,
+        modifier = Modifier.testTag(TAG_INTESTAZIONE),
+    )
 }
 
 /** AC-S133: a warning notice INSIDE the tab — never [snastro.ui.stile.BannerSn] (ux: "not a screen Banner"). */
@@ -289,7 +305,7 @@ private fun BottoneCopia(contenuto: ContenutoUi) {
 }
 
 @Composable
-private fun TestoContenuto(contenuto: ContenutoUi) {
+private fun TestoContenuto(contenuto: ContenutoUi, azioni: AzioniRiassunto) {
     Column(
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
         modifier = Modifier.testTag(TAG_CONTENUTO),
@@ -306,16 +322,16 @@ private fun TestoContenuto(contenuto: ContenutoUi) {
             )
         }
         if (contenuto.decisioni.isNotEmpty()) {
-            Sezione("Decisioni") { contenuto.decisioni.forEach { ElementoRiga(it) } }
+            Sezione("Decisioni") { contenuto.decisioni.forEach { ElementoRiga(it, azioni) } }
         }
         if (contenuto.azioni.isNotEmpty()) {
-            Sezione("Azioni") { contenuto.azioni.forEach { AzioneRiga(it) } }
+            Sezione("Azioni") { contenuto.azioni.forEach { AzioneRiga(it, azioni) } }
         }
         if (contenuto.questioniAperte.isNotEmpty()) {
-            Sezione("Questioni aperte") { contenuto.questioniAperte.forEach { ElementoRiga(it) } }
+            Sezione("Questioni aperte") { contenuto.questioniAperte.forEach { ElementoRiga(it, azioni) } }
         }
         if (contenuto.puntiChiave.isNotEmpty()) {
-            Sezione("Punti chiave") { contenuto.puntiChiave.forEach { PuntoChiaveRiga(it) } }
+            Sezione("Punti chiave") { contenuto.puntiChiave.forEach { PuntoChiaveRiga(it, azioni) } }
         }
         contenuto.omessiTesto?.let {
             Text(it, style = tipografia.caption, color = colori.inkMuted, modifier = Modifier.testTag(TAG_OMESSI))
@@ -332,20 +348,20 @@ private fun Sezione(titolo: String, righe: @Composable ColumnScope.() -> Unit) {
 }
 
 @Composable
-private fun ElementoRiga(elemento: ElementoUi) {
+private fun ElementoRiga(elemento: ElementoUi, azioni: AzioniRiassunto) {
     Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space1)) {
         Text(
             text = "• ${elemento.testo}",
             style = LocalSnastroTipografia.current.body,
             color = LocalSnastroColori.current.ink,
         )
-        if (elemento.fonti.isNotEmpty()) GruppoFonti(elemento.fonti)
+        if (elemento.fonti.isNotEmpty()) FontiRiga(elemento.fonti, azioni)
     }
 }
 
 /** AC-S132: "→ " + Responsabile (voice dot + Nome) when bound, nothing otherwise. */
 @Composable
-private fun AzioneRiga(azione: AzioneUi) {
+private fun AzioneRiga(azione: AzioneUi, azioni: AzioniRiassunto) {
     Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space1)) {
         Text("• ${azione.testo}", style = LocalSnastroTipografia.current.body, color = LocalSnastroColori.current.ink)
         azione.responsabile?.let { responsabile ->
@@ -357,13 +373,13 @@ private fun AzioneRiga(azione: AzioneUi) {
                 Voce(responsabile)
             }
         }
-        if (azione.fonti.isNotEmpty()) GruppoFonti(azione.fonti)
+        if (azione.fonti.isNotEmpty()) FontiRiga(azione.fonti, azioni)
     }
 }
 
 /** AC-S132: speaker (dot + Nome) BEFORE the text, when bound. */
 @Composable
-private fun PuntoChiaveRiga(punto: PuntoChiaveUi) {
+private fun PuntoChiaveRiga(punto: PuntoChiaveUi, azioni: AzioniRiassunto) {
     Column(verticalArrangement = Arrangement.spacedBy(SnastroMisure.space1)) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -377,12 +393,30 @@ private fun PuntoChiaveRiga(punto: PuntoChiaveUi) {
                 modifier = Modifier.weight(1f, fill = false),
             )
         }
-        if (punto.fonti.isNotEmpty()) GruppoFonti(punto.fonti)
+        if (punto.fonti.isNotEmpty()) FontiRiga(punto.fonti, azioni)
     }
 }
 
+/** AC-I81: a clickable chip hands its Parte and minute to the presenter. */
 @Composable
-private fun Voce(voce: VoceVista) = EtichettaVoce(voceId = VoceId(voce.voceId), nome = voce.nome)
+private fun FontiRiga(fonti: List<FonteChipDati>, azioni: AzioniRiassunto) {
+    GruppoFonti(fonti, onFonte = { f -> f.registrazioneId?.let { r -> f.inizioMs?.let { azioni.apriFonte(r, it) } } })
+}
+
+/** INV-I13: a Voce no longer present is muted text with no dot and no Nome. */
+@Composable
+private fun Voce(voce: VoceVista) {
+    if (voce.presente) {
+        EtichettaVoce(voceId = VoceId(voce.voceId), nome = voce.nome)
+    } else {
+        Text(
+            text = "${voce.etichetta} · $TESTO_NON_PIU_PRESENTE",
+            style = LocalSnastroTipografia.current.label,
+            color = LocalSnastroColori.current.inkMuted,
+            modifier = Modifier.testTag(TAG_VOCE_NON_PRESENTE),
+        )
+    }
+}
 
 @Composable
 private fun AreaAzioneVista(area: AreaAzione, stato: RiassuntoUiStato.Dati, azioni: AzioniRiassunto) {

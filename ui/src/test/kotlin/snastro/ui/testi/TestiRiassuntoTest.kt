@@ -69,11 +69,11 @@ class TestiRiassuntoTest {
     fun `AC-S129 un testo per ognuno dei motivi di non disponibilita`() {
         assertEquals(
             "La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa).",
-            messaggioNonDisponibile(MotivoNonDisponibile.TroppoLunga),
+            messaggioNonDisponibile(MotivoNonDisponibile.TroppoLunga, numParti = 1),
         )
         assertEquals(
             "Aspetta la fine della trascrizione.",
-            messaggioNonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
+            messaggioNonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1), numParti = 1),
         )
     }
 
