@@ -32,18 +32,18 @@ public class Riassunto internal constructor(
     avviatoAlle: Instant?,
     motivoFallimento: MotivoFallimento?,
     contenuto: EsitoVerifica?,
-    struttura: String?,
+    strutturaRegistrata: String?,
 ) {
     // Backing fields, not `public var … private set`: CR-4's Konsist rule bans any public var in dominio.
     private var _stato = stato
     private var _avviatoAlle = avviatoAlle
     private var _motivoFallimento = motivoFallimento
     private var _contenuto = contenuto
-    private var _struttura = struttura
+    private var _strutturaRegistrata = strutturaRegistrata
 
     init {
         require((stato == FALLITO) == (motivoFallimento != null)) { "INV-S1: motivoFallimento esiste sse fallito" }
-        require((stato == PRONTO) == (contenuto != null) && (stato == PRONTO) == (struttura != null)) {
+        require((stato == PRONTO) == (contenuto != null) && (stato == PRONTO) == (strutturaRegistrata != null)) {
             "INV-S1: contenuto e struttura esistono sse pronto"
         }
         require(stato == IN_ATTESA || avviatoAlle != null) { "INV-S1: avviatoAlle esiste da in_corso in poi" }
@@ -67,16 +67,17 @@ public class Riassunto internal constructor(
 
     /**
      * The recorded [StrutturaIncontro.chiave]: the Parti with a Trascritto the content was verified against (ADR 0037
-     * §5); null unless `pronto`. For the persistence adapter only: `superato` is decided by [superato].
+     * §5); null unless `pronto`. For the persistence mapping only (ADR 0037 §9, amended 2026-10-03: the name is unique
+     * so the check `struttura-letta-dalla-radice` can forbid it everywhere else): `superato` is decided by [superato].
      */
-    public val struttura: String? get() = _struttura
+    public val strutturaRegistrata: String? get() = _strutturaRegistrata
 
     /**
      * TRANSITION (ADR 0033 §4.1): the Parte of a one-Parte recorded structure; null unless `pronto`, or when the
      * structure has several Parti. Only an I1 end-to-end test reads it; the wave-5/6 blocks drop it.
      */
     public val parte: RegistrazioneId?
-        get() = _struttura?.takeUnless { SEPARATORE_PARTI in it }
+        get() = _strutturaRegistrata?.takeUnless { SEPARATORE_PARTI in it }
             ?.substringBefore(SEPARATORE_PARTE)
             ?.let(::RegistrazioneId)
 
@@ -92,7 +93,7 @@ public class Riassunto internal constructor(
      * Incontro now, a Parte without Trascritto as null); false unless `pronto`. Names and Attribuzioni are not in it,
      * so they never change it; restoring the exact structure clears it.
      */
-    public fun superato(corrente: StrutturaIncontro): Boolean = pronto && corrente.chiave != _struttura
+    public fun superato(corrente: StrutturaIncontro): Boolean = pronto && corrente.chiave != _strutturaRegistrata
 
     public fun avvia(alle: Instant): Esito<RiassuntoAvviatoDominio> =
         transizione(da = IN_ATTESA, verso = IN_CORSO) {
@@ -121,7 +122,7 @@ public class Riassunto internal constructor(
         } else {
             transizione(da = IN_CORSO, verso = PRONTO) {
                 _contenuto = verificato
-                _struttura = registrata.chiave
+                _strutturaRegistrata = registrata.chiave
                 ConclusioneRiassunto.Pronto(verificato.omessi)
             }
         }
@@ -156,14 +157,15 @@ public class Riassunto internal constructor(
         ): Creato<Riassunto, RiassuntoRichiestoDominio> = Creato(
             Riassunto(
                 id, incontroId, argomento, lunghezzaMassima, richiestoAlle,
-                IN_ATTESA, avviatoAlle = null, motivoFallimento = null, contenuto = null, struttura = null,
+                IN_ATTESA, avviatoAlle = null, motivoFallimento = null, contenuto = null, strutturaRegistrata = null,
             ),
             RiassuntoRichiestoDominio(id, incontroId, richiestoAlle),
         )
 
         /**
          * Rebuilds from persisted state (the DB is trusted, nothing re-verified); an INV-S1-inconsistent
-         * combination is a programmer error (`require`): content, [omessi] and [struttura] only when `pronto`.
+         * combination is a programmer error (`require`): content, [omessi] and [strutturaRegistrata] only when
+         * `pronto`.
          */
         @RicostituzioneDaPersistenza
         public fun ricostituisci(
@@ -181,7 +183,7 @@ public class Riassunto internal constructor(
             azioni: List<Azione>,
             puntiChiave: List<PuntoChiave>,
             omessi: Int?,
-            struttura: String?,
+            strutturaRegistrata: String?,
         ): Riassunto {
             val haElementi = sommario != null || decisioni.isNotEmpty() || questioniAperte.isNotEmpty() ||
                 azioni.isNotEmpty() || puntiChiave.isNotEmpty()
@@ -199,7 +201,7 @@ public class Riassunto internal constructor(
             }
             return Riassunto(
                 id, incontroId, argomento, lunghezzaMassima, richiestoAlle,
-                stato, avviatoAlle, motivoFallimento, contenuto, struttura,
+                stato, avviatoAlle, motivoFallimento, contenuto, strutturaRegistrata,
             )
         }
     }

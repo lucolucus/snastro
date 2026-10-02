@@ -91,5 +91,6 @@ public fun unaStruttura(vararg coppie: Pair<Int, Int>): StrutturaTrascritto =
 /** Every observable field of a Riassunto (the root has no value equality), to compare stored and expected. */
 public fun Riassunto.statoOsservabile(): List<Any?> = listOf(
     id, incontroId, argomento, lunghezzaMassima, richiestoAlle, stato, avviatoAlle, motivoFallimento,
-    sommario, decisioni.toList(), questioniAperte.toList(), azioni.toList(), puntiChiave.toList(), omessi, struttura,
+    sommario, decisioni.toList(), questioniAperte.toList(), azioni.toList(), puntiChiave.toList(), omessi,
+    strutturaRegistrata,
 )

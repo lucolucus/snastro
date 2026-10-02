@@ -3,9 +3,9 @@
 trovaPerId:
 SELECT * FROM registrazione WHERE id = :id;
 
+-- In no guaranteed order: OrdineDelleRegistrazioni sorts them (ADR 0033 §7, no SQL ordering on the Parte-order columns).
 trovaDelProgetto:
-SELECT * FROM registrazione WHERE progetto_id = :progettoId
-    ORDER BY data_registrazione DESC, aggiunta_alle DESC;
+SELECT * FROM registrazione WHERE progetto_id = :progettoId;
 
 -- ADR 0033 §1: the Parti of an Incontro (IncontroRepository.partiDi), in no guaranteed order (INV-I2 is the domain's).
 trovaDiIncontro:

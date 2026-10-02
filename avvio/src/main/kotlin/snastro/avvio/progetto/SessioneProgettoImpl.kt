@@ -305,9 +305,9 @@ internal class SessioneProgettoImpl(
         // girerebbe dopo il ritorno di crea/apri — anche dopo chiudi — toccando un database gia' chiuso o
         // una cartella gia' rimossa); solo la chiamata al registro e' spostata fuori dal thread UI (AC-347).
         val numRegistrazioni = contaRegistrazioni(porte.registrazioni, progettoId)
-        val aggiuntaAlle = clock.instant()
+        val ultimaAttivita = clock.instant()
         fuoriDalThreadUi(registro) {
-            it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, aggiuntaAlle))
+            it.registra(VoceRegistro(progettoId, nomeProgetto, percorso, numRegistrazioni, ultimaAttivita))
         }
 
         aperta = SessioneAperta(cartella, lockCartella, progettoId, composto, RisorseDaChiudere(lettoreAudio, chiudiDb))

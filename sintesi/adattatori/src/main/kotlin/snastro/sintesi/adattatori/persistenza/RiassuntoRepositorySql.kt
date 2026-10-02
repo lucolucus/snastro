@@ -136,7 +136,7 @@ private fun scriviRadiceNuova(db: SnastroDatabase, r: Riassunto) {
         motivoFallimento = r.motivoFallimento?.codice,
         sommario = r.sommario?.testo?.codifica(),
         omessi = r.omessi?.toLong(),
-        struttura = r.struttura,
+        struttura = r.strutturaRegistrata,
         incontroId = r.incontroId.valore,
     )
 }
@@ -175,7 +175,7 @@ private fun eseguiConcludi(db: SnastroDatabase, r: Riassunto): Long =
         motivoFallimento = r.motivoFallimento?.codice,
         sommario = r.sommario?.testo?.codifica(),
         omessi = r.omessi?.toLong(),
-        struttura = r.struttura,
+        struttura = r.strutturaRegistrata,
         id = r.id.valore,
     ).value
 

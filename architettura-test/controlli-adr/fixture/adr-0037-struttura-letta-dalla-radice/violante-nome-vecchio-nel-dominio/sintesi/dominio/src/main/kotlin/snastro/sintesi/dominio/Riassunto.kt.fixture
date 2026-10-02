@@ -1,0 +1,4 @@
+package snastro.sintesi.dominio
+
+/** Used to hold strutturaRegistrata. */
+public class Riassunto(public val struttura: String?)

@@ -8,6 +8,8 @@ import snastro.sintesi.dominio.RiassuntoId
 /**
  * Persistence port of the [Riassunto] aggregate (boundary `repo-sintesi`, ADR 0022). Every write runs inside the
  * caller's `UnitaDiLavoro` transaction, never opens one. Contract: `RiassuntoRepositoryContratto`.
+ *
+ * Method set closed by ADR 0037 (allow-list check); a new method is an ADR amendment.
  */
 public interface RiassuntoRepository {
     public fun trova(id: RiassuntoId): Riassunto?

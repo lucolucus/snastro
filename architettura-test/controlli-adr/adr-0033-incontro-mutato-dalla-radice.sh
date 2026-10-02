@@ -9,6 +9,7 @@
 #      cambia*/scrivi*/riassegna*/assegna*/trasferisci*/unisci*/salvaOraDiInizio included): salva, rimuovi (their only
 #      writes) and the reads trova, delProgetto, titoliDelProgetto, partiDi.
 # Comments are removed by lib/senza-commenti.awk (nested and multi-line /* */, trailing //; a `//` inside a string is code).
+# A fun outside the allow-list prints `<file:n:code>: fun <name> not on the allow-list of ADR 0033`.
 # FAIL when progetto/dominio or progetto/applicazione is missing, or when no file declares `class Incontro`.
 # Usage: sh architettura-test/controlli-adr/adr-0033-incontro-mutato-dalla-radice.sh [project-root]
 N='ADR-0033 incontro-mutato-dalla-radice'
@@ -48,7 +49,7 @@ for f in $APPLICAZIONE; do
     nome=$(printf '%s\n' "$riga" | sed -nE \
       's/^[^:]*:[0-9]+:.*(^|[^A-Za-z0-9_])fun[[:space:]]+(<[^>]*>[[:space:]]*)?([A-Za-z0-9_]+[.])*([A-Za-z0-9_]+).*$/\4/p')
     [ -n "$nome" ] || continue
-    printf '%s\n' "$nome" | grep -qE "^($AMMESSE)\$" || printf '%s\n' "$riga"
+    printf '%s\n' "$nome" | grep -qE "^($AMMESSE)\$" || printf '%s: fun %s not on the allow-list of ADR 0033\n' "$riga" "$nome"
   done)
   [ -z "$R" ] || V="$V$R
 "

@@ -1,0 +1,4 @@
+partiOrdinate:
+SELECT * FROM registrazione WHERE incontro_id = :incontroId
+    ORDER BY data_registrazione,
+    ora_di_inizio;

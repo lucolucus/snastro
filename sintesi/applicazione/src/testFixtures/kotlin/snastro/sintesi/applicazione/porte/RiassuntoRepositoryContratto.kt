@@ -64,7 +64,7 @@ public abstract class RiassuntoRepositoryContratto {
         val elementi = listOf(letto.decisioni, letto.questioniAperte, letto.azioni, letto.puntiChiave)
         assertEquals(listOf(1, 1, 1, 1), elementi.map { it.size })
         assertEquals(2, letto.omessi)
-        assertEquals("${unicaParteDi(letto.incontroId).valore}=1:1,2:2,3:1", letto.struttura)
+        assertEquals("${unicaParteDi(letto.incontroId).valore}=1:1,2:2,3:1", letto.strutturaRegistrata)
         assertEquals(setOf(1, 3), letto.puntiChiave.single().fonti.map { it.segmentoId.numero }.toSet())
         assertEquals(BOZZA.sommario, letto.sommario?.testo?.codifica())
         assertEquals(BOZZA.azioni.first().testo, letto.azioni.single().testo.codifica())

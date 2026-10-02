@@ -1,0 +1,3 @@
+package snastro.sbobinatura.applicazione
+
+internal fun ora(p: Parte) = with(p) { oraDiInizio }

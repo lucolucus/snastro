@@ -8,6 +8,8 @@ import snastro.progetto.dominio.Registrazione
  * Repository port of the [Registrazione] aggregate. It maps every field of the root, `incontroId` (written once, never
  * updated, D-0028) and `oraDiInizio` (nullable) included (boundary `repo-incontro`). The Parti of an Incontro are read
  * through [IncontroRepository.partiDi].
+ *
+ * Method set closed by ADR 0033 (allow-list check); a new method is an ADR amendment.
  */
 public interface RegistrazioneRepository {
     public fun trova(id: RegistrazioneId): Registrazione?

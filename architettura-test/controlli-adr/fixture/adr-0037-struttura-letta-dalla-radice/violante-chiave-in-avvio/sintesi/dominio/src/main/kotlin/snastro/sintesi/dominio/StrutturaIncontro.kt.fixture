@@ -3,5 +3,3 @@ package snastro.sintesi.dominio
 public data class StrutturaIncontro(val parti: List<String>) {
     public val chiave: String get() = parti.joinToString(";")
 }
-
-public fun superato(corrente: StrutturaIncontro, registrata: String?): Boolean = corrente.chiave != registrata

@@ -30,5 +30,7 @@ class OraDiInizioTest {
     fun `INV-I14 da un LocalTime accetta il secondo e rifiuta le frazioni di secondo`() {
         assertEquals(LocalTime.of(10, 25), OraDiInizio.di(LocalTime.of(10, 25)).atteso().valore)
         OraDiInizio.di(LocalTime.of(10, 25, 0, 1)).erroreAtteso<ErroreProgetto.OraDiInizioNonValida>()
+        // The pinned table case (ADR 0033 §1, amended 2026-10-03): half a second is refused, never truncated.
+        OraDiInizio.di(LocalTime.of(12, 0, 0, 500_000_000)).erroreAtteso<ErroreProgetto.OraDiInizioNonValida>()
     }
 }

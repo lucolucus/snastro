@@ -9,7 +9,8 @@
 # `aggiornaImpronta` (RiallineaImpronte's compare-and-set, ADR 0012 (b)). Clause 3: ImprontaVocale is a data class, so
 # `.copy(` is a construction too: in the same files as clause 1, a file naming `ImprontaVocale` or reading `.impronte`
 # has no `.copy(` call. Comments are removed by lib/senza-commenti.awk (nested and multi-line /* */, trailing //; a `//`
-# inside a string is code); build dirs excluded. FAIL when parlanti/dominio/src/main is missing, no file there declares
+# inside a string is code); build dirs excluded. A clause-2 fun outside the allow-list prints `<file:n:code>: fun <name>
+# not on the allow-list of ADR 0035`. FAIL when parlanti/dominio/src/main is missing, no file there declares
 # `class Parlante`, or no file declares `interface ParlanteRepository`.
 # Usage: sh architettura-test/controlli-adr/adr-0035-impronte-mutate-dalla-radice.sh [project-root]
 N='ADR-0035 impronte-mutate-dalla-radice'
@@ -39,7 +40,7 @@ V2=$(for f in $REPO; do
     nome=$(printf '%s\n' "$riga" | sed -nE \
       's/^[^:]*:[0-9]+:.*(^|[^A-Za-z0-9_])fun[[:space:]]+(<[^>]*>[[:space:]]*)?([A-Za-z0-9_]+[.])*([A-Za-z0-9_]+).*$/\4/p')
     [ -n "$nome" ] || continue
-    printf '%s\n' "$nome" | grep -qE "^($AMMESSE)\$" || printf '%s\n' "$riga"
+    printf '%s\n' "$nome" | grep -qE "^($AMMESSE)\$" || printf '%s: fun %s not on the allow-list of ADR 0035\n' "$riga" "$nome"
   done
 done)
 # Clause 3: `.copy(` in a file that can hold an ImprontaVocale.

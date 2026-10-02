@@ -8,6 +8,8 @@ import snastro.progetto.dominio.Incontro
  * Repository port of the [Incontro] aggregate (boundary `repo-incontro`, ADR 0033 §1). Every write joins the caller's
  * transaction. The Parti are the [snastro.progetto.dominio.Registrazione]s saved with this `incontroId` through
  * [RegistrazioneRepository]: an Incontro is saved before its first Parte and removed after its last (INV-I1).
+ *
+ * Method set closed by ADR 0033 (allow-list check); a new method is an ADR amendment.
  */
 public interface IncontroRepository {
     /** The Incontro [id], or `null` if it was never saved or was removed. */
