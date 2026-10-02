@@ -5,6 +5,7 @@ import kotlinx.coroutines.Job
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.comandi.RiallineaImpronte
 import snastro.parlanti.applicazione.comandi.RiallineaImpronteServizio
@@ -21,11 +22,12 @@ import kotlin.time.Duration.Companion.seconds
  * `AbbonatoDopoCommit` (ADR 0012) that keeps every Registrazione's print rows fresh after a
  * Trascrizione Revisione (block `abbonato-riallineamento-impronte`, AC-304..AC-307; retry mechanics
  * reworked by `a3-ritenta-parlanti`, ADR 0028 §7.4, AC-C50..C53): [VociUnite]/[VoceDivisa]/
- * [SegmentoRiassegnato] each enqueue a [RiallineaImpronte] for their `registrazioneId`, run only
+ * [SegmentoRiassegnato] each enqueue a [RiallineaImpronte] for the Incontro of their `registrazioneId`
+ * ([incontroDi]), run only
  * AFTER the publishing command's transaction committed, never on a rollback — its background work
  * is exactly ONE [RitentaConBackoff] (AC-C50: no private conflated loop, backoff or `runCatching`
- * here — [ritenta] is the only place that catches [esegui]'s exceptions), keyed by [RegistrazioneId]
- * so several Registrazioni are retried independently (AC-C51: one failing key never blocks another's
+ * here — [ritenta] is the only place that catches [esegui]'s exceptions), keyed by [IncontroId]
+ * so several Incontri are retried independently (AC-C51: one failing key never blocks another's
  * progress). A failed run — [Esito.Errore] or a thrown exception — is reported through the injected
  * [Segnalazione] (key + cause) and retried with an exponential backoff, and its later success reports
  * the recovery once (AC-C51); an [Error] escapes to [scope]'s handler instead of being retried, and
@@ -43,11 +45,13 @@ import kotlin.time.Duration.Companion.seconds
  */
 public class AbbonatoRiallineamentoImpronte(
     private val riallinea: RiallineaImpronteServizio,
+    /** The Incontro of a Registrazione (`null` once it is gone: nothing left to realign). */
+    private val incontroDi: (RegistrazioneId) -> IncontroId?,
     segnalazione: Segnalazione,
     ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
     ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
 ) : AbbonatoDopoCommit {
-    private val ritenta = RitentaConBackoff<RegistrazioneId>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
+    private val ritenta = RitentaConBackoff<IncontroId>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     /** Starts the retry worker on [scope]; cancelling [scope] (or the returned [Job]) stops it. */
     public fun avvia(scope: CoroutineScope): Job = ritenta.avvia(scope)
@@ -59,11 +63,11 @@ public class AbbonatoRiallineamentoImpronte(
             is SegmentoRiassegnato -> evento.registrazioneId
             else -> return
         }
-        ritenta.richiedi(registrazioneId)
+        incontroDi(registrazioneId)?.let(ritenta::richiedi)
     }
 
     /** `true` = done, `false` = retry (ADR 0028 §2); [ritenta] is the only catch, never here (AC-C50). */
-    private suspend fun esegui(id: RegistrazioneId): Boolean = riallinea.esegui(RiallineaImpronte(id)) is Esito.Ok
+    private suspend fun esegui(id: IncontroId): Boolean = riallinea.esegui(RiallineaImpronte(id)) is Esito.Ok
 
     private companion object {
         val RITARDO_INIZIALE_DEFAULT: Duration = 500.milliseconds

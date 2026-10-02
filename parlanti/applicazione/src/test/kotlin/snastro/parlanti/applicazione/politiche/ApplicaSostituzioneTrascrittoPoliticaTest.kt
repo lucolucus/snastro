@@ -49,12 +49,12 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
     /** Attributes [voceRef] to [parlante] with one print, as a command would (skips a not-attivo Parlante). */
     private fun attribuisci(voceRef: VoceRef, parlante: Parlante, valore: Float = voceRef.voceId.numero.toFloat()) {
         if (parlante.attivo) {
-            parlante.registraImpronta(
+            parlante.aggiungiImpronta(
                 voceRef,
+                unicaParteDi(voceRef),
                 Impronta(floatArrayOf(valore)),
                 "0-1000",
                 "finto",
-                unicaParteDi(voceRef),
             ).atteso()
         }
         parlanti.salva(parlante).atteso()
@@ -63,12 +63,12 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
 
     /** A print row with NO Attribuzione (the defensive case: [INV-15] says it cannot exist). */
     private fun improntaOrfana(voceRef: VoceRef, parlante: Parlante, valore: Float) {
-        parlante.registraImpronta(
+        parlante.aggiungiImpronta(
             voceRef,
+            unicaParteDi(voceRef),
             Impronta(floatArrayOf(valore)),
             "0-1000",
             "finto",
-            unicaParteDi(voceRef),
         ).atteso()
         parlanti.salva(parlante).atteso()
     }

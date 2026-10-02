@@ -3,7 +3,6 @@ package snastro.parlanti.applicazione.comandi
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
-import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -20,7 +19,6 @@ import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
-import snastro.parlanti.applicazione.porte.leggiVoceNellaParte
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -55,37 +53,33 @@ public class ConfermaAttribuzioneServizio(
     private val eventi: DispatcherEventi,
 ) {
     public fun esegui(c: ConfermaAttribuzione): Esito<Unit> =
-        leggiVoce(c.voceRef).poi { voce ->
+        leggiVoceNelleParti(c.voceRef, registrazioni, lettoreVoci).poi { voce ->
             if (riconfermaDelloStessoParlante(c)) {
                 Esito.Ok(Unit) // AC-87 cheap refusal: nothing changes, no extraction, no event
             } else {
                 // AC-86: a decode/extract failure propagates here, before any transaction is opened.
-                val sorgente = SorgenteImpronta.di(voce.intervalli)
-                val campioni = decodificatore.campioni(voce.parte, sorgente.intervalli)
-                val impronta = estrattore.estrai(campioni)
-                uow.inTransazione { confermaInTransazione(c, sorgente, impronta) }
+                val estratte = voce.parti.map { estrai(it) }
+                uow.inTransazione { confermaInTransazione(c, voce.sorgenti(), estratte) }
             }
         }
+
+    /** [INV-I8]: one print per Parte where the Voce speaks, each from its own bounded source. */
+    private fun estrai(inParte: VoceInParte): ImprontaEstratta {
+        val campioni = decodificatore.campioni(inParte.parte, inParte.sorgente.intervalli)
+        return ImprontaEstratta(estrattore.estrai(campioni), inParte.sorgente.chiave, inParte.parte)
+    }
 
     private fun confermaInTransazione(
         c: ConfermaAttribuzione,
-        sorgente: SorgenteImpronta,
-        impronta: Impronta,
+        sorgentiEstratte: List<Pair<RegistrazioneId, String>>,
+        estratte: List<ImprontaEstratta>,
     ): Esito<Unit> =
-        leggiVoce(c.voceRef).poi { voce ->
-            if (SorgenteImpronta.di(voce.intervalli).chiave != sorgente.chiave) {
+        leggiVoceNelleParti(c.voceRef, registrazioni, lettoreVoci).poi { voce ->
+            if (voce.sorgenti() != sorgentiEstratte) {
                 Esito.Errore(ErroreParlanti.VoceCambiata(c.voceRef)) // AC-282: edited since the extraction
             } else {
-                risolviObiettivo(c.obiettivo, voce.progettoId).poi { risolto ->
-                    confermaSu(risolto, c.voceRef, ImprontaEstratta(impronta, sorgente.chiave, voce.parte))
-                }
+                risolviObiettivo(c.obiettivo, voce.progettoId).poi { confermaSu(it, c.voceRef, estratte) }
             }
-        }
-
-    /** ADR 0033 §4.1: the Voce of the Incontro read in the Parte it speaks in (AC-I206). */
-    private fun leggiVoce(voceRef: VoceRef): Esito<VoceLetta> =
-        leggiVoceNellaParte(voceRef, registrazioni, lettoreVoci).mappa { letta ->
-            VoceLetta(letta.registrazione.progettoId, letta.voce.intervalli, letta.registrazione.registrazioneId)
         }
 
     /** AC-87 before extracting: the Voce is already attributed to the very Parlante being confirmed. */
@@ -95,7 +89,7 @@ public class ConfermaAttribuzioneServizio(
     }
 
     /**
-     * [INV-17]: an existing target must be `attivo` (discovered through [Parlante.registraImpronta],
+     * [INV-17]: an existing target must be `attivo` (discovered through [Parlante.aggiungiImpronta],
      * not duplicated here) and of the SAME Progetto (checked here — no aggregate call carries it).
      */
     private fun risolviObiettivo(obiettivo: ObiettivoAttribuzione, progettoId: ProgettoId): Esito<ObiettivoRisolto> =
@@ -132,12 +126,12 @@ public class ConfermaAttribuzioneServizio(
     }
 
     /** [INV-15]: writes the print only when [risolviCambiamento] decides something really changes. */
-    private fun confermaSu(risolto: ObiettivoRisolto, voceRef: VoceRef, estratta: ImprontaEstratta): Esito<Unit> =
+    private fun confermaSu(risolto: ObiettivoRisolto, voceRef: VoceRef, estratte: List<ImprontaEstratta>): Esito<Unit> =
         risolviCambiamento(risolto, voceRef).poi { cambiamento ->
             if (cambiamento == null) {
                 Esito.Ok(Unit) // AC-87: reconfirm, no change, no event
             } else {
-                registraEDiffondi(risolto, cambiamento, voceRef, estratta)
+                registraEDiffondi(risolto, cambiamento, voceRef, estratte)
             }
         }
 
@@ -145,18 +139,16 @@ public class ConfermaAttribuzioneServizio(
         risolto: ObiettivoRisolto,
         cambiamento: Cambiamento,
         voceRef: VoceRef,
-        estratta: ImprontaEstratta,
+        estratte: List<ImprontaEstratta>,
     ): Esito<Unit> =
         // the Parlante MUST be saved before the Attribuzione: persistenza-schema's
         // attribuzione.parlante_id REFERENCES parlante(id) is an immediate FK (SQLite
         // foreign_keys=ON) — for a brand new Parlante the row must exist first.
-        risolto.parlante.registraImpronta(
-            voceRef,
-            estratta.impronta,
-            estratta.sorgente,
-            estrattore.modello,
-            estratta.parte,
-        )
+        estratte.fold<ImprontaEstratta, Esito<Unit>>(Esito.Ok(Unit)) { esito, e ->
+            esito.poi {
+                risolto.parlante.aggiungiImpronta(voceRef, e.parte, e.impronta, e.sorgente, estrattore.modello)
+            }
+        }
             .poi { parlanti.salva(risolto.parlante) }
             .poi {
                 attribuzioni.salva(cambiamento.attribuzione)
@@ -192,8 +184,6 @@ public class ConfermaAttribuzioneServizio(
         return Esito.Ok(Unit)
     }
 }
-
-private data class VoceLetta(val progettoId: ProgettoId, val intervalli: List<IntervalloMs>, val parte: RegistrazioneId)
 
 private class ImprontaEstratta(val impronta: Impronta, val sorgente: String, val parte: RegistrazioneId)
 

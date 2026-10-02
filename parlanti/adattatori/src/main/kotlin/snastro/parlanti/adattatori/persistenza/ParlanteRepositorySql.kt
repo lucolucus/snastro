@@ -190,10 +190,14 @@ private fun scriviRadice(db: SnastroDatabase, p: Parlante) {
     }
 }
 
-/** Replaces the prints of [p]; true iff a print that was stored is gone (removed, or moved to another Voce). */
+/**
+ * Replaces the prints of [p]; true iff a print that was stored is gone (removed, or moved to another Voce). A print is
+ * identified by (Voce, Parte) like its row ([INV-I8]): removing one Parte's print of a Voce that keeps another's is a
+ * removal too — the purged pages must be checkpointed away (ADR 0009, ADR 0020 §3).
+ */
 private fun sostituisciImpronte(db: SnastroDatabase, p: Parlante): Boolean {
     val primaDi = db.improntaVocaleQueries.trovaDiParlante(p.id.valore).executeAsList()
-        .map { VoceRef(IncontroId(it.incontro_id), VoceId(it.voce_id.toInt())) }
+        .map { VoceRef(IncontroId(it.incontro_id), VoceId(it.voce_id.toInt())) to RegistrazioneId(it.registrazione_id) }
     db.improntaVocaleQueries.eliminaDiParlante(p.id.valore)
     p.impronte.forEach { imp ->
         db.improntaVocaleQueries.inserisci(
@@ -206,7 +210,7 @@ private fun sostituisciImpronte(db: SnastroDatabase, p: Parlante): Boolean {
             modelloImpronta = imp.modello,
         )
     }
-    return !p.impronte.map { it.voceRef }.containsAll(primaDi)
+    return !p.impronte.map { it.voceRef to it.parte }.containsAll(primaDi)
 }
 
 private fun impronteDi(db: SnastroDatabase, id: ParlanteId): List<ImprontaVocale> =

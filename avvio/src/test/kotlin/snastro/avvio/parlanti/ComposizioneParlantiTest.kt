@@ -159,7 +159,10 @@ class ComposizioneParlantiTest {
             val scritto = file.getLastModifiedTime()
 
             val dispatcher = it.porte.dispatcher
-            dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ImpronteRiallineate(id))) }.atteso()
+            val incontro = voce(id, 1).incontroId
+            dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(dispatcher.pubblica(ImpronteRiallineate(incontro)))
+            }.atteso()
 
             attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento della Registrazione") {
                 Cambiamento(id) in cambiamenti

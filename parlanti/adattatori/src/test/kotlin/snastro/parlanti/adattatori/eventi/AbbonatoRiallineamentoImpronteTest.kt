@@ -20,6 +20,7 @@ import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -108,7 +109,7 @@ class AbbonatoRiallineamentoImpronteTest {
 
         init {
             // ADR 0030 §1 (AC-C67): a value the composition registers, whose worker starts only at avvia(scope).
-            val abbonato = AbbonatoRiallineamentoImpronte(riallinea, segnalazioni)
+            val abbonato = AbbonatoRiallineamentoImpronte(riallinea, { r -> unIncontroDi(r) }, segnalazioni)
             dispatcher.registraDopoCommit(abbonato)
             abbonato.avvia(scope)
         }
@@ -126,12 +127,12 @@ class AbbonatoRiallineamentoImpronteTest {
         /** Seeds a Parlante with one STALE print row for `VoceRef(unIncontroDi(registrazioneId), voce)`. */
         fun seminaStale(id: String, voce: Int, registrazioneId: RegistrazioneId = REG): ParlanteId {
             val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
-            p.registraImpronta(
+            p.aggiungiImpronta(
                 VoceRef(unIncontroDi(registrazioneId), VoceId(voce)),
+                unicaParteDi(VoceRef(unIncontroDi(registrazioneId), VoceId(voce))),
                 VECCHIA,
                 "0-1000",
                 MODELLO,
-                unicaParteDi(VoceRef(unIncontroDi(registrazioneId), VoceId(voce))),
             ).atteso()
             parlanti.salva(p).atteso()
             return p.id
@@ -161,7 +162,7 @@ class AbbonatoRiallineamentoImpronteTest {
                 dispatcher,
             ),
         )
-        val abbonato = AbbonatoRiallineamentoImpronte(riallinea, Segnalazione { _, _ -> })
+        val abbonato = AbbonatoRiallineamentoImpronte(riallinea, { r -> unIncontroDi(r) }, Segnalazione { _, _ -> })
 
         abbonato.ricevi(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         runCurrent() // backgroundScope's own tasks: advanceUntilIdle ignores them
@@ -171,7 +172,39 @@ class AbbonatoRiallineamentoImpronteTest {
         abbonato.avvia(backgroundScope)
         runCurrent() // backgroundScope's own tasks: advanceUntilIdle ignores them
 
-        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(REG)) }
+        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(unIncontroDi(REG))) }
+    }
+
+    @Test
+    fun `INV-I8 una Revisione e ricondotta all Incontro, una Registrazione ignota non fa nulla`() = runTest {
+        val parlanti = ParlanteRepositoryFinta()
+        val transazioni = UnitaDiLavoroFinta(parlanti)
+        val dispatcher = DispatcherEventiInMemoria(transazioni)
+        val riallinea = spyk(
+            RiallineaImpronteServizio(
+                dispatcher.unitaDiLavoro,
+                LettoreVociFinta(emptyMap()),
+                ogniRegistrazioneNota(),
+                parlanti,
+                DecodificatoreAudioFinta(unitaDiLavoro = transazioni),
+                EstrattoreImprontaFinta(unitaDiLavoro = transazioni),
+                dispatcher,
+            ),
+        )
+        val incontro = IncontroId("incontro-condiviso")
+        val abbonato = AbbonatoRiallineamentoImpronte(
+            riallinea,
+            { r -> incontro.takeIf { r == REG } },
+            Segnalazione { _, _ -> },
+        )
+        abbonato.avvia(backgroundScope)
+
+        abbonato.ricevi(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        abbonato.ricevi(VociUnite(RegistrazioneId("altra"), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        runCurrent()
+
+        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(incontro)) }
+        verify(exactly = 1) { riallinea.esegui(any()) }
     }
 
     @Test
@@ -238,7 +271,7 @@ class AbbonatoRiallineamentoImpronteTest {
         ).atteso()
         advanceUntilIdle()
 
-        verify(exactly = 1) { spia.esegui(RiallineaImpronte(REG)) }
+        verify(exactly = 1) { spia.esegui(RiallineaImpronte(unIncontroDi(REG))) }
     }
 
     // --- AC-307 (retry, backoff, no busy loop, propagated exceptions included) -------------------

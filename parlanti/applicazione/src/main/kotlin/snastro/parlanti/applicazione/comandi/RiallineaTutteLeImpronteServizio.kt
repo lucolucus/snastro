@@ -1,18 +1,18 @@
 package snastro.parlanti.applicazione.comandi
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.poi
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 
 /**
  * Use-case `RiallineaTutteLeImpronte` (AC-300, ADR 0012 Amendment (b) point 3, AC-C33): at project open, after
- * `RecuperaElaborazioniInterrotte`, runs [RiallineaImpronteServizio] for every Registrazione of the Progetto
+ * `RecuperaElaborazioniInterrotte`, runs [RiallineaImpronteServizio] for every Incontro of the Progetto
  * holding at least one print row — read through [lettura] (ADR 0029 §5), never `inTransazione` (this service
- * itself writes nothing: [riallinea] does, over its own `UnitaDiLavoro`). A failing Registrazione does not stop
+ * itself writes nothing: [riallinea] does, over its own `UnitaDiLavoro`). A failing Incontro does not stop
  * the others: once all ran, the first [Esito.Errore] is returned, or the failures are rethrown as one exception
- * naming every failed Registrazione (fatal throwables — [Error], [InterruptedException] — propagate at once).
+ * naming every failed Incontro (fatal throwables — [Error], [InterruptedException] — propagate at once).
  */
 public class RiallineaTutteLeImpronteServizio(
     private val lettura: LetturaCoerente,
@@ -21,9 +21,9 @@ public class RiallineaTutteLeImpronteServizio(
 ) {
     public fun esegui(c: RiallineaTutteLeImpronte): Esito<Unit> =
         Esito.Ok(lettura.inLettura { parlanti.impronteDelProgetto(c.progettoId) })
-            .poi { righe -> riallineaOgnuna(righe.map { it.parte }.distinct()) }
+            .poi { righe -> riallineaOgnuna(righe.map { it.voceRef.incontroId }.distinct()) }
 
-    private fun riallineaOgnuna(ids: List<RegistrazioneId>): Esito<Unit> {
+    private fun riallineaOgnuna(ids: List<IncontroId>): Esito<Unit> {
         var primoErrore: Esito.Errore? = null
         val fallimenti = ids.mapNotNull { id ->
             runCatching { riallinea.esegui(RiallineaImpronte(id)) }
@@ -35,7 +35,7 @@ public class RiallineaTutteLeImpronteServizio(
         if (fallimenti.isNotEmpty()) {
             val (_, primo) = fallimenti.first()
             throw IllegalStateException(
-                "RiallineaTutteLeImpronte: fallito per le registrazioni ${fallimenti.map { it.first.valore }}",
+                "RiallineaTutteLeImpronte: fallito per gli incontri ${fallimenti.map { it.first.valore }}",
                 primo,
             ).apply { fallimenti.drop(1).forEach { addSuppressed(it.second) } }
         }

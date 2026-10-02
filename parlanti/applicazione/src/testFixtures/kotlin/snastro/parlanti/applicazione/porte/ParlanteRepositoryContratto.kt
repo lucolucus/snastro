@@ -117,19 +117,19 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 AC-271 round-trip con impronte conserva sorgente e modello`() {
         val p = unParlante("id-1", "Marco", tipo = TipoParlante.OCCASIONALE)
-        p.registraImpronta(
+        p.aggiungiImpronta(
             VOCE_1,
+            unicaParteDi(VOCE_1),
             Impronta(floatArrayOf(0.1f, 0.2f, 0.3f)),
             "1200-5400,8000-15000",
             "m-a",
-            unicaParteDi(VOCE_1),
         ).atteso()
-        p.registraImpronta(
+        p.aggiungiImpronta(
             VOCE_2,
+            unicaParteDi(VOCE_2),
             Impronta(floatArrayOf(-1.5f, 0f, 2.25f)),
             SORGENTE,
             MODELLO,
-            unicaParteDi(VOCE_2),
         ).atteso()
 
         repo.salva(p).atteso()
@@ -140,7 +140,7 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 round-trip di un eliminato conserva il nome e nessuna impronta`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 2f)), SORGENTE, MODELLO, unicaParteDi(VOCE_1)).atteso()
+        p.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(floatArrayOf(1f, 2f)), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
         p.elimina().atteso()
 
@@ -156,11 +156,11 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 salva sostituisce le impronte possedute senza duplicare il Parlante`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f)), SORGENTE, MODELLO, unicaParteDi(VOCE_1)).atteso()
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f)), SORGENTE, MODELLO, unicaParteDi(VOCE_2)).atteso()
+        p.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(floatArrayOf(1f)), SORGENTE, MODELLO).atteso()
+        p.aggiungiImpronta(VOCE_2, unicaParteDi(VOCE_2), Impronta(floatArrayOf(2f)), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
         p.rimuoviImpronta(VOCE_1)
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(3f)), SORGENTE, MODELLO, unicaParteDi(VOCE_2)).atteso()
+        p.aggiungiImpronta(VOCE_2, unicaParteDi(VOCE_2), Impronta(floatArrayOf(3f)), SORGENTE, MODELLO).atteso()
 
         repo.salva(p).atteso()
 
@@ -178,23 +178,23 @@ public abstract class ParlanteRepositoryContratto {
         val marco = unParlante("id-1", "Marco")
         repo.salva(marco).atteso()
         val anna = unParlante("id-2", "Anna")
-        anna.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f, 1f)), SORGENTE, MODELLO, unicaParteDi(VOCE_1)).atteso()
+        anna.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(floatArrayOf(1f, 1f)), SORGENTE, MODELLO).atteso()
         repo.salva(anna).atteso()
         val modificata = assertNotNull(repo.trova(anna.id))
         modificata.rimuoviImpronta(VOCE_1)
-        modificata.registraImpronta(
+        modificata.aggiungiImpronta(
             VOCE_2,
+            unicaParteDi(VOCE_2),
             Impronta(floatArrayOf(2f, 2f)),
             SORGENTE,
             MODELLO,
-            unicaParteDi(VOCE_2),
         ).atteso()
-        modificata.registraImpronta(
+        modificata.aggiungiImpronta(
             VOCE_3,
+            unicaParteDi(VOCE_3),
             Impronta(floatArrayOf(3f, 3f)),
             SORGENTE,
             MODELLO,
-            unicaParteDi(VOCE_3),
         ).atteso()
         modificata.rinomina(nome(" MARCO")).atteso()
 
@@ -209,7 +209,7 @@ public abstract class ParlanteRepositoryContratto {
     public fun `AC-37 lo stato salvato non cambia con modifiche non salvate all aggregato o ai suoi array`() {
         val valori = floatArrayOf(1f, 2f)
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(valori), SORGENTE, MODELLO, unicaParteDi(VOCE_1)).atteso()
+        p.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(valori), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
 
         p.rinomina(nome("Luca")).atteso()
@@ -229,7 +229,7 @@ public abstract class ParlanteRepositoryContratto {
     public fun `AC-37 salva non modifica gli array delle impronte ricevute`() {
         val valori = floatArrayOf(0.5f, -0.5f)
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(valori), SORGENTE, MODELLO, unicaParteDi(VOCE_1)).atteso()
+        p.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(valori), SORGENTE, MODELLO).atteso()
 
         repo.salva(p).atteso()
 
@@ -257,7 +257,7 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-37 rimuovi cancella il Parlante con le sue impronte e ne libera il nome`() {
         val p = unParlante("id-1", "Marco", tipo = TipoParlante.OCCASIONALE)
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f)), SORGENTE, MODELLO, unicaParteDi(VOCE_1)).atteso()
+        p.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(floatArrayOf(1f)), SORGENTE, MODELLO).atteso()
         repo.salva(p).atteso()
 
         repo.rimuovi(p.id)
@@ -376,8 +376,8 @@ public abstract class ParlanteRepositoryContratto {
     @Test
     public fun `AC-271 le righe riportano la sorgente e il modello di ogni impronta`() {
         val p = unParlante("id-1", "Marco")
-        p.registraImpronta(VOCE_1, Impronta(floatArrayOf(1f)), "1200-5400", "m-a", unicaParteDi(VOCE_1)).atteso()
-        p.registraImpronta(VOCE_2, Impronta(floatArrayOf(2f)), "0-3000,4000-9000", "m-b", unicaParteDi(VOCE_2)).atteso()
+        p.aggiungiImpronta(VOCE_1, unicaParteDi(VOCE_1), Impronta(floatArrayOf(1f)), "1200-5400", "m-a").atteso()
+        p.aggiungiImpronta(VOCE_2, unicaParteDi(VOCE_2), Impronta(floatArrayOf(2f)), "0-3000,4000-9000", "m-b").atteso()
         repo.salva(p).atteso()
 
         assertEquals(
@@ -397,12 +397,12 @@ public abstract class ParlanteRepositoryContratto {
         progettoId: ProgettoId = PROGETTO,
     ): Parlante {
         val p = unParlante(id, nome, progettoId)
-        voci.forEachIndexed { i, v -> p.registraImpronta(
+        voci.forEachIndexed { i, v -> p.aggiungiImpronta(
             v,
+            unicaParteDi(v),
             Impronta(floatArrayOf(i + 1f)),
             SORGENTE,
             MODELLO,
-            unicaParteDi(v),
         ).atteso() }
         repo.salva(p).atteso()
         return p

@@ -28,7 +28,7 @@ import snastro.ui.Cambiamento
  * a Proposta is always invalidated before any screen hears of the change that made it stale (AC-173, AC-317):
  *
  * - `AttribuzioneConfermata` → invalidate, `Cambiamento(its Registrazione)` (S2 badge, S3 panel, S4);
- * - `ImpronteRiallineate` → invalidate, `Cambiamento(its Registrazione)` (AC-317; the Sbobinatura does not
+ * - `ImpronteRiallineate` → invalidate, `Cambiamento` of each Parte of its Incontro (AC-317; the Sbobinatura does not
  *   subscribe to it: prints do not change a Sbobinatura);
  * - `ParlanteCreato`/`Rinominato`/`Promosso`/`Eliminato` → invalidate, `Cambiamento(null)` (a Nome may show
  *   in every Registrazione);
@@ -56,7 +56,8 @@ internal class AggiornamentiVistaParlanti(
         val cambiamenti = when (evento) {
             is AttribuzioneConfermata ->
                 partiDi(evento.voceRef.incontroId)?.map(::Cambiamento) ?: listOf(Cambiamento(null))
-            is ImpronteRiallineate -> listOf(Cambiamento(evento.registrazioneId))
+            is ImpronteRiallineate ->
+                partiDi(evento.incontroId)?.map(::Cambiamento) ?: listOf(Cambiamento(null))
             is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato,
             is TrascrittoSostituito, is RegistrazioneEliminata,
             -> listOf(Cambiamento(null))
