@@ -841,3 +841,14 @@ exactly: AC-484 and AC-485 are reworded for linkage by piece count and for the s
 `PianoRiassegnazione` and the frasi di riferimento are computed over the whole `Incontro`: a reference `Parlante`'s target
 `Voce` is its lowest `voceId` in the `Incontro`; "≥ 1 `Segmento` left" is counted in the `Incontro`. The S3 preview line
 may split counts per `Parte` (UX). Checks unchanged.
+
+## Amendment 2026-10-02 — the `piano-per-somiglianza` pin over the `Incontro` [user, incontro D-0046]
+The boundary `piano-per-somiglianza` (feature trascrizione-con-parlanti) is re-pinned for a plan over the whole
+`Incontro` (Amendment 2026-10-01, [ADR 0035](0035-voci-dell-incontro.md) §6, [ADR 0033](0033-incontro-progetto-chiavi-confini.md) §1):
+- `PianoRiassegnazione(incontroId: IncontroId, spostamenti: List<SpostamentoProposto>, incerte: Int)`;
+- `SpostamentoProposto(segmento: SegmentoRef, da: VoceId, a: VoceId, intervallo: IntervalloMs)`, ordered by
+  (numero della Parte from `LettoreRegistrazione.parti`, `intervallo.inizioMs`, `segmentoId`);
+- `PianoRiassegnazioneQuery.calcola(id: RegistrazioneId, progresso)` keeps its entry point and errors: the Parte the
+  user asked from resolves its `Incontro`.
+A bare `SegmentoId` is not unique across Parti; `SegmentoRef` is the only exact key. Applying the plan must stay one
+unit of work (§4.5): the per-Parte apply in `AzioniSomiglianzaProgetto` is a must-fix before the I2 import.

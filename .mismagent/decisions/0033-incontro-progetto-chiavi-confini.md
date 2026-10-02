@@ -77,7 +77,7 @@ persistence is ADR 0034; Trascrizione and Parlanti rules are ADR 0035; the Riass
 ```kotlin
 public data class AggiungiRegistrazione(
     val progettoId: ProgettoId,
-    val file: List<Path>,                 // ≥ 1, in the order the user selected them
+    val file: List<String>,               // ≥ 1 source paths, in the order the user selected them (amended 2026-10-02, D-0045)
     val destinazione: Destinazione,
 )
 public sealed interface Destinazione {
@@ -229,3 +229,9 @@ For the `incontro` aggregate (block `incontro`; `invariant_fields`: `Registrazio
   (ADR 0035) are new names the analyst may add to the ubiquitous language.
 - Enforcement: structural (compile + module graph). Discursive (code review): no context but Progetto computes the
   order of the `Parte`s; every multi-file import is one transaction; no file I/O inside it.
+
+## Amendment 2026-10-02 — `AggiungiRegistrazione.file` is `List<String>` [user, incontro D-0045]
+§2 pinned `file: List<Path>` (`java.nio.file.Path`), which contradicts [ADR 0002](0002-esagonale-modulo-per-contesto.md)'s
+check and rule CR-2 (no `java.nio.file.` in any `*/applicazione`). The command carries the source paths as `String`,
+as `percorsoSorgente`, `SondaAudio` and `ArchivioAudio` already do; the adapters turn them into `Path`. No exception
+is added to ADR 0002.
