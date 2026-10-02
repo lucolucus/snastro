@@ -99,6 +99,9 @@ private class EstrattoreTabella : EstrattoreImpronta {
     }
 }
 
+/** The split per Parte (AC-I79) is checked in `AzioniSomiglianzaProgettoTest`; here the lines' (da, a, frasi). */
+private fun List<GruppoSpostamenti>.senzaParti() = map { it.copy(perParte = emptyList()) }
+
 /**
  * ADR 0019 §4-§6 + Amendment (b) end-to-end on the REAL single composition ([AmbienteProgetto]: SQLite project
  * folder, real queue/pipeline, real Parlanti and Trascrizione services and subscribers, the real
@@ -190,7 +193,8 @@ class SomiglianzaTest {
                 GruppoSpostamenti(VoceId(4), VoceId(1), 1),
                 GruppoSpostamenti(VoceId(3), VoceId(2), 1),
             )
-            assertEquals(StatoSomiglianza.Anteprima(attesi, 1), anteprima)
+            val senzaParti = (anteprima as StatoSomiglianza.Anteprima).let { it.copy(gruppi = it.gruppi.senzaParti()) }
+            assertEquals(StatoSomiglianza.Anteprima(attesi, 1), senzaParti)
             assertEquals(prima, righe(a, id), "l'anteprima non scrive nulla")
 
             // AC-549: nothing decoded nor extracted between Applica and the batch transaction.
@@ -256,7 +260,7 @@ class SomiglianzaTest {
             val gruppi = (nuova as StatoSomiglianza.Anteprima).gruppi
             assertEquals(
                 listOf(GruppoSpostamenti(VoceId(3), VoceId(1), 1), GruppoSpostamenti(VoceId(4), VoceId(1), 1)),
-                gruppi.filter { it.a == VoceId(1) },
+                gruppi.filter { it.a == VoceId(1) }.senzaParti(),
             )
         }
     }
@@ -303,7 +307,7 @@ class SomiglianzaTest {
             assertEquals(
                 // Anna's centroid is her whole Voce: the ambiguous Segmento 9 is now closer to her than to Luca's.
                 listOf(GruppoSpostamenti(VoceId(3), VoceId(1), 3), GruppoSpostamenti(VoceId(4), VoceId(1), 1)),
-                anteprima.gruppi.filter { it.a == VoceId(1) },
+                anteprima.gruppi.filter { it.a == VoceId(1) }.senzaParti(),
             )
             assertFalse(anteprima.gruppi.any { it.da == VoceId(1) }, "Anna's only Segmento is her last: never moved")
         }

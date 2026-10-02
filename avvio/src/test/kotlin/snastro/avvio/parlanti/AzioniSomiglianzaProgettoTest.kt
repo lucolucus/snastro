@@ -24,6 +24,7 @@ import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
 import snastro.ui.registrazione.AzioniSomiglianzaContratto
 import snastro.ui.registrazione.ErroreSomiglianzaUi
+import snastro.ui.registrazione.FrasiInParte
 import snastro.ui.registrazione.GruppoSpostamenti
 import snastro.ui.registrazione.StatoSomiglianza
 import java.time.Clock
@@ -126,7 +127,10 @@ class AzioniSomiglianzaProgettoTest {
         assertEquals(1, chiamate.get())
         assertEquals(
             StatoSomiglianza.Anteprima(
-                listOf(GruppoSpostamenti(VoceId(3), VoceId(1), 2), GruppoSpostamenti(VoceId(4), VoceId(2), 1)),
+                listOf(
+                    GruppoSpostamenti(VoceId(3), VoceId(1), 2, listOf(FrasiInParte(REG, 2))),
+                    GruppoSpostamenti(VoceId(4), VoceId(2), 1, listOf(FrasiInParte(REG, 1))),
+                ),
                 1,
             ),
             p.stato.value[REG],
@@ -169,9 +173,34 @@ class AzioniSomiglianzaProgettoTest {
         assertEquals(StatoSomiglianza.Esito(3, 1), p.stato.value[REG])
         assertEquals(1, calcoli.get())
         val atteso = piano.spostamenti.map { SpostamentoSegmento(it.segmento.segmentoId, it.da, it.a, it.intervallo) }
-        assertEquals(listOf(RiassegnaSegmenti(REG, atteso)), applicati.toList())
+        val comando = RiassegnaSegmenti(REG, atteso, incontroDelleVoci = unIncontroDi(REG))
+        assertEquals(listOf(comando), applicati.toList())
         p.applica(REG)
         assertEquals(1, applicati.size)
+    }
+
+    @Test
+    fun `AC-I79 due parti, anteprima per parte e un comando per parte con l Incontro delle Voci`() {
+        val parte2 = RegistrazioneId("id-2")
+        val mossa = { parte: RegistrazioneId, n: Int ->
+            val intervallo = IntervalloMs(n * 1_000L, n * 1_000L + 900)
+            SpostamentoProposto(SegmentoRef(parte, SegmentoId(n)), VoceId(3), VoceId(1), intervallo)
+        }
+        val mosse = listOf(mossa(REG, 1), mossa(parte2, 2), mossa(parte2, 3))
+        val due = PianoRiassegnazione(unIncontroDi(REG), mosse, 0)
+        val perParte = listOf(FrasiInParte(REG, 1), FrasiInParte(parte2, 2))
+        val p = porta { _, _ -> Esito.Ok(due) }.inAnteprima()
+        assertEquals(
+            StatoSomiglianza.Anteprima(
+                listOf(GruppoSpostamenti(VoceId(3), VoceId(1), 3, perParte)),
+                0,
+            ),
+            p.stato.value[REG],
+        )
+        p.applica(REG)
+        attendiFinche(timeout = 10.seconds, messaggio = "esito") { p.stato.value[REG] is StatoSomiglianza.Esito }
+        assertEquals(listOf(REG, parte2), applicati.map { it.registrazioneId })
+        assertTrue(applicati.all { it.incontroDelleVoci == unIncontroDi(REG) })
     }
 
     @Test

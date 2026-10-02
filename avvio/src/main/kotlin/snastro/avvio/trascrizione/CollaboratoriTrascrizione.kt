@@ -1,6 +1,7 @@
 package snastro.avvio.trascrizione
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
@@ -8,6 +9,7 @@ import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
+import snastro.trascrizione.applicazione.letture.VociIncontro
 
 /**
  * Trascrizione's typed collaborators of ONE open project ([ModuloTrascrizione]), as plain functions (CR-1: `:ui`
@@ -23,4 +25,5 @@ internal class CollaboratoriTrascrizione(
     val revisione: ComandiRevisione,
     val confermaSegmento: (ConfermaSegmento) -> Esito<Unit>,
     val riassegnaSegmenti: (RiassegnaSegmenti) -> Esito<Unit>,
+    val vociIncontro: (IncontroId) -> VociIncontro?,
 )

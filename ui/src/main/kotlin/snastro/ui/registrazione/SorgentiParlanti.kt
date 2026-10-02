@@ -13,6 +13,7 @@ import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
+import snastro.trascrizione.applicazione.letture.VociIncontro
 import snastro.ui.AggiornamentiVista
 import java.time.Clock
 
@@ -47,4 +48,6 @@ class SorgentiParlanti(
     val somiglianza: AzioniSomiglianza,
     /** ADR 0036 §3: `PropostaTraParti::perIncontro`. BLOCKING (extracts prints); never called while read-only. */
     val traParti: (IncontroId) -> List<CoppiaTraParti>,
+    /** AC-I77: `TrascrittoQuery::vociIncontro` — the Incontro's Voci with their Parti ('Unisci con ▾' across Parti). */
+    val vociIncontro: (IncontroId) -> VociIncontro?,
 )

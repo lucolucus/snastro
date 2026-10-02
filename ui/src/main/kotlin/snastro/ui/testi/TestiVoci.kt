@@ -77,3 +77,16 @@ fun testoTraParti(voceA: Int, parteA: Int, voceB: Int): String =
 /** AC-209: the toolbar's summary of the selection. */
 fun testoSelezione(numero: Int, etichetta: String): String =
     if (numero == 1) "1 segmento di $etichetta" else "$numero segmenti di $etichetta"
+
+/** AC-I77: the card's line for a Voce that also speaks in other Parti, e.g. "anche in parte 1, 3". */
+fun testoAncheInParti(parti: List<Int>): String = "anche in parte ${parti.joinToString(", ")}"
+
+/** AC-I77: the two groups of 'Unisci con ▾' once the Incontro has other Parti. */
+const val ETICHETTA_GRUPPO_QUESTA_PARTE: String = "In questa parte"
+const val ETICHETTA_GRUPPO_ALTRE_PARTI: String = "In altre parti"
+
+/** AC-I77: the trailing caption of an 'In altre parti' item, e.g. "parte 1, 3". */
+fun testoParti(parti: List<Int>): String = "parte ${parti.joinToString(", ")}"
+
+/** AC-I78: an extract that comes from another Parte than the open one. */
+fun testoEstrattoParte(parte: Int): String = "estratto · parte $parte"

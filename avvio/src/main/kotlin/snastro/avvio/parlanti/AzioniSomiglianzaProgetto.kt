@@ -26,6 +26,7 @@ import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
 import snastro.ui.registrazione.AzioniSomiglianza
 import snastro.ui.registrazione.ErroreSomiglianzaUi
+import snastro.ui.registrazione.FrasiInParte
 import snastro.ui.registrazione.GruppoSpostamenti
 import snastro.ui.registrazione.StatoSomiglianza
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
@@ -143,7 +144,7 @@ internal class AzioniSomiglianzaProgetto(
         // one Parte, I1); the first Errore stops the rest.
         val comandi = piano.spostamenti.groupBy { it.segmento.registrazioneId }.map { (parte, mosse) ->
             val spostamenti = mosse.map { SpostamentoSegmento(it.segmento.segmentoId, it.da, it.a, it.intervallo) }
-            RiassegnaSegmenti(parte, spostamenti)
+            RiassegnaSegmenti(parte, spostamenti, incontroDelleVoci = piano.incontroId) // INV-I7
         }
         scope.launch {
             val esito = try {
@@ -194,8 +195,12 @@ internal class AzioniSomiglianzaProgetto(
 
         /** Presentation grouping of the plan: one line per (da, a), ordered by (a, da). */
         fun gruppiDi(piano: PianoRiassegnazione): List<GruppoSpostamenti> =
-            piano.spostamenti.groupingBy { it.da to it.a }.eachCount()
-                .map { (coppia, frasi) -> GruppoSpostamenti(coppia.first, coppia.second, frasi) }
+            piano.spostamenti.groupBy { it.da to it.a }
+                .map { (coppia, mosse) ->
+                    val perParte = mosse.groupingBy { it.segmento.registrazioneId }.eachCount()
+                        .map { (parte, frasi) -> FrasiInParte(parte, frasi) }
+                    GruppoSpostamenti(coppia.first, coppia.second, mosse.size, perParte)
+                }
                 .sortedWith(compareBy({ it.a.numero }, { it.da.numero }))
 
         fun erroreUi(e: ErroreDominio): ErroreSomiglianzaUi = when (e) {

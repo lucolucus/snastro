@@ -238,7 +238,8 @@ class RegistrazioneSomiglianzaTest {
             assertTrue(assertNotNull(presenter.dati.barraSelezione?.frase).confermato)
             presenter.azioni.togliConferma()
             advanceUntilIdle()
-            assertEquals(listOf<Any>(ConfermaSegmento(REG, SegmentoId(1), confermato = false)), a.revisioni)
+            val atteso = ConfermaSegmento(REG, SegmentoId(1), confermato = false, incontroDelleVoci = INCONTRO_REG)
+            assertEquals(listOf<Any>(atteso), a.revisioni)
             assertFalse(presenter.riga(1).confermato)
         }
 

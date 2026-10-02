@@ -89,6 +89,7 @@ class StatoVociRicaricaTest {
             confermaSegmento = { Esito.Ok(Unit) },
             somiglianza = AzioniSomiglianzaFinta(Clock.systemUTC()),
             traParti = { emptyList() },
+            vociIncontro = { null },
         )
     }
 

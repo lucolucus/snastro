@@ -1,5 +1,7 @@
 package snastro.ui.registrazione
 
+import snastro.kernel.EstrattoRef
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.CoppiaTraParti
@@ -26,10 +28,24 @@ data class PannelloVoci(
      * Proposta di unione is shown (at most one banner), while S3 is read-only, or when no pair holds.
      */
     val traParti: CoppiaTraParti? = null,
-)
+    /** AC-I78: the OTHER Parti of the Incontro (`TrascrittoView.parti` minus this one); empty over one Parte. */
+    val altreParti: Map<RegistrazioneId, Int> = emptyMap(),
+) {
+    /** AC-I78: the number of the Parte an extract comes from, when it is not the open one (`null` = no label). */
+    fun parteDelloEstratto(estratto: EstrattoRef): Int? = altreParti[estratto.registrazioneId]
+}
 
-/** A Voce as a target of 'Unisci con ▾' / 'Riassegna a ▾': its number and its label (Nome or "Voce n"). */
-data class OpzioneVoce(val voceId: VoceId, val etichetta: String)
+/**
+ * A Voce as a target of 'Unisci con ▾' / 'Riassegna a ▾': its number and its label (Nome or "Voce n").
+ * [parti] (AC-I77) are the Parti of the Incontro it speaks in, set only on a Voce that does not speak in the
+ * open Parte ('parte n' in 'In altre parti'); [nome] is its attributed Nome (such a Voce has no card here).
+ */
+data class OpzioneVoce(
+    val voceId: VoceId,
+    val etichetta: String,
+    val parti: List<Int> = emptyList(),
+    val nome: String? = null,
+)
 
 /** AC-411/AC-412: [IN_CORSO] at once on click; [IN_ATTESA] once past `SOGLIA_ATTESA_VISIBILE_MS` ('Annulla'). */
 enum class AttesaComando { IN_CORSO, IN_ATTESA }
@@ -50,6 +66,10 @@ data class CartaVoce(
     val errore: String? = null,
     val altreVoci: List<OpzioneVoce> = emptyList(),
     val soloLettura: Boolean = false,
+    /** AC-I77: 'anche in parte 1, 3' — the OTHER Parti this Voce speaks in; empty = no line. */
+    val altreParti: List<Int> = emptyList(),
+    /** AC-I77: 'Unisci con ▾' → 'In altre parti': the Incontro's Voci absent from this Parte. */
+    val vociAltreParti: List<OpzioneVoce> = emptyList(),
 ) {
     /** AC-411/AC-454: no second command from a card while one runs, nothing to act on while
      * loading/failed, and no command at all while read-only. */

@@ -44,6 +44,9 @@ import kotlin.test.assertTrue
 
 private const val SOGLIA = RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS
 
+private fun riassegna(segmento: Int, verso: VoceId?) =
+    RiassegnaSegmento(REG, SegmentoId(segmento), verso, incontroDelleVoci = INCONTRO_REG)
+
 /**
  * S3's Voci panel, Nome labels, selection toolbar and Revisione UI, with every collaborator a
  * hand-written fake ([AmbienteVoci]) and virtual time ([OrologioVirtuale]) for the ADR 0017 pending
@@ -437,7 +440,8 @@ class RegistrazioneIdentificazioneTest {
         assertTrue(assertNotNull(presenter.dati.barraSelezione).dividiAbilitato)
         presenter.azioni.dividiVoce()
         advanceUntilIdle()
-        assertEquals(listOf<Any>(DividiVoce(REG, V1, setOf(SegmentoId(1)))), a.revisioni)
+        val atteso = DividiVoce(REG, V1, setOf(SegmentoId(1)), incontroDelleVoci = INCONTRO_REG)
+        assertEquals(listOf<Any>(atteso), a.revisioni)
         assertEquals(VoceId(4), presenter.dati.segmenti.first().voceId)
         assertTrue(presenter.dati.selezione.isEmpty())
         assertEquals(4, assertNotNull(presenter.dati.pannello).carte.size)
@@ -454,7 +458,7 @@ class RegistrazioneIdentificazioneTest {
         presenter.azioni.riassegnaA(V2)
         advanceUntilIdle()
         assertEquals(
-            listOf<Any>(RiassegnaSegmento(REG, SegmentoId(1), V2), RiassegnaSegmento(REG, SegmentoId(3), V2)),
+            listOf<Any>(riassegna(1, V2), riassegna(3, V2)),
             a.revisioni,
         )
         assertTrue(presenter.dati.segmenti.filter { it.segmentoId.numero in setOf(1, 3) }.all { it.voceId == V2 })
@@ -470,7 +474,7 @@ class RegistrazioneIdentificazioneTest {
         presenter.azioni.riassegnaA(null)
         advanceUntilIdle()
         assertEquals(
-            listOf<Any>(RiassegnaSegmento(REG, SegmentoId(1), null), RiassegnaSegmento(REG, SegmentoId(3), VoceId(4))),
+            listOf<Any>(riassegna(1, null), riassegna(3, VoceId(4))),
             a.revisioni,
         )
     }
@@ -496,7 +500,7 @@ class RegistrazioneIdentificazioneTest {
 
             // Both moves were attempted, in selection order, and the SECOND one failed.
             assertEquals(
-                listOf<Any>(RiassegnaSegmento(REG, SegmentoId(1), V2), RiassegnaSegmento(REG, SegmentoId(3), V2)),
+                listOf<Any>(riassegna(1, V2), riassegna(3, V2)),
                 a.revisioni,
             )
             // The one that succeeded is APPLIED — a partial failure is not treated as "nothing changed".
@@ -542,7 +546,7 @@ class RegistrazioneIdentificazioneTest {
         }
         presenter.azioni.unisci(V1, V3)
         advanceUntilIdle()
-        assertEquals(listOf<Any>(UnisciVoci(REG, V1, V3)), a.revisioni)
+        assertEquals(listOf<Any>(UnisciVoci(REG, V1, V3, incontroDelleVoci = INCONTRO_REG)), a.revisioni)
         assertTrue(assertNotNull(presenter.dati.pannello).unioni.isEmpty())
         assertEquals(2, assertNotNull(presenter.dati.pannello).carte.size)
     }
@@ -556,7 +560,7 @@ class RegistrazioneIdentificazioneTest {
         presenter.azioni.unisci(V1, V2)
         presenter.azioni.unisci(V1, V3)
         advanceUntilIdle()
-        assertEquals(listOf<Any>(UnisciVoci(REG, V1, V2)), a.revisioni)
+        assertEquals(listOf<Any>(UnisciVoci(REG, V1, V2, incontroDelleVoci = INCONTRO_REG)), a.revisioni)
     }
 
     // --- excerpts: AC-403 ---------------------------------------------------------------------------

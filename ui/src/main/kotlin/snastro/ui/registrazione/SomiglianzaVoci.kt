@@ -100,6 +100,7 @@ internal class SomiglianzaVoci(
     fun pannello(
         riferimenti: RiferimentiSomiglianza,
         bloccato: Boolean,
+        parti: Map<RegistrazioneId, Int>,
         etichetta: (VoceId) -> String,
     ): PannelloSomiglianza {
         abilitato = riferimenti.persone >= 2 && !bloccato && !aperta
@@ -109,7 +110,7 @@ internal class SomiglianzaVoci(
             riferimenti = testoRiferimenti(riferimenti.confermate, riferimenti.tuttaLaVoce),
             avvisoTuttaLaVoce = if (riferimenti.tuttaLaVoce.isNotEmpty()) AVVISO_TUTTA_LA_VOCE else null,
             nonToccate = riferimenti.nonToccate.takeIf { it.isNotEmpty() }?.let(::testoNonToccate),
-            fase = faseDi(stato, ultimaAnteprima, applicaInviato, clock.millis(), registrazioneId, etichetta),
+            fase = faseDi(stato, ultimaAnteprima, applicaInviato, clock.millis(), registrazioneId, parti, etichetta),
         )
     }
 

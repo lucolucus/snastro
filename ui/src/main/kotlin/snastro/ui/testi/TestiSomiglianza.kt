@@ -51,6 +51,15 @@ fun testoAnteprima(n: Int, m: Int): String = when (n) {
 /** AC-545: one preview line, "Voce 3 → Anna: 8". */
 fun testoGruppo(da: String, a: String, frasi: Int): String = "$da → $a: $frasi"
 
+/** AC-I79: over a multi-Parte Incontro, "Voce 3 → Anna: 8 (parte 1: 3, parte 2: 5)"; [perParte] = (n, frasi). */
+fun testoGruppoPerParte(
+    da: String,
+    a: String,
+    frasi: Int,
+    perParte: List<Pair<Int, Int>>,
+): String =
+    "${testoGruppo(da, a, frasi)} (${perParte.joinToString(", ") { (parte, n) -> "parte $parte: $n" }})"
+
 /** AC-533: "3 frasi spostate, 2 incerte (rimaste dov'erano)" / "1 frase spostata, 1 incerta (rimasta dov'era)". */
 fun testoEsitoSomiglianza(spostate: Int, incerte: Int): String {
     val frasi = if (spostate == 1) "1 frase spostata" else "$spostate frasi spostate"

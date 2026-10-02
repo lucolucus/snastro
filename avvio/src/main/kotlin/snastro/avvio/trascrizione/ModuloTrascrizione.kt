@@ -123,6 +123,7 @@ internal class ModuloTrascrizione(
             ),
             confermaSegmento = ConfermaSegmentoServizio(uow, porte.trascritti, registrazioni, dispatcher)::esegui,
             riassegnaSegmenti = RiassegnaSegmentiServizio(uow, porte.trascritti, registrazioni, dispatcher)::esegui,
+            vociIncontro = trascrittoQuery::vociIncontro,
         )
     }
 
