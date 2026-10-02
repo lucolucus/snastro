@@ -145,3 +145,31 @@ fun messaggioImportTuttoONiente(errore: ErroreDominio): String = when (errore) {
         "Nessun file importato: «${java.io.File(errore.percorsoSorgente).name}» non è leggibile."
     else -> "Nessun file importato. ${messaggioPer(errore)}"
 }
+
+/** AC-I66..I68: S2 per Incontro (ux-proposal § S2). The title is the first Parte's, derived — never a field. */
+fun titoloIncontro(titolo: String, numParti: Int): String = "$titolo · $numParti parti"
+fun etichettaParte(numero: Int): String = "Parte $numero"
+const val ETICHETTA_ESPANDI_PARTI: String = "Mostra le parti"
+const val ETICHETTA_COMPRIMI_PARTI: String = "Nascondi le parti"
+
+/** AC-I66: the aggregated state of an Incontro names the Parte, e.g. "Parte 2 · In corso · separazione voci · 3:12". */
+fun etichettaParteInCorso(numero: Int, faseEtichetta: String, trascorsoMs: Long, ritrascrizione: Boolean): String =
+    "Parte $numero · " + if (ritrascrizione) {
+        etichettaRitrascrizioneInCorso(faseEtichetta, trascorsoMs)
+    } else {
+        etichettaInCorso(faseEtichetta, trascorsoMs)
+    }
+
+fun etichettaParteInCoda(numero: Int, posizione: Int, ritrascrizione: Boolean): String =
+    "Parte $numero · " + if (ritrascrizione) "Ritrascrizione in coda · $posizione" else "In coda · $posizione"
+
+fun etichettaParteNonRiuscita(numero: Int): String = "Parte $numero non riuscita"
+
+/** AC-I66/I67: 'Trascrivi N parti' when more than one Parte is untranscribed, plain 'Trascrivi' for one. */
+fun etichettaTrascriviParti(numParti: Int): String =
+    if (numParti > 1) "$ETICHETTA_TRASCRIVI $numParti parti" else ETICHETTA_TRASCRIVI
+
+/** AC-I68: an empty OraDiInizio and its tooltip; the inline editor's refusal. */
+const val ETICHETTA_ORA_SCONOSCIUTA: String = "—:—"
+const val SUGGERIMENTO_ORA_SCONOSCIUTA: String = "Ora di inizio sconosciuta: impostala per ordinare le parti"
+const val MESSAGGIO_ORA_NON_VALIDA: String = "Ora non valida."

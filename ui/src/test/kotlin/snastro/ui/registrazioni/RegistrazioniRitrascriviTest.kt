@@ -113,9 +113,12 @@ class RegistrazioniRitrascriviTest {
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione (Trascrivi/Riprova) non atteso in questo test") },
             apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
-            identificazioni = { emptyList() },
+            identificazioniIncontri = { emptyMap() },
             eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { posizioni },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
             ritrascrivi = { c ->
                 avvii += c
                 ritrascrivi(c)
@@ -165,11 +168,14 @@ class RegistrazioniRitrascriviTest {
             statiElaborazione = statiCon(StatoElaborazioneVista.COMPLETATA, trascrittoDisponibile = true),
             apriRegistrazione = { aperta = it },
             avviaElaborazione = { error("non atteso") },
-            identificazioni = { emptyList() },
+            identificazioniIncontri = { emptyMap() },
             ritrascrivi = { error("non atteso") },
             annullaElaborazione = { error("non atteso") },
             eliminaRegistrazione = { error("non atteso") },
             posizioniNellaCoda = { PosizioniCoda.VUOTA },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
         )
         advanceUntilIdle()
 

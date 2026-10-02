@@ -165,4 +165,9 @@ private val AZIONI = AzioniRegistrazioni(
     scegliImporta = {},
     confermaImporta = {},
     annullaImporta = {},
+    espandiIncontro = {},
+    modificaOraDiInizio = { _, _ -> },
+    modificaNumeroPersoneIncontro = { _, _ -> },
+    avviaElaborazioniIncontro = {},
+    chiudiErroreIncontro = {},
 )

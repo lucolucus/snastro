@@ -104,7 +104,7 @@ class RegistrazioniEliminaParteTest {
             },
             avviaElaborazione = { error("non atteso") },
             apriRegistrazione = { error("non atteso") },
-            identificazioni = { emptyList() },
+            identificazioniIncontri = { emptyMap() },
             ritrascrivi = { error("non atteso") },
             annullaElaborazione = { error("non atteso") },
             eliminaRegistrazione = { c ->
@@ -113,6 +113,9 @@ class RegistrazioniEliminaParteTest {
                 Esito.Ok(Unit)
             },
             posizioniNellaCoda = { PosizioniCoda.VUOTA },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
         )
     }
 

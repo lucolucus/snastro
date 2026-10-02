@@ -51,11 +51,14 @@ class RegistrazioniImportaPartiTest {
             statiElaborazione = { emptyList() },
             avviaElaborazione = { error("non atteso") },
             apriRegistrazione = { error("non atteso") },
-            identificazioni = { emptyList() },
+            identificazioniIncontri = { emptyMap() },
             ritrascrivi = { error("non atteso") },
             annullaElaborazione = { error("non atteso") },
             eliminaRegistrazione = { error("non atteso") },
             posizioniNellaCoda = { PosizioniCoda.VUOTA },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
         )
     }
 

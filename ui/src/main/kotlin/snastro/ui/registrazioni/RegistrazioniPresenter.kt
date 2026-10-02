@@ -13,7 +13,7 @@ import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
-import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
+import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
@@ -22,8 +22,10 @@ import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
+import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontro
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.dominio.ErroreTrascrizione
@@ -48,6 +50,7 @@ import java.io.File
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * State holder of S2 · Registrazioni del Progetto (RC-2, thin UI): joins `registrazioni-del-progetto`
@@ -96,7 +99,7 @@ import java.time.LocalDate
  * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
  * wires all of them, so a missed wiring fails to compile instead of silently hiding a row's control.
  */
-@Suppress("LongParameterList", "TooManyFunctions") // one parameter per collaborator; one method per user action
+@Suppress("LongParameterList", "TooManyFunctions", "LargeClass") // a parameter per collaborator, a method per action
 class RegistrazioniPresenter(
     private val scope: CoroutineScope,
     io: CoroutineDispatcher,
@@ -112,11 +115,14 @@ class RegistrazioniPresenter(
     private val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
     private val avviaElaborazione: (AvviaElaborazione) -> Esito<Unit>,
     private val apriRegistrazione: (RegistrazioneId) -> Unit,
-    private val identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione>,
+    private val identificazioniIncontri: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro>,
     private val ritrascrivi: (AvviaElaborazione) -> Esito<Unit>,
     private val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
     private val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
     private val posizioniNellaCoda: () -> PosizioniCoda,
+    private val avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
+    private val modificaOraDiInizioRegistrazione: (RegistrazioneId, LocalTime?) -> Esito<Unit>,
+    private val numeroPersonePrecompilato: (IncontroId) -> Int?,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -135,6 +141,9 @@ class RegistrazioniPresenter(
     // FAILED (which never produced a result of its own to prefer).
     private var generazioneApplicata = 0
 
+    // AC-I69: the expanded Incontri — presenter state, so the chevron survives a round trip to S3 and every refresh.
+    private val espansi = mutableSetOf<IncontroId>()
+
     init {
         scope.launch { carica() }
         scope.launch { aggiornamenti.cambiamenti.collect { carica() } } // R15
@@ -144,10 +153,10 @@ class RegistrazioniPresenter(
     private suspend fun carica() {
         val generazione = ++generazioneCaricamento
         try {
-            val righe = withContext(io) { costruisciRighe() }
+            val lista = withContext(io) { costruisciLista() }
             if (generazione > generazioneApplicata) { // L485b
                 generazioneApplicata = generazione
-                aggiornaConNuoveRighe(righe)
+                aggiornaConNuoveRighe(lista)
             }
         } catch (e: CancellationException) {
             throw e
@@ -169,7 +178,8 @@ class RegistrazioniPresenter(
      * refresh started on [io]; a play/pause landing on [lettore] while that refresh was still building
      * rows would otherwise be silently reverted by this merge once it lands.
      */
-    private fun aggiornaConNuoveRighe(nuove: List<RigaRegistrazione>) {
+    private fun aggiornaConNuoveRighe(lista: ListaS2) {
+        val nuove = lista.righe
         val precedente = _stato.value as? RegistrazioniUiStato.Dati
         val fuse = nuove.map { nuova ->
             val vecchia = precedente?.righe?.find { it.registrazioneId == nuova.registrazioneId }
@@ -200,6 +210,7 @@ class RegistrazioniPresenter(
             avviso = precedente?.avviso, // ADR 0020/AC-627: survives an unrelated refresh, H1-style
             titoloAvviso = precedente?.titoloAvviso ?: ETICHETTA_REGISTRAZIONE_ELIMINATA,
             dialogoImporta = precedente?.dialogoImporta, // AC-I70: an open dialog survives a refresh
+            incontri = fondiIncontri(lista.incontri, precedente?.incontri.orEmpty()),
         )
     }
 
@@ -227,56 +238,137 @@ class RegistrazioniPresenter(
         scope.launch { carica() }
     }
 
-    private fun costruisciRighe(): List<RigaRegistrazione> {
-        val progetto = registrazioni()
-        val parti = partiDiIncontriMultipli()
-        val ids = progetto.map { it.registrazioneId }
+    /** AC-I69: an Incontro's own flags survive a refresh like a row's (M1); its field takes the fresh prefill only
+     * when its aggregated state moved on; [espansi] is the chevron's single owner. */
+    private fun fondiIncontri(nuovi: List<RigaIncontro>, vecchi: List<RigaIncontro>): List<RigaIncontro> =
+        nuovi.map { nuovo ->
+            val vecchio = vecchi.find { it.incontroId == nuovo.incontroId }
+            val base = nuovo.copy(espanso = nuovo.incontroId in espansi)
+            if (vecchio == null) {
+                base
+            } else {
+                base.copy(
+                    operazioneInCorso = vecchio.operazioneInCorso,
+                    errore = vecchio.errore,
+                    numeroPersone = if (vecchio.stato == nuovo.stato) vecchio.numeroPersone else nuovo.numeroPersone,
+                )
+            }
+        }
+
+    /** What S2 shows: the Incontri ([incontri]) and the flat Parte rows ([righe]) they point to. */
+    private class ListaS2(val righe: List<RigaRegistrazione>, val incontri: List<RigaIncontro>)
+
+    /** One Incontro of the list before its rows exist: [parti] are the Registrazioni present in the catalogue. */
+    private class Gruppo(
+        val incontroId: IncontroId,
+        val titolo: String,
+        val data: LocalDate,
+        val parti: List<Pair<RegistrazioneDelProgettoVista, LocalTime?>>,
+    )
+
+    /**
+     * AC-I69: the Incontri come from [incontri]; a failure of that read (or a Registrazione it does not list) must not
+     * fail the whole load — each such Registrazione is then an Incontro of its own, today's S2.
+     */
+    private fun gruppi(progetto: List<RegistrazioneDelProgettoVista>): List<Gruppo> {
+        val perId = progetto.associateBy { it.registrazioneId }
+        val letti = catturaNonFatale { incontri() }.getOrDefault(emptyList())
+        val raggruppati = letti.mapNotNull { i ->
+            val parti = i.parti.mapNotNull { p -> perId[p.registrazioneId]?.let { it to p.oraDiInizio } }
+            parti.takeIf { it.isNotEmpty() }?.let { Gruppo(i.incontroId, i.titolo, i.data, it) }
+        }
+        val coperti = raggruppati.flatMap { g -> g.parti.map { it.first.registrazioneId } }.toSet()
+        val soli = progetto.filter { it.registrazioneId !in coperti }.map {
+            Gruppo(IncontroId(it.registrazioneId.valore), it.titolo, it.dataRegistrazione, listOf(it to null))
+        }
+        return raggruppati + soli
+    }
+
+    private fun costruisciLista(): ListaS2 {
+        val gruppi = gruppi(registrazioni())
+        val ids = gruppi.flatMap { g -> g.parti.map { it.first.registrazioneId } }
         val stati = statiElaborazione(ids).associateBy { it.registrazioneId }
-        val conteggiIdentificazione = conteggiIdentificazione(ids)
+        val incontriIds = gruppi.map { it.incontroId }
+        val conteggi = conteggiIdentificazione(incontriIds)
         // ADR 0023 §4 (sweep, block avvio-coda-condivisa): the queue position is no longer part of
         // StatoRegistrazioneVista — it is read from PosizioniNellaCoda (the shared queue's owner) and
         // joined here by registrazioneId, one snapshot shared by every row (mirrors AC-163's old intent).
         val posizioni = posizioniNellaCoda()
         val statoLettore = lettore.stato.value
-        return progetto.map { r ->
-            val vista = stati[r.registrazioneId]
-            val elaborazioneRiga = vista?.let { elaborazioneDi(it, posizioni) }
-            // AC-451: FALLITA over an existing Trascritto renders as Completata + this notice, whatever
-            // the `ritrascrivi` source's presence — it reports a FACT, independent of the action's
-            // availability (which `ritrascriviDisponibile` gates on its own).
-            val ritrascrizioneFallita = vista
-                ?.takeIf { it.stato == StatoElaborazioneVista.FALLITA && it.trascrittoDisponibile }
-                ?.motivoFallimento
-            RigaRegistrazione(
-                registrazioneId = r.registrazioneId,
-                titolo = r.titolo,
-                dataRegistrazione = r.dataRegistrazione,
-                durataMs = r.durataMs,
-                elaborazione = elaborazioneRiga,
-                riproduzione = riproduzioneDi(
-                    r.registrazioneId,
+        val righe = mutableListOf<RigaRegistrazione>()
+        val incontriRighe = gruppi.map { g ->
+            val multi = g.parti.size > 1
+            val daGruppo = g.parti.mapIndexed { i, (r, ora) ->
+                costruisciRiga(
+                    r,
+                    stati[r.registrazioneId],
+                    posizioni,
                     statoLettore,
-                    disponibile = lettore.disponibile(r.registrazioneId),
-                ),
-                numeroPersone = numeroPersonePrefillDi(vista),
-                identificazione = identificazioneDi(vista, conteggiIdentificazione[r.registrazioneId]),
-                trascrittoDisponibile = vista?.trascrittoDisponibile == true,
-                elaborazioneId = vista?.elaborazioneId,
-                ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata,
-                ritrascrizioneFallita = ritrascrizioneFallita,
-                annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa,
-                eliminazione = eliminazioneDi(elaborazioneRiga),
-                parte = parti[r.registrazioneId],
+                    parte = if (multi) ParteDiIncontro(i + 1, g.titolo) else null,
+                    ora = if (multi) ora else null,
+                    identificazione = if (multi) null else conteggi[g.incontroId],
+                )
+            }
+            righe += daGruppo
+            RigaIncontro(
+                incontroId = g.incontroId,
+                titolo = g.titolo,
+                data = g.data,
+                durataMs = g.parti.sumOf { it.first.durataMs },
+                parti = daGruppo.map { it.registrazioneId },
+                stato = statoAggregato(daGruppo),
+                identificazione = conteggi[g.incontroId]?.takeIf { multi }
+                    ?.let { IdentificazioneRiga(it.numVoci, it.numVociDaIdentificare) },
+                numeroPersone = if (multi) precompilato(g.incontroId) else "",
             )
         }
+        return ListaS2(righe, incontriRighe)
     }
 
-    /** ADR 0038 §5: the Parti of every Incontro with two or more Parti, by their Registrazione — a 1-part Incontro
-     * (or the last Parte left) has no entry and keeps today's Elimina dialog. */
-    private fun partiDiIncontriMultipli(): Map<RegistrazioneId, ParteDiIncontro> =
-        incontri().filter { it.numParti > 1 }.flatMap { i ->
-            i.parti.map { it.registrazioneId to ParteDiIncontro(it.numero, i.titolo) }
-        }.toMap()
+    /** AC-I67: the latest number used in the Incontro; a failing read only costs the prefill. */
+    private fun precompilato(id: IncontroId): String =
+        catturaNonFatale { numeroPersonePrecompilato(id)?.toString().orEmpty() }.getOrDefault("")
+
+    @Suppress("LongParameterList") // the row's sources: catalogue entry, status, queue, player, Incontro context
+    private fun costruisciRiga(
+        r: RegistrazioneDelProgettoVista,
+        vista: StatoRegistrazioneVista?,
+        posizioni: PosizioniCoda,
+        statoLettore: StatoLettore,
+        parte: ParteDiIncontro?,
+        ora: LocalTime?,
+        identificazione: IdentificazioneIncontro?,
+    ): RigaRegistrazione {
+        val elaborazioneRiga = vista?.let { elaborazioneDi(it, posizioni) }
+        // AC-451: FALLITA over an existing Trascritto renders as Completata + this notice, whatever
+        // the `ritrascrivi` source's presence — it reports a FACT, independent of the action's
+        // availability (which `ritrascriviDisponibile` gates on its own).
+        val ritrascrizioneFallita = vista
+            ?.takeIf { it.stato == StatoElaborazioneVista.FALLITA && it.trascrittoDisponibile }
+            ?.motivoFallimento
+        return RigaRegistrazione(
+            registrazioneId = r.registrazioneId,
+            titolo = r.titolo,
+            dataRegistrazione = r.dataRegistrazione,
+            durataMs = r.durataMs,
+            elaborazione = elaborazioneRiga,
+            riproduzione = riproduzioneDi(
+                r.registrazioneId,
+                statoLettore,
+                disponibile = lettore.disponibile(r.registrazioneId),
+            ),
+            numeroPersone = numeroPersonePrefillDi(vista),
+            identificazione = identificazioneDi(vista, identificazione),
+            trascrittoDisponibile = vista?.trascrittoDisponibile == true,
+            elaborazioneId = vista?.elaborazioneId,
+            ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata,
+            ritrascrizioneFallita = ritrascrizioneFallita,
+            annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa,
+            eliminazione = eliminazioneDi(elaborazioneRiga),
+            parte = parte,
+            oraDiInizio = ora,
+        )
+    }
 
     /** ADR 0020 §6/AC-625: disabled with its caption on an open Elaborazione (IN_ATTESA/IN_CORSO, plain
      * or re-run) — every other state (no Elaborazione yet, FALLITA, Completata) is
@@ -298,14 +390,14 @@ class RegistrazioniPresenter(
     }
 
     /**
-     * AC-345: an empty map — never a partial batch — when [identificazioni]'s read throws; a throw here
-     * is contained to this batch (never the outer [carica] catch of [costruisciRighe]'s OTHER sources),
+     * AC-345: an empty map — never a partial batch — when [identificazioniIncontri]'s read throws; a throw here
+     * is contained to this batch (never the outer [carica] catch of [costruisciLista]'s OTHER sources),
      * so a failing Parlanti source only costs every row its badge, the rest of each row (title, date,
      * status, playback…) stays built from its own source.
      */
-    private fun conteggiIdentificazione(ids: List<RegistrazioneId>): Map<RegistrazioneId, ConteggioIdentificazione> =
+    private fun conteggiIdentificazione(ids: List<IncontroId>): Map<IncontroId, IdentificazioneIncontro> =
         try {
-            identificazioni(ids).associateBy { it.registrazioneId }
+            identificazioniIncontri(ids)
         } catch (e: CancellationException) {
             throw e
         } catch (
@@ -314,12 +406,12 @@ class RegistrazioniPresenter(
             emptyMap()
         }
 
-    /** AC-204/AC-345: a badge only once BOTH `numVoci` (only known for `COMPLETATA`) and the
-     * Parlanti [conteggio] for this row are known — a missing [vista]/`numVoci`/[conteggio] (source
+    /** AC-204/AC-345: a badge on a 1-part row only once BOTH `numVoci` (only known for `COMPLETATA`) and the
+     * Parlanti [conteggio] of its Incontro are known — a missing [vista]/`numVoci`/[conteggio] (source
      * absent, not yet loaded for this row, or failed) means no badge, never a provisional one. */
     private fun identificazioneDi(
         vista: StatoRegistrazioneVista?,
-        conteggio: ConteggioIdentificazione?,
+        conteggio: IdentificazioneIncontro?,
     ): IdentificazioneRiga? =
         vista?.numVoci?.let { numVoci -> conteggio?.let { IdentificazioneRiga(numVoci, it.numVociDaIdentificare) } }
 
@@ -659,6 +751,64 @@ class RegistrazioniPresenter(
     /** AC-627: dismisses the post-elimination success notice, if any. */
     fun chiudiAvviso() = azzeraAvviso()
 
+    /** AC-I69: the chevron of [id]; the set lives here so it outlives S2's composition and every refresh. */
+    fun espandiIncontro(id: IncontroId) {
+        if (!espansi.add(id)) espansi.remove(id)
+        aggiornaIncontro(id) { it.copy(espanso = id in espansi) }
+    }
+
+    /**
+     * AC-I68: replaces a Parte's start time ([ora] `null` clears it) — `ModificaOraDiInizio`, whose `OraDiInizio` VO
+     * `:avvio` builds (CR-1: `:ui` does not see the domain). The list is read again on success, so the sub-rows come
+     * back in their new order; a refusal stays on the Parte's row ([RigaRegistrazione.erroreRiga]).
+     */
+    fun modificaOraDiInizio(id: RegistrazioneId, ora: LocalTime?) {
+        val comando = modificaOraDiInizioRegistrazione
+        suRiga(id) { withContext(io) { comando(id, ora) } }
+    }
+
+    /** AC-I67: the text of an Incontro's ONE 'Numero di persone' field, as typed (validated when 'Trascrivi' fires). */
+    fun modificaNumeroPersoneIncontro(id: IncontroId, testo: String) =
+        aggiornaIncontro(id) { it.copy(numeroPersone = testo) }
+
+    /**
+     * AC-I67: 'Trascrivi N parti' — the field validated like a row's (invalid → the same inline message, nothing
+     * sent), then ONE `AvviaElaborazioniDellIncontro(id, n)` over the Incontro.
+     */
+    fun avviaElaborazioniIncontro(id: IncontroId) {
+        val comando = avviaElaborazioniDellIncontro
+        val incontro = incontroLibero(id) ?: return
+        when (val campo = numeroPersoneCampo(incontro.numeroPersone)) {
+            NumeroPersoneCampo.NonValido ->
+                aggiornaIncontro(id) { it.copy(errore = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
+            is NumeroPersoneCampo.Valido -> {
+                aggiornaIncontro(id) { it.copy(operazioneInCorso = true, errore = null) }
+                azzeraAvviso()
+                scope.launch {
+                    val avvia = AvviaElaborazioniDellIncontro(id, campo.numero)
+                    val esito = catturaNonFatale { withContext(io) { comando(avvia) } }.getOrNull()
+                    val errore = when (esito) {
+                        is Esito.Ok -> null
+                        is Esito.Errore -> messaggioPer(esito.errore)
+                        null -> MESSAGGIO_ERRORE_GENERICO
+                    }
+                    if (errore == null) carica()
+                    aggiornaIncontro(id) { it.copy(operazioneInCorso = false, errore = errore) }
+                }
+            }
+        }
+    }
+
+    /** AC-I67: dismisses the inline message of Incontro [id]. */
+    fun chiudiErroreIncontro(id: IncontroId) = aggiornaIncontro(id) { it.copy(errore = null) }
+
+    private fun incontroLibero(id: IncontroId): RigaIncontro? =
+        (_stato.value as? RegistrazioniUiStato.Dati)?.incontri?.find { it.incontroId == id }
+            ?.takeUnless { it.operazioneInCorso }
+
+    private fun aggiornaIncontro(id: IncontroId, f: (RigaIncontro) -> RigaIncontro) =
+        aggiornaDati { d -> d.copy(incontri = d.incontri.map { if (it.incontroId == id) f(it) else it }) }
+
     /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only when an action fires). */
     fun modificaNumeroPersone(id: RegistrazioneId, testo: String) = aggiornaRiga(id) { it.copy(numeroPersone = testo) }
 
@@ -785,6 +935,11 @@ class RegistrazioniPresenter(
         scegliImporta = ::scegliImporta,
         confermaImporta = ::confermaImporta,
         annullaImporta = ::annullaImporta,
+        espandiIncontro = ::espandiIncontro,
+        modificaOraDiInizio = ::modificaOraDiInizio,
+        modificaNumeroPersoneIncontro = ::modificaNumeroPersoneIncontro,
+        avviaElaborazioniIncontro = ::avviaElaborazioniIncontro,
+        chiudiErroreIncontro = ::chiudiErroreIncontro,
     )
 }
 
