@@ -76,12 +76,12 @@ class AbbonatoRevisioneParlantiTest {
 
     /** Attributes [voceRef] to [parlante] with one print, as a command would. */
     private fun attribuisci(voceRef: VoceRef, parlante: Parlante) {
-        parlante.registraImpronta(
+        parlante.aggiungiImpronta(
             voceRef,
+            unicaParteDi(voceRef),
             Impronta(floatArrayOf(1f)),
             "0-1000",
             "finto",
-            unicaParteDi(voceRef),
         ).atteso()
         parlanti.salva(parlante).atteso()
         attribuzioni.salva(Attribuzione.conferma(voceRef, PROGETTO, parlante.id).aggregato)

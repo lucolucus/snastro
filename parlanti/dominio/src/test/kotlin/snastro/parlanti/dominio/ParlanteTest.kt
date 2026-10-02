@@ -51,8 +51,8 @@ class ParlanteTest {
     @Test
     fun `INV-13 elimina rimuove tutte le impronte e rende il Parlante eliminato, poi ogni modifica e rifiutata`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(1), unaImpronta(1f, 2f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
-        p.registraImpronta(unaVoce(2), unaImpronta(3f, 4f), SORGENTE, MODELLO, unicaParteDi(unaVoce(2))).atteso()
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(1f, 2f), SORGENTE, MODELLO).atteso()
+        p.aggiungiImpronta(unaVoce(2), unicaParteDi(unaVoce(2)), unaImpronta(3f, 4f), SORGENTE, MODELLO).atteso()
 
         val evento = p.elimina().atteso()
 
@@ -65,7 +65,7 @@ class ParlanteTest {
         val rifiutati = listOf(
             p.rinomina(unNome("Luca")),
             p.promuovi(null),
-            p.registraImpronta(unaVoce(3), unaImpronta(5f), SORGENTE, MODELLO, unicaParteDi(unaVoce(3))),
+            p.aggiungiImpronta(unaVoce(3), unicaParteDi(unaVoce(3)), unaImpronta(5f), SORGENTE, MODELLO),
             p.elimina(),
         )
         rifiutati.forEach {
@@ -88,18 +88,18 @@ class ParlanteTest {
     }
 
     @Test
-    fun `INV-14 registraImpronta sostituisce solo l impronta dello stesso VoceRef e aggiunge le nuove`() {
+    fun `INV-14 aggiungiImpronta sostituisce solo l impronta dello stesso VoceRef e aggiunge le nuove`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(1), unaImpronta(1f, 1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
-        p.registraImpronta(unaVoce(2), unaImpronta(2f, 2f), SORGENTE, MODELLO, unicaParteDi(unaVoce(2))).atteso()
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(1f, 1f), SORGENTE, MODELLO).atteso()
+        p.aggiungiImpronta(unaVoce(2), unicaParteDi(unaVoce(2)), unaImpronta(2f, 2f), SORGENTE, MODELLO).atteso()
 
-        p.registraImpronta(unaVoce(1), unaImpronta(9f, 9f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
-        p.registraImpronta(
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(9f, 9f), SORGENTE, MODELLO).atteso()
+        p.aggiungiImpronta(
             unaVoce(1, registrazione = "id-altra"),
+            unicaParteDi(unaVoce(1, registrazione = "id-altra")),
             unaImpronta(3f, 3f),
             SORGENTE,
             MODELLO,
-            unicaParteDi(unaVoce(1, registrazione = "id-altra")),
         ).atteso()
 
         assertEquals(
@@ -122,8 +122,8 @@ class ParlanteTest {
     @Test
     fun `rimuoviImpronta toglie solo l impronta di quel VoceRef ed e innocua se assente`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(1), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
-        p.registraImpronta(unaVoce(2), unaImpronta(2f), SORGENTE, MODELLO, unicaParteDi(unaVoce(2))).atteso()
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(1f), SORGENTE, MODELLO).atteso()
+        p.aggiungiImpronta(unaVoce(2), unicaParteDi(unaVoce(2)), unaImpronta(2f), SORGENTE, MODELLO).atteso()
 
         p.rimuoviImpronta(unaVoce(1))
         p.rimuoviImpronta(unaVoce(7))
@@ -137,7 +137,7 @@ class ParlanteTest {
     @Test
     fun `le impronte esposte sono una copia`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(1), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(1f), SORGENTE, MODELLO).atteso()
 
         val copia = p.impronte
         p.rimuoviImpronta(unaVoce(1))
@@ -155,7 +155,7 @@ class ParlanteTest {
         )
 
         val p = unParlante(nome = "Ospite del 12/09/2026", tipo = TipoParlante.OCCASIONALE)
-        p.registraImpronta(unaVoce(1), unaImpronta(1f, 2f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(1f, 2f), SORGENTE, MODELLO).atteso()
         val improntePrima = p.impronte
 
         val evento = p.promuovi(unNome("Giulia")).atteso()
@@ -185,24 +185,24 @@ class ParlanteTest {
     }
 
     @Test
-    fun `INV-13 su un eliminato trasferisciImpronta non crea impronte`() {
+    fun `INV-13 su un eliminato riassegnaImpronte non crea impronte`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(2), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(2))).atteso()
+        p.aggiungiImpronta(unaVoce(2), unicaParteDi(unaVoce(2)), unaImpronta(1f), SORGENTE, MODELLO).atteso()
         p.elimina().atteso()
 
-        p.trasferisciImpronta(da = unaVoce(2), a = unaVoce(1))
+        p.riassegnaImpronte(da = unaVoce(2), a = unaVoce(1))
 
         assertFalse(p.haImpronte)
         assertEquals(emptyList(), p.impronte)
     }
 
     @Test
-    fun `INV-14 trasferisciImpronta ri-chiava su a con stessa Impronta sorgente e modello senza toccare le altre`() {
+    fun `INV-14 riassegnaImpronte ri-chiava su a con stessa Impronta sorgente e modello senza toccare le altre`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(2), unaImpronta(2f, 2f), "3000-9000", "modello-b", unicaParteDi(unaVoce(2))).atteso()
-        p.registraImpronta(unaVoce(5), unaImpronta(5f, 5f), SORGENTE, MODELLO, unicaParteDi(unaVoce(5))).atteso()
+        p.aggiungiImpronta(unaVoce(2), unicaParteDi(unaVoce(2)), unaImpronta(2f, 2f), "3000-9000", "modello-b").atteso()
+        p.aggiungiImpronta(unaVoce(5), unicaParteDi(unaVoce(5)), unaImpronta(5f, 5f), SORGENTE, MODELLO).atteso()
 
-        p.trasferisciImpronta(da = unaVoce(2), a = unaVoce(1))
+        p.riassegnaImpronte(da = unaVoce(2), a = unaVoce(1))
 
         assertEquals(
             listOf(
@@ -214,11 +214,11 @@ class ParlanteTest {
     }
 
     @Test
-    fun `INV-14 trasferisciImpronta senza impronta per da non fa nulla`() {
+    fun `INV-14 riassegnaImpronte senza impronta per da non fa nulla`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(5), unaImpronta(5f), SORGENTE, MODELLO, unicaParteDi(unaVoce(5))).atteso()
+        p.aggiungiImpronta(unaVoce(5), unicaParteDi(unaVoce(5)), unaImpronta(5f), SORGENTE, MODELLO).atteso()
 
-        p.trasferisciImpronta(da = unaVoce(2), a = unaVoce(1))
+        p.riassegnaImpronte(da = unaVoce(2), a = unaVoce(1))
 
         assertEquals(
             listOf(ImprontaVocale(unaVoce(5), unaImpronta(5f), SORGENTE, MODELLO, unicaParteDi(unaVoce(5)))),
@@ -227,12 +227,12 @@ class ParlanteTest {
     }
 
     @Test
-    fun `INV-21 trasferisciImpronta su un a che ha gia l impronta della stessa Parte tiene quella di a`() {
+    fun `INV-21 riassegnaImpronte su un a che ha gia l impronta della stessa Parte tiene quella di a`() {
         val p = unParlante()
-        p.registraImpronta(unaVoce(1), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1))).atteso()
-        p.registraImpronta(unaVoce(2), unaImpronta(2f), SORGENTE, MODELLO, unicaParteDi(unaVoce(2))).atteso()
+        p.aggiungiImpronta(unaVoce(1), unicaParteDi(unaVoce(1)), unaImpronta(1f), SORGENTE, MODELLO).atteso()
+        p.aggiungiImpronta(unaVoce(2), unicaParteDi(unaVoce(2)), unaImpronta(2f), SORGENTE, MODELLO).atteso()
 
-        p.trasferisciImpronta(da = unaVoce(2), a = unaVoce(1))
+        p.riassegnaImpronte(da = unaVoce(2), a = unaVoce(1))
 
         assertEquals(
             listOf(ImprontaVocale(unaVoce(1), unaImpronta(1f), SORGENTE, MODELLO, unicaParteDi(unaVoce(1)))),
@@ -241,15 +241,15 @@ class ParlanteTest {
     }
 
     @Test
-    fun `AC-268 registraImpronta conserva sorgente e modello`() {
+    fun `AC-268 aggiungiImpronta conserva sorgente e modello`() {
         val p = unParlante()
 
-        p.registraImpronta(
+        p.aggiungiImpronta(
             unaVoce(1),
+            unicaParteDi(unaVoce(1)),
             unaImpronta(1f),
             "1200-5400,8000-15000",
             "campplus",
-            unicaParteDi(unaVoce(1)),
         ).atteso()
 
         val impronta = p.impronte.single()
