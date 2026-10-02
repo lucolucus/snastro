@@ -1,0 +1,3 @@
+package snastro.trascrizione.applicazione
+
+internal fun registrata(r: Riassunto): String? = "${r.strutturaRegistrata}"

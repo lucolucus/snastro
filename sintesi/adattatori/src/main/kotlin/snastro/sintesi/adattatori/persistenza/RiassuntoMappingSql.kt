@@ -46,7 +46,7 @@ internal fun inDominio(db: SnastroDatabase, riga: RigaRiassunto): Riassunto {
         puntiChiave = figli.puntiChiave,
         omessi = riga.omessi?.toInt(),
         // The stored key is the domain's own StrutturaIncontro.chiave (ADR 0034 §1, ADR 0037 §5): verbatim.
-        struttura = riga.struttura,
+        strutturaRegistrata = riga.struttura,
     )
 }
 

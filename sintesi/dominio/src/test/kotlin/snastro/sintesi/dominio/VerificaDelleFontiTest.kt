@@ -102,7 +102,7 @@ class VerificaDelleFontiTest {
         assertTrue(r.fallito)
         assertNull(r.sommario)
         assertNull(r.omessi)
-        assertNull(r.struttura)
+        assertNull(r.strutturaRegistrata)
         assertTrue(r.decisioni.isEmpty() && r.azioni.isEmpty())
     }
 

@@ -404,7 +404,7 @@ class RiassumiServizioTest {
     }
 
     @Test
-    fun `Incontro sconosciuto rifiuta con IncontroNonTrovato prima di ModelloNonInstallato`() {
+    fun `Incontro sconosciuto rifiuta con IncontroNonTrovato prima di ModelloNonInstallato e non scrive`() {
         val a = unAmbienteMultiParte(
             trascritte = setOf(REG1, REG2),
             disponibilita = DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.NonInstallato(1)),
@@ -414,6 +414,9 @@ class RiassumiServizioTest {
         val errore = a.servizio.esegui(Riassumi(ignoto)).erroreAtteso<ErroreSintesi.IncontroNonTrovato>()
 
         assertEquals(ignoto, errore.incontroId)
+        assertEquals(emptyList(), a.riassunti.trova(ignoto))
+        assertEquals(emptyList(), a.riassunti.trova(INCONTRO))
+        assertEquals(emptyList(), a.eventi.pubblicati)
     }
 
     @Test

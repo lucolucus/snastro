@@ -1,0 +1,3 @@
+package snastro.progetto.applicazione.letture
+
+internal fun ultima(p: List<Registrazione>) = p.maxOf { it.oraDiInizio!! }

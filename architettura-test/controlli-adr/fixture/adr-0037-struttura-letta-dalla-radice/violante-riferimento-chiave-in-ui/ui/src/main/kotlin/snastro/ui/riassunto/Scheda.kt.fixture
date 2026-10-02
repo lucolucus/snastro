@@ -1,0 +1,3 @@
+package snastro.ui.riassunto
+
+internal val chiave = StrutturaIncontro::chiave

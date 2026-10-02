@@ -1,5 +1,0 @@
-package snastro.sintesi.adattatori.persistenza
-
-internal fun scrivi(r: Riassunto, s: StrutturaIncontro) {
-    check(r.struttura == null || r.struttura == s.chiave)
-}

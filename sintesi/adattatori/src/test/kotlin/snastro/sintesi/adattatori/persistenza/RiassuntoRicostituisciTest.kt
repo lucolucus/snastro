@@ -49,7 +49,7 @@ class RiassuntoRicostituisciTest {
         id, incontroId, argomento = null, lunghezzaMassima = parole, richiestoAlle = richiestoAlle,
         stato = StatoRiassunto.PRONTO, avviatoAlle = richiestoAlle, motivoFallimento = null,
         sommario = sommario, decisioni = decisioni, questioniAperte = questioniAperte,
-        azioni = azioni, puntiChiave = puntiChiave, omessi = omessi, struttura = "1:1",
+        azioni = azioni, puntiChiave = puntiChiave, omessi = omessi, strutturaRegistrata = "1:1",
     )
 
     @Test

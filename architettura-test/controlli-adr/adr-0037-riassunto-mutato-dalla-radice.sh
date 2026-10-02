@@ -10,7 +10,8 @@
 #      and no public `fun` returning `Esito<` (on the `fun` line or on a `): Esito<` continuation line of a public fun):
 #      only the root `Riassunto` changes state.
 # Comments are removed by lib/senza-commenti.awk (nested and multi-line /* */, trailing //; a `//` inside a string is
-# code); build dirs excluded. FAIL when no file declares `class Riassunto` (sintesi/dominio/src/main) or
+# code); build dirs excluded. A clause-1 fun outside the allow-list prints `<file:n:code>: fun <name> not on the
+# allow-list of ADR 0037`. FAIL when no file declares `class Riassunto` (sintesi/dominio/src/main) or
 # `interface RiassuntoRepository` (sintesi/applicazione/src/main).
 # Usage: sh architettura-test/controlli-adr/adr-0037-riassunto-mutato-dalla-radice.sh [project-root]
 N='ADR-0037 riassunto-mutato-dalla-radice'
@@ -29,7 +30,7 @@ V1=$(for f in $PORTA; do
     nome=$(printf '%s\n' "$riga" | sed -nE \
       's/^[^:]*:[0-9]+:.*(^|[^A-Za-z0-9_])fun[[:space:]]+(<[^>]*>[[:space:]]*)?([A-Za-z0-9_]+[.])*([A-Za-z0-9_]+).*$/\4/p')
     [ -n "$nome" ] || continue
-    printf '%s\n' "$nome" | grep -qE "^($AMMESSE)\$" || printf '%s\n' "$riga"
+    printf '%s\n' "$nome" | grep -qE "^($AMMESSE)\$" || printf '%s: fun %s not on the allow-list of ADR 0037\n' "$riga" "$nome"
   done
 done)
 TIPI='Decisione|QuestioneAperta|Azione|PuntoChiave|Fonte|StrutturaIncontro|StrutturaTrascritto'

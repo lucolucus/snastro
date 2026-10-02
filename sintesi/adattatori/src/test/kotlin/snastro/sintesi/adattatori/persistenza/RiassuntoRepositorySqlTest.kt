@@ -201,7 +201,7 @@ class RiassuntoRepositorySqlTest : RiassuntoRepositoryContratto() {
 
         val letto = checkNotNull(repo.trova(pronto.id))
         assertEquals(pronto.statoOsservabile(), letto.statoOsservabile())
-        assertEquals("parte-1=1:1;parte-2=1:2", letto.struttura)
+        assertEquals("parte-1=1:1;parte-2=1:2", letto.strutturaRegistrata)
         assertEquals(
             setOf(SegmentoRef(prima, SegmentoId(1)), SegmentoRef(seconda, SegmentoId(1))),
             letto.decisioni.single().fonti,

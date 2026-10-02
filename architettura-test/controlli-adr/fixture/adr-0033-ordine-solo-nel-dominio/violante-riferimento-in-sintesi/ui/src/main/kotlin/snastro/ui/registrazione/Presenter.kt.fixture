@@ -1,0 +1,3 @@
+package snastro.ui.registrazione
+
+internal fun ora(i: Incontro?, id: Id) = i?.parti?.firstOrNull { it.registrazioneId == id }?.oraDiInizio

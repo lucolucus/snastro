@@ -98,7 +98,7 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
         val azioni = r.azioni.toList()
         val puntiChiave = r.puntiChiave.toList()
         val omessi = r.omessi
-        val struttura = r.struttura
+        val struttura = r.strutturaRegistrata
 
         fun inDominio(): Riassunto {
             val riassunto = unRiassunto(id.valore, incontroId, argomento, parole, richiestoAlle)
