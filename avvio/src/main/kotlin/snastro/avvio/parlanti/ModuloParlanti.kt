@@ -180,6 +180,7 @@ internal class ModuloParlanti(
             incontroDi = { r -> registrazione.registrazione(r)?.incontroId },
         )
         val attivi = ParlantiAttivi(porte.parlanti)
+        val unioni = PropostaUnione(porte.attribuzioni, porte.parlanti)
         val delProgetto = ParlantiDelProgetto(porte.parlanti, porte.attribuzioni, registrazione, estrattoAudio)
         val galleriaVuota = { voceRef: VoceRef -> PropostaVista(voceRef.voceId, emptyList()) }
         val lavoro = scopeProgetto.coroutineContext.job
@@ -187,7 +188,7 @@ internal class ModuloParlanti(
             letture = LettureParlanti(
                 identificazione = IdentificazioneVoci(voci, porte.attribuzioni, porte.parlanti, registrazione)::voci,
                 proposta = if (ml.proposte) proposte::perVoce else galleriaVuota,
-                unioni = PropostaUnione(porte.attribuzioni, porte.parlanti, registrazione)::proposte,
+                unioni = { r -> registrazione.registrazione(r)?.incontroId?.let(unioni::proposte).orEmpty() },
                 parlantiAttivi = { attivi.parlanti(progettoId) },
                 estratto = estrattoAudio::estratto,
                 parlantiDelProgetto = { delProgetto.parlanti(progettoId) },

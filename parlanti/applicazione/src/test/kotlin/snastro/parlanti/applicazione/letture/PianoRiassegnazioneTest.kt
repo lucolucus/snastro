@@ -22,12 +22,15 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
+import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
+import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
 import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
 import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaRegistrazioneVista
 import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
@@ -87,7 +90,7 @@ class PianoRiassegnazioneTest {
         val piano = ambiente.api.calcola(REGISTRAZIONE) { _, _ -> }.atteso()
 
         assertEquals(
-            listOf(SpostamentoProposto(SegmentoId(8), VoceId(4), VoceId(1), IntervalloMs(10_500, 12_500))),
+            listOf(spostamento(REGISTRAZIONE, 8, 4, 1, 10_500, 12_500)),
             piano.spostamenti,
         )
         assertEquals(1, piano.incerte, "solo il Segmento 5 (< 1s)")
@@ -313,7 +316,7 @@ class PianoRiassegnazioneTest {
         val piano = ambiente.api.calcola(REGISTRAZIONE) { _, _ -> }.atteso()
 
         assertEquals(
-            listOf(SpostamentoProposto(SegmentoId(6), VoceId(6), VoceId(2), IntervalloMs(9_400, 11_400))),
+            listOf(spostamento(REGISTRAZIONE, 6, 6, 2, 9_400, 11_400)),
             piano.spostamenti,
             "una Voce non congelata (T, intera Voce) produce un candidato; nessuna Voce congelata appare come da/a",
         )
@@ -372,7 +375,7 @@ class PianoRiassegnazioneTest {
         val piano = ambiente.api.calcola(REGISTRAZIONE) { _, _ -> }.atteso()
 
         assertEquals(
-            listOf(SpostamentoProposto(SegmentoId(4), VoceId(4), VoceId(2), IntervalloMs(6_000, 8_000))),
+            listOf(spostamento(REGISTRAZIONE, 4, 4, 2, 6_000, 8_000)),
             piano.spostamenti,
         )
     }
@@ -523,14 +526,14 @@ class PianoRiassegnazioneTest {
         val primo = ambiente.api.calcola(REGISTRAZIONE) { _, _ -> }.atteso()
         assertEquals(
             listOf(
-                SpostamentoProposto(SegmentoId(3), VoceId(3), VoceId(5), IntervalloMs(3_000, 5_000)),
-                SpostamentoProposto(SegmentoId(5), VoceId(5), VoceId(1), IntervalloMs(5_000, 7_000)),
+                spostamento(REGISTRAZIONE, 3, 3, 5, 3_000, 5_000),
+                spostamento(REGISTRAZIONE, 5, 5, 1, 5_000, 7_000),
             ),
             primo.spostamenti,
         )
         assertEquals(
             0,
-            primo.spostamenti.count { it.segmentoId == SegmentoId(1) },
+            primo.spostamenti.count { it.segmento.segmentoId == SegmentoId(1) },
             "il confermato di P non si sposta mai",
         )
         ambiente.applica(primo.spostamenti)
@@ -647,6 +650,67 @@ class PianoRiassegnazioneTest {
         assertEquals(primo, secondo, "il risultato e deterministico: stesso piano due volte")
     }
 
+    @Test
+    fun `INV-27 su due parti il target e la Voce piu bassa dell Incontro e i Segmenti di entrambe sono candidati`() {
+        val anna = parlante("anna", "Anna") // Voce 3 (parte 1) e Voce 6 (parte 2): target Voce 3
+        val marco = parlante("marco", "Marco") // Voce 4 (parte 1)
+        // stessi segmentoId nelle due parti: la chiave e il SegmentoRef. La parte 2 e data per prima dal lettore:
+        // l'ordine tra le parti e quello dell'Incontro.
+        val parte2 = listOf(segDi(PARTE_2, 1, 6, 0, 2_000), segDi(PARTE_2, 2, 7, 2_000, 4_000))
+        val parte1 = listOf(
+            segDi(PARTE_1, 1, 3, 0, 2_000, confermato = true),
+            segDi(PARTE_1, 2, 4, 2_000, 4_000, confermato = true),
+            segDi(PARTE_1, 3, 5, 4_000, 6_000),
+        )
+        val voci = (parte1 + parte2).groupBy { it.voceId }.map { (v, segs) ->
+            VoceVista(VoceRef(INCONTRO, v), segs.groupBy({ it.segmento.registrazioneId }, { it.intervallo }))
+        }
+        val classificatore = ClassificatoreSomiglianzaFinta(
+            // movibiliValidi in ordine (parte, inizio, segmentoId): P1 seg3 (0), P2 seg1 (1), P2 seg2 (2).
+            mapOf(
+                0 to Classificazione.Sicura(anna.id),
+                1 to Classificazione.Sicura(anna.id),
+                2 to Classificazione.Sicura(marco.id),
+            ),
+        )
+        val parlanti = ParlanteRepositoryFinta().apply { salva(anna).atteso() }.apply { salva(marco).atteso() }
+        val attribuzioni = AttribuzioneRepositoryFinta()
+        listOf(3 to anna, 6 to anna, 4 to marco).forEach { (v, p) ->
+            attribuzioni.salva(Attribuzione.conferma(VoceRef(INCONTRO, VoceId(v)), PROGETTO, p.id).aggregato)
+        }
+        val decodificatore = DecodificatoreAudioCheConta(DecodificatoreAudioFinta())
+        val api = PianoRiassegnazioneQuery(
+            LettoreVociFinta(mapOf(INCONTRO to voci), mapOf(INCONTRO to parte2 + parte1)),
+            attribuzioni,
+            parlanti,
+            decodificatore,
+            EstrattoreImprontaFinta(),
+            classificatore,
+            LettoreRegistrazioneFinta(
+                mapOf(
+                    PARTE_1 to unaRegistrazioneVista(PARTE_1, PROGETTO).copy(incontroId = INCONTRO),
+                    PARTE_2 to unaRegistrazioneVista(PARTE_2, PROGETTO).copy(incontroId = INCONTRO),
+                ),
+            ),
+        )
+
+        val piano = api.calcola(PARTE_2) { _, _ -> }.atteso()
+
+        assertEquals(
+            listOf(
+                spostamento(PARTE_1, 3, 5, 3, 4_000, 6_000),
+                spostamento(PARTE_2, 1, 6, 3, 0, 2_000),
+                spostamento(PARTE_2, 2, 7, 4, 2_000, 4_000),
+            ),
+            piano.spostamenti,
+        )
+        assertEquals(INCONTRO, piano.incontroId)
+        assertEquals(0, piano.incerte)
+        val partiDecodificate = decodificatore.chiamate.map { it.first }.toSet()
+        assertEquals(setOf(PARTE_1, PARTE_2), partiDecodificate, "ogni Segmento dalla sua parte")
+        assertEquals(5, decodificatore.chiamate.size, "2 riferimenti + 3 movibili, ognuno una volta")
+    }
+
     private fun attesaImpronta(s: SegmentoDiVoce): Impronta =
         EstrattoreImprontaFinta().estrai(
             DecodificatoreAudioFinta().campioni(REGISTRAZIONE, SorgenteImpronta.di(listOf(s.intervallo)).intervalli),
@@ -722,7 +786,7 @@ class PianoRiassegnazioneTest {
         /** Moves each spostamento's Segmento onto its `a` Voce (the automatic batch touches no `confermato` flag). */
         fun applica(spostamenti: List<SpostamentoProposto>) {
             spostamenti.forEach { m ->
-                val i = segmentiVivi.indexOfFirst { it.segmento.segmentoId == m.segmentoId }
+                val i = segmentiVivi.indexOfFirst { it.segmento == m.segmento }
                 segmentiVivi[i] = segmentiVivi[i].copy(voceId = m.a)
             }
             dati[REGISTRAZIONE] = segmentiVivi.toList()
@@ -732,6 +796,17 @@ class PianoRiassegnazioneTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
+        val INCONTRO = IncontroId("incontro-2-parti")
+        val PARTE_1 = RegistrazioneId("parte-1")
+        val PARTE_2 = RegistrazioneId("parte-2")
+
+        @Suppress("LongParameterList") // one parameter per field of the planned move
+        fun spostamento(parte: RegistrazioneId, n: Int, da: Int, a: Int, inizio: Long, fine: Long) =
+            SpostamentoProposto(SegmentoRef(parte, SegmentoId(n)), VoceId(da), VoceId(a), IntervalloMs(inizio, fine))
+
+        @Suppress("LongParameterList") // one parameter per SegmentoDiVoce field
+        fun segDi(parte: RegistrazioneId, n: Int, voce: Int, inizio: Long, fine: Long, confermato: Boolean = false) =
+            SegmentoDiVoce(SegmentoRef(parte, SegmentoId(n)), VoceId(voce), IntervalloMs(inizio, fine), confermato)
 
         fun parlante(id: String, nome: String, tipo: TipoParlante = TipoParlante.RICORRENTE): Parlante =
             Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(nome).atteso(), tipo).aggregato

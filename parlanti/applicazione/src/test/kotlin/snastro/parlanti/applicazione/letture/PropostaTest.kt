@@ -1,6 +1,7 @@
 package snastro.parlanti.applicazione.letture
 
 import snastro.kernel.CampioniAudio
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -23,8 +24,10 @@ import snastro.parlanti.applicazione.porte.Fascia
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
+import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
+import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
 import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.applicazione.porte.unaVoceVista
@@ -313,6 +316,55 @@ class PropostaTest {
         assertEquals(1, proposta.candidati.size)
     }
 
+    @Test
+    fun `INV-20 la Proposta per la Voce 5 della parte 2 propone Anna con impronta dalla parte 1 dell Incontro`() {
+        val ambiente = AmbienteDueParti(voce5 = mapOf(PARTE_2 to listOf(IntervalloMs(0, 4_000))))
+        val anna = unParlante("p-anna", "Anna")
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_1, impronta(1f), "s1", MODELLO).atteso()
+        ambiente.parlanti.salva(anna).atteso()
+
+        val candidato = assertNotNull(ambiente.api.perVoce(VOCE_5)).candidati.single()
+
+        assertEquals(anna.id, candidato.parlanteId)
+        assertEquals(ambiente.estrattoAudio.estratto(VOCE_ANNA, PARTE_1), candidato.estratto)
+        assertEquals(PARTE_1, candidato.estratto.registrazioneId, "INV-I17: dalla parte dell'impronta scelta")
+    }
+
+    @Test
+    fun `INV-20 la Fascia e la migliore sulle coppie fetta per impronta, l estratto dalla parte dell impronta`() {
+        val fettaParte1 = listOf(IntervalloMs(0, 4_000))
+        val fettaParte2 = listOf(IntervalloMs(10_000, 14_000))
+        val debole = impronta(40f)
+        lateinit var estrattoreSpia: EstrattoreImprontaCheConta
+        val ambiente = AmbienteDueParti(
+            voce5 = mapOf(PARTE_1 to fettaParte1, PARTE_2 to fettaParte2),
+            confronto = ConfrontoImpronteFinta(mapOf(debole to Fascia.DEBOLE)),
+            estrattore = { EstrattoreImprontaCheConta(EstrattoreImprontaFinta()).also { estrattoreSpia = it } },
+        )
+        // Anna: una impronta DEBOLE (parte 1) e una identica alla fetta della Voce 5 nella parte 2 (FORTE solo con
+        // quella fetta): FORTE esiste solo se si confrontano TUTTE le fette con TUTTE le impronte.
+        val comeFettaParte2 = EstrattoreImprontaFinta().estrai(
+            DecodificatoreAudioFinta().campioni(PARTE_2, SorgenteImpronta.di(fettaParte2).intervalli),
+        )
+        val anna = unParlante("p-anna", "Anna")
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_1, debole, "s1", MODELLO).atteso()
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_2, comeFettaParte2, "s2", MODELLO).atteso()
+        ambiente.parlanti.salva(anna).atteso()
+
+        val candidato = assertNotNull(ambiente.api.perVoce(VOCE_5)).candidati.single()
+
+        assertEquals(Fascia.FORTE, candidato.fascia)
+        assertEquals(ambiente.estrattoAudio.estratto(VOCE_ANNA, PARTE_2), candidato.estratto)
+        assertEquals(2, estrattoreSpia.chiamate, "una impronta transitoria per Parte in cui la Voce parla")
+    }
+
+    @Test
+    fun `INV-20 un Candidato non espone alcun punteggio numerico`() {
+        val campi = Candidato::class.java.declaredFields.map { it.name }.toSet()
+
+        assertEquals(setOf("parlanteId", "nome", "tipoParlante", "fascia", "estratto"), campi)
+    }
+
     private fun aggiungiCandidato(ambiente: Ambiente, seme: Seed) {
         val p = unParlante(seme.id, seme.nome, seme.tipo)
         p.aggiungiImpronta(seme.storica, unicaParteDi(seme.storica), seme.impronta, "s-${seme.id}", MODELLO).atteso()
@@ -346,6 +398,45 @@ class PropostaTest {
             parlanti,
             decodificatore(uow),
             estrattore(uow),
+            confronto,
+            estrattoAudio,
+        )
+    }
+
+    /** An Incontro of two Parti: Voce 1 (Anna's source) speaks in both, Voce 5 (under Proposta) in [voce5]. */
+    private class AmbienteDueParti(
+        voce5: Map<RegistrazioneId, List<IntervalloMs>>,
+        confronto: ConfrontoImpronte = ConfrontoImpronteFinta(),
+        estrattore: () -> EstrattoreImpronta = { EstrattoreImprontaFinta() },
+    ) {
+        val parlanti = ParlanteRepositoryFinta()
+        private val registrazioni = LettoreRegistrazioneFinta(
+            mapOf(
+                PARTE_1 to unaRegistrazioneVista().copy(registrazioneId = PARTE_1, incontroId = INCONTRO),
+                PARTE_2 to unaRegistrazioneVista().copy(registrazioneId = PARTE_2, incontroId = INCONTRO),
+            ),
+        )
+        private val voci = LettoreVociFinta(
+            mapOf(
+                INCONTRO to listOf(
+                    VoceVista(
+                        VOCE_ANNA,
+                        mapOf(
+                            PARTE_1 to listOf(IntervalloMs(20_000, 23_000)),
+                            PARTE_2 to listOf(IntervalloMs(30_000, 32_000)),
+                        ),
+                    ),
+                    VoceVista(VOCE_5, voce5),
+                ),
+            ),
+        )
+        val estrattoAudio = EstrattoAudio(voci, registrazioni)
+        val api = Proposta(
+            voci,
+            registrazioni,
+            parlanti,
+            DecodificatoreAudioFinta(),
+            estrattore(),
             confronto,
             estrattoAudio,
         )
@@ -398,6 +489,11 @@ class PropostaTest {
         val STORICA = RegistrazioneId("storica-1")
         val VOCE_1 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
         val MODELLO = EstrattoreImprontaFinta.MODELLO
+        val INCONTRO = IncontroId("incontro-2-parti")
+        val PARTE_1 = RegistrazioneId("parte-1")
+        val PARTE_2 = RegistrazioneId("parte-2")
+        val VOCE_ANNA = VoceRef(INCONTRO, VoceId(1))
+        val VOCE_5 = VoceRef(INCONTRO, VoceId(5))
 
         fun impronta(seme: Float): Impronta = Impronta(FloatArray(8) { i -> seme + i })
 

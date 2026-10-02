@@ -42,7 +42,7 @@ import java.util.logging.Logger
  *   through `runInterruptible`, publishing `InCorso` per extraction, and ends in `Anteprima` — nothing
  *   written. It HOLDS the plan (ids, VoceIds, intervals: no embedding, no number — ADR 0009), at most one
  *   per Registrazione, in memory only.
- * - [applica] sends EXACTLY the held plan, 1:1, as ONE `RiassegnaSegmenti` ([applicaPiano], built with
+ * - [applica] sends EXACTLY the held plan, 1:1, as ONE `RiassegnaSegmenti` per Parte ([applicaPiano], built with
  *   `eventi.unitaDiLavoro`): nothing recomputed, nothing extracted (AC-549). The final transaction is not
  *   interrupted once started (`NonCancellable`). The plan is dropped whatever the outcome.
  * - [annulla] interrupts a computation or discards a preview (nothing written); clears a final result.
@@ -138,12 +138,20 @@ internal class AzioniSomiglianzaProgetto(
         val piano = piani[id]?.takeIf { it.spostamenti.isNotEmpty() } ?: return
         piani.remove(id)
         imposta(id, StatoSomiglianza.Applicazione)
-        // 1:1, in plan order: nothing recomputed, nothing extracted (AC-549).
-        val spostamenti = piano.spostamenti.map { SpostamentoSegmento(it.segmentoId, it.da, it.a, it.intervallo) }
-        val comando = RiassegnaSegmenti(id, spostamenti)
+        // 1:1, in plan order: nothing recomputed, nothing extracted (AC-549). The plan spans the Incontro ([INV-27]),
+        // RiassegnaSegmenti is per Parte: one command per Parte, in plan order (exactly one while every Incontro has
+        // one Parte, I1); the first Errore stops the rest.
+        val comandi = piano.spostamenti.groupBy { it.segmento.registrazioneId }.map { (parte, mosse) ->
+            val spostamenti = mosse.map { SpostamentoSegmento(it.segmento.segmentoId, it.da, it.a, it.intervallo) }
+            RiassegnaSegmenti(parte, spostamenti)
+        }
         scope.launch {
             val esito = try {
-                withContext(NonCancellable + bg) { applicaPiano(comando) }
+                withContext(NonCancellable + bg) {
+                    comandi.fold<RiassegnaSegmenti, Esito<Unit>>(Esito.Ok(Unit)) { finora, comando ->
+                        if (finora is Esito.Ok) applicaPiano(comando) else finora
+                    }
+                }
             } catch (
                 // A SQL fault (ADR 0003): the transaction rolled back; the panel shows it in plain words.
                 @Suppress("TooGenericExceptionCaught") e: Exception,
