@@ -64,7 +64,7 @@ class AbbonatoProgettoSintesiTest {
         }
 
         esito.atteso()
-        verify(exactly = 0) { politica.applica(any()) }
+        verify(exactly = 0) { politica.applica(any(), any()) }
     }
 
     @Test
@@ -81,8 +81,25 @@ class AbbonatoProgettoSintesiTest {
         }
 
         esito.atteso()
-        verify(exactly = 1) { politica.applica(unIncontroDi(REG)) }
+        verify(exactly = 1) { politica.applica(unIncontroDi(REG), true) }
         assertEquals(emptyList(), riassunti.trova(unIncontroDi(REG)), "l'effetto della politica e davvero applicato")
+    }
+
+    @Test
+    fun `INV-I12b RegistrazioneEliminata di una Parte non ultima passa incontroCessato false, nulla e tolto`() {
+        val riassunti = RiassuntoRepositoryFinta()
+        riassunti.salva(unRiassunto("vecchio", REG)).atteso()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
+        val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica, ::unIncontroDi))
+
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(eliminata(REG, cessato = false))
+            Esito.Ok(Unit)
+        }.atteso()
+
+        verify(exactly = 1) { politica.applica(unIncontroDi(REG), false) }
+        assertEquals(1, riassunti.trova(unIncontroDi(REG)).size)
     }
 
     @Test
@@ -116,7 +133,7 @@ class AbbonatoProgettoSintesiTest {
         )
     }
 
-    private fun eliminata(r: RegistrazioneId) =
+    private fun eliminata(r: RegistrazioneId, cessato: Boolean = true) =
         RegistrazioneEliminata(
             r,
             PROGETTO,
@@ -124,7 +141,7 @@ class AbbonatoProgettoSintesiTest {
             DATA,
             RiferimentoAudio("audio/${r.valore}.m4a"),
             unIncontroDi(r),
-            incontroCessato = true,
+            incontroCessato = cessato,
         )
 
     private companion object {
