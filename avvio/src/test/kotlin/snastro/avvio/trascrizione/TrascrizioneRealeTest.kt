@@ -10,6 +10,7 @@ import snastro.modelli.VOCE_CATALOGO_ASR_PARAKEET_TDT_0_6B_V3_INT8
 import snastro.modelli.VOCE_CATALOGO_VAD_SILERO
 import snastro.modelli.VoceCatalogo
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
@@ -51,7 +52,8 @@ class TrascrizioneRealeTest {
             val collaboratori = checkNotNull(sessione.collaboratoriCorrenti())
             val trascrizione = collaboratori.trascrizione
             val wav = spike.resolve("$CARTELLA_PARAKEET/test_wavs/en.wav")
-            collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(wav.toString())).atteso()
+            val comando = AggiungiRegistrazione(progetto.progettoId, listOf(wav.toString()), Destinazione.NuovoIncontro)
+            collaboratori.aggiungiRegistrazione(comando).atteso()
             val id = collaboratori.registrazioni().single().registrazioneId
 
             collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()

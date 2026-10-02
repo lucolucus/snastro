@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.supporto.test.attendiFinche
@@ -79,6 +80,7 @@ class RegistrazioniPresenterConcorrenzaTest {
             val presenter = RegistrazioniPresenter(
                 scope = scope,
                 io = esecutoreIo.asCoroutineDispatcher(),
+                progettoId = ProgettoId("progetto-1"),
                 registrazioni = { listOf(rigaVista(REG_1)) },
                 aggiungiRegistrazione = { error("non atteso in questo test") },
                 modificaDataRegistrazione = { error("non atteso in questo test") },
@@ -153,6 +155,7 @@ class RegistrazioniPresenterConcorrenzaTest {
             val presenter = RegistrazioniPresenter(
                 scope = scope,
                 io = esecutoreIo.asCoroutineDispatcher(),
+                progettoId = ProgettoId("progetto-1"),
                 registrazioni = {
                     when (chiamate.incrementAndGet()) {
                         1 -> { // the OLDER call: the presenter's own initial load — blocks until released

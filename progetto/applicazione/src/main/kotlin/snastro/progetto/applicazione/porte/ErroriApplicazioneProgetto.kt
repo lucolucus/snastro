@@ -1,6 +1,7 @@
 package snastro.progetto.applicazione.porte
 
 import snastro.kernel.ErroreDominio
+import snastro.kernel.IncontroId
 
 /**
  * The application/technical failures of the Progetto context — ONE hierarchy per module (ADR 0003,
@@ -15,4 +16,7 @@ public sealed interface ErroreApplicazioneProgetto : ErroreDominio {
 
     /** Copying the source into `audio/` failed; nothing was left behind. */
     public data class CopiaFallita(val percorsoSorgente: String) : ErroreApplicazioneProgetto
+
+    /** INV-I1: the destination Incontro of an import is unknown, of another Progetto, or ceased with its last Parte. */
+    public data class IncontroNonTrovato(val id: IncontroId) : ErroreApplicazioneProgetto
 }

@@ -7,6 +7,7 @@ import snastro.avvio.scriviWavSintetico
 import snastro.kernel.Esito
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.Destinazione.NuovoIncontro
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import java.nio.file.Files
 import java.nio.file.Path
@@ -38,7 +39,8 @@ class ImportaSenzaElaborazioneTest {
         val progetto = esitoCrea.valore
         val collaboratori = checkNotNull(grafo.sessione.collaboratoriCorrenti())
 
-        val esitoAggiungi = collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(sorgente.toString()))
+        val comando = AggiungiRegistrazione(progetto.progettoId, listOf(sorgente.toString()), NuovoIncontro)
+        val esitoAggiungi = collaboratori.aggiungiRegistrazione(comando)
         check(esitoAggiungi is Esito.Ok) { "AggiungiRegistrazione fallita: $esitoAggiungi" }
         val registrazioneId = collaboratori.registrazioni().single().registrazioneId
 

@@ -10,6 +10,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
@@ -101,6 +102,7 @@ class RegistrazioniPresenterTest {
         return RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = registrazioni,
             aggiungiRegistrazione = aggiungi,
             modificaDataRegistrazione = modificaData,
@@ -228,7 +230,7 @@ class RegistrazioniPresenterTest {
         val presenter = presentatore(
             this,
             registrazioni = { emptyList() },
-            aggiungi = { Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(it.percorsoSorgente)) },
+            aggiungi = { Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(it.file.single())) },
         )
         advanceUntilIdle()
 
@@ -274,9 +276,9 @@ class RegistrazioniPresenterTest {
         val presenter = presentatore(
             this,
             aggiungi = { c ->
-                chiamate += c.percorsoSorgente
-                if (c.percorsoSorgente.endsWith("b.m4a")) {
-                    Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(c.percorsoSorgente))
+                chiamate += c.file.single()
+                if (c.file.single().endsWith("b.m4a")) {
+                    Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(c.file.single()))
                 } else {
                     Esito.Ok(Unit)
                 }
@@ -589,7 +591,7 @@ class RegistrazioniPresenterTest {
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
-            aggiungi = { Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(it.percorsoSorgente)) },
+            aggiungi = { Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(it.file.single())) },
             modificaData = { Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(REG_1)) },
         )
         advanceUntilIdle()

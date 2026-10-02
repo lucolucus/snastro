@@ -43,6 +43,7 @@ fun messaggioPer(errore: ErroreApplicazioneProgetto): String = when (errore) {
     is ErroreApplicazioneProgetto.AudioNonLeggibile -> "Il file audio non può essere letto."
     is ErroreApplicazioneProgetto.FormatoNonSupportato -> "Il formato del file audio non è supportato."
     is ErroreApplicazioneProgetto.CopiaFallita -> "La copia del file nel progetto non è riuscita."
+    is ErroreApplicazioneProgetto.IncontroNonTrovato -> "Incontro non trovato."
 }
 
 fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
