@@ -200,7 +200,8 @@ class SomiglianzaTest {
 
             assertEquals(StatoSomiglianza.Esito(4, 1), applica(a, id))
             assertEquals(prima549, sonda.chiamateAllInizio)
-            assertEquals(listOf(3, 5, 7, 8), sonda.eventi.map { it.segmentoId.numero }, "ONE batch, in plan order")
+            val ordine = sonda.eventi.map { it.segmento.segmentoId.numero }
+            assertEquals(listOf(3, 5, 7, 8), ordine, "ONE batch, in plan order")
 
             assertEquals(listOf(1, 3, 5, 8).map { VoceId(1) }, listOf(1, 3, 5, 8).map { voceDi(a, id, it) })
             assertEquals(listOf(VoceId(2), VoceId(2)), listOf(2, 7).map { voceDi(a, id, it) })

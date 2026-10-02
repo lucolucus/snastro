@@ -85,7 +85,8 @@ public class AbbonatoSbobinaturaEventi(
     private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
     /**
      * The Parti of an Incontro, unordered (ADR 0033 §4.1, e.g. `CatalogoRegistrazioni::parti` bound at `:avvio`): an
-     * [AttribuzioneConfermata] names a Voce of the Incontro, and each Parte has its own Sbobinatura.
+     * [AttribuzioneConfermata] and a Revisione event ([VociUnite], [VoceDivisa], [SegmentoRiassegnato]) name the
+     * Incontro, and each Parte has its own Sbobinatura.
      */
     private val partiDellIncontro: (IncontroId) -> List<RegistrazioneId>?,
     segnalazione: Segnalazione,
@@ -141,11 +142,11 @@ public class AbbonatoSbobinaturaEventi(
     override fun ricevi(evento: EventoPubblicato) {
         when (evento) {
             is ElaborazioneCompletata -> accoda(evento.registrazioneId, LavoroPendente())
-            is VociUnite -> accoda(evento.registrazioneId, LavoroPendente())
-            is VoceDivisa -> accoda(evento.registrazioneId, LavoroPendente())
-            is SegmentoRiassegnato -> accoda(evento.registrazioneId, LavoroPendente())
-            is AttribuzioneConfermata ->
-                partiDellIncontro(evento.voceRef.incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
+            // ADR 0035 §7: an Incontro-keyed Revisione regenerates every Parte of the Incontro (each its own entry).
+            is VociUnite -> accodaParti(evento.incontroId)
+            is VoceDivisa -> accodaParti(evento.incontroId)
+            is SegmentoRiassegnato -> accodaParti(evento.incontroId)
+            is AttribuzioneConfermata -> accodaParti(evento.voceRef.incontroId)
             is DataRegistrazioneModificata ->
                 accoda(evento.registrazioneId, LavoroPendente(dataPrecedente = evento.precedente))
             is RegistrazioneRinominata ->
@@ -160,6 +161,10 @@ public class AbbonatoSbobinaturaEventi(
             // LettoreNomi) ed ogni altro evento pubblicato non rilevante per la Sbobinatura.
             else -> Unit
         }
+    }
+
+    private fun accodaParti(incontroId: IncontroId) {
+        partiDellIncontro(incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
     }
 
     private fun accoda(id: RegistrazioneId, lavoro: LavoroPendente) {

@@ -20,7 +20,7 @@ import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import java.time.Clock
 import java.time.Instant
@@ -58,12 +58,12 @@ internal class FonteCodaElaborazioneTest : FonteCodaContratto() {
     /** [FonteCodaContratto] (A122): due Elaborazioni in_attesa, strettamente in ordine — sulla vera fonte. */
     override fun conDue(): FonteCoda {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, TrascrittoRepositoryFinta()))
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, VociDellIncontroRepositoryFinta()))
         val servizio = EseguiProssimaElaborazioneServizio(
             eventi.unitaDiLavoro,
             OROLOGIO,
             elaborazioni,
-            TrascrittoRepositoryFinta(),
+            VociDellIncontroRepositoryFinta(),
             PortePipeline(
                 LettoreRegistrazioneFinta(),
                 DecodificatoreAudioFinta(emptyMap()),

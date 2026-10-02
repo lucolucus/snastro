@@ -26,6 +26,7 @@ import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -109,7 +110,7 @@ class AbbonatoRiallineamentoImpronteTest {
 
         init {
             // ADR 0030 §1 (AC-C67): a value the composition registers, whose worker starts only at avvia(scope).
-            val abbonato = AbbonatoRiallineamentoImpronte(riallinea, { r -> unIncontroDi(r) }, segnalazioni)
+            val abbonato = AbbonatoRiallineamentoImpronte(riallinea, segnalazioni)
             dispatcher.registraDopoCommit(abbonato)
             abbonato.avvia(scope)
         }
@@ -162,9 +163,9 @@ class AbbonatoRiallineamentoImpronteTest {
                 dispatcher,
             ),
         )
-        val abbonato = AbbonatoRiallineamentoImpronte(riallinea, { r -> unIncontroDi(r) }, Segnalazione { _, _ -> })
+        val abbonato = AbbonatoRiallineamentoImpronte(riallinea, Segnalazione { _, _ -> })
 
-        abbonato.ricevi(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        abbonato.ricevi(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         runCurrent() // backgroundScope's own tasks: advanceUntilIdle ignores them
         verify(exactly = 0) { riallinea.esegui(any()) }
         assertTrue(backgroundScope.coroutineContext.job.children.none(), "nessun lavoro in corso prima di avvia")
@@ -176,7 +177,7 @@ class AbbonatoRiallineamentoImpronteTest {
     }
 
     @Test
-    fun `INV-I8 una Revisione e ricondotta all Incontro, una Registrazione ignota non fa nulla`() = runTest {
+    fun `INV-I8 una Revisione chiede il riallineamento dell Incontro che nomina`() = runTest {
         val parlanti = ParlanteRepositoryFinta()
         val transazioni = UnitaDiLavoroFinta(parlanti)
         val dispatcher = DispatcherEventiInMemoria(transazioni)
@@ -191,20 +192,16 @@ class AbbonatoRiallineamentoImpronteTest {
                 dispatcher,
             ),
         )
-        val incontro = IncontroId("incontro-condiviso")
-        val abbonato = AbbonatoRiallineamentoImpronte(
-            riallinea,
-            { r -> incontro.takeIf { r == REG } },
-            Segnalazione { _, _ -> },
-        )
+        val abbonato = AbbonatoRiallineamentoImpronte(riallinea, Segnalazione { _, _ -> })
         abbonato.avvia(backgroundScope)
 
-        abbonato.ricevi(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
-        abbonato.ricevi(VociUnite(RegistrazioneId("altra"), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        abbonato.ricevi(VociUnite(IncontroId("uno"), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        abbonato.ricevi(VoceDivisa(IncontroId("due"), VoceId(1), VoceId(2), emptyList()))
         runCurrent()
 
-        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(incontro)) }
-        verify(exactly = 1) { riallinea.esegui(any()) }
+        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(IncontroId("uno"))) }
+        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(IncontroId("due"))) }
+        verify(exactly = 2) { riallinea.esegui(any()) }
     }
 
     @Test
@@ -214,7 +211,7 @@ class AbbonatoRiallineamentoImpronteTest {
         val ricevuti = mutableListOf<EventoPubblicato>()
         ambiente.dispatcher.registraDopoCommit { ricevuti += it }
 
-        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
         assertEquals(VECCHIA, ambiente.impronta(id).impronta, "non ancora eseguito: il worker non ha ancora girato")
 
         advanceUntilIdle()
@@ -228,7 +225,7 @@ class AbbonatoRiallineamentoImpronteTest {
         val ambiente = Ambiente(testScheduler, voci = mapOf(REG to listOf(unaVoce(1, NUOVI))))
         val id = ambiente.seminaStale("Marco", 1)
 
-        ambiente.commit(VoceDivisa(REG, origine = VoceId(1), nuova = VoceId(2), segmentiSpostati = emptyList()))
+        ambiente.commit(VoceDivisa(unIncontroDi(REG), origine = VoceId(1), nuova = VoceId(2), spostati = emptyList()))
             .atteso()
         advanceUntilIdle()
 
@@ -244,7 +241,7 @@ class AbbonatoRiallineamentoImpronteTest {
         val ricevuti = mutableListOf<EventoPubblicato>()
         ambiente.dispatcher.registraDopoCommit { ricevuti += it }
 
-        ambiente.commitAnnullato(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        ambiente.commitAnnullato(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         advanceUntilIdle()
 
         assertEquals(VECCHIA, ambiente.impronta(id).impronta, "nessun riallineamento dopo un rollback")
@@ -263,11 +260,18 @@ class AbbonatoRiallineamentoImpronteTest {
 
         // Tre eventi della STESSA Registrazione, tutti pubblicati prima che il worker abbia la
         // possibilita' di girare (nessun advance* tra un commit e l'altro).
-        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
-        val divisa = VoceDivisa(REG, origine = VoceId(1), nuova = VoceId(3), segmentiSpostati = emptyList())
+        ambiente.commit(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        val divisa = VoceDivisa(unIncontroDi(REG), origine = VoceId(1), nuova = VoceId(3), spostati = emptyList())
         ambiente.commit(divisa).atteso()
         ambiente.commit(
-            SegmentoRiassegnato(REG, SegmentoId(1), da = VoceId(1), a = VoceId(3), daRimossa = false, aNuova = false),
+            SegmentoRiassegnato(
+                unIncontroDi(REG),
+                SegmentoRef(REG, SegmentoId(1)),
+                da = VoceId(1),
+                a = VoceId(3),
+                daRimossa = false,
+                aNuova = false,
+            ),
         ).atteso()
         advanceUntilIdle()
 
@@ -284,7 +288,7 @@ class AbbonatoRiallineamentoImpronteTest {
         val id = ambiente.seminaStale("Marco", 1)
 
         val inizio = testScheduler.currentTime
-        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
         advanceUntilIdle()
 
         assertEquals(3, guasto.tentativi, "2 fallimenti + 1 successo")
@@ -332,8 +336,8 @@ class AbbonatoRiallineamentoImpronteTest {
         val id2 = ambiente.seminaStale("Luca", 1, registrazioneId = k2)
 
         // K1 richiesto per primo, poi K2: stesso lotto, nessun advance tra i due commit.
-        ambiente.commit(VociUnite(k1, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
-        ambiente.commit(VociUnite(k2, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(unIncontroDi(k1), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(unIncontroDi(k2), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
         advanceUntilIdle()
 
         assertEquals(
@@ -363,7 +367,7 @@ class AbbonatoRiallineamentoImpronteTest {
         val ambiente = Ambiente(testScheduler, voci = mapOf(REG to listOf(unaVoce(1, NUOVI))), estrattore = guasto)
         val id = ambiente.seminaStale("Marco", 1)
 
-        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
         advanceUntilIdle()
 
         val righe = ambiente.segnalazioni.tutte.filter { REG.valore in it.messaggio }
@@ -381,7 +385,7 @@ class AbbonatoRiallineamentoImpronteTest {
         advanceUntilIdle()
 
         ambiente.scope.cancel()
-        ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        ambiente.commit(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
         advanceUntilIdle()
 
         assertEquals(VECCHIA, ambiente.impronta(id).impronta, "nessun riallineamento dopo la cancellazione")
@@ -402,7 +406,7 @@ class AbbonatoRiallineamentoImpronteTest {
             ambiente.seminaStale("Marco", 1)
 
             try {
-                ambiente.commit(VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+                ambiente.commit(VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
                 // Tempo LIMITATO, mai una advanceUntilIdle: se l'Error fosse per errore ritentato (regressione
                 // verso un runCatching), l'estrattore lo rilancerebbe all'infinito e non convergerebbe mai.
                 advanceTimeBy(60.seconds)

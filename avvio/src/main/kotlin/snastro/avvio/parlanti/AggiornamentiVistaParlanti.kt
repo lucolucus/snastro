@@ -61,7 +61,7 @@ internal class AggiornamentiVistaParlanti(
             is ParlanteCreato, is ParlanteRinominato, is ParlantePromosso, is ParlanteEliminato,
             is TrascrittoSostituito, is RegistrazioneEliminata,
             -> listOf(Cambiamento(null))
-            is SegmentoConfermato -> listOf(Cambiamento(evento.registrazioneId))
+            is SegmentoConfermato -> listOf(Cambiamento(evento.segmento.registrazioneId))
             is VociUnite, is VoceDivisa, is SegmentoRiassegnato -> emptyList()
             else -> return
         }

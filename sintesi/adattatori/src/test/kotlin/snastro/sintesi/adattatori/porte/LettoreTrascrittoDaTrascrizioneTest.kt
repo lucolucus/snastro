@@ -47,8 +47,8 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -129,14 +129,14 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         private val clock = OrologioCheAvanza(Instant.parse("2026-09-23T10:00:00Z"))
         private val generatoreId = GeneratoreIdFinto()
         private val elaborazioni = ElaborazioneRepositoryFinta()
-        private val trascritti = TrascrittoRepositoryFinta()
+        private val trascritti = VociDellIncontroRepositoryFinta()
         private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
         private val registrazioni = LettoreRegistrazioneFinta(registrazioniViste)
 
         override val lettore: LettoreTrascritto = LettoreTrascrittoDaTrascrizione(
-            VociDelTrascritto(trascritti, registrazioni),
-            StatiElaborazione(elaborazioni, trascritti, registrazioni, FasiInCorso()),
+            VociDelTrascritto(trascritti),
+            StatiElaborazione(elaborazioni, trascritti, FasiInCorso()),
         )
 
         override fun aggiungiRegistrazione(): RegistrazioneId {
@@ -180,7 +180,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             elaborazioni.salva(chiusa).atteso()
             accodaElaborazione(r)
             eseguiProssima(r, turni)
-            val trascritto = checkNotNull(trascritti.trova(r, unIncontroDi(r)))
+            val trascritto = checkNotNull(trascritti.trascritto(r))
             return turni.map { t ->
                 val segmento = trascritto.segmenti.single { it.intervallo == t.intervallo }
                 SegmentoConiato(segmento.id, segmento.voceId)

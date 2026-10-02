@@ -56,9 +56,13 @@ internal class ModuloTrascrizione(
     app: ComponentiApp,
     private val campanello: Campanello,
 ) : ModuloComposizione {
-    private val aggiornamenti = AggiornamentiVistaTrascrizione()
+    private val aggiornamenti = AggiornamentiVistaTrascrizione(porte.catalogo::parti)
     private val eliminazione = AbbonatoEliminazioneRegistrazione(
-        ApplicaEliminazioneRegistrazionePolitica(porte.elaborazioni, porte.trascritti),
+        ApplicaEliminazioneRegistrazionePolitica(
+            porte.elaborazioni,
+            porte.trascritti,
+            porte.registrazionePerTrascrizione,
+        ),
         porte.registrazionePerTrascrizione,
     )
     private val fonte: FonteCoda

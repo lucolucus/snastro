@@ -295,8 +295,9 @@ class ComposizioneSintesiTest {
             val eventi = modulo.abbonatiSincroni().map { ab -> ab.evento } +
                 modulo.abbonatiDopoCommit().map { ab -> ab.evento }
 
-            assertTrue(eventi.none { e -> e.isInstance(TrascrittoSostituito(a)) }, "abbonati di Sintesi: $eventi")
-            consegna(it, TrascrittoSostituito(a))
+            val sostituito = TrascrittoSostituito(a, it.incontroDi(a), emptySet())
+            assertTrue(eventi.none { e -> e.isInstance(sostituito) }, "abbonati di Sintesi: $eventi")
+            consegna(it, sostituito)
             assertEquals(emptyList(), it.diRegistrazione(a))
         }
     }

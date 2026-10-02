@@ -2,30 +2,25 @@ package snastro.trascrizione.applicazione.letture
 
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
-import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
-import snastro.trascrizione.applicazione.porte.trovaDi
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 
 /**
  * Public query API of the Trascrizione context (Published Language): the shapes read-models of other
  * contexts are built from (`voci-per-parlanti`, `trascritto-per-sbobinatura`) — those consumer-owned
  * ports map [VoceVista] / [SegmentoVista] into their own DTOs, never re-deciding anything (RC-1).
- * Read-only: every method reads through [TrascrittoRepository], the Parte's Incontro resolved through
- * [LettoreRegistrazione] (ADR 0033 §4.1); no rule lives here.
+ * Read-only: every method reads one Parte through [VociDellIncontroRepository.trascritto] (ADR 0035 §1); no rule
+ * lives here.
  */
-public class VociDelTrascritto(
-    private val trascritti: TrascrittoRepository,
-    private val registrazioni: LettoreRegistrazione,
-) {
+public class VociDelTrascritto(private val trascritti: VociDellIncontroRepository) {
     /** AC-98: the Voci of [registrazioneId]'s Trascritto, ordered by id, or `null` without one (INV-5). */
     public fun voci(registrazioneId: RegistrazioneId): List<VoceVista>? =
-        trascritti.trovaDi(registrazioneId, registrazioni)?.let { t ->
+        trascritti.trascritto(registrazioneId)?.let { t ->
             t.voci.map { voce -> VoceVista(VoceRef(t.incontroId, voce.id), voce.segmenti.map { it.intervallo }) }
         }
 
     /** AC-99: every Segmento of [registrazioneId]'s Trascritto, ordered across Voci, or `null` without one. */
     public fun segmenti(registrazioneId: RegistrazioneId): List<SegmentoVista>? =
-        trascritti.trovaDi(registrazioneId, registrazioni)?.segmenti?.map { segmento ->
+        trascritti.trascritto(registrazioneId)?.segmenti?.map { segmento ->
             SegmentoVista(segmento.id, segmento.voceId, segmento.intervallo, segmento.testo)
         }
 
@@ -34,7 +29,7 @@ public class VociDelTrascritto(
      * with its `confermato` flag as stored and no text, or `null` without a Trascritto.
      */
     public fun segmentiDiVoce(registrazioneId: RegistrazioneId): List<SegmentoDiVoceVista>? =
-        trascritti.trovaDi(registrazioneId, registrazioni)?.segmenti?.map { segmento ->
+        trascritti.trascritto(registrazioneId)?.segmenti?.map { segmento ->
             SegmentoDiVoceVista(segmento.id, segmento.voceId, segmento.intervallo, segmento.confermato)
         }
 

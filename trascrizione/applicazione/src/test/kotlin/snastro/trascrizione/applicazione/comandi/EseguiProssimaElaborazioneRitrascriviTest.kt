@@ -12,6 +12,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
+import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
@@ -30,14 +31,15 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unTrascritto
 import snastro.trascrizione.dominio.unaElaborazione
+import snastro.trascrizione.dominio.unaRadice
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -47,9 +49,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * REWORK ADR 0018 (+ Amendment (b)): a completion over an existing Trascritto replaces it whole in the SAME
- * transaction and publishes [TrascrittoSostituito] strictly before [ElaborazioneCompletata]; a first completion
- * and every failure leave things as before; a row cancelled while queued is never claimed. Split from
+ * REWORK ADR 0018 (+ Amendment (b)), ADR 0035 §2-§3: a completion over an existing Trascritto replaces it through
+ * the root in the SAME transaction — new Voci from the Incontro counter, Segmenti after every id the Parte used
+ * (INV-I4, INV-I16) — and publishes [TrascrittoSostituito] (with the Voci that ceased) strictly before
+ * [ElaborazioneCompletata]; a first completion and every failure leave things as before; a row cancelled while
+ * queued is never claimed. Split from
  * [EseguiProssimaElaborazioneServizioTest] (`LargeClass`).
  */
 class EseguiProssimaElaborazioneRitrascriviTest {
@@ -60,9 +64,10 @@ class EseguiProssimaElaborazioneRitrascriviTest {
 
         s.servizio().esegui(EseguiProssimaElaborazione()).atteso()
 
-        assertEquals(NUOVO, s.trascritti.trova(R, unIncontroDi(R))?.let(::forma))
-        assertEquals(listOf(ElaborazioneAvviata(R, OROLOGIO.instant()), ElaborazioneCompletata(R)), s.eventi.pubblicati)
-        assertEquals(listOf(ElaborazioneAvviata(R, OROLOGIO.instant()), ElaborazioneCompletata(R)), s.sincroni)
+        assertEquals(NUOVO, s.trascritti.trascritto(R)?.let(::forma))
+        val attese = listOf(ElaborazioneAvviata(R, OROLOGIO.instant()), ElaborazioneCompletata(R, INCONTRO))
+        assertEquals(attese, s.eventi.pubblicati)
+        assertEquals(attese, s.sincroni)
     }
 
     @Test
@@ -72,16 +77,16 @@ class EseguiProssimaElaborazioneRitrascriviTest {
         s.servizio().esegui(EseguiProssimaElaborazione()).atteso()
 
         assertEquals(2, s.contata.transazioni, "presa in carico + UNA transazione di completamento")
-        assertEquals(NUOVO, s.trascritti.trova(R, unIncontroDi(R))?.let(::forma), "Voci da 1, contatori del nuovo crea")
+        assertEquals(SOSTITUITO, s.trascritti.trascritto(R)?.let(::forma), "Voci e Segmenti dopo ogni id usato")
         val attese = listOf(
             ElaborazioneAvviata(R, OROLOGIO.instant()),
-            TrascrittoSostituito(R),
-            ElaborazioneCompletata(R),
+            TrascrittoSostituito(R, INCONTRO, vociRimosse = (1..5).mapTo(LinkedHashSet(), ::VoceId)),
+            ElaborazioneCompletata(R, INCONTRO),
         )
         assertEquals(attese, s.eventi.pubblicati)
         assertEquals(attese, s.sincroni)
         assertEquals(listOf(1, 2, 2), s.transazioneDiOgniSincrono, "Sostituito e Completata nella stessa transazione")
-        assertEquals(NUOVO, s.trascrittoAlSostituito, "il sincrono vede gia il nuovo Trascritto")
+        assertEquals(SOSTITUITO, s.trascrittoAlSostituito, "il sincrono vede gia il nuovo Trascritto")
         assertTrue(s.elaborazioni.trova(RITRASCRIZIONE)?.completata == true)
         assertTrue(s.elaborazioni.trova(COMPLETATA_1)?.completata == true, "la completata precedente resta completata")
     }
@@ -90,12 +95,12 @@ class EseguiProssimaElaborazioneRitrascriviTest {
     fun `INV-5 ogni completata riscrive il Trascritto intero e nessun altro esito lo tocca`() {
         val completata = Scenario().giaTrascritta()
         completata.servizio().esegui(EseguiProssimaElaborazione()).atteso()
-        assertEquals(NUOVO, completata.trascritti.trova(R, unIncontroDi(R))?.let(::forma))
+        assertEquals(SOSTITUITO, completata.trascritti.trascritto(R)?.let(::forma))
 
         val fallita = Scenario().giaTrascritta()
         fallita.servizio(fallita.pipeline(allineatore = AllineatoreMuto())).esegui(EseguiProssimaElaborazione())
             .atteso()
-        assertEquals(FORMA_VECCHIO, fallita.trascritti.trova(R, unIncontroDi(R))?.let(::forma))
+        assertEquals(FORMA_VECCHIO, fallita.trascritti.trascritto(R)?.let(::forma))
     }
 
     @Test
@@ -106,7 +111,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
             private val reale = DiarizzatoreFinta(TURNI)
 
             override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
-                osservato += s.trascritti.trova(R, unIncontroDi(R))?.let(::forma) to s.uow.transazioneAperta
+                osservato += s.trascritti.trascritto(R)?.let(::forma) to s.uow.transazioneAperta
                 return reale.diarizza(c, numeroPersone)
             }
         }
@@ -124,7 +129,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
             "diarizzazione" to { esegui(pipeline(diarizzatore = DiarizzatoreGuasto())) },
             "trascrizione" to { esegui(pipeline(allineatore = AllineatoreGuasto())) },
             "nessun parlato rilevato" to { esegui(pipeline(allineatore = AllineatoreMuto())) },
-            "Trascritto.crea rifiuta" to { esegui(pipeline(allineatore = AllineatoreOltreLaDurata())) },
+            "completaParte rifiuta" to { esegui(pipeline(allineatore = AllineatoreOltreLaDurata())) },
             "interrotta" to {
                 val ritrascrizione = checkNotNull(elaborazioni.trova(RITRASCRIZIONE))
                 ritrascrizione.avvia(DOPO).atteso()
@@ -143,7 +148,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
             assertTrue(s.eventi.pubblicati.none { it is ElaborazioneCompletata }, caso)
             assertEquals(
                 FORMA_VECCHIO,
-                s.trascritti.trova(R, unIncontroDi(R))?.let(::forma),
+                s.trascritti.trascritto(R)?.let(::forma),
                 "$caso: vecchio Trascritto invariato",
             )
             assertTrue(s.elaborazioni.trova(RITRASCRIZIONE)?.fallita == true, caso)
@@ -164,7 +169,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
 
         s.servizio().esegui(EseguiProssimaElaborazione()).atteso()
 
-        assertEquals(FORMA_VECCHIO, s.trascritti.trova(R, unIncontroDi(R))?.let(::forma), "vecchio Trascritto intatto")
+        assertEquals(FORMA_VECCHIO, s.trascritti.trascritto(R)?.let(::forma), "vecchio Trascritto intatto")
         val fallita = checkNotNull(s.elaborazioni.trova(RITRASCRIZIONE))
         assertTrue(fallita.fallita)
         assertEquals("salvataggio del risultato non riuscito", fallita.motivoFallimento)
@@ -210,7 +215,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
     /** One fresh world: fakes, a counting unit of work, a recording synchronous subscriber. */
     private class Scenario {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val uow = UnitaDiLavoroFinta(elaborazioni, trascritti)
         val eventi = DispatcherEventiFinta(uow)
         val contata = UnitaDiLavoroContata(eventi.unitaDiLavoro)
@@ -224,7 +229,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
                 sincroni += evento
                 transazioneDiOgniSincrono += contata.transazioni
                 if (evento is TrascrittoSostituito) {
-                    trascrittoAlSostituito = trascritti.trova(R, unIncontroDi(R))?.let(::forma)
+                    trascrittoAlSostituito = trascritti.trascritto(R)?.let(::forma)
                 }
                 Esito.Ok(Unit)
             }
@@ -234,7 +239,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
         fun giaTrascritta(): Scenario = apply {
             val completata = unaElaborazione(StatoElaborazione.COMPLETATA, COMPLETATA_1, R, creataAlle = PRIMA)
             elaborazioni.salva(completata).atteso()
-            trascritti.salva(VECCHIO)
+            trascritti.salva(unaRadice(voci = 5, segmentiPerVoce = 2, registrazioneId = R))
             elaborazioni.salva(Elaborazione.accoda(RITRASCRIZIONE, R, DOPO, null).aggregato).atteso()
         }
 
@@ -257,6 +262,7 @@ class EseguiProssimaElaborazioneRitrascriviTest {
     private companion object {
         val R = RegistrazioneId("registrazione-1")
         val R2 = RegistrazioneId("registrazione-2")
+        val INCONTRO = unIncontroDi(R)
         val COMPLETATA_1 = ElaborazioneId("completata-1")
         val RITRASCRIZIONE = ElaborazioneId("ritrascrizione")
         const val DURATA = 2_000L
@@ -271,10 +277,9 @@ class EseguiProssimaElaborazioneRitrascriviTest {
         )
 
         /** The old generation: Voci 1..5, two Segmenti each, counters 6 / 11. */
-        val VECCHIO: Trascritto = unTrascritto(voci = 5, segmentiPerVoce = 2, registrazioneId = R)
-        val FORMA_VECCHIO = forma(VECCHIO)
+        val FORMA_VECCHIO = forma(unTrascritto(voci = 5, segmentiPerVoce = 2, registrazioneId = R))
 
-        /** The new generation the pipeline produces from [TURNI], numbered from 1 again. */
+        /** A first generation the pipeline produces from [TURNI]: numbered from 1. */
         val NUOVO = FormaTrascritto(
             segmenti = listOf(
                 listOf(1, 1, IntervalloMs(0, 800), "voce 1 0-800"),
@@ -282,6 +287,16 @@ class EseguiProssimaElaborazioneRitrascriviTest {
             ),
             prossimaVoce = 3,
             prossimoSegmento = 3,
+        )
+
+        /** [TURNI] replacing [FORMA_VECCHIO]: Voci from the counter 6, Segmenti after id 10 (INV-I4, INV-I16). */
+        val SOSTITUITO = FormaTrascritto(
+            segmenti = listOf(
+                listOf(11, 6, IntervalloMs(0, 800), "voce 1 0-800"),
+                listOf(12, 7, IntervalloMs(1_000, 1_800), "voce 0 1000-1800"),
+            ),
+            prossimaVoce = 8,
+            prossimoSegmento = 13,
         )
 
         fun riferimento(id: RegistrazioneId) = RiferimentoAudio("audio/${id.valore}.m4a")
@@ -330,7 +345,7 @@ private class AllineatoreMuto : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = emptyList()
 }
 
-/** A Segmento past the decoded duration: `Trascritto.crea` refuses it (INV-7). */
+/** A Segmento past the decoded duration: `completaParte` refuses it (INV-7). */
 private class AllineatoreOltreLaDurata : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> =
         listOf(SegmentoGrezzo(0, IntervalloMs(0, 5_000), "oltre"))

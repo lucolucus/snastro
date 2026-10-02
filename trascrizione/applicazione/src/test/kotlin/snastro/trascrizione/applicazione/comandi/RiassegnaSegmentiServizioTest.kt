@@ -6,25 +6,27 @@ import snastro.kernel.EventoPubblicato
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
 import snastro.trascrizione.dominio.Trascritto
-import snastro.trascrizione.dominio.unTrascritto
+import snastro.trascrizione.dominio.VociDellIncontro
+import snastro.trascrizione.dominio.unaRadice
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class RiassegnaSegmentiServizioTest {
-    private val finta = TrascrittoRepositoryFinta()
+    private val finta = VociDellIncontroRepositoryFinta()
     private val trascritti = SalvataggiContati(finta)
     private val uow = UnitaDiLavoroFinta(finta)
     private val eventi = DispatcherEventiFinta(uow)
@@ -41,7 +43,7 @@ class RiassegnaSegmentiServizioTest {
     @Test
     fun `AC-518 un solo salva e gli N SegmentoRiassegnato in ordine tutti dentro la transazione`() {
         // V1:S1,S5 V2:S2,S6 V3:S3,S7 V4:S4,S8 — V3 empties; V2 empties and is refilled by S7
-        val t = semina(unTrascritto(voci = 4, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
+        val t = semina(unaRadice(voci = 4, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
         val piano = listOf(t.sposta(3, 1), t.sposta(2, 1), t.sposta(7, 2), t.sposta(6, 1))
 
         servizio.esegui(RiassegnaSegmenti(REGISTRAZIONE, piano)).atteso()
@@ -57,13 +59,13 @@ class RiassegnaSegmentiServizioTest {
         assertEquals(1, trascritti.salvataggi)
         assertEquals(
             listOf(1, 2, 4),
-            assertNotNull(finta.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).voci.map { it.id.numero },
+            assertNotNull(finta.trascritto(REGISTRAZIONE)).voci.map { it.id.numero },
         )
     }
 
     @Test
     fun `AC-519 un Errore del sincrono al k-esimo evento annulla tutto il blocco`() {
-        val originale = semina(unTrascritto(voci = 3, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
+        val originale = semina(unaRadice(voci = 3, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
         val piano = listOf(originale.sposta(2, 1), originale.sposta(3, 1), originale.sposta(5, 3))
         var consegnati = 0
         eventi.registraSincrono {
@@ -73,7 +75,7 @@ class RiassegnaSegmentiServizioTest {
 
         servizio.esegui(RiassegnaSegmenti(REGISTRAZIONE, piano)).erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
 
-        val dopo = assertNotNull(finta.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
+        val dopo = assertNotNull(finta.trascritto(REGISTRAZIONE))
         assertEquals(originale.segmenti, dopo.segmenti)
         assertEquals(originale.prossimaVoce, dopo.prossimaVoce)
         assertEquals(emptyList(), eventi.pubblicati)
@@ -81,9 +83,8 @@ class RiassegnaSegmentiServizioTest {
 
     @Test
     fun `AC-520 un piano stantio restituisce TrascrittoCambiato senza scrivere ne pubblicare`() {
-        val originale = semina(unTrascritto(voci = 3, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
+        val originale = semina(unaRadice(voci = 3, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
         val s2 = originale.segmenti.single { it.id == SegmentoId(2) }
-        val confermato = unTrascritto(voci = 3, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE)
         val casi = listOf(
             "Segmento mancante" to SpostamentoSegmento(SegmentoId(99), VoceId(2), VoceId(1), s2.intervallo),
             "non su da" to SpostamentoSegmento(s2.id, VoceId(3), VoceId(1), s2.intervallo),
@@ -95,8 +96,9 @@ class RiassegnaSegmentiServizioTest {
                 .erroreAtteso<ErroreTrascrizione.TrascrittoCambiato>()
             assertEquals(ErroreTrascrizione.TrascrittoCambiato(REGISTRAZIONE), errore, caso)
         }
-        confermato.confermaSegmento(SegmentoId(2), true).atteso()
-        semina(confermato)
+        val radice = unaRadice(voci = 3, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE)
+        radice.confermaSegmento(SegmentoRef(REGISTRAZIONE, SegmentoId(2)), true).atteso()
+        val confermato = semina(radice)
         val salvataggi = trascritti.salvataggi
         servizio.esegui(RiassegnaSegmenti(REGISTRAZIONE, listOf(confermato.sposta(2, 1))))
             .erroreAtteso<ErroreTrascrizione.TrascrittoCambiato>()
@@ -104,7 +106,7 @@ class RiassegnaSegmentiServizioTest {
         assertEquals(salvataggi, trascritti.salvataggi)
         assertEquals(
             confermato.segmenti,
-            assertNotNull(finta.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+            assertNotNull(finta.trascritto(REGISTRAZIONE)).segmenti,
         )
         assertEquals(emptyList(), eventi.pubblicati)
         assertEquals(emptyList(), sincroni)
@@ -123,7 +125,7 @@ class RiassegnaSegmentiServizioTest {
 
     @Test
     fun `AC-520 una lista vuota restituisce Ok senza scrivere ne pubblicare`() {
-        semina(unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
+        semina(unaRadice(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE))
         val salvataggi = trascritti.salvataggi
 
         assertEquals(Unit, servizio.esegui(RiassegnaSegmenti(REGISTRAZIONE, emptyList())).atteso())
@@ -133,9 +135,9 @@ class RiassegnaSegmentiServizioTest {
         assertEquals(emptyList(), sincroni)
     }
 
-    private fun semina(t: Trascritto): Trascritto {
-        finta.salva(t)
-        return t
+    private fun semina(radice: VociDellIncontro): Trascritto {
+        finta.salva(radice)
+        return checkNotNull(radice.trascritto(REGISTRAZIONE))
     }
 
     private fun Trascritto.sposta(segmento: Int, verso: Int): SpostamentoSegmento {
@@ -144,16 +146,24 @@ class RiassegnaSegmentiServizioTest {
     }
 
     private fun riassegnato(segmento: Int, da: Int, a: Int, daRimossa: Boolean): SegmentoRiassegnato =
-        SegmentoRiassegnato(REGISTRAZIONE, SegmentoId(segmento), VoceId(da), VoceId(a), daRimossa, aNuova = false)
+        SegmentoRiassegnato(
+            unIncontroDi(REGISTRAZIONE),
+            SegmentoRef(REGISTRAZIONE, SegmentoId(segmento)),
+            VoceId(da),
+            VoceId(a),
+            daRimossa,
+            aNuova = false,
+        )
 
     /** Recording decorator: counts the `salva` calls that reach the repository (AC-518 "ONE salva"). */
-    private class SalvataggiContati(private val delegato: TrascrittoRepository) : TrascrittoRepository by delegato {
+    private class SalvataggiContati(private val delegato: VociDellIncontroRepository) :
+        VociDellIncontroRepository by delegato {
         var salvataggi = 0
             private set
 
-        override fun salva(t: Trascritto) {
+        override fun salva(root: VociDellIncontro) {
             salvataggi++
-            delegato.salva(t)
+            delegato.salva(root)
         }
     }
 

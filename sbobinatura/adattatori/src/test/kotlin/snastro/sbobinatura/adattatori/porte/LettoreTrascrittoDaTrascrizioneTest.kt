@@ -46,8 +46,8 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -85,7 +85,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio /
         // RiassegnaSegmentoServizio.
         private val elaborazioni = ElaborazioneRepositoryFinta()
-        private val trascritti = TrascrittoRepositoryFinta()
+        private val trascritti = VociDellIncontroRepositoryFinta()
         private val eventiTrascrizione = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
 
         /** Trascrizione's own view of each Registrazione seeded so far (its `LettoreRegistrazione` port). */
@@ -106,7 +106,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
 
         override val lettore: LettoreTrascritto =
             LettoreTrascrittoDaTrascrizione(
-                VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste)),
+                VociDelTrascritto(trascritti),
                 catalogo,
             )
 
@@ -155,7 +155,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             eseguiPipeline(registrazioneId, diarizzatore, AllineatoreConTesto(testoDi))
 
             val trascritto = checkNotNull(
-                trascritti.trova(registrazioneId, registrazioniViste.getValue(registrazioneId).incontroId),
+                trascritti.trascritto(registrazioneId),
             )
             return turni.map { t ->
                 val segmento = trascritto.segmenti.single { it.intervallo == t.intervallo }

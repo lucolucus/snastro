@@ -4,44 +4,46 @@ import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.unTrascritto
+import snastro.trascrizione.dominio.unaRadice
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class DividiVoceServizioTest {
-    private val trascritti = TrascrittoRepositoryFinta()
+    private val trascritti = VociDellIncontroRepositoryFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(trascritti))
     private val servizio = DividiVoceServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
 
     @Test
     fun `AC-78 DividiVoce valido pubblica VoceDivisa con i segmenti spostati in ordine deterministico`() {
         // V1: S1, S3, S5 (unTrascritto, voci=2, segmentiPerVoce=3)
-        trascritti.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
+        trascritti.salva(unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
 
         // The input Set is handed in reverse of INV-7 order (inizio, id): the event must still list S3 before S5.
         val comando = DividiVoce(REGISTRAZIONE, origine = VoceId(1), segmenti = setOf(SegmentoId(5), SegmentoId(3)))
         servizio.esegui(comando).atteso()
 
-        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
+        val trascritto = assertNotNull(trascritti.trascritto(REGISTRAZIONE))
         assertEquals(listOf(SegmentoId(1)), trascritto.voci.first { it.id == VoceId(1) }.segmenti.map { it.id })
-        val spostati = listOf(SegmentoId(3), SegmentoId(5))
-        val atteso = VoceDivisa(REGISTRAZIONE, origine = VoceId(1), nuova = VoceId(3), spostati)
+        val spostati = listOf(SegmentoRef(REGISTRAZIONE, SegmentoId(3)), SegmentoRef(REGISTRAZIONE, SegmentoId(5)))
+        val atteso = VoceDivisa(unIncontroDi(REGISTRAZIONE), origine = VoceId(1), nuova = VoceId(3), spostati)
         assertEquals(listOf(atteso), eventi.pubblicati)
     }
 
     @Test
     fun `AC-79 DividiVoce con l intera Voce restituisce DivisioneNonAmmessa e non pubblica nulla`() {
-        trascritti.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
+        trascritti.salva(unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
         val tutti = setOf(SegmentoId(1), SegmentoId(3), SegmentoId(5))
 
         val errore = servizio.esegui(DividiVoce(REGISTRAZIONE, origine = VoceId(1), segmenti = tutti))
@@ -66,7 +68,7 @@ class DividiVoceServizioTest {
     @Test
     fun `AC-83 un abbonato sincrono che restituisce Errore annulla la Revisione e il Trascritto resta invariato`() {
         val originale = unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE)
-        trascritti.salva(originale)
+        trascritti.salva(unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
         eventi.registraSincrono { Esito.Errore(ErroreTrascrizione.VoceNonTrovata(VoceId(99))) }
 
         val errore = servizio.esegui(DividiVoce(REGISTRAZIONE, origine = VoceId(1), segmenti = setOf(SegmentoId(3))))
@@ -75,7 +77,7 @@ class DividiVoceServizioTest {
         assertEquals(VoceId(99), errore.voceId)
         assertEquals(
             originale.segmenti,
-            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+            assertNotNull(trascritti.trascritto(REGISTRAZIONE)).segmenti,
         )
         assertEquals(emptyList(), eventi.pubblicati)
     }

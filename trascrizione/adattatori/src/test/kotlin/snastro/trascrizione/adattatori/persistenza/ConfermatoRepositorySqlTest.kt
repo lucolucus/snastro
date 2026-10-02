@@ -2,56 +2,60 @@ package snastro.trascrizione.adattatori.persistenza
 
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
 import snastro.persistenza.SnastroDatabase
-import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
 import snastro.persistenza.seminaRegistrazioneDiProva
-import snastro.trascrizione.dominio.unTrascritto
+import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
+import snastro.trascrizione.dominio.unSegmentoIniziale
+import snastro.trascrizione.dominio.unaRadice
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** REWORK ADR 0019 §3 of [TrascrittoRepositorySql]: `segmento.confermato` is written and read back (AC-522). */
+/** REWORK ADR 0019 §3 of [VociDellIncontroRepositorySql]: `segmento.confermato` is written and read back (AC-522). */
 class ConfermatoRepositorySqlTest {
     private val db = databaseInMemoria().seminato()
-    private val repo = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
+    private val repo = repositorySql(db)
 
     @Test
     fun `AC-522 un Trascritto con flag misti e salvato e riletto identico`() {
-        val t = unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = R) // V1:S1,S3,S5 V2:S2,S4,S6
-        t.riassegna(SegmentoId(3), VoceId(2)).atteso()
-        t.confermaSegmento(SegmentoId(6), true).atteso()
+        val t = unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = R) // V1:S1,S3,S5 V2:S2,S4,S6
+        t.riassegna(ref(3), VoceId(2)).atteso()
+        t.confermaSegmento(ref(6), true).atteso()
         repo.salva(t)
 
-        val riletto = checkNotNull(repo.trova(R, unIncontroDi(R)))
+        val riletto = checkNotNull(repo.trova(unIncontroDi(R)))
 
-        assertEquals(t.segmenti, riletto.segmenti)
+        assertEquals(t.trascritto(R)?.segmenti, riletto.trascritto(R)?.segmenti)
         assertEquals(listOf(0L, 0L, 1L, 0L, 0L, 1L), colonnaConfermato())
-        riletto.confermaSegmento(SegmentoId(3), false).atteso()
+        riletto.confermaSegmento(ref(3), false).atteso()
         repo.salva(riletto)
         assertEquals(listOf(0L, 0L, 0L, 0L, 0L, 1L), colonnaConfermato())
     }
 
     @Test
-    fun `AC-522 un Trascritto creato da crea salva ogni flag a 0`() {
-        repo.salva(unTrascritto(voci = 3, segmentiPerVoce = 2, registrazioneId = R))
+    fun `AC-522 un Trascritto appena completato salva ogni flag a 0`() {
+        repo.salva(unaRadice(voci = 3, segmentiPerVoce = 2, registrazioneId = R))
 
         assertEquals(List(6) { 0L }, colonnaConfermato())
     }
 
     @Test
     fun `AC-522 la sostituzione ADR 0018 scrive 0 ovunque`() {
-        val vecchio = unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = R)
-        vecchio.confermaSegmento(SegmentoId(1), true).atteso()
-        vecchio.confermaSegmento(SegmentoId(2), true).atteso()
-        repo.salva(vecchio)
+        val radice = unaRadice(voci = 2, segmentiPerVoce = 2, registrazioneId = R)
+        radice.confermaSegmento(ref(1), true).atteso()
+        radice.confermaSegmento(ref(2), true).atteso()
+        repo.salva(radice)
 
-        repo.salva(unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = R))
+        val turni = (0 until 4).map { unSegmentoIniziale(voceIndice = it % 2, inizioMs = it * 1_000L) }
+        radice.completaParte(R, turni, DURATA_TRASCRITTO_MS).atteso() // ADR 0018 / INV-I5: the Parte replaced
+        repo.salva(radice)
 
         assertEquals(List(4) { 0L }, colonnaConfermato())
-        assertEquals(emptyList(), checkNotNull(repo.trova(R, unIncontroDi(R))).segmenti.filter { it.confermato })
+        assertEquals(emptyList(), checkNotNull(repo.trascritto(R)).segmenti.filter { it.confermato })
     }
 
     private fun colonnaConfermato(): List<Long> =
@@ -69,6 +73,8 @@ class ConfermatoRepositorySqlTest {
             aggiuntaAlle = 0L,
         )
     }
+
+    private fun ref(numero: Int) = SegmentoRef(R, SegmentoId(numero))
 
     private companion object {
         val R = RegistrazioneId("registrazione-1")

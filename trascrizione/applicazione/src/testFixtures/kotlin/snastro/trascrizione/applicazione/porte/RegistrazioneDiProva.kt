@@ -3,10 +3,12 @@
 
 package snastro.trascrizione.applicazione.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.unIncontroDi
+import snastro.kernel.unicaParteDi
 import java.time.LocalDate
 
 /** A [RegistrazioneVista] of [id], the one Parte of the Incontro [unIncontroDi] ([id]) — never equal to [id]. */
@@ -24,7 +26,13 @@ public fun unaRegistrazioneVista(
     durataMs = durataMs,
 )
 
-/** A [LettoreRegistrazione] that knows EVERY id, each as [unaRegistrazioneVista]: for tests about something else. */
+/**
+ * A [LettoreRegistrazione] that knows EVERY id, each as [unaRegistrazioneVista] — the one Parte of its own Incontro
+ * ([unIncontroDi]) — for tests about something else.
+ */
 public fun ogniRegistrazioneNota(): LettoreRegistrazione = object : LettoreRegistrazione {
     override fun registrazione(id: RegistrazioneId): RegistrazioneVista = unaRegistrazioneVista(id)
+
+    override fun parti(incontroId: IncontroId): List<ParteDiIncontro> =
+        listOf(ParteDiIncontro(unicaParteDi(incontroId), 1))
 }

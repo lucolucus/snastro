@@ -13,46 +13,47 @@ import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.FALLITA
-import snastro.trascrizione.dominio.unTrascritto
 import snastro.trascrizione.dominio.unaElaborazione
+import snastro.trascrizione.dominio.unaRadice
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * ADR 0020 on SQL (AC-620): `TrascrittoRepositorySql.rimuovi` deletes segmento, voce, trascritto (the voce FK is
+ * ADR 0020 on SQL (AC-620): `VociDellIncontroRepositorySql.rimuovi` deletes segmento, voce, trascritto (the voce FK is
  * immediate, so any other order fails) and `ElaborazioneRepositorySql.rimuoviDiRegistrazione` every Elaborazione —
  * both inside the CALLER's transaction. The contracts (AC-619) run in the `*RepositorySqlTest` subclasses.
  */
 class EliminazioneRegistrazioneSqlTest {
     private val db = databaseInMemoria().seminato(listOf(R, ALTRA))
     private val uow = UnitaDiLavoroSql(db)
-    private val trascritti = TrascrittoRepositorySql(db, uow)
+    private val trascritti = repositorySql(db, uow)
     private val elaborazioni = ElaborazioneRepositorySql(db)
 
     init {
         for (r in listOf(R, ALTRA)) {
             elaborazioni.salva(unaElaborazione(FALLITA, ElaborazioneId("fallita-${r.valore}"), r)).atteso()
             elaborazioni.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata-${r.valore}"), r)).atteso()
-            trascritti.salva(unTrascritto(voci = 3, segmentiPerVoce = 2, registrazioneId = r))
+            trascritti.salva(unaRadice(voci = 3, segmentiPerVoce = 2, registrazioneId = r))
         }
     }
 
     @Test
     fun `AC-620 dopo rimuovi e rimuoviDiRegistrazione le righe segmento voce trascritto elaborazione di r sono 0`() {
         uow.inTransazione {
-            trascritti.rimuovi(R, unIncontroDi(R))
+            trascritti.rimuovi(unIncontroDi(R))
             elaborazioni.rimuoviDiRegistrazione(R)
             Esito.Ok(Unit)
         }.atteso()
 
         assertEquals(Righe(0, 0, 0, 0), righe(R))
+        assertEquals(null, db.vociIncontroQueries.trovaPerIncontro(unIncontroDi(R).valore).executeAsOneOrNull())
         assertEquals(Righe(segmenti = 6, voci = 3, trascritti = 1, elaborazioni = 2), righe(ALTRA))
     }
 
     @Test
     fun `AC-620 rimuovi e rimuoviDiRegistrazione in una transazione annullata non tolgono nulla`() {
         uow.inTransazione<Unit> {
-            trascritti.rimuovi(R, unIncontroDi(R))
+            trascritti.rimuovi(unIncontroDi(R))
             elaborazioni.rimuoviDiRegistrazione(R)
             Esito.Errore(ElaborazioneNonTrovata(ElaborazioneId("annullata")))
         }.erroreAtteso<ElaborazioneNonTrovata>()

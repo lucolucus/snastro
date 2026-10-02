@@ -16,18 +16,18 @@ import snastro.persistenza.databaseInMemoria
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
+import snastro.trascrizione.adattatori.persistenza.repositorySql
 import snastro.trascrizione.adattatori.persistenza.seminato
 import snastro.trascrizione.applicazione.politiche.ApplicaEliminazioneRegistrazionePolitica
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
-import snastro.trascrizione.dominio.unTrascritto
 import snastro.trascrizione.dominio.unaElaborazione
+import snastro.trascrizione.dominio.unaRadice
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -41,37 +41,37 @@ import kotlin.test.assertNull
  */
 class AbbonatoEliminazioneRegistrazioneTest {
     private val elaborazioni = ElaborazioneRepositoryContata(ElaborazioneRepositoryFinta())
-    private val trascritti = TrascrittoRepositoryFinta()
+    private val trascritti = VociDellIncontroRepositoryFinta()
     private val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(elaborazioni.delegato, trascritti)).also {
-        val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti)
+        val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, ogniRegistrazioneNota())
         it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica, ogniRegistrazioneNota()))
     }
 
     @Test
     fun `AC-612 RegistrazioneEliminata applica la politica dentro la transazione che la pubblica`() {
         elaborazioni.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata"), R)).atteso()
-        trascritti.salva(unTrascritto(registrazioneId = R))
+        trascritti.salva(unaRadice(registrazioneId = R))
 
         pubblicaInTransazione(eliminata(R)).atteso()
 
         assertEquals(emptyList(), elaborazioni.diRegistrazione(R))
-        assertNull(trascritti.trova(R, unIncontroDi(R)))
+        assertNull(trascritti.trascritto(R))
     }
 
     @Test
     fun `AC-612 l Errore della politica condanna la transazione e la annulla tutta`() {
         elaborazioni.salva(unaElaborazione(IN_ATTESA, ElaborazioneId("in-coda"), R)).atteso()
-        trascritti.salva(unTrascritto(registrazioneId = ALTRA))
+        trascritti.salva(unaRadice(registrazioneId = ALTRA))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
-            trascritti.rimuovi(ALTRA, unIncontroDi(ALTRA)) // a write of the same command, before the veto
+            trascritti.rimuovi(unIncontroDi(ALTRA)) // a write of the same command, before the veto
             dispatcher.pubblica(eliminata(R))
             Esito.Ok(Unit)
         }
 
         assertEquals(ElaborazioneGiaAperta(R), esito.erroreAtteso<ElaborazioneGiaAperta>())
         assertNotNull(
-            trascritti.trova(ALTRA, unIncontroDi(ALTRA)),
+            trascritti.trascritto(ALTRA),
             "il rollback ripristina la scrittura fatta prima del veto",
         )
         assertEquals(listOf("in-coda"), elaborazioni.diRegistrazione(R).map { it.id.valore })
@@ -93,15 +93,16 @@ class AbbonatoEliminazioneRegistrazioneTest {
         val db = databaseInMemoria().seminato(listOf(R))
         val uow = UnitaDiLavoroSql(db)
         val elaborazioniSql = ElaborazioneRepositorySql(db)
-        val trascrittiSql = TrascrittoRepositorySql(db, uow)
+        val trascrittiSql = repositorySql(db, uow)
         val sql = DispatcherEventiInMemoria(uow).also {
-            val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql)
+            val politica =
+                ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql, ogniRegistrazioneNota())
             it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica, ogniRegistrazioneNota()))
         }
         elaborazioniSql.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata"), R)).atteso()
-        trascrittiSql.salva(unTrascritto(registrazioneId = R))
+        trascrittiSql.salva(unaRadice(registrazioneId = R))
         elaborazioniSql.salva(unaElaborazione(IN_ATTESA, ElaborazioneId("in-coda"), R)).atteso()
-        val prima = trascrittiSql.trova(R, unIncontroDi(R))?.segmenti
+        val prima = trascrittiSql.trascritto(R)?.segmenti
 
         val esito = sql.unitaDiLavoro.inTransazione {
             sql.pubblica(eliminata(R))
@@ -111,7 +112,7 @@ class AbbonatoEliminazioneRegistrazioneTest {
 
         assertEquals(ElaborazioneGiaAperta(R), esito.erroreAtteso<ElaborazioneGiaAperta>())
         assertEquals(setOf("completata", "in-coda"), elaborazioniSql.diRegistrazione(R).map { it.id.valore }.toSet())
-        assertEquals(prima, trascrittiSql.trova(R, unIncontroDi(R))?.segmenti)
+        assertEquals(prima, trascrittiSql.trascritto(R)?.segmenti)
         assertNotNull(db.registrazioneQueries.trovaPerId(R.valore).executeAsOneOrNull())
     }
 

@@ -24,8 +24,8 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import java.time.Clock
@@ -46,7 +46,7 @@ class EseguiProssimaElaborazioneEsclusioneTest {
     @Test
     fun `AC-313 esclude gli id passati e parte sul prossimo in_attesa idoneo`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val vecchia = RegistrazioneId("registrazione-vecchia")
         val recente = RegistrazioneId("registrazione-recente")
@@ -81,7 +81,7 @@ class EseguiProssimaElaborazioneEsclusioneTest {
     @Test
     fun `AC-313 un abbonato sincrono che rifiuta sempre restituisce AvvioRifiutato con l id, resta in_attesa`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val causa = ErroreTrascrizione.ElaborazioneGiaAperta(REGISTRAZIONE_GUASTO)
         eventi.registraSincrono { evento -> if (evento is ElaborazioneAvviata) Esito.Errore(causa) else Esito.Ok(Unit) }
@@ -100,7 +100,7 @@ class EseguiProssimaElaborazioneEsclusioneTest {
         uow: UnitaDiLavoro,
         eventi: DispatcherEventiFinta,
         elaborazioni: ElaborazioneRepository,
-        trascritti: TrascrittoRepository,
+        trascritti: VociDellIncontroRepository,
         pipeline: PortePipeline,
     ): EseguiProssimaElaborazioneServizio =
         EseguiProssimaElaborazioneServizio(uow, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)

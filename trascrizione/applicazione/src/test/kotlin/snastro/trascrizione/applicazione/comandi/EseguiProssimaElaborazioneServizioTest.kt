@@ -32,18 +32,20 @@ import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.TRASCRIZIONE
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
+import snastro.trascrizione.applicazione.porte.ParteDiIncontro
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.StatoElaborazione
 import snastro.trascrizione.dominio.Trascritto
+import snastro.trascrizione.dominio.VociDellIncontro
 import snastro.trascrizione.dominio.unaElaborazione
 import java.time.Clock
 import java.time.Instant
@@ -61,7 +63,7 @@ class EseguiProssimaElaborazioneServizioTest {
     @Test
     fun `AC-68 senza in_attesa il comando non ha effetti`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, pipeline())
 
@@ -74,7 +76,7 @@ class EseguiProssimaElaborazioneServizioTest {
     @Test
     fun `AC-68 parte sempre la piu vecchia in_attesa FIFO`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val vecchia = RegistrazioneId("registrazione-vecchia")
         val recente = RegistrazioneId("registrazione-recente")
@@ -108,7 +110,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val segnalatore = SegnalatoreFaseFinta()
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
@@ -128,7 +130,7 @@ class EseguiProssimaElaborazioneServizioTest {
         assertEquals(listOf(id), segnalatore.terminate)
         assertTrue(elaborazioni.diRegistrazione(id).single().completata)
         assertEquals(
-            listOf(ElaborazioneAvviata(id, OROLOGIO.instant()), ElaborazioneCompletata(id)),
+            listOf(ElaborazioneAvviata(id, OROLOGIO.instant()), ElaborazioneCompletata(id, unIncontroDi(id))),
             eventi.pubblicati,
             "il successo deve pubblicare ElaborazioneCompletata",
         )
@@ -194,7 +196,7 @@ class EseguiProssimaElaborazioneServizioTest {
         segnalatore: SegnalatoreFaseFinta = portePipeline.segnalatore as SegnalatoreFaseFinta,
     ) {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, portePipeline)
         elaborazioni.salva(unaInAttesa(REGISTRAZIONE_GUASTO)).atteso()
@@ -221,7 +223,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, 5_000)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to 5_000L))
@@ -243,7 +245,7 @@ class EseguiProssimaElaborazioneServizioTest {
 
         servizio.esegui(EseguiProssimaElaborazione()).atteso()
 
-        val trascritto = checkNotNull(trascritti.trova(id, unIncontroDi(id)))
+        val trascritto = checkNotNull(trascritti.trascritto(id))
         val voci = trascritto.voci
         assertEquals(2, voci.size)
         assertEquals("voce 2 0-1000", voci[0].segmenti.single().testo, "prima apparizione (0 ms) -> Voce 1")
@@ -255,7 +257,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -290,7 +292,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -327,7 +329,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val sorveglia = SorvegliaTransazione(eventi.unitaDiLavoro)
         val letteDurante = mutableListOf<Boolean>()
@@ -364,7 +366,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascrittiGuasti = TrascrittoRepositoryGuasta()
+        val trascrittiGuasti = VociDellIncontroRepositoryGuasta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascrittiGuasti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -401,7 +403,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioniReali = ElaborazioneRepositoryFinta()
         val elaborazioni = ElaborazioneRepositoryCheRifiutaIlCompletamento(elaborazioniReali)
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -442,7 +444,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val elaborazioneId = ElaborazioneId("elab-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatoreBase = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
@@ -478,7 +480,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val id = RegistrazioneId("registrazione-1")
         val riferimento = RiferimentoAudio("audio/registrazione-1.m4a")
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         // Il catalogo dichiara 1999 ms (un possibile arrotondamento), ma l'audio decodificato ne ha
         // 2000: un turno che finisce esattamente a 2000 ms non deve far fallire l'elaborazione (F5).
@@ -500,7 +502,7 @@ class EseguiProssimaElaborazioneServizioTest {
             elaborazioni.diRegistrazione(id).single().completata,
             "un surplus di decodifica di 1 ms rispetto al catalogo non deve far fallire l'elaborazione",
         )
-        assertEquals(1, trascritti.trova(id, unIncontroDi(id))?.segmenti?.size)
+        assertEquals(1, trascritti.trascritto(id)?.segmenti?.size)
     }
 
     @Test
@@ -586,7 +588,7 @@ class EseguiProssimaElaborazioneServizioTest {
 
     private fun verificaInterruzioneNonGuasto(atteso: Class<out Exception>, portePipeline: PortePipeline) {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val segnalatore = portePipeline.segnalatore as SegnalatoreFaseFinta
         val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, portePipeline)
@@ -639,7 +641,7 @@ class EseguiProssimaElaborazioneServizioTest {
     private fun eseguiConConclusioneGuasta(conclusione: (Elaborazione) -> Esito<Unit>): EsecuzioneGuasta {
         val elaborazioniReali = ElaborazioneRepositoryFinta()
         val elaborazioni = ElaborazioneRepositoryCheRifiutaLaConclusione(elaborazioniReali, conclusione)
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val segnalatore = SegnalatoreFaseFinta()
         val servizio = servizio(
@@ -654,7 +656,7 @@ class EseguiProssimaElaborazioneServizioTest {
         val lanciata = runCatching { servizio.esegui(EseguiProssimaElaborazione()) }.exceptionOrNull()
 
         assertNull(
-            trascritti.trova(REGISTRAZIONE_GUASTO, unIncontroDi(REGISTRAZIONE_GUASTO)),
+            trascritti.trascritto(REGISTRAZIONE_GUASTO),
             "nessun Trascritto: rollback (INV-5)",
         )
         return EsecuzioneGuasta(lanciata, elaborazioniReali, segnalatore, eventi)
@@ -673,7 +675,7 @@ class EseguiProssimaElaborazioneServizioTest {
     @Test
     fun `F5 un millisecondo parziale di campioni decodificati conta come millisecondo intero`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         // 2000 ms + 1 campione (16 kHz): la durata e' 2001 ms, un segmento che finisce a 2001 ms e' valido.
         val servizio = servizio(
@@ -698,7 +700,7 @@ class EseguiProssimaElaborazioneServizioTest {
         uow: UnitaDiLavoro,
         eventi: DispatcherEventiFinta,
         elaborazioni: ElaborazioneRepository,
-        trascritti: TrascrittoRepository,
+        trascritti: VociDellIncontroRepository,
         pipeline: PortePipeline,
     ): EseguiProssimaElaborazioneServizio =
         EseguiProssimaElaborazioneServizio(uow, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)
@@ -826,6 +828,8 @@ private class AllineatoreCheLancia(
 private class LettoreRegistrazioneCheLancia : LettoreRegistrazione {
     override fun registrazione(id: RegistrazioneId): RegistrazioneVista? =
         throw GuastoDiPortaDiProva("registrazione()")
+
+    override fun parti(incontroId: IncontroId): List<ParteDiIncontro>? = throw GuastoDiPortaDiProva("parti()")
 }
 
 /** [SegnalatoreFase] that throws on [guasta] (F-A), recording every other signal into [registro]. */
@@ -886,15 +890,17 @@ private class AllineatoreVuoto : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = emptyList()
 }
 
-/** [TrascrittoRepository] whose `salva` always fails (INV-5). */
-private class TrascrittoRepositoryGuasta : TrascrittoRepository, Ripristinabile {
-    override fun trova(id: RegistrazioneId, incontroId: IncontroId): Trascritto? = null
+/** [VociDellIncontroRepository] whose `salva` always fails (INV-5). */
+private class VociDellIncontroRepositoryGuasta : VociDellIncontroRepository, Ripristinabile {
+    override fun trova(id: IncontroId): VociDellIncontro? = null
+
+    override fun trascritto(r: RegistrazioneId): Trascritto? = null
 
     override fun conTrascritto(): List<RegistrazioneId> = emptyList()
 
-    override fun salva(t: Trascritto): Unit = throw GuastoDiProva()
+    override fun salva(root: VociDellIncontro): Unit = throw GuastoDiProva()
 
-    override fun rimuovi(id: RegistrazioneId, incontroId: IncontroId): Unit = error("non usato dalla pipeline")
+    override fun rimuovi(id: IncontroId): Unit = error("non usato dalla pipeline")
 
     override fun istantanea(): () -> Unit = {}
 }
@@ -904,7 +910,7 @@ private class GuastoDiProva : RuntimeException("guasto di prova nel salvataggio 
 /**
  * [ElaborazioneRepository] whose `salva` refuses to persist a `completata` row (V1): the Trascritto may
  * already be saved in the SAME transaction — this proves the whole transaction rolls back (INV-5),
- * unlike a [TrascrittoRepositoryGuasta]-only scenario, which stays green even under a two-transaction
+ * unlike a [VociDellIncontroRepositoryGuasta]-only scenario, which stays green even under a two-transaction
  * split.
  */
 private class ElaborazioneRepositoryCheRifiutaIlCompletamento(

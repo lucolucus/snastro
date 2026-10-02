@@ -28,11 +28,12 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
  * construction; Segmenti are never created after [crea] nor edited except for their Voce and their
  * flag (INV-8); new Voci take [prossimaVoce]`++`, so a `VoceId` is never reused nor renumbered (INV-12).
  *
- * ADR 0035 §1: it is also the per-Parte ENTITY of [VociDellIncontro] (its internal operations below, called only by
- * that root); there its [prossimaVoce] is the Incontro's counter. The per-Registrazione root API above stays until
- * the ADR 0033 §6 sweep moves its callers onto the root.
+ * ADR 0035 §1, §9: it is the per-Parte ENTITY of [VociDellIncontro], with no repository of its own: every command
+ * above is `internal` (the per-Registrazione rules, exercised by this module's tests), and outside this module a
+ * Trascritto is only read — the root's detached copies, [ricostituisci] in the persistence adapter. Every change goes
+ * through the root (`adr-0035-voci-mutate-dalla-radice.sh`); there its [prossimaVoce] is the Incontro's counter.
  */
-@Suppress("TooManyFunctions") // the legacy root API (retired in the ADR 0033 §6 sweep) + the entity operations
+@Suppress("TooManyFunctions") // the per-Registrazione commands (internal) + the entity operations
 public class Trascritto private constructor(
     public val registrazioneId: RegistrazioneId,
     public val incontroId: IncontroId,
@@ -61,7 +62,7 @@ public class Trascritto private constructor(
             .sortedBy { it.id.numero }
 
     /** INV-9: moves every Segmento of [rimossa] onto [sopravvive]; [rimossa] ceases to exist. */
-    public fun unisci(sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite> = when {
+    internal fun unisci(sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite> = when {
         sopravvive == rimossa -> Esito.Errore(UnioneNonAmmessa(sopravvive, rimossa))
         !esiste(sopravvive) -> Esito.Errore(VoceNonTrovata(sopravvive))
         !esiste(rimossa) -> Esito.Errore(VoceNonTrovata(rimossa))
@@ -75,7 +76,7 @@ public class Trascritto private constructor(
      * INV-10: [segmenti], a non-empty proper subset of [origine]'s Segmenti, become a NEW Voce; each of them is
      * `confermato` afterwards (INV-26), the Segmenti left on [origine] keep their flags.
      */
-    public fun dividi(origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa> {
+    internal fun dividi(origine: VoceId, segmenti: Set<SegmentoId>): Esito<VoceDivisa> {
         val diOrigine = idsDi(origine)
         return when {
             diOrigine.isEmpty() -> Esito.Errore(VoceNonTrovata(origine))
@@ -97,7 +98,7 @@ public class Trascritto private constructor(
      * ImprontaVocale (INV-21). A refusal changes nothing, [prossimaVoce] included. The moved Segmento is
      * `confermato` afterwards: a manual move is an explicit user act (INV-26).
      */
-    public fun riassegna(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> {
+    internal fun riassegna(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> {
         val da = _segmenti[segmento]?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento))
         return when {
             destinazione == da || destinazione == null && idsDi(da).size == 1 ->
@@ -128,7 +129,7 @@ public class Trascritto private constructor(
      * Segmento → [RiassegnazioneNonAmmessa]; a refusal changes nothing. One event per move in list order,
      * `aNuova = false`, `daRimossa` on the LAST move out of each Voce empty at the end.
      */
-    public fun riassegnaInBlocco(spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>> {
+    internal fun riassegnaInBlocco(spostamenti: List<SpostamentoSegmento>): Esito<List<SegmentoRiassegnato>> {
         val rifiuto = rifiutoDelBlocco(spostamenti)
         if (rifiuto != null) return Esito.Errore(rifiuto)
         spostamenti.forEach { m -> sposta(setOf(m.segmentoId), verso = m.a, conferma = false) }
@@ -151,7 +152,7 @@ public class Trascritto private constructor(
      * INV-26: sets ([confermato] = true) or revokes ("Togli conferma") the flag of [segmento]. The same value →
      * `Ok(null)`, nothing changes; an unknown Segmento → [SegmentoNonTrovato].
      */
-    public fun confermaSegmento(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> {
+    internal fun confermaSegmento(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> {
         val attuale = _segmenti[segmento]
         return when {
             attuale == null -> Esito.Errore(SegmentoNonTrovato(segmento))
@@ -218,7 +219,7 @@ public class Trascritto private constructor(
          * (inizio, Voce, fine), independent of the input order. No turn → [NessunParlatoRilevato] (AC-21);
          * a turn ending after [durataMs] → [SegmentoOltreLaDurata] (INV-7).
          */
-        public fun crea(
+        internal fun crea(
             registrazioneId: RegistrazioneId,
             incontroId: IncontroId,
             durataMs: Long,

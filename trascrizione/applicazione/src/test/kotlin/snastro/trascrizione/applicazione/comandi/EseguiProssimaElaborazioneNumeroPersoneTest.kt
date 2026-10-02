@@ -15,7 +15,7 @@ import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.NumeroPersone
 import java.time.Clock
@@ -31,7 +31,7 @@ class EseguiProssimaElaborazioneNumeroPersoneTest {
     @Test
     fun `AC-370 la pipeline passa al Diarizzatore il numeroPersone dell Elaborazione riletta, assente compreso`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val trascritti = TrascrittoRepositoryFinta()
+        val trascritti = VociDellIncontroRepositoryFinta()
         val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         val quattro = NumeroPersone.di(4).atteso()
         // Queued before the "restart": the new service only sees what it re-reads from the repository.

@@ -29,7 +29,7 @@ public abstract class LetturaCoerenteContratto {
          * `check(!letturaAperta)` or the SQL adapter's `query_only`) — it is not proof that [UnitaDiLavoroFinta]
          * enforces the rule on anyone's behalf. [UnitaDiLavoroFinta.letturaAperta] only TRACKS whether a read is
          * open; it refuses nothing by itself. A real consumer repository fake (`ParlanteRepositoryFinta`,
-         * `TrascrittoRepositoryFinta`, `RiassuntoRepositoryFinta`, …) that omits its OWN
+         * `VociDellIncontroRepositoryFinta`, `RiassuntoRepositoryFinta`, …) that omits its OWN
          * `check(!lettura.letturaAperta)` before writing would still pass THIS contract while silently
          * diverging from the SQL adapter's `query_only` — a write-during-read application bug would then go
          * undetected on every D1 (Finta-backed) test and surface only on the real SQL adapter. Authoring a

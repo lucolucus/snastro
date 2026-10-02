@@ -1,0 +1,25 @@
+package snastro.trascrizione.dominio
+
+/**
+ * The per-Parte entity. Mentioning `public fun unisci(a: VoceId, b: VoceId): Esito<VociUnite>` in a KDoc is no
+ * declaration.
+ */
+public class Trascritto private constructor(public val registrazioneId: RegistrazioneId) {
+    public val segmenti: List<Segmento> get() = emptyList()
+
+    // public fun dividi(origine: VoceId): Esito<VoceDivisa> -- a comment, not code
+    internal fun unisci(sopravvive: VoceId, rimossa: VoceId): Esito<VociUnite> = TODO()
+
+    private fun sposta(verso: VoceId): Esito<Unit> = TODO()
+
+    public fun voce(id: VoceId): Voce? = null
+
+    public companion object {
+        internal fun crea(
+            registrazioneId: RegistrazioneId,
+            segmenti: List<SegmentoIniziale>,
+        ): Esito<Trascritto> = TODO()
+
+        public fun ricostituisci(registrazioneId: RegistrazioneId): Trascritto = Trascritto(registrazioneId)
+    }
+}

@@ -6,7 +6,6 @@ import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.kernel.IncontroId
-import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.comandi.RiallineaImpronte
 import snastro.parlanti.applicazione.comandi.RiallineaImpronteServizio
 import snastro.supporto.RitentaConBackoff
@@ -22,8 +21,7 @@ import kotlin.time.Duration.Companion.seconds
  * `AbbonatoDopoCommit` (ADR 0012) that keeps every Registrazione's print rows fresh after a
  * Trascrizione Revisione (block `abbonato-riallineamento-impronte`, AC-304..AC-307; retry mechanics
  * reworked by `a3-ritenta-parlanti`, ADR 0028 §7.4, AC-C50..C53): [VociUnite]/[VoceDivisa]/
- * [SegmentoRiassegnato] each enqueue a [RiallineaImpronte] for the Incontro of their `registrazioneId`
- * ([incontroDi]), run only
+ * [SegmentoRiassegnato] each enqueue a [RiallineaImpronte] for the Incontro they name (`incontroId`), run only
  * AFTER the publishing command's transaction committed, never on a rollback — its background work
  * is exactly ONE [RitentaConBackoff] (AC-C50: no private conflated loop, backoff or `runCatching`
  * here — [ritenta] is the only place that catches [esegui]'s exceptions), keyed by [IncontroId]
@@ -45,8 +43,6 @@ import kotlin.time.Duration.Companion.seconds
  */
 public class AbbonatoRiallineamentoImpronte(
     private val riallinea: RiallineaImpronteServizio,
-    /** The Incontro of a Registrazione (`null` once it is gone: nothing left to realign). */
-    private val incontroDi: (RegistrazioneId) -> IncontroId?,
     segnalazione: Segnalazione,
     ritardoIniziale: Duration = RITARDO_INIZIALE_DEFAULT,
     ritardoMassimo: Duration = RITARDO_MASSIMO_DEFAULT,
@@ -57,13 +53,13 @@ public class AbbonatoRiallineamentoImpronte(
     public fun avvia(scope: CoroutineScope): Job = ritenta.avvia(scope)
 
     override fun ricevi(evento: EventoPubblicato) {
-        val registrazioneId = when (evento) {
-            is VociUnite -> evento.registrazioneId
-            is VoceDivisa -> evento.registrazioneId
-            is SegmentoRiassegnato -> evento.registrazioneId
+        val incontroId = when (evento) {
+            is VociUnite -> evento.incontroId
+            is VoceDivisa -> evento.incontroId
+            is SegmentoRiassegnato -> evento.incontroId
             else -> return
         }
-        incontroDi(registrazioneId)?.let(ritenta::richiedi)
+        ritenta.richiedi(incontroId)
     }
 
     /** `true` = done, `false` = retry (ADR 0028 §2); [ritenta] is the only catch, never here (AC-C50). */

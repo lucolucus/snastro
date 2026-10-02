@@ -47,8 +47,8 @@ import snastro.trascrizione.applicazione.porte.AllineatoreFinta
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -96,7 +96,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio
         // (to mint real Voci — Parlanti's Attribuzioni need real VoceRefs).
         private val elaborazioni = ElaborazioneRepositoryFinta()
-        private val trascritti = TrascrittoRepositoryFinta()
+        private val trascritti = VociDellIncontroRepositoryFinta()
         private val eventiTrascrizione = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         private val registrazioniVisteTrascrizione = mutableMapOf<RegistrazioneId, RegistrazioneVistaTrascrizione>()
 
@@ -231,7 +231,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 eventiTrascrizione,
             ).esegui(EseguiProssimaElaborazione()).atteso()
 
-            val trascritto = checkNotNull(trascritti.trova(id, registrazioniVisteTrascrizione.getValue(id).incontroId))
+            val trascritto = checkNotNull(trascritti.trascritto(id))
             vociVisteParlanti[trascritto.incontroId] = trascritto.voci.map { voce ->
                 val intervalli = voce.segmenti.map { it.intervallo }
                 VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), mapOf(id to intervalli))

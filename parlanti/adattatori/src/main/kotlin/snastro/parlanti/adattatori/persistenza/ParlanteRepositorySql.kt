@@ -39,7 +39,7 @@ import migrations.Parlante as ParlanteRiga
 /**
  * [ParlanteRepository] on the generated [SnastroDatabase] queries (dev-architecture-app.md#repository,
  * ADR 0006/0007/0009): [salva] upserts the root row, then **replaces** the owned `impronta_vocale`
- * rows of that `parlante_id` (delete then re-insert, mirroring `TrascrittoRepositorySql`) — always
+ * rows of that `parlante_id` (delete then re-insert, mirroring `VociDellIncontroRepositorySql`) — always
  * inside the caller's transaction, never opening one (ADR 0012).
  *
  * `nome_normalizzato` is the [Nome] VO's own `normalizzato` (never computed in SQL, ADR 0007): INV-16

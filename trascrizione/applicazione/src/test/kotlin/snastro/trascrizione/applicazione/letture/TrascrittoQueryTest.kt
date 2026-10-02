@@ -4,29 +4,30 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
-import snastro.trascrizione.dominio.Trascritto
 import snastro.trascrizione.dominio.unSegmentoIniziale
-import snastro.trascrizione.dominio.unTrascritto
+import snastro.trascrizione.dominio.unaRadice
+import snastro.trascrizione.dominio.unaRadiceDa
 import java.time.LocalDate
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class TrascrittoQueryTest {
-    private val trascritti = TrascrittoRepositoryFinta()
+    private val trascritti = VociDellIncontroRepositoryFinta()
     private val registrazioni = LettoreRegistrazioneFinta(mapOf(REGISTRAZIONE to UNA_REGISTRAZIONE))
     private val query = TrascrittoQuery(trascritti, registrazioni)
 
     @Test
     fun `AC-167 vista espone i campi della Registrazione, i segmenti in ordine di tempo e le voci etichettate`() {
-        val trascritto = Trascritto.crea(
+        val radice = unaRadiceDa(
             REGISTRAZIONE,
             unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
@@ -35,8 +36,8 @@ class TrascrittoQueryTest {
                 unSegmentoIniziale(voceIndice = 2, inizioMs = 0, fineMs = 1_500, testo = "prima battuta"),
                 unSegmentoIniziale(voceIndice = 4, inizioMs = 4_500, fineMs = 5_000, testo = "terza battuta"),
             ),
-        ).atteso().aggregato
-        trascritti.salva(trascritto)
+        )
+        trascritti.salva(radice)
 
         val vista = query.vista(REGISTRAZIONE)
 
@@ -63,7 +64,7 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-167 segmenti in ordine di tempo anche quando le Voci si alternano`() {
-        val trascritto = Trascritto.crea(
+        val radice = unaRadiceDa(
             REGISTRAZIONE,
             unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
@@ -72,8 +73,8 @@ class TrascrittoQueryTest {
                 unSegmentoIniziale(voceIndice = 2, inizioMs = 1_000, fineMs = 2_000, testo = "v2 turno 1"),
                 unSegmentoIniziale(voceIndice = 1, inizioMs = 2_000, fineMs = 3_000, testo = "v1 turno 2"),
             ),
-        ).atteso().aggregato
-        trascritti.salva(trascritto)
+        )
+        trascritti.salva(radice)
 
         val vista = query.vista(REGISTRAZIONE)
 
@@ -90,7 +91,7 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-167 etichetta 'Voce n' usa il VoceId anche con un buco nella sequenza`() {
-        val trascritto = Trascritto.crea(
+        val radice = unaRadiceDa(
             REGISTRAZIONE,
             unIncontroDi(REGISTRAZIONE),
             DURATA_TRASCRITTO_MS,
@@ -99,11 +100,11 @@ class TrascrittoQueryTest {
                 unSegmentoIniziale(voceIndice = 20, inizioMs = 1_000, fineMs = 2_000, testo = "b"),
                 unSegmentoIniziale(voceIndice = 30, inizioMs = 2_000, fineMs = 3_000, testo = "c"),
             ),
-        ).atteso().aggregato
+        )
         // VoceId(1) is absorbed into VoceId(2): only VoceId(2) and VoceId(3) survive — a gap at 1.
-        val fuso = trascritto.unisci(sopravvive = VoceId(2), rimossa = VoceId(1)).atteso()
+        val fuso = radice.unisci(sopravvive = VoceId(2), rimossa = VoceId(1)).atteso()
         check(fuso.sopravvissuta == VoceId(2) && fuso.rimossa == VoceId(1))
-        trascritti.salva(trascritto)
+        trascritti.salva(radice)
 
         val vista = query.vista(REGISTRAZIONE)
 
@@ -119,10 +120,10 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-167 dopo una Revisione (dividi) i segmenti restano in ordine di tempo e portano il nuovo voceId`() {
-        val trascritto = unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE)
+        val radice = unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE)
         // Origine VoceId(1) owns segmenti {1, 3, 5} (INV-7 order); split off segmento 3 into a new Voce.
-        trascritto.dividi(origine = VoceId(1), segmenti = setOf(SegmentoId(3))).atteso()
-        trascritti.salva(trascritto)
+        radice.dividi(origine = VoceId(1), segmenti = setOf(SegmentoRef(REGISTRAZIONE, SegmentoId(3)))).atteso()
+        trascritti.salva(radice)
 
         val vista = query.vista(REGISTRAZIONE)
 
@@ -141,10 +142,10 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-523 la vista espone confermato per Segmento come salvato`() {
-        val trascritto = unTrascritto(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE)
-        trascritto.confermaSegmento(SegmentoId(2), true).atteso()
-        trascritto.confermaSegmento(SegmentoId(4), true).atteso()
-        trascritti.salva(trascritto)
+        val radice = unaRadice(voci = 2, segmentiPerVoce = 2, registrazioneId = REGISTRAZIONE)
+        radice.confermaSegmento(SegmentoRef(REGISTRAZIONE, SegmentoId(2)), true).atteso()
+        radice.confermaSegmento(SegmentoRef(REGISTRAZIONE, SegmentoId(4)), true).atteso()
+        trascritti.salva(radice)
 
         val vista = query.vista(REGISTRAZIONE)
 
@@ -159,7 +160,7 @@ class TrascrittoQueryTest {
 
     @Test
     fun `AC-168 vista con Trascritto ma senza Registrazione nota restituisce null`() {
-        trascritti.salva(unTrascritto(voci = 1, segmentiPerVoce = 1, registrazioneId = ALTRA_REGISTRAZIONE))
+        trascritti.salva(unaRadice(voci = 1, segmentiPerVoce = 1, registrazioneId = ALTRA_REGISTRAZIONE))
 
         assertNull(query.vista(ALTRA_REGISTRAZIONE))
     }
