@@ -259,6 +259,11 @@ public class EseguiProssimaElaborazioneServizio(
         durataMs: Long,
         segmenti: List<SegmentoIniziale>,
     ): Esito<Unit> {
+        // INV-I16: a removed Parte loses its Segmento counter with its Trascritto, so a completion that outlives
+        // its Registrazione (deleted while the pipeline ran) is refused, never re-created from id 1.
+        if (pipeline.registrazioni.registrazione(elaborazione.registrazioneId) == null) {
+            return concludiConFallimento(elaborazione, MOTIVO_REGISTRAZIONE_MANCANTE)
+        }
         val radice = trascritti.trova(incontroId) ?: VociDellIncontro.crea(incontroId)
         return when (val conclusione = radice.completaParte(elaborazione.registrazioneId, segmenti, durataMs)) {
             is Esito.Ok -> completa(elaborazione, radice, conclusione.valore)
