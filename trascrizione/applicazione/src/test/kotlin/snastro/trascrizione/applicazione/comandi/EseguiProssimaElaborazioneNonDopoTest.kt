@@ -17,7 +17,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import java.time.Clock
 import java.time.Instant
@@ -60,7 +60,7 @@ class EseguiProssimaElaborazioneNonDopoTest {
     @Test
     fun `AC-S21 nonDopo di un millisecondo prima non rivendica nulla, la testa resta in_attesa`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, TrascrittoRepositoryFinta()))
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, VociDellIncontroRepositoryFinta()))
         val servizio = servizio(elaborazioni, eventi)
         elaborazioni.salva(unaInAttesa(REGISTRAZIONE, CREATA_ALLE)).atteso()
 
@@ -75,7 +75,7 @@ class EseguiProssimaElaborazioneNonDopoTest {
     @Test
     fun `AC-S22 il vincolo e onorato dentro la transazione, sulla testa appena letta, non su quella annullata`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, TrascrittoRepositoryFinta()))
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, VociDellIncontroRepositoryFinta()))
         val servizio = servizio(elaborazioni, eventi)
         val annullaServizio = AnnullaElaborazioneServizio(eventi.unitaDiLavoro, elaborazioni, eventi)
         val vecchia = RegistrazioneId("registrazione-vecchia")
@@ -105,7 +105,7 @@ class EseguiProssimaElaborazioneNonDopoTest {
     @Test
     fun `A37 il vincolo nonDopo e verificato mentre la transazione e gia aperta, sulla testa letta ora`() {
         val elaborazioni = ElaborazioneRepositoryFinta()
-        val uowFinta = UnitaDiLavoroFinta(elaborazioni, TrascrittoRepositoryFinta())
+        val uowFinta = UnitaDiLavoroFinta(elaborazioni, VociDellIncontroRepositoryFinta())
         val eventi = DispatcherEventiFinta(uowFinta)
         val servizio = servizio(elaborazioni, eventi)
         elaborazioni.salva(unaInAttesa(REGISTRAZIONE, CREATA_ALLE)).atteso()
@@ -120,7 +120,7 @@ class EseguiProssimaElaborazioneNonDopoTest {
             uowFinta,
             OROLOGIO,
             elaborazioniOsservate,
-            TrascrittoRepositoryFinta(),
+            VociDellIncontroRepositoryFinta(),
             pipeline(),
             eventi,
         )
@@ -158,13 +158,13 @@ class EseguiProssimaElaborazioneNonDopoTest {
     private fun servizio(
         elaborazioni: ElaborazioneRepositoryFinta,
         eventi: DispatcherEventiFinta = DispatcherEventiFinta(
-            UnitaDiLavoroFinta(elaborazioni, TrascrittoRepositoryFinta()),
+            UnitaDiLavoroFinta(elaborazioni, VociDellIncontroRepositoryFinta()),
         ),
     ): EseguiProssimaElaborazioneServizio = EseguiProssimaElaborazioneServizio(
         eventi.unitaDiLavoro,
         OROLOGIO,
         elaborazioni,
-        TrascrittoRepositoryFinta(),
+        VociDellIncontroRepositoryFinta(),
         pipeline(),
         eventi,
     )

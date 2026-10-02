@@ -15,17 +15,31 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
     private class AmbienteFinto : AmbienteLettoreRegistrazione {
         private val generatore = GeneratoreIdFinto()
         private val registrazioni = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
+        private val ordine = mutableMapOf<IncontroId, List<RegistrazioneId>>()
 
         override val progettoId = ProgettoId(generatore.nuovo())
 
-        override val lettore: LettoreRegistrazione = LettoreRegistrazioneFinta(registrazioni)
+        override val lettore: LettoreRegistrazione = LettoreRegistrazioneFinta(registrazioni, ordine)
 
-        override fun semina(seme: SemeRegistrazione): RegistrazioneId {
+        override val piuPartiPerIncontro: Boolean = true
+
+        override fun semina(seme: SemeRegistrazione): RegistrazioneId = semina(seme, IncontroId(generatore.nuovo()))
+
+        /** The supplier's order is not the seeding order: each new Parte goes first (a reader must not re-sort). */
+        override fun seminaIncontro(semi: List<SemeRegistrazione>): IncontroId {
+            val incontro = IncontroId(generatore.nuovo())
+            semi.forEach { ordine[incontro] = listOf(semina(it, incontro)) + ordine[incontro].orEmpty() }
+            return incontro
+        }
+
+        override fun ordineDelleParti(incontroId: IncontroId): List<RegistrazioneId> = ordine.getValue(incontroId)
+
+        private fun semina(seme: SemeRegistrazione, incontro: IncontroId): RegistrazioneId {
             val id = RegistrazioneId(generatore.nuovo())
             registrazioni[id] = RegistrazioneVista(
                 registrazioneId = id,
                 progettoId = progettoId,
-                incontroId = IncontroId(generatore.nuovo()),
+                incontroId = incontro,
                 titolo = seme.titolo,
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.${seme.estensione.lowercase(Locale.ROOT)}"),
                 dataRegistrazione = seme.dataRegistrazione,

@@ -9,36 +9,37 @@ import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.eventi.VociUnite
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.unTrascritto
+import snastro.trascrizione.dominio.unaRadice
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class UnisciVociServizioTest {
-    private val trascritti = TrascrittoRepositoryFinta()
+    private val trascritti = VociDellIncontroRepositoryFinta()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(trascritti))
     private val servizio = UnisciVociServizio(eventi.unitaDiLavoro, trascritti, ogniRegistrazioneNota(), eventi)
 
     @Test
     fun `AC-76 UnisciVoci valido sposta i Segmenti su sopravvive e pubblica VociUnite esattamente una volta`() {
-        trascritti.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
+        trascritti.salva(unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
 
         servizio.esegui(UnisciVoci(REGISTRAZIONE, sopravvive = VoceId(1), rimossa = VoceId(2))).atteso()
 
-        val trascritto = assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE)))
+        val trascritto = assertNotNull(trascritti.trascritto(REGISTRAZIONE))
         assertEquals(listOf(VoceId(1)), trascritto.voci.map { it.id })
         assertEquals(
-            listOf(VociUnite(REGISTRAZIONE, sopravvissuta = VoceId(1), rimossa = VoceId(2))),
+            listOf(VociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2))),
             eventi.pubblicati,
         )
     }
 
     @Test
     fun `AC-77 UnisciVoci(A, A) restituisce UnioneNonAmmessa e non pubblica nulla`() {
-        trascritti.salva(unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
+        trascritti.salva(unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
 
         val errore = servizio.esegui(UnisciVoci(REGISTRAZIONE, sopravvive = VoceId(1), rimossa = VoceId(1)))
             .erroreAtteso<ErroreTrascrizione.UnioneNonAmmessa>()
@@ -59,7 +60,7 @@ class UnisciVociServizioTest {
     @Test
     fun `AC-83 un abbonato sincrono che restituisce Errore annulla la Revisione e il Trascritto resta invariato`() {
         val originale = unTrascritto(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE)
-        trascritti.salva(originale)
+        trascritti.salva(unaRadice(voci = 2, segmentiPerVoce = 3, registrazioneId = REGISTRAZIONE))
         eventi.registraSincrono { Esito.Errore(ErroreTrascrizione.VoceNonTrovata(VoceId(99))) }
 
         val errore = servizio.esegui(UnisciVoci(REGISTRAZIONE, sopravvive = VoceId(1), rimossa = VoceId(2)))
@@ -68,7 +69,7 @@ class UnisciVociServizioTest {
         assertEquals(VoceId(99), errore.voceId)
         assertEquals(
             originale.segmenti,
-            assertNotNull(trascritti.trova(REGISTRAZIONE, unIncontroDi(REGISTRAZIONE))).segmenti,
+            assertNotNull(trascritti.trascritto(REGISTRAZIONE)).segmenti,
         )
         assertEquals(emptyList(), eventi.pubblicati)
     }

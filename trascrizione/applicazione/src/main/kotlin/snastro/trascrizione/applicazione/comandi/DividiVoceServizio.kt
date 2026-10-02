@@ -2,37 +2,34 @@ package snastro.trascrizione.applicazione.comandi
 
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
-import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
-import snastro.trascrizione.applicazione.porte.trovaDi
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
+import snastro.trascrizione.applicazione.porte.radiceDi
 import snastro.trascrizione.dominio.ErroreTrascrizione.TrascrittoNonTrovato
 
 /**
- * Use-case `DividiVoce` (AC-78/79/82/83): splits [DividiVoce.segmenti] off [DividiVoce.origine] into a new Voce
- * on the Trascritto of [DividiVoce.registrazioneId] — INV-10 is owned by
- * [snastro.trascrizione.dominio.Trascritto.dividi] (RC-1), which also fixes `segmentiSpostati`'s order — saves it
- * and publishes `VoceDivisa`. The Parlanti revisione-policy runs synchronously in the same transaction
- * (ADR 0012): its `Esito.Errore` rolls the whole command back.
+ * Use-case `DividiVoce` (AC-78/79/82/83): splits [DividiVoce.segmenti] of the Parte [DividiVoce.registrazioneId] off
+ * [DividiVoce.origine] into a new Voce — INV-10 is owned by [snastro.trascrizione.dominio.VociDellIncontro.dividi]
+ * (RC-1), which also fixes the order of `spostati` — saves the root and publishes `VoceDivisa`. The Parlanti
+ * revisione-policy runs synchronously in the same transaction (ADR 0012): its `Esito.Errore` rolls the whole command
+ * back.
  */
 public class DividiVoceServizio(
     private val uow: UnitaDiLavoro,
-    private val trascritti: TrascrittoRepository,
+    private val trascritti: VociDellIncontroRepository,
     private val registrazioni: LettoreRegistrazione,
     private val eventi: DispatcherEventi,
 ) {
     public fun esegui(c: DividiVoce): Esito<Unit> = uow.inTransazione {
-        val trascritto = trascritti.trovaDi(c.registrazioneId, registrazioni)
+        val radice = trascritti.radiceDi(c.registrazioneId, registrazioni)
             ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
-        trascritto.dividi(c.origine, c.segmenti).poi { evento ->
-            trascritti.salva(trascritto)
-            eventi.pubblica(evento.pubblicato())
+        radice.dividi(c.origine, c.segmenti.mapTo(LinkedHashSet()) { SegmentoRef(c.registrazioneId, it) }).poi { e ->
+            trascritti.salva(radice)
+            eventi.pubblica(e.pubblicato())
             Esito.Ok(Unit)
         }
     }
 }
-
-private fun snastro.trascrizione.dominio.VoceDivisa.pubblicato(): VoceDivisa =
-    VoceDivisa(registrazioneId, origine, nuova, segmentiSpostati)

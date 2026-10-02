@@ -50,8 +50,8 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
-import snastro.trascrizione.applicazione.porte.TrascrittoRepositoryFinta
 import snastro.trascrizione.applicazione.porte.Turno
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
@@ -93,7 +93,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio /
         // UnisciVociServizio / DividiVoceServizio / RiassegnaSegmentoServizio.
         private val elaborazioni = ElaborazioneRepositoryFinta()
-        private val trascritti = TrascrittoRepositoryFinta()
+        private val trascritti = VociDellIncontroRepositoryFinta()
         private val eventiTrascrizione = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
 
         /** Trascrizione's own view of each Registrazione seeded so far (its `LettoreRegistrazione` port). */
@@ -107,7 +107,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
         }
 
         override val lettore: LettoreVoci = LettoreVociDaTrascrizione(
-            VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste)),
+            VociDelTrascritto(trascritti),
             LettoreRegistrazioneDaProgetto(catalogo),
         )
 
@@ -159,7 +159,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             val diarizzatore = DiarizzatoreFinta(turni.map { Turno(it.intervallo, it.voceIndice) })
             eseguiPipeline(registrazioneId, diarizzatore, AllineatoreConIndice())
 
-            val trascritto = checkNotNull(trascritti.trova(registrazioneId, incontroDi(registrazioneId)))
+            val trascritto = checkNotNull(trascritti.trascritto(registrazioneId))
             val perIndice = trascritto.segmenti.associateBy { it.testo.toInt() }
             return turni.indices.map { i ->
                 val segmento = perIndice.getValue(i)

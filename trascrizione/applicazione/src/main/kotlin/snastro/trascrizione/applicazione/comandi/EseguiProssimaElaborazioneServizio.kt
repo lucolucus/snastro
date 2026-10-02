@@ -1,7 +1,6 @@
 package snastro.trascrizione.applicazione.comandi
 
 import snastro.kernel.CampioniAudio
-import snastro.kernel.Creato
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDominio
@@ -21,12 +20,12 @@ import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.TRASCRIZIONE
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
+import snastro.trascrizione.dominio.ConclusioneParte
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SegmentoIniziale
-import snastro.trascrizione.dominio.Trascritto
-import snastro.trascrizione.dominio.TrascrittoCreato
+import snastro.trascrizione.dominio.VociDellIncontro
 import java.time.Clock
 import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
@@ -37,9 +36,10 @@ import kotlin.coroutines.cancellation.CancellationException
  * race), then runs decodifica → diarizzazione → trascrizione → allineamento through the pinned
  * ML/audio ports of [PortePipeline] OUTSIDE any transaction (AC-73), signalling each phase in order
  * (AC-69) with one FIXED, plain-Italian `motivo` per fault point — no raw exception text, path or id
- * ever reaches the user (ADR 0003). On success, `completata` and the [Trascritto] are saved together
- * in one short transaction (INV-5) — over an existing Trascritto, replacing it whole and publishing
- * [TrascrittoSostituito] first (ADR 0018, [completa]): that transaction re-reads the Elaborazione BY ID
+ * ever reaches the user (ADR 0003). On success, `completata` and the Parte's Trascritto (through the root
+ * [VociDellIncontro.completaParte], ADR 0035 §3) are saved together in one short transaction (INV-5) — over an
+ * existing Trascritto, replacing it and publishing [TrascrittoSostituito] first (ADR 0018, [completa]): that
+ * transaction re-reads the Elaborazione BY ID
  * first and, if it is no longer `in_corso`, leaves it untouched (e.g. [RecuperaElaborazioniInterrotte] already
  * recovered it while this run was mid-flight — the in-memory instance mutated earlier is never
  * reused). If that final transaction itself fails — `Esito.Errore`, or an exception (the store refuses
@@ -70,7 +70,7 @@ public class EseguiProssimaElaborazioneServizio(
     private val uow: UnitaDiLavoro,
     private val orologio: Clock,
     private val elaborazioni: ElaborazioneRepository,
-    private val trascritti: TrascrittoRepository,
+    private val trascritti: VociDellIncontroRepository,
     private val pipeline: PortePipeline,
     private val eventi: DispatcherEventi,
 ) {
@@ -248,40 +248,54 @@ public class EseguiProssimaElaborazioneServizio(
         }
     }
 
+    /**
+     * ADR 0035 §3: the root of the Parte's Incontro is re-read HERE, inside the completion transaction (created empty
+     * at the first completion of any Parte of the Incontro), and [VociDellIncontro.completaParte] numbers the new Voci
+     * from its counter and the Segmenti after every id the Parte ever used (INV-I4, INV-I16).
+     */
     private fun concludiConSuccesso(
         elaborazione: Elaborazione,
         incontroId: IncontroId,
         durataMs: Long,
         segmenti: List<SegmentoIniziale>,
-    ): Esito<Unit> =
-        when (val creato = Trascritto.crea(elaborazione.registrazioneId, incontroId, durataMs, segmenti)) {
-            is Esito.Ok -> completa(elaborazione, creato.valore)
+    ): Esito<Unit> {
+        val radice = trascritti.trova(incontroId) ?: VociDellIncontro.crea(incontroId)
+        return when (val conclusione = radice.completaParte(elaborazione.registrazioneId, segmenti, durataMs)) {
+            is Esito.Ok -> completa(elaborazione, radice, conclusione.valore)
             is Esito.Errore -> {
-                // F-D: Trascritto.crea only returns ErroreTrascrizione; any other ErroreDominio is a
+                // F-D: completaParte only returns ErroreTrascrizione; any other ErroreDominio is a
                 // programmer error, surfaced with its OWN motivo — never disguised as another failure.
-                val errore = creato.errore as? ErroreTrascrizione
+                val errore = conclusione.errore as? ErroreTrascrizione
                 concludiConFallimento(elaborazione, errore?.let(::motivoTrascritto) ?: MOTIVO_ERRORE_INTERNO)
             }
         }
+    }
 
     /**
-     * INV-5 / ADR 0018: `completata` and the Trascritto in ONE transaction. The existing Trascritto is re-read
-     * HERE, inside it: if there is one, [TrascrittoRepository.salva] replaces it whole and [TrascrittoSostituito]
-     * is published BEFORE `ElaborazioneCompletata`, so its synchronous subscriber (the Parlanti purge) runs before
-     * the COMMIT and its refusal rolls the whole completion back (then compensated to `fallita`).
+     * INV-5 / ADR 0018: `completata` and the root in ONE transaction. On a replacement
+     * ([ConclusioneParte.Sostituzione]) [TrascrittoSostituito] (with the Voci that ceased) is published BEFORE
+     * `ElaborazioneCompletata`, so its synchronous subscriber (the Parlanti purge) runs before the COMMIT and its
+     * refusal rolls the whole completion back (then compensated to `fallita`).
      */
-    private fun completa(elaborazione: Elaborazione, creato: Creato<Trascritto, TrascrittoCreato>): Esito<Unit> =
+    private fun completa(
+        elaborazione: Elaborazione,
+        radice: VociDellIncontro,
+        conclusione: ConclusioneParte,
+    ): Esito<Unit> =
         elaborazione.completa().poi { evento ->
-            val sostituisce = trascritti.trova(elaborazione.registrazioneId, creato.aggregato.incontroId) != null
-            trascritti.salva(creato.aggregato) // stessa transazione del salva sotto: INV-5
+            trascritti.salva(radice) // stessa transazione del salva sotto: INV-5
             elaborazioni.salva(elaborazione).poi {
-                if (sostituisce) eventi.pubblica(TrascrittoSostituito(elaborazione.registrazioneId))
-                eventi.pubblica(evento.pubblicato())
+                if (conclusione is ConclusioneParte.Sostituzione) {
+                    eventi.pubblica(
+                        TrascrittoSostituito(elaborazione.registrazioneId, radice.incontroId, conclusione.vociRimosse),
+                    )
+                }
+                eventi.pubblica(evento.pubblicato(radice.incontroId))
                 Esito.Ok(Unit)
             }
         }
 
-    /** Shared by a `fallita` outcome of the pipeline AND by [Trascritto.crea] refusing its input. */
+    /** Shared by a `fallita` outcome of the pipeline AND by [VociDellIncontro.completaParte] refusing its input. */
     private fun concludiConFallimento(elaborazione: Elaborazione, motivo: String): Esito<Unit> =
         elaborazione.fallisci(motivo).poi { evento ->
             elaborazioni.salva(elaborazione).poi {
@@ -319,7 +333,7 @@ public class EseguiProssimaElaborazioneServizio(
 
         /**
          * Exhaustive, no `else`: a new [ErroreTrascrizione] variant breaks compilation here until it
-         * gets its own plain-Italian `motivo` (ADR 0003). [Trascritto.crea] only ever returns
+         * gets its own plain-Italian `motivo` (ADR 0003). [VociDellIncontro.completaParte] only ever returns
          * [ErroreTrascrizione.NessunParlatoRilevato] or [ErroreTrascrizione.SegmentoOltreLaDurata];
          * the other branches exist only so the mapping stays total for any future caller.
          */
@@ -343,7 +357,7 @@ public class EseguiProssimaElaborazioneServizio(
         }
 
         /**
-         * Single source of truth for the duration passed to [Trascritto.crea]: the DECODED samples,
+         * Single source of truth for the duration passed to [VociDellIncontro.completaParte]: the DECODED samples,
          * never the catalogue's `durataMs` (a rounding surplus there must not fail a run whose audio
          * actually decoded a little longer). Ceiling division: a trailing partial millisecond of
          * samples still counts as that millisecond.
@@ -407,8 +421,8 @@ private sealed interface RisultatoPipeline {
 private fun snastro.trascrizione.dominio.ElaborazioneAvviata.pubblicato(): ElaborazioneAvviata =
     ElaborazioneAvviata(registrazioneId = registrazioneId, avviataAlle = avviataAlle)
 
-private fun snastro.trascrizione.dominio.ElaborazioneCompletata.pubblicato(): ElaborazioneCompletata =
-    ElaborazioneCompletata(registrazioneId = registrazioneId)
+private fun snastro.trascrizione.dominio.ElaborazioneCompletata.pubblicato(incontroId: IncontroId) =
+    ElaborazioneCompletata(registrazioneId = registrazioneId, incontroId = incontroId)
 
 private fun snastro.trascrizione.dominio.ElaborazioneFallita.pubblicato(): ElaborazioneFallita =
     ElaborazioneFallita(registrazioneId = registrazioneId, motivo = motivo)

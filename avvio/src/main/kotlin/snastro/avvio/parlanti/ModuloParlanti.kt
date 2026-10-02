@@ -140,7 +140,7 @@ internal class ModuloParlanti(
             dispatcher,
         )
         // AC-C54: the ONE JUL-backed Segnalazione of `:avvio`.
-        riallineamento = AbbonatoRiallineamentoImpronte(riallinea, segnalazioneApp)
+        riallineamento = AbbonatoRiallineamentoImpronte(riallinea, porte.catalogo::parti, segnalazioneApp)
         riallineaTutte = RiallineaTutteLeImpronteServizio(porte.lettura, porte.parlanti, riallinea)
         val conferma = ConfermaAttribuzioneServizio(
             uow,

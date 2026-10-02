@@ -1,15 +1,16 @@
 package snastro.trascrizione.applicazione.eventi
 
 import snastro.kernel.EventoPubblicato
-import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
+import snastro.kernel.IncontroId
+import snastro.kernel.SegmentoRef
 
 /**
- * Published Language of the domain event `SegmentoConfermato` (boundary `eventi-revisione`, ADR 0019 §3): the
- * [confermato] flag of [segmentoId] changed. After-commit subscribers only (view refresh); no synchronous one.
+ * Published Language of the domain event `SegmentoConfermato` (boundary `eventi-trascrizione-incontro`, ADR 0019 §3,
+ * ADR 0035 §5): in the Incontro [incontroId], the [confermato] flag of [segmento] changed. After-commit subscribers
+ * only (view refresh); no synchronous one.
  */
 public data class SegmentoConfermato(
-    val registrazioneId: RegistrazioneId,
-    val segmentoId: SegmentoId,
+    val incontroId: IncontroId,
+    val segmento: SegmentoRef,
     val confermato: Boolean,
 ) : EventoPubblicato

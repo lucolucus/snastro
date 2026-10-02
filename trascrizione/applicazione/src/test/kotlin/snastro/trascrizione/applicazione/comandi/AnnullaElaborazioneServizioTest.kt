@@ -18,7 +18,7 @@ import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
@@ -90,10 +90,10 @@ class AnnullaElaborazioneServizioTest {
     }
 
     @Test
-    fun `AC-465 AnnullaElaborazione non puo toccare il Trascritto perche non riceve alcun TrascrittoRepository`() {
+    fun `AC-465 AnnullaElaborazione non puo toccare il Trascritto perche non riceve il repository delle Voci`() {
         val dipendenze = AnnullaElaborazioneServizio::class.java.constructors.single().parameterTypes
 
-        assertTrue(dipendenze.none { TrascrittoRepository::class.java.isAssignableFrom(it) })
+        assertTrue(dipendenze.none { VociDellIncontroRepository::class.java.isAssignableFrom(it) })
     }
 
     @Test

@@ -1,8 +1,10 @@
 package snastro.trascrizione.adattatori.porte
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
+import snastro.trascrizione.applicazione.porte.ParteDiIncontro
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 
 /**
@@ -25,4 +27,8 @@ public class LettoreRegistrazioneDaProgetto(
                 durataMs = vista.durataMs,
             )
         }
+
+    /** The Parti of [incontroId] as Progetto orders and numbers them (INV-I2, `CatalogoRegistrazioni.incontro`). */
+    override fun parti(incontroId: IncontroId): List<ParteDiIncontro>? =
+        catalogo.incontro(incontroId)?.parti?.map { ParteDiIncontro(it.registrazioneId, it.numero) }
 }

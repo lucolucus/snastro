@@ -21,8 +21,9 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAvviata
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneNonTrovata
 import snastro.trascrizione.dominio.SegmentoIniziale
 import snastro.trascrizione.dominio.StatoElaborazione
-import snastro.trascrizione.dominio.Trascritto
+import snastro.trascrizione.dominio.VociDellIncontro
 import snastro.trascrizione.dominio.unaElaborazione
+import snastro.trascrizione.dominio.unaRadiceDa
 import java.io.File
 import java.sql.DriverManager
 import java.sql.SQLException
@@ -61,19 +62,25 @@ class RitrascriviRepositorySqlTest {
     }
 
     @Test
-    fun `AC-444 salva di un nuovo Trascritto sopra uno esistente lascia solo il nuovo`() {
+    fun `AC-444 salvare la sostituzione di una Parte lascia solo i nuovi Segmenti, numerati dopo i vecchi`() {
         val db = databaseInMemoria().seminato()
-        val repo = TrascrittoRepositorySql(db, UnitaDiLavoroSql(db))
-        repo.salva(VECCHIO)
-        assertEquals(6 to 40, repo.trova(R, unIncontroDi(R))?.let { it.prossimaVoce to it.prossimoSegmento })
+        val repo = repositorySql(db)
+        repo.salva(vecchio())
+        assertEquals(6 to 40, repo.trascritto(R)?.let { it.prossimaVoce to it.prossimoSegmento })
 
-        repo.salva(NUOVO)
+        val radice = sostituita(checkNotNull(repo.trova(unIncontroDi(R))))
+        repo.salva(radice)
 
-        val riletto = checkNotNull(repo.trova(R, unIncontroDi(R)))
-        assertEquals(NUOVO.segmenti, riletto.segmenti)
-        assertEquals(4 to 20, riletto.prossimaVoce to riletto.prossimoSegmento)
-        assertEquals(listOf(1L, 2L, 3L), db.voceQueries.trovaDiTrascritto(R.valore).executeAsList().map { it.numero })
+        val riletto = checkNotNull(repo.trascritto(R))
+        assertEquals(radice.trascritto(R)?.segmenti, riletto.segmenti)
+        assertEquals(9 to 59, riletto.prossimaVoce to riletto.prossimoSegmento, "INV-I4, INV-I16: never lowered")
+        assertEquals(listOf(6L, 7L, 8L), db.voceQueries.trovaDiTrascritto(R.valore).executeAsList().map { it.numero })
         assertEquals(19, db.segmentoQueries.trovaDiTrascritto(R.valore).executeAsList().size)
+        assertEquals(
+            listOf(6L, 7L, 8L),
+            db.voceIncontroQueries.numeriDiIncontro(unIncontroDi(R).valore).executeAsList(),
+            "the Voci that ceased leave voce_incontro",
+        )
     }
 
     /**
@@ -90,20 +97,22 @@ class RitrascriviRepositorySqlTest {
         try {
             val db = database.database.seminato()
             val uow = UnitaDiLavoroSql(db)
-            val repo = TrascrittoRepositorySql(db, uow)
-            uow.inTransazione { Esito.Ok(repo.salva(VECCHIO)) }.atteso()
+            val repo = repositorySql(db, uow)
+            uow.inTransazione { Esito.Ok(repo.salva(vecchio())) }.atteso()
+            val prima = repo.trascritto(R)?.segmenti
             val url = "jdbc:sqlite:${File(cartella, "progetto.db").absolutePath}"
             ATTRIBUZIONE_SU_VOCE_5.forEach { eseguiJdbc(url, it) }
 
             assertFailsWith<SQLException> {
                 uow.inTransazione {
-                    repo.salva(NUOVO) // Voce 5 is gone, the attribuzione still points at it: deferred FK at COMMIT
+                    // Voce 5 is gone, the attribuzione still points at it: deferred FK at COMMIT
+                    repo.salva(sostituita(checkNotNull(repo.trova(unIncontroDi(R)))))
                     Esito.Ok(Unit)
                 }
             }
 
-            assertEquals(VECCHIO.segmenti, repo.trova(R, unIncontroDi(R))?.segmenti, "il vecchio Trascritto e intatto")
-            assertEquals(6 to 40, repo.trova(R, unIncontroDi(R))?.let { it.prossimaVoce to it.prossimoSegmento })
+            assertEquals(prima, repo.trascritto(R)?.segmenti, "il vecchio Trascritto e intatto")
+            assertEquals(6 to 40, repo.trascritto(R)?.let { it.prossimaVoce to it.prossimoSegmento })
             val attribuzioni = contaJdbc(url, "SELECT count(*) FROM attribuzione WHERE voce_id = 5")
             assertEquals(1, attribuzioni, "l attribuzione e intatta")
         } finally {
@@ -115,9 +124,10 @@ class RitrascriviRepositorySqlTest {
     fun `AC-445 la stessa sostituzione con le righe della Voce 5 cancellate prima fa COMMIT`() {
         val (db, driver) = databaseConDriver()
         val uow = UnitaDiLavoroSql(db)
-        val repo = TrascrittoRepositorySql(db, uow)
-        repo.salva(VECCHIO)
+        val repo = repositorySql(db, uow)
+        repo.salva(vecchio())
         seminaAttribuzioneSuVoce5(driver)
+        val radice = sostituita(checkNotNull(repo.trova(unIncontroDi(R))))
 
         uow.inTransazione {
             driver.execute(
@@ -126,11 +136,11 @@ class RitrascriviRepositorySqlTest {
                     "(SELECT incontro_id FROM registrazione WHERE id = '${R.valore}')",
                 0,
             )
-            repo.salva(NUOVO)
+            repo.salva(radice)
             Esito.Ok(Unit)
         }.atteso()
 
-        assertEquals(NUOVO.segmenti, repo.trova(R, unIncontroDi(R))?.segmenti)
+        assertEquals(radice.trascritto(R)?.segmenti, repo.trascritto(R)?.segmenti)
         assertEquals(0L, conta(driver, "SELECT count(*) FROM attribuzione"))
     }
 
@@ -207,19 +217,16 @@ class RitrascriviRepositorySqlTest {
                 "5, 'progetto-1', 'parlante-1')",
         )
 
-        /** 5 Voci over 39 Segmenti: counters 6 / 40. */
-        val VECCHIO: Trascritto = trascritto(voci = 5, segmenti = 39)
+        /** The root whose Parte [R] has 5 Voci over 39 Segmenti: counters 6 / 40. */
+        fun vecchio(): VociDellIncontro = unaRadiceDa(R, unIncontroDi(R), DURATA, turni(voci = 5, segmenti = 39))
 
-        /** 3 Voci over 19 Segmenti: counters 4 / 20. */
-        val NUOVO: Trascritto = trascritto(voci = 3, segmenti = 19)
+        /** [radice] with [R] replaced by 3 Voci over 19 Segmenti: Voci 6..8, Segmenti 40..58, counters 9 / 59. */
+        fun sostituita(radice: VociDellIncontro): VociDellIncontro = radice.apply {
+            completaParte(R, turni(voci = 3, segmenti = 19), DURATA).atteso()
+        }
 
-        fun trascritto(voci: Int, segmenti: Int): Trascritto {
-            val turni = (0 until segmenti).map { i ->
-                SegmentoIniziale(i % voci, IntervalloMs(i * 1_000L, i * 1_000L + 900), "voce ${i % voci} n$i")
-            }
-            val esito = Trascritto.crea(R, unIncontroDi(R), DURATA, turni)
-            check(esito is Esito.Ok)
-            return esito.valore.aggregato
+        fun turni(voci: Int, segmenti: Int): List<SegmentoIniziale> = (0 until segmenti).map { i ->
+            SegmentoIniziale(i % voci, IntervalloMs(i * 1_000L, i * 1_000L + 900), "voce ${i % voci} n$i")
         }
     }
 }

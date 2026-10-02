@@ -21,6 +21,7 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -121,7 +122,7 @@ class AbbonatoSbobinaturaEventiTest {
         advanceUntilIdle() // AC-185's own startup sweep settles first (nothing to do with this AC)
         val primaDelRollback = ambiente.operazioni().size
 
-        ambiente.commitAnnullato(ElaborazioneCompletata(REG_1))
+        ambiente.commitAnnullato(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
         advanceUntilIdle()
 
         assertEquals(primaDelRollback, ambiente.operazioni().size)
@@ -141,9 +142,9 @@ class AbbonatoSbobinaturaEventiTest {
 
         // Tre eventi della STESSA Registrazione, tutti pubblicati prima che il worker abbia la
         // possibilita' di girare (nessun advance* tra un commit e l'altro).
-        ambiente.commit(ElaborazioneCompletata(REG_1))
+        ambiente.commit(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
         ambiente.commit(AttribuzioneConfermata(VoceRef(unIncontroDi(REG_1), VoceId(1)), PARLANTE, precedente = null))
-        ambiente.commit(VociUnite(REG_1, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        ambiente.commit(VociUnite(unIncontroDi(REG_1), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         advanceUntilIdle()
 
         assertEquals(1, ambiente.operazioni().size - primaDellaRaffica)
@@ -194,7 +195,7 @@ class AbbonatoSbobinaturaEventiTest {
         val tentativiDopoAvvio = scrittore.tentativi
 
         scrittore.fallisciProssimeScritture(2)
-        ambiente.commit(ElaborazioneCompletata(REG_1))
+        ambiente.commit(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
         val inizio = testScheduler.currentTime
         advanceUntilIdle()
 
@@ -220,11 +221,15 @@ class AbbonatoSbobinaturaEventiTest {
         val prima = scrittore.operazioni.size
 
         lettore.lanciaProssimeLetture(2)
-        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(REG_1))) }
+        dispatcher.unitaDiLavoro.inTransazione {
+            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1))))
+        }
         advanceUntilIdle()
 
         assertEquals(prima + 1, scrittore.operazioni.size, "riletto dopo 2 eccezioni, scritto una volta")
-        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(REG_1))) }
+        dispatcher.unitaDiLavoro.inTransazione {
+            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1))))
+        }
         advanceUntilIdle()
         assertEquals(prima + 2, scrittore.operazioni.size, "il ciclo e ancora vivo")
     }
@@ -246,18 +251,23 @@ class AbbonatoSbobinaturaEventiTest {
 
     @Test
     fun `AC-186 ElaborazioneCompletata attiva la Rigenerazione`() = runTest {
-        assertEventoRigenera(ElaborazioneCompletata(REG_1))
+        assertEventoRigenera(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
     }
 
     @Test
     fun `AC-186 VociUnite attiva la Rigenerazione`() = runTest {
-        assertEventoRigenera(VociUnite(REG_1, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        assertEventoRigenera(VociUnite(unIncontroDi(REG_1), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
     }
 
     @Test
     fun `AC-186 VoceDivisa attiva la Rigenerazione`() = runTest {
         assertEventoRigenera(
-            VoceDivisa(REG_1, origine = VoceId(1), nuova = VoceId(2), segmentiSpostati = listOf(SegmentoId(2))),
+            VoceDivisa(
+                unIncontroDi(REG_1),
+                origine = VoceId(1),
+                nuova = VoceId(2),
+                spostati = listOf(SegmentoRef(REG_1, SegmentoId(2))),
+            ),
         )
     }
 
@@ -265,8 +275,8 @@ class AbbonatoSbobinaturaEventiTest {
     fun `AC-186 SegmentoRiassegnato attiva la Rigenerazione`() = runTest {
         assertEventoRigenera(
             SegmentoRiassegnato(
-                REG_1,
-                segmentoId = SegmentoId(1),
+                unIncontroDi(REG_1),
+                SegmentoRef(REG_1, SegmentoId(1)),
                 da = VoceId(1),
                 a = VoceId(2),
                 daRimossa = false,
@@ -422,8 +432,12 @@ class AbbonatoSbobinaturaEventiTest {
         advanceTimeBy(1.seconds)
         runCurrent() // lo sweep di avvio: puo' fallire su poisoned, irrilevante qui
 
-        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(poisoned))) }
-        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra))) }
+        dispatcher.unitaDiLavoro.inTransazione {
+            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(poisoned, unIncontroDi(poisoned))))
+        }
+        dispatcher.unitaDiLavoro.inTransazione {
+            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra, unIncontroDi(altra))))
+        }
         advanceTimeBy(10.seconds)
         runCurrent()
 
@@ -509,7 +523,9 @@ class AbbonatoSbobinaturaEventiTest {
         // "Meanwhile": altra diventa nota solo ora (la sua Elaborazione completa dopo l'avvio) — lo sweep,
         // bloccato a ritentare poisoned, non deve impedire la SUA rigenerazione (guidata dall'evento).
         lettore.aggiungi(altra, unTrascritto(altra, titolo = "Y"))
-        dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra))) }
+        dispatcher.unitaDiLavoro.inTransazione {
+            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra, unIncontroDi(altra))))
+        }
         advanceTimeBy(5.seconds)
         runCurrent()
 
@@ -539,7 +555,7 @@ class AbbonatoSbobinaturaEventiTest {
 
         scope.cancel()
         dispatcher.unitaDiLavoro.inTransazione {
-            dispatcher.pubblica(ElaborazioneCompletata(REG_1))
+            dispatcher.pubblica(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
             Esito.Ok(Unit)
         }
         advanceUntilIdle()
@@ -621,7 +637,9 @@ class AbbonatoSbobinaturaEventiTest {
             // Richieste "nel frattempo": reg2 e' GIA' pendente (accodata dal fan-out dello sweep, non ancora
             // girata) e si fonde nella stessa chiave; PerParlante e' tutta nuova. Entrambe restano in coda,
             // proprio perche' condividono l'UNICA istanza di RitentaConBackoff (sequenziale).
-            dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(reg2))) }
+            dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(reg2, unIncontroDi(reg2))))
+            }
             dispatcher.unitaDiLavoro.inTransazione {
                 Esito.Ok(dispatcher.pubblica(ParlanteRinominato(PARLANTE, "Marco Rossi")))
             }
@@ -724,7 +742,7 @@ class AbbonatoSbobinaturaEventiTest {
 
     /**
      * [LettoreTrascritto] whose next `n` [trascritto] calls throw like a half-written read (D-0008: the
-     * `ricostituisci` `require` escaping `TrascrittoRepositorySql.trova`), then delegates.
+     * `ricostituisci` `require` escaping `VociDellIncontroRepositorySql.trova`), then delegates.
      */
     private class LettoreCheLancia(private val delegato: LettoreTrascritto) : LettoreTrascritto by delegato {
         private var lanciRimanenti = 0

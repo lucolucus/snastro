@@ -18,7 +18,7 @@ import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
-import snastro.trascrizione.applicazione.porte.TrascrittoRepository
+import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.ErroreTrascrizione.NumeroPersoneFuoriIntervallo
@@ -188,10 +188,10 @@ class AvviaElaborazioneServizioTest {
     }
 
     @Test
-    fun `AC-434 AvviaElaborazione non puo toccare il Trascritto perche non riceve alcun TrascrittoRepository`() {
+    fun `AC-434 AvviaElaborazione non puo toccare il Trascritto perche non riceve il repository delle Voci`() {
         val dipendenze = AvviaElaborazioneServizio::class.java.constructors.single().parameterTypes
 
-        assertTrue(dipendenze.none { TrascrittoRepository::class.java.isAssignableFrom(it) })
+        assertTrue(dipendenze.none { VociDellIncontroRepository::class.java.isAssignableFrom(it) })
     }
 
     @Test

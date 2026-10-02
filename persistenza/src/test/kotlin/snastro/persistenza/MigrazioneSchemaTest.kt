@@ -125,8 +125,9 @@ class MigrazioneSchemaTest {
         db.parlanteQueries.rimuovi(parlanteId)
         db.segmentoQueries.eliminaDiRegistrazione(registrazioneId)
         db.voceQueries.eliminaDiRegistrazione(registrazioneId)
-        db.voceIncontroQueries.eliminaSenzaPresenza(incontroDiProva, registrazioneId)
-        db.vociIncontroQueries.eliminaSeSenzaVoci(incontroDiProva)
+        db.voceIncontroQueries.elimina(incontroDiProva, 1L)
+        db.voceIncontroQueries.eliminaDiIncontro(incontroDiProva)
+        db.vociIncontroQueries.elimina(incontroDiProva)
         eseguiQueryEliminaRegistrazione(db)
     }
 
@@ -180,7 +181,7 @@ class MigrazioneSchemaTest {
 
         db.voceIncontroQueries.inserisciSeAssente(incontroDiProva, 1L)
         db.voceQueries.inserisci(registrazioneId, 1L)
-        db.voceIncontroQueries.eliminaSenzaPresenza(incontroDiProva, registrazioneId)
+        db.voceIncontroQueries.numeriDiIncontro(incontroDiProva).executeAsList()
         db.voceQueries.trovaDiTrascritto(registrazioneId).executeAsList()
 
         db.segmentoQueries.inserisci(registrazioneId, 1L, 1L, 0L, 1000L, "ciao", 0L)

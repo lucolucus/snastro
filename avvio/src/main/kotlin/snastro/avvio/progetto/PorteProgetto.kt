@@ -21,7 +21,7 @@ import snastro.sintesi.adattatori.persistenza.LunghezzaMassimaRiassuntoRepositor
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
 import snastro.sintesi.adattatori.porte.LettoreIncontroDaProgetto
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
+import snastro.trascrizione.adattatori.persistenza.VociDellIncontroRepositorySql
 import snastro.trascrizione.applicazione.letture.FasiInCorso
 import snastro.trascrizione.applicazione.letture.StatiElaborazione
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
@@ -69,7 +69,6 @@ internal class PorteProgetto(
     val eliminazioniInSospeso: EliminazioniInSospesoSql = EliminazioniInSospesoSql(database, clock)
     val incontri: IncontroRepository = IncontroRepositorySql(database)
     val catalogo: CatalogoRegistrazioni = CatalogoRegistrazioni(registrazioni, incontri)
-    val trascritti: TrascrittoRepositorySql = TrascrittoRepositorySql(database, lettura)
     val elaborazioni: ElaborazioneRepositorySql = ElaborazioneRepositorySql(database)
     val parlanti: ParlanteRepositorySql = ParlanteRepositorySql(
         database,
@@ -87,19 +86,18 @@ internal class PorteProgetto(
     val registrazionePerParlanti: LettoreRegistrazioneParlanti = LettoreRegistrazioneParlanti(catalogo)
     val incontroPerSintesi: LettoreIncontroDaProgetto = LettoreIncontroDaProgetto(catalogo)
 
+    /** ADR 0035 §1: the Voci dell'Incontro, their Parti read through [registrazionePerTrascrizione]. */
+    val trascritti: VociDellIncontroRepositorySql =
+        VociDellIncontroRepositorySql(database, lettura, registrazionePerTrascrizione)
+
     /** AC-C63: written by the pipeline, read by [statiElaborazione]; shared with Sintesi, never rebuilt. */
     val fasiInCorso: FasiInCorso = FasiInCorso()
 
     /** AC-C63: the project's ONE `StatiElaborazione`: S2 and Sintesi read this SAME instance. */
-    val statiElaborazione: StatiElaborazione = StatiElaborazione(
-        elaborazioni,
-        trascritti,
-        registrazionePerTrascrizione,
-        fasiInCorso,
-    )
+    val statiElaborazione: StatiElaborazione = StatiElaborazione(elaborazioni, trascritti, fasiInCorso)
 
     /** Trascrizione's public read API over [trascritti], shared by every cross-context reader below. */
-    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti, registrazionePerTrascrizione)
+    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Sbobinatura's and Sintesi's readers. */
     val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, registrazionePerParlanti, lettura)

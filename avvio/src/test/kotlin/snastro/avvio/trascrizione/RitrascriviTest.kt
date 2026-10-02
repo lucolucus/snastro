@@ -116,12 +116,14 @@ class RitrascriviTest {
             assertEquals(s.mario, attribuzioni.diIncontro(it.incontroDi(s.y)).single().parlanteId)
             assertEquals(1, parlanti.impronteDiRegistrazione(s.y).size, "la sua impronta altrove resta")
             assertEquals(3, it.trascrizione.trascritto(s.x)?.voci?.size)
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura riscritta con Voce 1..3") {
-                sbobinatura(it, s.x)?.contains("**Voce 3**") == true
+            // INV-I4 (ADR 0035 §2, D-0007): the new Voci take the Incontro counter, after Voce 1-2, never reused.
+            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura riscritta con Voce 3..5") {
+                sbobinatura(it, s.x)?.contains("**Voce 5**") == true
             }
             val nuovo = sbobinatura(it, s.x).orEmpty()
             assertFalse("Mario" in nuovo || "Ospite" in nuovo, "solo etichette 'Voce n': $nuovo")
-            assertTrue((1..3).all { n -> "**Voce $n**" in nuovo })
+            assertTrue((3..5).all { n -> "**Voce $n**" in nuovo })
+            assertFalse((1..2).any { n -> "**Voce $n**" in nuovo }, "nessun numero riusato: $nuovo")
             assertNotEquals(sbobinaturaPrima, nuovo)
             attendiFinche(timeout = 10.seconds, messaggio = "S3 ricaricato sulla nuova generazione, modificabile") {
                 datiS3(s3)?.let { d -> !d.soloLettura && d.segmenti.size == 3 } == true
@@ -255,7 +257,7 @@ class RitrascriviTest {
             val dispatcher = it.porte.dispatcher
 
             dispatcher.unitaDiLavoro.inTransazione {
-                dispatcher.pubblica(TrascrittoSostituito(x))
+                dispatcher.pubblica(TrascrittoSostituito(x, it.incontroDi(x), emptySet()))
                 Esito.Errore(ErroreDiProva.Fallito("rollback"))
             }
             restaVeroPer(ATTESA_NESSUN_EFFETTO_MS.milliseconds, messaggio = "mai consegnato su rollback") {
@@ -264,7 +266,9 @@ class RitrascriviTest {
             it.parlanti.letture.proposta(voce(x, 2))
             assertEquals(calcolate, estrattore.chiamate.get(), "la Proposta resta in cache dopo un rollback")
 
-            dispatcher.unitaDiLavoro.inTransazione { Esito.Ok(dispatcher.pubblica(TrascrittoSostituito(x))) }.atteso()
+            dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(dispatcher.pubblica(TrascrittoSostituito(x, it.incontroDi(x), emptySet())))
+            }.atteso()
 
             attendiFinche(timeout = 10.seconds, messaggio = "Cambiamento(null)") { Cambiamento(null) in cambiamenti }
             it.parlanti.letture.proposta(voce(x, 2))

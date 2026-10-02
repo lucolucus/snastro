@@ -162,7 +162,7 @@ class PorteProgettoTest {
         const val PROGETTO_SQL = "snastro.progetto.adattatori.persistenza.ProgettoRepositorySql"
         const val REGISTRAZIONE_SQL = "snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql"
         const val IN_SOSPESO_SQL = "snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql"
-        const val TRASCRITTO_SQL = "snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql"
+        const val TRASCRITTO_SQL = "snastro.trascrizione.adattatori.persistenza.VociDellIncontroRepositorySql"
         const val ELABORAZIONE_SQL = "snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql"
         const val PARLANTE_SQL = "snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql"
         const val ATTRIBUZIONE_SQL = "snastro.parlanti.adattatori.persistenza.AttribuzioneRepositorySql"

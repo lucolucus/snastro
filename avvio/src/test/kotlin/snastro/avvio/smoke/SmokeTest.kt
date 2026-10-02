@@ -41,11 +41,11 @@ import snastro.sintesi.applicazione.porte.unaStruttura
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
-import snastro.trascrizione.adattatori.persistenza.TrascrittoRepositorySql
+import snastro.trascrizione.adattatori.persistenza.VociDellIncontroRepositorySql
 import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import snastro.trascrizione.dominio.SegmentoIniziale
 import snastro.trascrizione.dominio.StatoElaborazione
-import snastro.trascrizione.dominio.Trascritto
+import snastro.trascrizione.dominio.VociDellIncontro
 import snastro.trascrizione.dominio.unaElaborazione
 import java.nio.file.Files
 import java.nio.file.Path
@@ -135,13 +135,11 @@ class SmokeTest {
             SegmentoIniziale(1, IntervalloMs(4_500, 9_000), "Grazie. Da parte mia ci sono due aggiornamenti."),
             SegmentoIniziale(0, IntervalloMs(9_500, 12_000), "Perfetto, partiamo dal primo."),
         )
-        val trascritto = Trascritto.crea(
-            registrazioneId,
-            registrazione.aggregato.incontroId,
-            durataMs = 60_000,
-            segmenti = segmenti,
-        ).atteso()
-        TrascrittoRepositorySql(db.database, UnitaDiLavoroSql(db.database)).salva(trascritto.aggregato)
+        val radice = VociDellIncontro.crea(registrazione.aggregato.incontroId)
+        radice.completaParte(registrazioneId, segmenti, durataMs = 60_000).atteso()
+        val catalogo = CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(db.database))
+        val lettore = LettoreRegistrazioneTrascrizione(catalogo)
+        VociDellIncontroRepositorySql(db.database, UnitaDiLavoroSql(db.database), lettore).salva(radice)
 
         // AC-357: Voce 1 is 'Anna' (S2 badge '2 voci · 1 da identificare', S3 Nome, one S4 row).
         confermaAttribuzione(db.database, registrazioni).esegui(
@@ -174,9 +172,12 @@ class SmokeTest {
             LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),
             LettoreVociDaTrascrizione(
                 VociDelTrascritto(
-                    TrascrittoRepositorySql(database, unitaDiLavoroSql),
-                    LettoreRegistrazioneTrascrizione(
-                        CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
+                    VociDellIncontroRepositorySql(
+                        database,
+                        unitaDiLavoroSql,
+                        LettoreRegistrazioneTrascrizione(
+                            CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
+                        ),
                     ),
                 ),
                 LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),

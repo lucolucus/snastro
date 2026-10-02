@@ -1,0 +1,12 @@
+package snastro.trascrizione.applicazione.porte
+
+/** Never `fun salva(t: Trascritto)`: that is in a KDoc only. */
+public interface VociDellIncontroRepository {
+    public fun trova(id: IncontroId): VociDellIncontro?
+
+    public fun salva(root: VociDellIncontro)
+
+    public fun rimuovi(id: IncontroId)
+
+    public fun trascritto(r: RegistrazioneId): Trascritto?
+}

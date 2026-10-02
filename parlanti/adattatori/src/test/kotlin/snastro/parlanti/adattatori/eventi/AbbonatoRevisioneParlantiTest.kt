@@ -10,6 +10,7 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -95,7 +96,7 @@ class AbbonatoRevisioneParlantiTest {
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(2)), pb)
 
-        commit(dispatcher, VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
+        commit(dispatcher, VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2))).atteso()
 
         verify(exactly = 1) { politica.applicaVociUnite(unIncontroDi(REG), VoceId(1), VoceId(2)) }
         val messaggio = "l'effetto della policy e davvero applicato: B perde l'Attribuzione"
@@ -109,7 +110,8 @@ class AbbonatoRevisioneParlantiTest {
         val pa = unParlante("id-pa")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
 
-        val evento = VoceDivisa(REG, origine = VoceId(1), nuova = VoceId(2), segmentiSpostati = listOf(SegmentoId(2)))
+        val spostati = listOf(SegmentoRef(REG, SegmentoId(2)))
+        val evento = VoceDivisa(unIncontroDi(REG), origine = VoceId(1), nuova = VoceId(2), spostati = spostati)
         commit(dispatcher, evento).atteso()
 
         verify(exactly = 1) { politica.applicaVoceDivisa(unIncontroDi(REG), VoceId(1)) }
@@ -124,8 +126,8 @@ class AbbonatoRevisioneParlantiTest {
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pda)
 
         val evento = SegmentoRiassegnato(
-            REG,
-            SegmentoId(1),
+            unIncontroDi(REG),
+            SegmentoRef(REG, SegmentoId(1)),
             da = VoceId(1),
             a = VoceId(2),
             daRimossa = true,
@@ -149,7 +151,7 @@ class AbbonatoRevisioneParlantiTest {
         val guasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
         val dispatcher = dispatcherCon(guasto)
 
-        val esito = commit(dispatcher, VociUnite(REG, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        val esito = commit(dispatcher, VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
 
         assertTrue(esito is Esito.Errore, "la Revisione deve essere annullata")
         val trovata = attribuzioni.trova(VoceRef(unIncontroDi(REG), VoceId(2)))
@@ -165,7 +167,7 @@ class AbbonatoRevisioneParlantiTest {
         val pa = unParlante("id-pa")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
 
-        commit(dispatcher, TrascrittoSostituito(REG)).atteso()
+        commit(dispatcher, TrascrittoSostituito(REG, unIncontroDi(REG), emptySet())).atteso()
 
         verify(exactly = 1) { politicaSostituzione.applica(REG, unIncontroDi(REG)) }
         val messaggio = "l'effetto della policy e davvero applicato: purga la vecchia generazione"
@@ -182,7 +184,7 @@ class AbbonatoRevisioneParlantiTest {
         )
         val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), guasto)
 
-        val esito = commit(dispatcher, TrascrittoSostituito(REG))
+        val esito = commit(dispatcher, TrascrittoSostituito(REG, unIncontroDi(REG), emptySet()))
 
         assertTrue(esito is Esito.Errore, "il completamento deve essere annullato")
         val trovata = attribuzioni.trova(VoceRef(unIncontroDi(REG), VoceId(1)))
@@ -196,7 +198,7 @@ class AbbonatoRevisioneParlantiTest {
         val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
         val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
 
-        commit(dispatcher, ElaborazioneCompletata(REG)).atteso()
+        commit(dispatcher, ElaborazioneCompletata(REG, unIncontroDi(REG))).atteso()
 
         verify(exactly = 0) { politicaSostituzione.applica(any(), any()) }
     }
