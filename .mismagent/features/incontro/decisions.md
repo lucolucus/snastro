@@ -541,3 +541,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (porte-trascrizione-incontro), mismagent-verifier, code-review
 - Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
 - Revisit: none expected.
+
+### D-0041 · Riallineare prima della revisione
+- Meta: 2026-10-02; scope: feature; status: accepted
+- Question: Sibling blocks integrating first break other blocks' compile after merge (constructors, queries in tests); these merge-forward breaks consumed the rework cap. How to handle them?
+- Options: A before review the composer merges the line into the block and the worker fixes compile there; merge-forward fixes do not count toward the cap (kept); B keep the cap; C lower parallelism to 2.
+- Hypothesis: n/a — decided by the user after porte-sintesi-incontro was parked at the cap, [pre-release](pre-release.md)
+- Check: n/a — decided by the user after porte-sintesi-incontro was parked at the cap, [pre-release](pre-release.md)
+- Result: n/a — decided by the user after porte-sintesi-incontro was parked at the cap, [pre-release](pre-release.md)
+- Debate: three blocks needed reworks only for CatalogoRegistrazioni / AggiungiRegistrazioneServizio / Registrazione.sq signature changes landed by siblings.
+- Decision: A; porte-sintesi-incontro resumes under it. Cost: the composer runs one more merge per block before review.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer)
+- Docs: [pre-release](pre-release.md)
+- Revisit: merge-forward fixes start hiding real defects.
