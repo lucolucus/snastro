@@ -789,7 +789,7 @@ blocks:
       RiassuntoVista: "{ incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato? }"
       DisponibilitaVista: "Disponibile | NonDisponibile{ motivo: PartiNonTrascritte{parte} | ElaborazioneAperta{parte} | PartiFallite{parte} | TroppoLunga }"
       VoceVista: "{ voceId, etichetta, nome?, presente: Boolean }"
-      FonteVista: "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean }"
+      FonteVista: "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista? /* null when the Segmento vanished: Sintesi stores no Voce per Fonte (D-0042) */, inizioMs: Long?, segmentoPresente: Boolean }"
       RiassuntoInCoda: "{ riassuntoId, incontroId, richiestoAlle }"
     tests_nl_status: "confirmed"
     tests_nl:
@@ -1467,7 +1467,7 @@ boundaries:
       RiassuntoVista: "(incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato?)"
       DisponibilitaVista: "Disponibile | NonDisponibile(motivo: PartiNonTrascritte(parte) | ElaborazioneAperta(parte) | PartiFallite(parte) | TroppoLunga)"
       VoceVista: "(voceId, etichetta, nome: String?, presente: Boolean)"
-      FonteVista: "(registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean)"
+      FonteVista: "(registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista? /* null when the Segmento vanished: Sintesi stores no Voce per Fonte (D-0042) */, inizioMs: Long?, segmentoPresente: Boolean)"
     keys:
       incontroId: "as kernel-incontro"
     contract_test: "consumer-driven"

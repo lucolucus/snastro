@@ -18,7 +18,7 @@ reuses:
 related_adrs:
   - "0023"
   - "0037"
-view_shape: {"RiassuntoVista": "{ incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato? }", "DisponibilitaVista": "Disponibile | NonDisponibile{ motivo: PartiNonTrascritte{parte} | ElaborazioneAperta{parte} | PartiFallite{parte} | TroppoLunga }", "VoceVista": "{ voceId, etichetta, nome?, presente: Boolean }", "FonteVista": "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean }", "RiassuntoInCoda": "{ riassuntoId, incontroId, richiestoAlle }"}
+view_shape: {"RiassuntoVista": "{ incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato? }", "DisponibilitaVista": "Disponibile | NonDisponibile{ motivo: PartiNonTrascritte{parte} | ElaborazioneAperta{parte} | PartiFallite{parte} | TroppoLunga }", "VoceVista": "{ voceId, etichetta, nome?, presente: Boolean }", "FonteVista": "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista? /* null when the Segmento vanished: Sintesi stores no Voce per Fonte (D-0042) */, inizioMs: Long?, segmentoPresente: Boolean }", "RiassuntoInCoda": "{ riassuntoId, incontroId, richiestoAlle }"}
 tests_nl_status: confirmed
 ---
 # riassunto-vista-incontro
@@ -65,7 +65,7 @@ Re-key riassunto-vista and the queue source by incontroId: numParti, disponibili
   - pinned `RiassuntoVista`: (incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato?)
   - pinned `DisponibilitaVista`: Disponibile | NonDisponibile(motivo: PartiNonTrascritte(parte) | ElaborazioneAperta(parte) | PartiFallite(parte) | TroppoLunga)
   - pinned `VoceVista`: (voceId, etichetta, nome: String?, presente: Boolean)
-  - pinned `FonteVista`: (registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean)
+  - pinned `FonteVista`: (registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista? /* null when the Segmento vanished: Sintesi stores no Voce per Fonte (D-0042) */, inizioMs: Long?, segmentoPresente: Boolean)
   - key `incontroId`: as kernel-incontro
 
 Sources: ADR 0037 §1, §6 · tactical-model.md [INV-I13] · UI/ux-proposal.md § Riassunto tab
