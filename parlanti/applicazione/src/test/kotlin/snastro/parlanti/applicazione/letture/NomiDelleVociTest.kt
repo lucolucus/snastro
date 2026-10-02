@@ -1,17 +1,15 @@
 package snastro.parlanti.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
-import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
-import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
@@ -21,7 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * [NomiDelleVoci] against the ports' fakes (D1): AC-101/AC-102 of `nomi-delle-voci`, mirroring the
+ * [NomiDelleVoci] against the ports' fakes (D1): AC-I46/AC-I46 of `nomi-delle-voci`, mirroring the
  * semantics the consumer-driven `LettoreNomiContratto` (sbobinatura) already pins for this shape.
  */
 class NomiDelleVociTest {
@@ -30,7 +28,6 @@ class NomiDelleVociTest {
     private val api = NomiDelleVoci(
         attribuzioni,
         parlanti,
-        ogniRegistrazioneNota(),
         UnitaDiLavoroFinta(attribuzioni, parlanti),
     )
 
@@ -47,25 +44,25 @@ class NomiDelleVociTest {
                 return parlanti.trova(id)
             }
         }
-        val apiOsservata = NomiDelleVoci(attribuzioni, parlantiOsservato, ogniRegistrazioneNota(), uow)
+        val apiOsservata = NomiDelleVoci(attribuzioni, parlantiOsservato, uow)
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
         attribuzioni.salva(Attribuzione.conferma(VOCE_3, PROGETTO, marco.id).aggregato)
 
-        apiOsservata.nomi(REGISTRAZIONE)
+        apiOsservata.nomi(INCONTRO)
 
         assertEquals(2, statiDurante.size, "due Voci attribuite, due trova")
         assertTrue(statiDurante.all { it }, "ogni trova deve girare dentro l'unica inLettura di nomi(): $statiDurante")
     }
 
     @Test
-    fun `AC-101 senza Attribuzioni nomi e vuota`() {
-        assertEquals(emptyMap(), api.nomi(SCONOSCIUTA))
+    fun `AC-I46 senza Attribuzioni nomi e vuota`() {
+        assertEquals(emptyMap(), api.nomi(SCONOSCIUTO))
     }
 
     @Test
-    fun `AC-101 nomi mappa ogni Voce attribuita al Nome corrente del suo Parlante`() {
+    fun `AC-I46 nomi mappa ogni Voce attribuita al Nome corrente del suo Parlante`() {
         val marco = unParlante("id-1", "Marco")
         val giulia = unParlante("id-2", "Giulia")
         parlanti.salva(marco).atteso()
@@ -73,32 +70,32 @@ class NomiDelleVociTest {
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
         attribuzioni.salva(Attribuzione.conferma(VOCE_3, PROGETTO, giulia.id).aggregato)
 
-        assertEquals(mapOf(VOCE_1 to "Marco", VOCE_3 to "Giulia"), api.nomi(REGISTRAZIONE))
+        assertEquals(mapOf(VOCE_1 to "Marco", VOCE_3 to "Giulia"), api.nomi(INCONTRO))
     }
 
     @Test
-    fun `AC-101 le Voci non attribuite non compaiono`() {
+    fun `AC-I46 le Voci non attribuite non compaiono`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
         // VOCE_2 non ha alcuna Attribuzione.
 
-        assertEquals(mapOf(VOCE_1 to "Marco"), api.nomi(REGISTRAZIONE))
+        assertEquals(mapOf(VOCE_1 to "Marco"), api.nomi(INCONTRO))
     }
 
     @Test
-    fun `AC-101 una Voce attribuita a un Parlante eliminato risolve comunque al suo Nome`() {
+    fun `AC-I46 una Voce attribuita a un Parlante eliminato risolve comunque al suo Nome`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
         marco.elimina().atteso()
         parlanti.salva(marco).atteso()
 
-        assertEquals(mapOf(VOCE_1 to "Marco"), api.nomi(REGISTRAZIONE))
+        assertEquals(mapOf(VOCE_1 to "Marco"), api.nomi(INCONTRO))
     }
 
     @Test
-    fun `AC-101 dopo una rinomina vince il Nome nuovo`() {
+    fun `AC-I46 dopo una rinomina vince il Nome nuovo`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
@@ -106,35 +103,35 @@ class NomiDelleVociTest {
         marco.rinomina(Nome.di("Marco Rossi").atteso()).atteso()
         parlanti.salva(marco).atteso()
 
-        assertEquals(mapOf(VOCE_1 to "Marco Rossi"), api.nomi(REGISTRAZIONE))
+        assertEquals(mapOf(VOCE_1 to "Marco Rossi"), api.nomi(INCONTRO))
     }
 
     @Test
-    fun `AC-102 un Parlante sconosciuto non ha Registrazioni`() {
-        assertEquals(emptyList(), api.registrazioniCon(ParlanteId("parlante-sconosciuto")))
+    fun `AC-I46 un Parlante sconosciuto non ha Incontri`() {
+        assertEquals(emptyList(), api.incontriCon(ParlanteId("parlante-sconosciuto")))
     }
 
     @Test
-    fun `AC-102 registrazioniCon elenca una volta ogni Registrazione con un Attribuzione al Parlante e nessun altra`() {
+    fun `AC-I46 incontriCon elenca una volta ogni Incontro con un Attribuzione al Parlante e nessun altra`() {
         val marco = unParlante("id-1", "Marco")
         val giulia = unParlante("id-2", "Giulia")
         parlanti.salva(marco).atteso()
         parlanti.salva(giulia).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
-        // Due Voci della stessa Registrazione allo stesso Parlante (INV-22): non duplica la Registrazione.
+        // Due Voci dello stesso Incontro allo stesso Parlante (INV-22): non duplica l'Incontro.
         attribuzioni.salva(Attribuzione.conferma(VOCE_3, PROGETTO, marco.id).aggregato)
         attribuzioni.salva(
-            Attribuzione.conferma(VoceRef(unIncontroDi(ALTRA_REGISTRAZIONE), VoceId(1)), PROGETTO, marco.id).aggregato,
+            Attribuzione.conferma(VoceRef(ALTRO_INCONTRO, VoceId(1)), PROGETTO, marco.id).aggregato,
         )
         attribuzioni.salva(Attribuzione.conferma(VOCE_2, PROGETTO, giulia.id).aggregato)
 
-        assertEquals(setOf(REGISTRAZIONE, ALTRA_REGISTRAZIONE), api.registrazioniCon(marco.id).toSet())
-        assertEquals(2, api.registrazioniCon(marco.id).size)
-        assertEquals(listOf(REGISTRAZIONE), api.registrazioniCon(giulia.id))
+        assertEquals(setOf(INCONTRO, ALTRO_INCONTRO), api.incontriCon(marco.id).toSet())
+        assertEquals(2, api.incontriCon(marco.id).size)
+        assertEquals(listOf(INCONTRO), api.incontriCon(giulia.id))
     }
 
     @Test
-    fun `AC-102 le Registrazioni di un Parlante eliminato restano elencate`() {
+    fun `AC-I46 le Incontri di un Parlante eliminato restano elencate`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
@@ -142,11 +139,11 @@ class NomiDelleVociTest {
         marco.elimina().atteso()
         parlanti.salva(marco).atteso()
 
-        assertEquals(listOf(REGISTRAZIONE), api.registrazioniCon(marco.id))
+        assertEquals(listOf(INCONTRO), api.incontriCon(marco.id))
     }
 
     @Test
-    fun `AC-102 una Registrazione la cui unica Voce passa a un altro Parlante non e piu elencata`() {
+    fun `AC-I46 una Incontro la cui unica Voce passa a un altro Parlante non e piu elencata`() {
         val marco = unParlante("id-1", "Marco")
         val giulia = unParlante("id-2", "Giulia")
         parlanti.salva(marco).atteso()
@@ -157,8 +154,8 @@ class NomiDelleVociTest {
         attribuzione.cambia(giulia.id).atteso()
         attribuzioni.salva(attribuzione)
 
-        assertEquals(emptyList(), api.registrazioniCon(marco.id))
-        assertEquals(listOf(REGISTRAZIONE), api.registrazioniCon(giulia.id))
+        assertEquals(emptyList(), api.incontriCon(marco.id))
+        assertEquals(listOf(INCONTRO), api.incontriCon(giulia.id))
     }
 
     private fun unParlante(id: String, nome: String, progettoId: ProgettoId = PROGETTO): Parlante =
@@ -166,11 +163,11 @@ class NomiDelleVociTest {
 
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
-        val REGISTRAZIONE = RegistrazioneId("registrazione-1")
-        val ALTRA_REGISTRAZIONE = RegistrazioneId("registrazione-2")
-        val SCONOSCIUTA = RegistrazioneId("registrazione-sconosciuta")
-        val VOCE_1 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1))
-        val VOCE_2 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2))
-        val VOCE_3 = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(3))
+        val INCONTRO = IncontroId("incontro-1")
+        val ALTRO_INCONTRO = IncontroId("incontro-2")
+        val SCONOSCIUTO = IncontroId("incontro-sconosciuto")
+        val VOCE_1 = VoceRef(INCONTRO, VoceId(1))
+        val VOCE_2 = VoceRef(INCONTRO, VoceId(2))
+        val VOCE_3 = VoceRef(INCONTRO, VoceId(3))
     }
 }
