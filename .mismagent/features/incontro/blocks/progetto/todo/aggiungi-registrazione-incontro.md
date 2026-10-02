@@ -25,6 +25,7 @@ tests_nl_status: confirmed
 Amend AggiungiRegistrazione to one command with a list of files and a destination (NuovoIncontro | IncontriSeparati | Incontro(id)): probe and copy outside, then ONE transaction that creates the new Incontro(s) and one Registrazione per file, all or nothing.
 
 ## Tasks
+- AC-I32 concurrent (moved from elimina-parte, D-0038): an import into an Incontro whose last Parte was deleted first answers IncontroNonTrovato (BEGIN IMMEDIATE serialization; two real-SQLite transactions)
 - AggiungiRegistrazione with 3 readable files and NuovoIncontro → ONE new Incontro with 3 Registrazioni (incontroId equal), 3 RegistrazioneAggiunta events after commit, each carrying that incontroId; no Elaborazione created
 - AggiungiRegistrazione with 3 files and IncontriSeparati → 3 new Incontri with one Parte each (today's multi-file behaviour)
 - AggiungiRegistrazione with Incontro(id) of the same Progetto → the files become Parti of THAT Incontro; titles unique also among the files of the same import

@@ -109,7 +109,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         /** Parlanti's OWN view of each Registrazione/Voce seeded so far (its consumed ports' fakes). */
         private val registrazioniVisteParlanti = mutableMapOf<RegistrazioneId, RegistrazioneVistaParlanti>()
-        private val vociVisteParlanti = mutableMapOf<RegistrazioneId, List<VoceVistaParlanti>>()
+        private val vociVisteParlanti = mutableMapOf<IncontroId, List<VoceVistaParlanti>>()
 
         private var contatore = 0
 
@@ -231,8 +231,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             ).esegui(EseguiProssimaElaborazione()).atteso()
 
             val trascritto = checkNotNull(trascritti.trova(id, registrazioniVisteTrascrizione.getValue(id).incontroId))
-            vociVisteParlanti[id] = trascritto.voci.map { voce ->
-                VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), voce.segmenti.map { it.intervallo })
+            vociVisteParlanti[trascritto.incontroId] = trascritto.voci.map { voce ->
+                val intervalli = voce.segmenti.map { it.intervallo }
+                VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), mapOf(id to intervalli))
             }
             return RegistrazioneConiata(
                 id,

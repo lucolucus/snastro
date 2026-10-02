@@ -62,6 +62,7 @@ Add the VociDellIncontroRepository port (trova, salva, rimuovi, trascritto(r)) w
   - pinned `TrascrittoRepository (transition, wave 2)`: trova(r: RegistrazioneId, incontroId: IncontroId): Trascritto?; rimuovi(r, incontroId); salva(t) writes voci_incontro/voce_incontro with t.incontroId; the Trascritto carries incontroId; replaced by VociDellIncontroRepository.trova(incontroId) in wave 3/4
   - key `incontroId`: as kernel-incontro; Trascrizione services read it via LettoreRegistrazione.registrazione(r).incontroId before calling the repository; no Trascrizione query reads the registrazione table; no UPDATE names incontro_id (D-0028)
 - `repo-voci-incontro` (owns it) — consumers: `avvia-elaborazioni-incontro`, `esegui-elaborazione-incontro`, `revisione-incontro`, `eliminazione-parte-trascrizione`, `voci-del-trascritto-incontro`, `viste-parte-incontro`, `adattatori-trascrizione-incontro` · contract_test: consumer-driven
+  - pinned `VociDellIncontroRepository (amended 2026-10-02, D-0040)`: + conTrascritto(): List<RegistrazioneId> /* read-only, the Sbobinatura startup sweep */; VociDellIncontro.copia(): VociDellIncontro is public (whole-root read copy, used by the Finta)
   - pinned `VociDellIncontroRepository`: interface { fun trova(id: IncontroId): VociDellIncontro? /* one LetturaCoerente snapshot */; fun salva(root: VociDellIncontro) /* rewrites only changed Parti */; fun rimuovi(id: IncontroId); fun trascritto(r: RegistrazioneId): Trascritto? }
   - key `incontroId`: as kernel-incontro
 

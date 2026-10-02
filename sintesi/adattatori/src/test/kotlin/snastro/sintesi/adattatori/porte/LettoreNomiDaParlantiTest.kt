@@ -88,7 +88,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         /** Parlanti's OWN view of each Registrazione/Voce seeded so far (its consumed ports' fakes). */
         private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
-        private val vociViste = mutableMapOf<RegistrazioneId, List<VoceVista>>()
+        private val vociViste = mutableMapOf<IncontroId, List<VoceVista>>()
 
         // Progetto: seeded only through CreaProgettoServizio / AggiungiRegistrazioneServizio (ADR 0033 §4).
         private val clock = Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC)
@@ -146,9 +146,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 dataRegistrazione = LocalDate.of(2026, 9, 23),
                 durataMs = DURATA_REGISTRAZIONE_MS,
             )
-            vociViste[id] = refs.map { ref ->
+            vociViste[unIncontroDi(id)] = refs.map { ref ->
                 val inizio = (ref.voceId.numero - 1) * 2_000L
-                VoceVista(ref, listOf(IntervalloMs(inizio, inizio + 1_000L)))
+                VoceVista(ref, mapOf(id to listOf(IntervalloMs(inizio, inizio + 1_000L))))
             }
             return RegistrazioneSeminata(id, incontroId, refs)
         }

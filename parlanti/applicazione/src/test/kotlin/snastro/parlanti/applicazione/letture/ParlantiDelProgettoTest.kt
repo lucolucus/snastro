@@ -15,11 +15,11 @@ import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
-import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
 import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
@@ -150,7 +150,7 @@ class ParlantiDelProgettoTest {
         val parlanti: ParlanteRepositoryFinta = ParlanteRepositoryFinta(),
         val attribuzioni: AttribuzioneRepositoryFinta = AttribuzioneRepositoryFinta(),
         registrazioni: LettoreRegistrazione = ogniRegistrazioneNota(),
-        lettoreVoci: LettoreVoci = LettoreVociFinta(),
+        lettoreVoci: LettoreVoci = lettoreVociDiUnicheParti(),
     ) {
         val estrattoAudio: EstrattoAudio = EstrattoAudio(lettoreVoci, ogniRegistrazioneNota())
         val api: ParlantiDelProgetto = ParlantiDelProgetto(parlanti, attribuzioni, registrazioni, estrattoAudio)
@@ -160,8 +160,8 @@ class ParlantiDelProgettoTest {
 
     private fun unLettoreVoci(vararg voci: VoceRef): LettoreVoci {
         val perRegistrazione = voci.groupBy { unicaParteDi(it) }
-            .mapValues { (_, v) -> v.map { VoceVista(it, listOf(IntervalloMs(0, 2_000))) } }
-        return LettoreVociFinta(perRegistrazione)
+            .mapValues { (_, v) -> v.map { unaVoceVista(it, listOf(IntervalloMs(0, 2_000))) } }
+        return lettoreVociDiUnicheParti(perRegistrazione)
     }
 
     private fun unaRegistrazione(id: RegistrazioneId, dataRegistrazione: LocalDate): RegistrazioneVista =
