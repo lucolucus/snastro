@@ -580,3 +580,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [rework](rework/politiche-parlanti-incontro-1.md), [pre-release](pre-release.md)
 - Revisit: the I2 release check fails.
+
+### D-0044 · INV-I16: una Parte rimossa non si completa
+- Meta: 2026-10-02; scope: block:esegui-elaborazione-incontro; status: accepted; sha: c6142269
+- Question: How is INV-I16 kept when a removed Parte completes again, given its counter lives in the Parte's Trascritto that rimuoviParte drops?
+- Options: A refuse the completion when a fresh Registrazione lookup misses (kept); B keep the counter in a new root field with persistence in voci-dell-incontro.
+- Hypothesis: n/a — decided by the worker within the block, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker within the block, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker within the block, [pre-release](pre-release.md)
+- Debate: code-review: the path is unreachable in production, deletion is vetoed while aperta and removes the Elaborazioni; the guard is defence in depth.
+- Decision: A; a miss concludes fallita(MOTIVO_REGISTRAZIONE_MANCANTE), root untouched; Registrazione ids are never reused. Cost: misleading motivo on a port fault, deferred LOW.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [pre-release](pre-release.md)
+- Revisit: Registrazione ids become reusable.
