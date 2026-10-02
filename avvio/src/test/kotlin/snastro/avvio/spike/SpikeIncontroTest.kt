@@ -5,11 +5,14 @@ import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import snastro.avvio.costruisciGrafo
+import snastro.avvio.progetto.CollaboratoriProgetto
 import snastro.avvio.trascrizione.SceltaMl
+import snastro.kernel.ProgettoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
@@ -57,7 +60,7 @@ class SpikeIncontroTest {
             val progetto = sessione.crea(esito.toString(), "Spike Incontro").atteso()
             val c = checkNotNull(sessione.collaboratoriCorrenti())
             val ids = parti.map { parte ->
-                c.aggiungiRegistrazione(AggiungiRegistrazione(parte.toString())).atteso()
+                importa(c, progetto.progettoId, parte)
                 val titolo = parte.fileName.toString().substringBeforeLast('.')
                 c.registrazioni().single { it.titolo == titolo }.registrazioneId
             }
@@ -137,6 +140,11 @@ class SpikeIncontroTest {
             appendLine()
         }
         appendLine("Tempo totale dello spike: $secondiTotali s")
+    }
+
+    private fun importa(c: CollaboratoriProgetto, progettoId: ProgettoId, parte: Path) {
+        val comando = AggiungiRegistrazione(progettoId, listOf(parte.toString()), Destinazione.NuovoIncontro)
+        c.aggiungiRegistrazione(comando).atteso()
     }
 
     private fun minuto(ms: Long): String = "%d:%02d".format(ms / MS_MIN, ms / MS_S % SECONDI_MIN)

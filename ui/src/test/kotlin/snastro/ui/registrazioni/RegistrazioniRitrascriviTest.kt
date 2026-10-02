@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
@@ -100,6 +101,7 @@ class RegistrazioniRitrascriviTest {
         return RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = { listOf(rigaVista(REG_1)) },
             aggiungiRegistrazione = { error("aggiungi non atteso in questo test") },
             modificaDataRegistrazione = { error("modificaData non atteso in questo test") },
@@ -150,6 +152,7 @@ class RegistrazioniRitrascriviTest {
         val presenter = RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = { listOf(rigaVista(REG_1)) },
             aggiungiRegistrazione = { error("non atteso") },
             modificaDataRegistrazione = { error("non atteso") },

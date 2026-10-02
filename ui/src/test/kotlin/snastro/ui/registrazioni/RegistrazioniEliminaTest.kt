@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
@@ -93,6 +94,7 @@ class RegistrazioniEliminaTest {
         return RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = { listOf(rigaVista(REG_1)) },
             aggiungiRegistrazione = { error("aggiungi non atteso in questo test") },
             modificaDataRegistrazione = { error("modificaData non atteso in questo test") },
@@ -245,6 +247,7 @@ class RegistrazioniEliminaTest {
         val presenter = RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = { registrazioniCorrenti },
             aggiungiRegistrazione = { error("non atteso") },
             modificaDataRegistrazione = { error("non atteso") },
@@ -284,6 +287,7 @@ class RegistrazioniEliminaTest {
         val presenter = RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = { registrazioniCorrenti },
             aggiungiRegistrazione = { error("non atteso") },
             modificaDataRegistrazione = { error("non atteso") },
@@ -425,6 +429,7 @@ class RegistrazioniEliminaTest {
         val presenter = RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = { registrazioniCorrenti },
             aggiungiRegistrazione = { error("non atteso") },
             modificaDataRegistrazione = { error("non atteso") },
