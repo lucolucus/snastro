@@ -20,6 +20,7 @@ import java.time.LocalDate
 import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** D2 (dev-architecture-app.md#porta-contratto): the contract passes real-on-real (AC-109). */
 class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
@@ -71,7 +72,9 @@ class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
         val uow = UnitaDiLavoroSql(db)
         val r = unaRegistrazione(progetto, RegistrazioneId("reg-1"))
 
-        assertFails { uow.inTransazione { Esito.Ok(repo.salva(r)) } }
+        val rifiuto = assertFails { uow.inTransazione { Esito.Ok(repo.salva(r)) } }
+        val messaggi = generateSequence(rifiuto) { it.cause }.mapNotNull { it.message }.toList()
+        assertTrue(messaggi.any { "FOREIGN KEY constraint failed" in it }, "il rifiuto e' la FK: $messaggi")
         assertEquals(0, contaIncontri(db))
         assertNull(repo.trova(r.id))
 

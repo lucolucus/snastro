@@ -16,11 +16,14 @@ import snastro.kernel.erroreAtteso
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
+import snastro.progetto.applicazione.porte.IncontroRepository
 import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
+import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
+import snastro.progetto.dominio.Incontro
 import snastro.progetto.dominio.NomeProgetto
 import snastro.progetto.dominio.Progetto
 import snastro.progetto.dominio.Registrazione
@@ -44,6 +47,23 @@ class AggiungiRegistrazioneServizioTest {
     }
     private val registrazioni = RegistrazioneRepositoryFinta()
     private val incontri = IncontroRepositoryFinta(registrazioni)
+
+    /** Every Incontro the service saved (even if rolled back after). */
+    private val incontriSalvati = mutableListOf<IncontroId>()
+    private val incontriRegistrati = object : IncontroRepository by incontri {
+        override fun salva(i: Incontro) {
+            incontriSalvati += i.id
+            incontri.salva(i)
+        }
+    }
+
+    /** Like the immediate SQL FK `registrazione.incontro_id → incontro` (AC-I55): a Parte before its Incontro fails. */
+    private val registrazioniConFk = object : RegistrazioneRepository by registrazioni {
+        override fun salva(r: Registrazione) {
+            checkNotNull(incontri.trova(r.incontroId)) { "FOREIGN KEY constraint failed: ${r.incontroId}" }
+            registrazioni.salva(r)
+        }
+    }
     private val generatoreId = GeneratoreIdFinto()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, incontri))
     private val infoLeggibili = mutableMapOf(
@@ -56,8 +76,8 @@ class AggiungiRegistrazioneServizioTest {
         generatoreId,
         clock,
         progetti,
-        registrazioni,
-        incontri,
+        registrazioniConFk,
+        incontriRegistrati,
         sonda,
         archivio,
         eventi,
@@ -93,6 +113,7 @@ class AggiungiRegistrazioneServizioTest {
 
     @Test
     fun `AC-I55 l'import salva l'Incontro della Parte attraverso la porta, nella stessa transazione`() {
+        // registrazioniConFk refuses a Parte saved before its Incontro: swapping the two salva fails here.
         servizio.esegui(comando(SORGENTE)).atteso()
 
         val salvata = assertNotNull(registrazioni.trova(RegistrazioneId("id-1")))
@@ -152,7 +173,7 @@ class AggiungiRegistrazioneServizioTest {
         leggibili(A, B)
         val altroProgetto = ProgettoId("altro")
         val altroIncontro = IncontroId("incontro-altrui")
-        incontri.salva(snastro.progetto.dominio.Incontro.nuovo(altroIncontro, altroProgetto))
+        incontri.salva(Incontro.nuovo(altroIncontro, altroProgetto))
 
         listOf(altroIncontro, IncontroId("sconosciuto")).forEach { destinazione ->
             importa(A, B, destinazione = Destinazione.Incontro(destinazione))
@@ -173,7 +194,7 @@ class AggiungiRegistrazioneServizioTest {
         }
 
         assertEquals(emptyList(), registrazioni.delProgetto(progettoId))
-        assertNull(incontri.trova(IncontroId("id-2"))) // the Incontro that would have been minted
+        assertEquals(emptyList(), incontriSalvati, "nessun Incontro: la transazione non e' mai partita")
         assertEquals(emptySet(), archivio.archiviati)
         assertEquals(emptyList(), eventi.pubblicati)
     }
@@ -275,6 +296,18 @@ class AggiungiRegistrazioneServizioTest {
         assertNull(registrazioni.trova(RegistrazioneId("id-1")))
         assertEquals(emptySet(), archivio.archiviati)
         assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-60 un abbonato dopo-commit che lancia non scarta l'audio delle Registrazioni gia' confermate`() {
+        leggibili(A, B)
+        eventi.registraDopoCommit { throw GuastoDiProva() }
+
+        assertFailsWith<GuastoDiProva> { importa(A, B) }
+
+        val salvate = registrazioni.delProgetto(progettoId)
+        assertEquals(2, salvate.size, "il commit e' avvenuto prima dell'abbonato")
+        assertEquals(salvate.map { it.riferimentoAudio }.toSet(), archivio.archiviati)
     }
 
     @Test

@@ -5,7 +5,6 @@ import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.Ripristinabile
 import snastro.progetto.dominio.Registrazione
-import java.time.Instant
 
 /**
  * In-memory [RegistrazioneRepository]; rolls back with `UnitaDiLavoroFinta` ([Ripristinabile]).
@@ -19,8 +18,12 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
     override fun delProgetto(id: ProgettoId): List<Registrazione> =
         righe.values.filter { it.progettoId == id }.map { it.copia() }
 
-    /** The Parti of the Incontro [id], for [IncontroRepositoryFinta.partiDi] (one state, two ports). */
-    public fun partiDi(id: IncontroId): List<RegistrazioneId> = righe.values.filter { it.incontroId == id }.map { it.id }
+    /**
+     * The Parti of the Incontro [id], for [IncontroRepositoryFinta.partiDi] (one state, two ports): in REVERSE
+     * insertion order, so a caller that relies on the unguaranteed order fails here too.
+     */
+    public fun partiDi(id: IncontroId): List<RegistrazioneId> =
+        righe.values.filter { it.incontroId == id }.map { it.id }.asReversed()
 
     override fun titoliDelProgetto(id: ProgettoId): List<String> =
         righe.values.filter { it.progettoId == id }.map { it.titolo }
@@ -42,9 +45,8 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
     }
 
     // `ricostituisci` is reserved to persistence adapters (CR-15): the public factory rebuilds the
-    // same observable state and its event is dropped.
-    // `aggiuntaAlle` is floored to the millisecond (L496a): the real repository stores epoch millis,
-    // so the fake mirrors that round-trip instead of silently keeping a precision no adapter offers.
+    // same observable state (`aggiuntaAlle` is already to the millisecond, like the stored epoch millis) and its
+    // event is dropped.
     private fun Registrazione.copia(): Registrazione =
         Registrazione.aggiungi(
             id,
@@ -54,7 +56,7 @@ public class RegistrazioneRepositoryFinta : RegistrazioneRepository, Ripristinab
             riferimentoAudio,
             durataMs,
             dataRegistrazione,
-            Instant.ofEpochMilli(aggiuntaAlle.toEpochMilli()),
+            aggiuntaAlle,
             oraDiInizio,
         ).aggregato
 }

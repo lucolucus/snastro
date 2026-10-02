@@ -12,7 +12,6 @@ class IncontroRepositoryFintaTest : IncontroRepositoryContratto() {
             override val registrazioni = registrazioni
             override val unitaDiLavoro = UnitaDiLavoroFinta(registrazioni, incontri)
             override val progettoId = ProgettoId("id-1")
-            override val incontriConPiuParti = true
         }
     }
 }
