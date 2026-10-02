@@ -143,6 +143,9 @@ internal fun costruisciRegistrazionePresenter(
         selezioneSchedaS3 = selezioneSchedaS3,
         parti = SorgentiParti(
             incontro = { incontroId -> collaboratori.incontri().firstOrNull { it.incontroId == incontroId } },
+            incontroDi = { parte ->
+                collaboratori.incontri().firstOrNull { incontro -> incontro.parti.any { it.registrazioneId == parte } }
+            },
             vaiAllaParte = vaiAllaParte,
         ),
     )

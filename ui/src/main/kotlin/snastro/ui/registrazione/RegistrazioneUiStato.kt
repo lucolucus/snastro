@@ -83,6 +83,14 @@ sealed interface RegistrazioneUiStato {
             }
     }
 
+    /**
+     * D-0051 (L198): a Parte of a multi-part Incontro that has no Trascritto YET — queued, in transcription, never
+     * started or failed — opened from the switcher. Not an error: [parte] keeps the header and the switcher, [messaggio]
+     * says why there is nothing to read; the screen reloads by itself when the transcription publishes its Cambiamento.
+     */
+    data class ParteInAttesa(val titolo: String, val parte: IntestazioneParte, val messaggio: String) :
+        RegistrazioneUiStato
+
     /** M5-style: the INITIAL load failed (a thrown fault, or no Trascritto at all for this Registrazione) —
      * a distinct state with a retry action, never the misleading "nessun parlato" empty message. */
     data class Errore(val messaggio: String) : RegistrazioneUiStato

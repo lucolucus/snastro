@@ -218,6 +218,8 @@ data class RigaIncontro(
     val errore: String? = null,
     val operazioneInCorso: Boolean = false,
     val espanso: Boolean = false,
+    /** L203: `false` when [incontroId] is only a guess (read failed or unlisted): no 'Aggiungi parti…'. */
+    val aggiungiPartiDisponibile: Boolean = true,
 ) {
     val multiParte: Boolean get() = parti.size > 1
 

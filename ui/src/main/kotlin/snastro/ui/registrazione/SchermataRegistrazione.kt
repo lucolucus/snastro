@@ -9,6 +9,7 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -133,6 +135,7 @@ fun SchermataRegistrazione(
             when (stato) {
                 RegistrazioneUiStato.Caricamento -> ScheletroRegistrazione()
                 is RegistrazioneUiStato.Dati -> ContenutoRegistrazione(stato, azioni)
+                is RegistrazioneUiStato.ParteInAttesa -> ParteInAttesaRegistrazione(stato, azioni)
                 is RegistrazioneUiStato.Errore -> ErroreCaricamentoRegistrazione(stato.messaggio, azioni.riprova)
             }
         }
@@ -168,6 +171,27 @@ private fun ErroreCaricamentoRegistrazione(messaggio: String, onRiprova: () -> U
         Text(text = messaggio, color = colori.danger, style = LocalSnastroTipografia.current.body)
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         BottoneSn(ETICHETTA_RIPROVA, onClick = onRiprova, modifier = Modifier.testTag("registrazione-riprova"))
+    }
+}
+
+/** D-0051 (L198): a Parte with no Trascritto yet: breadcrumb, title and switcher as on any Parte, then the reason. */
+@Composable
+private fun ParteInAttesaRegistrazione(stato: RegistrazioneUiStato.ParteInAttesa, azioni: AzioniRegistrazione) {
+    val colori = LocalSnastroColori.current
+    val tipografia = LocalSnastroTipografia.current
+    Column(
+        modifier = Modifier.fillMaxSize().padding(SnastroMisure.space5).testTag("registrazione-parte-in-attesa"),
+    ) {
+        BriciolaParte(stato.parte)
+        Text(text = stato.titolo, style = tipografia.display, color = colori.ink)
+        SelettoreParte(stato.parte, azioni.vaiAllaParte)
+        Spacer(modifier = Modifier.height(SnastroMisure.space5))
+        Text(
+            text = stato.messaggio,
+            style = tipografia.body,
+            color = colori.inkMuted,
+            modifier = Modifier.testTag("registrazione-parte-in-attesa-messaggio"),
+        )
     }
 }
 
@@ -384,16 +408,7 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
         // AC-580: plain, non-interactive caption — this screen has no callback to actually navigate
         // back (the always-visible sidebar already offers that path); no chevron either, so nothing
         // implies a click that would do nothing (rework cycle 1, HIGH-1).
-        Text(
-            text = stato.parte?.let {
-                "$ETICHETTA_BRICIOLA_REGISTRAZIONI › ${testoBriciolaIncontro(it.titoloIncontro, it.totale)}"
-            } ?: ETICHETTA_BRICIOLA_REGISTRAZIONI,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = tipografia.caption,
-            color = colori.inkMuted,
-            modifier = Modifier.testTag("registrazione-briciole"),
-        )
+        BriciolaParte(stato.parte)
         Row(verticalAlignment = Alignment.Bottom) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -433,6 +448,20 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
     }
 }
 
+@Composable
+private fun BriciolaParte(parte: IntestazioneParte?) {
+    Text(
+        text = parte?.let {
+            "$ETICHETTA_BRICIOLA_REGISTRAZIONI › ${testoBriciolaIncontro(it.titoloIncontro, it.totale)}"
+        } ?: ETICHETTA_BRICIOLA_REGISTRAZIONI,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        style = LocalSnastroTipografia.current.caption,
+        color = LocalSnastroColori.current.inkMuted,
+        modifier = Modifier.testTag("registrazione-briciole"),
+    )
+}
+
 /** AC-580's caption meta line — sums view-only data already in [stato] (a Voce count and, only once the
  * Voci panel is published, how many are still to identify); no new source, purely display arithmetic. */
 private fun testoIntestazione(stato: RegistrazioneUiStato.Dati): String {
@@ -449,16 +478,19 @@ private fun testoIntestazione(stato: RegistrazioneUiStato.Dati): String {
 @Composable
 private fun SelettoreParte(parte: IntestazioneParte, vaiAllaParte: (RegistrazioneId) -> Unit) {
     Spacer(modifier = Modifier.height(SnastroMisure.space2))
-    SchedeSn(
-        schede = parte.parti.map { etichettaParte(it.numero) },
-        selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0),
-        onSeleziona = { indice ->
-            parte.parti[indice].takeIf { it.numero != parte.numero }?.let { vaiAllaParte(it.registrazioneId) }
-        },
-        modifier = Modifier.width(LARGHEZZA_SELETTORE_PARTE_PER_PARTE * parte.parti.size)
-            .testTag("registrazione-parti"),
-        prefissoTag = "parte",
-    )
+    // L200: the tabs keep their width and the strip scrolls when the header column has less room than N Parti need.
+    Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        SchedeSn(
+            schede = parte.parti.map { etichettaParte(it.numero) },
+            selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0),
+            onSeleziona = { indice ->
+                parte.parti[indice].takeIf { it.numero != parte.numero }?.let { vaiAllaParte(it.registrazioneId) }
+            },
+            modifier = Modifier.width(LARGHEZZA_SELETTORE_PARTE_PER_PARTE * parte.parti.size)
+                .testTag("registrazione-parti"),
+            prefissoTag = "parte",
+        )
+    }
 }
 
 @Composable

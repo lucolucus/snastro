@@ -16,6 +16,8 @@ import snastro.progetto.applicazione.letture.ParteVista
 import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.RitrascrizioneInCorso
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
+import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
+import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
 import snastro.ui.AggiornamentiVistaFinta
@@ -95,7 +97,7 @@ class RegistrazioneParteTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
             selezioneSchedaS3 = selezione,
-            parti = SorgentiParti(incontro = { incontroVista() }, vaiAllaParte = vaiAllaParte),
+            parti = SorgentiParti({ incontroVista() }, { incontroVista() }, vaiAllaParte),
         )
     }
 
@@ -188,6 +190,55 @@ class RegistrazioneParteTest {
     }
 
     @Test
+    fun `L199 la ritrascrizione di questa Parte letta da stati nomina la Parte anche senza solaLettura`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
+        val vista = vistaDi(2) // solaLettura == null: the lock is only known from the `stati` source
+        val presenter = RegistrazionePresenter(
+            scope = scopeCoroutine, io = dispatcher, registrazioneId = vista.registrazioneId,
+            trascritto = { vista }, sbobinatura = { null }, lettore = LettoreAudioFinta(),
+            apriEsterno = ApriEsternoFinta(), parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
+            stati = {
+                StatoRegistrazioneVista(
+                    vista.registrazioneId, StatoElaborazioneVista.IN_CORSO, null, null, null, null, null, true, null,
+                )
+            },
+            aggiornamenti = AggiornamentiVistaFinta(),
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
+            parti = SorgentiParti({ incontroVista() }, { incontroVista() }, {}),
+        )
+        advanceUntilIdle()
+
+        assertEquals(true, presenter.dati.soloLettura)
+        assertEquals(messaggioRitrascrizioneParteInCorso(2), presenter.dati.bannerRitrascrizione)
+    }
+
+    @Test
+    fun `L199 su una sola Parte il banner da stati resta quello di oggi`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val scopeCoroutine = CoroutineScope(dispatcher)
+        val vista = vistaDi(1, parti = listOf(PARTI[0]))
+        val presenter = RegistrazionePresenter(
+            scope = scopeCoroutine, io = dispatcher, registrazioneId = vista.registrazioneId,
+            trascritto = { vista }, sbobinatura = { null }, lettore = LettoreAudioFinta(),
+            apriEsterno = ApriEsternoFinta(), parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
+            stati = {
+                StatoRegistrazioneVista(
+                    vista.registrazioneId, StatoElaborazioneVista.IN_ATTESA, null, null, null, null, null, true, null,
+                )
+            },
+            aggiornamenti = AggiornamentiVistaFinta(),
+            riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
+            selezioneSchedaS3 = SelezioneSchedaS3(),
+            parti = unaSorgentiPartiInerte(),
+        )
+        advanceUntilIdle()
+
+        assertEquals(snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO, presenter.dati.bannerRitrascrizione)
+    }
+
+    @Test
     fun `AC-I74 un guasto nel leggere l'Incontro non porta la schermata in errore`() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scopeCoroutine = CoroutineScope(dispatcher)
@@ -199,7 +250,7 @@ class RegistrazioneParteTest {
             stati = { null }, aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
             selezioneSchedaS3 = SelezioneSchedaS3(),
-            parti = SorgentiParti(incontro = { error("guasto") }, vaiAllaParte = {}),
+            parti = SorgentiParti(incontro = { error("guasto") }, incontroDi = { error("guasto") }, vaiAllaParte = {}),
         )
         advanceUntilIdle()
 

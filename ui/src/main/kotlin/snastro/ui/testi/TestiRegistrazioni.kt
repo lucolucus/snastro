@@ -179,4 +179,4 @@ fun etichettaTrascriviParti(numParti: Int): String =
 /** AC-I68: an empty OraDiInizio and its tooltip; the inline editor's refusal. */
 const val ETICHETTA_ORA_SCONOSCIUTA: String = "—:—"
 const val SUGGERIMENTO_ORA_SCONOSCIUTA: String = "Ora di inizio sconosciuta: impostala per ordinare le parti"
-const val MESSAGGIO_ORA_NON_VALIDA: String = "Ora non valida."
+const val MESSAGGIO_ORA_NON_VALIDA: String = "Ora non valida: usa il formato HH:mm, ad esempio 09:30."

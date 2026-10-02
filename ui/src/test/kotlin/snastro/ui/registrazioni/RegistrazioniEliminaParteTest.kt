@@ -77,6 +77,7 @@ private fun stato(id: RegistrazioneId, s: StatoElaborazioneVista, trascritto: Bo
 class RegistrazioniEliminaParteTest {
     private val eliminazioni = mutableListOf<EliminaRegistrazione>()
     private var presenti = mutableListOf(P1, P2, P3)
+    private var lettureIncontri: () -> List<IncontroDelProgettoVista> = { listOf(incontro(presenti)) }
 
     private fun presentatore(
         scope: TestScope,
@@ -92,7 +93,7 @@ class RegistrazioniEliminaParteTest {
                     RegistrazioneDelProgettoVista(id, if (i == 0) TITOLO else "file ${i + 1}", DATA, 60_000)
                 }
             },
-            incontri = { listOf(incontro(presenti)) },
+            incontri = { lettureIncontri() },
             aggiungiRegistrazione = { error("non atteso") },
             modificaDataRegistrazione = { error("non atteso") },
             rinominaRegistrazione = { error("non atteso") },
@@ -180,5 +181,48 @@ class RegistrazioniEliminaParteTest {
         assertEquals(listOf(P1, P3), p.righe().map { it.registrazioneId })
         assertEquals(messaggioEliminata("file 2"), assertIs<RegistrazioniUiStato.Dati>(p.stato.value).avviso)
         assertEquals(ParteDiIncontro(2, TITOLO), p.riga(P3).parte)
+    }
+
+    @Test
+    fun `L179 dopo Elimina della prima parte le altre si rinumerano e la seconda e la prima`() = runTest {
+        val p = presentatore(this)
+        advanceUntilIdle()
+
+        p.elimina(P1)
+        p.confermaElimina(P1)
+        advanceUntilIdle()
+
+        assertEquals(listOf(P2, P3), p.righe().map { it.registrazioneId })
+        assertEquals(ParteDiIncontro(1, TITOLO), p.riga(P2).parte)
+        assertEquals(ParteDiIncontro(2, TITOLO), p.riga(P3).parte)
+    }
+
+    @Test
+    fun `L177 L179 un guasto della lettura degli incontri non fa fallire il caricamento e tiene il dialogo di oggi`() =
+        runTest {
+            lettureIncontri = { error("guasto incontri") }
+            val p = presentatore(this)
+            advanceUntilIdle()
+
+            assertEquals(listOf(P1, P2, P3), p.righe().map { it.registrazioneId })
+            assertEquals(listOf(null, null, null), p.righe().map { it.parte })
+            p.elimina(P2)
+            assertEquals(true, p.riga(P2).confermaElimina) // today's dialog, still reachable
+        }
+
+    @Test
+    fun `L203 con gli incontri illeggibili la riga non offre Aggiungi parti, con la lettura riuscita si`() = runTest {
+        presenti = mutableListOf(P1)
+        lettureIncontri = { error("guasto incontri") }
+        val guasto = presentatore(this)
+        advanceUntilIdle()
+        lettureIncontri = { listOf(incontro(presenti)) }
+        val sano = presentatore(this)
+        advanceUntilIdle()
+
+        fun RegistrazioniPresenter.disponibile() =
+            assertIs<RegistrazioniUiStato.Dati>(stato.value).incontri.single().aggiungiPartiDisponibile
+        assertEquals(false, guasto.disponibile())
+        assertEquals(true, sano.disponibile())
     }
 }

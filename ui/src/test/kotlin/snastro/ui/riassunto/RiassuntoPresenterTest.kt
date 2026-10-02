@@ -201,6 +201,7 @@ class RiassuntoPresenterTest {
         // Pre-release finding #159 (rework, LOW): simulates `riassumiCmd` throwing (a real port fault),
         // never a legitimate `Esito.Errore`.
         var lanciaRiassumiCmd = false
+        var lanciaRiproduciDa = false
         val chiamateLunghezza = mutableListOf<Int>()
         var risultatoLunghezza: Esito<Unit> = Esito.Ok(Unit)
         val servizioModelli = ServizioModelliSpia()
@@ -239,7 +240,10 @@ class RiassuntoPresenterTest {
             dimensioneModelloLinguisticoByte = 6_169_341_984,
             limiteCaratteriArgomento = limiteCaratteriArgomento,
             vaiAllaParte = { parte -> eventi.add("vai:${parte.valore}") },
-            riproduciDa = { parte, ms -> eventi.add("play:${parte.valore}@$ms") },
+            riproduciDa = { parte, ms ->
+                eventi.add("play:${parte.valore}@$ms")
+                if (lanciaRiproduciDa) error("guasto simulato di riproduciDa")
+            },
         )
     }
 
@@ -502,6 +506,14 @@ class RiassuntoPresenterTest {
             runCurrent()
             assertEquals(listOf("play:id-3@750000", "vai:id-3"), a.eventi)
         }
+
+    @Test
+    fun `L194 una riproduzione che fallisce non ferma il passaggio alla parte`() = eseguiTest { a ->
+        a.lanciaRiproduciDa = true
+        a.presenter.azioni.apriFonte(REG_3, 750_000)
+        runCurrent()
+        assertEquals(listOf("play:id-3@750000", "vai:id-3"), a.eventi)
+    }
 
     @Test
     fun `AC-I81 cliccare una chip della parte aperta riproduce senza cambiare parte`() = eseguiTest { a ->
