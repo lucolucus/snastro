@@ -50,7 +50,10 @@ class DividiVoceServizioTest {
             .erroreAtteso<ErroreTrascrizione.DivisioneNonAmmessa>()
 
         assertEquals(
-            ErroreTrascrizione.DivisioneNonAmmessa(VoceId(1), setOf(SegmentoId(1), SegmentoId(3), SegmentoId(5))),
+            ErroreTrascrizione.DivisioneNonAmmessa(
+                VoceId(1),
+                setOf(1, 3, 5).mapTo(mutableSetOf()) { SegmentoRef(REGISTRAZIONE, SegmentoId(it)) },
+            ),
             errore,
         )
         assertEquals(emptyList(), eventi.pubblicati)

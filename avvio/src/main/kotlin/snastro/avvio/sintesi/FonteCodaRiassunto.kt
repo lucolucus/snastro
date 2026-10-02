@@ -5,8 +5,6 @@ import snastro.avvio.coda.FonteCoda
 import snastro.avvio.coda.RisultatoTentativo
 import snastro.avvio.coda.TipoElementoCoda
 import snastro.kernel.Esito
-import snastro.kernel.IncontroId
-import snastro.kernel.RegistrazioneId
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassunto
 import snastro.sintesi.applicazione.comandi.RisultatoRiassunto
 import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
@@ -31,11 +29,9 @@ internal fun fonteCodaRiassunto(
     esegui: (EseguiProssimoRiassunto) -> Esito<RisultatoRiassunto>,
     recupera: () -> Unit,
     esecuzioni: EsecuzioniRiassunto,
-    parteDi: (IncontroId) -> RegistrazioneId?,
 ): FonteCoda {
-    // ADR 0033 §4.1: the queue's positions are per Registrazione (the S3 tab); a Riassunto is its Incontro's one Parte.
-    fun elemento(it: RiassuntoInCoda) =
-        ElementoInCoda(it.riassuntoId, (parteDi(it.incontroId)?.valore ?: it.incontroId.valore), it.richiestoAlle)
+    // AC-I51: a Riassunto is queued per Incontro; the element's key is the Incontro's id text.
+    fun elemento(it: RiassuntoInCoda) = ElementoInCoda(it.riassuntoId, it.incontroId.valore, it.richiestoAlle)
     fun tutti(): List<ElementoInCoda> = elenco.elenco().map(::elemento)
     fun testaAttuale(esclusi: Set<String>) = elenco.elenco().firstOrNull { it.riassuntoId !in esclusi }
     return FonteCoda(

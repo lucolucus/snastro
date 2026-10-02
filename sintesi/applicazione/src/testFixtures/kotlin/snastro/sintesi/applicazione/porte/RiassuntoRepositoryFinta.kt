@@ -7,7 +7,6 @@ import snastro.kernel.Ripristinabile
 import snastro.kernel.SegmentoId
 import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
-import snastro.kernel.unicaParteDi
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.ErroreSintesi
@@ -102,7 +101,7 @@ public class RiassuntoRepositoryFinta : RiassuntoRepository, Ripristinabile {
         val struttura = r.struttura
 
         fun inDominio(): Riassunto {
-            val riassunto = unRiassunto(id.valore, unicaParteDi(incontroId), argomento, parole, richiestoAlle)
+            val riassunto = unRiassunto(id.valore, incontroId, argomento, parole, richiestoAlle)
             if (inAttesa) return riassunto
             riassunto.conAvvio(checkNotNull(avviatoAlle))
             return when {

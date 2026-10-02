@@ -20,7 +20,6 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.inIngresso
-import snastro.sintesi.applicazione.porte.parteUnica
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.IngressoRiassunto
@@ -37,9 +36,11 @@ import java.time.Instant
  * 1. **Claim** — one short transaction reads the oldest eligible `in_attesa` Riassunto (FIFO, [esclusi]
  *    and `primaDi` honoured) and moves it `in_corso`, publishing [RiassuntoAvviato].
  * 2. **Run**, OUTSIDE any transaction — checks [DisponibilitaModelloLinguistico] first (AC-S87: the
- *    model is never called when it is not `Installato`), then reads the Segmenti ([LettoreTrascritto])
+ *    model is never called when it is not `Installato`), then reads the Incontro's Parti ([LettoreIncontro], INV-I2
+ *    order) and the Segmenti of each ([LettoreTrascritto]; none with a Trascritto → `nessun_contenuto_verificabile`)
  *    — never earlier, so a Revisione committed meanwhile is what the run sees (AC-S88) — builds the labelled
- *    input ([IngressoRiassunto], legend `Voce n` only, ADR 0032) with the Riassunto's OWN
+ *    input in ONE pass over all the Parti ([IngressoRiassunto], legend `Voce n` only, ADR 0032) with the
+ *    Riassunto's OWN
  *    cap ([INV-S10], AC-S85), and calls [ModelloLinguistico].
  * 3. **Complete** — the raw answer is verified by the root itself ([Riassunto.completa], INV-S4) against
  *    the structure read in step 2, or the mapped failure is applied ([Riassunto.fallisci]); either way
@@ -106,17 +107,25 @@ public class EseguiProssimoRiassuntoServizio(
         if (disponibilita.stato() !is StatoModelloLinguistico.Installato) {
             return EsecuzioneModello.Fallita(MotivoFallimento.MODELLO_NON_DISPONIBILE)
         }
-        // ADR 0033 §4.1: the Incontro's Parte, then its Segmenti. INV-S8-style race: the Incontro or the Trascritto can
-        // vanish between the claim and here (outside any transaction, e.g. a concurrent EliminaRegistrazione) —
-        // treated like a CAS=false, not a programmer error:
-        // nothing written, nothing published (the row itself is already gone or about to be, ADR 0022 §4).
-        // TRANSITION (D-0033): the one Parte as a 1-Parte StrutturaIncontro (multi-Parte: esegui-riassunto-incontro).
-        val parte = incontri.parteUnica(riassunto.incontroId) ?: return EsecuzioneModello.Annullata
-        val segmenti = trascritti.segmenti(parte) ?: return EsecuzioneModello.Annullata
+        // ADR 0037 §3/§8 (INV-I12): the Incontro's Parti in INV-I2 order, then each Parte's Segmenti, read NOW
+        // (outside any transaction) so a Revisione or an eliminazione committed after the claim is what the run
+        // sees. The Incontro
+        // ceased (null) is treated like a CAS=false: nothing written, nothing published. A Parte that has lost its
+        // Trascritto stays in the structure as null (the Riassunto is born superato); a Parte eliminated meanwhile is
+        // simply no longer listed (AC-I210): the run completes over the remaining ones, never left in_corso.
+        val parti = incontri.parti(riassunto.incontroId) ?: return EsecuzioneModello.Annullata
+        val lette = parti.map { it.registrazioneId to trascritti.segmenti(it.registrazioneId) }
         val struttura = StrutturaIncontro(
-            listOf(parte to StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })),
+            lette.map { (parte, segmenti) ->
+                parte to segmenti?.let { s -> StrutturaTrascritto.di(s.map { it.segmentoId to it.voceId }) }
+            },
         )
-        val ingresso = IngressoRiassunto.costruisci(listOf(segmenti.map { it.inIngresso(parte) }))
+        if (lette.all { it.second == null }) {
+            return EsecuzioneModello.Fallita(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE)
+        }
+        val ingresso = IngressoRiassunto.costruisci(
+            lette.map { (parte, segmenti) -> segmenti.orEmpty().map { it.inIngresso(parte) } },
+        )
         return when (val risposta = modello.riassumi(richiesta(riassunto, ingresso.testo), annullato)) {
             is Esito.Ok -> EsecuzioneModello.Completata(risposta.valore.inBozza(), struttura, ingresso.etichette)
             is Esito.Errore -> mappaErrore(risposta.errore)

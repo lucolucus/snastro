@@ -100,7 +100,6 @@ internal class ModuloSintesi(
         fonte = fonteCodaRiassunto(
             elenco = RiassuntiInAttesa(riassunti),
             esegui = esegui::esegui,
-            parteDi = { incontroId -> porte.catalogo.parti(incontroId)?.singleOrNull() },
             recupera = {
                 val esito = recupera.esegui(RecuperaRiassuntiInterrotti)
                 if (esito is Esito.Errore) log.warning("recupero dei riassunti interrotti fallito: $esito")

@@ -72,7 +72,7 @@ class ConfermaSegmentoServizioTest {
         val errore = servizio.esegui(ConfermaSegmento(REGISTRAZIONE, SegmentoId(99), confermato = true))
             .erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
 
-        assertEquals(ErroreTrascrizione.SegmentoNonTrovato(SegmentoId(99)), errore)
+        assertEquals(ErroreTrascrizione.SegmentoNonTrovato(SegmentoRef(REGISTRAZIONE, SegmentoId(99))), errore)
         assertEquals(
             originale.segmenti,
             assertNotNull(trascritti.trascritto(REGISTRAZIONE)).segmenti,

@@ -32,6 +32,10 @@ public class RiassegnaSegmentiServizio(
             uow.inTransazione {
                 val radice = trascritti.radiceDi(c.registrazioneId, registrazioni)
                     ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
+                radice.segmentoDiQuestoIncontro(
+                    c.incontroDelleVoci,
+                    SegmentoRef(c.registrazioneId, c.spostamenti.first().segmentoId),
+                )?.let { return@inTransazione it }
                 val spostamenti = c.spostamenti.map {
                     SpostamentoNellIncontro(SegmentoRef(c.registrazioneId, it.segmentoId), it.da, it.a, it.intervallo)
                 }

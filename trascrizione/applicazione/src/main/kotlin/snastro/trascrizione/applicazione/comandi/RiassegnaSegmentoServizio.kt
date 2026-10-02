@@ -29,7 +29,9 @@ public class RiassegnaSegmentoServizio(
     public fun esegui(c: RiassegnaSegmento): Esito<VoceId> = uow.inTransazione {
         val radice = trascritti.radiceDi(c.registrazioneId, registrazioni)
             ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
-        radice.riassegna(SegmentoRef(c.registrazioneId, c.segmento), c.destinazione).poi { evento ->
+        val rif = SegmentoRef(c.registrazioneId, c.segmento)
+        radice.segmentoDiQuestoIncontro(c.incontroDelleVoci, rif)?.let { return@inTransazione it }
+        radice.riassegna(rif, c.destinazione).poi { evento ->
             trascritti.salva(radice)
             eventi.pubblica(evento.pubblicato())
             Esito.Ok(evento.a)

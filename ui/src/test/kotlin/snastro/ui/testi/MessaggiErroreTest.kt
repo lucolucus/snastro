@@ -8,6 +8,7 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.unIncontroDi
@@ -124,9 +125,12 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.NessunParlatoRilevato,
                 ErroreTrascrizione.SegmentoOltreLaDurata(IntervalloMs(0, 1000), 500),
                 ErroreTrascrizione.VoceNonTrovata(VoceId(1)),
-                ErroreTrascrizione.SegmentoNonTrovato(SegmentoId(1)),
+                ErroreTrascrizione.SegmentoNonTrovato(SegmentoRef(RegistrazioneId("id-1"), SegmentoId(1))),
                 ErroreTrascrizione.UnioneNonAmmessa(VoceId(1), VoceId(2)),
-                ErroreTrascrizione.DivisioneNonAmmessa(VoceId(1), setOf(SegmentoId(1))),
+                ErroreTrascrizione.DivisioneNonAmmessa(
+                    VoceId(1),
+                    setOf(SegmentoRef(RegistrazioneId("id-1"), SegmentoId(1))),
+                ),
                 ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
                 ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
                 ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1")),

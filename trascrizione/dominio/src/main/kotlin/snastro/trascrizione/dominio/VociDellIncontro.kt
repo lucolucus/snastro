@@ -127,7 +127,7 @@ public class VociDellIncontro private constructor(
         return when {
             diOrigine.isEmpty() -> Esito.Errore(VoceNonTrovata(origine))
             segmenti.isEmpty() || !diOrigine.containsAll(segmenti) || segmenti.size == diOrigine.size ->
-                Esito.Errore(DivisioneNonAmmessa(origine, segmenti.mapTo(mutableSetOf()) { it.segmentoId }))
+                Esito.Errore(DivisioneNonAmmessa(origine, segmenti.toSet()))
             else -> {
                 val nuova = nuovaVoce()
                 sposta(segmenti, verso = nuova, conferma = true)
@@ -142,7 +142,7 @@ public class VociDellIncontro private constructor(
      * The moved Segmento is `confermato` afterwards (INV-26). A refusal changes nothing, the counter included.
      */
     public fun riassegna(segmento: SegmentoRef, destinazione: VoceId?): Esito<EventoRevisione.SegmentoRiassegnato> {
-        val da = trova(segmento)?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento.segmentoId))
+        val da = trova(segmento)?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento))
         return when {
             destinazione == da || destinazione == null && refsDi(da).size == 1 ->
                 Esito.Errore(RiassegnazioneNonAmmessa(segmento.segmentoId, destinazione))
@@ -198,7 +198,7 @@ public class VociDellIncontro private constructor(
     ): Esito<EventoRevisione.SegmentoConfermato?> {
         val attuale = trova(segmento)
         return when {
-            attuale == null -> Esito.Errore(SegmentoNonTrovato(segmento.segmentoId))
+            attuale == null -> Esito.Errore(SegmentoNonTrovato(segmento))
             attuale.confermato == confermato -> Esito.Ok(null)
             else -> {
                 parti.getValue(segmento.registrazioneId).assegna(segmento.segmentoId, attuale.voceId, confermato)

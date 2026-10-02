@@ -116,6 +116,7 @@ private fun unaVista(
     mostrato: RiassuntoMostrato? = null,
 ) = RiassuntoVista(
     unIncontroDi(REG_1),
+    1,
     modello,
     richiestaAperta,
     ultimoFallimento,
@@ -124,7 +125,10 @@ private fun unaVista(
     mostrato,
 )
 
-private fun unaVoce(numero: Int, nome: String? = "Marco") = VoceVista(numero, "Voce $numero", nome)
+private fun unaFonte(segmentoId: Int, voce: VoceVista, inizioMs: Long) =
+    FonteVista(REG_1, 1, segmentoId, voce, inizioMs, segmentoPresente = true)
+
+private fun unaVoce(numero: Int, nome: String? = "Marco") = VoceVista(numero, "Voce $numero", nome, presente = true)
 
 private fun unTesto(testo: String) = listOf(ParteTestoVista.Testo(testo))
 
@@ -364,7 +368,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S129 non disponibile mostra il motivo e il Riassunto mostrato resta visibile`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(
-            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
             mostrato = unMostrato(),
         )
         runCurrent()
@@ -376,7 +380,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S130 in_attesa mostra la posizione dalla coda o In coda se assente`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(richiestaAperta = RichiestaApertaVista.InAttesa(ISTANTE_0))
-        a.posizioniCorrenti = PosizioniCoda(elaborazioni = emptyMap(), riassunti = mapOf(REG_1 to 2))
+        a.posizioniCorrenti = PosizioniCoda(elaborazioni = emptyMap(), riassunti = mapOf(unIncontroDi(REG_1) to 2))
         runCurrent()
         assertEquals(AreaAzione.InCoda(2), dati(a.presenter).areaAzione)
 
@@ -401,8 +405,8 @@ class RiassuntoPresenterTest {
 
     @Test
     fun `AC-S132 pronto mostra le sezioni gli omessi solo se maggiori di zero e i metadati`() = eseguiTest { a ->
-        val f1 = FonteVista(2, unaVoce(1), 5_000)
-        val f2 = FonteVista(1, unaVoce(2), 1_000)
+        val f1 = unaFonte(2, unaVoce(1), 5_000)
+        val f2 = unaFonte(1, unaVoce(2), 1_000)
         a.vistaCorrente = unaVista(
             mostrato = unMostrato(
                 omessi = 3,
@@ -471,7 +475,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S135 dopo un Ritrascrivi il Cambiamento ricarica dalla nuova generazione della vista`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(
-            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
             mostrato = unMostrato(),
         )
         runCurrent()
@@ -489,7 +493,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S135 dopo Ritrascrivi senza nuovo Riassunto per limite superato mostra stato 5`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(
-            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
             mostrato = unMostrato(),
         )
         runCurrent()
@@ -510,7 +514,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S135 dopo Ritrascrivi senza nuovo Riassunto e modello installato mostra stato 4`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(
-            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
             mostrato = unMostrato(),
         )
         runCurrent()
@@ -528,7 +532,7 @@ class RiassuntoPresenterTest {
     @Test
     fun `AC-S135 dopo Ritrascrivi senza nuovo Riassunto e modello mancante mostra stato 1`() = eseguiTest { a ->
         a.vistaCorrente = unaVista(
-            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
             mostrato = unMostrato(),
         )
         runCurrent()

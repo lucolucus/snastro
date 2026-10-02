@@ -73,7 +73,7 @@ class TestiRiassuntoTest {
         )
         assertEquals(
             "Aspetta la fine della trascrizione.",
-            messaggioNonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            messaggioNonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
         )
     }
 

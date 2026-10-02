@@ -3,6 +3,7 @@ package snastro.trascrizione.dominio
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
@@ -218,7 +219,7 @@ class TrascrittoSeparazioneTest {
         assertEquals(prima, t.stato())
 
         assertEquals(
-            ErroreTrascrizione.SegmentoNonTrovato(SegmentoId(99)),
+            ErroreTrascrizione.SegmentoNonTrovato(SegmentoRef(t.registrazioneId, SegmentoId(99))),
             t.confermaSegmento(SegmentoId(99), true).erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>(),
         )
         assertEquals(prima, t.stato())
