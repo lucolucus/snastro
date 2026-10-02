@@ -43,7 +43,6 @@ import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.parlanti.applicazione.letture.EstrattoAudio
 import snastro.parlanti.applicazione.letture.IdentificazioneIncontri
-import snastro.parlanti.applicazione.letture.IdentificazioneRegistrazioni
 import snastro.parlanti.applicazione.letture.IdentificazioneVoci
 import snastro.parlanti.applicazione.letture.ParlantiAttivi
 import snastro.parlanti.applicazione.letture.ParlantiDelProgetto
@@ -195,7 +194,6 @@ internal class ModuloParlanti(
                 parlantiAttivi = { attivi.parlanti(progettoId) },
                 estratto = estrattoAudio::estratto,
                 parlantiDelProgetto = { delProgetto.parlanti(progettoId) },
-                identificazioni = IdentificazioneRegistrazioni(voci, porte.attribuzioni, registrazione)::conteggi,
                 identificazioniIncontri = IdentificazioneIncontri(voci, porte.attribuzioni)::conteggi,
             ),
             comandi = ComandiVoceProgetto(

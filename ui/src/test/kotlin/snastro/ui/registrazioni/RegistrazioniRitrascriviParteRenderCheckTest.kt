@@ -43,6 +43,11 @@ private val AZIONI = AzioniRegistrazioni(
     scegliImporta = {},
     confermaImporta = {},
     annullaImporta = {},
+    espandiIncontro = {},
+    modificaOraDiInizio = { _, _ -> },
+    modificaNumeroPersoneIncontro = { _, _ -> },
+    avviaElaborazioniIncontro = {},
+    chiudiErroreIncontro = {},
 )
 
 /** AC-I76 render-check: the multi-part 'Ritrascrivi' confirmation, both sizes, light and dark. */

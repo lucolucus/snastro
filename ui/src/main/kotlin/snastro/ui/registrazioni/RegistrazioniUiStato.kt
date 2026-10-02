@@ -1,9 +1,11 @@
 package snastro.ui.registrazioni
 
 import snastro.kernel.ElaborazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * State of S2 · Registrazioni del Progetto (AC-199..206, AC-342..344) — presenter-owned, rendered by
@@ -28,6 +30,9 @@ sealed interface RegistrazioniUiStato {
      * by the merge) and is cleared by `AzioniRegistrazioni.chiudiAvviso` or by the presenter's own next
      * command (ADR 0020 §6 "fino a chiudiAvviso o al comando successivo").
      * [titoloAvviso] is the notice's title: the Elimina one by default, 'Parti aggiunte' after AC-I71.
+     * AC-I66..I69: [righe] stays the flat list of EVERY Parte (the row commands address a Registrazione); [incontri]
+     * is how S2 shows them: one [RigaIncontro] per Incontro, newest first, each naming its Parti in order. The default
+     * is "every Registrazione alone" — the 1-part Incontro, today's screen (INV-I3).
      */
     data class Dati(
         val righe: List<RigaRegistrazione>,
@@ -37,6 +42,7 @@ sealed interface RegistrazioniUiStato {
         val avviso: String? = null,
         val dialogoImporta: DialogoImporta? = null,
         val titoloAvviso: String = ETICHETTA_REGISTRAZIONE_ELIMINATA,
+        val incontri: List<RigaIncontro> = righe.map(RigaIncontro::singola),
     ) : RegistrazioniUiStato
 
     /**
@@ -84,6 +90,9 @@ enum class SceltaImporta { UnIncontro, IncontriSeparati }
  * `motivoFallimento` on a `Completata` row (AC-451); [annullabile] is `true` only on an `InAttesa` row
  * (AC-475).
  *
+ * AC-I68: [oraDiInizio] is the Parte's start time (`null` shows '—:—'), editable like the date; it is shown only on
+ * a Parte of a multi-part Incontro (those with a [parte]).
+ *
  * ADR 0020 §6/AC-625: [eliminazione] drives the row's More menu — the menu holds 'Elimina…'
  * (enabled/disabled per [StatoEliminazione]) and, when [ritrascriviDisponibile], 'Ritrascrivi' too
  * (AC-625 (b)) — the row's own 'Ritrascrivi' BUTTON is then folded into the menu, the prefilled field
@@ -111,6 +120,7 @@ data class RigaRegistrazione(
     val eliminazione: StatoEliminazione = StatoEliminazione.Disponibile,
     val confermaElimina: Boolean = false,
     val parte: ParteDiIncontro? = null,
+    val oraDiInizio: LocalTime? = null,
 )
 
 /**
@@ -185,4 +195,91 @@ sealed interface StatoElaborazioneRiga {
      * carry the ADR 0018 additions (kept on the row, not here, since they are independent of this
      * marker state). */
     data object Completata : StatoElaborazioneRiga
+}
+
+/**
+ * AC-I66..I69: one Incontro of S2 (boundary `vista-incontri`). [titolo]/[data] are the first Parte's (the '· N parti'
+ * suffix is the view's), [durataMs] the sum of the Parti, [parti] their Registrazioni in Parte order (the rows are
+ * [RegistrazioniUiStato.Dati.righe]). [stato] is the aggregated state of the Parti ([statoAggregato], `null` while no
+ * Parte has a status yet). [numeroPersone] is the ONE 'Numero di persone' field of 'Trascrivi N parti' (AC-I67);
+ * [errore]/[operazioneInCorso] are this Incontro's own inline error and in-flight guard; [espanso] is the
+ * chevron, kept by the presenter so it survives a round trip to S3 (AC-I69). A 1-part Incontro ([multiParte] false)
+ * is rendered as its Parte's row, exactly as today (INV-I3).
+ */
+data class RigaIncontro(
+    val incontroId: IncontroId,
+    val titolo: String,
+    val data: LocalDate,
+    val durataMs: Long,
+    val parti: List<RegistrazioneId>,
+    val stato: StatoIncontro? = null,
+    val identificazione: IdentificazioneRiga? = null,
+    val numeroPersone: String = "",
+    val errore: String? = null,
+    val operazioneInCorso: Boolean = false,
+    val espanso: Boolean = false,
+) {
+    val multiParte: Boolean get() = parti.size > 1
+
+    companion object {
+        /** A Registrazione alone: the 1-part Incontro (its id is the Registrazione's, the migration's own rule). */
+        fun singola(riga: RigaRegistrazione): RigaIncontro = RigaIncontro(
+            incontroId = IncontroId(riga.registrazioneId.valore),
+            titolo = riga.titolo,
+            data = riga.dataRegistrazione,
+            durataMs = riga.durataMs,
+            parti = listOf(riga.registrazioneId),
+            stato = statoAggregato(listOf(riga)),
+        )
+    }
+}
+
+/**
+ * AC-I66: the aggregated state of an Incontro, highest priority first — a Parte in progress, a Parte queued, a Parte
+ * failed, Parti never started ([DaTrascrivere]), otherwise [Completata]. [numero] names the (first) Parte concerned.
+ */
+sealed interface StatoIncontro {
+    data class ParteInCorso(
+        val numero: Int,
+        val faseEtichetta: String,
+        val trascorsoMs: Long,
+        val ritrascrizione: Boolean,
+    ) : StatoIncontro
+
+    data class ParteInCoda(
+        val numero: Int,
+        val posizione: Int,
+        val ritrascrizione: Boolean,
+        val registrazioneId: RegistrazioneId,
+    ) : StatoIncontro
+
+    data class ParteNonRiuscita(val numero: Int) : StatoIncontro
+
+    /** [numParti] Parti never started: 'Trascrivi' (1) or 'Trascrivi N parti'. */
+    data class DaTrascrivere(val numParti: Int) : StatoIncontro
+
+    data object Completata : StatoIncontro
+}
+
+/** AC-I66: [StatoIncontro] of [parti] (in Parte order); a Parte without a status yet is not counted. */
+fun statoAggregato(parti: List<RigaRegistrazione>): StatoIncontro? {
+    val numerate = parti.mapIndexedNotNull { i, riga -> riga.elaborazione?.let { Triple(i + 1, riga, it) } }
+    val inCorso = numerate.firstNotNullOfOrNull { (n, _, s) ->
+        (s as? StatoElaborazioneRiga.InCorso)?.let {
+            StatoIncontro.ParteInCorso(n, it.faseEtichetta, it.trascorsoMs, it.ritrascrizione)
+        }
+    }
+    val inCoda = numerate.firstNotNullOfOrNull { (n, riga, s) ->
+        (s as? StatoElaborazioneRiga.InAttesa)?.let {
+            StatoIncontro.ParteInCoda(n, it.posizione, it.ritrascrizione, riga.registrazioneId)
+        }
+    }
+    val nonRiuscita = numerate.firstOrNull { it.third is StatoElaborazioneRiga.Fallita }
+        ?.let { StatoIncontro.ParteNonRiuscita(it.first) }
+    val daFare = numerate.count { it.third == StatoElaborazioneRiga.NonAvviata }
+    return inCorso ?: inCoda ?: nonRiuscita ?: when {
+        numerate.isEmpty() -> null
+        daFare > 0 -> StatoIncontro.DaTrascrivere(daFare)
+        else -> StatoIncontro.Completata
+    }
 }

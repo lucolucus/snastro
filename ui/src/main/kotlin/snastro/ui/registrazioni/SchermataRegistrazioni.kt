@@ -5,6 +5,8 @@
 package snastro.ui.registrazioni
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
@@ -15,6 +17,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -69,6 +72,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.ui.SnastroTema
 import snastro.ui.formattaData
@@ -90,14 +94,18 @@ import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
+import snastro.ui.testi.ETICHETTA_AGGIUNGI_PARTI
 import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
+import snastro.ui.testi.ETICHETTA_COMPRIMI_PARTI
 import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
 import snastro.ui.testi.ETICHETTA_ELIMINA
+import snastro.ui.testi.ETICHETTA_ESPANDI_PARTI
 import snastro.ui.testi.ETICHETTA_IMPORTAZIONE_NON_RIUSCITA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
+import snastro.ui.testi.ETICHETTA_ORA_SCONOSCIUTA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
@@ -109,16 +117,25 @@ import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_PARTE_CON_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_FORMATI_AUDIO_SUPPORTATI
+import snastro.ui.testi.MESSAGGIO_ORA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
 import snastro.ui.testi.MESSAGGIO_RILASCIA_PER_IMPORTARE
+import snastro.ui.testi.SUGGERIMENTO_ORA_SCONOSCIUTA
 import snastro.ui.testi.etichettaIdentificazione
+import snastro.ui.testi.etichettaParte
+import snastro.ui.testi.etichettaParteInCoda
+import snastro.ui.testi.etichettaParteInCorso
+import snastro.ui.testi.etichettaParteNonRiuscita
 import snastro.ui.testi.etichettaRegistrazioni
 import snastro.ui.testi.etichettaRitrascrizioneInAttesa
 import snastro.ui.testi.etichettaRitrascrizioneInCorso
+import snastro.ui.testi.etichettaTrascriviParti
 import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
 import snastro.ui.testi.titoloConfermaElimina
 import snastro.ui.testi.titoloConfermaEliminaParte
+import snastro.ui.testi.titoloIncontro
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.time.format.ResolverStyle
@@ -272,7 +289,7 @@ private fun ContenutoRegistrazioni(
         if (stato.righe.isEmpty()) {
             DropZoneVuota(inDrop = dragAttivo, importoInCorso = stato.importoInCorso, azioni = azioni)
         } else {
-            ElencoRegistrazioni(stato.righe, azioni, inDrop = dragAttivo)
+            ElencoRegistrazioni(stato, azioni, inDrop = dragAttivo)
         }
     }
 }
@@ -386,8 +403,13 @@ private fun Modifier.bordoTratteggiato(colore: Color, spessore: Dp, raggio: Dp):
  * `accentInk`/[SPESSORE_TRATTEGGIO_OVER] the empty [DropZoneVuota] uses — otherwise a drop over an
  * already-populated list gave no visual feedback at all. */
 @Composable
-private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRegistrazioni, inDrop: Boolean = false) {
+private fun ElencoRegistrazioni(
+    stato: RegistrazioniUiStato.Dati,
+    azioni: AzioniRegistrazioni,
+    inDrop: Boolean = false,
+) {
     val colori = LocalSnastroColori.current
+    val perId = stato.righe.associateBy { it.registrazioneId }
     Surface(
         modifier = Modifier.fillMaxWidth().testTag("registrazioni-lista"),
         color = if (inDrop) colori.accentSoft else colori.raised,
@@ -400,18 +422,218 @@ private fun ElencoRegistrazioni(righe: List<RigaRegistrazione>, azioni: AzioniRe
         Column(modifier = Modifier.fillMaxWidth()) {
             // Rework cycle 2 (MED #2): keyed by id — the row-local state (title/date buffers, focus)
             // follows its Registrazione when a row is inserted/removed above it.
-            righe.forEachIndexed { indice, riga ->
-                key(riga.registrazioneId) {
+            stato.incontri.forEachIndexed { indice, incontro ->
+                key(incontro.incontroId) {
                     if (indice > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colori.line))
-                    RigaRegistrazioneItem(riga, azioni)
+                    IncontroItem(incontro, incontro.parti.mapNotNull(perId::get), azioni)
                 }
             }
         }
     }
 }
 
+/**
+ * AC-I66..I68/INV-I3: a 1-part Incontro IS its Parte's row, today's, only its More menu gains 'Aggiungi parti…';
+ * a multi-part one is [RigaIncontroItem] and, when expanded, its Parti as indented sub-rows in Parte order.
+ */
 @Composable
-private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+private fun IncontroItem(incontro: RigaIncontro, parti: List<RigaRegistrazione>, azioni: AzioniRegistrazioni) {
+    if (parti.isEmpty()) return
+    val aggiungiParti: () -> Unit = {
+        val percorsi = sceltaFileAudioMultipla()
+        if (percorsi.isNotEmpty()) azioni.aggiungiParti(incontro.incontroId, incontro.titolo, percorsi)
+    }
+    if (!incontro.multiParte || parti.size == 1) {
+        RigaRegistrazioneItem(parti.first(), azioni, aggiungiParti, incontro.incontroId)
+        return
+    }
+    val colori = LocalSnastroColori.current
+    RigaIncontroItem(incontro, parti.first(), azioni, aggiungiParti)
+    if (incontro.espanso) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(start = SnastroMisure.space6)
+                .testTag("registrazioni-incontro-parti-${incontro.incontroId.valore}"),
+        ) {
+            parti.forEach { parte ->
+                key(parte.registrazioneId) {
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(colori.line))
+                    RigaRegistrazioneItem(parte, azioni, null, incontro.incontroId)
+                }
+            }
+        }
+    }
+}
+
+/** AC-I66: the collapsed row of a multi-part Incontro — chevron, '▶' of Parte 1, 'titolo · N parti', date · duration ·
+ * badge, the aggregated state ([ColonnaIncontro]) and the More menu ('Aggiungi parti…'). A click opens S3 of
+ * Parte 1. */
+@Composable
+private fun RigaIncontroItem(
+    incontro: RigaIncontro,
+    prima: RigaRegistrazione,
+    azioni: AzioniRegistrazioni,
+    aggiungiParti: () -> Unit,
+) {
+    val colori = LocalSnastroColori.current
+    val id = incontro.incontroId.valore
+    val sfondo = if (prima.riproduzione == StatoRiproduzioneRiga.InRiproduzione) colori.accentSoft else colori.raised
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(sfondo)
+            .clickable(enabled = prima.trascrittoDisponibile) { azioni.apriRiga(prima.registrazioneId) }
+            .padding(horizontal = SnastroMisure.space4, vertical = SnastroMisure.space3)
+            .testTag("registrazioni-incontro-$id"),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            BottoneIconaSn(
+                icona = if (incontro.espanso) Icona.ChevronDown else Icona.ChevronRight,
+                descrizione = if (incontro.espanso) ETICHETTA_COMPRIMI_PARTI else ETICHETTA_ESPANDI_PARTI,
+                onClick = { azioni.espandiIncontro(incontro.incontroId) },
+                modifier = Modifier.testTag("registrazioni-incontro-chevron-$id"),
+            )
+            ControlloRiproduzione(prima, azioni)
+            Spacer(modifier = Modifier.width(SnastroMisure.space3))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = titoloIncontro(incontro.titolo, incontro.parti.size),
+                    style = LocalSnastroTipografia.current.heading,
+                    color = colori.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.testTag("registrazioni-incontro-titolo-$id"),
+                )
+                MetaIncontro(incontro)
+            }
+            Spacer(modifier = Modifier.width(SnastroMisure.space3))
+            ColonnaIncontro(incontro, azioni)
+            Spacer(modifier = Modifier.width(SnastroMisure.space2))
+            MenuAltreAzioni("registrazioni-incontro-altre-azioni-$id", !incontro.operazioneInCorso) { chiudi ->
+                VoceMenuAggiungiParti("registrazioni-menu-aggiungi-parti-$id") {
+                    chiudi()
+                    aggiungiParti()
+                }
+            }
+        }
+        incontro.errore?.let {
+            MessaggioInlineErrore(
+                it,
+                { azioni.chiudiErroreIncontro(incontro.incontroId) },
+                "registrazioni-errore-incontro-$id",
+            )
+        }
+    }
+}
+
+@Composable
+private fun MetaIncontro(incontro: RigaIncontro) {
+    val colori = LocalSnastroColori.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
+    ) {
+        Text(
+            text = formattaData(incontro.data),
+            style = LocalSnastroTipografia.current.caption,
+            color = colori.inkMuted,
+        )
+        Separatore()
+        Text(
+            text = formattaDurata(incontro.durataMs),
+            style = LocalSnastroTipografia.current.timecode,
+            color = colori.inkMuted,
+        )
+        incontro.identificazione?.let {
+            Separatore()
+            BadgeIdentificazione(it, incontro.incontroId.valore)
+        }
+    }
+}
+
+/** AC-I67: the ONE 'Numero di persone' field and 'Trascrivi N parti' of an Incontro with Parti never started. */
+@Composable
+private fun AvvioIncontro(incontro: RigaIncontro, numParti: Int, azioni: AzioniRegistrazioni) {
+    val id = incontro.incontroId.valore
+    CampoNumeroPersone(
+        valore = incontro.numeroPersone,
+        onValoreCambiato = { azioni.modificaNumeroPersoneIncontro(incontro.incontroId, it) },
+        errore = incontro.errore != null,
+        abilitato = !incontro.operazioneInCorso,
+        onInvio = { azioni.avviaElaborazioniIncontro(incontro.incontroId) },
+        modifier = Modifier.testTag("registrazioni-incontro-numero-persone-$id"),
+    )
+    BottoneSn(
+        etichetta = etichettaTrascriviParti(numParti),
+        onClick = { azioni.avviaElaborazioniIncontro(incontro.incontroId) },
+        variante = VarianteBottone.Primario,
+        piccolo = true,
+        abilitato = !incontro.operazioneInCorso,
+        modifier = Modifier.testTag("registrazioni-incontro-trascrivi-$id"),
+    )
+}
+
+/**
+ * AC-I66: the aggregated state of a multi-part Incontro, one line like a row's ([ColonnaElaborazione]): a Parte in
+ * progress / queued ('Annulla') / failed name the Parte; Parti never started offer the ONE 'Numero di persone'
+ * field and 'Trascrivi N parti' (AC-I67); otherwise 'Trascritta' (or 'Da identificare' while Voci are unidentified).
+ */
+@Composable
+private fun ColonnaIncontro(incontro: RigaIncontro, azioni: AzioniRegistrazioni) {
+    val colori = LocalSnastroColori.current
+    val id = incontro.incontroId.valore
+    val tipografia = LocalSnastroTipografia.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
+        modifier = Modifier.testTag("registrazioni-incontro-stato-$id"),
+    ) {
+        when (val stato = incontro.stato) {
+            is StatoIncontro.ParteInCorso -> Text(
+                text = with(stato) { etichettaParteInCorso(numero, faseEtichetta, trascorsoMs, ritrascrizione) },
+                style = tipografia.caption,
+                color = colori.ink,
+            )
+            is StatoIncontro.ParteInCoda -> {
+                Text(
+                    text = etichettaParteInCoda(stato.numero, stato.posizione, stato.ritrascrizione),
+                    style = tipografia.caption,
+                    color = colori.ink,
+                )
+                BottoneSn(
+                    etichetta = ETICHETTA_ANNULLA,
+                    onClick = { azioni.annullaElaborazione(stato.registrazioneId) },
+                    variante = VarianteBottone.Link,
+                    piccolo = true,
+                    modifier = Modifier.testTag("registrazioni-incontro-annulla-$id"),
+                )
+            }
+            is StatoIncontro.ParteNonRiuscita ->
+                ChipStato(TipoChipStato.NonRiuscita(etichettaParteNonRiuscita(stato.numero)))
+            is StatoIncontro.DaTrascrivere -> AvvioIncontro(incontro, stato.numParti, azioni)
+            StatoIncontro.Completata ->
+                if ((incontro.identificazione?.numVociDaIdentificare ?: 0) > 0) {
+                    ChipStato(TipoChipStato.Avviso(ETICHETTA_DA_IDENTIFICARE, Icona.People))
+                } else {
+                    ChipStato(TipoChipStato.Trascritta)
+                }
+            null -> Unit
+        }
+        if (incontro.operazioneInCorso) {
+            CircularProgressIndicator(
+                modifier = Modifier.width(DIMENSIONE_INDICATORE_PICCOLO)
+                    .testTag("registrazioni-incontro-operazione-in-corso-$id"),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RigaRegistrazioneItem(
+    riga: RigaRegistrazione,
+    azioni: AzioniRegistrazioni,
+    aggiungiParti: (() -> Unit)?,
+    incontroId: IncontroId,
+) {
     // AC-626: the confirmation REPLACES the row's own (clickable) content entirely — same mechanism as
     // ConfermaRitrascrivi above, never an OS-level modal dialog.
     if (riga.confermaElimina) {
@@ -447,7 +669,7 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
             // NonDisponibile) — the `StatoEliminazione.Assente` release-flag leftover that used to
             // gate this is retired.
             Spacer(modifier = Modifier.width(SnastroMisure.space2))
-            MenuAzioniRegistrazione(riga, azioni)
+            MenuAzioniRegistrazione(riga, azioni, aggiungiParti, incontroId)
         }
         riga.erroreRiga?.let {
             MessaggioInlineErrore(
@@ -462,12 +684,53 @@ private fun RigaRegistrazioneItem(riga: RigaRegistrazione, azioni: AzioniRegistr
 /**
  * ADR 0020 §6/AC-625: `BottoneIcona More` opening an `anteprime/Menu.html`-style menu — 'Ritrascrivi'
  * (only when [RigaRegistrazione.ritrascriviDisponibile], same field/flow as before, listed first like
- * S4's non-destructive-before-destructive order) and 'Elimina…' (always, enabled/disabled per
- * [RigaRegistrazione.eliminazione]) — same mechanism as S4's `MenuAltreAzioniParlante`.
+ * S4's non-destructive-before-destructive order), 'Aggiungi parti…' (only on a 1-part Incontro's row: [aggiungiParti]
+ * non-null) and 'Elimina…' (always, enabled/disabled per [RigaRegistrazione.eliminazione]) — same mechanism as S4's
+ * `MenuAltreAzioniParlante`.
  */
 @Composable
-private fun MenuAzioniRegistrazione(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+private fun MenuAzioniRegistrazione(
+    riga: RigaRegistrazione,
+    azioni: AzioniRegistrazioni,
+    aggiungiParti: (() -> Unit)?,
+    incontroId: IncontroId,
+) {
     val id = riga.registrazioneId
+    MenuAltreAzioni("registrazioni-altre-azioni-${id.valore}", !riga.operazioneInCorso) { chiudi ->
+        if (riga.ritrascriviDisponibile) {
+            DropdownMenuItem(
+                text = { Text(ETICHETTA_RITRASCRIVI) },
+                onClick = {
+                    chiudi()
+                    azioni.ritrascrivi(id)
+                },
+                modifier = Modifier.testTag("registrazioni-menu-ritrascrivi-${id.valore}"),
+            )
+        }
+        aggiungiParti?.let {
+            VoceMenuAggiungiParti("registrazioni-menu-aggiungi-parti-${incontroId.valore}") {
+                chiudi()
+                it()
+            }
+        }
+        VoceMenuElimina(
+            riga.eliminazione,
+            onClick = {
+                chiudi()
+                azioni.elimina(id)
+            },
+            tag = "registrazioni-menu-elimina-${id.valore}",
+        )
+    }
+}
+
+/** The row's `More` button and its menu; [contenuto] receives the `chiudi` that also returns focus to the button. */
+@Composable
+private fun MenuAltreAzioni(
+    tag: String,
+    abilitato: Boolean,
+    contenuto: @Composable ColumnScope.(chiudi: () -> Unit) -> Unit,
+) {
     var espanso by remember { mutableStateOf(false) }
     // L742b (S4 precedent): focus returns to this same button once the menu closes.
     val richiestaFocus = remember { FocusRequester() }
@@ -480,32 +743,16 @@ private fun MenuAzioniRegistrazione(riga: RigaRegistrazione, azioni: AzioniRegis
             icona = Icona.More,
             descrizione = ETICHETTA_ALTRE_AZIONI,
             onClick = { espanso = true },
-            abilitato = !riga.operazioneInCorso,
-            modifier = Modifier
-                .focusRequester(richiestaFocus)
-                .testTag("registrazioni-altre-azioni-${id.valore}"),
+            abilitato = abilitato,
+            modifier = Modifier.focusRequester(richiestaFocus).testTag(tag),
         )
-        DropdownMenu(expanded = espanso, onDismissRequest = ::chiudi) {
-            if (riga.ritrascriviDisponibile) {
-                DropdownMenuItem(
-                    text = { Text(ETICHETTA_RITRASCRIVI) },
-                    onClick = {
-                        chiudi()
-                        azioni.ritrascrivi(id)
-                    },
-                    modifier = Modifier.testTag("registrazioni-menu-ritrascrivi-${id.valore}"),
-                )
-            }
-            VoceMenuElimina(
-                riga.eliminazione,
-                onClick = {
-                    chiudi()
-                    azioni.elimina(id)
-                },
-                tag = "registrazioni-menu-elimina-${id.valore}",
-            )
-        }
+        DropdownMenu(expanded = espanso, onDismissRequest = ::chiudi) { contenuto(::chiudi) }
     }
+}
+
+@Composable
+private fun VoceMenuAggiungiParti(tag: String, onClick: () -> Unit) {
+    DropdownMenuItem(text = { Text(ETICHETTA_AGGIUNGI_PARTI) }, onClick = onClick, modifier = Modifier.testTag(tag))
 }
 
 /** AC-625: 'Elimina…' — enabled (danger text) or disabled with its caption as a second line, never
@@ -609,7 +856,15 @@ private fun RigaMeta(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
     ) {
+        riga.parte?.let {
+            Text(text = etichettaParte(it.numero), style = LocalSnastroTipografia.current.label, color = colori.ink)
+            Separatore()
+        }
         CampoData(riga, azioni = azioni)
+        if (riga.parte != null) {
+            Separatore()
+            CampoOra(riga, azioni)
+        }
         Separatore()
         Text(
             text = formattaDurata(riga.durataMs),
@@ -623,7 +878,7 @@ private fun RigaMeta(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
         }
         riga.identificazione?.let {
             Separatore()
-            BadgeIdentificazione(it, riga.registrazioneId)
+            BadgeIdentificazione(it, riga.registrazioneId.valore)
         }
     }
 }
@@ -755,13 +1010,102 @@ private fun CampoTitolo(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
  */
 @Composable
 private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId.valore
+    CampoInline(
+        valore = riga.dataRegistrazione,
+        formatta = ::formattaData,
+        interpreta = { t -> t.aData()?.let { Interpretato(it) } },
+        messaggioNonValido = MESSAGGIO_DATA_NON_VALIDA,
+        abilitato = !riga.operazioneInCorso,
+        onModifica = { azioni.modificaData(riga.registrazioneId, it) },
+        tag = "registrazioni-data-$id",
+        tagErrore = "registrazioni-data-errore-$id",
+    )
+}
+
+/**
+ * AC-I68: a Parte's `OraDiInizio`, edited exactly like the date ([CampoInline]); an empty time reads '—:—' with its
+ * tooltip, and clearing the text clears the time.
+ */
+@Composable
+private fun CampoOra(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
+    val id = riga.registrazioneId.valore
+    CampoInline(
+        valore = riga.oraDiInizio,
+        formatta = { it?.let(::formattaOra) ?: ETICHETTA_ORA_SCONOSCIUTA },
+        interpreta = { it.aOra() },
+        messaggioNonValido = MESSAGGIO_ORA_NON_VALIDA,
+        abilitato = !riga.operazioneInCorso,
+        onModifica = { azioni.modificaOraDiInizio(riga.registrazioneId, it) },
+        tag = "registrazioni-ora-$id",
+        tagErrore = "registrazioni-ora-errore-$id",
+        testoModifica = { it?.let(::formattaOra).orEmpty() },
+        suggerimento = if (riga.oraDiInizio == null) SUGGERIMENTO_ORA_SCONOSCIUTA else null,
+    )
+}
+
+/** [contenuto], wrapped in a hover tooltip saying [suggerimento] when there is one. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun ConSuggerimento(suggerimento: String?, contenuto: @Composable () -> Unit) {
+    if (suggerimento == null) {
+        contenuto()
+        return
+    }
     val colori = LocalSnastroColori.current
-    var testo by remember(riga.dataRegistrazione) { mutableStateOf(formattaData(riga.dataRegistrazione)) }
-    var nonValido by remember(riga.dataRegistrazione) { mutableStateOf(false) }
-    var inModifica by remember(riga.dataRegistrazione) { mutableStateOf(false) }
+    TooltipArea(
+        tooltip = {
+            Surface(color = colori.raised, shape = RoundedCornerShape(SnastroMisure.radiusControl)) {
+                Text(
+                    suggerimento,
+                    style = LocalSnastroTipografia.current.caption,
+                    color = colori.ink,
+                    modifier = Modifier.padding(SnastroMisure.space2),
+                )
+            }
+        },
+        content = contenuto,
+    )
+}
+
+/** What [CampoInline] parsed: [valore] may legitimately be `null` (a cleared time), unlike a failed parse. */
+internal class Interpretato<T>(val valore: T)
+
+/** AC-I68: `HH:mm` (a start time to the minute); blank clears the time; anything else is not a time. */
+internal fun String.aOra(): Interpretato<LocalTime?>? {
+    val t = trim()
+    val m = REGEX_ORA.matchEntire(t)
+    return when {
+        t.isEmpty() -> Interpretato(null)
+        m == null -> null
+        else -> Interpretato(LocalTime.of(m.groupValues[1].toInt(), m.groupValues[2].toInt()))
+    }
+}
+
+private val REGEX_ORA = Regex("""([01]?\d|2[0-3]):([0-5]\d)""")
+
+internal fun formattaOra(ora: LocalTime): String = ora.format(DateTimeFormatter.ofPattern("HH:mm"))
+
+@Suppress("LongParameterList") // one parameter per documented knob of the inline editor
+@Composable
+private fun <T> CampoInline(
+    valore: T,
+    formatta: (T) -> String,
+    interpreta: (String) -> Interpretato<T>?,
+    messaggioNonValido: String,
+    abilitato: Boolean,
+    onModifica: (T) -> Unit,
+    tag: String,
+    tagErrore: String,
+    testoModifica: (T) -> String = formatta,
+    suggerimento: String? = null,
+) {
+    val colori = LocalSnastroColori.current
+    var testo by remember(valore) { mutableStateOf(formatta(valore)) }
+    var nonValido by remember(valore) { mutableStateOf(false) }
+    var inModifica by remember(valore) { mutableStateOf(false) }
     val interazione = remember { MutableInteractionSource() }
     val hover by interazione.collectIsHoveredAsState()
-    val tag = "registrazioni-data-${riga.registrazioneId.valore}"
     val stile = LocalSnastroTipografia.current.caption.copy(color = if (nonValido) colori.danger else colori.inkMuted)
     val focusTesto = remember { FocusRequester() }
     var richiediFocusTesto by remember { mutableStateOf(false) }
@@ -770,15 +1114,15 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
         inModifica = false
         richiediFocusTesto = true // L755c
         if (!sottometti) {
-            testo = formattaData(riga.dataRegistrazione)
+            testo = formatta(valore)
             nonValido = false
             return
         }
-        val data = testo.aData()
-        nonValido = data == null
-        if (data != null) {
-            testo = formattaData(data) // L755d
-            if (data != riga.dataRegistrazione) azioni.modificaData(riga.registrazioneId, data)
+        val nuovo = interpreta(testo)
+        nonValido = nuovo == null
+        if (nuovo != null) {
+            testo = formatta(nuovo.valore) // L755d
+            if (formatta(nuovo.valore) != formatta(valore)) onModifica(nuovo.valore)
         }
     }
     // L755c: fires only once the read-only Text (below) is actually back in composition — requesting
@@ -792,17 +1136,23 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.hoverable(interazione)) {
             if (inModifica) {
-                CampoDataInModifica(testo, { testo = it }, stile, !riga.operazioneInCorso, ::termina, tag)
+                CampoDataInModifica(testo, { testo = it }, stile, abilitato, ::termina, tag)
             } else {
-                Text(
-                    text = testo,
-                    style = stile,
-                    modifier = Modifier
-                        .focusRequester(focusTesto)
-                        .focusable()
-                        .clickable(enabled = !riga.operazioneInCorso) { inModifica = true }
-                        .testTag(tag),
-                )
+                val lettura = @Composable {
+                    Text(
+                        text = testo,
+                        style = stile,
+                        modifier = Modifier
+                            .focusRequester(focusTesto)
+                            .focusable()
+                            .clickable(enabled = abilitato) {
+                                testo = testoModifica(valore)
+                                inModifica = true
+                            }
+                            .testTag(tag),
+                    )
+                }
+                ConSuggerimento(suggerimento, lettura)
                 if (hover) {
                     IconaSn(Icona.Edit, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
                 }
@@ -810,16 +1160,16 @@ private fun CampoData(riga: RigaRegistrazione, azioni: AzioniRegistrazioni) {
         }
         if (nonValido) {
             Text(
-                text = MESSAGGIO_DATA_NON_VALIDA,
+                text = messaggioNonValido,
                 color = colori.danger,
                 style = LocalSnastroTipografia.current.caption,
-                modifier = Modifier.testTag("registrazioni-data-errore-${riga.registrazioneId.valore}"),
+                modifier = Modifier.testTag(tagErrore),
             )
         }
     }
 }
 
-/** [CampoData] while editing: focused on entry; Enter/blur → `termina(true)`, Esc → `termina(false)`. */
+/** [CampoInline] while editing: focused on entry; Enter/blur → `termina(true)`, Esc → `termina(false)`. */
 @Suppress("LongParameterList") // one parameter per documented knob of the inline editor
 @Composable
 private fun CampoDataInModifica(
@@ -882,13 +1232,13 @@ internal fun String.aData(): LocalDate? =
  * voice dots — [IdentificazioneRiga] carries only counts, no `VoceId`s to colour.
  */
 @Composable
-private fun BadgeIdentificazione(identificazione: IdentificazioneRiga, id: RegistrazioneId) {
+private fun BadgeIdentificazione(identificazione: IdentificazioneRiga, id: String) {
     val colori = LocalSnastroColori.current
     Text(
         text = etichettaIdentificazione(identificazione.numVoci, identificazione.numVociDaIdentificare),
         style = LocalSnastroTipografia.current.caption,
         color = if (identificazione.numVociDaIdentificare > 0) colori.accentInk else colori.inkMuted,
-        modifier = Modifier.testTag("registrazioni-identificazione-${id.valore}"),
+        modifier = Modifier.testTag("registrazioni-identificazione-$id"),
     )
 }
 
@@ -1147,6 +1497,19 @@ private fun sceltaFileAudio(): String? {
         selettore.selectedFile.absolutePath
     } else {
         null
+    }
+}
+
+/** 'Aggiungi parti…': the same native picker, several files at once (AC-I71); empty when cancelled. */
+private fun sceltaFileAudioMultipla(): List<String> {
+    val selettore = JFileChooser().apply {
+        fileSelectionMode = JFileChooser.FILES_ONLY
+        isMultiSelectionEnabled = true
+    }
+    return if (selettore.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+        selettore.selectedFiles.map { it.absolutePath }
+    } else {
+        emptyList()
     }
 }
 

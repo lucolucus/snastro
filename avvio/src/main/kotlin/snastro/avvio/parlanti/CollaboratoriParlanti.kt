@@ -9,7 +9,6 @@ import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.comandi.EliminaParlante
 import snastro.parlanti.applicazione.comandi.PromuoviParlante
 import snastro.parlanti.applicazione.comandi.RinominaParlante
-import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
 import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
@@ -26,8 +25,7 @@ internal class LettureParlanti(
     val parlantiAttivi: () -> List<ParlanteAttivo>,
     val estratto: (VoceRef) -> EstrattoRef?,
     val parlantiDelProgetto: () -> List<ParlanteDelProgetto>,
-    val identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione>,
-    /** `viste-parlanti-incontro` (AC-I47): bound by the Incontri screens; [identificazioni] goes with S2's rows. */
+    /** `viste-parlanti-incontro` (AC-I47): the per-Incontro badge of S2's rows (ADR 0033 §5). */
     val identificazioniIncontri: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro>,
 )
 

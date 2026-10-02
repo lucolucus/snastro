@@ -56,6 +56,11 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     scegliImporta = {},
     confermaImporta = {},
     annullaImporta = {},
+    espandiIncontro = {},
+    modificaOraDiInizio = { _, _ -> },
+    modificaNumeroPersoneIncontro = { _, _ -> },
+    avviaElaborazioniIncontro = {},
+    chiudiErroreIncontro = {},
 )
 
 /**

@@ -114,11 +114,14 @@ class RegistrazioniPresenterTest {
             statiElaborazione = stati,
             avviaElaborazione = avvia,
             apriRegistrazione = apriRegistrazione,
-            identificazioni = { emptyList() },
+            identificazioniIncontri = { emptyMap() },
             ritrascrivi = { error("ritrascrivi non atteso in questo test") },
             annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
             eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { posizioni },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
         )
     }
 

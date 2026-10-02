@@ -92,11 +92,14 @@ class RegistrazioniPresenterConcorrenzaTest {
                 statiElaborazione = { emptyList() },
                 avviaElaborazione = { error("non atteso in questo test") },
                 apriRegistrazione = { error("non atteso in questo test") },
-                identificazioni = { emptyList() },
+                identificazioniIncontri = { emptyMap() },
                 ritrascrivi = { error("non atteso in questo test") },
                 annullaElaborazione = { error("non atteso in questo test") },
                 eliminaRegistrazione = { error("non atteso in questo test") },
                 posizioniNellaCoda = { PosizioniCoda.VUOTA },
+                avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+                modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+                numeroPersonePrecompilato = { null },
             )
             // initial load, chiamata #1
             attendiFinche(messaggio = "Dati dopo il caricamento iniziale") {
@@ -141,6 +144,7 @@ class RegistrazioniPresenterConcorrenzaTest {
 
     // --- L485b: an older success must not be hidden by a newer load that already failed -------------
 
+    @Suppress("LongMethod") // the second presenter's collaborators are wired inline
     @Test
     fun `L485b un successo piu vecchio si applica anche se un caricamento piu nuovo e gia fallito`() {
         val esecutoreUi = Executors.newSingleThreadExecutor()
@@ -177,11 +181,14 @@ class RegistrazioniPresenterConcorrenzaTest {
                 statiElaborazione = { emptyList() },
                 avviaElaborazione = { error("non atteso in questo test") },
                 apriRegistrazione = { error("non atteso in questo test") },
-                identificazioni = { emptyList() },
+                identificazioniIncontri = { emptyMap() },
                 ritrascrivi = { error("non atteso in questo test") },
                 annullaElaborazione = { error("non atteso in questo test") },
                 eliminaRegistrazione = { error("non atteso in questo test") },
                 posizioniNellaCoda = { PosizioniCoda.VUOTA },
+                avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+                modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+                numeroPersonePrecompilato = { null },
             )
             // `init` already launched the initial load (chiamata #1); it is now blocked.
             assertTrue(ingresso.await(ATTESA_S, TimeUnit.SECONDS))

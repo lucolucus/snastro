@@ -7,9 +7,10 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.ElaborazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
-import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
+import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -54,7 +55,7 @@ private fun statoVista(
 )
 
 /**
- * AC-204/AC-345 (fetta Parlanti): the identification badge — [RegistrazioniPresenter.identificazioni]
+ * AC-204/AC-345 (fetta Parlanti): the identification badge — [RegistrazioniPresenter] `identificazioniIncontri`
  * (split from `RegistrazioniPresenterTest`).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -64,7 +65,7 @@ class RegistrazioniIdentificazioneTest {
         scope: TestScope,
         registrazioni: () -> List<RegistrazioneDelProgettoVista>,
         stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
-        identificazioni: (List<RegistrazioneId>) -> List<ConteggioIdentificazione> = { emptyList() },
+        identificazioni: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro> = { emptyMap() },
         aggiornamenti: AggiornamentiVistaFinta = AggiornamentiVistaFinta(),
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
@@ -83,11 +84,14 @@ class RegistrazioniIdentificazioneTest {
             statiElaborazione = stati,
             avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
             apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
-            identificazioni = identificazioni,
+            identificazioniIncontri = identificazioni,
             ritrascrivi = { error("ritrascrivi non atteso in questo test") },
             annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
             eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { PosizioniCoda.VUOTA },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
         )
     }
 
@@ -97,7 +101,7 @@ class RegistrazioniIdentificazioneTest {
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
             stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
-            identificazioni = { ids -> ids.map { ConteggioIdentificazione(it, numVociDaIdentificare = 1) } },
+            identificazioni = { ids -> ids.associateWith { IdentificazioneIncontro(3, numVociDaIdentificare = 1) } },
         )
         advanceUntilIdle()
 
@@ -111,7 +115,7 @@ class RegistrazioniIdentificazioneTest {
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
             stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
-            identificazioni = { emptyList() }, // nessun Trascritto ancora per questa riga
+            identificazioni = { emptyMap() }, // nessun Trascritto ancora per questa riga
         )
         advanceUntilIdle()
 
@@ -125,7 +129,7 @@ class RegistrazioniIdentificazioneTest {
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
             stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
-            identificazioni = { ids -> ids.map { ConteggioIdentificazione(it, numVociDaIdentificare = 0) } },
+            identificazioni = { ids -> ids.associateWith { IdentificazioneIncontro(3, numVociDaIdentificare = 0) } },
         )
         advanceUntilIdle()
 
@@ -158,7 +162,7 @@ class RegistrazioniIdentificazioneTest {
             registrazioni = { listOf(rigaVista(REG_1)) },
             stati = { ids -> ids.map { statoVista(it, StatoElaborazioneVista.COMPLETATA, numVoci = 3) } },
             identificazioni = { ids ->
-                ids.map { ConteggioIdentificazione(it, numVociDaIdentificare = daIdentificare) }
+                ids.associateWith { IdentificazioneIncontro(3, numVociDaIdentificare = daIdentificare) }
             },
             aggiornamenti = aggiornamenti,
         )

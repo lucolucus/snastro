@@ -52,6 +52,7 @@ import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
 import snastro.ui.testi.titoloConfermaElimina
 import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.io.File
+import java.security.MessageDigest
 import java.time.LocalDate
 import javax.imageio.ImageIO
 
@@ -84,6 +85,11 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     scegliImporta = {},
     confermaImporta = {},
     annullaImporta = {},
+    espandiIncontro = {},
+    modificaOraDiInizio = { _, _ -> },
+    modificaNumeroPersoneIncontro = { _, _ -> },
+    avviaElaborazioniIncontro = {},
+    chiudiErroreIncontro = {},
 )
 
 private val REG_1 = RegistrazioneId("id-1")
@@ -1195,5 +1201,23 @@ class RegistrazioniRenderCheckTest {
         val bitmap = onRoot().captureToImage().toAwtImage()
         ImageIO.write(bitmap, "PNG", png)
         check(png.exists() && png.length() > 0) { "renderCheck: PNG not written: $png" }
+        verificaUgualeAOggi(png)
+    }
+
+    /**
+     * INV-I3: every fixture of this class is a 1-part Incontro, and its PNG must equal the one S2 rendered BEFORE the
+     * Incontri (the SHA-256 of today's PNG, `registrazioni-1-parte-baseline.txt`, taken at 1280x800 and 1024x640, light
+     * and dark). The three open-menu fixtures are not in it: their menu gains 'Aggiungi parti…' by design.
+     */
+    private fun verificaUgualeAOggi(png: File) {
+        val atteso = BASELINE_1_PARTE[png.name] ?: return
+        val impronta = MessageDigest.getInstance("SHA-256").digest(png.readBytes())
+        val effettivo = impronta.joinToString("") { "%02x".format(it) }
+        check(effettivo == atteso) { "INV-I3: ${png.name} differs from today's PNG ($effettivo != $atteso)" }
     }
 }
+
+private val BASELINE_1_PARTE: Map<String, String> =
+    RegistrazioniRenderCheckTest::class.java.getResourceAsStream("/registrazioni-1-parte-baseline.txt")!!
+        .bufferedReader().readLines().filter { it.isNotBlank() }
+        .associate { it.substringBefore(' ') to it.substringAfter(' ') }

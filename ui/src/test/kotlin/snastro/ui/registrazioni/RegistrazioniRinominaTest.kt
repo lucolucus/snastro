@@ -58,11 +58,14 @@ class RegistrazioniRinominaTest {
             statiElaborazione = { emptyList() },
             avviaElaborazione = { error("avviaElaborazione non atteso in questo test") },
             apriRegistrazione = { error("apriRegistrazione non atteso in questo test") },
-            identificazioni = { emptyList() },
+            identificazioniIncontri = { emptyMap() },
             ritrascrivi = { error("ritrascrivi non atteso in questo test") },
             annullaElaborazione = { error("annullaElaborazione non atteso in questo test") },
             eliminaRegistrazione = { error("eliminaRegistrazione non atteso in questo test") },
             posizioniNellaCoda = { PosizioniCoda.VUOTA },
+            avviaElaborazioniDellIncontro = { error("avviaElaborazioniDellIncontro non atteso in questo test") },
+            modificaOraDiInizioRegistrazione = { _, _ -> error("modificaOraDiInizio non atteso in questo test") },
+            numeroPersonePrecompilato = { null },
         )
     }
 

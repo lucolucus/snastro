@@ -84,11 +84,16 @@ internal fun costruisciRegistrazioniPresenter(
     statiElaborazione = collaboratori.trascrizione.statiElaborazione,
     avviaElaborazione = collaboratori.avviaElaborazione,
     apriRegistrazione = apriRegistrazione,
-    identificazioni = collaboratori.parlanti.letture.identificazioni,
+    identificazioniIncontri = collaboratori.parlanti.letture.identificazioniIncontri,
     ritrascrivi = collaboratori.avviaElaborazione,
     annullaElaborazione = collaboratori.trascrizione.annullaElaborazione,
     eliminaRegistrazione = collaboratori.eliminaRegistrazione,
     posizioniNellaCoda = collaboratori.posizioniNellaCoda::istantanea,
+    // Wired by `avvio-incontro-parti` (D-0037): until then 'Trascrivi N parti' and the start-time edit end in the
+    // presenter's generic failure message, and the field has no prefill.
+    avviaElaborazioniDellIncontro = { error("AvviaElaborazioniDellIncontro: collegamento in avvio-incontro-parti") },
+    modificaOraDiInizioRegistrazione = { _, _ -> error("ModificaOraDiInizio: collegamento in avvio-incontro-parti") },
+    numeroPersonePrecompilato = { null },
 )
 
 /**

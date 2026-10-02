@@ -3,6 +3,7 @@ package snastro.ui.registrazioni
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import java.time.LocalDate
+import java.time.LocalTime
 
 /**
  * One lambda per user action of S2 · Registrazioni (dev-architecture `#presenter`, user decision
@@ -21,6 +22,10 @@ import java.time.LocalDate
  *
  * ADR 0033 §2 / AC-I70..I71: `scegliImporta`/`confermaImporta`/`annullaImporta` drive the 2+ files import dialog;
  * `aggiungiParti` is "Aggiungi parti…" on an Incontro's row, called with the files the view's picker returned.
+ *
+ * AC-I66..I69 (S2 per Incontro): `espandiIncontro` toggles the chevron; `modificaOraDiInizio` replaces a Parte's start
+ * time (`null` clears it); `modificaNumeroPersoneIncontro`/`avviaElaborazioniIncontro` are the ONE field and 'Trascrivi
+ * N parti' of a multi-part Incontro; `chiudiErroreIncontro` dismisses its inline message.
  */
 data class AzioniRegistrazioni(
     val importa: (percorsi: List<String>) -> Unit,
@@ -46,4 +51,9 @@ data class AzioniRegistrazioni(
     val scegliImporta: (SceltaImporta) -> Unit,
     val confermaImporta: () -> Unit,
     val annullaImporta: () -> Unit,
+    val espandiIncontro: (IncontroId) -> Unit,
+    val modificaOraDiInizio: (RegistrazioneId, LocalTime?) -> Unit,
+    val modificaNumeroPersoneIncontro: (IncontroId, String) -> Unit,
+    val avviaElaborazioniIncontro: (IncontroId) -> Unit,
+    val chiudiErroreIncontro: (IncontroId) -> Unit,
 )
