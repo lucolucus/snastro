@@ -169,7 +169,7 @@ class StatoVociRicaricaTest {
             }
 
             assertTrue(conclusa.await(5, TimeUnit.SECONDS), "la lettura non si e conclusa")
-            assertEquals(0, letture.get(), "l'Incontro viene solo dalla vista caricata, mai da una lettura del repository")
+            assertEquals(0, letture.get(), "l'Incontro viene dalla vista caricata, mai da una lettura del repository")
         } finally {
             eseguitori.shutdownNow()
         }
