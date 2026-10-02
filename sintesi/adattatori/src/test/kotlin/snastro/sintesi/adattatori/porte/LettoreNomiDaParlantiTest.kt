@@ -112,9 +112,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro))
 
         /**
-         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
-         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
-         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
+         * Off (D-0037) until the I2 capability switch (its own change): [aggiungiParte] already imports through
+         * Progetto's `AggiungiRegistrazione` into the Incontro, so switching it on registers the multi-Parte cases.
          */
         override val piuPartiPerIncontro: Boolean = false
 
@@ -134,9 +133,26 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
-            val id = importa()
-            val incontroId = checkNotNull(catalogo.registrazione(id)).incontroId
-            val refs = (1..voci).map { n -> VoceRef(incontroId, VoceId(n)) }
+            val id = importa(Destinazione.NuovoIncontro)
+            return semina(id, checkNotNull(catalogo.registrazione(id)).incontroId, voci)
+        }
+
+        /**
+         * Implemented for when [piuPartiPerIncontro] is switched on (pre-I2-8): Progetto's AggiungiRegistrazione into
+         * the existing Incontro, whose new Voci are numbered after its existing ones (INV-I4).
+         */
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneSeminata {
+            require(voci >= 1) { "voci deve essere >= 1: $voci" }
+            return semina(importa(Destinazione.Incontro(incontroId)), incontroId, voci)
+        }
+
+        /**
+         * Parlanti's view of the new Parte [id] of [incontroId] with [voci] new Voci, MERGED into the Incontro's Voce
+         * list: the Voci of the earlier Parti and their per-Registrazione intervals are kept (L97).
+         */
+        private fun semina(id: RegistrazioneId, incontroId: IncontroId, voci: Int): RegistrazioneSeminata {
+            val gia = vociViste[incontroId].orEmpty()
+            val refs = (gia.size + 1..gia.size + voci).map { n -> VoceRef(incontroId, VoceId(n)) }
             registrazioniViste[id] = RegistrazioneVista(
                 registrazioneId = id,
                 incontroId = incontroId,
@@ -146,18 +162,15 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 dataRegistrazione = LocalDate.of(2026, 9, 23),
                 durataMs = DURATA_REGISTRAZIONE_MS,
             )
-            vociViste[incontroId] = refs.map { ref ->
-                val inizio = (ref.voceId.numero - 1) * 2_000L
+            vociViste[incontroId] = gia + refs.mapIndexed { i, ref ->
+                val inizio = i * 2_000L
                 VoceVista(ref, mapOf(id to listOf(IntervalloMs(inizio, inizio + 1_000L))))
             }
             return RegistrazioneSeminata(id, incontroId, refs)
         }
 
-        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneSeminata =
-            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
-
-        /** Progetto's AggiungiRegistrazione: the one Parte of a new Incontro. */
-        private fun importa(): RegistrazioneId {
+        /** Progetto's AggiungiRegistrazione into [destinazione]. */
+        private fun importa(destinazione: Destinazione): RegistrazioneId {
             val idProgetto = checkNotNull(progetti.trova()).id
             val percorso = "/sorgenti/parte-${++contatore}.m4a"
             archivio.conSorgente(percorso)
@@ -172,7 +185,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 sonda,
                 archivio,
                 eventiProgetto,
-            ).esegui(AggiungiRegistrazione(idProgetto, listOf(percorso), Destinazione.NuovoIncontro)).atteso()
+            ).esegui(AggiungiRegistrazione(idProgetto, listOf(percorso), destinazione)).atteso()
             return eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }
 

@@ -15,11 +15,10 @@ import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
 import snastro.sintesi.applicazione.porte.ParteSintesi
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
-import snastro.sintesi.applicazione.porte.inIngresso
+import snastro.sintesi.applicazione.porte.riassumibilitaInDuePassi
+import snastro.sintesi.applicazione.porte.stimaTokenDi
 import snastro.sintesi.dominio.Argomento
 import snastro.sintesi.dominio.ErroreSintesi
-import snastro.sintesi.dominio.IngressoRiassunto
-import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.Riassumibilita
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
@@ -70,34 +69,21 @@ public class RiassumiServizio(
     }
 
     /**
-     * [Riassumibilita] in two passes: the size estimate needs the whole labelled input (up to ~540k chars on a 3 h
-     * Incontro), so it is built only when every other precondition already holds. A `RiassuntoGiaAperto` carries
-     * [incontroId], equal to the repository backstop's own (INV-S2).
+     * [Riassumibilita] in two passes ([riassumibilitaInDuePassi]). A `RiassuntoGiaAperto` carries [incontroId], equal
+     * to the repository backstop's own (INV-S2).
      */
     private fun riassumibile(incontroId: IncontroId, parti: List<ParteSintesi>): Esito<Unit> {
         val modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato
         val stati = parti.map { it.numero to trascritti.statoParte(it.registrazioneId) }
         val riassuntoAperto = riassunti.trova(incontroId).any { it.aperto }
-        val esito = Riassumibilita.valuta(modelloInstallato, stati, riassuntoAperto, stimaToken = null)
-            .poi { Riassumibilita.valuta(modelloInstallato, stati, riassuntoAperto, stimaDi(parti)) }
+        val esito = riassumibilitaInDuePassi(modelloInstallato, stati, riassuntoAperto) {
+            stimaTokenDi(parti, trascritti::segmenti)
+        }
         val errore = (esito as? Esito.Errore)?.errore
         return if (errore is ErroreSintesi.RiassuntoGiaAperto) {
             Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(incontroId))
         } else {
             esito
-        }
-    }
-
-    /**
-     * The estimate of the whole labelled input ([IngressoRiassunto], no names, ADR 0032) over every Parte; `null`
-     * when a Parte has no Trascritto (the input is not built: that Parte blocks first).
-     */
-    private fun stimaDi(parti: List<ParteSintesi>): Int? {
-        val lette = parti.map { p -> trascritti.segmenti(p.registrazioneId)?.map { it.inIngresso(p.registrazioneId) } }
-        return if (lette.any { it == null }) {
-            null
-        } else {
-            LimiteIngresso.stimaToken(IngressoRiassunto.costruisci(lette.map { it.orEmpty() }).testo)
         }
     }
 

@@ -2,6 +2,7 @@ package snastro.sintesi.dominio
 
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
@@ -72,6 +73,22 @@ class RiassuntoTest {
         assertEquals(ConclusioneRiassunto.Fallito(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE), conclusione)
         assertTrue(r.fallito && !r.aperto)
         assertEquals(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE, r.motivoFallimento)
+    }
+
+    @Test
+    fun `ADR 0037 par 8 senza alcuna Parte con Trascritto un Sommario solo porta a fallito, non a pronto vuoto`() {
+        listOf(
+            StrutturaIncontro(listOf(PARTE to null, RegistrazioneId("parte-2") to null)),
+            StrutturaIncontro(emptyList()),
+        ).forEach { struttura ->
+            val r = unRiassuntoInCorso()
+
+            val conclusione = r.completa(unaBozza(sommario = "si parla del budget"), struttura, emptyList()).atteso()
+
+            assertEquals(ConclusioneRiassunto.Fallito(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE), conclusione)
+            assertTrue(r.fallito, "struttura $struttura")
+            assertNull(r.struttura)
+        }
     }
 
     @Test

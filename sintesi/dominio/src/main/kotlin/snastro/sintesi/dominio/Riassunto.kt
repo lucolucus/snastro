@@ -104,7 +104,7 @@ public class Riassunto internal constructor(
      * INV-I10: verifies [bozza] against [struttura] (the Parti read for this run) through the run's label table
      * [etichette] ([IngressoEtichettato.etichette]). Some content left → `pronto` (kept whole, never truncated:
      * INV-S10), recording the Parti of [struttura] that had a Trascritto (a Parte without one makes it born `superato`,
-     * ADR 0037 §8); nothing left → `fallito` NESSUN_CONTENUTO_VERIFICABILE.
+     * ADR 0037 §8); nothing left, or no Parte with a Trascritto at all → `fallito` NESSUN_CONTENUTO_VERIFICABILE.
      */
     public fun completa(
         bozza: BozzaRiassunto,
@@ -113,12 +113,15 @@ public class Riassunto internal constructor(
     ): Esito<ConclusioneRiassunto> {
         if (stato != IN_CORSO) return nonAmmessa(PRONTO)
         val verificato = VerificaDelleFonti(struttura, etichette).applica(bozza)
-        return if (verificato.vuoto) {
+        val registrata = struttura.conTrascritto()
+        // ADR 0037 §8: no Parte with a Trascritto leaves nothing a Fonte could be verified against (a lone Sommario
+        // included): fallito, never a `pronto` with an empty recorded structure.
+        return if (verificato.vuoto || registrata.parti.isEmpty()) {
             fallisci(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE).mappa { ConclusioneRiassunto.Fallito(it.motivo) }
         } else {
             transizione(da = IN_CORSO, verso = PRONTO) {
                 _contenuto = verificato
-                _struttura = struttura.conTrascritto().chiave
+                _struttura = registrata.chiave
                 ConclusioneRiassunto.Pronto(verificato.omessi)
             }
         }

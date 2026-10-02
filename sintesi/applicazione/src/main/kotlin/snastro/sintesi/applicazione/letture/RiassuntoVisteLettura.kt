@@ -8,7 +8,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
-import snastro.kernel.poi
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreNomi
@@ -17,10 +16,10 @@ import snastro.sintesi.applicazione.porte.ParteSintesi
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
-import snastro.sintesi.applicazione.porte.inIngresso
+import snastro.sintesi.applicazione.porte.riassumibilitaInDuePassi
+import snastro.sintesi.applicazione.porte.stimaTokenDi
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.IngressoRiassunto
-import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.ParteTesto
 import snastro.sintesi.dominio.Riassumibilita
 import snastro.sintesi.dominio.Riassunto
@@ -80,19 +79,14 @@ public class RiassuntoVisteLettura(
     private fun disponibilita(corrente: Corrente): DisponibilitaVista {
         val stati = corrente.parti.map { it.numero to trascritti.statoParte(it.registrazioneId) }
         // `modello` and `richiestaAperta` surface the other two reasons; the input is built only when no Parte blocks
-        val esito = Riassumibilita.valuta(modelloInstallato = true, stati, riassuntoAperto = false, stimaToken = null)
-            .poi { Riassumibilita.valuta(modelloInstallato = true, stati, riassuntoAperto = false, stimaDi(corrente)) }
+        val esito = riassumibilitaInDuePassi(modelloInstallato = true, stati, riassuntoAperto = false) {
+            stimaTokenDi(corrente.parti, corrente::segmentiLetti)
+        }
         return when (esito) {
             is Esito.Ok -> DisponibilitaVista.Disponibile
             is Esito.Errore -> DisponibilitaVista.NonDisponibile(motivoDi(esito.errore))
         }
     }
-
-    private fun stimaDi(corrente: Corrente): Int = LimiteIngresso.stimaToken(
-        IngressoRiassunto.costruisci(
-            corrente.parti.map { p -> corrente.segmentiDi(p).map { it.inIngresso(p.registrazioneId) } },
-        ).testo,
-    )
 
     /** Only the four reasons reachable with `modelloInstallato = true` and `riassuntoAperto = false`. */
     private fun motivoDi(errore: ErroreDominio): MotivoNonDisponibile = when (errore) {
@@ -130,6 +124,9 @@ private class Corrente(
     val voci: Set<VoceId> = segmenti.values.flatMap { it.orEmpty() }.map { it.voceId }.toSet()
 
     fun segmentiDi(p: ParteSintesi): List<SegmentoSintesi> = segmenti[p.registrazioneId].orEmpty()
+
+    /** The Segmenti of Parte [r] as read, `null` when it has no Trascritto. */
+    fun segmentiLetti(r: RegistrazioneId): List<SegmentoSintesi>? = segmenti[r]
 
     fun parteDi(r: RegistrazioneId): ParteSintesi? = parti.firstOrNull { it.registrazioneId == r }
 
