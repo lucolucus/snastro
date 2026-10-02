@@ -332,6 +332,8 @@ public class EseguiProssimaElaborazioneServizio(
         const val MOTIVO_RIASSEGNAZIONE_NON_AMMESSA = "riassegnazione del segmento non consentita"
         const val MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO = "numero di persone non valido"
         const val MOTIVO_TRASCRITTO_CAMBIATO = "la trascrizione è cambiata nel frattempo"
+        const val MOTIVO_INCONTRO_NON_TROVATO = "incontro non trovato"
+        const val MOTIVO_NESSUNA_PARTE_DA_TRASCRIVERE = "nessuna parte da trascrivere"
 
         /** 16 kHz mono (`DecodificatoreAudio`, ADR 0005): samples per millisecond. */
         const val CAMPIONI_PER_MS = 16
@@ -359,6 +361,8 @@ public class EseguiProssimaElaborazioneServizio(
             is ErroreTrascrizione.RiassegnazioneNonAmmessa -> MOTIVO_RIASSEGNAZIONE_NON_AMMESSA
             is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MOTIVO_NUMERO_PERSONE_FUORI_INTERVALLO
             is ErroreTrascrizione.TrascrittoCambiato -> MOTIVO_TRASCRITTO_CAMBIATO
+            is ErroreTrascrizione.IncontroNonTrovato -> MOTIVO_INCONTRO_NON_TROVATO
+            is ErroreTrascrizione.NessunaParteDaTrascrivere -> MOTIVO_NESSUNA_PARTE_DA_TRASCRIVERE
         }
 
         /**
