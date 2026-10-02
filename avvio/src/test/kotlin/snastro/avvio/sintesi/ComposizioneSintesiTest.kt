@@ -243,6 +243,7 @@ class ComposizioneSintesiTest {
             val elimina = EliminaRegistrazioneServizio(
                 senzaSintesi.unitaDiLavoro,
                 it.porte.registrazioni,
+                it.porte.incontri,
                 it.porte.eliminazioniInSospeso,
                 senzaSintesi,
             )
