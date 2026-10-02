@@ -12,7 +12,6 @@ import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
-import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzione
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzioneServizio
 import snastro.parlanti.applicazione.comandi.EliminaParlante
@@ -30,12 +29,27 @@ import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
+import snastro.progetto.applicazione.comandi.CreaProgetto
+import snastro.progetto.applicazione.comandi.CreaProgettoServizio
+import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
+import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.progetto.applicazione.porte.ArchivioAudioFinta
+import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
+import snastro.progetto.applicazione.porte.InfoAudio
+import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
+import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
+import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.sintesi.applicazione.porte.AmbienteLettoreNomi
 import snastro.sintesi.applicazione.porte.LettoreNomi
 import snastro.sintesi.applicazione.porte.LettoreNomiContratto
 import snastro.sintesi.applicazione.porte.ParlanteSeminato
 import snastro.sintesi.applicazione.porte.RegistrazioneSeminata
+import java.time.Clock
+import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneOffset
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): [LettoreNomiDaParlanti] passes [LettoreNomiContratto]
@@ -50,8 +64,10 @@ import java.time.LocalDate
  * "fakes are mandatory for every port"), never touching a raw Parlanti aggregate or query. Parlanti's
  * OWN consumed ports (`LettoreRegistrazione`/`LettoreVoci`/`DecodificatoreAudio`/`EstrattoreImpronta`)
  * are Parlanti's OWN fakes too — none of them is part of the `nomi-per-sintesi` boundary under test,
- * so the Registrazione/Voci they need are synthesized directly (this Ambiente's own contract, unlike
- * Sbobinatura's, never promises real Trascritto-minted Voci — see `AmbienteLettoreNomi`'s KDoc).
+ * so the Registrazione/Voci they need are synthesized directly, from the Registrazione and Incontro Progetto
+ * minted through ITS commands (the adapter reads the Incontro's Parti from Progetto's `CatalogoRegistrazioni`).
+ * This Ambiente's own contract, unlike Sbobinatura's, never promises real Trascritto-minted Voci (see
+ * `AmbienteLettoreNomi`'s KDoc).
  *
  * [ParlanteSeminato] stays opaque at Sintesi's own boundary the whole time (ADR 0021 §7, INV-S5): only
  * this environment maps its [ParlanteSeminato.chiave] to the real [ParlanteId] Parlanti minted, read
@@ -74,10 +90,34 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
         private val vociViste = mutableMapOf<IncontroId, List<VoceVista>>()
 
+        // Progetto: seeded only through CreaProgettoServizio / AggiungiRegistrazioneServizio (ADR 0033 §4).
+        private val clock = Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC)
+        private val progetti = ProgettoRepositoryFinta()
+        private val registrazioniProgetto = RegistrazioneRepositoryFinta()
+        private val incontriProgetto = IncontroRepositoryFinta(registrazioniProgetto)
+        private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
+        private val archivio = ArchivioAudioFinta()
+        private val catalogo =
+            CatalogoRegistrazioni(registrazioniProgetto, incontriProgetto)
+        private var contatore = 0
+
+        init {
+            CreaProgettoServizio(eventiProgetto.unitaDiLavoro, generatoreId, progetti, eventiProgetto)
+                .esegui(CreaProgetto("Progetto di prova")).atteso()
+        }
+
         override val lettore: LettoreNomi =
             LettoreNomiDaParlanti(
                 NomiDelleVoci(attribuzioni, parlanti, LettoreRegistrazioneFinta(registrazioniViste), unitaDiLavoro),
+                catalogo,
             )
+
+        /**
+         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
+         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
+         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
+         */
+        override val piuPartiPerIncontro: Boolean = false
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
@@ -95,22 +135,45 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
-            val id = RegistrazioneId(generatoreId.nuovo())
-            val refs = (1..voci).map { n -> VoceRef(unIncontroDi(id), VoceId(n)) }
+            val id = importa()
+            val incontroId = checkNotNull(catalogo.registrazione(id)).incontroId
+            val refs = (1..voci).map { n -> VoceRef(incontroId, VoceId(n)) }
             registrazioniViste[id] = RegistrazioneVista(
                 registrazioneId = id,
-                incontroId = unIncontroDi(id),
+                incontroId = incontroId,
                 progettoId = progettoId,
                 titolo = "Registrazione di prova",
                 riferimentoAudio = RiferimentoAudio("audio/${id.valore}.wav"),
                 dataRegistrazione = LocalDate.of(2026, 9, 23),
                 durataMs = DURATA_REGISTRAZIONE_MS,
             )
-            vociViste[unIncontroDi(id)] = refs.map { ref ->
+            vociViste[incontroId] = refs.map { ref ->
                 val inizio = (ref.voceId.numero - 1) * 2_000L
                 VoceVista(ref, mapOf(id to listOf(IntervalloMs(inizio, inizio + 1_000L))))
             }
-            return RegistrazioneSeminata(id, refs)
+            return RegistrazioneSeminata(id, incontroId, refs)
+        }
+
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneSeminata =
+            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
+
+        /** Progetto's AggiungiRegistrazione: the one Parte of a new Incontro. */
+        private fun importa(): RegistrazioneId {
+            val percorso = "/sorgenti/parte-${++contatore}.m4a"
+            archivio.conSorgente(percorso)
+            val sonda = SondaAudioFinta(leggibili = mapOf(percorso to InfoAudio(60_000L, LocalDate.of(2026, 10, 1))))
+            AggiungiRegistrazioneServizio(
+                eventiProgetto.unitaDiLavoro,
+                generatoreId,
+                clock,
+                progetti,
+                registrazioniProgetto,
+                incontriProgetto,
+                sonda,
+                archivio,
+                eventiProgetto,
+            ).esegui(AggiungiRegistrazione(percorso)).atteso()
+            return eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }
 
         override fun attribuisciANuovo(voce: VoceRef, nome: String): ParlanteSeminato {

@@ -480,8 +480,8 @@ class RiassuntoVisteLetturaTest {
         val trascrittiDelega = LettoreTrascrittoFinta(mapOf(REGISTRAZIONE to listOf(unSegmentoSintesi())))
         val trascritti = object : LettoreTrascritto {
             override fun segmenti(r: RegistrazioneId) = trascrittiDelega.segmenti(r).also { viste += uow.letturaAperta }
-            override fun elaborazioneAperta(r: RegistrazioneId) =
-                trascrittiDelega.elaborazioneAperta(r).also { viste += uow.letturaAperta }
+            override fun statoParte(r: RegistrazioneId) =
+                trascrittiDelega.statoParte(r).also { viste += uow.letturaAperta }
         }
         val riassuntiDelega = RiassuntoRepositoryFinta()
         val riassunti = object : RiassuntoRepository by riassuntiDelega {
@@ -490,7 +490,7 @@ class RiassuntoVisteLetturaTest {
         }
         val nomiDelega = LettoreNomiFinta()
         val nomi = object : LettoreNomi {
-            override fun nomi(r: RegistrazioneId) = nomiDelega.nomi(r).also { viste += uow.letturaAperta }
+            override fun nomi(incontroId: IncontroId) = nomiDelega.nomi(incontroId).also { viste += uow.letturaAperta }
         }
         val lettura = RiassuntoVisteLettura(
             uow,

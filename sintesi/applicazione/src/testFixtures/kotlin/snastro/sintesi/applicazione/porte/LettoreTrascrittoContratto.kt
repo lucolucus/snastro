@@ -3,13 +3,15 @@ package snastro.sintesi.applicazione.porte
 import org.junit.jupiter.api.Test
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
+import snastro.sintesi.dominio.StatoParte.DA_TRASCRIVERE
+import snastro.sintesi.dominio.StatoParte.IN_TRASCRIZIONE
+import snastro.sintesi.dominio.StatoParte.NON_RIUSCITA
+import snastro.sintesi.dominio.StatoParte.TRASCRITTA
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 
 /**
- * Consumer-driven contract of [LettoreTrascritto] (boundary `trascritto-per-sintesi`): one subclass per
+ * Consumer-driven contract of [LettoreTrascritto] (boundaries `trascritto-per-sintesi`, `porte-sintesi`): one subclass per
  * implementation — [LettoreTrascrittoFinta] (D1) and `lettore-trascritto-da-trascrizione-sintesi`
  * (D2, real-on-real).
  */
@@ -132,58 +134,57 @@ public abstract class LettoreTrascrittoContratto {
     }
 
     @Test
-    public fun `AC-S6 elaborazioneAperta e vera solo mentre l ultima Elaborazione e in attesa o in corso`() {
+    public fun `AC-I29 statoParte segue l ultima Elaborazione della prima trascrizione`() {
         val a = ambiente()
         val id = a.aggiungiRegistrazione()
-        assertFalse(a.lettore.elaborazioneAperta(SCONOSCIUTA), "sconosciuta")
-        assertFalse(a.lettore.elaborazioneAperta(id), "mai elaborata")
+        assertEquals(DA_TRASCRIVERE, a.lettore.statoParte(SCONOSCIUTA), "sconosciuta")
+        assertEquals(DA_TRASCRIVERE, a.lettore.statoParte(id), "mai elaborata")
 
         a.accodaElaborazione(id)
-        assertTrue(a.lettore.elaborazioneAperta(id), "in_attesa")
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(id), "in_attesa, senza Trascritto")
         a.avviaElaborazione(id)
-        assertTrue(a.lettore.elaborazioneAperta(id), "in_corso")
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(id), "in_corso, senza Trascritto")
         a.fallisciElaborazione(id)
-        assertFalse(a.lettore.elaborazioneAperta(id), "fallita")
+        assertEquals(NON_RIUSCITA, a.lettore.statoParte(id), "fallita, senza Trascritto")
 
         a.accodaElaborazione(id)
-        assertTrue(a.lettore.elaborazioneAperta(id), "in_attesa dopo fallita")
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(id), "in_attesa dopo fallita")
         a.annullaElaborazione(id)
-        assertFalse(a.lettore.elaborazioneAperta(id), "annullata")
+        assertEquals(NON_RIUSCITA, a.lettore.statoParte(id), "annullata: l'ultima e di nuovo la fallita")
 
         a.accodaElaborazione(id)
         a.avviaElaborazione(id)
         a.completaElaborazione(id, listOf(SemeTurno(0, IntervalloMs(0, 1_000), "Fatto.")))
-        assertFalse(a.lettore.elaborazioneAperta(id), "completata")
+        assertEquals(TRASCRITTA, a.lettore.statoParte(id), "completata")
     }
 
-    // A3: nessun caso annullava l'UNICA Elaborazione mai messa in coda (nessuna storia precedente).
     @Test
-    public fun `AC-S6 annullare l unica Elaborazione mai messa in coda lascia elaborazioneAperta falso`() {
+    public fun `AC-I29 annullare l unica Elaborazione mai messa in coda torna a DA_TRASCRIVERE`() {
         val a = ambiente()
         val id = a.aggiungiRegistrazione()
 
         a.accodaElaborazione(id)
-        assertTrue(a.lettore.elaborazioneAperta(id), "in_attesa, la prima e unica mai creata")
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(id), "in_attesa, la prima e unica mai creata")
 
         a.annullaElaborazione(id)
 
-        assertFalse(a.lettore.elaborazioneAperta(id), "annullata: mai esistita un'altra Elaborazione")
+        assertEquals(DA_TRASCRIVERE, a.lettore.statoParte(id), "annullata: mai esistita un'altra Elaborazione")
         assertNull(a.lettore.segmenti(id), "nessun Trascritto: mai completata alcuna Elaborazione")
     }
 
     @Test
-    public fun `AC-S6 elaborazioneAperta riguarda solo la propria Registrazione`() {
+    public fun `AC-I29 statoParte riguarda solo la propria Registrazione`() {
         val a = ambiente()
         val aperta = a.aggiungiRegistrazione()
         val altra = a.aggiungiRegistrazione()
         a.accodaElaborazione(aperta)
 
-        assertTrue(a.lettore.elaborazioneAperta(aperta))
-        assertFalse(a.lettore.elaborazioneAperta(altra))
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(aperta))
+        assertEquals(DA_TRASCRIVERE, a.lettore.statoParte(altra))
     }
 
     @Test
-    public fun `AC-S6 durante una rielaborazione in coda o in corso segmenti restituisce il VECCHIO Trascritto`() {
+    public fun `AC-I29 una rielaborazione di una Parte trascritta e IN_TRASCRIZIONE e segmenti restituisce il VECCHIO Trascritto`() {
         val a = ambiente()
         val id = a.aggiungiRegistrazione()
         val vecchi = listOf(
@@ -193,25 +194,23 @@ public abstract class LettoreTrascrittoContratto {
         val vecchio = atteso(vecchi, completa(a, id, vecchi))
 
         a.accodaElaborazione(id)
-        assertTrue(a.lettore.elaborazioneAperta(id))
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(id), "rielaborazione in_attesa")
         assertEquals(vecchio, a.lettore.segmenti(id), "rielaborazione in_attesa")
         a.avviaElaborazione(id)
-        assertTrue(a.lettore.elaborazioneAperta(id))
+        assertEquals(IN_TRASCRIZIONE, a.lettore.statoParte(id), "rielaborazione in_corso")
         assertEquals(vecchio, a.lettore.segmenti(id), "rielaborazione in_corso")
         a.fallisciElaborazione(id)
-        assertFalse(a.lettore.elaborazioneAperta(id))
+        assertEquals(TRASCRITTA, a.lettore.statoParte(id), "rielaborazione fallita: il Trascritto resta")
         assertEquals(vecchio, a.lettore.segmenti(id), "rielaborazione fallita")
 
         a.accodaElaborazione(id)
         a.annullaElaborazione(id)
-        // A3: elaborazioneAperta era controllata solo prima, mai qui — un annullamento che la lasciasse vera
-        // (invece di tornare alla "completata" precedente) passava inosservato.
-        assertFalse(a.lettore.elaborazioneAperta(id), "rielaborazione annullata")
+        assertEquals(TRASCRITTA, a.lettore.statoParte(id), "rielaborazione annullata")
         assertEquals(vecchio, a.lettore.segmenti(id), "rielaborazione annullata")
 
         val nuovi = listOf(SemeTurno(0, IntervalloMs(10_000, 14_000), "Versione nuova."))
         val nuovo = atteso(nuovi, completa(a, id, nuovi))
-        assertFalse(a.lettore.elaborazioneAperta(id))
+        assertEquals(TRASCRITTA, a.lettore.statoParte(id), "rielaborazione completata")
         assertEquals(nuovo, a.lettore.segmenti(id), "rielaborazione completata")
     }
 

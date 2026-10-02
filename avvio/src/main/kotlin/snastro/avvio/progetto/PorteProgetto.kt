@@ -112,7 +112,7 @@ internal class PorteProgetto(
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
     val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci, catalogo)
     val trascrittoPerSintesi: LettoreTrascrittoSintesi = LettoreTrascrittoSintesi(vociDelTrascritto, statiElaborazione)
-    val nomiPerSintesi: LettoreNomiSintesi = LettoreNomiSintesi(nomiDelleVoci)
+    val nomiPerSintesi: LettoreNomiSintesi = LettoreNomiSintesi(nomiDelleVoci, catalogo)
 
     companion object {
         /** `SessioneProgettoSeams`' default: the production Registrazione repository, built through here only. */

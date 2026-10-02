@@ -1,8 +1,7 @@
 package snastro.sintesi.applicazione.porte
 
-import snastro.kernel.RegistrazioneId
+import snastro.kernel.IncontroId
 import snastro.kernel.VoceRef
-import snastro.kernel.unIncontroDi
 
 /**
  * In-memory [LettoreNomi] over Published Language data (passes [LettoreNomiContratto]):
@@ -14,8 +13,8 @@ public class LettoreNomiFinta(
     private val attribuzioni: Map<VoceRef, String> = emptyMap(),
     private val nomiParlanti: Map<String, String> = emptyMap(),
 ) : LettoreNomi {
-    override fun nomi(r: RegistrazioneId): Map<VoceRef, String> =
-        attribuzioni.filterKeys { it.incontroId == unIncontroDi(r) }.mapValues { (voce, p) ->
+    override fun nomi(incontroId: IncontroId): Map<VoceRef, String> =
+        attribuzioni.filterKeys { it.incontroId == incontroId }.mapValues { (voce, p) ->
             checkNotNull(nomiParlanti[p]) { "Attribuzione di $voce a $p, assente da nomiParlanti" }
         }
 }

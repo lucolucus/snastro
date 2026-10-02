@@ -5,7 +5,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 
-/** AC-S7 (D1): [LettoreTrascrittoFinta] passes [LettoreTrascrittoContratto] in the gate. */
+/** AC-S7, AC-I29 (D1): [LettoreTrascrittoFinta] passes [LettoreTrascrittoContratto] in the gate. */
 class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
     override fun ambiente(): AmbienteLettoreTrascritto = AmbienteFinto()
 
@@ -25,6 +25,7 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
             get() = LettoreTrascrittoFinta(
                 trascritti.mapValues { it.value.toList() },
                 elaborazioni.filterValues { it.lastOrNull() in APERTI }.keys,
+                elaborazioni.filterValues { it.lastOrNull() == Stato.FALLITA }.keys,
             )
 
         override fun aggiungiRegistrazione(): RegistrazioneId =
