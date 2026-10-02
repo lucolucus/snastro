@@ -107,6 +107,32 @@ class StatiElaborazioneTest {
     }
 
     @Test
+    fun `AC-I41 statoParte nei quattro casi`() {
+        val daFare = RegistrazioneId("p-da-fare")
+        val inCorso = RegistrazioneId("p-in-corso")
+        val rifatta = RegistrazioneId("p-rifatta")
+        val fallita = RegistrazioneId("p-fallita")
+        val trascritta = RegistrazioneId("p-trascritta")
+        elaborazioni.salva(unaElaborazione(IN_CORSO, id = idDi("el-1"), registrazioneId = inCorso))
+        elaborazioni.salva(unaElaborazione(IN_ATTESA, id = idDi("el-2"), registrazioneId = rifatta))
+        trascritti.salva(unaRadice(registrazioneId = rifatta))
+        elaborazioni.salva(unaElaborazione(FALLITA, id = idDi("el-3"), registrazioneId = fallita))
+        elaborazioni.salva(unaElaborazione(COMPLETATA, id = idDi("el-4"), registrazioneId = trascritta))
+        trascritti.salva(unaRadice(registrazioneId = trascritta))
+
+        assertEquals(
+            listOf(
+                StatoParte.DA_TRASCRIVERE,
+                StatoParte.IN_TRASCRIZIONE,
+                StatoParte.IN_TRASCRIZIONE,
+                StatoParte.NON_RIUSCITA,
+                StatoParte.TRASCRITTA,
+            ),
+            listOf(daFare, inCorso, rifatta, fallita, trascritta).map(stati::statoParte),
+        )
+    }
+
+    @Test
     fun `AC-165 numVoci conta le Voci del Trascritto quando esiste`() {
         elaborazioni.salva(unaElaborazione(COMPLETATA, registrazioneId = REGISTRAZIONE))
         trascritti.salva(unaRadice(voci = 3, segmentiPerVoce = 1, registrazioneId = REGISTRAZIONE))

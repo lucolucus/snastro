@@ -179,8 +179,10 @@ class SmokeTest {
                             CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
                         ),
                     ),
+                    LettoreRegistrazioneTrascrizione(
+                        CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
+                    ),
                 ),
-                LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),
             ),
             ParlanteRepositorySql(database, unitaDiLavoroSql),
             AttribuzioneRepositorySql(database),

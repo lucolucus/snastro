@@ -25,6 +25,21 @@ public class StatiElaborazione(
     public fun stati(registrazioneIds: List<RegistrazioneId>): List<StatoRegistrazioneVista> =
         registrazioneIds.map(::riga)
 
+    /**
+     * AC-I41 (ADR 0033 §4): an open run wins (a re-run of a transcribed Parte too), then the Trascritto, then a failed
+     * run, else nothing yet. Derived from [stati]' row, so the latest-run rule lives in one place.
+     */
+    public fun statoParte(r: RegistrazioneId): StatoParte {
+        val riga = riga(r)
+        return when {
+            riga.stato == StatoElaborazioneVista.IN_ATTESA || riga.stato == StatoElaborazioneVista.IN_CORSO ->
+                StatoParte.IN_TRASCRIZIONE
+            riga.trascrittoDisponibile -> StatoParte.TRASCRITTA
+            riga.stato == StatoElaborazioneVista.FALLITA -> StatoParte.NON_RIUSCITA
+            else -> StatoParte.DA_TRASCRIVERE
+        }
+    }
+
     private fun riga(id: RegistrazioneId): StatoRegistrazioneVista {
         val ultima = ultima(id)
         val trascritto = trascritti.trascritto(id) // ADR 0018: whatever the latest run's state (AC-165/AC-447)

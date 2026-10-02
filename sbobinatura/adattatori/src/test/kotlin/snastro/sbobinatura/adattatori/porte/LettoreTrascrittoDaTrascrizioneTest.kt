@@ -106,7 +106,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
 
         override val lettore: LettoreTrascritto =
             LettoreTrascrittoDaTrascrizione(
-                VociDelTrascritto(trascritti),
+                VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste)),
                 catalogo,
             )
 
