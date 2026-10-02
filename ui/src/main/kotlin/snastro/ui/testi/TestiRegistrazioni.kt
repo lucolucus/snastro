@@ -80,6 +80,14 @@ const val MESSAGGIO_CONFERMA_RITRASCRIVI: String =
     "La trascrizione attuale resta consultabile finché la nuova non è pronta, poi viene sostituita. " +
         "Le correzioni delle voci e le assegnazioni dei nomi di questa registrazione andranno perse."
 
+/** AC-I76 (ADR 0035 §8): the multi-part 'Ritrascrivi' confirmation, on a Parte of an Incontro with 2+ Parti. */
+fun titoloConfermaRitrascriviParte(numero: Int, titoloIncontro: String): String =
+    "Ritrascrivere la parte $numero di «$titoloIncontro»?"
+const val MESSAGGIO_CONFERMA_RITRASCRIVI_PARTE: String =
+    "La trascrizione attuale di questa parte resta consultabile finché la nuova non è pronta, poi viene sostituita. " +
+        "Le voci che compaiono solo in questa parte, con le loro correzioni e i loro nomi, andranno perse; " +
+        "le altre voci dell'incontro restano. Il riassunto dell'incontro diventerà superato."
+
 /** AC-450: "Ritrascrizione in coda (n)" / "Ritrascrizione in corso · <fase> · mm:ss" — the same data as
  * [etichettaInAttesa]/[etichettaInCorso]; the label alone makes clear the shown transcript is current. */
 fun etichettaRitrascrizioneInAttesa(posizione: Int): String = "Ritrascrizione in coda ($posizione)"

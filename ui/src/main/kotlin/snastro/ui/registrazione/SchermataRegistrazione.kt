@@ -50,6 +50,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.ui.SnastroTema
@@ -90,12 +91,18 @@ import snastro.ui.testi.MESSAGGIO_COMANDO_IN_ATTESA
 import snastro.ui.testi.MESSAGGIO_TRASCRITTO_VUOTO
 import snastro.ui.testi.TITOLO_BANNER_AUDIO_MANCANTE
 import snastro.ui.testi.TOOLTIP_FRASE_CONFERMATA
+import snastro.ui.testi.etichettaParte
 import snastro.ui.testi.testoBannerVociDaIdentificare
+import snastro.ui.testi.testoBriciolaIncontro
+import snastro.ui.testi.testoParteDi
 import snastro.ui.testi.testoPersone
 import snastro.ui.testi.testoSelezione
+import java.time.format.DateTimeFormatter
 
 private val LARGHEZZA_MASSIMA_TRASCRITTO = 712.dp
 private val LARGHEZZA_SOGLIA_IMPILAMENTO = 1_100.dp
+private val LARGHEZZA_SELETTORE_PARTE_PER_PARTE = 96.dp
+private val FORMATO_ORA: DateTimeFormatter = DateTimeFormatter.ofPattern("HH:mm")
 private val LARGHEZZA_GUTTER = 56.dp
 private val DIMENSIONE_INDICATORE = 14.dp
 private val DIMENSIONE_CASELLA = 16.dp
@@ -378,7 +385,11 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
         // back (the always-visible sidebar already offers that path); no chevron either, so nothing
         // implies a click that would do nothing (rework cycle 1, HIGH-1).
         Text(
-            text = ETICHETTA_BRICIOLA_REGISTRAZIONI,
+            text = stato.parte?.let {
+                "$ETICHETTA_BRICIOLA_REGISTRAZIONI › ${testoBriciolaIncontro(it.titoloIncontro, it.totale)}"
+            } ?: ETICHETTA_BRICIOLA_REGISTRAZIONI,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             style = tipografia.caption,
             color = colori.inkMuted,
             modifier = Modifier.testTag("registrazione-briciole"),
@@ -397,6 +408,7 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
                     color = colori.inkMuted,
                     modifier = Modifier.testTag("registrazione-meta"),
                 )
+                stato.parte?.let { SelettoreParte(it, azioni.vaiAllaParte) }
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -424,10 +436,29 @@ private fun IntestazioneRegistrazione(stato: RegistrazioneUiStato.Dati, azioni: 
 /** AC-580's caption meta line — sums view-only data already in [stato] (a Voce count and, only once the
  * Voci panel is published, how many are still to identify); no new source, purely display arithmetic. */
 private fun testoIntestazione(stato: RegistrazioneUiStato.Dati): String {
+    val prefisso = stato.parte?.let { "${testoParteDi(it.numero, it.totale)} · " }.orEmpty()
+    val ora = stato.parte?.ora?.let { " ${it.format(FORMATO_ORA)}" }.orEmpty()
     val persone = stato.pannello?.carte?.size ?: stato.segmenti.map { it.voceId }.distinct().size
     val daIdentificare = stato.pannello?.carte?.count { it.contenuto is ContenutoCarta.DaIdentificare } ?: 0
-    return "${formattaData(stato.dataRegistrazione)} · ${formattaDurataEstesa(stato.durataMs)} · " +
+    return "$prefisso${formattaData(stato.dataRegistrazione)}$ora · ${formattaDurataEstesa(stato.durataMs)} · " +
         testoPersone(persone, daIdentificare)
+}
+
+/** AC-I74: 'Parte 1 | Parte 2 | Parte 3', the current one selected; choosing another opens S3 of that Parte
+ * (the per-window tab choice, [SelezioneSchedaS3], is kept by the composition). */
+@Composable
+private fun SelettoreParte(parte: IntestazioneParte, vaiAllaParte: (RegistrazioneId) -> Unit) {
+    Spacer(modifier = Modifier.height(SnastroMisure.space2))
+    SchedeSn(
+        schede = parte.parti.map { etichettaParte(it.numero) },
+        selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0),
+        onSeleziona = { indice ->
+            parte.parti[indice].takeIf { it.numero != parte.numero }?.let { vaiAllaParte(it.registrazioneId) }
+        },
+        modifier = Modifier.width(LARGHEZZA_SELETTORE_PARTE_PER_PARTE * parte.parti.size)
+            .testTag("registrazione-parti"),
+        prefissoTag = "parte",
+    )
 }
 
 @Composable

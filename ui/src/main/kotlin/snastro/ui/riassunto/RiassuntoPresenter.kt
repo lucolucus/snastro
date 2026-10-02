@@ -29,6 +29,7 @@ import snastro.ui.testi.contatoreArgomento
 import snastro.ui.testi.erroreArgomentoTroppoLungo
 import snastro.ui.testi.erroreLunghezzaMassima
 import snastro.ui.testi.etichettaScaricaModello
+import snastro.ui.testi.intestazioneIncontro
 import snastro.ui.testi.messaggioDownloadFallito
 import snastro.ui.testi.messaggioFallimento
 import snastro.ui.testi.messaggioModelloInDownload
@@ -92,6 +93,10 @@ class RiassuntoPresenter(
     /** Mirrors `:sintesi:dominio Argomento.MASSIMO_CARATTERI`, injected rather than duplicated as a
      * `:ui`-local literal (finding #148 — CR-1(b) still keeps the VO itself out of `:ui`). */
     private val limiteCaratteriArgomento: Int,
+    /** AC-I81: switches the page to another Parte of the Incontro, staying on the Riassunto tab (`schermata-parte`). */
+    private val vaiAllaParte: (RegistrazioneId) -> Unit,
+    /** AC-I81: plays [RegistrazioneId] from a millisecond (the shared `LettoreAudio`, bound by `:avvio`). */
+    private val riproduciDa: (RegistrazioneId, Long) -> Unit,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -188,13 +193,14 @@ class RiassuntoPresenter(
         richiesta = richiestaUi(v.richiestaAperta, v.incontroId, pos),
         fallimentoTesto = v.ultimoFallimento?.let { messaggioFallimento(it.motivo.codice) },
         nonDisponibileTesto = (v.disponibilita as? DisponibilitaVista.NonDisponibile)?.let {
-            messaggioNonDisponibile(it.motivo)
+            messaggioNonDisponibile(it.motivo, v.numParti)
         },
-        contenuto = v.mostrato?.let(::contenutoUi),
+        contenuto = v.mostrato?.let { contenutoUi(it, v.numParti) },
         argomento = argomentoUiDi(argomentoAttuale),
         lunghezzaMassima = lunghezzaMassimaLocale ?: LunghezzaMassimaUiStato.Testo(ultimaLunghezzaMassimaLetta),
         messaggioErrore = messaggioErrore,
         moduloAperto = moduloAperto,
+        intestazioneTesto = if (v.numParti > 1) intestazioneIncontro(v.numParti) else null,
     )
 
     private fun modelloUi(m: StatoModelloVista): ModelloUi = when (m) {
@@ -386,6 +392,17 @@ class RiassuntoPresenter(
         aggiornaDati { it.copy(lunghezzaMassima = LunghezzaMassimaUiStato.Testo(ultimaLunghezzaMassimaLetta)) }
     }
 
+    /**
+     * AC-I81: a Fonte chip of [parte]: the audio plays from [daMs] (off the UI thread), then another Parte's page
+     * is opened (the tab stays). Playing first: the switch may dispose this presenter's own scope.
+     */
+    private fun apriFonte(parte: RegistrazioneId, daMs: Long) {
+        scope.launch {
+            withContext(io) { riproduciDa(parte, daMs) }
+            if (parte != registrazioneId) vaiAllaParte(parte)
+        }
+    }
+
     val azioni: AzioniRiassunto = AzioniRiassunto(
         cambiaArgomento = ::cambiaArgomento,
         riassumi = ::riassumi,
@@ -396,5 +413,6 @@ class RiassuntoPresenter(
         annullaLunghezzaMassima = ::annullaLunghezzaMassima,
         apriModulo = ::apriModulo,
         chiudiModulo = ::chiudiModulo,
+        apriFonte = ::apriFonte,
     )
 }

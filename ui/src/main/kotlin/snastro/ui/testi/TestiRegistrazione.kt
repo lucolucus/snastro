@@ -36,6 +36,17 @@ const val MESSAGGIO_RITRASCRIZIONE_IN_CORSO: String =
     "Ritrascrizione in corso: modifiche disabilitate fino al termine\n" +
         "Questa trascrizione sarà sostituita quando la nuova sarà pronta."
 
+/** AC-I75 (ADR 0035 §4): the banner on every Parte page while a re-run of Parte [parte] is open (multi-part only;
+ * a 1-part Incontro keeps [MESSAGGIO_RITRASCRIZIONE_IN_CORSO]). */
+fun messaggioRitrascrizioneParteInCorso(parte: Int): String =
+    "Ritrascrizione della parte $parte in corso: modifiche disabilitate fino al termine\n" +
+        "La trascrizione della parte $parte sarà sostituita quando la nuova sarà pronta."
+
+/** AC-I74: the multi-part breadcrumb tail, the subtitle prefix and the switcher label. */
+fun testoBriciolaIncontro(titolo: String, totale: Int): String = "$titolo · $totale parti"
+fun testoParteDi(numero: Int, totale: Int): String = "Parte $numero di $totale"
+fun etichettaParte(numero: Int): String = "Parte $numero"
+
 /** AC-S120: the centre-column tab labels (ux-proposal "Screen S3", [SchedaS3]). */
 const val ETICHETTA_SCHEDA_TRASCRIZIONE: String = "Trascrizione"
 const val ETICHETTA_SCHEDA_RIASSUNTO: String = "Riassunto"

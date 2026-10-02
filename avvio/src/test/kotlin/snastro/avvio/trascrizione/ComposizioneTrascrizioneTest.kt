@@ -191,7 +191,7 @@ class ComposizioneTrascrizioneTest {
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
 
             val presenter =
-                costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, scopeS3, SelezioneSchedaS3())
+                costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, scopeS3, SelezioneSchedaS3(), {})
 
             attendiFinche(timeout = 10.seconds, messaggio = "S3 caricato") {
                 presenter.stato.value is RegistrazioneUiStato.Dati
@@ -286,7 +286,7 @@ class ComposizioneTrascrizioneTest {
             }
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
             val presenter =
-                costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, scopeS3, SelezioneSchedaS3())
+                costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, scopeS3, SelezioneSchedaS3(), {})
             attendiFinche(timeout = 10.seconds, messaggio = "S3 modificabile") {
                 (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == false
             }

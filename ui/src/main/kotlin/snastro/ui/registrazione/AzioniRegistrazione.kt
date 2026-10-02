@@ -2,6 +2,7 @@ package snastro.ui.registrazione
 
 import snastro.kernel.EstrattoRef
 import snastro.kernel.ParlanteId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
@@ -51,4 +52,6 @@ data class AzioniRegistrazione(
     val annullaSomiglianza: () -> Unit = {},
     /** AC-S120/S121: switches the centre-column tab. */
     val selezionaScheda: (SchedaS3) -> Unit = {},
+    /** AC-I74: the Parte switcher — opens S3 of another Parte of the Incontro (tab kept). */
+    val vaiAllaParte: (RegistrazioneId) -> Unit = {},
 )

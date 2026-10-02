@@ -12,6 +12,7 @@ import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
@@ -24,11 +25,13 @@ import snastro.sintesi.applicazione.letture.PuntoChiaveVista
 import snastro.sintesi.applicazione.letture.RiassuntoMostrato
 import snastro.sintesi.applicazione.letture.VoceVista
 import snastro.ui.SnastroTema
+import snastro.ui.stile.FonteChip
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.TAG_EMPTY_STATE
 import snastro.ui.stile.TAG_PALLINO_IN_CORSO
 import java.io.File
 import javax.imageio.ImageIO
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 private const val LARGA = 1280
@@ -198,6 +201,44 @@ private fun statoConMessaggioErrore() = unDati(messaggioErrore = MESSAGGIO_ERROR
  * error, all at once — the combination the bottom-fixed placement used to fail. */
 private fun statoInCorsoConContenutoEMessaggio() =
     statoInCorsoConContenuto().copy(messaggioErrore = MESSAGGIO_ERRORE_RIASSUNTO_GIA_APERTO)
+
+/** Incontro of 3 Parti: chips "parte n · m:ss", a Voce no longer present (as Responsabile, in the Sommario and on
+ * a chip), a chip whose Segmento vanished and one whose Parte was eliminated (INV-I13). */
+private fun contenutoMultiParte(superato: Boolean = false): ContenutoUi {
+    val marco = unaVoce(1, "Marco")
+    val assente = VoceVista(7, "Voce 7", null, presente = false)
+    val fonti = listOf(
+        FonteVista(RegistrazioneId("r-1"), 1, 2, marco, 65_000, segmentoPresente = true),
+        FonteVista(RegistrazioneId("r-3"), 3, 9, marco, 750_000, segmentoPresente = true),
+        FonteVista(RegistrazioneId("r-1"), 1, 6, assente, 90_000, segmentoPresente = true),
+        FonteVista(RegistrazioneId("r-2"), 2, 4, null, null, segmentoPresente = false),
+        FonteVista(RegistrazioneId("r-9"), null, 5, null, null, segmentoPresente = false),
+    )
+    return contenutoUi(
+        RiassuntoMostrato(
+            argomento = null,
+            lunghezzaMassimaParole = 2_000,
+            superato = superato,
+            omessi = 0,
+            sommario = listOf(
+                ParteTestoVista.Testo("Ne parla "),
+                ParteTestoVista.Voce(assente),
+                ParteTestoVista.Testo("."),
+            ),
+            decisioni = listOf(ElementoVista(unTesto("Si parte a ottobre"), fonti)),
+            azioni = listOf(AzioneVista(unTesto("Scrivere il piano"), emptyList(), assente)),
+            questioniAperte = emptyList(),
+            puntiChiave = emptyList(),
+        ),
+        numParti = 3,
+    )
+}
+
+private fun statoMultiParte(superato: Boolean = false) = unDati(contenuto = contenutoMultiParte(superato))
+    .copy(intestazioneTesto = "Riassunto dell'incontro · 3 parti")
+
+private fun statoMultiParteNonDisponibile(testo: String) =
+    statoMultiParte().copy(nonDisponibileTesto = testo)
 
 /**
  * AC-S140: every state 1..12 at 1280×800/1024×640, light and a representative dark subset — a
@@ -521,6 +562,113 @@ class SchedaRiassuntoRenderCheckTest {
             )
         }
 
+    @Test
+    fun `AC-I81 INV-I13 multi parte chip parte n e non piu presente a 1280x800`() =
+        verifica("multi-parte", statoMultiParte(), LARGA, ALTA) {
+            onNodeWithTag("riassunto-intestazione").assertIsDisplayed()
+            onNodeWithText("Riassunto dell'incontro · 3 parti").assertIsDisplayed()
+            onNodeWithText("parte 3 · 12:30").assertIsDisplayed()
+            onNodeWithText("parte 2 · non più presente").assertIsDisplayed()
+            onNodeWithText("non più presente").assertIsDisplayed()
+            onNodeWithTag("riassunto-voce-non-presente").assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-I81 INV-I13 multi parte a 1024x640`() =
+        verifica("multi-parte", statoMultiParte(), PICCOLA_LARGA, PICCOLA_ALTA)
+
+    @Test
+    fun `AC-I81 INV-I13 multi parte scuro a 1280x800`() =
+        verifica("multi-parte", statoMultiParte(), LARGA, ALTA, scuro = true)
+
+    @Test
+    fun `AC-I81 INV-I13 multi parte scuro a 1024x640`() =
+        verifica("multi-parte", statoMultiParte(), PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
+
+    @Test
+    fun `AC-I80 multi parte superato col testo generico a 1280x800`() =
+        verifica("multi-parte-superato", statoMultiParte(superato = true), LARGA, ALTA) {
+            onNodeWithText(
+                "Il riassunto non corrisponde più alle parti attuali (voci, trascrizioni o ordine cambiati).",
+            ).assertIsDisplayed()
+            onNodeWithTag(TAG_RIASSUMI_DI_NUOVO_TEST).assertIsDisplayed()
+        }
+
+    @Test
+    fun `AC-I80 multi parte superato a 1024x640 e scuro`() {
+        verifica("multi-parte-superato", statoMultiParte(superato = true), PICCOLA_LARGA, PICCOLA_ALTA)
+        verifica("multi-parte-superato", statoMultiParte(superato = true), LARGA, ALTA, scuro = true)
+        verifica("multi-parte-superato", statoMultiParte(superato = true), PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
+    }
+
+    @Test
+    fun `AC-I80 i tre suggerimenti disabilitati nominano la parte che blocca a 1024x640 chiaro e scuro`() {
+        listOf(
+            "manca" to "Manca la trascrizione della parte 2.",
+            "in-trascrizione" to "Parte 1 in trascrizione.",
+            "non-riuscita" to "Parte 1 non riuscita: riprova o eliminala.",
+        ).forEach { (nome, testo) ->
+            verifica("multi-parte-$nome", statoMultiParteNonDisponibile(testo), PICCOLA_LARGA, PICCOLA_ALTA) {
+                onNodeWithText(testo).assertIsDisplayed()
+                onNodeWithTag(TAG_NON_DISPONIBILE_TEST).assertIsDisplayed()
+            }
+            verifica("multi-parte-$nome", statoMultiParteNonDisponibile(testo), LARGA, ALTA, scuro = true)
+        }
+    }
+
+    @Test
+    fun `AC-I81 cliccare una chip cliccabile chiama apriFonte con la sua parte e il suo minuto`() {
+        val aperti = mutableListOf<Pair<RegistrazioneId, Long>>()
+        verifica(
+            "multi-parte-click",
+            statoMultiParte(),
+            LARGA,
+            ALTA,
+            azioni = AZIONI_VUOTE.copy(apriFonte = { r, ms -> aperti.add(r to ms) }),
+        ) {
+            onNodeWithText("parte 3 · 12:30").performClick()
+            onNodeWithText("parte 2 · non più presente").performClick()
+            onNodeWithText("non più presente").performClick()
+            waitForIdle()
+            assertEquals(listOf(RegistrazioneId("r-3") to 750_000L), aperti)
+        }
+    }
+
+    // INV-I3: a one-Parte chip is exactly today's FonteChip, pixel for pixel, and not clickable.
+    @Test
+    fun `INV-I3 la chip di un incontro di una parte e identica a quella di oggi`() {
+        fun immagine(contenuto: @androidx.compose.runtime.Composable () -> Unit): java.awt.image.BufferedImage {
+            var img: java.awt.image.BufferedImage? = null
+            runDesktopComposeUiTest(300, 60) {
+                setContent {
+                    SnastroTema(riduciMovimento = true) {
+                        Surface(color = LocalSnastroColori.current.surface, modifier = Modifier.fillMaxSize()) {
+                            contenuto()
+                        }
+                    }
+                }
+                img = onRoot().captureToImage().toAwtImage()
+            }
+            return requireNotNull(img)
+        }
+        val oggi = immagine { FonteChip(voceId = 1, nome = "Marco", inizioMs = 65_000) }
+        val dati = contenutoUi(
+            RiassuntoMostrato(
+                null, 2_000, false, 0, null,
+                listOf(ElementoVista(unTesto("D"), listOf(unaFonte(1, unaVoce(1, "Marco"), 65_000)))),
+                emptyList(), emptyList(), emptyList(),
+            ),
+            numParti = 1,
+        ).decisioni.single().fonti.single()
+        assertEquals("1:05", dati.tempoTesto)
+        assertTrue(!dati.cliccabile)
+        val nuova = immagine { FonteChip(dati, onClick = null) }
+        assertEquals(oggi.width, nuova.width)
+        for (x in 0 until oggi.width) for (y in 0 until oggi.height) {
+            assertEquals(oggi.getRGB(x, y), nuova.getRGB(x, y), "pixel ($x,$y)")
+        }
+    }
+
     /** Every action area/status sits ABOVE the shown Riassunto, never past it (2026-09-30, top bar). */
     private fun ComposeUiTest.assertStatoSopra(tagStato: String) {
         val contenuto = onNodeWithTag(TAG_CONTENUTO_TEST).getUnclippedBoundsInRoot()
@@ -535,6 +683,7 @@ class SchedaRiassuntoRenderCheckTest {
         width: Int,
         height: Int,
         scuro: Boolean = false,
+        azioni: AzioniRiassunto = AZIONI_VUOTE,
         asserzioni: ComposeUiTest.() -> Unit = {},
     ) = runDesktopComposeUiTest(width, height) {
         setContent {
@@ -542,7 +691,7 @@ class SchedaRiassuntoRenderCheckTest {
                 // Mirrors the real host (`SchermataRegistrazione`'s own top-level `Surface`) — this
                 // composable is embedded content and paints no background of its own.
                 Surface(color = LocalSnastroColori.current.surface, modifier = Modifier.fillMaxSize()) {
-                    SchedaRiassunto(stato, AZIONI_VUOTE)
+                    SchedaRiassunto(stato, azioni)
                 }
             }
         }
