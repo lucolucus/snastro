@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
@@ -29,6 +31,8 @@ import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.testi.ETICHETTA_PARTI_AGGIUNTE
+import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
@@ -37,6 +41,8 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.etichetta
 import snastro.ui.testi.messaggioEliminata
+import snastro.ui.testi.messaggioImportTuttoONiente
+import snastro.ui.testi.messaggioPartiAggiunte
 import snastro.ui.testi.messaggioPer
 import java.io.File
 import java.time.Clock
@@ -192,6 +198,8 @@ class RegistrazioniPresenter(
             errore = precedente?.errore,
             erroreAggiornamento = null, // L485a: a SUCCESS always clears a previous refresh error
             avviso = precedente?.avviso, // ADR 0020/AC-627: survives an unrelated refresh, H1-style
+            titoloAvviso = precedente?.titoloAvviso ?: ETICHETTA_REGISTRAZIONE_ELIMINATA,
+            dialogoImporta = precedente?.dialogoImporta, // AC-I70: an open dialog survives a refresh
         )
     }
 
@@ -371,40 +379,102 @@ class RegistrazioniPresenter(
         }
 
     /**
-     * AC-199..201/LOW: drag-and-drop (one or more files) and the file picker (one file, as
-     * `listOf(path)`) both land here. Every file is imported SEQUENTIALLY — a drop no longer silently
-     * drops every file after the first — and every per-file failure is collected and reported inline
-     * together, without stopping the others; the list is refreshed once at the end.
+     * AC-199..201/AC-I70: drag-and-drop and the file picker both land here. ONE file imports at once as a new
+     * Incontro (`NuovoIncontro`) with its failure reported inline; 2+ files open the import dialog first (D-0019).
      */
     fun importa(percorsi: List<String>) {
-        if (percorsi.isEmpty()) return
         val attuale = _stato.value
-        if (attuale !is RegistrazioniUiStato.Dati || attuale.importoInCorso) return // M3
+        val libero = attuale is RegistrazioniUiStato.Dati && !attuale.importoInCorso && attuale.dialogoImporta == null
+        if (percorsi.isEmpty() || !libero) return // M3
+        attuale as RegistrazioniUiStato.Dati
+        if (percorsi.size > 1) {
+            _stato.value = attuale.copy(dialogoImporta = DialogoImporta(percorsi), errore = null, avviso = null)
+            return
+        }
         // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too.
         _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
+        val percorso = percorsi.single()
         scope.launch {
-            val errori = mutableListOf<String>()
-            for (percorso in percorsi) {
-                try {
-                    val comando =
-                        AggiungiRegistrazione(progettoId, listOf(percorso), Destinazione.NuovoIncontro)
-                    when (val esito = withContext(io) { aggiungiRegistrazione(comando) }) {
-                        is Esito.Ok -> {}
-                        is Esito.Errore -> errori += messaggioImportFallito(percorso, messaggioPer(esito.errore))
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (
-                    @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-                ) {
-                    errori += messaggioImportFallito(percorso, MESSAGGIO_ERRORE_GENERICO)
-                }
-            }
+            val comando = AggiungiRegistrazione(progettoId, percorsi, Destinazione.NuovoIncontro)
+            val errore = inviaImport(comando) { messaggioImportFallito(percorso, messaggioPer(it)) }
             carica() // M1: merges the refreshed list, preserving importoInCorso/errore until reset below
-            val messaggioErrori = errori.takeIf(List<*>::isNotEmpty)?.joinToString("\n")
-            aggiornaDati { it.copy(importoInCorso = false, errore = messaggioErrori) }
+            aggiornaDati { it.copy(importoInCorso = false, errore = errore) }
         }
     }
+
+    /** AC-I70: 'Un incontro in N parti' / 'N incontri separati' toggle. */
+    fun scegliImporta(scelta: SceltaImporta) =
+        aggiornaDialogo { if (it.invioInCorso) it else it.copy(scelta = scelta) }
+
+    /** AC-I70: 'Annulla' closes the dialog; nothing is sent (not while the command is in flight). */
+    fun annullaImporta() = aggiornaDati { d ->
+        if (d.dialogoImporta?.invioInCorso == true) d else d.copy(dialogoImporta = null)
+    }
+
+    /** AC-I70/AC-I71: 'Importa' sends ONE all-or-nothing command (ADR 0033 §2); on failure the dialog stays open. */
+    fun confermaImporta() {
+        val dialogo = (_stato.value as? RegistrazioniUiStato.Dati)?.dialogoImporta ?: return
+        if (dialogo.invioInCorso) return
+        val destinazione = when (dialogo.scelta) {
+            SceltaImporta.UnIncontro -> Destinazione.NuovoIncontro
+            SceltaImporta.IncontriSeparati -> Destinazione.IncontriSeparati
+        }
+        aggiornaDialogo { it.copy(invioInCorso = true, errore = null) }
+        scope.launch {
+            val esito = inviaImport(AggiungiRegistrazione(progettoId, dialogo.percorsi, destinazione))
+            if (esito == null) {
+                carica()
+                aggiornaDati { it.copy(dialogoImporta = null) }
+            } else {
+                aggiornaDialogo { it.copy(invioInCorso = false, errore = esito) }
+            }
+        }
+    }
+
+    /**
+     * AC-I71: "Aggiungi parti…" — [percorsi] come from the row's file picker; ONE command to
+     * `Destinazione.Incontro([incontroId])`. Success: the closable notice '2 parti aggiunte a «[titolo]».';
+     * failure: [RegistrazioniUiStato.Dati.errore] and nothing changes.
+     */
+    fun aggiungiParti(incontroId: IncontroId, titolo: String, percorsi: List<String>) {
+        if (percorsi.isEmpty()) return
+        val attuale = _stato.value
+        if (attuale !is RegistrazioniUiStato.Dati || attuale.importoInCorso || attuale.dialogoImporta != null) return
+        _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
+        scope.launch {
+            val errore = inviaImport(AggiungiRegistrazione(progettoId, percorsi, Destinazione.Incontro(incontroId)))
+            if (errore == null) carica()
+            aggiornaDati {
+                it.copy(
+                    importoInCorso = false,
+                    errore = errore,
+                    avviso = if (errore == null) messaggioPartiAggiunte(percorsi.size, titolo) else null,
+                    titoloAvviso = ETICHETTA_PARTI_AGGIUNTE,
+                )
+            }
+        }
+    }
+
+    /** Runs [comando] off the UI thread; `null` on success, otherwise the user-facing failure text. */
+    private suspend fun inviaImport(
+        comando: AggiungiRegistrazione,
+        messaggio: (ErroreDominio) -> String = ::messaggioImportTuttoONiente,
+    ): String? = try {
+        when (val esito = withContext(io) { aggiungiRegistrazione(comando) }) {
+            is Esito.Ok -> null
+            is Esito.Errore -> messaggio(esito.errore)
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception) {
+        MESSAGGIO_ERRORE_GENERICO
+    }
+
+    private fun RegistrazioniUiStato.Dati.conAvvisoEliminata(titolo: String) =
+        copy(avviso = messaggioEliminata(titolo), titoloAvviso = ETICHETTA_REGISTRAZIONE_ELIMINATA)
+
+    private fun aggiornaDialogo(f: (DialogoImporta) -> DialogoImporta) =
+        aggiornaDati { d -> d.dialogoImporta?.let { d.copy(dialogoImporta = f(it)) } ?: d }
 
     private fun messaggioImportFallito(percorso: String, messaggio: String): String =
         "${File(percorso).name}: $messaggio"
@@ -541,7 +611,7 @@ class RegistrazioniPresenter(
                             withContext(io) { lettore.pausa() }
                         }
                         carica()
-                        aggiornaDati { it.copy(avviso = messaggioEliminata(titolo)) }
+                        aggiornaDati { it.conAvvisoEliminata(titolo) }
                     }
                     is Esito.Errore -> {
                         val errore = esito.errore
@@ -711,6 +781,10 @@ class RegistrazioniPresenter(
         annullaElimina = ::annullaElimina,
         confermaElimina = ::confermaElimina,
         chiudiAvviso = ::chiudiAvviso,
+        aggiungiParti = ::aggiungiParti,
+        scegliImporta = ::scegliImporta,
+        confermaImporta = ::confermaImporta,
+        annullaImporta = ::annullaImporta,
     )
 }
 

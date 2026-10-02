@@ -59,6 +59,10 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     annullaElimina = {},
     confermaElimina = {},
     chiudiAvviso = {},
+    aggiungiParti = { _, _, _ -> },
+    scegliImporta = {},
+    confermaImporta = {},
+    annullaImporta = {},
 )
 
 private fun riga(id: RegistrazioneId, titolo: String) =

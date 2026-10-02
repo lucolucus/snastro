@@ -43,6 +43,10 @@ private val AZIONI = AzioniRegistrazioni(
     annullaElimina = {},
     confermaElimina = {},
     chiudiAvviso = {},
+    aggiungiParti = { _, _, _ -> },
+    scegliImporta = {},
+    confermaImporta = {},
+    annullaImporta = {},
 )
 
 /** `dialogo-elimina-parte` render-check (AC-I72): the non-last Parte confirmation, both sizes, light and dark. */

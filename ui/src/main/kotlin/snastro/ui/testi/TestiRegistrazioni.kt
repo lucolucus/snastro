@@ -1,5 +1,9 @@
+@file:Suppress("TooManyFunctions") // one label function per S2 string
+
 package snastro.ui.testi
 
+import snastro.kernel.ErroreDominio
+import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.trascrizione.applicazione.porte.FaseElaborazione
 import snastro.ui.formattaDurata
 
@@ -118,3 +122,26 @@ const val MESSAGGIO_ELIMINAZIONE_RIFIUTATA: String =
 /** AC-627: the dismissible success notice shown above the list after an Elimina. */
 const val ETICHETTA_REGISTRAZIONE_ELIMINATA: String = "Registrazione eliminata"
 fun messaggioEliminata(titolo: String): String = "«$titolo» eliminata."
+
+/** AC-I70: the import dialog of 2+ files (ux-proposal § Import). */
+fun titoloDialogoImporta(n: Int): String = "Importare $n file"
+fun etichettaUnIncontro(n: Int): String = "Un incontro in $n parti"
+fun etichettaIncontriSeparati(n: Int): String = "$n incontri separati"
+const val ETICHETTA_IMPORTA: String = "Importa"
+const val ETICHETTA_ANNULLA_IMPORTA: String = "Annulla"
+
+/** Item of the row's More menu on an Incontro (ux-proposal § Import); AC-I71. */
+const val ETICHETTA_AGGIUNGI_PARTI: String = "Aggiungi parti…"
+
+const val ETICHETTA_PARTI_AGGIUNTE: String = "Parti aggiunte"
+
+/** AC-I71: the closable notice after "Aggiungi parti…". */
+fun messaggioPartiAggiunte(n: Int, titolo: String): String =
+    (if (n == 1) "1 parte aggiunta" else "$n parti aggiunte") + " a «$titolo»."
+
+/** AC-I71 (D-0016): the all-or-nothing failure of a multi-file import or of "Aggiungi parti…". */
+fun messaggioImportTuttoONiente(errore: ErroreDominio): String = when (errore) {
+    is ErroreApplicazioneProgetto.AudioNonLeggibile ->
+        "Nessun file importato: «${java.io.File(errore.percorsoSorgente).name}» non è leggibile."
+    else -> "Nessun file importato. ${messaggioPer(errore)}"
+}

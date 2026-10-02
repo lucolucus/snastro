@@ -80,6 +80,10 @@ private val AZIONI_VUOTE = AzioniRegistrazioni(
     annullaElimina = {},
     confermaElimina = {},
     chiudiAvviso = {},
+    aggiungiParti = { _, _, _ -> },
+    scegliImporta = {},
+    confermaImporta = {},
+    annullaImporta = {},
 )
 
 private val REG_1 = RegistrazioneId("id-1")

@@ -98,7 +98,6 @@ import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
 import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_IMPORTAZIONE_NON_RIUSCITA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
-import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
@@ -250,7 +249,7 @@ private fun ContenutoRegistrazioni(
                 Spacer(modifier = Modifier.height(SnastroMisure.space3))
                 BannerSn(
                     tipo = TipoBanner.Info,
-                    titolo = ETICHETTA_REGISTRAZIONE_ELIMINATA,
+                    titolo = stato.titoloAvviso,
                     testo = it,
                     azione = AzioneBanner(ETICHETTA_CHIUDI_ERRORE, azioni.chiudiAvviso),
                     modifier = Modifier.testTag("registrazioni-avviso"),
@@ -266,6 +265,10 @@ private fun ContenutoRegistrazioni(
                     modifier = Modifier.testTag("registrazioni-errore"),
                 )
             }
+        }
+        stato.dialogoImporta?.let {
+            Spacer(modifier = Modifier.height(SnastroMisure.space3))
+            DialogoImportaParti(it, azioni)
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         if (stato.righe.isEmpty()) {
