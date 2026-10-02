@@ -107,7 +107,6 @@ import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO_RESIDUO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_PARTE_CON_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
-import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
 import snastro.ui.testi.MESSAGGIO_FORMATI_AUDIO_SUPPORTATI
 import snastro.ui.testi.MESSAGGIO_REGISTRAZIONI_VUOTO
@@ -119,7 +118,6 @@ import snastro.ui.testi.etichettaRitrascrizioneInCorso
 import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
 import snastro.ui.testi.titoloConfermaElimina
 import snastro.ui.testi.titoloConfermaEliminaParte
-import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
@@ -1044,7 +1042,7 @@ private fun ConfermaRitrascrivi(riga: RigaRegistrazione, azioni: AzioniRegistraz
             .testTag("registrazioni-conferma-ritrascrivi-${id.valore}"),
     ) {
         Text(
-            text = titoloConfermaRitrascrivi(riga.titolo),
+            text = riga.testiConfermaRitrascrivi().titolo,
             style = LocalSnastroTipografia.current.title,
             color = colori.ink,
             maxLines = 2,
@@ -1052,7 +1050,7 @@ private fun ConfermaRitrascrivi(riga: RigaRegistrazione, azioni: AzioniRegistraz
         )
         Spacer(modifier = Modifier.height(SnastroMisure.space1))
         Text(
-            text = MESSAGGIO_CONFERMA_RITRASCRIVI,
+            text = riga.testiConfermaRitrascrivi().messaggio,
             style = LocalSnastroTipografia.current.caption,
             color = colori.inkMuted,
         )

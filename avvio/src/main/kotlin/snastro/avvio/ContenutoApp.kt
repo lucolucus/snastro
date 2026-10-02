@@ -147,7 +147,9 @@ private fun ContenutoConProgetto(
         conProgetto = conProgetto,
         navigazione = navigazione,
         elenco = { RegistrazioniRoute(registrazioniPresenter) },
-        registrazione = { id -> SchermataRegistrazione(grafo, collaboratori, id, selezioneScheda) },
+        registrazione = { id ->
+            SchermataRegistrazione(grafo, collaboratori, id, selezioneScheda) { navigazione.apriRegistrazione(it) }
+        },
         impostazioni = impostazioni,
         parlanti = { ParlantiRoute(parlantiPresenter) },
     )
@@ -165,11 +167,12 @@ private fun SchermataRegistrazione(
     collaboratori: CollaboratoriProgetto,
     id: RegistrazioneId,
     selezioneScheda: SelezioneSchedaS3,
+    vaiAllaParte: (RegistrazioneId) -> Unit,
 ) {
     val scopeS3 = remember(id) { collaboratori.parlanti.scopeSchermata(collaboratori.scope) }
     DisposableEffect(scopeS3) { onDispose { scopeS3.cancel() } }
     val presenter = remember(id) {
-        costruisciRegistrazionePresenter(grafo, collaboratori, id, scopeS3, selezioneScheda)
+        costruisciRegistrazionePresenter(grafo, collaboratori, id, scopeS3, selezioneScheda, vaiAllaParte)
     }
     RegistrazioneRoute(presenter)
 }

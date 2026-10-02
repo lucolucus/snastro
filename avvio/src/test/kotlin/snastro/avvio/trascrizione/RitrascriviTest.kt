@@ -376,6 +376,7 @@ class RitrascriviTest {
             id,
             ambiente.parlanti.scopeSchermata(ambiente.collaboratori.scope),
             SelezioneSchedaS3(),
+            vaiAllaParte = {},
         )
 
     private fun riga(s2: RegistrazioniPresenter, id: RegistrazioneId): RigaRegistrazione? =

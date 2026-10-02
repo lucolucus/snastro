@@ -213,7 +213,7 @@ class AttesaMutexTest {
                     parlanti.comandi.esegui(ComandoVoce.Salta(voce(id, 2)))
                 }
                 val schermata = parlanti.scopeSchermata(it.collaboratori.scope)
-                costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, schermata, SelezioneSchedaS3())
+                costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, schermata, SelezioneSchedaS3(), {})
                 attendiFinche(timeout = 10.seconds, messaggio = "comando e Proposta in attesa del Mutex") {
                     estrattore.lock.queueLength == 2
                 }
@@ -247,7 +247,7 @@ class AttesaMutexTest {
             try {
                 // Two S3 visits overlap (leave and come back while the first extraction still waits).
                 schermate.forEach { s ->
-                    costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, s, SelezioneSchedaS3())
+                    costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, s, SelezioneSchedaS3(), {})
                 }
                 attendiFinche(timeout = 10.seconds, messaggio = "una Proposta in attesa del Mutex") {
                     estrattore.lock.hasQueuedThreads()
@@ -271,6 +271,7 @@ class AttesaMutexTest {
                 id,
                 it.parlanti.scopeSchermata(it.collaboratori.scope),
                 SelezioneSchedaS3(),
+                vaiAllaParte = {},
             )
             attendiFinche(timeout = 10.seconds, messaggio = "Proposte di Voce 2 e 3 pronte") {
                 val carte = (s3.stato.value as? RegistrazioneUiStato.Dati)?.pannello?.carte.orEmpty()

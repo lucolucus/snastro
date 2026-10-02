@@ -60,6 +60,8 @@ sealed interface RegistrazioneUiStato {
         val schedaSelezionata: SchedaS3 = SchedaS3.TRASCRIZIONE,
         /** AC-S122: the small mark after the 'Riassunto' label, fed by [SorgenteRiassuntoS3.segno]. */
         val segnoRiassunto: SegnoScheda? = null,
+        /** AC-I74: the multi-part header + switcher; `null` on a 1-Parte Incontro (INV-I3). */
+        val parte: IntestazioneParte? = null,
     ) : RegistrazioneUiStato {
         /**
          * AC-S123 (ux-proposal "Banner precedence on S3"): the ONE screen [BannerSchermata], by

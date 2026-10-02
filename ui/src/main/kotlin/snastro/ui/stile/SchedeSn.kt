@@ -38,6 +38,7 @@ private val DIAMETRO_PALLINO_SEGNO = 6.dp
  * ([Role.Tab] via [androidx.compose.foundation.selection.selectable]) with the [AC-570][anelloFocus]
  * keyboard focus ring; [segni] renders one optional trailing [SegnoScheda] mark per tab index.
  */
+@Suppress("LongParameterList") // the tabs, the selection, the marks, and the tag prefix of a second control
 @Composable
 public fun SchedeSn(
     schede: List<String>,
@@ -45,6 +46,8 @@ public fun SchedeSn(
     onSeleziona: (Int) -> Unit,
     segni: Map<Int, SegnoScheda> = emptyMap(),
     modifier: Modifier = Modifier,
+    /** Test-tag prefix of the tabs (`<prefisso>-<indice>`): a second control on the same screen needs its own. */
+    prefissoTag: String = "scheda",
 ) {
     val colori = LocalSnastroColori.current
     Surface(
@@ -65,7 +68,7 @@ public fun SchedeSn(
                     segno = segni[indice],
                     interattiva = interattiva,
                     onClick = { onSeleziona(indice) },
-                    modifier = Modifier.weight(1f).testTag("scheda-$indice"),
+                    modifier = Modifier.weight(1f).testTag("$prefissoTag-$indice"),
                 )
             }
         }
