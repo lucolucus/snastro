@@ -5,7 +5,6 @@ import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
 import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
-import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
@@ -20,11 +19,11 @@ import snastro.trascrizione.applicazione.eventi.VociUnite
  * call, and [TrascrittoSostituito] / [TrascrittoEliminato] (ADR 0035 §6, [INV-I8b]) into an
  * [ApplicaSostituzioneTrascrittoPolitica] call — run INSIDE
  * the publishing command's transaction in both cases — an [Esito.Errore] from either policy dooms and
- * rolls back the whole transaction (the kernel dispatcher's rule). ADR 0020 §2 step 4 (AC-621):
- * Progetto's [RegistrazioneEliminata] is translated into the SAME [ApplicaSostituzioneTrascrittoPolitica]
- * call, inside the deleting transaction. `:parlanti:applicazione` may not import Trascrizione's or
- * Progetto's published events (`architecture.md` edges), so this translation lives here, mirroring
- * both policies' own KDoc.
+ * rolls back the whole transaction (the kernel dispatcher's rule). ADR 0020 §2 step 4 / ADR 0038 §2 (AC-I61):
+ * the deleting unit's purge arrives as [TrascrittoEliminato] (nested, synchronous); Parlanti subscribes to NO
+ * `RegistrazioneEliminata` (it never knew which Voci a non-last Parte's removal ends).
+ * `:parlanti:applicazione` may not import Trascrizione's (`architecture.md` edges), so this translation
+ * lives here, mirroring both policies' own KDoc.
  *
  * A plain [AbbonatoSincrono] VALUE (ADR 0030 §1, AC-C67): it never registers itself. The composition root
  * (`:avvio`'s `ModuloParlanti`) pairs it with each event type it handles and registers it, in the declared
@@ -44,12 +43,6 @@ public class AbbonatoRevisioneParlanti(
             politicaSostituzione.applica(evento.registrazioneId, evento.incontroId, evento.vociRimosse)
         is TrascrittoEliminato ->
             politicaSostituzione.applica(evento.registrazioneId, evento.incontroId, evento.vociRimosse)
-        // TRANSITIONAL (ADR 0038 §2): removed when eliminazione-parte-trascrizione publishes TrascrittoEliminato.
-        is RegistrazioneEliminata -> politicaSostituzione.applicaEliminazioneRegistrazione(
-            evento.registrazioneId,
-            evento.incontroId,
-            evento.incontroCessato,
-        )
         else -> Esito.Ok(Unit)
     }
 }
