@@ -1,7 +1,9 @@
 package snastro.sintesi.applicazione.letture
 
 /**
- * AC-S103: one Voce as the Riassunto tab shows it. [etichetta] is always "Voce n"; [nome] is the
- * CURRENT Nome when the Voce is attributed, else `null` (colour = `palette(voceId)`, decided in `:ui`).
+ * AC-S103: one Voce as the Riassunto tab shows it. [etichetta] is always "Voce n"; [nome] is the CURRENT Nome when
+ * the Voce is [presente] and attributed, else `null` (colour = `palette(voceId)`, decided in `:ui`). INV-I13:
+ * [presente] is `false` when the Voce is no longer in the Incontro's current structure — it then never carries a
+ * [nome] and renders "Voce n · non più presente".
  */
-public data class VoceVista(val voceId: Int, val etichetta: String, val nome: String?)
+public data class VoceVista(val voceId: Int, val etichetta: String, val nome: String?, val presente: Boolean)

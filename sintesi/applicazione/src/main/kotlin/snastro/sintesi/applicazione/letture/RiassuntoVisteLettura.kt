@@ -1,10 +1,10 @@
 package snastro.sintesi.applicazione.letture
 
+import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
 import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
@@ -12,13 +12,11 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreNomi
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
-import snastro.sintesi.applicazione.porte.PRIMA_PARTE
+import snastro.sintesi.applicazione.porte.ParteSintesi
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.inIngresso
-import snastro.sintesi.applicazione.porte.parteUnica
-import snastro.sintesi.applicazione.porte.statoDi
 import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.LimiteIngresso
@@ -30,10 +28,11 @@ import snastro.sintesi.dominio.StrutturaTrascritto
 import snastro.sintesi.dominio.TestoConVoci
 
 /**
- * Read-model `vista-riassunto` (AC-S102..S108, ADR 0021 §3, ADR 0023 §4, ADR 0029 §5/AC-C32): builds
- * [RiassuntoVista] for one Registrazione with no side effect, never calling
- * [snastro.sintesi.applicazione.porte.ModelloLinguistico]. `null` when [trascritti] has no Trascritto
- * for it (the tab is not offered). Names for display are joined from [nomi] at read time (INV-S5): a
+ * Read-model `vista-riassunto` (AC-S102..S108, ADR 0021 §3, ADR 0023 §4, ADR 0029 §5/AC-C32, ADR 0037 §6): builds
+ * [RiassuntoVista] for one Incontro, over ALL its Parti in INV-I2 order, with no side effect, never calling
+ * [snastro.sintesi.applicazione.porte.ModelloLinguistico]. `null` when the Incontro is unknown, or has one Parte
+ * with no Trascritto (the tab is not offered, INV-I3). Names for display are joined from [nomi] at read time
+ * (INV-S5), for Voci still present only (INV-I13): a
  * rename never invalidates a stored Riassunto. [di] reads the Segmenti (through [trascritti]) and the
  * Riassunto rows (through [riassunti]) from ONE [lettura] snapshot — never a row read before a
  * concurrent completion commits and its elements after (a stale reconstitution would throw): this
@@ -47,53 +46,58 @@ public class RiassuntoVisteLettura(
     private val nomi: LettoreNomi,
     private val disponibilitaModello: DisponibilitaModelloLinguistico,
 ) {
-    /** The Riassunto view of the Incontro [i] (ADR 0037 §1), read through its Parte (ADR 0033 §4.1). */
+    /** The Riassunto view of the Incontro [i] (ADR 0037 §1, §6), read through all its Parti. */
     public fun di(i: IncontroId): RiassuntoVista? = lettura.inLettura {
-        val parte = incontri.parteUnica(i) ?: return@inLettura null
-        val segmenti = trascritti.segmenti(parte) ?: return@inLettura null
-        val correnti = segmenti.associateBy { it.segmentoId }
-        val nomiVoci = nomi.nomi(i)
+        val parti = incontri.parti(i) ?: return@inLettura null
+        val segmentiDi = parti.associate { it.registrazioneId to trascritti.segmenti(it.registrazioneId) }
+        // INV-I3: a one-Parte Incontro with no Trascritto has no tab, as before (never "Parte 1 non riuscita")
+        if (parti.size == 1 && segmentiDi.getValue(parti.single().registrazioneId) == null) return@inLettura null
+        val corrente = Corrente(parti, segmentiDi)
         val righe = riassunti.trova(i)
         val pronto = unicoOSseNessuno(righe.filter { it.pronto }, i, "pronto")
         val nonPronto = unicoOSseNessuno(righe.filterNot { it.pronto }, i, "non pronto")
 
         RiassuntoVista(
             incontroId = i,
+            numParti = parti.size,
             modello = statoModelloVista(disponibilitaModello.stato()),
             richiestaAperta = nonPronto?.takeIf { it.aperto }?.let(::richiestaApertaVista),
             ultimoFallimento = nonPronto?.takeIf { it.fallito }?.let(::fallimentoVista),
-            disponibilita = disponibilita(parte, segmenti),
+            disponibilita = disponibilita(corrente),
             argomentoPrecompilato = argomentoPrecompilato(pronto, nonPronto?.takeIf { it.fallito }),
-            mostrato = pronto?.let { mostratoVista(it, parte, correnti, nomiVoci, i) },
+            mostrato = pronto?.let { mostratoVista(it, corrente, nomi.nomi(i), i) },
         )
     }
 
     /**
-     * AC-S107: [Riassumibilita] restricted to the two reasons this read-model decides on its own — no
-     * write, no LLM call. The estimate is [IngressoRiassunto] built with no names, exactly like
-     * `RiassumiServizio`'s guard, so the button and the command never disagree at the limit.
+     * AC-S107, AC-I50: [Riassumibilita] restricted to the reasons this read-model decides on its own — no write, no
+     * LLM call. The estimate is [IngressoRiassunto] built with no names over every Parte in order, exactly like
+     * `RiassumiServizio`'s guard, so the button and the command never disagree at the limit. The blocking Parte is
+     * the first one in Parte order.
      */
-    private fun disponibilita(parte: RegistrazioneId, segmenti: List<SegmentoSintesi>): DisponibilitaVista {
-        val ingresso = IngressoRiassunto.costruisci(listOf(segmenti.map { it.inIngresso(parte) })).testo
+    private fun disponibilita(corrente: Corrente): DisponibilitaVista {
+        val ingresso = IngressoRiassunto.costruisci(
+            corrente.parti.map { p -> corrente.segmentiDi(p).map { it.inIngresso(p.registrazioneId) } },
+        ).testo
         val esito = Riassumibilita.valuta(
             modelloInstallato = true, // surfaced by `modello`, not `disponibilita`
-            // TRANSITION (D-0033): the one Parte, its Trascritto already known ([di] returned above otherwise).
-            stati = listOf(PRIMA_PARTE to trascritti.statoDi(parte)),
+            stati = corrente.parti.map { it.numero to trascritti.statoParte(it.registrazioneId) },
             riassuntoAperto = false, // surfaced by `richiestaAperta`, not `disponibilita`
             stimaToken = LimiteIngresso.stimaToken(ingresso),
         )
         return when (esito) {
             is Esito.Ok -> DisponibilitaVista.Disponibile
-            is Esito.Errore -> when (esito.errore) {
-                is ErroreSintesi.ElaborazioneGiaAperta ->
-                    DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta)
-                is ErroreSintesi.IngressoTroppoLungo ->
-                    DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.TroppoLunga)
-                else -> error(
-                    "Riassumibilita ha rifiutato con ${esito.errore} a modello installato e nessun Riassunto aperto",
-                )
-            }
+            is Esito.Errore -> DisponibilitaVista.NonDisponibile(motivoDi(esito.errore))
         }
+    }
+
+    /** Only the four reasons reachable with `modelloInstallato = true` and `riassuntoAperto = false`. */
+    private fun motivoDi(errore: ErroreDominio): MotivoNonDisponibile = when (errore) {
+        is ErroreSintesi.PartiNonTrascritte -> MotivoNonDisponibile.PartiNonTrascritte(errore.parte)
+        is ErroreSintesi.ElaborazioneGiaAperta -> MotivoNonDisponibile.ElaborazioneAperta(errore.parte)
+        is ErroreSintesi.PartiFallite -> MotivoNonDisponibile.PartiFallite(errore.parte)
+        is ErroreSintesi.IngressoTroppoLungo -> MotivoNonDisponibile.TroppoLunga
+        else -> error("Riassumibilita ha rifiutato con $errore a modello installato e nessun Riassunto aperto")
     }
 
     /** INV-S2/INV-S3 (partial unique indexes): at most one row of [righe] per state group; a second one
@@ -110,6 +114,34 @@ public class RiassuntoVisteLettura(
         is StatoModelloLinguistico.Installato -> StatoModelloVista.Installato
     }
 }
+
+/**
+ * The Incontro as read in this snapshot: its [parti] in INV-I2 order and, per Parte, its current Segmenti (`null`: no
+ * Trascritto). [voci] are the Voci of the CURRENT structure (INV-I13: presence), [parteDi] numbers a Parte still in
+ * the Incontro.
+ */
+private class Corrente(
+    val parti: List<ParteSintesi>,
+    private val segmenti: Map<RegistrazioneId, List<SegmentoSintesi>?>,
+) {
+    val voci: Set<VoceId> = segmenti.values.flatMap { it.orEmpty() }.map { it.voceId }.toSet()
+
+    fun segmentiDi(p: ParteSintesi): List<SegmentoSintesi> = segmenti[p.registrazioneId].orEmpty()
+
+    fun parteDi(r: RegistrazioneId): ParteSintesi? = parti.firstOrNull { it.registrazioneId == r }
+
+    fun segmento(ref: SegmentoRef): SegmentoSintesi? =
+        segmenti[ref.registrazioneId]?.firstOrNull { it.segmentoId == ref.segmentoId }
+
+    /** The structure the root's INV-I11 predicate compares: EVERY current Segmento of every Parte (an uncited one
+     * moving also supera it), a Parte without Trascritto as `null`. */
+    val struttura: StrutturaIncontro = StrutturaIncontro(
+        parti.map { p -> p.registrazioneId to segmenti[p.registrazioneId]?.let(::strutturaCorrente) },
+    )
+}
+
+private fun strutturaCorrente(segmenti: List<SegmentoSintesi>): StrutturaTrascritto =
+    StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })
 
 private fun richiestaApertaVista(riassunto: Riassunto): RichiestaApertaVista = if (riassunto.inAttesa) {
     RichiestaApertaVista.InAttesa(riassunto.richiestoAlle)
@@ -131,70 +163,87 @@ private fun argomentoPrecompilato(pronto: Riassunto?, fallito: Riassunto?): Stri
 
 private fun mostratoVista(
     pronto: Riassunto,
-    parte: RegistrazioneId,
-    correnti: Map<SegmentoId, SegmentoSintesi>,
+    c: Corrente,
     nomiVoci: Map<VoceRef, String>,
-    r: IncontroId,
+    i: IncontroId,
 ): RiassuntoMostrato = RiassuntoMostrato(
     argomento = pronto.argomento?.valore,
     lunghezzaMassimaParole = pronto.lunghezzaMassima.valore,
-    superato = pronto.superato(StrutturaIncontro(listOf(parte to strutturaCorrente(correnti)))),
+    superato = pronto.superato(c.struttura),
     omessi = checkNotNull(pronto.omessi) { "pronto senza omessi: ${pronto.id}" },
-    sommario = pronto.sommario?.testo?.let { testoConVociVista(it, nomiVoci, r) },
-    decisioni = pronto.decisioni.map { elementoVista(it.testo, it.fonti, correnti, nomiVoci, r) },
+    sommario = pronto.sommario?.testo?.let { testoConVociVista(it, c, nomiVoci, i) },
+    decisioni = pronto.decisioni.map { elementoVista(it.testo, it.fonti, c, nomiVoci, i) },
     azioni = pronto.azioni.map { azione ->
         AzioneVista(
-            testo = testoConVociVista(azione.testo, nomiVoci, r),
-            fonti = fontiVista(azione.fonti, correnti, nomiVoci, r),
-            responsabile = azione.responsabile?.let { voceVista(it, nomiVoci, r) },
+            testo = testoConVociVista(azione.testo, c, nomiVoci, i),
+            fonti = fontiVista(azione.fonti, c, nomiVoci, i),
+            responsabile = azione.responsabile?.let { voceVista(it, c, nomiVoci, i) },
         )
     },
-    questioniAperte = pronto.questioniAperte.map { elementoVista(it.testo, it.fonti, correnti, nomiVoci, r) },
+    questioniAperte = pronto.questioniAperte.map { elementoVista(it.testo, it.fonti, c, nomiVoci, i) },
     puntiChiave = pronto.puntiChiave.map { punto ->
         PuntoChiaveVista(
-            testo = testoConVociVista(punto.testo, nomiVoci, r),
-            fonti = fontiVista(punto.fonti, correnti, nomiVoci, r),
-            parlante = punto.parlante?.let { voceVista(it, nomiVoci, r) },
+            testo = testoConVociVista(punto.testo, c, nomiVoci, i),
+            fonti = fontiVista(punto.fonti, c, nomiVoci, i),
+            parlante = punto.parlante?.let { voceVista(it, c, nomiVoci, i) },
         )
     },
 )
 
-/** The Parte's current structure for the root's INV-I11 predicate, over EVERY current Segmento (an uncited one moving
- * also supera it). */
-private fun strutturaCorrente(correnti: Map<SegmentoId, SegmentoSintesi>): StrutturaTrascritto =
-    StrutturaTrascritto.di(correnti.values.map { it.segmentoId to it.voceId })
-
 private fun elementoVista(
     testo: TestoConVoci,
     fonti: Set<SegmentoRef>,
-    correnti: Map<SegmentoId, SegmentoSintesi>,
+    c: Corrente,
     nomiVoci: Map<VoceRef, String>,
-    r: IncontroId,
-): ElementoVista = ElementoVista(testoConVociVista(testo, nomiVoci, r), fontiVista(fonti, correnti, nomiVoci, r))
+    i: IncontroId,
+): ElementoVista = ElementoVista(testoConVociVista(testo, c, nomiVoci, i), fontiVista(fonti, c, nomiVoci, i))
 
 private fun testoConVociVista(
     testo: TestoConVoci,
+    c: Corrente,
     nomiVoci: Map<VoceRef, String>,
-    r: IncontroId,
+    i: IncontroId,
 ): TestoConVociVista = testo.parti.map { parte ->
     when (parte) {
         is ParteTesto.Testo -> ParteTestoVista.Testo(parte.testo)
-        is ParteTesto.Voce -> ParteTestoVista.Voce(voceVista(parte.voceId, nomiVoci, r))
+        is ParteTesto.Voce -> ParteTestoVista.Voce(voceVista(parte.voceId, c, nomiVoci, i))
     }
 }
 
-/** AC-S104: sorted by the CURRENT Segmento's inizio; every stored Fonte is still in the same
- * Trascritto generation (INV-S8: a Riassunto is deleted with its generation). TRANSITION (D-0033): every Fonte is of
- * the one Parte; FonteVista per Parte comes with riassunto-vista-incontro. */
+/**
+ * AC-S104, INV-I13: every stored Fonte is shown, never thrown at. A Fonte whose Segmento is gone (its Parte was
+ * re-transcribed: segment ids are never reused, INV-I16) has no minute and no Voce; one whose Parte left the Incontro
+ * has no number. Sorted by Parte number (a missing one last), then the CURRENT start (a missing one last).
+ */
 private fun fontiVista(
     fonti: Set<SegmentoRef>,
-    correnti: Map<SegmentoId, SegmentoSintesi>,
+    c: Corrente,
     nomiVoci: Map<VoceRef, String>,
-    r: IncontroId,
-): List<FonteVista> = fonti.map { it.segmentoId }.map { id ->
-    val segmento = checkNotNull(correnti[id]) { "Fonte $id assente dal Trascritto corrente di $r" }
-    FonteVista(id.numero, voceVista(segmento.voceId, nomiVoci, r), segmento.intervallo.inizioMs)
-}.sortedWith(compareBy({ it.inizioMs }, { it.segmentoId })) // a parita' di inizioMs (Set order altrimenti instabile)
+    i: IncontroId,
+): List<FonteVista> = fonti.map { ref ->
+    val segmento = c.segmento(ref)
+    FonteVista(
+        registrazioneId = ref.registrazioneId,
+        numeroParte = c.parteDi(ref.registrazioneId)?.numero,
+        segmentoId = ref.segmentoId.numero,
+        voce = segmento?.let { voceVista(it.voceId, c, nomiVoci, i) },
+        inizioMs = segmento?.intervallo?.inizioMs,
+        segmentoPresente = segmento != null,
+    )
+}.sortedWith(
+    compareBy<FonteVista, Int?>(nullsLast()) { it.numeroParte }
+        .thenBy(nullsLast()) { it.inizioMs }
+        .thenBy { it.registrazioneId.valore }
+        .thenBy { it.segmentoId },
+) // a parita' di tutto il resto (Set order altrimenti instabile)
 
-private fun voceVista(voceId: VoceId, nomiVoci: Map<VoceRef, String>, r: IncontroId): VoceVista =
-    VoceVista(voceId.numero, "Voce ${voceId.numero}", nomiVoci[VoceRef(r, voceId)])
+/** INV-I13: a Voce outside the current structure is [VoceVista.presente] `false` and never carries a Nome. */
+private fun voceVista(voceId: VoceId, c: Corrente, nomiVoci: Map<VoceRef, String>, i: IncontroId): VoceVista {
+    val presente = voceId in c.voci
+    return VoceVista(
+        voceId.numero,
+        "Voce ${voceId.numero}",
+        nomiVoci[VoceRef(i, voceId)].takeIf { presente },
+        presente,
+    )
+}
