@@ -48,7 +48,7 @@ class ParlantiDelProgettoTest {
             lettoreVoci = unLettoreVoci(VOCE_A),
         )
         val marco = unParlante("p-1", "Marco", TipoParlante.RICORRENTE)
-        marco.registraImpronta(VOCE_A, impronta(1f), "s1", "finto", unicaParteDi(VOCE_A)).atteso()
+        marco.aggiungiImpronta(VOCE_A, unicaParteDi(VOCE_A), impronta(1f), "s1", "finto").atteso()
         ambiente.parlanti.salva(marco).atteso()
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_A, PROGETTO, marco.id).aggregato)
 
@@ -76,7 +76,7 @@ class ParlantiDelProgettoTest {
             lettoreVoci = unLettoreVoci(VOCE_A),
         )
         val marco = unParlante("p-1", "Marco", TipoParlante.RICORRENTE)
-        marco.registraImpronta(VOCE_A, impronta(1f), "s1", "finto", unicaParteDi(VOCE_A)).atteso()
+        marco.aggiungiImpronta(VOCE_A, unicaParteDi(VOCE_A), impronta(1f), "s1", "finto").atteso()
         ambiente.parlanti.salva(marco).atteso()
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_A, PROGETTO, marco.id).aggregato)
         ambiente.attribuzioni.salva(Attribuzione.conferma(VOCE_B_REG_2, PROGETTO, marco.id).aggregato)

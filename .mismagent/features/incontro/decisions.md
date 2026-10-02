@@ -554,3 +554,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer)
 - Docs: [pre-release](pre-release.md)
 - Revisit: merge-forward fixes start hiding real defects.
+
+### D-0042 · Fonte senza voce se il segmento sparisce
+- Meta: 2026-10-02; scope: block:riassunto-vista-incontro; status: accepted; sha: 68093f0d
+- Question: A Fonte whose Segmento vanished after a Ritrascrivi has no knowable Voce (Sintesi stores only the SegmentoRef); the pin wanted FonteVista.voce always present.
+- Options: A FonteVista.voce nullable, the chip shows "parte n · non più presente" without a Voce as ADR 0037 §6 draws it (kept); B a sentinel VoceVista with a fake value.
+- Hypothesis: n/a — decided by the user on the worker's DEVIATION, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user on the worker's DEVIATION, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user on the worker's DEVIATION, [manifest](building-blocks.yaml)
+- Debate: none; the change removes the I1 crash (checkNotNull on every Fonte) that segment ids never reused made reachable after any Ritrascrivi.
+- Decision: A; the riassunto-vista pins are amended; scheda-riassunto-incontro renders the voiceless chip. Cost: consumers handle a null Voce.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (riassunto-vista-incontro)
+- Docs: [manifest](building-blocks.yaml), [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
+- Revisit: none expected.

@@ -107,10 +107,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         }
 
         override val lettore: LettoreNomi =
-            LettoreNomiDaParlanti(
-                NomiDelleVoci(attribuzioni, parlanti, LettoreRegistrazioneFinta(registrazioniViste), unitaDiLavoro),
-                catalogo,
-            )
+            LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro))
 
         /**
          * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's

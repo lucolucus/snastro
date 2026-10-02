@@ -2,6 +2,7 @@ package snastro.parlanti.applicazione.comandi
 
 import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.VoceRef
@@ -13,19 +14,20 @@ import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.RigaImpronta
-import snastro.parlanti.applicazione.porte.vociDellaParte
 import snastro.parlanti.dominio.ImprontaVocale
 import snastro.parlanti.dominio.SorgenteImpronta
 
 /**
- * Use-case `RiallineaImpronte` (AC-292..AC-299, AC-301; freshness half of [INV-15], ADR 0012 Amendment (b)
+ * Use-case `RiallineaImpronte` (AC-292..AC-299, AC-301, ADR 0035 §6 — keyed by the Incontro; freshness half of
+ * [INV-15], ADR 0012 Amendment (b)
  * point 3, ADR 0009 Amendment (b)), run after commit and at project open:
- * 1. one short read transaction lists the Registrazione's print rows and keeps the STALE ones — decided by
+ * 1. one short read transaction lists the print rows of every Parte of the Incontro and keeps the STALE ones —
+ *    decided by
  *    [ImprontaVocale.obsoleta] against [SorgenteImpronta.di] of the Voce's current intervals and
- *    [EstrattoreImpronta.modello] — grouped per Voce; a row whose Voce (or Trascritto) no longer exists is
+ *    [EstrattoreImpronta.modello] — grouped per (Voce, Parte); a row whose Voce (or Trascritto) no longer exists is
  *    skipped, its removal belongs to the revisione-policy;
- * 2. per Voce, OUTSIDE any transaction, decode the source and extract the print;
- * 3. per Voce, one short transaction re-reads the Voce and — only if its source is still the extracted one —
+ * 2. per (Voce, Parte), OUTSIDE any transaction, decode the source and extract the print;
+ * 3. per (Voce, Parte), one short transaction re-reads the Voce and — only if its source is still the extracted one —
  *    compare-and-set UPDATEs each row ([ParlanteRepository.aggiornaImpronta]); it NEVER inserts, so a print
  *    purged meanwhile is not resurrected. A print that is not written is dropped (ADR 0009 (b)).
  *
@@ -43,29 +45,40 @@ public class RiallineaImpronteServizio(
     private val eventi: DispatcherEventi,
 ) {
     public fun esegui(c: RiallineaImpronte): Esito<Unit> {
-        val registrazioneId = c.registrazioneId
+        val incontroId = c.incontroId
         val modello = estrattore.modello
-        return uow.inTransazione { Esito.Ok(obsolete(registrazioneId, modello)) }
-            .poi { daRiallineare -> riallinea(registrazioneId, daRiallineare, modello) }
+        return uow.inTransazione { Esito.Ok(obsolete(incontroId, modello)) }
+            .poi { daRiallineare -> riallinea(incontroId, daRiallineare, modello) }
     }
 
-    /** Stale rows per Voce, each with the source it must be re-derived from; absent Voci are skipped (AC-299). */
-    private fun obsolete(registrazioneId: RegistrazioneId, modello: String): List<VoceObsoleta> {
-        val sorgenti = lettoreVoci.vociDellaParte(registrazioneId, registrazioni).orEmpty()
-            .filter { it.intervalli.isNotEmpty() }
-            .associate { it.voceRef to SorgenteImpronta.di(it.intervalli) }
-        return parlanti.impronteDiRegistrazione(registrazioneId)
-            .filter { riga ->
-                val sorgente = sorgenti[riga.voceRef]
-                sorgente != null && ImprontaVocale.obsoleta(riga.sorgente, riga.modello, sorgente.chiave, modello)
-            }
-            .groupBy { it.voceRef }
-            .map { (voceRef, righe) ->
-                VoceObsoleta(voceRef, registrazioneId, checkNotNull(sorgenti[voceRef]), righe)
-            }
+    /**
+     * Stale rows per (Voce, Parte), each with the source it must be re-derived from; absent Voci are skipped
+     * (AC-299). Every print of the Incontro is sourced from one of its Parti ([INV-I8b] purges the others).
+     */
+    private fun obsolete(incontroId: IncontroId, modello: String): List<VoceObsoleta> {
+        val sorgenti = sorgentiDelleVoci(incontroId)
+        return registrazioni.parti(incontroId).orEmpty().flatMap { parte ->
+            parlanti.impronteDiRegistrazione(parte.registrazioneId)
+                .filter { riga ->
+                    val sorgente = sorgenti[riga.voceRef to riga.parte]
+                    sorgente != null && ImprontaVocale.obsoleta(riga.sorgente, riga.modello, sorgente.chiave, modello)
+                }
+                .groupBy { it.voceRef }
+                .map { (voceRef, righe) ->
+                    val sorgente = checkNotNull(sorgenti[voceRef to parte.registrazioneId])
+                    VoceObsoleta(voceRef, parte.registrazioneId, sorgente, righe)
+                }
+        }
     }
 
-    private fun riallinea(registrazioneId: RegistrazioneId, voci: List<VoceObsoleta>, modello: String): Esito<Unit> {
+    /** The current source of each (Voce, Parte) where the Voce speaks. */
+    private fun sorgentiDelleVoci(incontroId: IncontroId): Map<Pair<VoceRef, RegistrazioneId>, SorgenteImpronta> =
+        lettoreVoci.voci(incontroId).orEmpty().flatMap { v ->
+            v.intervalliPerParte.filterValues { it.isNotEmpty() }
+                .map { (parte, intervalli) -> (v.voceRef to parte) to SorgenteImpronta.di(intervalli) }
+        }.toMap()
+
+    private fun riallinea(incontroId: IncontroId, voci: List<VoceObsoleta>, modello: String): Esito<Unit> {
         var aggiornate = 0
         var esito: Esito<Unit> = Esito.Ok(Unit)
         val fallimento = runCatching {
@@ -80,7 +93,7 @@ public class RiallineaImpronteServizio(
             }
         }.exceptionOrNull()
         if (aggiornate > 0) {
-            runCatching { pubblica(registrazioneId) }
+            runCatching { pubblica(incontroId) }
                 .onSuccess { if (esito is Esito.Ok) esito = it }
                 .onFailure { e -> fallimento?.addSuppressed(e) ?: throw e }
         }
@@ -93,10 +106,8 @@ public class RiallineaImpronteServizio(
         val campioni = decodificatore.campioni(voce.parte, voce.sorgente.intervalli)
         val impronta = estrattore.estrai(campioni)
         return uow.inTransazione {
-            val attuale = lettoreVoci.vociDellaParte(voce.parte, registrazioni)
-                ?.find { it.voceRef == voce.voceRef }
-                ?.takeIf { it.intervalli.isNotEmpty() }
-            if (attuale == null || SorgenteImpronta.di(attuale.intervalli) != voce.sorgente) {
+            val attuale = sorgentiDelleVoci(voce.voceRef.incontroId)[voce.voceRef to voce.parte]
+            if (attuale != voce.sorgente) {
                 Esito.Ok(0) // the Voce changed or vanished during the extraction: a later run converges
             } else {
                 Esito.Ok(
@@ -108,9 +119,9 @@ public class RiallineaImpronteServizio(
         }
     }
 
-    private fun pubblica(registrazioneId: RegistrazioneId): Esito<Unit> =
+    private fun pubblica(incontroId: IncontroId): Esito<Unit> =
         uow.inTransazione {
-            eventi.pubblica(ImpronteRiallineate(registrazioneId))
+            eventi.pubblica(ImpronteRiallineate(incontroId))
             Esito.Ok(Unit)
         }
 }

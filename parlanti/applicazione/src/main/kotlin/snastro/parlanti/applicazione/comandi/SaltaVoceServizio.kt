@@ -5,6 +5,7 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.VoceRef
 import snastro.kernel.poi
@@ -16,9 +17,6 @@ import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
-import snastro.parlanti.applicazione.porte.RegistrazioneVista
-import snastro.parlanti.applicazione.porte.VoceNellaParte
-import snastro.parlanti.applicazione.porte.leggiVoceNellaParte
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.AttribuzioneConfermata
 import snastro.parlanti.dominio.ErroreParlanti
@@ -36,17 +34,19 @@ import snastro.parlanti.applicazione.eventi.ParlanteCreato as ParlanteCreatoPubb
 
 /**
  * `SaltaVoce` (AC-88/AC-89, AC-286..AC-290, [INV-19]): skipping `comando.voceRef` CONFIRMS it — a new
- * occasionale "Ospite del <DataRegistrazione>" [Parlante] is created (first free numeric suffix on a
- * normalized name clash, [ParlanteRepository.nomeAttivoInUso], ADR 0007) keeping the Voce's print
- * ([INV-14]), then the Voce is attributed to it. Refused, unchanged, on an already-attributed Voce
- * (`ErroreParlanti.VoceGiaAttribuita`, AC-89) — checked FIRST, before any lookup or native call.
+ * occasionale "Ospite del <DataRegistrazione of the Incontro's FIRST Parte>" [Parlante] is created (first free
+ * numeric suffix on a normalized name clash, [ParlanteRepository.nomeAttivoInUso], ADR 0007) keeping the Voce's
+ * prints (one per Parte where it speaks, [INV-I8]), then the Voce is attributed to it. Refused, unchanged, on an
+ * already-attributed Voce (`ErroreParlanti.VoceGiaAttribuita`, AC-89) — checked FIRST, before any lookup or
+ * native call.
  *
  * ADR 0012 Amendment (b) point 2: OUTSIDE any transaction the Voce's audio is bounded with
- * [SorgenteImpronta.di], decoded and its print extracted (a failure propagates, nothing written: AC-290);
+ * [SorgenteImpronta.di], decoded and its print extracted, Parte by Parte (a failure propagates, nothing
+ * written: AC-290);
  * THEN one transaction repeats the checks, re-reads the Voce — a different source is
  * [ErroreParlanti.VoceCambiata], nothing written — and writes Parlante + Attribuzione + print row
  * (`sorgente` = [SorgenteImpronta.chiave], `modello` = [EstrattoreImpronta.modello]). The guest's Nome is
- * derived ONCE from the Registrazione as read in that transaction: a later `ModificaDataRegistrazione`
+ * derived ONCE from the first Parte as read in that transaction: a later `ModificaDataRegistrazione`
  * never revisits an already-created guest's Nome (nothing re-derives it).
  */
 // one parameter per collaborator: uow, id, 2 repos, 2 read ports, 2 technical ports, eventi
@@ -65,40 +65,41 @@ public class SaltaVoceServizio(
     public fun esegui(comando: SaltaVoce): Esito<Unit> {
         val voceRef = comando.voceRef
         return voceLibera(voceRef).poi { letta ->
-            val sorgente = SorgenteImpronta.di(letta.voce.intervalli)
-            val parte = letta.registrazione.registrazioneId
-            val impronta = estrattore.estrai(decodificatore.campioni(parte, sorgente.intervalli))
+            // [INV-I8]: one print per Parte where the Voce speaks, extracted outside any transaction.
+            val estratte = letta.parti.map { estrai(it) }
             uow.inTransazione {
                 voceLibera(voceRef).poi { attuale ->
-                    if (SorgenteImpronta.di(attuale.voce.intervalli).chiave != sorgente.chiave) {
+                    if (attuale.sorgenti() != letta.sorgenti()) {
                         Esito.Errore(ErroreParlanti.VoceCambiata(voceRef)) // AC-286: edited since the extraction
                     } else {
-                        creaOspite(voceRef, attuale.registrazione, impronta, sorgente.chiave)
+                        creaOspite(voceRef, attuale, estratte)
                     }
                 }
             }
         }
     }
 
-    /** AC-89 first, then the Voce read in its Parte (ADR 0033 §4.1: TrascrittoNonTrovato / VoceNonTrovata). */
-    private fun voceLibera(voceRef: VoceRef): Esito<VoceNellaParte> {
-        if (attribuzioni.trova(voceRef) != null) return Esito.Errore(ErroreParlanti.VoceGiaAttribuita(voceRef))
-        return leggiVoceNellaParte(voceRef, registrazioni, voci)
+    private fun estrai(inParte: VoceInParte): ImprontaDellaParte {
+        val impronta = estrattore.estrai(decodificatore.campioni(inParte.parte, inParte.sorgente.intervalli))
+        return ImprontaDellaParte(inParte.parte, impronta, inParte.sorgente.chiave)
     }
 
-    private fun creaOspite(
-        voceRef: VoceRef,
-        registrazione: RegistrazioneVista,
-        impronta: Impronta,
-        sorgente: String,
-    ): Esito<Unit> {
-        val nome = nomeOspiteLibero(registrazione.progettoId, registrazione.dataRegistrazione)
+    /** AC-89 first, then the Voce read in its Parti (ADR 0033 §4.1: TrascrittoNonTrovato / VoceNonTrovata). */
+    private fun voceLibera(voceRef: VoceRef): Esito<VoceNelleParti> {
+        if (attribuzioni.trova(voceRef) != null) return Esito.Errore(ErroreParlanti.VoceGiaAttribuita(voceRef))
+        return leggiVoceNelleParti(voceRef, registrazioni, voci)
+    }
+
+    private fun creaOspite(voceRef: VoceRef, voce: VoceNelleParti, estratte: List<ImprontaDellaParte>): Esito<Unit> {
+        // [INV-19]: the Incontro's date is its FIRST Parte's, whether or not the Voce speaks there.
+        val nome = nomeOspiteLibero(voce.progettoId, voce.dataDelIncontro)
         val (parlante, evParlante) =
-            Parlante.crea(ParlanteId(generatoreId.nuovo()), registrazione.progettoId, nome, TipoParlante.OCCASIONALE)
-        // Un Parlante appena creato e sempre attivo: registraImpronta non puo rifiutare la richiesta.
-        val parte = registrazione.registrazioneId
-        check(parlante.registraImpronta(voceRef, impronta, sorgente, estrattore.modello, parte) is Esito.Ok)
-        val (attribuzione, evAttribuzione) = Attribuzione.conferma(voceRef, registrazione.progettoId, parlante.id)
+            Parlante.crea(ParlanteId(generatoreId.nuovo()), voce.progettoId, nome, TipoParlante.OCCASIONALE)
+        // Un Parlante appena creato e sempre attivo: aggiungiImpronta non puo rifiutare la richiesta.
+        estratte.forEach { e ->
+            check(parlante.aggiungiImpronta(voceRef, e.parte, e.impronta, e.sorgente, estrattore.modello) is Esito.Ok)
+        }
+        val (attribuzione, evAttribuzione) = Attribuzione.conferma(voceRef, voce.progettoId, parlante.id)
 
         // FK order: the new Parlante row before its Attribuzione.
         return parlanti.salva(parlante).poi {
@@ -128,6 +129,8 @@ public class SaltaVoceServizio(
         val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
+
+private class ImprontaDellaParte(val parte: RegistrazioneId, val impronta: Impronta, val sorgente: String)
 
 private fun ParlanteCreato.pubblicato(): ParlanteCreatoPubblicato =
     ParlanteCreatoPubblicato(parlanteId, progettoId, nome, tipo.pubblicato())

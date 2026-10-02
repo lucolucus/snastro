@@ -1,37 +1,37 @@
 ---
-id: riassunto-vista-incontro
-type: read-model
+id: esegui-riassunto-incontro
+type: application-service
 context: sintesi
 side: app
 wave: 5
 release: I1
 high_value: true
-module: ":sintesi:applicazione ..letture (RiassuntoVisteLettura, RiassuntiInAttesa)"
+model_hint: deep
+module: ":sintesi:applicazione ..comandi (EseguiProssimoRiassuntoServizio)"
 consumes:
   - kernel-incontro
   - agg-riassunto-incontro
   - porte-sintesi
   - lettore-incontro-sintesi
   - repo-riassunto-incontro
-reuses:
-  - sintesi/repo-sintesi
 related_adrs:
-  - "0023"
+  - "0026"
   - "0037"
-view_shape: {"RiassuntoVista": "{ incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato? }", "DisponibilitaVista": "Disponibile | NonDisponibile{ motivo: PartiNonTrascritte{parte} | ElaborazioneAperta{parte} | PartiFallite{parte} | TroppoLunga }", "VoceVista": "{ voceId, etichetta, nome?, presente: Boolean }", "FonteVista": "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean }", "RiassuntoInCoda": "{ riassuntoId, incontroId, richiestoAlle }"}
+commands:
+  - EseguiProssimoRiassunto
 tests_nl_status: confirmed
 ---
-# riassunto-vista-incontro
+# esegui-riassunto-incontro
 
 ## What to do
-Re-key riassunto-vista and the queue source by incontroId: numParti, disponibilita naming the first blocking Parte, superato from StrutturaIncontro, VoceVista.presente from the current structure, FonteVista with registrazioneId, numeroParte and inizioMs nullable.
+Amend EseguiProssimoRiassunto: read the Incontro's ordered Parti when the run is claimed, the Segmenti of each TRASCRITTA Parte, build the one-pass input with its label table, call the LLM outside any transaction, apply the Verifica per Parte and complete by compare-and-set; handle the races of INV-I12.
 
 ## Tasks
-- INV-I13 a Responsabile Voce 7 no longer in the Incontro → VoceVista(7, presente = false, nome = null) even if a Parlante was once attributed; a present attributed Voce → presente = true with its Nome
-- INV-I13 a Fonte whose Segmento vanished (its Parte re-transcribed) → segmentoPresente = false, inizioMs = null; a Fonte of an eliminated Parte → numeroParte = null
-- INV-I11 the view's superato is true after a re-transcription of any Parte, also on a 1-part Incontro, and false on the unchanged migrated Riassunto (INV-I3)
-- AC-I50 disponibilita names the FIRST blocking Parte in Parte order (PartiNonTrascritte{2}, ElaborazioneAperta{1}, PartiFallite{1}); numParti = number of Parti now
-- AC-I51 RiassuntiInAttesa items are (riassuntoId, incontroId, richiestoAlle) and PosizioniNellaCoda.riassunti is keyed by IncontroId (at most one open Riassunto per Incontro)
+- AC-I210 a non-last Parte eliminated while the Incontro's Riassunto is in_attesa or in_corso (added 2026-10-02 from the eliminazione-parte-sintesi review): the run never leaves the row in_corso or loops through RecuperaRiassuntiInterrotti — it completes born superato over the remaining Parti, or ends fallito nessun_contenuto_verificabile (INV-I12)
+- EseguiProssimoRiassunto on a 2-Parte Incontro sends the fake ModelloLinguistico ONE input with labels s1..sN over both Parti and stores the kept Fonti as SegmentoRef of the right Parte
+- INV-I12 a queued Riassunto whose Parte 2 lost its Trascritto before the claim → run on Parte 1 only, born superato; no Parte with a Trascritto → fallito nessun_contenuto_verificabile
+- INV-I12 a Revisione across Parti during the run → the Riassunto completes born superato; the Incontro ceases during the run → the compare-and-set finds no row and writes nothing
+- AC-I36 [@modelli] benchmark (D-0010, opt-in benchmarkRiassunto): a real 2-3 Parte Incontro of about 3 h is summarized in ≤ 10 min per hour of audio (ADR 0026) on the M3 Pro, and the user judges that no Decisione spanning two Parti appears twice (result recorded in the PR)
 
 ## Dependencies
 - `agg-riassunto-incontro` (consumes it; owner `riassunto-incontro`) — consumers: `porte-sintesi-incontro`, `riassumi-incontro`, `esegui-riassunto-incontro`, `eliminazione-parte-sintesi`, `riassunto-vista-incontro`, `adattatori-sintesi-incontro` · contract_test: invariant-test
@@ -61,11 +61,5 @@ Re-key riassunto-vista and the queue source by incontroId: numParti, disponibili
   - pinned `RiassuntoRepository (amended)`: keyed by incontroId (trova(incontroId) → the open or pronto Riassunto of that Incontro); RiassuntoInCoda(riassuntoId, incontroId, richiestoAlle)
   - key `incontroId`: as kernel-incontro
   - key `richiestoAlle`: unchanged (FIFO key, ADR 0023)
-- `vista-riassunto-incontro` (owns it) — consumers: `scheda-riassunto-incontro`, `avvio-incontro` · contract_test: consumer-driven
-  - pinned `RiassuntoVista`: (incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato?)
-  - pinned `DisponibilitaVista`: Disponibile | NonDisponibile(motivo: PartiNonTrascritte(parte) | ElaborazioneAperta(parte) | PartiFallite(parte) | TroppoLunga)
-  - pinned `VoceVista`: (voceId, etichetta, nome: String?, presente: Boolean)
-  - pinned `FonteVista`: (registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean)
-  - key `incontroId`: as kernel-incontro
 
-Sources: ADR 0037 §1, §6 · tactical-model.md [INV-I13] · UI/ux-proposal.md § Riassunto tab
+Sources: ADR 0037 §3, §4, §8 · tactical-model.md [INV-I12], [INV-I19] · decisions.md D-0010

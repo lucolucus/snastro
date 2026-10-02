@@ -13,9 +13,6 @@ import snastro.kernel.VoceRef
  * [INV-18], and the print re-keying of [INV-21]. The set rule INV-16
  * (unique active [Nome] per Progetto) is NOT checked here (service + index, ADR 0007).
  */
-// TooManyFunctions: registraImpronta and trasferisciImpronta are the pre-Incontro spellings of aggiungiImpronta and
-// riassegnaImpronte, kept only until their callers (attribuzione-incontro, politiche-parlanti-incontro) move over.
-@Suppress("TooManyFunctions")
 public class Parlante private constructor(
     public val id: ParlanteId,
     public val progettoId: ProgettoId,
@@ -85,15 +82,6 @@ public class Parlante private constructor(
             if (indice >= 0) _impronte[indice] = nuova else _impronte.add(nuova)
         }
 
-    /** The pre-Incontro spelling of [aggiungiImpronta], kept for its callers until they move to it. */
-    public fun registraImpronta(
-        voceRef: VoceRef,
-        impronta: Impronta,
-        sorgente: String,
-        modello: String,
-        parte: RegistrazioneId,
-    ): Esito<Unit> = aggiungiImpronta(voceRef, parte, impronta, sorgente, modello)
-
     /**
      * POLICY-ONLY ([INV-21] `unire(A = [a], B = [da])`): each print of [da] is re-keyed onto [a] keeping its Parte,
      * impronta, sorgente and modello (stale by construction, refreshed after commit by `RiallineaImpronte`) — unless [a]
@@ -107,10 +95,10 @@ public class Parlante private constructor(
         _impronte.replaceAll { if (it.voceRef == da) it.copy(voceRef = a) else it }
     }
 
-    /** The pre-Incontro spelling of [riassegnaImpronte], kept for its caller until it moves to it. */
-    public fun trasferisciImpronta(da: VoceRef, a: VoceRef): Unit = riassegnaImpronte(da, a)
-
-    /** Removes every print of [voceRef], in every Parte (a physical removal: biometric rows, ADR 0009). */
+    /**
+     * Removes every print of [voceRef], in every Parte (a physical removal: biometric rows, ADR 0009). Kept for the
+     * whole-Voce removals of the Attribuzione move and of the revisione-policy (D-0034 lists it as transitional).
+     */
     public fun rimuoviImpronta(voceRef: VoceRef) {
         _impronte.removeAll { it.voceRef == voceRef }
     }

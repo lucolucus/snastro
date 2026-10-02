@@ -3,6 +3,7 @@ package snastro.parlanti.applicazione.eventi
 import com.lemonappdev.konsist.api.Konsist
 import com.lemonappdev.konsist.api.declaration.KoClassDeclaration
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
@@ -86,10 +87,10 @@ class EventiParlantiTest {
     }
 
     @Test
-    fun `AC-14 ImpronteRiallineate ha solo registrazioneId`() {
-        val evento: EventoPubblicato = ImpronteRiallineate(registrazioneId = RegistrazioneId("id-9"))
-        assertEquals(ImpronteRiallineate(RegistrazioneId("id-9")), evento)
-        assertEquals(listOf("registrazioneId: RegistrazioneId"), formaDi("ImpronteRiallineate"))
+    fun `AC-14 ImpronteRiallineate ha solo incontroId`() {
+        val evento: EventoPubblicato = ImpronteRiallineate(incontroId = IncontroId("id-9"))
+        assertEquals(ImpronteRiallineate(IncontroId("id-9")), evento)
+        assertEquals(listOf("incontroId: IncontroId"), formaDi("ImpronteRiallineate"))
     }
 
     @Test

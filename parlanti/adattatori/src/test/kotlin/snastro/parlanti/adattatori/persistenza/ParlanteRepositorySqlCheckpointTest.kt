@@ -60,12 +60,12 @@ class ParlanteRepositorySqlCheckpointTest {
                 Nome.di("Marco").atteso(),
                 TipoParlante.RICORRENTE,
             ).aggregato
-            p.registraImpronta(
+            p.aggiungiImpronta(
                 voceRef,
+                unicaParteDi(voceRef),
                 Impronta(floatArrayOf(1f, 2f, 3f)),
                 "0-1000",
                 "modello-1",
-                unicaParteDi(voceRef),
             ).atteso()
             repo.salva(p).atteso()
             assertEquals(1, repo.impronteDiRegistrazione(RegistrazioneId("registrazione-1")).size)

@@ -38,7 +38,7 @@
 # multi-file import lands (no skipped/aborted tests: the gate fails tests JUnit does not execute). Workers list such edits as DEVIATIONS.
 feature: incontro
 profile: .mismagent/profile.md
-ac_scheme: "AC-I1..AC-I209 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
+ac_scheme: "AC-I1..AC-I210 incontro-local (assigned in manifest order 2026-10-01); INV-I1..INV-I19 from features/incontro/tactical-model.md"
 blocks:
   # ---------------------------------------------------------------- wave 1: the two owners of the new ADR check scripts
   - id: "persistenza-incontro"
@@ -591,6 +591,7 @@ blocks:
     commands: ["EseguiProssimoRiassunto"]
     tests_nl_status: "confirmed"
     tests_nl:
+      - "AC-I210 a non-last Parte eliminated while the Incontro's Riassunto is in_attesa or in_corso (added 2026-10-02 from the eliminazione-parte-sintesi review): the run never leaves the row in_corso or loops through RecuperaRiassuntiInterrotti — it completes born superato over the remaining Parti, or ends fallito nessun_contenuto_verificabile (INV-I12)"
       - "EseguiProssimoRiassunto on a 2-Parte Incontro sends the fake ModelloLinguistico ONE input with labels s1..sN over both Parti and stores the kept Fonti as SegmentoRef of the right Parte"
       - "INV-I12 a queued Riassunto whose Parte 2 lost its Trascritto before the claim → run on Parte 1 only, born superato; no Parte with a Trascritto → fallito nessun_contenuto_verificabile"
       - "INV-I12 a Revisione across Parti during the run → the Riassunto completes born superato; the Incontro ceases during the run → the compare-and-set finds no row and writes nothing"
@@ -788,7 +789,7 @@ blocks:
       RiassuntoVista: "{ incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato? }"
       DisponibilitaVista: "Disponibile | NonDisponibile{ motivo: PartiNonTrascritte{parte} | ElaborazioneAperta{parte} | PartiFallite{parte} | TroppoLunga }"
       VoceVista: "{ voceId, etichetta, nome?, presente: Boolean }"
-      FonteVista: "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean }"
+      FonteVista: "{ registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista? /* null when the Segmento vanished: Sintesi stores no Voce per Fonte (D-0042) */, inizioMs: Long?, segmentoPresente: Boolean }"
       RiassuntoInCoda: "{ riassuntoId, incontroId, richiestoAlle }"
     tests_nl_status: "confirmed"
     tests_nl:
@@ -1466,7 +1467,7 @@ boundaries:
       RiassuntoVista: "(incontroId, numParti: Int, modello, richiestaAperta, ultimoFallimento, disponibilita: DisponibilitaVista, argomentoPrecompilato, mostrato: RiassuntoMostrato?)"
       DisponibilitaVista: "Disponibile | NonDisponibile(motivo: PartiNonTrascritte(parte) | ElaborazioneAperta(parte) | PartiFallite(parte) | TroppoLunga)"
       VoceVista: "(voceId, etichetta, nome: String?, presente: Boolean)"
-      FonteVista: "(registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista, inizioMs: Long?, segmentoPresente: Boolean)"
+      FonteVista: "(registrazioneId, numeroParte: Int?, segmentoId, voce: VoceVista? /* null when the Segmento vanished: Sintesi stores no Voce per Fonte (D-0042) */, inizioMs: Long?, segmentoPresente: Boolean)"
     keys:
       incontroId: "as kernel-incontro"
     contract_test: "consumer-driven"

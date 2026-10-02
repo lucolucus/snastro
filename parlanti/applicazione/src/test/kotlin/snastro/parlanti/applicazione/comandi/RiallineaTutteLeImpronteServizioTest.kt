@@ -64,7 +64,7 @@ class RiallineaTutteLeImpronteServizioTest {
     ): ParlanteId {
         val p = Parlante.crea(ParlanteId(id), progetto, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
         registrazioni.forEach {
-            p.registraImpronta(VoceRef(unIncontroDi(it), VoceId(1)), VECCHIA, "0-1000", "altro", it).atteso()
+            p.aggiungiImpronta(VoceRef(unIncontroDi(it), VoceId(1)), it, VECCHIA, "0-1000", "altro").atteso()
         }
         parlanti.salva(p).atteso()
         return p.id
@@ -86,7 +86,7 @@ class RiallineaTutteLeImpronteServizioTest {
         assertEquals(CHIAVE, sorgenteDi(anna, B))
         assertEquals("0-1000", sorgenteDi(estraneo, ALTROVE))
         assertEquals(
-            setOf(ImpronteRiallineate(A), ImpronteRiallineate(B)),
+            setOf(ImpronteRiallineate(unIncontroDi(A)), ImpronteRiallineate(unIncontroDi(B))),
             eventi.pubblicati.toSet(),
         )
         assertEquals(2, eventi.pubblicati.size, "una volta per Registrazione")
@@ -141,7 +141,7 @@ class RiallineaTutteLeImpronteServizioTest {
         assertTrue(A.valore in assertNotNull(riportato.message), "il messaggio nomina la Registrazione fallita")
         assertEquals("0-1000", sorgenteDi(marco, A))
         assertEquals(CHIAVE, sorgenteDi(marco, B), "B riallineata nonostante A")
-        assertEquals(listOf(ImpronteRiallineate(B)), eventi.pubblicati)
+        assertEquals(listOf(ImpronteRiallineate(unIncontroDi(B))), eventi.pubblicati)
     }
 
     private companion object {
