@@ -1,7 +1,9 @@
 package snastro.avvio.progetto
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ErroreDiProva
@@ -17,10 +19,12 @@ import snastro.progetto.applicazione.eventi.OraDiInizioModificata
 import snastro.progetto.applicazione.eventi.ProgettoCreato
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.supporto.test.attendiFinche
 import snastro.ui.Cambiamento
 import java.time.LocalDate
 import java.time.LocalTime
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -111,6 +115,42 @@ class AggiornamentiVistaEventiTest {
         assertEquals(listOf(Cambiamento(b)), raccolti)
     }
 
+    @Test
+    fun `L208 un import di molti file in un Incontro di molte Parti non perde Cambiamenti con una vista lenta`() {
+        val parti = List(PARTI) { RegistrazioneId("p-$it") }
+        val incontro = IncontroId("incontro-1")
+        val aggiornamenti = AggiornamentiVistaEventi { parti }.also(delegata::registraDopoCommit)
+        val via = CountDownLatch(1)
+        val raccolti = CopyOnWriteArrayList<Cambiamento>()
+        // UNDISPATCHED: subscribed before the commit below; each Cambiamento then waits on a Default thread.
+        val vista = CoroutineScope(Dispatchers.Default).launch(start = CoroutineStart.UNDISPATCHED) {
+            aggiornamenti.cambiamenti.collect {
+                via.await() // a screen still reloading
+                raccolti += it
+            }
+        }
+
+        delegata.unitaDiLavoro.inTransazione {
+            parti.forEach { delegata.pubblica(RegistrazioneAggiunta(it, ProgettoId("p-1"), incontro)) }
+            Esito.Ok(Unit)
+        }
+        via.countDown()
+
+        attendiFinche(messaggio = "tutti i Cambiamenti") { raccolti.size == PARTI * PARTI }
+        assertEquals(parti.toSet(), raccolti.map { it.registrazioneId }.toSet())
+        vista.cancel()
+    }
+
+    @Test
+    fun `L209 una lettura delle Parti che fallisce rinfresca comunque la Registrazione dell evento, senza eccezione`() {
+        val b = RegistrazioneId("b")
+        val raccolti = raccogli(AggiornamentiVistaEventi { error("SQL giu'") })
+
+        pubblica(OraDiInizioModificata(b, IncontroId("incontro-1"), null, null))
+
+        assertEquals(listOf(Cambiamento(b)), raccolti)
+    }
+
     private fun raccogli(aggiornamenti: AggiornamentiVistaEventi): MutableList<Cambiamento> {
         delegata.registraDopoCommit(aggiornamenti)
         val raccolti = CopyOnWriteArrayList<Cambiamento>()
@@ -123,5 +163,9 @@ class AggiornamentiVistaEventiTest {
             delegata.pubblica(evento)
             Esito.Ok(Unit)
         }
+    }
+
+    private companion object {
+        const val PARTI = 6
     }
 }

@@ -15,6 +15,7 @@ import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.porte.Diarizzatore
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.dominio.NumeroPersone
+import snastro.ui.Cambiamento
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.registrazioni.RegistrazioniUiStato
 import java.nio.file.Path
@@ -122,8 +123,13 @@ class IncontroPartiTest {
                 ambiente.sintesi.vista(parti.first())?.mostrato?.let { !it.superato } == true
             }
 
+            val cambiamenti = ambiente.raccogliCambiamenti()
             sulThreadUi(ambiente) { s2.modificaOraDiInizio(parti.last(), LocalTime.of(9, 0)) }
 
+            // After commit, every Parte's view (the S3 open on the OTHER Parte too) is told to reload its order.
+            attendiFinche(messaggio = "un Cambiamento per ogni Parte") {
+                parti.all { Cambiamento(it) in cambiamenti }
+            }
             attendiFinche(messaggio = "ordine fresco") {
                 ambiente.collaboratori.incontri().single().parti.first().registrazioneId == parti.last()
             }
@@ -131,8 +137,9 @@ class IncontroPartiTest {
         }
     }
 
+    // The 'last value used' half of the AC is asserted after a real 'Trascrivi 2 parti' in this class's first test.
     @Test
-    fun `AC-I89 senza prefill il campo Numero di persone dell Incontro e' vuoto, poi mostra l ultimo valore usato`() {
+    fun `AC-I89 senza prefill il campo Numero di persone di un Incontro mai trascritto e' vuoto`() {
         AmbienteProgetto(radice).use { ambiente ->
             ambiente.importaIn(Destinazione.NuovoIncontro)
             val incontro = ambiente.collaboratori.incontri().single().incontroId

@@ -125,7 +125,7 @@ private fun ComposeUiTest.percorriIncontro(grafo: Grafo, fixtureDir: String, out
     check(incontro.parti.size >= 2) { "smoke: l'Incontro del fixture ha ${incontro.parti.size} Parti, ne servono 2" }
     val idIncontro = incontro.incontroId.valore
     val parte1 = incontro.parti[0].registrazioneId
-    checkNotNull(grafo.primaRegistrazioneCompletata()) {
+    check(grafo.primaRegistrazioneCompletata() != null) {
         "smoke: il progetto fixture '$fixtureDir' non ha alcuna Registrazione con un Trascritto completato"
     }
     // The fixture has 4 Voci, 1 of them named (AC-357 over the Incontro).

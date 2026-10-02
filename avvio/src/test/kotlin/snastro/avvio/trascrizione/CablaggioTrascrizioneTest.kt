@@ -3,10 +3,21 @@ package snastro.avvio.trascrizione
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.ModuloComposizione
 import snastro.avvio.SEZIONI_SHELL
+import snastro.avvio.coda.Campanello
 import snastro.avvio.progetto.AmbienteProgetto
+import snastro.avvio.progetto.AperturaProgetto
+import snastro.avvio.progetto.PorteProgetto
+import snastro.kernel.ErroreDominio
+import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.UnitaDiLavoro
+import snastro.kernel.atteso
+import snastro.kernel.erroreAtteso
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
+import snastro.progetto.applicazione.porte.SondaAudioFinta
+import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontro
 import snastro.ui.DestinazioneShell
 import java.io.File
 import java.nio.file.Path
@@ -79,10 +90,29 @@ class CablaggioTrascrizioneTest {
 
     @Test
     fun `AC-I89 Trascrivi N parti suona il Campanello come Trascrivi, e S2 riceve il comando dell Incontro`() {
-        val modulo = File("src/main/kotlin/snastro/avvio/trascrizione/ModuloTrascrizione.kt").readText()
-        val lambda = modulo.substringAfter("avviaElaborazioniDellIncontro = {")
-            .substringBefore("numeroPersonePrecompilato")
-        assertTrue("campanello.suona()" in lambda, "le Parti accodate svegliano la coda: $lambda")
+        AmbienteProgetto(radice).use {
+            it.importaIn(Destinazione.NuovoIncontro).atteso()
+            val incontro = it.collaboratori.incontri().single().incontroId
+            val campanello = Campanello()
+            val cartella = Path.of(it.progetto.percorso)
+            val porte = PorteProgetto(it.porte.database, it.clock, cartella.toFile())
+            val apertura = AperturaProgetto(
+                it.progetto.progettoId,
+                cartella,
+                it.scope,
+                it.collaboratori.lettoreAudio,
+                GeneratoreIdFinto(),
+                it.clock,
+                SondaAudioFinta(emptyMap()),
+            )
+            val modulo = ModuloTrascrizione(porte, apertura, it.app, campanello)
+            val avvia = modulo.collaboratori.avviaElaborazioniDellIncontro
+
+            avvia(AvviaElaborazioniDellIncontro(IncontroId("nessuno"))).erroreAtteso<ErroreDominio>()
+            assertTrue(campanello.segnali.tryReceive().isFailure, "un rifiuto non accoda nulla: nessuno squillo")
+            avvia(AvviaElaborazioniDellIncontro(incontro)).atteso()
+            assertTrue(campanello.segnali.tryReceive().isSuccess, "le Parti accodate svegliano la coda")
+        }
         val s2 = "avviaElaborazioniDellIncontro = collaboratori.trascrizione.avviaElaborazioniDellIncontro"
         assertEquals(1, righeCon(s2).size)
     }
