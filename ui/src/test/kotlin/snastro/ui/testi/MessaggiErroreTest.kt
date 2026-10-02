@@ -134,6 +134,8 @@ class MessaggiErroreTest {
                 ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
                 ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
                 ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1")),
+                ErroreTrascrizione.IncontroNonTrovato(IncontroId("incontro-1")),
+                ErroreTrascrizione.NessunaParteDaTrascrivere(IncontroId("incontro-1")),
             ),
         ) { messaggioPer(it) }
     }
