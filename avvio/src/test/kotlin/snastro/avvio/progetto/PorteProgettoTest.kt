@@ -135,8 +135,9 @@ class PorteProgettoTest {
             ambiente.diarizzatoreScriptato.barriera = barriera
             val id = try {
                 val id = ambiente.importaEAvvia()
-                attendiFinche(timeout = 10.seconds, messaggio = "S2 IN_CORSO (DIARIZZAZIONE)") {
-                    ambiente.stato(id) == StatoElaborazioneVista.IN_CORSO
+                // The fase is published a moment after IN_CORSO (DECODIFICA comes first): wait for the fase itself.
+                attendiFinche(timeout = 30.seconds, messaggio = "S2 IN_CORSO in DIARIZZAZIONE") {
+                    ambiente.vistaDi(id).fase == FaseElaborazione.DIARIZZAZIONE
                 }
                 val rigaS2 = ambiente.vistaDi(id)
                 val rigaPorte = ambiente.porte.statiElaborazione.stati(listOf(id)).single()
@@ -147,7 +148,7 @@ class PorteProgettoTest {
             } finally {
                 barriera.countDown()
             }
-            attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata dopo il rilascio della barriera") {
+            attendiFinche(timeout = 30.seconds, messaggio = "elaborazione completata dopo il rilascio della barriera") {
                 ambiente.stato(id) == StatoElaborazioneVista.COMPLETATA
             }
         }

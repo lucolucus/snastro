@@ -19,6 +19,7 @@ import java.time.LocalDate
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -133,6 +134,42 @@ class StatoVociRicaricaTest {
 
             // L665a: the OLD read finishing LAST must never overwrite the fresher one already applied.
             assertEquals(fresca, statoFlow.value.contenutoUnicaCarta())
+        } finally {
+            eseguitori.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `ricaricare le Voci senza vista caricata non rilegge il Trascritto dal repository`() {
+        val eseguitori = Executors.newFixedThreadPool(2)
+        val ioReale = eseguitori.asCoroutineDispatcher()
+        try {
+            val trascritto = TRASCRITTO_UNA_VOCE
+            val letture = AtomicInteger()
+            val statoFlow = unoStatoVuoto(trascritto)
+            val progetto = CoroutineScope(SupervisorJob() + ioReale)
+            val sorgenti = unaSorgenteConLetturaVecchiaBloccata(
+                progetto,
+                CountDownLatch(1),
+                CountDownLatch(0),
+                VoceIdentificata(V1, MARCO.parlanteId, MARCO.nome, MARCO.tipoParlante),
+            )
+            val leggiTrascritto = {
+                letture.incrementAndGet()
+                trascritto
+            }
+            // L32: no `vista` yet (the first load still in flight) — the Incontro must not be fetched
+            // through `trascritto()`, a repository read reachable from the UI thread.
+            val voci = StatoVoci(sorgenti, progetto, ioReale, REG, leggiTrascritto, statoFlow) { emptyList() }
+            val conclusa = CountDownLatch(1)
+
+            progetto.launch {
+                voci.ricaricaParlanti()
+                conclusa.countDown()
+            }
+
+            assertTrue(conclusa.await(5, TimeUnit.SECONDS), "la lettura non si e conclusa")
+            assertEquals(0, letture.get(), "l'Incontro viene dalla vista caricata, mai da una lettura del repository")
         } finally {
             eseguitori.shutdownNow()
         }

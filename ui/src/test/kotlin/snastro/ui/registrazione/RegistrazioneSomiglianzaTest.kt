@@ -568,9 +568,10 @@ class RegistrazioneSomiglianzaTest {
         // L713a: this test failed once on a full run at a 2s budget under load (dispatch.log,
         // "timing-flaky") — attendiFinche's own elapsed-time timeout (never a fixed retry count) with a
         // generous ceiling replaces the old budget loop.
-        val timeout = 10.seconds
-        val ui = pool("ui-test")
-        val io = pool("io-test")
+        val timeout = 30.seconds
+        // ONE thread, like the real UI dispatcher: StatoVoci is mutated only there (two threads would race on it).
+        val ui = pool("ui-test", threads = 1)
+        val io = pool("io-test", threads = 2)
         val a = AmbienteVoci(
             CoroutineScope(Dispatchers.Default),
             Clock.systemUTC(),
@@ -624,6 +625,6 @@ class RegistrazioneSomiglianzaTest {
         io.close()
     }
 
-    private fun pool(nome: String): ExecutorCoroutineDispatcher =
-        Executors.newFixedThreadPool(2) { r -> Thread(r, nome).apply { isDaemon = true } }.asCoroutineDispatcher()
+    private fun pool(nome: String, threads: Int): ExecutorCoroutineDispatcher =
+        Executors.newFixedThreadPool(threads) { r -> Thread(r, nome).apply { isDaemon = true } }.asCoroutineDispatcher()
 }

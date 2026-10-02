@@ -88,7 +88,7 @@ class ContenutoAppFooterModelloTest {
     private fun ServizioModelliFinta.emetti(stato: StatoModelloFacoltativo) = emettiFacoltativo(MODELLO_ID, stato)
 
     private fun ComposeUiTest.attendiPiede(visibile: Boolean, messaggio: String) =
-        attendiFinche(timeout = 10.seconds, messaggio = messaggio) {
+        attendiFinche(timeout = 30.seconds, messaggio = messaggio) { // generous: a whole project boots under gate load
             waitForIdle()
             onAllNodesWithTag(PIEDE_MODELLO, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() == visibile
         }

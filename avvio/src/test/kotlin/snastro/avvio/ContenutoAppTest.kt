@@ -6,6 +6,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -58,6 +59,11 @@ class ContenutoAppTest {
                 apri(b)
                 attendi("la scheda Riassunto resta selezionata aprendo b") { esiste("riassunto") }
 
+                // A click on a still disabled button is a silent no-op: wait for it to be enabled.
+                attendi("il bottone Riassumi di b abilitato") {
+                    onAllNodes(hasTestTag("riassunto-bottone-principale") and isEnabled()).fetchSemanticsNodes()
+                        .isNotEmpty()
+                }
                 onNodeWithTag("riassunto-bottone-principale").performClick()
                 attendi("il pronto di b mostrato") { esiste("riassunto-contenuto") }
             }
@@ -77,7 +83,7 @@ class ContenutoAppTest {
         onAllNodesWithTag(tag, useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty()
 
     private fun ComposeUiTest.attendi(messaggio: String, condizione: () -> Boolean) =
-        attendiFinche(timeout = 10.seconds, messaggio = messaggio) {
+        attendiFinche(timeout = 30.seconds, messaggio = messaggio) { // generous: a whole project boots under gate load
             waitForIdle()
             condizione()
         }

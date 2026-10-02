@@ -213,8 +213,8 @@ internal class CodaCondivisa(
             // the element's key is its Registrazione for an Elaborazione, its Incontro for a Riassunto (AC-I51)
             when (voce.tipo) {
                 TipoElementoCoda.ELABORAZIONE ->
-                    elaborazioni[RegistrazioneId(voce.elemento.registrazioneId)] = indice + 1
-                TipoElementoCoda.RIASSUNTO -> riassunti[IncontroId(voce.elemento.registrazioneId)] = indice + 1
+                    elaborazioni[RegistrazioneId(voce.elemento.oggettoId)] = indice + 1
+                TipoElementoCoda.RIASSUNTO -> riassunti[IncontroId(voce.elemento.oggettoId)] = indice + 1
             }
         }
         return PosizioniCoda(elaborazioni, riassunti)
@@ -347,8 +347,11 @@ internal class CodaCondivisa(
 /** The two kinds of item the shared queue orders (ADR 0023 §1/§2) — ordinal is the tie-breaker. */
 internal enum class TipoElementoCoda { ELABORAZIONE, RIASSUNTO }
 
-/** One queued item, over primitive/context-neutral ids only (ADR 0023 §1). */
-internal data class ElementoInCoda(val id: String, val registrazioneId: String, val istante: Instant)
+/**
+ * One queued item, over primitive/context-neutral ids only (ADR 0023 §1). [oggettoId] is the id the item is about:
+ * a RegistrazioneId for an Elaborazione, an IncontroId for a Riassunto (ADR 0037).
+ */
+internal data class ElementoInCoda(val id: String, val oggettoId: String, val istante: Instant)
 
 /**
  * One source of the shared queue (ADR 0023 §1/§2), a bundle of plain functions over [ElementoInCoda]'s

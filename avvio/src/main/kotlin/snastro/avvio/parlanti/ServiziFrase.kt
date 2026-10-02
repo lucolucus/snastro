@@ -9,6 +9,7 @@ import snastro.kernel.poi
 import snastro.parlanti.applicazione.comandi.ConfermaAttribuzione
 import snastro.parlanti.applicazione.comandi.ObiettivoAttribuzione
 import snastro.parlanti.dominio.TipoParlante
+import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.ui.registrazione.FraseRef
@@ -31,23 +32,24 @@ internal class ServiziFrase(
 ) {
     fun esegui(frase: FraseRef, passi: PassiNominaFrase): Esito<Unit> {
         val id = frase.registrazioneId
-        val incontroId = { checkNotNull(incontroDi(id)) { "frase di una Registrazione sconosciuta: $id" } }
+        // A Registrazione deleted while its page was open: an expected failure (ADR 0003), never a throw.
+        val incontroId = incontroDi(id) ?: return Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(id))
         // INV-I7: the commands carry the Incontro the frase was read from, so a Voce of another one is refused.
         val conferma = {
             confermaSegmento(
-                ConfermaSegmento(id, frase.segmentoId, confermato = true, incontroDelleVoci = incontroId()),
+                ConfermaSegmento(id, frase.segmentoId, confermato = true, incontroDelleVoci = incontroId),
             )
         }
         val riassegna = { destinazione: VoceId? ->
-            riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, destinazione, incontroId()))
+            riassegnaSegmento(RiassegnaSegmento(id, frase.segmentoId, destinazione, incontroId))
         }
         return when (passi) {
             PassiNominaFrase.SoloConferma -> conferma()
             is PassiNominaFrase.AttribuisciVoce ->
-                attribuisci(VoceRef(incontroId(), passi.voceId), passi.obiettivo).poi { conferma() }
+                attribuisci(VoceRef(incontroId, passi.voceId), passi.obiettivo).poi { conferma() }
             is PassiNominaFrase.Sposta -> riassegna(passi.voceId).poi { Esito.Ok(Unit) }
             is PassiNominaFrase.NuovaVoce ->
-                riassegna(null).poi { nuova -> attribuisci(VoceRef(incontroId(), nuova), passi.obiettivo) }
+                riassegna(null).poi { nuova -> attribuisci(VoceRef(incontroId, nuova), passi.obiettivo) }
         }
     }
 

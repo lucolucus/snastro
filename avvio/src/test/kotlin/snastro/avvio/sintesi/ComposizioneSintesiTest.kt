@@ -25,6 +25,7 @@ import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
+import snastro.progetto.dominio.ErroreProgetto
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
 import snastro.sintesi.applicazione.eventi.RiassuntoEliminato
@@ -291,6 +292,9 @@ class ComposizioneSintesiTest {
     fun `INV-I12b un TrascrittoSostituito sul dispatcher non raggiunge alcun abbonato di Sintesi`() {
         AmbienteProgetto(radice).use {
             val a = it.registrazioneTrascritta()
+            it.riassumi(a)
+            it.attendiPronto(a) // a Riassunto pronto exists: the delivery below could really touch it
+            val prima = it.diRegistrazione(a).single()
             val modulo = it.composto.ordineSincroni.filterIsInstance<ModuloSintesi>().single()
             val eventi = modulo.abbonatiSincroni().map { ab -> ab.evento } +
                 modulo.abbonatiDopoCommit().map { ab -> ab.evento }
@@ -298,7 +302,10 @@ class ComposizioneSintesiTest {
             val sostituito = TrascrittoSostituito(a, it.incontroDi(a), emptySet())
             assertTrue(eventi.none { e -> e.isInstance(sostituito) }, "abbonati di Sintesi: $eventi")
             consegna(it, sostituito)
-            assertEquals(emptyList(), it.diRegistrazione(a))
+            val dopo = it.diRegistrazione(a).single()
+            assertEquals(prima.id, dopo.id, "il Riassunto pronto resta lo stesso (ADR 0037 §7)")
+            assertTrue(dopo.pronto)
+            assertEquals(prima.decisioni, dopo.decisioni)
         }
     }
 
@@ -383,6 +390,19 @@ class ComposizioneSintesiTest {
             assertTrue((System.nanoTime() - inizio) / NANO_PER_MS < TIMEOUT_STOP_MS)
             assertEquals(Esito.Errore(ErroreApplicazioneSintesi.Annullato), it.modello.esiti.single())
             assertTrue(it.diRegistrazione(a).single().inCorso, "nulla scritto: il recupero lo marchera' interrotto")
+        }
+    }
+
+    @Test
+    fun `Riassumi di una Registrazione eliminata con S3 aperta e un Errore, mai un'eccezione`() {
+        AmbienteProgetto(radice).use {
+            val a = it.registrazioneTrascritta()
+            it.collaboratori.eliminaRegistrazione(EliminaRegistrazione(a)).atteso()
+
+            val esito = it.sintesi.riassumi(a, null)
+
+            assertEquals(Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(a)), esito)
+            assertEquals(emptyList(), it.diRegistrazione(a))
         }
     }
 

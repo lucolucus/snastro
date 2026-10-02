@@ -359,6 +359,36 @@ class RegistrazioneIdentificazioneTest {
     }
 
     @Test
+    fun `AC-415 con io su un dispatcher separato il presenter ricreato mostra la card in corso e poi l esito`() =
+        runTest {
+            val a = ambiente()
+            a.comandi.trattieni = true
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val schermata1 = CoroutineScope(dispatcher)
+            a.presenter(schermata1, dispatcher).also {
+                advanceUntilIdle()
+                it.azioni.conferma(V1)
+                runCurrent()
+            }
+            schermata1.cancel()
+            runCurrent()
+
+            // As in the app (UI dispatcher + a separate io pool): `withContext(io)` really suspends, so the
+            // pending-commands collector runs BEFORE the first load has set the vista.
+            val ui = StandardTestDispatcher(testScheduler)
+            val secondo = a.presenter(CoroutineScope(ui), StandardTestDispatcher(testScheduler))
+            advanceTimeBy(SOGLIA / 2)
+            runCurrent()
+            assertEquals(AttesaComando.IN_CORSO, secondo.carta(V1).inCorso)
+            assertFalse(secondo.carta(V1).azioniAbilitate)
+
+            a.comandi.rilascia(ref(V1))
+            advanceUntilIdle()
+            assertNull(secondo.carta(V1).inCorso)
+            assertEquals("Marco", assertIs<ContenutoCarta.Attribuita>(secondo.carta(V1).contenuto).nome)
+        }
+
+    @Test
     fun `AC-415 Annulla da un presenter ricreato annulla il comando del progetto`() = runTest {
         val a = ambiente()
         a.comandi.trattieni = true

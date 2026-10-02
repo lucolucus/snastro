@@ -58,12 +58,24 @@ internal class StatoVoci(
     private val stato: MutableStateFlow<RegistrazioneUiStato>,
     private val segmentiDi: (TrascrittoView) -> List<SegmentoRiga>,
 ) {
-    /** The trascritto the panel is built on; set by the presenter's own load, refreshed after a Revisione. */
+    /**
+     * The trascritto the panel is built on; set by the presenter's own load, refreshed after a Revisione.
+     * AC-415: the pending-commands collector may run BEFORE the first load sets it (the load suspends on
+     * [io]) and then saw no Incontro — so a new Incontro re-reflects the in-memory project state at once.
+     */
     var vista: TrascrittoView? = null
+        set(nuova) {
+            val cambiato = nuova?.incontroId != field?.incontroId
+            field = nuova
+            if (cambiato) riflettiInCorso(sorgenti.comandi.stato.value)
+        }
 
-    /** ADR 0033 §4.1: the Voci are the Incontro's, so their VoceRef carries the Incontro of the trascritto shown. */
+    /**
+     * ADR 0033 §4.1: the Voci are the Incontro's, so their VoceRef carries the Incontro of the trascritto shown.
+     * Read off [vista] alone, never through [trascritto]: that is a repository read, only for [io].
+     */
     private val incontroId: IncontroId?
-        get() = (vista ?: trascritto())?.incontroId
+        get() = vista?.incontroId
 
     private fun voceRef(voceId: VoceId): VoceRef =
         VoceRef(checkNotNull(incontroId) { "Voce $voceId senza trascritto caricato" }, voceId)
@@ -162,7 +174,7 @@ internal class StatoVoci(
         var nuovi: DatiParlanti? = null
         var fallito = false
         // AC-I77: the Incontro's Voci are read only when there is another Parte to merge with.
-        val incontroDaLeggere = incontroId.takeIf { (vista ?: trascritto())?.parti.orEmpty().size > 1 }
+        val incontroDaLeggere = incontroId.takeIf { vista?.parti.orEmpty().size > 1 }
         try {
             nuovi = withContext(io) {
                 DatiParlanti(
@@ -275,12 +287,18 @@ internal class StatoVoci(
      * (sent by an earlier S3 visit) → re-read the panel, so its outcome (the Nome) shows here too.
      */
     private suspend fun rifletti(mappa: Map<VoceRef, StatoComando>) {
+        val conclusiAltrove = riflettiInCorso(mappa)
+        pubblica()
+        if (conclusiAltrove.isNotEmpty() && vista != null) ricaricaParlanti()
+    }
+
+    /** Keeps this Incontro's pending commands of [mappa]; returns those that ended while not sent from here. */
+    private fun riflettiInCorso(mappa: Map<VoceRef, StatoComando>): Set<VoceRef> {
         val mie = mappa.filterKeys { it.incontroId == incontroId }.mapValues { it.value.avviatoAlle }
         val conclusiAltrove = inCorsoAltrove.keys - mie.keys - invii.keys
         inCorsoAltrove = mie
         mie.forEach { (ref, inizio) -> programmaSoglia(ref, inizio) }
-        pubblica()
-        if (conclusiAltrove.isNotEmpty() && vista != null) ricaricaParlanti()
+        return conclusiAltrove
     }
 
     /** AC-529/AC-415: the pending namings of this Registrazione, as [rifletti] does for the cards. */
