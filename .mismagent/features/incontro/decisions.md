@@ -632,3 +632,42 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: four delta checkers
 - Docs: [pre-release](pre-release.md)
 - Revisit: a delta checker reports a GAP.
+
+### D-0048 · Riassunto superato in I1 come in I2
+- Meta: 2026-10-02; scope: feature; status: accepted; sha: 0d84d070
+- Question: How does I1 render a Riassunto made superato by a Ritrascrivi, and does the generic superato notice apply to 1-Parte Incontri?
+- Options: A the I2 Riassunto tab rendering for I1 too (muted vanished Voci, no Fonte chips until a new Riassumi, generic notice everywhere) (kept); B as A with the old notice for 1 Parte.
+- Hypothesis: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Check: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Result: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Debate: the old text named a cause (voci corrette) that no longer defines superato after D-0007; ux-proposal.md:114 reads as generic.
+- Decision: A. Cost: a 1-Parte user sees a new wording for the same state.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: users find the generic notice unclear.
+
+### D-0049 · Emendamenti ADR rimandati a I2
+- Meta: 2026-10-02; scope: feature; status: accepted; sha: 0d84d070
+- Question: Six pre-release lines need ADR or pin text changes (ADR 0033 §7, ADR 0037, allow-list wording, OraDiInizio pin, error order); amend before I1?
+- Options: A defer them to one amendment pass with the I2 release check, one delta review (kept); B amend now and re-review every block before I1.
+- Hypothesis: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Check: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Result: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Debate: D-0047 showed that an ADR amendment makes every dependent review proof stale; batching keeps it to one delta review.
+- Decision: A; the lines move to I2. Cost: the checks stay narrower than the code until I2.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: a check lets a real violation through before I2.
+
+### D-0050 · Righe I1 chiuse con motivo
+- Meta: 2026-10-02; scope: feature; status: accepted; sha: 0d84d070
+- Question: 13 I1 pre-release lines were left unchanged by the fix workers with reviewer-verified reasons; waive them?
+- Options: A waive them, listed with reasons in release-decisions/I1.md; the two-Parti plan test (L146) moves to I2 (kept); B review them line by line.
+- Hypothesis: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Check: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Result: n/a — decided by the user at the I1 pre-release review, [release decisions](release-decisions/I1.md)
+- Debate: reasons were design (CR-15, ADR 0003, CR-19b), unreachable states, or a shared fake used by about 30 test classes.
+- Decision: A. Cost: a few test-fake looseness points remain.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [release decisions](release-decisions/I1.md)
+- Revisit: one of the waived points causes a defect.
