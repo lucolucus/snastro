@@ -66,7 +66,7 @@ private fun unaRiga(
     nome = nome,
     tipoParlante = tipoParlante,
     numImpronte = 3,
-    numRegistrazioni = 2,
+    numIncontri = 2,
     ultimaApparizione = DATA_1,
     riproduzioneAbilitata = riproduzioneAbilitata,
     operazioneInCorso = operazioneInCorso,

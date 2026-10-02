@@ -51,7 +51,7 @@ data class RigaParlante(
     val nome: String,
     val tipoParlante: TipoParlanteVista,
     val numImpronte: Int,
-    val numRegistrazioni: Int,
+    val numIncontri: Int,
     val ultimaApparizione: LocalDate?,
     val riproduzioneAbilitata: Boolean,
     val operazioneInCorso: Boolean = false,
