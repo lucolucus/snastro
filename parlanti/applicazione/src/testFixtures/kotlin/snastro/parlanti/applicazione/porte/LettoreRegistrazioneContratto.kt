@@ -152,13 +152,9 @@ public abstract class LettoreRegistrazioneContratto {
         assertEquals(listOf(ParteDiIncontroParlanti(id, 1, LocalDate.of(2026, 1, 5))), lettore.parti(ambiente.incontroDi(id)))
     }
 
-    /**
-     * AC-I25 on an Incontro with several Parti: registered only where [AmbienteLettoreRegistrazione.piuPartiPerIncontro]
-     * holds (D-0037: the fake now, the real adapter once the I2 import lands) — dynamic tests, never a skipped one.
-     */
+    /** AC-I25 on an Incontro with several Parti. */
     @TestFactory
     public fun `AC-I25 casi con piu Parti`(): List<DynamicTest> {
-        if (!ambiente().piuPartiPerIncontro) return emptyList()
         return listOf(
             dynamicTest("AC-I25 parti ordinate per data e import, numerate 1..N con la data di ciascuna") {
                 val ambiente = ambiente()

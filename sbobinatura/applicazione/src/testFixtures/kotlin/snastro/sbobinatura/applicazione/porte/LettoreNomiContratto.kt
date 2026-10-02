@@ -13,8 +13,7 @@ import kotlin.test.assertTrue
  * Consumer-driven contract of [LettoreNomi] (boundary `porte-sbobinatura`): one subclass per
  * implementation — [LettoreNomiFinta] (D1) and `LettoreNomiDaParlanti` (D2, real-on-real).
  * Each test takes [AmbienteLettoreNomi.lettore] once, up front, and keeps reading through it after
- * every change: an implementation that serves a stale copy fails. The multi-Parte cases are registered only
- * when [AmbienteLettoreNomi.piuPartiPerIncontro] (D-0037), never skipped.
+ * every change: an implementation that serves a stale copy fails.
  */
 public abstract class LettoreNomiContratto {
     /** A fresh supplier: one Progetto, no Registrazione, no Parlante. */
@@ -221,19 +220,15 @@ public abstract class LettoreNomiContratto {
         assertIncontri(lettore, marco, "Marco", setOf(riunione.incontroId, altra.incontroId))
     }
 
-    /** AC-I27 on an Incontro of several Parti (registered only when the supplier can seed one, D-0037). */
+    /** AC-I27 on an Incontro of several Parti. */
     @TestFactory
     public fun `AC-I27 Incontro con piu Parti`(): List<DynamicTest> =
-        if (!ambiente().piuPartiPerIncontro) {
-            emptyList()
-        } else {
-            listOf(
-                dynamicTest("AC-I27 nomi ha un Nome per Voce qualunque sia la Parte") { unNomePerVoceInOgniParte() },
-                dynamicTest("AC-I27 incontriCon elenca una volta l Incontro attribuito in piu Parti") {
-                    unaVoltaLIncontroAttribuitoInPiuParti()
-                },
-            )
-        }
+        listOf(
+            dynamicTest("AC-I27 nomi ha un Nome per Voce qualunque sia la Parte") { unNomePerVoceInOgniParte() },
+            dynamicTest("AC-I27 incontriCon elenca una volta l Incontro attribuito in piu Parti") {
+                unaVoltaLIncontroAttribuitoInPiuParti()
+            },
+        )
 
     private fun unNomePerVoceInOgniParte() {
         val a = ambiente()

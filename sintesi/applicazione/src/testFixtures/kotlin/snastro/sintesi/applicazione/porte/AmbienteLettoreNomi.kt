@@ -15,13 +15,6 @@ public interface AmbienteLettoreNomi {
     public val lettore: LettoreNomi
 
     /**
-     * Capability (D-0037): the supplier can give an Incontro more than one Parte ([aggiungiParte]). The multi-Parte
-     * cases of [LettoreNomiContratto] are registered only when it is `true`; the real supplier switches it on when
-     * the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands.
-     */
-    public val piuPartiPerIncontro: Boolean
-
-    /**
      * Adds one Registrazione, the one Parte of a new Incontro, whose Trascritto has [voci] (>= 1) Voci, none
      * attributed.
      */
@@ -29,8 +22,7 @@ public interface AmbienteLettoreNomi {
 
     /**
      * Adds one Registrazione as a further Parte of the existing Incontro [incontroId], bringing [voci] (>= 1) NEW Voci
-     * of that Incontro (numbered after its existing ones, INV-I4), none attributed. Only called when
-     * [piuPartiPerIncontro].
+     * of that Incontro (numbered after its existing ones, INV-I4), none attributed.
      */
     public fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneSeminata
 

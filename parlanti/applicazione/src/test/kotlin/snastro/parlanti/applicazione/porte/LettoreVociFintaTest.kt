@@ -36,8 +36,6 @@ class LettoreVociFintaTest : LettoreVociContratto() {
 
         override val lettore: LettoreVoci = LettoreVociFinta(viste, dati)
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun aggiungiRegistrazione(): RegistrazioneId = aggiungiParte(IncontroId(generatore.nuovo()))
 
         override fun aggiungiParte(incontroId: IncontroId): RegistrazioneId =

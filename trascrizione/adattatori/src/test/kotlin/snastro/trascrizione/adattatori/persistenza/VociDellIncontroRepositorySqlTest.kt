@@ -18,7 +18,6 @@ import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryContrat
  * seed, never through the `registrazione` table (ADR 0033 §4.1).
  */
 class VociDellIncontroRepositorySqlTest : VociDellIncontroRepositoryContratto() {
-    override val piuPartiPerIncontro: Boolean = true
 
     private lateinit var db: SnastroDatabase
     private val viste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()

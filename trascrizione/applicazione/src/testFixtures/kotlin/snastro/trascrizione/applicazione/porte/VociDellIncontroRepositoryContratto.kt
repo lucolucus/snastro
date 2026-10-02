@@ -28,9 +28,6 @@ import kotlin.test.assertTrue
  * INV-I16): a full round-trip of the root (Voce counter, each Parte's Segmenti and Segmento counter), the counter
  * surviving the removal of every Trascritto, a Parte read alone, no aliasing. One subclass per implementation (the
  * Finta here, the SQL adapter in `:trascrizione:adattatori`).
- *
- * D-0037: the cases on an Incontro with more than one Parte are built by [casiConPiuParti] only when the environment
- * declares [piuPartiPerIncontro]; otherwise that factory runs the one-Parte guard instead (never skipped).
  */
 public abstract class VociDellIncontroRepositoryContratto {
     /** A fresh, empty repository. */
@@ -38,9 +35,6 @@ public abstract class VociDellIncontroRepositoryContratto {
 
     /** Hook for real stores: create the parent rows of every id the contract uses ([PREDISPOSIZIONE]). */
     protected open fun predisponi(predisposizione: PredisposizioneTrascrizione) {}
-
-    /** Environment capability (D-0037): the store can hold an Incontro with more than one Parte. */
-    protected abstract val piuPartiPerIncontro: Boolean
 
     private lateinit var repo: VociDellIncontroRepository
 
@@ -195,7 +189,7 @@ public abstract class VociDellIncontroRepositoryContratto {
 
     @TestFactory
     public fun `AC-I21 casi su un Incontro con piu' Parti`(): List<DynamicTest> =
-        if (piuPartiPerIncontro) casiConPiuParti() else listOf(guardiaUnaParte())
+        casiConPiuParti()
 
     private fun casiConPiuParti(): List<DynamicTest> = listOf(
         dynamicTest("AC-I21 round-trip di una radice con due Parti e una Voce unita tra le due") {
@@ -245,13 +239,6 @@ public abstract class VociDellIncontroRepositoryContratto {
     )
 
     /** Without the capability, the one-Parte shape every Incontro of this environment has still round-trips. */
-    private fun guardiaUnaParte(): DynamicTest =
-        dynamicTest("AC-I21 ambiente con una Parte per Incontro: la radice di una Parte fa round-trip") {
-            val radice = unaRadice(registrazioneId = REGISTRAZIONE)
-            repo.salva(radice)
-            assertStessoStato(radice, assertNotNull(repo.trova(unIncontroDi(REGISTRAZIONE))))
-        }
-
     /** The root of [INCONTRO]: Parte A with Voci 1, 2 (Segmenti 1..4), Parte B with Voci 3, 4, 5 (Segmenti 1..6). */
     private fun dueParti(): VociDellIncontro {
         val radice = VociDellIncontro.crea(INCONTRO)

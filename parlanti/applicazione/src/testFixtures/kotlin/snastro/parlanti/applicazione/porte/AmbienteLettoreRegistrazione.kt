@@ -20,15 +20,7 @@ public interface AmbienteLettoreRegistrazione {
     public fun semina(seme: SemeRegistrazione): RegistrazioneId
 
     /**
-     * Capability flag (D-0037): `true` iff this supplier can give an Incontro a second Parte ([aggiungiParte]).
-     * The real adapter switches it on when the I2 multi-file import lands; until then [LettoreRegistrazioneContratto]
-     * registers its multi-Parte cases only where it is `true` — never a skipped test.
-     */
-    public val piuPartiPerIncontro: Boolean
-
-    /**
-     * Imports one more Registrazione INTO the existing Incontro [incontroId] (only when [piuPartiPerIncontro]) and
-     * returns its minted id; the supplier places it in the Incontro's order ([INV-I2]).
+     * Imports one more Registrazione INTO the existing Incontro [incontroId] and returns its minted id; the supplier places it in the Incontro's order ([INV-I2]).
      */
     public fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId
 

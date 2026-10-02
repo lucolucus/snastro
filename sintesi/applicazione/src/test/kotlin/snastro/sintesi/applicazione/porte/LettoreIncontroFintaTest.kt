@@ -35,8 +35,6 @@ class LettoreIncontroFintaTest : LettoreIncontroContratto() {
 
         override val lettore: LettoreIncontro = LettoreIncontroFinta(parti)
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun importa(data: LocalDate, ora: LocalTime?): RegistrazioneId =
             aggiungi(IncontroId(generatore.nuovo()), data, ora)
 

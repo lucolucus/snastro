@@ -29,6 +29,7 @@ import snastro.sbobinatura.applicazione.porte.LettoreTrascrittoContratto
 import snastro.sbobinatura.applicazione.porte.SegmentoConiato
 import snastro.sbobinatura.applicazione.porte.SemeRegistrazione
 import snastro.sbobinatura.applicazione.porte.SemeTurno
+import snastro.supporto.test.OrologioFinto
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
@@ -49,9 +50,8 @@ import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
-import java.time.Clock
 import java.time.Instant
-import java.time.ZoneOffset
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): [LettoreTrascrittoDaTrascrizione] passes
@@ -72,16 +72,18 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
     override fun ambiente(): AmbienteLettoreTrascritto = AmbienteReale()
 
     private class AmbienteReale : AmbienteLettoreTrascritto {
-        private val clock = Clock.fixed(Instant.parse("2026-09-23T10:00:00Z"), ZoneOffset.UTC)
+        // Advances at every import, so the import order is a real aggiuntaAlle order (INV-I2), never an id tie-break.
+        private val clock = OrologioFinto(Instant.parse("2026-09-23T10:00:00Z"))
         private val generatoreId = GeneratoreIdFinto()
 
         // Progetto: seeded only through CreaProgettoServizio / AggiungiRegistrazioneServizio.
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
-        private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
+        private val incontriProgetto = IncontroRepositoryFinta(registrazioniProgetto)
+        private val eventiProgetto =
+            DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti, incontriProgetto))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo =
-            CatalogoRegistrazioni(registrazioniProgetto, IncontroRepositoryFinta(registrazioniProgetto))
+        private val catalogo = CatalogoRegistrazioni(registrazioniProgetto, incontriProgetto)
 
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio /
         // RiassegnaSegmentoServizio.
@@ -92,47 +94,49 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         /** Trascrizione's own view of each Registrazione seeded so far (its `LettoreRegistrazione` port). */
         private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
 
+        /** Each Incontro's Parti in PROGETTO's order (INV-I2), copied from its catalogue after each import. */
+        private val ordineParti = mutableMapOf<IncontroId, List<RegistrazioneId>>()
+        private val lettoreRegistrazione = LettoreRegistrazioneFinta(registrazioniViste, ordineParti)
+        private var contatore = 0
+
         init {
             CreaProgettoServizio(eventiProgetto.unitaDiLavoro, generatoreId, progetti, eventiProgetto)
                 .esegui(CreaProgetto("Progetto di prova"))
                 .atteso()
         }
 
-        /**
-         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
-         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
-         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
-         */
-        override val piuPartiPerIncontro: Boolean = false
-
         override val lettore: LettoreTrascritto =
             LettoreTrascrittoDaTrascrizione(
-                VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste), UnitaDiLavoroFinta()),
+                VociDelTrascritto(trascritti, lettoreRegistrazione, UnitaDiLavoroFinta()),
                 catalogo,
             )
 
-        override fun aggiungiRegistrazione(seme: SemeRegistrazione): RegistrazioneId {
-            val percorso = "/sorgenti/${seme.titolo}.wav"
+        override fun aggiungiRegistrazione(seme: SemeRegistrazione): RegistrazioneId =
+            importa(seme, Destinazione.NuovoIncontro)
+
+        override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
+            importa(seme, Destinazione.Incontro(incontroId))
+
+        /** Progetto's AggiungiRegistrazione to [destinazione], then Trascrizione's own view of the new Parte. */
+        private fun importa(seme: SemeRegistrazione, destinazione: Destinazione): RegistrazioneId {
+            val percorso = "/sorgenti/${++contatore}/${seme.titolo}.wav"
             archivio.conSorgente(percorso)
             val sonda = SondaAudioFinta(leggibili = mapOf(percorso to InfoAudio(seme.durataMs, seme.dataRegistrazione)))
+            clock.avanza(1.seconds)
             val servizio = AggiungiRegistrazioneServizio(
                 eventiProgetto.unitaDiLavoro,
                 generatoreId,
                 clock,
                 progetti,
                 registrazioniProgetto,
-                IncontroRepositoryFinta(registrazioniProgetto),
+                incontriProgetto,
                 sonda,
                 archivio,
                 eventiProgetto,
             )
 
             servizio.esegui(
-                AggiungiRegistrazione(
-                    checkNotNull(progetti.trova()).id,
-                    listOf(percorso),
-                    Destinazione.NuovoIncontro,
-                ),
+                AggiungiRegistrazione(checkNotNull(progetti.trova()).id, listOf(percorso), destinazione),
             ).atteso()
 
             val id = eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
@@ -146,11 +150,9 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 dataRegistrazione = v.dataRegistrazione,
                 durataMs = v.durataMs,
             )
+            ordineParti[v.incontroId] = checkNotNull(catalogo.incontro(v.incontroId)).parti.map { it.registrazioneId }
             return id
         }
-
-        override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
-            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
 
         override fun completaElaborazione(
             registrazioneId: RegistrazioneId,
@@ -183,7 +185,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             RiassegnaSegmentoServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
-                LettoreRegistrazioneFinta(registrazioniViste),
+                lettoreRegistrazione,
                 eventiTrascrizione,
             )
                 .esegui(RiassegnaSegmento(registrazioneId, segmento, destinazione))
@@ -196,7 +198,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 eventiTrascrizione.unitaDiLavoro,
                 generatoreId,
                 clock,
-                LettoreRegistrazioneFinta(registrazioniViste),
+                lettoreRegistrazione,
                 elaborazioni,
             ).esegui(AvviaElaborazione(registrazioneId)).atteso()
         }
@@ -209,7 +211,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             val vista = registrazioniViste.getValue(registrazioneId)
             val decodificatore = DecodificatoreAudioFinta(mapOf(vista.riferimentoAudio to vista.durataMs))
             val pipeline = PortePipeline(
-                LettoreRegistrazioneFinta(registrazioniViste),
+                lettoreRegistrazione,
                 decodificatore,
                 diarizzatore,
                 allineatore,

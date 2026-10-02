@@ -15,6 +15,8 @@ import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazioneServizio
+import snastro.progetto.applicazione.comandi.ModificaOraDiInizioServizio
+import snastro.progetto.applicazione.comandi.unaModificaOraDiInizio
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
@@ -39,7 +41,8 @@ import kotlin.test.assertEquals
 /**
  * D2 (AC-I204, AC-I28): [LettoreIncontroDaProgetto] passes [LettoreIncontroContratto] real-on-real. Progetto is seeded
  * only through ITS commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`,
- * `EliminaRegistrazione`) over its own port fakes; the Incontro of an import is read back through its public read API.
+ * `ModificaOraDiInizio`, `EliminaRegistrazione`) over its own port fakes; the Incontro of an import is read back
+ * through its public read API.
  */
 class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
     override fun ambiente(): AmbienteLettoreIncontro = AmbienteReale()
@@ -48,8 +51,8 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
      * AC-I64: an Incontro of several Parti, imported through Progetto's own `AggiungiRegistrazione` into it, comes back
      * ordered and numbered by Progetto (date, then start time with the empty one last, then import order) and an
      * eliminated Parte is renumbered away: the adapter serves the ordered Parti and no longer fails closed on more
-     * than one. The contract's own multi-Parte cases stay behind its flag: they also edit the start time, a command
-     * whose `OraDiInizio` argument lives in Progetto's dominio, out of reach of this module (CR-1).
+     * than one. The contract's own multi-Parte cases run here too (start time edited through Progetto's
+     * `unaModificaOraDiInizio` fixture, CR-1).
      */
     @Test
     fun `AC-I64 un Incontro di piu Parti torna in ordine e numerato e una Parte eliminata si rinumera`() {
@@ -93,12 +96,6 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
 
         override val lettore: LettoreIncontro = LettoreIncontroDaProgetto(catalogo)
 
-        /**
-         * Off (D-0037): the contract's multi-Parte cases also edit the start time, and `ModificaOraDiInizio` takes a
-         * Progetto-dominio `OraDiInizio` this module cannot build (CR-1); the ordering is covered above (AC-I64).
-         */
-        override val piuPartiPerIncontro: Boolean = false
-
         override fun importa(data: LocalDate, ora: LocalTime?): RegistrazioneId =
             importaIn(Destinazione.NuovoIncontro, data, ora)
 
@@ -128,8 +125,11 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
                 .esegui(ModificaDataRegistrazione(registrazioneId, data)).atteso()
         }
 
-        override fun modificaOraDiInizio(registrazioneId: RegistrazioneId, ora: LocalTime?): Unit =
-            error("ModificaOraDiInizio non e' ancora un comando di Progetto: piuPartiPerIncontro e' false")
+        // Progetto's own command; the OraDiInizio is built by Progetto's applicazione fixture (CR-1).
+        override fun modificaOraDiInizio(registrazioneId: RegistrazioneId, ora: LocalTime?) {
+            ModificaOraDiInizioServizio(eventi.unitaDiLavoro, registrazioni, eventi)
+                .esegui(unaModificaOraDiInizio(registrazioneId, ora)).atteso()
+        }
 
         override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId =
             checkNotNull(catalogo.registrazione(registrazioneId)).incontroId

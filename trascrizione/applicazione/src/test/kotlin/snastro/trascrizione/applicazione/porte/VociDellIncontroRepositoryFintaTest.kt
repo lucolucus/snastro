@@ -11,7 +11,6 @@ import kotlin.test.assertNull
 
 /** D1 (dev-architecture-app.md#porta-contratto): the contract passes on the fake, multi-Parte cases included. */
 class VociDellIncontroRepositoryFintaTest : VociDellIncontroRepositoryContratto() {
-    override val piuPartiPerIncontro: Boolean = true
 
     override fun repository(): VociDellIncontroRepository = VociDellIncontroRepositoryFinta()
 

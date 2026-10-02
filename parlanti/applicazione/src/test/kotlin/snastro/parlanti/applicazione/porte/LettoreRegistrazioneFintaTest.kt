@@ -25,8 +25,6 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
 
         override val lettore: LettoreRegistrazione = LettoreRegistrazioneFinta(registrazioni)
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun semina(seme: SemeRegistrazione): RegistrazioneId = importa(IncontroId(generatore.nuovo()), seme)
 
         override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId {

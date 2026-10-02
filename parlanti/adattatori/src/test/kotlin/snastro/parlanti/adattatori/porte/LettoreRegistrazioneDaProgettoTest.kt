@@ -30,10 +30,10 @@ import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
-import java.time.Clock
+import snastro.supporto.test.OrologioFinto
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): [LettoreRegistrazioneDaProgetto] passes
@@ -50,12 +50,16 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
     override fun ambiente(): AmbienteLettoreRegistrazione = AmbienteReale()
 
     private class AmbienteReale : AmbienteLettoreRegistrazione {
-        private val clock = Clock.fixed(Instant.parse("2026-09-24T10:00:00Z"), ZoneOffset.UTC)
+        // Advances at every import, so the import order is a real aggiuntaAlle order (INV-I2), never an id tie-break.
+        private val clock = OrologioFinto(Instant.parse("2026-09-24T10:00:00Z"))
         private val generatoreId = GeneratoreIdFinto()
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioni = RegistrazioneRepositoryFinta()
-        private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, progetti))
+        private val incontri = IncontroRepositoryFinta(registrazioni)
+        private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, progetti, incontri))
         private val archivio = ArchivioAudioFinta()
+        private val catalogo = CatalogoRegistrazioni(registrazioni, incontri)
+        private var contatore = 0
 
         override val progettoId: ProgettoId = run {
             CreaProgettoServizio(eventi.unitaDiLavoro, generatoreId, progetti, eventi)
@@ -63,55 +67,46 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
             eventi.pubblicati.filterIsInstance<ProgettoCreato>().single().progettoId
         }
 
-        override val lettore: LettoreRegistrazione =
-            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni)))
+        override val lettore: LettoreRegistrazione = LettoreRegistrazioneDaProgetto(catalogo)
 
-        /** D-0037: off until the I2 multi-file import into an Incontro lands (then seeded through it). */
-        override val piuPartiPerIncontro: Boolean = false
+        override fun semina(seme: SemeRegistrazione): RegistrazioneId = importa(seme, Destinazione.NuovoIncontro)
 
         override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
-            error("Progetto non importa ancora una parte in un Incontro esistente (rilascio I2)")
+            importa(seme, Destinazione.Incontro(incontroId))
 
-        override fun semina(seme: SemeRegistrazione): RegistrazioneId {
-            val percorso = "/sorgenti/${seme.titolo}.${seme.estensione}"
+        private fun importa(seme: SemeRegistrazione, destinazione: Destinazione): RegistrazioneId {
+            val percorso = "/sorgenti/${++contatore}/${seme.titolo}.${seme.estensione}"
             archivio.conSorgente(percorso)
             val sonda = SondaAudioFinta(
                 leggibili = mapOf(percorso to InfoAudio(seme.durataMs, seme.dataRegistrazione)),
             )
-            val servizio = AggiungiRegistrazioneServizio(
+            clock.avanza(1.seconds)
+            AggiungiRegistrazioneServizio(
                 eventi.unitaDiLavoro,
                 generatoreId,
                 clock,
                 progetti,
                 registrazioni,
-                IncontroRepositoryFinta(registrazioni),
+                incontri,
                 sonda,
                 archivio,
                 eventi,
-            )
-
-            servizio.esegui(
-                AggiungiRegistrazione(progettoId, listOf(percorso), Destinazione.NuovoIncontro),
-            ).atteso()
+            ).esegui(AggiungiRegistrazione(progettoId, listOf(percorso), destinazione)).atteso()
 
             return eventi.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }
 
         // The supplier's own public read API: the id AggiungiRegistrazione minted through GeneratoreId.
-        override fun incontroDi(id: RegistrazioneId): IncontroId =
-            checkNotNull(
-                CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni)).registrazione(id),
-            ).incontroId
+        override fun incontroDi(id: RegistrazioneId): IncontroId = checkNotNull(catalogo.registrazione(id)).incontroId
 
         override fun elimina(id: RegistrazioneId) {
             EliminaRegistrazioneServizio(
                 eventi.unitaDiLavoro,
                 registrazioni,
-                IncontroRepositoryFinta(registrazioni),
+                incontri,
                 EliminazioniInSospesoFinta(),
                 eventi,
-            )
-                .esegui(EliminaRegistrazione(id)).atteso()
+            ).esegui(EliminaRegistrazione(id)).atteso()
         }
 
         override fun modificaData(id: RegistrazioneId, data: LocalDate) {

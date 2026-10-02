@@ -22,8 +22,6 @@ class LettoreTrascrittoFintaTest : LettoreTrascrittoContratto() {
         private val trascritti = mutableMapOf<RegistrazioneId, MutableList<SegmentoVista>>()
         private val prossimaVoce = mutableMapOf<IncontroId, Int>()
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override val lettore: LettoreTrascritto
             get() = LettoreTrascrittoFinta(
                 trascritti.mapValues { (id, segmenti) ->

@@ -20,8 +20,7 @@ import kotlin.test.assertTrue
  * Each test takes [AmbienteLettoreVoci.lettore] once, up front, and keeps reading through it after
  * every change: an implementation that serves a stale copy fails. Expected lists are written in the
  * pinned order (Voci by voceId, intervalli by inizio then segmentoId) and compared whole, so every
- * listed [VoceRef] must be one the supplier minted for that Incontro. The cases with several Parti (AC-I24) are
- * registered only where [AmbienteLettoreVoci.piuPartiPerIncontro] holds (D-0037).
+ * listed [VoceRef] must be one the supplier minted for that Incontro.
  */
 public abstract class LettoreVociContratto {
     /** A fresh supplier: one Progetto, no Registrazione. */
@@ -359,13 +358,9 @@ public abstract class LettoreVociContratto {
         assertTrue(voci.all { it.voceRef.incontroId == a.incontroDi(id) && it.intervalliPerParte.keys == setOf(id) }, "$voci")
     }
 
-    /**
-     * AC-I24 on an Incontro with several Parti: registered only where [AmbienteLettoreVoci.piuPartiPerIncontro] holds
-     * (D-0037: the fake now, the real adapter once the I2 import lands) — dynamic tests, never a skipped one.
-     */
+    /** AC-I24 on an Incontro with several Parti. */
     @TestFactory
     public fun `AC-I24 casi con piu Parti`(): List<DynamicTest> {
-        if (!ambiente().piuPartiPerIncontro) return emptyList()
         return listOf(
             dynamicTest("AC-I24 null finche nessuna Parte e trascritta, poi solo le Voci delle Parti trascritte") {
                 val a = ambiente()

@@ -10,8 +10,7 @@ import kotlin.test.assertTrue
 
 /**
  * Consumer-driven contract of Sintesi's [LettoreNomi] (boundaries `nomi-per-sintesi`, `porte-sintesi`): one
- * subclass per implementation — [LettoreNomiFinta] (D1) and `LettoreNomiDaParlanti` (D2). The multi-Parte cases are
- * registered only when [AmbienteLettoreNomi.piuPartiPerIncontro] (D-0037), never skipped. Each test takes
+ * subclass per implementation — [LettoreNomiFinta] (D1) and `LettoreNomiDaParlanti` (D2). Each test takes
  * [AmbienteLettoreNomi.lettore] once, up front, and keeps reading through it after every change: an
  * implementation serving a stale copy fails (names are read at run time, never stored — INV-S5).
  */
@@ -122,18 +121,14 @@ public abstract class LettoreNomiContratto {
         assertEquals(emptyMap(), a.lettore.nomi(IncontroId("incontro-sconosciuto")))
     }
 
-    /** nomi(incontroId) on an Incontro of several Parti (registered only when the supplier can seed one, D-0037). */
+    /** nomi(incontroId) on an Incontro of several Parti. */
     @TestFactory
     public fun `AC-S8 Incontro con piu Parti`(): List<DynamicTest> =
-        if (!ambiente().piuPartiPerIncontro) {
-            emptyList()
-        } else {
-            listOf(
-                dynamicTest("AC-S8 nomi ha le Voci attribuite di ogni Parte dell Incontro e di nessun altro") {
-                    leVociDiOgniParte()
-                },
-            )
-        }
+        listOf(
+            dynamicTest("AC-S8 nomi ha le Voci attribuite di ogni Parte dell Incontro e di nessun altro") {
+                leVociDiOgniParte()
+            },
+        )
 
     private fun leVociDiOgniParte() {
         val a = ambiente()
