@@ -151,11 +151,9 @@ class AbbonatoSbobinaturaEventiTest {
 
         // Tre eventi della STESSA Registrazione, tutti pubblicati prima che il worker abbia la
         // possibilita' di girare (nessun advance* tra un commit e l'altro).
-        // Gli eventi dell'Incontro passano da un'unita' PerIncontro che elenca le Parti dentro il retry (mai sul thread
-        // del comando): arrivano prima, cosi' il fan-out trova gia' in coda la chiave della Registrazione e la fonde.
+        ambiente.commit(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
         ambiente.commit(AttribuzioneConfermata(VoceRef(unIncontroDi(REG_1), VoceId(1)), PARLANTE, precedente = null))
         ambiente.commit(VociUnite(unIncontroDi(REG_1), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
-        ambiente.commit(ElaborazioneCompletata(REG_1, unIncontroDi(REG_1)))
         advanceUntilIdle()
 
         assertEquals(1, ambiente.operazioni().size - primaDellaRaffica)

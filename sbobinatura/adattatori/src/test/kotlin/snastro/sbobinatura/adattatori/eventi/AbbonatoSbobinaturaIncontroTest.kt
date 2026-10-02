@@ -21,6 +21,7 @@ import snastro.sbobinatura.applicazione.porte.ScrittoreSbobinaturaFinta
 import snastro.sbobinatura.applicazione.porte.SegmentoVista
 import snastro.sbobinatura.applicazione.porte.TrascrittoTesto
 import snastro.supporto.Segnalazione
+import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import java.time.LocalDate
@@ -124,6 +125,46 @@ class AbbonatoSbobinaturaIncontroTest {
             listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte A.md")),
             scrittore.operazioni.drop(prima),
         )
+    }
+
+    // --- AC-183: one write for ANY order of a burst mixing the Registrazione's own event and Incontro-wide ones ----
+
+    @Test
+    fun `AC-183 una sola scrittura per qualunque ordine della raffica, duplicati compresi`() = runTest {
+        val proprio = ElaborazioneCompletata(PARTE_A, INCONTRO_I)
+        val unite = VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2))
+        val eliminato = TrascrittoEliminato(RegistrazioneId("altra"), INCONTRO_I, setOf(VoceId(2)))
+        val ordini = listOf(
+            listOf(proprio, unite, eliminato),
+            listOf(unite, eliminato, proprio),
+            listOf(unite, proprio, eliminato),
+            listOf(unite, proprio, eliminato, proprio, unite),
+        )
+        ordini.forEach { raffica ->
+            val lettore = LettoreTrascrittoFinta(mapOf(PARTE_A to unTrascritto(PARTE_A, "Parte A", INCONTRO_I)))
+            val scrittore = ScrittoreSbobinaturaFinta()
+            val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+            abbonaSbobinatura(
+                dispatcher,
+                RigenerazioneSbobinaturaPolitica(lettore, LettoreNomiFinta(), scrittore),
+                lettore::registrazioniConTrascritto,
+                CoroutineScope(StandardTestDispatcher(testScheduler)),
+                Segnalazione { _, _ -> },
+                lettore::partiConTrascritto,
+            )
+            advanceUntilIdle()
+            val prima = scrittore.operazioni.size
+
+            raffica.forEach { evento ->
+                dispatcher.unitaDiLavoro.inTransazione {
+                    dispatcher.pubblica(evento)
+                    Esito.Ok(Unit)
+                }
+            }
+            advanceUntilIdle()
+
+            assertEquals(1, scrittore.operazioni.size - prima, "ordine: ${raffica.map { it::class.simpleName }}")
+        }
     }
 
     private companion object {

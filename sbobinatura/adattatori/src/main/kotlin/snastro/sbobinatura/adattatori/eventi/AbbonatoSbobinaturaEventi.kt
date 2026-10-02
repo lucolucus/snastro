@@ -134,6 +134,9 @@ public class AbbonatoSbobinaturaEventi(
     }
 
     private val pendenti = ConcurrentHashMap<RegistrazioneId, LavoroPendente>()
+
+    /** Incontri whose Parti fan-out is requested and not done: a [Chiave.PerRegistrazione] run drains them first. */
+    private val incontriPendenti = ConcurrentHashMap.newKeySet<IncontroId>()
     private val ritenta = RitentaConBackoff<Chiave>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     init {
@@ -171,6 +174,7 @@ public class AbbonatoSbobinaturaEventi(
 
     /** Only requests the fan-out: the Parti are listed by [Chiave.PerIncontro]'s unit, inside [ritenta]. */
     private fun accodaParti(incontroId: IncontroId) {
+        incontriPendenti.add(incontroId)
         ritenta.richiedi(Chiave.PerIncontro(incontroId))
     }
 
@@ -189,7 +193,14 @@ public class AbbonatoSbobinaturaEventi(
 
     /** Like [avviaSweep]: only LISTS the Parti and fans each into its OWN [Chiave.PerRegistrazione]; never writes. */
     private fun fanOutParti(incontroId: IncontroId): Boolean {
-        partiDellIncontro(incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
+        if (!incontriPendenti.remove(incontroId)) return true // already drained by a Registrazione's run
+        var elencate = false
+        try {
+            partiDellIncontro(incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
+            elencate = true
+        } finally {
+            if (!elencate) incontriPendenti.add(incontroId) // the listing failed: the retried unit still owes it
+        }
         return true
     }
 
@@ -211,6 +222,8 @@ public class AbbonatoSbobinaturaEventi(
      * [ritenta]'s own retry, never a second loop.
      */
     private fun eseguiRegistrazione(id: RegistrazioneId): Boolean {
+        // AC-183 for ANY burst order: Incontro fan-outs already requested are done first, so they merge into THIS run.
+        incontriPendenti.toList().forEach(::fanOutParti)
         val lavoro = pendenti.remove(id) ?: return true
         var esito: Esito<Unit>? = null
         try {
