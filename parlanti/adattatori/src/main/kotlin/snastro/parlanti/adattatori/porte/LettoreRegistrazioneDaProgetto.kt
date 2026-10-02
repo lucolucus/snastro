@@ -12,10 +12,8 @@ import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
  * `registrazione-per-parlanti`, ADR 0002): calls the supplier's `registrazione(id)` and maps its
  * answer field by field into this context's own [RegistrazioneVista] — delegates, never re-decides.
  *
- * ONE-PARTE TRANSITION for [parti] (D-0032, D-0037): Progetto's `parti` is still the unordered read of ADR 0033 §4.1
- * until `catalogo-incontro`, and the order of the Parti is decided only in Progetto's domain (ADR 0033 §7), never
- * here. So an Incontro with ONE Parte is answered as Parte 1, and one with more FAILS CLOSED (an
- * [IllegalStateException], never an order made up here): no Incontro has a second Parte before the I2 import.
+ * [parti] maps Progetto's `incontro(id)` (Parti already ordered and numbered by `OrdineDelleParti`, ADR 0033 §7): the
+ * order is decided only in Progetto's domain, copied here as-is, never re-sorted.
  */
 public class LettoreRegistrazioneDaProgetto(
     private val catalogo: CatalogoRegistrazioni,
@@ -33,13 +31,8 @@ public class LettoreRegistrazioneDaProgetto(
             )
         }
 
-    override fun parti(incontroId: IncontroId): List<ParteDiIncontroParlanti>? {
-        val parti = catalogo.parti(incontroId) ?: return null
-        check(parti.size == 1) {
-            "Incontro ${incontroId.valore} con ${parti.size} parti: ordine delle parti non ancora pubblicato da " +
-                "Progetto (transizione a una parte fino a catalogo-incontro)"
+    override fun parti(incontroId: IncontroId): List<ParteDiIncontroParlanti>? =
+        catalogo.incontro(incontroId)?.parti?.map {
+            ParteDiIncontroParlanti(it.registrazioneId, it.numero, it.dataRegistrazione)
         }
-        return catalogo.registrazione(parti.single())
-            ?.let { listOf(ParteDiIncontroParlanti(it.registrazioneId, 1, it.dataRegistrazione)) }
-    }
 }

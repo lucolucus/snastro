@@ -8,8 +8,11 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.junit.jupiter.api.io.TempDir
 import org.sqlite.SQLiteConfig
 import org.sqlite.SQLiteException
+import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.atteso
 import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
@@ -21,12 +24,14 @@ import snastro.sintesi.applicazione.porte.RiassuntoRepository
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryContratto
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
+import snastro.sintesi.applicazione.porte.statoOsservabile
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.sintesi.applicazione.porte.unaStruttura
 import snastro.sintesi.dominio.BozzaElemento
 import snastro.sintesi.dominio.BozzaRiassunto
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
+import snastro.sintesi.dominio.StrutturaIncontro
 import snastro.supporto.test.attendiFinche
 import java.io.File
 import java.util.concurrent.CountDownLatch
@@ -151,6 +156,62 @@ class RiassuntoRepositorySqlTest : RiassuntoRepositoryContratto() {
         val letto = checkNotNull(repo.trova(id))
         assertTrue(letto.inAttesa, "la riga non deve avanzare quando salva fallisce forte")
         assertEquals(emptyList(), letto.decisioni, "nessun figlio orfano scritto contro una radice non pronto")
+    }
+
+    /**
+     * AC-I65 (ADR 0034 §1, ADR 0038): a `pronto` Riassunto with Fonti in TWO Parti of one Incontro round-trips with
+     * each Fonte's registrazione_id and the StrutturaIncontro chiave verbatim; deleting the non-last Parte leaves its
+     * `riassunto_fonte` rows (no FK) and the Riassunto readable.
+     */
+    @Test
+    fun `AC-I65 un pronto con Fonti in due Parti torna identico e le Fonti sopravvivono a una Parte eliminata`() {
+        val prima = RegistrazioneId("parte-1")
+        val seconda = RegistrazioneId("parte-2")
+        val incontro = IncontroId("incontro-di-due-parti")
+        semina(driver, PredisposizioneSintesi(setOf(PROGETTO), emptyMap()))
+        driver.execute(
+            null,
+            "INSERT INTO incontro(id, progetto_id) VALUES ('${incontro.valore}', '${PROGETTO.valore}')",
+            0,
+        )
+        listOf(prima, seconda).forEach { r ->
+            driver.execute(
+                null,
+                "INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, " +
+                    "data_registrazione, aggiunta_alle) VALUES ('${r.valore}', '${PROGETTO.valore}', " +
+                    "'${incontro.valore}', 't', 'audio/${r.valore}.wav', 1000, '2026-09-26', 0)",
+                0,
+            )
+        }
+        val struttura = StrutturaIncontro(listOf(prima to unaStruttura(1 to 1), seconda to unaStruttura(1 to 2)))
+        val bozza = BozzaRiassunto(
+            sommario = null,
+            decisioni = listOf(BozzaElemento("Una decisione a cavallo di due parti.", listOf(1, 2), null)),
+            questioniAperte = emptyList(),
+            azioni = emptyList(),
+            puntiChiave = emptyList(),
+        )
+        val etichette = listOf(SegmentoRef(prima, SegmentoId(1)), SegmentoRef(seconda, SegmentoId(1)))
+        val pronto = unRiassunto("riassunto-i65", incontro).conAvvio()
+            .conCompletamento(bozza, struttura, etichette)
+        val db = SnastroDatabase(driver)
+        val repo = RiassuntoRepositorySql(db, UnitaDiLavoroSql(db))
+
+        repo.salva(pronto).atteso()
+
+        val letto = checkNotNull(repo.trova(pronto.id))
+        assertEquals(pronto.statoOsservabile(), letto.statoOsservabile())
+        assertEquals("parte-1=1:1;parte-2=1:2", letto.struttura)
+        assertEquals(
+            setOf(SegmentoRef(prima, SegmentoId(1)), SegmentoRef(seconda, SegmentoId(1))),
+            letto.decisioni.single().fonti,
+        )
+
+        driver.execute(null, "DELETE FROM registrazione WHERE id = '${prima.valore}'", 0)
+
+        val dopo = checkNotNull(repo.trova(pronto.id))
+        assertEquals(pronto.statoOsservabile(), dopo.statoOsservabile())
+        assertEquals(2, db.riassuntoFonteQueries.trovaDiRiassunto(pronto.id.valore).executeAsList().size)
     }
 
     /** Delete + re-insert of [ID] with a different number of `decisioni`, in ONE write transaction. */
