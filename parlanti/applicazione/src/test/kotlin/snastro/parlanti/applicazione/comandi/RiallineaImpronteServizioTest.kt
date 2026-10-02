@@ -20,6 +20,8 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
+import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RigaImpronta
@@ -54,11 +56,12 @@ class RiallineaImpronteServizioTest {
     private fun servizio(
         decoder: DecodificatoreAudio = decodificatore,
         estrattore: EstrattoreImpronta = this.estrattore,
+        registrazioni: LettoreRegistrazione = ogniRegistrazioneNota(),
     ): RiallineaImpronteServizio =
         RiallineaImpronteServizio(
             eventi.unitaDiLavoro,
             lettoreVociDiUnicheParti(voci),
-            ogniRegistrazioneNota(),
+            registrazioni,
             parlanti,
             decoder,
             estrattore,
@@ -278,6 +281,17 @@ class RiallineaImpronteServizioTest {
         voci.clear()
 
         esegui().atteso()
+
+        assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(2))), impronta(id, 2))
+        verify(exactly = 0) { decodificatore.campioni(any(), any()) }
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-299 un Incontro cessato (parti null) e Ok senza decodifiche scritture ne eventi, mai un ritento`() {
+        val id = unParlanteConImpronte("Marco", Triple(2, "0-1000", MODELLO))
+
+        esegui(servizio(registrazioni = LettoreRegistrazioneFinta())).atteso()
 
         assertEquals(ImprontaVocale(ref(2), VECCHIA, "0-1000", MODELLO, unicaParteDi(ref(2))), impronta(id, 2))
         verify(exactly = 0) { decodificatore.campioni(any(), any()) }

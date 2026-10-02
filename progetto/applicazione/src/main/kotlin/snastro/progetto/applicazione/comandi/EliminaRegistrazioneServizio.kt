@@ -16,8 +16,9 @@ import snastro.progetto.dominio.ErroreProgetto
  * 1. the Registrazione (absent → `RegistrazioneNonTrovata`, nothing written);
  * 2. `Registrazione.elimina()` — the event with its values at deletion;
  * 3. the pending-cleanup row, so it exists iff the deletion commits (ADR 0020 §4);
- * 4. `pubblica`: the SYNCHRONOUS subscribers run here — the Trascrizione veto (`ElaborazioneGiaAperta`, returned
- *    unchanged: the dispatcher dooms the transaction) + purge, and the Parlanti purge + INV-25;
+ * 4. `pubblica`: the SYNCHRONOUS subscribers run here (ADR 0038 §2) — Sintesi's Riassunto removal when the Incontro
+ *    ceases, then the Trascrizione veto (`ElaborazioneGiaAperta`, returned unchanged: the dispatcher dooms the
+ *    transaction) + purge, which reaches the Parlanti purge + INV-25 through `TrascrittoEliminato`;
  * 5. `rimuovi` of the registrazione row — AFTER 4: the elaborazione / trascritto FKs are immediate;
  * 6. if it was the last Parte (`incontroCessato`, read at 1 from `partiDi`, ADR 0038 §1): `incontri.rimuovi` — AFTER 5,
  *    the `registrazione → incontro` FK is immediate (the call is a no-op if the row is already gone).

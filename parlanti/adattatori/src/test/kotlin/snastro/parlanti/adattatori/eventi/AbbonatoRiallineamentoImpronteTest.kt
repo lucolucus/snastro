@@ -197,11 +197,22 @@ class AbbonatoRiallineamentoImpronteTest {
 
         abbonato.ricevi(VociUnite(IncontroId("uno"), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         abbonato.ricevi(VoceDivisa(IncontroId("due"), VoceId(1), VoceId(2), emptyList()))
+        abbonato.ricevi(
+            SegmentoRiassegnato(
+                IncontroId("tre"),
+                SegmentoRef(REG, SegmentoId(1)),
+                da = VoceId(1),
+                a = VoceId(2),
+                daRimossa = false,
+                aNuova = false,
+            ),
+        )
         runCurrent()
 
         verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(IncontroId("uno"))) }
         verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(IncontroId("due"))) }
-        verify(exactly = 2) { riallinea.esegui(any()) }
+        verify(exactly = 1) { riallinea.esegui(RiallineaImpronte(IncontroId("tre"))) }
+        verify(exactly = 3) { riallinea.esegui(any()) }
     }
 
     @Test

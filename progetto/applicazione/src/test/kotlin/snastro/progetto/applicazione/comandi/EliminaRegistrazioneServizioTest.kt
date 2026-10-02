@@ -159,12 +159,15 @@ class EliminaRegistrazioneServizioTest {
     }
 
     @Test
-    fun `eliminare l ultima Parte con la riga Incontro gia sparita non fallisce`() {
-        // No Incontro row at all for this Parte: the explicit rimuovi is a no-op (SQL auto-deletes it with the Parte).
+    fun `eliminare l ultima Parte di un Incontro mai salvato non fallisce, il suo rimuovi e un no-op`() {
+        // The Incontro "incontro-di-id-3" is never saved (the Finta accepts the Parte without it): incontroCessato is
+        // still true and IncontroRepository.rimuovi of an absent id changes nothing (its contract).
         registrazioni.salva(unaRegistrazione(RegistrazioneId("id-3"), "Senza riga"))
         servizio.esegui(EliminaRegistrazione(RegistrazioneId("id-3"))).atteso()
 
         assertNull(registrazioni.trova(RegistrazioneId("id-3")))
+        assertEquals("rimuoviIncontro", passi.last())
+        assertNotNull(incontri.trova(IncontroId("incontro-di-id-2")), "gli altri Incontri restano")
     }
 
     @Test

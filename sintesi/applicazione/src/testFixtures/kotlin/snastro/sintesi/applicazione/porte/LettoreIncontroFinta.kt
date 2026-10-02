@@ -2,6 +2,7 @@ package snastro.sintesi.applicazione.porte
 
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.unIncontroDi
 import snastro.kernel.unicaParteDi
 
 /**
@@ -18,9 +19,10 @@ public class LettoreIncontroFinta(
 }
 
 /**
- * A [LettoreIncontro] where EVERY Incontro is the one-Parte one of the test convention ([unicaParteDi]): for tests
- * about something else.
+ * A [LettoreIncontro] where every Incontro of the test convention ([unIncontroDi]) is its one-Parte one
+ * ([unicaParteDi]): for tests about something else. Any other id is unknown (`null`), like the supplier's.
  */
 public fun ogniIncontroConUnaParte(): LettoreIncontro = object : LettoreIncontro {
-    override fun parti(incontroId: IncontroId): List<ParteSintesi> = listOf(ParteSintesi(unicaParteDi(incontroId), 1))
+    override fun parti(incontroId: IncontroId): List<ParteSintesi>? =
+        unicaParteDi(incontroId).takeIf { unIncontroDi(it) == incontroId }?.let { listOf(ParteSintesi(it, 1)) }
 }

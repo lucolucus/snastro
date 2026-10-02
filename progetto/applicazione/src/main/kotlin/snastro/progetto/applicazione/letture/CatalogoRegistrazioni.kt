@@ -34,7 +34,8 @@ public class CatalogoRegistrazioni(
 
     /**
      * The Incontro [id] with its Parti ordered and numbered by `OrdineDelleParti` (INV-I2, the only place the order is
-     * computed). `null` for an unknown Incontro or one that ceased with its last Parte.
+     * computed). `null` for an unknown Incontro or one that ceased with its last Parte. A Parte deleted between the two
+     * reads (`partiDi`, then `trova`) is left out: it is gone, like it would be one read later.
      */
     public fun incontro(id: IncontroId): IncontroVista? {
         val parti = incontri.partiDi(id).mapNotNull(registrazioni::trova)
@@ -54,9 +55,8 @@ public class CatalogoRegistrazioni(
     }
 
     /**
-     * Projection of [incontro]: the ids of its Parti, UNORDERED by contract (callers never rely on the order).
-     * `null` as [incontro].
+     * The ids of the Parti of the Incontro [incontroId], UNORDERED by contract (callers never rely on the order: they
+     * come as the repository returns them, not ordered by [incontro]). `null` as [incontro].
      */
-    public fun parti(incontroId: IncontroId): List<RegistrazioneId>? =
-        incontro(incontroId)?.parti?.map { it.registrazioneId }
+    public fun parti(incontroId: IncontroId): List<RegistrazioneId>? = incontri.partiDi(incontroId).ifEmpty { null }
 }

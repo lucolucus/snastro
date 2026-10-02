@@ -420,6 +420,39 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
+    fun `INV-I10 le etichette si mappano su segmentoId diversi da k e le etichette 0 o negative sono scartate`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+        // s1..s3 = segmentoId 10, 20, 30 of Parte 1; s4 = segmentoId 7 of Parte 2: no label equals its segmentoId
+        modello.rispondi(
+            RispostaModello(
+                sommario = null,
+                decisioni = listOf(
+                    ElementoRisposta("Seconda etichetta.", fonti = listOf(2)),
+                    ElementoRisposta("Etichetta zero e la quarta.", fonti = listOf(0, 4)),
+                    ElementoRisposta("Solo etichette non valide.", fonti = listOf(0, -1)),
+                ),
+                questioniAperte = emptyList(),
+                azioni = emptyList(),
+                puntiChiave = emptyList(),
+            ),
+        )
+        val parte1 = listOf(10, 20, 30).map { id ->
+            SegmentoSintesi(SegmentoId(id), VoceId(1), IntervalloMs(id * 100L, id * 100L + 50), "Parte uno, $id.")
+        }
+        val parte2 = listOf(SegmentoSintesi(SegmentoId(7), VoceId(2), IntervalloMs(0, 500), "Parte due, sette."))
+
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2)), trascritti = mapOf(REG1 to parte1, REG2 to parte2))
+            .esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertEquals(
+            listOf(setOf(SegmentoRef(REG1, SegmentoId(20))), setOf(SegmentoRef(REG2, SegmentoId(7)))),
+            concluso.decisioni.map { it.fonti },
+        )
+        assertEquals(1, concluso.omessi, "l'elemento con sole etichette 0 e -1 e scartato e contato")
+    }
+
+    @Test
     fun `un Incontro di 2 Parti manda al modello UN ingresso su entrambe e salva le Fonti giuste`() {
         riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
         // s1..s3 = Parte 1, s4..s5 = Parte 2 (segmentoId 1 and 2 of REG2: the same numbers as REG1's, other Parte).

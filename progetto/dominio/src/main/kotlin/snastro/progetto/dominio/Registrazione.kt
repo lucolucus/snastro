@@ -9,6 +9,7 @@ import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.RiferimentoAudio
 import java.time.Instant
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 /**
  * Aggregate root: an audio recording of one [Progetto].
@@ -87,7 +88,11 @@ private constructor(
         RegistrazioneEliminata(id, progettoId, _titolo, _dataRegistrazione, riferimentoAudio)
 
     public companion object {
-        /** [dataRegistrazione] defaults, at the caller, to the source file's date (INV-2). */
+        /**
+         * [dataRegistrazione] defaults, at the caller, to the source file's date (INV-2). [aggiuntaAlle] is kept to the
+         * millisecond, its stored precision (epoch millis): the order of the Parti (INV-I2) is then the same before and
+         * after a round trip.
+         */
         @Suppress("LongParameterList") // the pinned signature of agg-registrazione
         public fun aggiungi(
             id: RegistrazioneId,
@@ -109,7 +114,7 @@ private constructor(
                     riferimentoAudio,
                     durataMs,
                     dataRegistrazione,
-                    aggiuntaAlle,
+                    aggiuntaAlle.truncatedTo(ChronoUnit.MILLIS),
                     oraDiInizio,
                 ),
                 RegistrazioneAggiunta(id, progettoId),

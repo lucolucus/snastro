@@ -73,6 +73,22 @@ class RegistrazioneTest {
     }
 
     @Test
+    fun `INV-I2 aggiungi tiene aggiuntaAlle al millisecondo come la persistenza, cosi l ordine non cambia dopo`() {
+        val conNanosecondi = Registrazione.aggiungi(
+            id = id,
+            progettoId = progettoId,
+            incontroId = IncontroId("incontro-di-${'$'}{id.valore}"),
+            titolo = "Intervista Marco",
+            riferimentoAudio = RiferimentoAudio("audio/id-1.m4a"),
+            durataMs = 1L,
+            dataRegistrazione = dataFile,
+            aggiuntaAlle = Instant.parse("2026-09-23T10:00:00.123999999Z"),
+        ).aggregato
+
+        assertEquals(Instant.parse("2026-09-23T10:00:00.123Z"), conNanosecondi.aggiuntaAlle)
+    }
+
+    @Test
     fun `AC-18 il titolo resta quello dato ad aggiungi dopo modificaData`() {
         val registrazione = unaRegistrazione().aggregato
 

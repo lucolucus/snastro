@@ -19,7 +19,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * [NomiDelleVoci] against the ports' fakes (D1): AC-I46/AC-I46 of `nomi-delle-voci`, mirroring the
+ * [NomiDelleVoci] against the ports' fakes (D1): AC-I46 of `nomi-delle-voci-incontro`, mirroring the
  * semantics the consumer-driven `LettoreNomiContratto` (sbobinatura) already pins for this shape.
  */
 class NomiDelleVociTest {
@@ -131,7 +131,7 @@ class NomiDelleVociTest {
     }
 
     @Test
-    fun `AC-I46 le Incontri di un Parlante eliminato restano elencate`() {
+    fun `AC-I46 gli Incontri di un Parlante eliminato restano elencati`() {
         val marco = unParlante("id-1", "Marco")
         parlanti.salva(marco).atteso()
         attribuzioni.salva(Attribuzione.conferma(VOCE_1, PROGETTO, marco.id).aggregato)
@@ -143,7 +143,7 @@ class NomiDelleVociTest {
     }
 
     @Test
-    fun `AC-I46 una Incontro la cui unica Voce passa a un altro Parlante non e piu elencata`() {
+    fun `AC-I46 un Incontro la cui unica Voce passa a un altro Parlante non e piu elencato`() {
         val marco = unParlante("id-1", "Marco")
         val giulia = unParlante("id-2", "Giulia")
         parlanti.salva(marco).atteso()
