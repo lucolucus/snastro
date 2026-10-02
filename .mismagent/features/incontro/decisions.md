@@ -710,3 +710,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-architect; recorded: Claude (worker-composer); consulted: verifier findings
 - Docs: [pre-release](pre-release.md)
 - Revisit: the reader allow-list blocks a legitimate new screen.
+
+### D-0054 · rimuoviImpronta(voce) resta, non è transitorio
+- Meta: 2026-10-03; scope: block:parlante-impronte-per-parte; status: accepted; sha: 8ef776a2
+- Question: D-0034 called Parlante.rimuoviImpronta(voceRef) a transitional delegate to delete; it is still called by attribuzione and the revisione policy. Keep or replace?
+- Options: A keep it as a permanent whole-Voce operation (kept); B replace it with per-Parte removals at both callers.
+- Hypothesis: n/a — decided by the worker in fix group pre-I2-4, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I2-4, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I2-4, [pre-release](pre-release.md)
+- Debate: both callers end the Voce's link to the Parlante in every Parte (Attribuzione moved, or Voce ceased); the verifier agreed.
+- Decision: A; KDoc updated. D-0034's "transitional delegates" no longer covers it. Cost: none.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: a caller needs to drop the prints of only some Parti.
