@@ -45,10 +45,10 @@ private fun unParlante(
     tipo: TipoParlanteVista = TipoParlanteVista.RICORRENTE,
     stato: StatoParlanteVista = StatoParlanteVista.ATTIVO,
     numImpronte: Int = 2,
-    numRegistrazioni: Int = 1,
+    numIncontri: Int = 1,
     ultimaApparizione: LocalDate? = DATA_1,
     estratto: EstrattoRef? = null,
-) = ParlanteDelProgetto(id, nome, tipo, stato, numImpronte, numRegistrazioni, ultimaApparizione, estratto)
+) = ParlanteDelProgetto(id, nome, tipo, stato, numImpronte, numIncontri, ultimaApparizione, estratto)
 
 /**
  * Presenter tests for S4 · Parlanti del Progetto, translating `tests_nl` AC-220..226 into unit tests
@@ -412,5 +412,31 @@ class ParlantiPresenterTest {
         advanceUntilIdle()
 
         assertEquals(2, assertIs<ParlantiUiStato.Dati>(presenter.stato.value).ricorrenti.size)
+    }
+}
+
+/** AC-I82: S4 counts Incontri, not Registrazioni. */
+@OptIn(ExperimentalCoroutinesApi::class)
+class ParlantiIncontriTest {
+    @Test
+    fun `AC-I82 un parlante in 2 incontri mostra 2 incontri e non registrazioni`() = runTest {
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val presenter = ParlantiPresenter(
+            CoroutineScope(dispatcher),
+            dispatcher,
+            { listOf(unParlante(numImpronte = 3, numIncontri = 2)) },
+            { error("no") },
+            { error("no") },
+            { error("no") },
+            LettoreAudioFinta(),
+            AggiornamentiVistaFinta(),
+        )
+        advanceUntilIdle()
+        val riga = assertIs<ParlantiUiStato.Dati>(presenter.stato.value).ricorrenti.single()
+        assertEquals(2, riga.numIncontri)
+        assertEquals(
+            "3 impronte · 2 incontri · ultima il 12/03/2026",
+            snastro.ui.testi.etichettaDettaglioParlante(riga.numImpronte, riga.numIncontri, riga.ultimaApparizione),
+        )
     }
 }

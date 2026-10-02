@@ -36,7 +36,7 @@ private fun unaRiga(tipoParlante: TipoParlanteVista = TipoParlanteVista.RICORREN
     nome = "Marco",
     tipoParlante = tipoParlante,
     numImpronte = 3,
-    numRegistrazioni = 2,
+    numIncontri = 2,
     ultimaApparizione = LocalDate.of(2026, 3, 12),
     riproduzioneAbilitata = true,
 )
