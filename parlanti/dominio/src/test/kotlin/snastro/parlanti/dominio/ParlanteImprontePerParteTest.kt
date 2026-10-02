@@ -117,6 +117,32 @@ class ParlanteImprontePerParteTest {
         assertEquals(listOf(stampa(a, PARTE_A, 2f), stampa(a, PARTE_B, 3f)), p.impronte)
     }
 
+    @Test
+    fun `riassegnaImpronte di una Voce su se stessa non cancella nulla`() {
+        val p = unParlante()
+        val a = unaVoce(1)
+        p.aggiungi(a, PARTE_A, 1f)
+        p.aggiungi(a, PARTE_B, 2f)
+
+        p.riassegnaImpronte(da = a, a = a)
+
+        assertEquals(listOf(stampa(a, PARTE_A, 1f), stampa(a, PARTE_B, 2f)), p.impronte)
+    }
+
+    @Test
+    fun `rimuoviImpronteSenzaFetta toglie solo le impronte della Voce nelle Parti senza piu fetta`() {
+        val p = unParlante()
+        p.aggiungi(unaVoce(1), PARTE_A, 1f)
+        p.aggiungi(unaVoce(1), PARTE_B, 2f)
+        p.aggiungi(unaVoce(2), PARTE_B, 3f)
+
+        p.rimuoviImpronteSenzaFetta(unaVoce(1), setOf(PARTE_A))
+
+        assertEquals(setOf(stampa(unaVoce(1), PARTE_A, 1f), stampa(unaVoce(2), PARTE_B, 3f)), p.impronte.toSet())
+        assertEquals(true, p.haImprontaDi(unaVoce(1)))
+        assertEquals(false, p.haImprontaDi(unaVoce(9)))
+    }
+
     private companion object {
         val INCONTRO = IncontroId("id-i")
         val PARTE_A = RegistrazioneId("id-r1")

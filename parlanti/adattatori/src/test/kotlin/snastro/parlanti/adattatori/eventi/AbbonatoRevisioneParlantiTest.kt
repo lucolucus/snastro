@@ -20,9 +20,9 @@ import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
 import snastro.parlanti.applicazione.politiche.ApplicaSostituzioneTrascrittoPolitica
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
+import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
-import snastro.parlanti.applicazione.porte.ogniRegistrazioneNota
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -55,13 +55,16 @@ class AbbonatoRevisioneParlantiTest {
     private val attribuzioni = AttribuzioneRepositoryFinta()
     private val transazioni = UnitaDiLavoroFinta(parlanti, attribuzioni)
 
+    private fun revisione(repo: ParlanteRepository = parlanti) =
+        ApplicaRevisionePolitica(repo, attribuzioni, LettoreVociFinta())
+
     private fun dispatcherCon(
         politica: ApplicaRevisionePolitica,
         politicaSostituzione: ApplicaSostituzioneTrascrittoPolitica =
             ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni),
     ): DispatcherEventiInMemoria {
         val dispatcher = DispatcherEventiInMemoria(transazioni)
-        dispatcher.registraSincrono(AbbonatoRevisioneParlanti(politica, politicaSostituzione, ogniRegistrazioneNota()))
+        dispatcher.registraSincrono(AbbonatoRevisioneParlanti(politica, politicaSostituzione))
         return dispatcher
     }
 
@@ -89,7 +92,7 @@ class AbbonatoRevisioneParlantiTest {
 
     @Test
     fun `AC-142 VociUnite invoca applicaVociUnite dentro la transazione della Revisione`() {
-        val politica = spyk(ApplicaRevisionePolitica(parlanti, attribuzioni))
+        val politica = spyk(revisione())
         val dispatcher = dispatcherCon(politica)
         val pa = unParlante("id-pa")
         val pb = unParlante("id-pb")
@@ -105,7 +108,7 @@ class AbbonatoRevisioneParlantiTest {
 
     @Test
     fun `AC-142 VoceDivisa invoca applicaVoceDivisa dentro la transazione della Revisione`() {
-        val politica = spyk(ApplicaRevisionePolitica(parlanti, attribuzioni))
+        val politica = spyk(revisione())
         val dispatcher = dispatcherCon(politica)
         val pa = unParlante("id-pa")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
@@ -120,7 +123,7 @@ class AbbonatoRevisioneParlantiTest {
 
     @Test
     fun `AC-142 SegmentoRiassegnato invoca applicaSegmentoRiassegnato dentro la transazione della Revisione`() {
-        val politica = spyk(ApplicaRevisionePolitica(parlanti, attribuzioni))
+        val politica = spyk(revisione())
         val dispatcher = dispatcherCon(politica)
         val pda = unParlante("id-pda")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pda)
@@ -148,7 +151,7 @@ class AbbonatoRevisioneParlantiTest {
         val pb = unParlante("id-pb")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(2)), pb)
-        val guasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
+        val guasto = revisione(ParlanteRepositorySalvaFallisce(parlanti))
         val dispatcher = dispatcherCon(guasto)
 
         val esito = commit(dispatcher, VociUnite(unIncontroDi(REG), sopravvissuta = VoceId(1), rimossa = VoceId(2)))
@@ -163,13 +166,13 @@ class AbbonatoRevisioneParlantiTest {
     @Test
     fun `AC-446 TrascrittoSostituito invoca politicaSostituzione applica dentro la transazione`() {
         val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
-        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
+        val dispatcher = dispatcherCon(revisione(), politicaSostituzione)
         val pa = unParlante("id-pa")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
 
-        commit(dispatcher, TrascrittoSostituito(REG, unIncontroDi(REG), emptySet())).atteso()
+        commit(dispatcher, TrascrittoSostituito(REG, unIncontroDi(REG), setOf(VoceId(1)))).atteso()
 
-        verify(exactly = 1) { politicaSostituzione.applica(REG, unIncontroDi(REG)) }
+        verify(exactly = 1) { politicaSostituzione.applica(REG, unIncontroDi(REG), setOf(VoceId(1))) }
         val messaggio = "l'effetto della policy e davvero applicato: purga la vecchia generazione"
         assertNull(attribuzioni.trova(VoceRef(unIncontroDi(REG), VoceId(1))), messaggio)
     }
@@ -182,9 +185,9 @@ class AbbonatoRevisioneParlantiTest {
             ParlanteRepositorySalvaFallisce(parlanti),
             attribuzioni,
         )
-        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), guasto)
+        val dispatcher = dispatcherCon(revisione(), guasto)
 
-        val esito = commit(dispatcher, TrascrittoSostituito(REG, unIncontroDi(REG), emptySet()))
+        val esito = commit(dispatcher, TrascrittoSostituito(REG, unIncontroDi(REG), setOf(VoceId(1))))
 
         assertTrue(esito is Esito.Errore, "il completamento deve essere annullato")
         val trovata = attribuzioni.trova(VoceRef(unIncontroDi(REG), VoceId(1)))
@@ -196,17 +199,17 @@ class AbbonatoRevisioneParlantiTest {
     @Test
     fun `AC-446 ElaborazioneCompletata e ogni altro evento non invocano la politicaSostituzione`() {
         val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
-        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
+        val dispatcher = dispatcherCon(revisione(), politicaSostituzione)
 
         commit(dispatcher, ElaborazioneCompletata(REG, unIncontroDi(REG))).atteso()
 
-        verify(exactly = 0) { politicaSostituzione.applica(any(), any()) }
+        verify(exactly = 0) { politicaSostituzione.applica(any(), any(), any()) }
     }
 
     @Test
-    fun `AC-621 RegistrazioneEliminata invoca politicaSostituzione applica dentro la transazione che elimina`() {
+    fun `AC-621 RegistrazioneEliminata (transitorio) invoca politicaSostituzione dentro la transazione che elimina`() {
         val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
-        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), politicaSostituzione)
+        val dispatcher = dispatcherCon(revisione(), politicaSostituzione)
         val ospite = Nome.di("Ospite").atteso()
         val occasionale = Parlante.crea(ParlanteId("id-occ"), PROGETTO, ospite, TipoParlante.OCCASIONALE).aggregato
         val ricorrente = unParlante("id-ric")
@@ -216,7 +219,7 @@ class AbbonatoRevisioneParlantiTest {
 
         commit(dispatcher, eliminata(REG)).atteso()
 
-        verify(exactly = 1) { politicaSostituzione.applica(REG, unIncontroDi(REG)) }
+        verify(exactly = 1) { politicaSostituzione.applicaEliminazioneRegistrazione(REG, unIncontroDi(REG), true) }
         assertEquals(emptyList(), attribuzioni.diIncontro(unIncontroDi(REG)), "ogni Attribuzione di r e purgata")
         assertNull(parlanti.trova(occasionale.id), "INV-25: l'occasionale rimasto senza Attribuzioni sparisce")
         val restante = assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta")
@@ -232,7 +235,7 @@ class AbbonatoRevisioneParlantiTest {
         val pa = unParlante("id-pa")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
         val guasto = ApplicaSostituzioneTrascrittoPolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
-        val dispatcher = dispatcherCon(ApplicaRevisionePolitica(parlanti, attribuzioni), guasto)
+        val dispatcher = dispatcherCon(revisione(), guasto)
 
         val esito = commit(dispatcher, eliminata(REG))
 

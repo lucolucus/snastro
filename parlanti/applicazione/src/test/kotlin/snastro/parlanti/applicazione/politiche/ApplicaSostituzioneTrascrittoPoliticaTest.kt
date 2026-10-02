@@ -73,6 +73,14 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         parlanti.salva(parlante).atteso()
     }
 
+    /** The 1-Parte case: every attributed Voce of the Incontro of [r] ceases with it. */
+    private fun purgaTutto(r: RegistrazioneId): Esito<Unit> =
+        politica.applica(
+            r,
+            unIncontroDi(r),
+            attribuzioni.diIncontro(unIncontroDi(r)).mapTo(HashSet()) { it.voceRef.voceId },
+        )
+
     private fun impronteDi(id: ParlanteId): List<VoceRef> =
         assertNotNull(parlanti.trova(id)).impronte.map { it.voceRef }
 
@@ -89,7 +97,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         pc.elimina().atteso()
         parlanti.salva(pc).atteso()
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        purgaTutto(R).atteso()
 
         assertEquals(emptyList(), attribuzioni.diIncontro(unIncontroDi(R)), "zero Attribuzioni di r")
         val messaggioImpronte = "zero righe d'impronta di r, incluse le orfane"
@@ -113,7 +121,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         attribuisci(unaVoce(R, 2), ancheAltrove)
         attribuisci(unaVoce(ALTRA, 1), ancheAltrove, valore = 200f)
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        purgaTutto(R).atteso()
 
         assertNull(parlanti.trova(soloInR.id), "l'occasionale rimasto senza Attribuzioni cessa")
         val trovato = assertNotNull(parlanti.trova(ancheAltrove.id), "l'occasionale con Attribuzione altrove resta")
@@ -131,7 +139,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         eliminato.elimina().atteso()
         parlanti.salva(eliminato).atteso()
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        purgaTutto(R).atteso()
 
         val ricorrenteDopo = assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta")
         assertTrue(ricorrenteDopo.attivo)
@@ -153,11 +161,11 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         attribuisci(unaVoce(R, 1), occasionale)
         attribuisci(unaVoce(R, 2), ricorrente)
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        purgaTutto(R).atteso()
         val occasionaleDopoUna = parlanti.trova(occasionale.id)
         val ricorrenteDopoUna = parlanti.trova(ricorrente.id)
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        purgaTutto(R).atteso()
 
         assertEquals(occasionaleDopoUna, parlanti.trova(occasionale.id))
         assertEquals(ricorrenteDopoUna?.impronte, parlanti.trova(ricorrente.id)?.impronte)
@@ -173,6 +181,7 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         politicaContata.applica(
             RegistrazioneId("registrazione-vuota"),
             unIncontroDi(RegistrazioneId("registrazione-vuota")),
+            emptySet(),
         ).atteso()
 
         verify(exactly = 0) { parlantiContati.salva(any()) }
@@ -187,9 +196,49 @@ class ApplicaSostituzioneTrascrittoPoliticaTest {
         val parlantiGuasti = ParlanteRepositorySalvaFallisce(parlanti)
         val politicaConGuasto = ApplicaSostituzioneTrascrittoPolitica(parlantiGuasti, attribuzioni)
 
-        val errore = politicaConGuasto.applica(R, unIncontroDi(R)).erroreAtteso<ErroreParlanti.NomeGiaInUso>()
+        val errore = politicaConGuasto.applica(R, unIncontroDi(R), setOf(VoceId(1)))
+            .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
 
         assertEquals(ErroreParlanti.NomeGiaInUso(p.nome.valore), errore)
+    }
+
+    /** Attributes [voce] to [parlante] with one print per Parte in [parti]. */
+    private fun attribuisciInParti(voce: VoceRef, parlante: Parlante, parti: List<RegistrazioneId>) {
+        parti.forEach { parlante.aggiungiImpronta(voce, it, Impronta(floatArrayOf(1f)), "0-1000", "finto").atteso() }
+        parlanti.salva(parlante).atteso()
+        attribuzioni.salva(Attribuzione.conferma(voce, PROGETTO, parlante.id).aggregato)
+    }
+
+    private val incontro = unIncontroDi(R)
+    private val parteB = RegistrazioneId("registrazione-b")
+
+    @Test
+    fun `INV-I8b TrascrittoEliminato di B toglie ogni impronta di B e l Attribuzione di vociRimosse`() {
+        val sopravvive = unParlante("id-s")
+        val rimosso = unParlante("id-r", tipo = TipoParlante.OCCASIONALE)
+        attribuisciInParti(VoceRef(incontro, VoceId(2)), sopravvive, listOf(R, parteB))
+        attribuisciInParti(VoceRef(incontro, VoceId(4)), rimosso, listOf(parteB))
+
+        politica.applica(parteB, incontro, setOf(VoceId(4))).atteso()
+
+        assertEquals(listOf(R), assertNotNull(parlanti.trova(sopravvive.id)).impronte.map { it.parte })
+        assertNotNull(attribuzioni.trova(VoceRef(incontro, VoceId(2))), "la Voce 2 tiene la sua Attribuzione")
+        assertNull(attribuzioni.trova(VoceRef(incontro, VoceId(4))), "l'Attribuzione della Voce 4 cade")
+        assertNull(parlanti.trova(rimosso.id), "INV-25: l'occasionale rimasto senza Attribuzioni cessa")
+    }
+
+    @Test
+    fun `INV-I8b TrascrittoSostituito di A lascia intatte le impronte di B`() {
+        val p = unParlante("id-p")
+        attribuisciInParti(VoceRef(incontro, VoceId(1)), p, listOf(R, parteB))
+        attribuisciInParti(VoceRef(incontro, VoceId(3)), p, listOf(R))
+
+        politica.applica(R, incontro, setOf(VoceId(3))).atteso()
+
+        val righe = assertNotNull(parlanti.trova(p.id)).impronte
+        assertEquals(listOf(VoceRef(incontro, VoceId(1)) to parteB), righe.map { it.voceRef to it.parte })
+        assertNull(attribuzioni.trova(VoceRef(incontro, VoceId(3))))
+        assertNotNull(attribuzioni.trova(VoceRef(incontro, VoceId(1))))
     }
 
     /** [ParlanteRepository] whose [salva] always fails, like ADR 0007's unique index (mirrors AC-96). */

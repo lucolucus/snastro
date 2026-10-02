@@ -12,8 +12,10 @@ import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
 import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
+import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -24,6 +26,7 @@ import snastro.parlanti.dominio.SorgenteImpronta
 import snastro.parlanti.dominio.TipoParlante
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -36,7 +39,7 @@ import kotlin.test.assertTrue
 class ApplicaRevisionePoliticaTest {
     private val parlanti = ParlanteRepositoryFinta()
     private val attribuzioni = AttribuzioneRepositoryFinta()
-    private val politica = ApplicaRevisionePolitica(parlanti, attribuzioni)
+    private val politica = ApplicaRevisionePolitica(parlanti, attribuzioni, LettoreVociFinta())
 
     private fun unParlante(id: String, tipo: TipoParlante = TipoParlante.RICORRENTE): Parlante =
         Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), tipo).aggregato
@@ -137,6 +140,63 @@ class ApplicaRevisionePoliticaTest {
         assertEquals(p.id, assertNotNull(attribuzioni.trova(unaVoce(1))).parlanteId)
         assertEquals(listOf(rigaA), impronteDi(p), "A tiene la propria riga (obsoleta), quella di B e cancellata")
         assertTrue(assertNotNull(parlanti.trova(p.id)).attivo, "e ancora attribuito da A: non cessa")
+    }
+
+    @Test
+    fun `INV-21 unire sullo stesso Parlante ri-chiava le impronte di B sulle Parti dove A non ne ha`() {
+        val p = unParlante("id-p")
+        val inc = unIncontroDi(REGISTRAZIONE)
+        val parteB = RegistrazioneId("registrazione-b")
+        listOf(unaVoce(1) to REGISTRAZIONE, unaVoce(2) to REGISTRAZIONE, unaVoce(2) to parteB).forEach { (v, parte) ->
+            p.aggiungiImpronta(v, parte, Impronta(floatArrayOf(v.voceId.numero.toFloat())), SORGENTE_INIZIALE, MODELLO)
+                .atteso()
+        }
+        parlanti.salva(p).atteso()
+        attribuzioni.salva(Attribuzione.conferma(unaVoce(1), PROGETTO, p.id).aggregato)
+        attribuzioni.salva(Attribuzione.conferma(unaVoce(2), PROGETTO, p.id).aggregato)
+
+        politica.applicaVociUnite(inc, sopravvissuta = VoceId(1), rimossa = VoceId(2)).atteso()
+
+        assertEquals(
+            setOf(unaVoce(1) to REGISTRAZIONE, unaVoce(1) to parteB),
+            impronteDi(p).map { it.voceRef to it.parte }.toSet(),
+        )
+        assertNull(attribuzioni.trova(unaVoce(2)))
+    }
+
+    @Test
+    fun `INV-21 una Revisione che svuota la fetta di una Parte toglie quella impronta e tiene le altre`() {
+        val p = unParlante("id-p")
+        val parteB = RegistrazioneId("registrazione-b")
+        val voce = unaVoce(1)
+        listOf(REGISTRAZIONE, parteB).forEach {
+            p.aggiungiImpronta(voce, it, Impronta(floatArrayOf(1f)), SORGENTE_INIZIALE, MODELLO).atteso()
+        }
+        parlanti.salva(p).atteso()
+        attribuzioni.salva(Attribuzione.conferma(voce, PROGETTO, p.id).aggregato)
+        // dopo la Revisione la Voce parla ancora solo nella Parte REGISTRAZIONE
+        val lettore = LettoreVociFinta(
+            mapOf(voce.incontroId to listOf(unaVoceVista(voce, listOf(IntervalloMs(0, 1_000))))),
+        )
+        val politicaConLettore = ApplicaRevisionePolitica(parlanti, attribuzioni, lettore)
+
+        politicaConLettore.applicaVoceDivisa(voce.incontroId, voce.voceId).atteso()
+
+        assertEquals(listOf(REGISTRAZIONE), impronteDi(p).map { it.parte })
+    }
+
+    @Test
+    fun `INV-21 unire con A senza Attribuzione ma con un impronta propria e uno stato corrotto`() {
+        val p = unParlante("id-p")
+        val q = unParlante("id-q")
+        attribuisci(unaVoce(2), p)
+        q.aggiungiImpronta(unaVoce(1), REGISTRAZIONE, Impronta(floatArrayOf(1f)), SORGENTE_INIZIALE, MODELLO).atteso()
+        p.aggiungiImpronta(unaVoce(1), REGISTRAZIONE, Impronta(floatArrayOf(1f)), SORGENTE_INIZIALE, MODELLO).atteso()
+        parlanti.salva(p).atteso()
+
+        assertFailsWith<IllegalStateException> {
+            politica.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2))
+        }
     }
 
     @Test
@@ -258,7 +318,11 @@ class ApplicaRevisionePoliticaTest {
     fun `AC-96 il ParlanteRepository che fallisce salva fa restituire alla policy il suo Errore`() {
         val p = unParlante("id-p")
         attribuisci(unaVoce(1), p)
-        val politicaConGuasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
+        val politicaConGuasto = ApplicaRevisionePolitica(
+            ParlanteRepositorySalvaFallisce(parlanti),
+            attribuzioni,
+            LettoreVociFinta(),
+        )
 
         val errore = politicaConGuasto
             .applicaSegmentoRiassegnato(
@@ -277,7 +341,11 @@ class ApplicaRevisionePoliticaTest {
     fun `AC-96 anche l eredita di unire propaga l Errore del ParlanteRepository`() {
         val p = unParlante("id-p")
         attribuisci(unaVoce(2), p)
-        val politicaConGuasto = ApplicaRevisionePolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
+        val politicaConGuasto = ApplicaRevisionePolitica(
+            ParlanteRepositorySalvaFallisce(parlanti),
+            attribuzioni,
+            LettoreVociFinta(),
+        )
 
         politicaConGuasto.applicaVociUnite(unIncontroDi(REGISTRAZIONE), sopravvissuta = VoceId(1), rimossa = VoceId(2))
             .erroreAtteso<ErroreParlanti.NomeGiaInUso>()
