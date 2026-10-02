@@ -27,11 +27,14 @@ import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.sintesi.applicazione.porte.AmbienteLettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreIncontroContratto
+import snastro.sintesi.applicazione.porte.ParteSintesi
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.ZoneOffset
+import kotlin.test.Test
+import kotlin.test.assertEquals
 
 /**
  * D2 (AC-I204, AC-I28): [LettoreIncontroDaProgetto] passes [LettoreIncontroContratto] real-on-real. Progetto is seeded
@@ -41,15 +44,46 @@ import java.time.ZoneOffset
 class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
     override fun ambiente(): AmbienteLettoreIncontro = AmbienteReale()
 
+    /**
+     * AC-I64: an Incontro of several Parti, imported through Progetto's own `AggiungiRegistrazione` into it, comes back
+     * ordered and numbered by Progetto (date, then start time with the empty one last, then import order) and an
+     * eliminated Parte is renumbered away: the adapter serves the ordered Parti and no longer fails closed on more
+     * than one. The contract's own multi-Parte cases stay behind its flag: they also edit the start time, a command
+     * whose `OraDiInizio` argument lives in Progetto's dominio, out of reach of this module (CR-1).
+     */
+    @Test
+    fun `AC-I64 un Incontro di piu Parti torna in ordine e numerato e una Parte eliminata si rinumera`() {
+        val a = AmbienteReale()
+        val senzaOra = a.importa(data = LocalDate.of(2026, 10, 1))
+        val incontro = a.incontroDi(senzaOra)
+        val giornoPrima = a.aggiungiParte(incontro, data = LocalDate.of(2026, 9, 30))
+        val alleNove = a.aggiungiParte(incontro, data = LocalDate.of(2026, 10, 1), ora = LocalTime.of(9, 0))
+        val alleOtto = a.aggiungiParte(incontro, data = LocalDate.of(2026, 10, 1), ora = LocalTime.of(8, 0))
+        val altroIncontro = a.importa()
+
+        assertEquals(
+            listOf(giornoPrima, alleOtto, alleNove, senzaOra).mapIndexed { i, r -> ParteSintesi(r, i + 1) },
+            a.lettore.parti(incontro),
+        )
+        assertEquals(listOf(ParteSintesi(altroIncontro, 1)), a.lettore.parti(a.incontroDi(altroIncontro)))
+
+        a.elimina(alleOtto)
+
+        assertEquals(
+            listOf(giornoPrima, alleNove, senzaOra).mapIndexed { i, r -> ParteSintesi(r, i + 1) },
+            a.lettore.parti(incontro),
+        )
+    }
+
     private class AmbienteReale : AmbienteLettoreIncontro {
         private val clock = Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC)
         private val generatoreId = GeneratoreIdFinto()
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioni = RegistrazioneRepositoryFinta()
-        private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, progetti))
+        private val incontri = IncontroRepositoryFinta(registrazioni)
+        private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, progetti, incontri))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo =
-            CatalogoRegistrazioni(registrazioni, IncontroRepositoryFinta(registrazioni))
+        private val catalogo = CatalogoRegistrazioni(registrazioni, incontri)
         private var contatore = 0
 
         init {
@@ -60,40 +94,34 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
         override val lettore: LettoreIncontro = LettoreIncontroDaProgetto(catalogo)
 
         /**
-         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands, with the
-         * ordered Parti of `catalogo-incontro`: Progetto's commands cannot give an Incontro a second Parte yet, so the
-         * contract's multi-Parte cases are not registered here (D-0037). Switch it on, and implement [aggiungiParte]
-         * and [modificaOraDiInizio] through those commands, when they land.
+         * Off (D-0037): the contract's multi-Parte cases also edit the start time, and `ModificaOraDiInizio` takes a
+         * Progetto-dominio `OraDiInizio` this module cannot build (CR-1); the ordering is covered above (AC-I64).
          */
         override val piuPartiPerIncontro: Boolean = false
 
-        override fun importa(data: LocalDate, ora: LocalTime?): RegistrazioneId {
-            require(ora == null) { "InfoAudio non porta ancora l'ora di inizio: solo i casi con piu Parti la usano" }
+        override fun importa(data: LocalDate, ora: LocalTime?): RegistrazioneId =
+            importaIn(Destinazione.NuovoIncontro, data, ora)
+
+        override fun aggiungiParte(incontroId: IncontroId, data: LocalDate, ora: LocalTime?): RegistrazioneId =
+            importaIn(Destinazione.Incontro(incontroId), data, ora)
+
+        private fun importaIn(destinazione: Destinazione, data: LocalDate, ora: LocalTime?): RegistrazioneId {
             val percorso = "/sorgenti/parte-${++contatore}.m4a"
             archivio.conSorgente(percorso)
-            val sonda = SondaAudioFinta(leggibili = mapOf(percorso to InfoAudio(60_000L, data)))
+            val sonda = SondaAudioFinta(leggibili = mapOf(percorso to InfoAudio(60_000L, data, ora)))
             AggiungiRegistrazioneServizio(
                 eventi.unitaDiLavoro,
                 generatoreId,
                 clock,
                 progetti,
                 registrazioni,
-                IncontroRepositoryFinta(registrazioni),
+                incontri,
                 sonda,
                 archivio,
                 eventi,
-            ).esegui(
-                AggiungiRegistrazione(
-                    checkNotNull(progetti.trova()).id,
-                    listOf(percorso),
-                    Destinazione.NuovoIncontro,
-                ),
-            ).atteso()
+            ).esegui(AggiungiRegistrazione(checkNotNull(progetti.trova()).id, listOf(percorso), destinazione)).atteso()
             return eventi.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }
-
-        override fun aggiungiParte(incontroId: IncontroId, data: LocalDate, ora: LocalTime?): RegistrazioneId =
-            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
 
         override fun modificaData(registrazioneId: RegistrazioneId, data: LocalDate) {
             ModificaDataRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, eventi)
@@ -110,7 +138,7 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
             EliminaRegistrazioneServizio(
                 eventi.unitaDiLavoro,
                 registrazioni,
-                IncontroRepositoryFinta(registrazioni),
+                incontri,
                 EliminazioniInSospesoFinta(),
                 eventi,
             )

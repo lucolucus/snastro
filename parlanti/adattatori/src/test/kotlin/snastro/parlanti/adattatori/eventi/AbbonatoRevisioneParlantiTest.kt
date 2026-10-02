@@ -32,6 +32,7 @@ import snastro.parlanti.dominio.TipoParlante
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
 import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
+import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
@@ -207,7 +208,7 @@ class AbbonatoRevisioneParlantiTest {
     }
 
     @Test
-    fun `AC-621 RegistrazioneEliminata (transitorio) invoca politicaSostituzione dentro la transazione che elimina`() {
+    fun `AC-I61 TrascrittoEliminato invoca politicaSostituzione dentro la transazione che elimina`() {
         val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
         val dispatcher = dispatcherCon(revisione(), politicaSostituzione)
         val ospite = Nome.di("Ospite").atteso()
@@ -217,9 +218,9 @@ class AbbonatoRevisioneParlantiTest {
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(2)), ricorrente)
         attribuisci(VoceRef(unIncontroDi(ALTRA), VoceId(1)), ricorrente)
 
-        commit(dispatcher, eliminata(REG)).atteso()
+        commit(dispatcher, TrascrittoEliminato(REG, unIncontroDi(REG), setOf(VoceId(1), VoceId(2)))).atteso()
 
-        verify(exactly = 1) { politicaSostituzione.applicaEliminazioneRegistrazione(REG, unIncontroDi(REG), true) }
+        verify(exactly = 1) { politicaSostituzione.applica(REG, unIncontroDi(REG), setOf(VoceId(1), VoceId(2))) }
         assertEquals(emptyList(), attribuzioni.diIncontro(unIncontroDi(REG)), "ogni Attribuzione di r e purgata")
         assertNull(parlanti.trova(occasionale.id), "INV-25: l'occasionale rimasto senza Attribuzioni sparisce")
         val restante = assertNotNull(parlanti.trova(ricorrente.id), "il ricorrente resta")
@@ -231,17 +232,31 @@ class AbbonatoRevisioneParlantiTest {
     }
 
     @Test
-    fun `AC-621 un Errore della politicaSostituzione su RegistrazioneEliminata condanna e ripristina la transazione`() {
+    fun `AC-I61 un Errore della politicaSostituzione su TrascrittoEliminato condanna e ripristina la transazione`() {
         val pa = unParlante("id-pa")
         attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
         val guasto = ApplicaSostituzioneTrascrittoPolitica(ParlanteRepositorySalvaFallisce(parlanti), attribuzioni)
         val dispatcher = dispatcherCon(revisione(), guasto)
 
-        val esito = commit(dispatcher, eliminata(REG))
+        val esito = commit(dispatcher, TrascrittoEliminato(REG, unIncontroDi(REG), setOf(VoceId(1))))
 
         assertTrue(esito is Esito.Errore, "l'eliminazione deve essere annullata")
         assertEquals(pa.id, assertNotNull(attribuzioni.trova(VoceRef(unIncontroDi(REG), VoceId(1)))).parlanteId)
         assertEquals(1, assertNotNull(parlanti.trova(pa.id)).impronte.size, "la riga d'impronta di A e ripristinata")
+    }
+
+    @Test
+    fun `AC-I61 RegistrazioneEliminata non ha abbonati in Parlanti, non tocca Attribuzioni ne impronte`() {
+        val politicaSostituzione = spyk(ApplicaSostituzioneTrascrittoPolitica(parlanti, attribuzioni))
+        val dispatcher = dispatcherCon(revisione(), politicaSostituzione)
+        val pa = unParlante("id-pa")
+        attribuisci(VoceRef(unIncontroDi(REG), VoceId(1)), pa)
+
+        commit(dispatcher, eliminata(REG)).atteso()
+
+        verify(exactly = 0) { politicaSostituzione.applica(any(), any(), any()) }
+        assertNotNull(attribuzioni.trova(VoceRef(unIncontroDi(REG), VoceId(1))), "l'Attribuzione resta")
+        assertEquals(1, assertNotNull(parlanti.trova(pa.id)).impronte.size)
     }
 
     private fun eliminata(r: RegistrazioneId) = RegistrazioneEliminata(
