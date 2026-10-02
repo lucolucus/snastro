@@ -36,7 +36,10 @@ private fun puntoChiaveUi(p: PuntoChiaveVista) = PuntoChiaveUi(testoConVoci(p.te
 
 /** Pre-release finding #117 (stile-sintesi): `GruppoFonti` keeps caller order — sorted HERE. */
 private fun fontiUi(fonti: List<FonteVista>): List<FonteChipDati> =
-    fonti.sortedBy { it.inizioMs }.map { FonteChipDati(it.voce.voceId, it.voce.nome, it.inizioMs) }
+    // TRANSITION (D-0037): a Fonte whose Segmento vanished (INV-I13) has no minute nor Voce; its chip
+    // ("parte n · non più presente") comes with scheda-riassunto-incontro.
+    fonti.mapNotNull { f -> f.voce?.let { v -> f.inizioMs?.let { FonteChipDati(v.voceId, v.nome, it) } } }
+        .sortedBy { it.inizioMs }
 
 /** ux-proposal: speaker tokens inside prose render as plain text (current Nome or "Voce n"), never
  * coloured — collapsing to a `String` here means the view does zero more decision-making on it. */

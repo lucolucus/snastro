@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.supporto.test.conScopeDiProva
 import java.time.Instant
@@ -121,7 +122,7 @@ class CodaCondivisaMultiSorgenteTest {
 
         val messaggio = "a parita' di istante l'Elaborazione e' 1a, il Riassunto 2o, mai la stessa posizione"
         assertEquals(mapOf(RegistrazioneId("reg-e1") to 1), istantanea.elaborazioni, messaggio)
-        assertEquals(mapOf(RegistrazioneId("reg-r1") to 2), istantanea.riassunti, messaggio)
+        assertEquals(mapOf(IncontroId("reg-r1") to 2), istantanea.riassunti, messaggio)
     }
 
     @Test

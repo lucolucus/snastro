@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.sintesi.applicazione.letture.DisponibilitaVista
 import snastro.sintesi.applicazione.letture.ImpostazioniSintesiVista
@@ -184,7 +185,7 @@ class RiassuntoPresenter(
 
     private fun costruisci(v: RiassuntoVista, pos: PosizioniCoda): RiassuntoUiStato.Dati = RiassuntoUiStato.Dati(
         modello = modelloUi(v.modello),
-        richiesta = richiestaUi(v.richiestaAperta, pos),
+        richiesta = richiestaUi(v.richiestaAperta, v.incontroId, pos),
         fallimentoTesto = v.ultimoFallimento?.let { messaggioFallimento(it.motivo.codice) },
         nonDisponibileTesto = (v.disponibilita as? DisponibilitaVista.NonDisponibile)?.let {
             messaggioNonDisponibile(it.motivo)
@@ -211,11 +212,11 @@ class RiassuntoPresenter(
         StatoModelloVista.Installato -> ModelloUi.Installato
     }
 
-    private fun richiestaUi(r: RichiestaApertaVista?, pos: PosizioniCoda): RichiestaUi? {
+    private fun richiestaUi(r: RichiestaApertaVista?, incontroId: IncontroId, pos: PosizioniCoda): RichiestaUi? {
         _avviatoIl.value = (r as? RichiestaApertaVista.InCorso)?.avviatoIl
         return when (r) {
             null -> null
-            is RichiestaApertaVista.InAttesa -> RichiestaUi.InAttesa(pos.riassunti[registrazioneId])
+            is RichiestaApertaVista.InAttesa -> RichiestaUi.InAttesa(pos.riassunti[incontroId])
             is RichiestaApertaVista.InCorso -> RichiestaUi.InCorso(trascorsoMs(r.avviatoIl))
         }
     }

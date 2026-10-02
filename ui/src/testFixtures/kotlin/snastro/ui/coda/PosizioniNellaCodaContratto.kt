@@ -1,6 +1,7 @@
 package snastro.ui.coda
 
 import org.junit.jupiter.api.Test
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -18,7 +19,7 @@ abstract class PosizioniNellaCodaContratto {
         val istantanea = con(ScenarioCoda(emptyList())).istantanea()
         assertEquals(PosizioniCoda.VUOTA, istantanea)
         assertNull(istantanea.elaborazioni[RegistrazioneId("r-1")])
-        assertNull(istantanea.riassunti[RegistrazioneId("r-1")])
+        assertNull(istantanea.riassunti[IncontroId("r-1")])
     }
 
     @Test
@@ -28,7 +29,7 @@ abstract class PosizioniNellaCodaContratto {
         )
         val istantanea = con(scenario).istantanea()
         assertEquals(mapOf(RegistrazioneId("r-1") to 1, RegistrazioneId("r-3") to 3), istantanea.elaborazioni)
-        assertEquals(mapOf(RegistrazioneId("r-2") to 2, RegistrazioneId("r-4") to 4), istantanea.riassunti)
+        assertEquals(mapOf(IncontroId("r-2") to 2, IncontroId("r-4") to 4), istantanea.riassunti)
     }
 
     @Test
@@ -39,7 +40,7 @@ abstract class PosizioniNellaCodaContratto {
         )
         val istantanea = con(scenario).istantanea()
         assertEquals(mapOf(RegistrazioneId("r-3") to 2), istantanea.elaborazioni)
-        assertEquals(mapOf(RegistrazioneId("r-2") to 1), istantanea.riassunti)
+        assertEquals(mapOf(IncontroId("r-2") to 1), istantanea.riassunti)
     }
 
     @Test
@@ -52,7 +53,7 @@ abstract class PosizioniNellaCodaContratto {
         )
         val istantanea = con(scenario).istantanea()
         assertEquals(emptyMap(), istantanea.elaborazioni, "l'Elaborazione in corso non e' mai contata")
-        assertEquals(mapOf(RegistrazioneId("r-1") to 1), istantanea.riassunti, "il Riassunto in attesa e' 1o")
+        assertEquals(mapOf(IncontroId("r-1") to 1), istantanea.riassunti, "il Riassunto in attesa e' 1o")
     }
 
     @Test
@@ -60,6 +61,6 @@ abstract class PosizioniNellaCodaContratto {
         val scenario = ScenarioCoda(listOf(unaElaborazione("r-1"), unRiassunto("r-1")))
         val istantanea = con(scenario).istantanea()
         assertEquals(mapOf(RegistrazioneId("r-1") to 1), istantanea.elaborazioni)
-        assertEquals(mapOf(RegistrazioneId("r-1") to 2), istantanea.riassunti)
+        assertEquals(mapOf(IncontroId("r-1") to 2), istantanea.riassunti)
     }
 }

@@ -13,6 +13,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withTimeoutOrNull
 import snastro.avvio.Avviabile
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.supporto.catturaNonFatale
 import snastro.ui.coda.PosizioniCoda
@@ -207,10 +208,14 @@ internal class CodaCondivisa(
         val tutti = fonti.flatMap { fonte -> fonte.tutti().map { Voce(fonte.tipo, it) } }
             .sortedWith(compareBy({ it.elemento.istante }, { it.tipo.ordinal }, { it.elemento.id }))
         val elaborazioni = mutableMapOf<RegistrazioneId, Int>()
-        val riassunti = mutableMapOf<RegistrazioneId, Int>()
+        val riassunti = mutableMapOf<IncontroId, Int>()
         tutti.forEachIndexed { indice, voce ->
-            val mappa = if (voce.tipo == TipoElementoCoda.ELABORAZIONE) elaborazioni else riassunti
-            mappa[RegistrazioneId(voce.elemento.registrazioneId)] = indice + 1
+            // the element's key is its Registrazione for an Elaborazione, its Incontro for a Riassunto (AC-I51)
+            when (voce.tipo) {
+                TipoElementoCoda.ELABORAZIONE ->
+                    elaborazioni[RegistrazioneId(voce.elemento.registrazioneId)] = indice + 1
+                TipoElementoCoda.RIASSUNTO -> riassunti[IncontroId(voce.elemento.registrazioneId)] = indice + 1
+            }
         }
         return PosizioniCoda(elaborazioni, riassunti)
     }
