@@ -96,9 +96,9 @@ class RiassuntoVisteLetturaTest {
 
         assertEquals(
             listOf(
-                ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marco")),
+                ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marco", true)),
                 ParteTestoVista.Testo(" apre, "),
-                ParteTestoVista.Voce(VoceVista(3, "Voce 3", null)),
+                ParteTestoVista.Voce(VoceVista(3, "Voce 3", null, true)),
                 ParteTestoVista.Testo(" chiude"),
             ),
             sommario,
@@ -150,11 +150,11 @@ class RiassuntoVisteLetturaTest {
         val dopoVista = checkNotNull(checkNotNull(letturaRinominata.di(unIncontroDi(REGISTRAZIONE))).mostrato).sommario
 
         assertEquals(
-            listOf(ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marco")), ParteTestoVista.Testo(" apre.")),
+            listOf(ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marco", true)), ParteTestoVista.Testo(" apre.")),
             primaVista,
         )
         assertEquals(
-            listOf(ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marchetto")), ParteTestoVista.Testo(" apre.")),
+            listOf(ParteTestoVista.Voce(VoceVista(1, "Voce 1", "Marchetto", true)), ParteTestoVista.Testo(" apre.")),
             dopoVista,
         )
         assertEquals(primaDellaRinomina?.statoRigaPerTest(), riassunti.trova(RiassuntoId("r-1"))?.statoRigaPerTest())
@@ -188,7 +188,7 @@ class RiassuntoVisteLetturaTest {
         assertEquals(listOf(2, 3, 1), mostrato.decisioni[0].fonti.map { it.segmentoId }, "ordine per inizioMs")
         assertEquals(
             listOf(1, 2, 3),
-            mostrato.decisioni[0].fonti.map { it.voce.voceId },
+            mostrato.decisioni[0].fonti.map { it.voce?.voceId },
             "il voceId di ogni Fonte segue il Segmento corrente, non tutte la stessa Voce",
         )
         assertEquals(listOf("Prima decisione.", "Seconda decisione."), mostrato.decisioni.map { it.testo.testoPiano() })
@@ -320,7 +320,7 @@ class RiassuntoVisteLetturaTest {
             ),
         )
         assertEquals(
-            DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta),
+            DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
             checkNotNull(aperta.lettura.di(unIncontroDi(REGISTRAZIONE))).disponibilita,
         )
 

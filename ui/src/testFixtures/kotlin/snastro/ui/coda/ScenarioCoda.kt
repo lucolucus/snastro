@@ -1,5 +1,6 @@
 package snastro.ui.coda
 
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 
 /** The two kinds of item the shared queue orders (ADR 0023 §1). */
@@ -20,9 +21,12 @@ data class ScenarioCoda(
     /** The snapshot the owner must report for this scenario — what the fake is seeded with (D1). */
     fun posizioniAttese(): PosizioniCoda {
         val numerati = inAttesa.mapIndexed { i, e -> e to i + 1 }
-        fun di(tipo: TipoInCoda) =
-            numerati.filter { (e, _) -> e.tipo == tipo }.associate { (e, n) -> e.registrazioneId to n }
-        return PosizioniCoda(di(TipoInCoda.ELABORAZIONE), di(TipoInCoda.RIASSUNTO))
+        fun di(tipo: TipoInCoda) = numerati.filter { (e, _) -> e.tipo == tipo }
+        // a Riassunto is keyed by its Incontro (AC-I51): the scenario names it by the same id text
+        return PosizioniCoda(
+            di(TipoInCoda.ELABORAZIONE).associate { (e, n) -> e.registrazioneId to n },
+            di(TipoInCoda.RIASSUNTO).associate { (e, n) -> IncontroId(e.registrazioneId.valore) to n },
+        )
     }
 }
 

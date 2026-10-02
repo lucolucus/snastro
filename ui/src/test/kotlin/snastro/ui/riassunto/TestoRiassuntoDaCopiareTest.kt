@@ -12,11 +12,13 @@ class TestoRiassuntoDaCopiareTest {
             sommario = "  La riunione ha fissato il budget.  ",
             decisioni = listOf(ElementoUi("Budget a 10k", emptyList())),
             azioni = listOf(
-                AzioneUi("Mandare il verbale", emptyList(), VoceVista(1, "Voce 1", "Anna")),
+                AzioneUi("Mandare il verbale", emptyList(), VoceVista(1, "Voce 1", "Anna", presente = true)),
                 AzioneUi("Prenotare la sala", emptyList(), null),
             ),
             questioniAperte = emptyList(),
-            puntiChiave = listOf(PuntoChiaveUi("Serve più tempo", emptyList(), VoceVista(2, "Voce 2", null))),
+            puntiChiave = listOf(
+                PuntoChiaveUi("Serve più tempo", emptyList(), VoceVista(2, "Voce 2", null, presente = true)),
+            ),
             omessiTesto = "2 punti omessi",
             metadatiTesto = "Lunghezza massima: 2000 parole",
         )
