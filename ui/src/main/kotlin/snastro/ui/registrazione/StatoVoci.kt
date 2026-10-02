@@ -18,10 +18,12 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
+import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.applicazione.porte.Fascia
+import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
@@ -108,6 +110,10 @@ internal class StatoVoci(
     private val proposte = mutableMapOf<VoceId, StatoProposta>()
     private var proposteOltreSoglia = false
     private var lavoroProposte: Job? = null
+
+    // AC-I83/AC-I84: the cross-Parte pair of the Incontro, computed by its OWN job so the panel never waits on it.
+    private var coppiaTraParti: CoppiaTraParti? = null
+    private var lavoroTraParti: Job? = null
     private val invii = mutableMapOf<VoceRef, Instant>()
     private var inCorsoAltrove: Map<VoceRef, Instant> = emptyMap()
     private val soglieProgrammate = mutableSetOf<Pair<Any, Instant>>()
@@ -183,6 +189,30 @@ internal class StatoVoci(
         // running pipeline (ADR 0017); AC-461: the job starts again once soloLettura ends (the same
         // ricaricaParlanti() call the base presenter's Cambiamento-triggered carica() already makes).
         if (!erroreLettura && !soloLettura) avviaProposte()
+        avviaTraParti()
+    }
+
+    /** AC-I84: neither read-only, nor in error, nor a Proposta di unione (which takes the single banner slot). */
+    private val bannerTraPartiAmmesso: Boolean
+        get() = !soloLettura && !erroreLettura && dati?.unioni.orEmpty().isEmpty()
+
+    /**
+     * AC-I84: the cross-Parte proposal is requested only when the banner could show — not read-only, not in
+     * error, no Proposta di unione (which takes the single banner slot). A superseded job is cancelled; a
+     * failed computation shows no banner (the manual 'Unisci con' stays).
+     */
+    private fun avviaTraParti() {
+        lavoroTraParti?.cancel()
+        val incontro = incontroId
+        if (incontro == null || !bannerTraPartiAmmesso) {
+            coppiaTraParti = null
+            return
+        }
+        lavoroTraParti = scope.launch {
+            coppiaTraParti = catturaNonFatale { runInterruptible(io) { sorgenti.traParti(incontro) } }
+                .getOrNull()?.firstOrNull()
+            pubblica()
+        }
     }
 
     /**
@@ -458,6 +488,7 @@ internal class StatoVoci(
             esistenti.map { it.segmentoId }.toSet()
         }
         proposte.clear()
+        coppiaTraParti = null // AC-I84: a Revisione may have joined the pair — never offer a stale one
         ricaricaParlanti()
     }
 
@@ -576,6 +607,7 @@ internal class StatoVoci(
             },
             parlantiAttivi = dati?.attivi.orEmpty(),
             unioni = dati?.unioni.orEmpty(),
+            traParti = coppiaTraParti.takeIf { bannerTraPartiAmmesso },
             estrattiDisponibili = audioDisponibile,
             // AC-454: the merge banner's action disabled too — '▶ estratto' stays governed only by
             // estrattiDisponibili (audio availability), untouched by soloLettura.

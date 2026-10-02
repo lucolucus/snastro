@@ -2,6 +2,7 @@ package snastro.ui.registrazione
 
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 
@@ -20,6 +21,11 @@ data class PannelloVoci(
     val unioneAbilitata: Boolean,
     /** ADR 0019 §6: 'Riassegna per somiglianza' in the header, `null` only before the first publish. */
     val somiglianza: PannelloSomiglianza? = null,
+    /**
+     * AC-I83/AC-I84 (ADR 0036): the cross-Parte banner, the second kind after [unioni] — `null` while a
+     * Proposta di unione is shown (at most one banner), while S3 is read-only, or when no pair holds.
+     */
+    val traParti: CoppiaTraParti? = null,
 )
 
 /** A Voce as a target of 'Unisci con ▾' / 'Riassegna a ▾': its number and its label (Nome or "Voce n"). */
