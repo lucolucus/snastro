@@ -13,7 +13,6 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.unIncontroDi
-import snastro.kernel.unicaParteDi
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.letture.RiassuntiInAttesa
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
@@ -75,7 +74,7 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
         eventi,
         esecuzioni.annullato,
     )
-    private val fonte = fonteCodaRiassunto(RiassuntiInAttesa(repo), servizio::esegui, {}, esecuzioni, ::unicaParteDi)
+    private val fonte = fonteCodaRiassunto(RiassuntiInAttesa(repo), servizio::esegui, {}, esecuzioni)
 
     private fun semina() {
         repo.salva(unRiassunto("A", R1, richiestoAlle = T1))
@@ -94,7 +93,7 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
     fun `teste onora esclusi nell'ordine FIFO, e una fonte Riassunto non trattiene mai la coda`() {
         semina()
         assertEquals(TipoElementoCoda.RIASSUNTO, fonte.tipo)
-        assertEquals(ElementoInCoda("A", R1.valore, T1), fonte.teste(emptySet()))
+        assertEquals(ElementoInCoda("A", unIncontroDi(R1).valore, T1), fonte.teste(emptySet()))
         assertEquals("B", fonte.teste(setOf("A"))?.id)
         assertEquals("C", fonte.teste(setOf("A", "B"))?.id)
         assertNull(fonte.teste(setOf("A", "B", "C")))
@@ -123,7 +122,6 @@ internal class FonteCodaRiassuntoTest : FonteCodaContratto() {
             esegui = { Esito.Errore(ErroreApplicazioneSintesi.ErroreRuntime("guasto di prova")) },
             recupera = {},
             esecuzioni,
-            ::unicaParteDi,
         )
         assertNull(esecuzioni.ultimoReclamato, "nessun reclamo salvato prima dell'errore")
 

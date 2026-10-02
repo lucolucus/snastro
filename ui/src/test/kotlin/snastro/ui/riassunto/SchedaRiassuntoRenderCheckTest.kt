@@ -15,6 +15,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
+import snastro.kernel.RegistrazioneId
 import snastro.sintesi.applicazione.letture.AzioneVista
 import snastro.sintesi.applicazione.letture.ElementoVista
 import snastro.sintesi.applicazione.letture.FonteVista
@@ -88,11 +89,12 @@ private fun unDati(
     messaggioErrore = messaggioErrore,
 )
 
-private fun unaVoce(numero: Int, nome: String?) = VoceVista(numero, "Voce $numero", nome)
+private fun unaVoce(numero: Int, nome: String?) = VoceVista(numero, "Voce $numero", nome, presente = true)
 
 private fun unTesto(testo: String) = listOf(ParteTestoVista.Testo(testo))
 
-private fun unaFonte(segmentoId: Int, voce: VoceVista, inizioMs: Long) = FonteVista(segmentoId, voce, inizioMs)
+private fun unaFonte(segmentoId: Int, voce: VoceVista, inizioMs: Long) =
+    FonteVista(RegistrazioneId("r-1"), 1, segmentoId, voce, inizioMs, segmentoPresente = true)
 
 private fun statoModelloNonInstallato() = unDati(
     modello = ModelloUi.NonInstallato(

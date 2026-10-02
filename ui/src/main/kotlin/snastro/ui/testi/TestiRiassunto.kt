@@ -59,7 +59,10 @@ fun messaggioDownloadFallito(motivo: MotivoDownload, dimensioneModelloByte: Long
 /** AC-S129: [MotivoNonDisponibile] — "1 h 10" is provisional (spike `contesto-lungo`). */
 fun messaggioNonDisponibile(motivo: MotivoNonDisponibile): String = when (motivo) {
     MotivoNonDisponibile.TroppoLunga -> "La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa)."
-    MotivoNonDisponibile.ElaborazioneAperta -> "Aspetta la fine della trascrizione."
+    // TRANSITION (D-0037): the wording per Parte comes with scheda-riassunto-incontro; one-Parte text unchanged.
+    is MotivoNonDisponibile.ElaborazioneAperta -> "Aspetta la fine della trascrizione."
+    is MotivoNonDisponibile.PartiNonTrascritte -> "Manca la trascrizione della parte ${motivo.parte}."
+    is MotivoNonDisponibile.PartiFallite -> "Parte ${motivo.parte} non riuscita: riprova o eliminala."
 }
 
 /**
