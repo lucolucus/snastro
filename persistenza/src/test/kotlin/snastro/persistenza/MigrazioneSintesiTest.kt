@@ -201,7 +201,7 @@ class MigrazioneSintesiTest {
 
         // ADR 0034 §2: riassunto's immediate FK is to incontro, so the Incontro of the last Parte fails closed.
         db.registrazioneQueries.elimina(registrazioneId)
-        assertFailsWith<SQLException> { db.incontroQueries.eliminaSeSenzaParti(incontro) }
+        assertFailsWith<SQLException> { db.incontroQueries.elimina(incontro) }
 
         assertEquals(incontro, db.incontroQueries.trovaPerId(incontro).executeAsOne().id)
     }

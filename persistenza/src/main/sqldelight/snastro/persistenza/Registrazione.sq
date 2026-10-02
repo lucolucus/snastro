@@ -11,17 +11,15 @@ SELECT * FROM registrazione WHERE progetto_id = :progettoId
 trovaDiIncontro:
 SELECT * FROM registrazione WHERE incontro_id = :incontroId;
 
+-- ora_di_inizio: INV-I14, 'HH:MM:SS' or NULL (empty).
 inserisci:
-INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, data_registrazione, aggiunta_alle)
-VALUES (:id, :progettoId, :incontroId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazione, :aggiuntaAlle);
+INSERT INTO registrazione(id, progetto_id, incontro_id, titolo, riferimento_audio, durata_ms, data_registrazione, aggiunta_alle, ora_di_inizio)
+VALUES (:id, :progettoId, :incontroId, :titolo, :riferimentoAudio, :durataMs, :dataRegistrazione, :aggiuntaAlle, :oraDiInizio);
 
--- The two columns that change after creation: titolo (AC-360) and data_registrazione (INV-2).
+-- The columns that change after creation: titolo (AC-360), data_registrazione (INV-2), ora_di_inizio (INV-I14).
+-- Never incontro_id: the trigger refuses any UPDATE naming it (D-0028).
 aggiorna:
-UPDATE registrazione SET titolo = :titolo, data_registrazione = :dataRegistrazione WHERE id = :id;
-
--- INV-I14: the OraDiInizio of a Parte, 'HH:MM:SS' or NULL (empty), written by every salva. Never incontro_id (D-0028).
-scriviOraDiInizio:
-UPDATE registrazione SET ora_di_inizio = :oraDiInizio WHERE id = :id;
+UPDATE registrazione SET titolo = :titolo, data_registrazione = :dataRegistrazione, ora_di_inizio = :oraDiInizio WHERE id = :id;
 
 -- AC-326: single-column select — the repository never reconstitutes a Registrazione from this row.
 titoliDelProgetto:

@@ -127,7 +127,7 @@ private constructor(
             durataMs: Long,
             dataRegistrazione: LocalDate,
             aggiuntaAlle: Instant,
-            oraDiInizio: OraDiInizio? = null,
+            oraDiInizio: OraDiInizio?,
         ): Registrazione =
             Registrazione(
                 id,

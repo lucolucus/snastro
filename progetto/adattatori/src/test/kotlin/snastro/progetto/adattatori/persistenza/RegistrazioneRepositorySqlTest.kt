@@ -1,24 +1,24 @@
 package snastro.progetto.adattatori.persistenza
 
 import org.junit.jupiter.api.Test
-import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
 import snastro.kernel.atteso
-import snastro.kernel.erroreAtteso
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
 import snastro.persistenza.seminaRegistrazioneDiProva
+import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryContratto
+import snastro.progetto.dominio.Incontro
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.test.assertEquals
-import kotlin.test.assertNotEquals
+import kotlin.test.assertFails
 import kotlin.test.assertNull
 
 /** D2 (dev-architecture-app.md#porta-contratto): the contract passes real-on-real (AC-109). */
@@ -28,7 +28,7 @@ class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
         val progetto = ProgettoId("progetto-1")
         db.progettoQueries.inserisci(progetto.valore, "Progetto di prova")
         return object : Ambiente {
-            override val registrazioni = RegistrazioneRepositorySql(db)
+            override val registrazioni = ConIncontro(db, RegistrazioneRepositorySql(db))
             override val unitaDiLavoro = UnitaDiLavoroSql(db)
             override val progettoId = progetto
         }
@@ -59,12 +59,11 @@ class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
     }
 
     /**
-     * AC-I6 (ADR 0033 §6 transition): a Registrazione saved by the repository is the one Parte of its OWN new
-     * Incontro, written in the same transaction (a rolled-back save leaves no Incontro either) — and the repository
-     * reads `incontro_id` from the column, never assuming it equals the Registrazione's id.
+     * AC-I55 (ADR 0033 §6): saving a Registrazione never writes `incontro`, [IncontroRepositorySql] is its only
+     * writer. Without the Incontro row the immediate FK refuses the Parte (nothing is left); with it, a save leaves it.
      */
     @Test
-    fun `AC-I6 salvare una nuova Registrazione crea il suo Incontro con una sola Parte nella stessa transazione`() {
+    fun `AC-I55 salvare una Registrazione non crea l'Incontro`() {
         val db = databaseInMemoria()
         val progetto = ProgettoId("progetto-1")
         db.progettoQueries.inserisci(progetto.valore, "Progetto di prova")
@@ -72,35 +71,56 @@ class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
         val uow = UnitaDiLavoroSql(db)
         val r = unaRegistrazione(progetto, RegistrazioneId("reg-1"))
 
-        uow.inTransazione<Unit> {
-            repo.salva(r)
-            Esito.Errore(ErroreDiProva.Fallito("annullato"))
-        }.erroreAtteso<ErroreDiProva.Fallito>()
-        assertEquals(0, contaIncontri(db), "un salva annullato non lascia un Incontro")
+        assertFails { uow.inTransazione { Esito.Ok(repo.salva(r)) } }
+        assertEquals(0, contaIncontri(db))
+        assertNull(repo.trova(r.id))
 
+        IncontroRepositorySql(db).salva(Incontro.nuovo(r.incontroId, progetto))
         uow.inTransazione { Esito.Ok(repo.salva(r)) }.atteso()
-        val incontroId = checkNotNull(db.registrazioneQueries.trovaPerId("reg-1").executeAsOne().incontro_id)
+        uow.inTransazione { Esito.Ok(repo.salva(r)) }.atteso()
         assertEquals(1, contaIncontri(db))
-        assertEquals(progetto.valore, db.incontroQueries.trovaPerId(incontroId).executeAsOne().progetto_id)
-        assertNotEquals(r.id.valore, incontroId, "l'Incontro ha un id proprio")
-
-        uow.inTransazione { Esito.Ok(repo.salva(r)) }.atteso()
-        assertEquals(1, contaIncontri(db), "un salva successivo non crea altri Incontri")
+        val incontroSalvato = db.registrazioneQueries.trovaPerId("reg-1").executeAsOne().incontro_id
+        assertEquals(r.incontroId.valore, incontroSalvato)
     }
 
     @Test
-    fun `AC-I6 rimuovere l'ultima Parte toglie anche il suo Incontro`() {
+    fun `AC-I55 rimuovere l'ultima Parte lascia l'Incontro a IncontroRepository`() {
         val db = databaseInMemoria()
         val progetto = ProgettoId("progetto-1")
         db.progettoQueries.inserisci(progetto.valore, "Progetto di prova")
         val repo = RegistrazioneRepositorySql(db)
         val r = unaRegistrazione(progetto, RegistrazioneId("reg-1"))
+        IncontroRepositorySql(db).salva(Incontro.nuovo(r.incontroId, progetto))
         repo.salva(r)
 
         repo.rimuovi(r.id)
 
-        assertEquals(0, contaIncontri(db))
+        assertEquals(1, contaIncontri(db), "solo IncontroRepository.rimuovi toglie l'Incontro")
         assertNull(repo.trova(r.id))
+    }
+
+    /** The database is trusted (CR-15): a corrupt stored time reads as the empty time, it does not break the list. */
+    @Test
+    fun `AC-I55 un'ora_di_inizio illeggibile si legge come vuota senza rompere la lista`() {
+        val db = databaseInMemoria()
+        val progetto = ProgettoId("progetto-1")
+        db.progettoQueries.inserisci(progetto.valore, "Progetto di prova")
+        db.incontroQueries.inserisci(id = "incontro-1", progettoId = progetto.valore)
+        for ((id, ora) in listOf("reg-1" to "25:99:00", "reg-2" to null)) {
+            db.registrazioneQueries.inserisci(
+                id = id,
+                progettoId = progetto.valore,
+                incontroId = "incontro-1",
+                titolo = id,
+                riferimentoAudio = "audio/$id.wav",
+                durataMs = 1L,
+                dataRegistrazione = "2026-02-12",
+                aggiuntaAlle = 0L,
+                oraDiInizio = ora,
+            )
+        }
+
+        assertEquals(listOf(null, null), RegistrazioneRepositorySql(db).delProgetto(progetto).map { it.oraDiInizio })
     }
 
     private fun contaIncontri(db: SnastroDatabase): Int =
@@ -117,4 +137,17 @@ class RegistrazioneRepositorySqlTest : RegistrazioneRepositoryContratto() {
             dataRegistrazione = LocalDate.of(2026, 2, 12),
             aggiuntaAlle = Instant.parse("2026-09-23T10:15:30.123Z"),
         ).aggregato
+}
+
+/** The import saves the Incontro before its Parti (the real writer does it through the port): same for the contract. */
+private class ConIncontro(
+    db: SnastroDatabase,
+    private val delega: RegistrazioneRepository,
+) : RegistrazioneRepository by delega {
+    private val incontri = IncontroRepositorySql(db)
+
+    override fun salva(r: Registrazione) {
+        incontri.salva(Incontro.nuovo(r.incontroId, r.progettoId))
+        delega.salva(r)
+    }
 }

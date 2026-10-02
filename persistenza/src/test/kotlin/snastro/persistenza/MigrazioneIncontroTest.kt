@@ -196,7 +196,7 @@ class MigrazioneIncontroTest {
         assertFailsWith<SQLException>("UPDATE di incontro_id con lo stesso valore") {
             driver.execute(null, "UPDATE registrazione SET incontro_id = 'i-1' WHERE id = 'r-1'", 0)
         }
-        db.registrazioneQueries.aggiorna("titolo nuovo", "2026-10-02", "r-1")
+        db.registrazioneQueries.aggiorna("titolo nuovo", "2026-10-02", null, "r-1")
         assertEquals(listOf("'titolo nuovo'|'i-1'"), tabella(driver, "registrazione", "titolo, incontro_id"))
     }
 
