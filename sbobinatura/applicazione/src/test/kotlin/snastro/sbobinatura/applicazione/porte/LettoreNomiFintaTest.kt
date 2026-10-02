@@ -7,9 +7,16 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import java.util.Locale
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class LettoreNomiFintaTest : LettoreNomiContratto() {
     override fun ambiente(): AmbienteLettoreNomi = AmbienteFinto()
+
+    @Test
+    fun `l Ambiente finto rifiuta una Parte di un Incontro sconosciuto come il fornitore`() {
+        assertFailsWith<IllegalArgumentException> { ambiente().aggiungiParte(IncontroId("mai-coniato"), voci = 1) }
+    }
 
     /**
      * Plays the supplier: mints ids like it (UUID-like strings, a new Incontro per Registrazione, VoceId from the
@@ -19,6 +26,7 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
      */
     private class AmbienteFinto : AmbienteLettoreNomi {
         private val generatore = GeneratoreIdFinto()
+        private val incontri = mutableSetOf<IncontroId>()
         private val voci = mutableSetOf<VoceRef>()
         private val attribuzioni = mutableMapOf<VoceRef, ParlanteId>()
         private val nomi = mutableMapOf<ParlanteId, String>()
@@ -30,10 +38,10 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
         override val lettore: LettoreNomi = LettoreNomiFinta(attribuzioni, nomi)
 
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata =
-            aggiungiParte(IncontroId(generatore.nuovo()), voci)
+            aggiungiParte(IncontroId(generatore.nuovo()).also { incontri += it }, voci)
 
         override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata {
-            require(voci >= 1)
+            require(voci >= 1 && incontroId in incontri) { "Incontro sconosciuto: ${incontroId.valore}" }
             val gia = this.voci.count { it.incontroId == incontroId }
             val refs = (gia + 1..gia + voci).map { VoceRef(incontroId, VoceId(it)) }
             this.voci += refs
