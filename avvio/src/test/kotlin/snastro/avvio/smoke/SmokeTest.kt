@@ -223,6 +223,7 @@ class SmokeTest {
                     LettoreRegistrazioneTrascrizione(
                         CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
                     ),
+                    unitaDiLavoroSql,
                 ),
             ),
             ParlanteRepositorySql(database, unitaDiLavoroSql),

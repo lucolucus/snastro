@@ -18,9 +18,7 @@ internal fun SnastroDatabase.seminaPredisposizione(predisposizione: Predisposizi
     predisposizione.progetti.forEach { progettoQueries.inserisci(it.valore, "Progetto di prova") }
     predisposizione.registrazioni.forEach { (registrazioneId, progettoId) ->
         val incontroId = predisposizione.incontroDi(registrazioneId).valore
-        if (incontroQueries.trovaPerId(incontroId).executeAsOneOrNull() == null) {
-            incontroQueries.inserisci(id = incontroId, progettoId = progettoId.valore)
-        }
+        incontroQueries.inserisci(id = incontroId, progettoId = progettoId.valore) // OR IGNORE: once per Incontro
         registrazioneQueries.inserisci(
             id = registrazioneId.valore,
             progettoId = progettoId.valore,

@@ -132,7 +132,7 @@ class MessaggiErroreTest {
                     VoceId(1),
                     setOf(SegmentoRef(RegistrazioneId("id-1"), SegmentoId(1))),
                 ),
-                ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), null),
+                ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(RegistrazioneId("r"), SegmentoId(1)), null),
                 ErroreTrascrizione.NumeroPersoneFuoriIntervallo(11),
                 ErroreTrascrizione.TrascrittoCambiato(RegistrazioneId("id-1")),
                 ErroreTrascrizione.IncontroNonTrovato(IncontroId("incontro-1")),

@@ -13,6 +13,7 @@ import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.trascrizione.applicazione.eventi.ElaborazioneAvviata
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
+import snastro.trascrizione.applicazione.eventi.ElaborazioneFallita
 import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.porte.Allineatore
 import snastro.trascrizione.applicazione.porte.AllineatoreFinta
@@ -22,7 +23,6 @@ import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
-import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
@@ -95,7 +95,7 @@ class EseguiProssimaElaborazioneIncontroTest {
         val prima = checkNotNull(s.trascritti.trova(INCONTRO)).trascritti.map { it.registrazioneId to it.segmenti }
         val gia = s.eventi.pubblicati.size
 
-        s.esegui(B, allineatore = AllineatoreSenzaParlato())
+        s.esegui(B, allineatore = AllineatoreMuto())
 
         val dopo = checkNotNull(s.trascritti.trova(INCONTRO)).trascritti.map { it.registrazioneId to it.segmenti }
         assertEquals(prima, dopo)
@@ -104,20 +104,56 @@ class EseguiProssimaElaborazioneIncontroTest {
 
     /** The Registrazione vanishing between the pipeline and the completion transaction refuses the completion. */
     @Test
-    fun `se la Registrazione sparisce prima del commit la completata diventa fallita e la radice non cambia`() {
+    fun `INV-I16 se la Registrazione sparisce prima del commit la completata diventa fallita e la radice non cambia`() {
         val s = Scenario()
         s.esegui(A)
-        s.elaborazioni.salva(Elaborazione.accoda(ElaborazioneId("e-B"), B, DOPO, null).aggregato).atteso()
-        val sparisce = object : Diarizzatore {
-            override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
-                s.registrazioni.remove(B) // deleted while the pipeline runs
-                return DiarizzatoreFinta(TURNI).diarizza(c, numeroPersone)
-            }
-        }
-        s.servizio(diarizzatore = sparisce).esegui(EseguiProssimaElaborazione()).atteso()
+        val primaA = s.trascritti.trascritto(A)?.segmenti
+        val gia = s.eventi.pubblicati.size
+
+        s.eseguiB(mentreGira = { s.registrazioni.remove(B) }) // deleted while the pipeline runs
 
         assertEquals(null, s.trascritti.trascritto(B))
+        assertEquals(primaA, s.trascritti.trascritto(A)?.segmenti, "A invariata")
         assertTrue(s.elaborazioni.trova(ElaborazioneId("e-B"))?.fallita == true)
+        assertEquals(
+            listOf(
+                ElaborazioneAvviata(B, OROLOGIO.instant()),
+                ElaborazioneFallita(B, "registrazione non più disponibile"),
+            ),
+            s.eventi.pubblicati.drop(gia),
+        )
+    }
+
+    @Test
+    fun `INV-I16 un guasto nel rileggere la Registrazione al commit e fallita col motivo della lettura`() {
+        val s = Scenario()
+        s.esegui(A)
+        val primaA = s.trascritti.trascritto(A)?.segmenti
+        val gia = s.eventi.pubblicati.size
+
+        s.eseguiB(mentreGira = { s.guasta = true })
+
+        assertEquals(null, s.trascritti.trascritto(B))
+        assertEquals(primaA, s.trascritti.trascritto(A)?.segmenti, "A invariata")
+        assertEquals(
+            listOf(
+                ElaborazioneAvviata(B, OROLOGIO.instant()),
+                ElaborazioneFallita(B, "impossibile leggere i dati della registrazione"),
+            ),
+            s.eventi.pubblicati.drop(gia),
+        )
+    }
+
+    @Test
+    fun `ADR 0035 la radice riletta al commit e quella dell Incontro della nuova lettura della Registrazione`() {
+        val s = Scenario()
+        val altro = IncontroId("incontro-2")
+
+        s.eseguiB(mentreGira = { s.registrazioni[B] = vista(B).copy(incontroId = altro) })
+
+        assertEquals(null, s.trascritti.trova(INCONTRO))
+        assertEquals(listOf(B), s.trascritti.trova(altro)?.trascritti?.map { it.registrazioneId })
+        assertEquals(ElaborazioneCompletata(B, altro), s.eventi.pubblicati.last())
     }
 
     private class Scenario {
@@ -127,10 +163,11 @@ class EseguiProssimaElaborazioneIncontroTest {
         val eventi = DispatcherEventiFinta(uow)
         val segnalatore = SegnalatoreFaseFinta()
         val registrazioni = mutableMapOf(A to vista(A), B to vista(B))
+        var guasta = false
         private var n = 0
 
         private val lettore = object : LettoreRegistrazione {
-            override fun registrazione(id: RegistrazioneId) = registrazioni[id]
+            override fun registrazione(id: RegistrazioneId) = registrazioni[id].also { check(!guasta) { "guasto" } }
             override fun parti(incontroId: IncontroId) = null
         }
 
@@ -162,6 +199,18 @@ class EseguiProssimaElaborazioneIncontroTest {
 
         fun ritrascrivi(parte: RegistrazioneId) = esegui(parte)
 
+        /** Runs the Elaborazione `e-B` of [B], calling [mentreGira] while its pipeline runs (after the lookup). */
+        fun eseguiB(mentreGira: () -> Unit) {
+            elaborazioni.salva(Elaborazione.accoda(ElaborazioneId("e-B"), B, DOPO, null).aggregato).atteso()
+            val diarizzatore = object : Diarizzatore {
+                override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> {
+                    mentreGira()
+                    return DiarizzatoreFinta(TURNI).diarizza(c, numeroPersone)
+                }
+            }
+            servizio(diarizzatore = diarizzatore).esegui(EseguiProssimaElaborazione()).atteso()
+        }
+
         private fun accoda(parte: RegistrazioneId) {
             val id = ElaborazioneId("e-${parte.valore}-${n++}")
             elaborazioni.salva(Elaborazione.accoda(id, parte, DOPO.plusSeconds(n.toLong()), null).aggregato).atteso()
@@ -192,8 +241,4 @@ class EseguiProssimaElaborazioneIncontroTest {
             durataMs = DURATA,
         )
     }
-}
-
-private class AllineatoreSenzaParlato : Allineatore {
-    override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = emptyList()
 }

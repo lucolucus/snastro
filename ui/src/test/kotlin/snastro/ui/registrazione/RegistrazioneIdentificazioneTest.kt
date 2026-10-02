@@ -16,6 +16,7 @@ import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
@@ -482,7 +483,7 @@ class RegistrazioneIdentificazioneTest {
     @Test
     fun `L665b un riassegna multi Segmento che fallisce a meta applica il primo spostamento e mostra l errore`() =
         runTest {
-            val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(3), V2)
+            val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(REG, SegmentoId(3)), V2)
             var chiamate = 0
             val a = ambiente().apply {
                 esitoRevisione = { c ->
@@ -513,7 +514,7 @@ class RegistrazioneIdentificazioneTest {
 
     @Test
     fun `AC-404 un errore di Revisione e un messaggio inline e trascritto e selezione restano invariati`() = runTest {
-        val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(2), null)
+        val errore = ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(REG, SegmentoId(2)), null)
         val a = ambiente().apply { esitoRevisione = { Esito.Errore(errore) } }
         val presenter = avvia(a)
         advanceUntilIdle()

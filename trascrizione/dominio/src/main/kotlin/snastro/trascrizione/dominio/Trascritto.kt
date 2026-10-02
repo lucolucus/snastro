@@ -105,7 +105,7 @@ public class Trascritto private constructor(
         val da = _segmenti[segmento]?.voceId ?: return Esito.Errore(SegmentoNonTrovato(rif(segmento)))
         return when {
             destinazione == da || destinazione == null && idsDi(da).size == 1 ->
-                Esito.Errore(RiassegnazioneNonAmmessa(segmento, destinazione))
+                Esito.Errore(RiassegnazioneNonAmmessa(rif(segmento), destinazione))
             destinazione != null && !esiste(destinazione) -> Esito.Errore(VoceNonTrovata(destinazione))
             else -> {
                 val a = destinazione ?: nuovaVoce()
@@ -158,7 +158,7 @@ public class Trascritto private constructor(
     internal fun confermaSegmento(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> {
         val attuale = _segmenti[segmento]
         return when {
-            attuale == null -> Esito.Errore(SegmentoNonTrovato(SegmentoRef(registrazioneId, segmento)))
+            attuale == null -> Esito.Errore(SegmentoNonTrovato(rif(segmento)))
             attuale.confermato == confermato -> Esito.Ok(null)
             else -> {
                 _segmenti[segmento] = attuale.copy(confermato = confermato)
@@ -173,7 +173,7 @@ public class Trascritto private constructor(
         return spostamenti.firstNotNullOfOrNull { m ->
             val s = _segmenti[m.segmentoId]
             when {
-                m.a == m.da || !visti.add(m.segmentoId) -> RiassegnazioneNonAmmessa(m.segmentoId, m.a)
+                m.a == m.da || !visti.add(m.segmentoId) -> RiassegnazioneNonAmmessa(rif(m.segmentoId), m.a)
                 s == null || s.voceId != m.da || s.intervallo != m.intervallo || s.confermato || !esiste(m.a) ->
                     TrascrittoCambiato(registrazioneId)
                 else -> null

@@ -17,9 +17,8 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
 
 /**
  * The Voci dell'Incontro (ADR 0035 §1, root, identity [incontroId]): the Voce counter of the Incontro and one
- * [Trascritto]
- * entity per transcribed Parte. Owns INV-6 and INV-8 at Incontro scope, INV-I4…INV-I7 and INV-I16; the `Revisione`
- * operations relate Voci and Segmenti of any Parte of THIS Incontro (INV-I7).
+ * [Trascritto] entity per transcribed Parte. Owns INV-6 and INV-8 at Incontro scope, INV-I4…INV-I7 and INV-I16; the
+ * `Revisione` operations relate Voci and Segmenti of any Parte of THIS Incontro (INV-I7).
  *
  * A Voce exists iff at least one Segmento of some Parte is assigned to it (INV-6 by construction). Every new Voce takes
  * the counter, which only grows (INV-I4); each Parte numbers its Segmenti from its own counter, kept across
@@ -145,7 +144,7 @@ public class VociDellIncontro private constructor(
         val da = trova(segmento)?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento))
         return when {
             destinazione == da || destinazione == null && refsDi(da).size == 1 ->
-                Esito.Errore(RiassegnazioneNonAmmessa(segmento.segmentoId, destinazione))
+                Esito.Errore(RiassegnazioneNonAmmessa(segmento, destinazione))
             destinazione != null && !esiste(destinazione) -> Esito.Errore(VoceNonTrovata(destinazione))
             else -> {
                 val a = destinazione ?: nuovaVoce()
@@ -212,7 +211,7 @@ public class VociDellIncontro private constructor(
         return spostamenti.firstNotNullOfOrNull { m ->
             val s = trova(m.segmento)
             when {
-                m.a == m.da || !visti.add(m.segmento) -> RiassegnazioneNonAmmessa(m.segmento.segmentoId, m.a)
+                m.a == m.da || !visti.add(m.segmento) -> RiassegnazioneNonAmmessa(m.segmento, m.a)
                 s == null || s.voceId != m.da || s.intervallo != m.intervallo || s.confermato || !esiste(m.a) ->
                     TrascrittoCambiato(m.segmento.registrazioneId)
                 else -> null
@@ -253,8 +252,9 @@ public class VociDellIncontro private constructor(
 
         /**
          * Rebuilds from persisted state; re-validates no rule (the DB is trusted) but refuses (`require`, programmer
-         * error) a Trascritto of another Incontro, a Parte twice, or a counter not past every stored Voce — a stale
-         * counter would mint an existing `VoceId` and silently merge Voci (INV-I4). The Trascritti are copied.
+         * error) a counter below 1, a Trascritto of another Incontro, a Parte twice, or a counter not past every stored
+         * Voce — a stale counter would mint an existing `VoceId` (or `VoceId(0)`) and silently merge Voci (INV-I4). The
+         * Trascritti are copied. Covered by the persistence adapter's tests (CR-15).
          */
         @RicostituzioneDaPersistenza
         public fun ricostituisci(
@@ -262,6 +262,7 @@ public class VociDellIncontro private constructor(
             trascritti: List<Trascritto>,
             prossimaVoce: Int,
         ): VociDellIncontro {
+            require(prossimaVoce >= 1) { "prossimaVoce $prossimaVoce sotto 1 in $incontroId" }
             require(trascritti.all { it.incontroId == incontroId }) { "Trascritto di un altro Incontro in $incontroId" }
             require(trascritti.distinctBy { it.registrazioneId }.size == trascritti.size) {
                 "Parte duplicata in $incontroId"

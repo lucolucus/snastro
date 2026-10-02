@@ -7,6 +7,7 @@ import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.junit.jupiter.api.io.TempDir
 import org.sqlite.SQLiteConfig
 import snastro.kernel.Esito
+import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.persistenza.SnastroDatabase
@@ -27,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * AC-I56 (the "rewrite only changed Parti" half) and AC-I58 on the SQL adapter, over an Incontro with two Parti
@@ -82,9 +84,11 @@ class VociDellIncontroRepositorySqlPartiTest {
     }
 
     /**
-     * On the PRODUCTION driver (file DB, `BEGIN IMMEDIATE`): a COMMIT refused by a deferred FK leaves nothing behind
-     * (the single-connection in-memory driver keeps the refused transaction open). The Parlanti rows are seeded
-     * through a plain JDBC connection, never the generated Parlanti queries (ADR 0018 enforced_by).
+     * On the PRODUCTION driver (file DB, `BEGIN IMMEDIATE`): the adapter deletes the `voce_incontro` row of a Voce that
+     * ceased, and a Parlanti row still pointing at it (the purge "forgotten") fails the COMMIT — not the DELETE, the FK
+     * is deferred — leaving nothing behind (the single-connection in-memory driver keeps the refused transaction open).
+     * The Parlanti rows are seeded through a plain JDBC connection, never the generated Parlanti queries (ADR 0018
+     * enforced_by).
      */
     @Test
     fun `AC-I58 una Voce rimossa con una Attribuzione non ripulita fa fallire il COMMIT sulla FK differita`(
@@ -99,14 +103,19 @@ class VociDellIncontroRepositorySqlPartiTest {
             val url = "jdbc:sqlite:${File(cartella, "progetto.db").absolutePath}"
             ATTRIBUZIONE_SU_VOCE_3.forEach { eseguiJdbc(url, it) } // Voce 3 speaks only in Parte B
 
-            assertFailsWith<SQLException> {
+            var bloccoFinito = false
+            val errore = assertFailsWith<SQLException> {
                 uow.inTransazione {
                     val radice = checkNotNull(repo.trova(INCONTRO))
                     radice.rimuoviParte(PARTE_B).atteso()
                     repo.salva(radice) // the Parlanti purge of the removed Voci is "forgotten"
+                    bloccoFinito = true // every statement of the unit ran: only the COMMIT is left
                     Esito.Ok(Unit)
                 }
             }
+
+            assertTrue(bloccoFinito, "refused at COMMIT, not by a statement inside the unit: $errore")
+            assertTrue("FOREIGN KEY" in errore.message.orEmpty(), "the deferred FK: ${errore.message}")
 
             assertEquals(
                 setOf(PARTE_A, PARTE_B),
@@ -132,6 +141,21 @@ class VociDellIncontroRepositorySqlPartiTest {
 
         assertEquals(setOf(PARTE_A), assertNotNull(repo.trova(INCONTRO)).trascritti.map { it.registrazioneId }.toSet())
         assertEquals(listOf(VoceId(1), VoceId(2)), assertNotNull(repo.trova(INCONTRO)).voci)
+        assertEquals(
+            listOf(1L, 2L),
+            db.voceIncontroQueries.numeriDiIncontro(INCONTRO.valore).executeAsList(),
+            "the voce_incontro rows of the Voci that ceased are deleted, never forgotten",
+        )
+    }
+
+    @OptIn(RicostituzioneDaPersistenza::class)
+    @Test
+    fun `AC-I56 salvare una radice con un contatore piu basso non lo abbassa nel database`() {
+        repo.salva(VociDellIncontro.ricostituisci(INCONTRO, emptyList(), 6))
+
+        repo.salva(VociDellIncontro.ricostituisci(INCONTRO, emptyList(), 3)) // a stale root
+
+        assertEquals(6, assertNotNull(repo.trova(INCONTRO)).prossimaVoce, "INV-I4: the store's MAX backstop")
     }
 
     private fun repositoryDi(db: SnastroDatabase, uow: UnitaDiLavoroSql) = VociDellIncontroRepositorySql(

@@ -70,11 +70,10 @@ public class VociDellIncontroRepositorySql(
         partiDi(root.incontroId).filterNot { it in tenute }.forEach(::eliminaParte)
         val voci = root.voci.mapTo(HashSet()) { it.numero.toLong() }
         voci.forEach { db.voceIncontroQueries.inserisciSeAssente(incontroId, it) }
-        trascritti.forEach { t ->
-            // Only a Parte whose rows differ from the root's is rewritten (ADR 0035 §1): its stored copy is compared.
-            val salvato = leggi(t.registrazioneId, root.incontroId, root.prossimaVoce)
-            if (salvato?.stessoContenutoDi(t) != true) scriviParte(t)
-        }
+        // Only a Parte whose rows differ from the root's is rewritten (ADR 0035 §1): its stored rows are compared. One
+        // read per Parte (2-3 per Incontro): Trascrizione cannot select the Segmenti of an Incontro in one query
+        // without reading `registrazione` (ADR 0033 §4.1).
+        trascritti.filterNot { db.righeUguali(it) }.forEach(::scriviParte)
         db.voceIncontroQueries.numeriDiIncontro(incontroId).executeAsList()
             .filterNot { it in voci }
             .forEach { db.voceIncontroQueries.elimina(incontroId, it) }
@@ -93,8 +92,7 @@ public class VociDellIncontroRepositorySql(
     @OptIn(RicostituzioneDaPersistenza::class)
     private fun leggi(r: RegistrazioneId, incontroId: IncontroId, prossimaVoce: Int): Trascritto? {
         val riga = db.trascrittoQueries.trovaPerRegistrazione(r.valore).executeAsOneOrNull() ?: return null
-        val segmenti = db.segmentoQueries.trovaDiTrascritto(r.valore).executeAsList().map { it.inDominio() }
-        return Trascritto.ricostituisci(r, incontroId, segmenti, prossimaVoce, riga.prossimo_segmento.toInt())
+        return Trascritto.ricostituisci(r, incontroId, db.segmentiDi(r), prossimaVoce, riga.prossimo_segmento.toInt())
     }
 
     private fun scriviParte(t: Trascritto) {
@@ -128,8 +126,15 @@ public class VociDellIncontroRepositorySql(
     }
 }
 
-private fun Trascritto.stessoContenutoDi(altro: Trascritto): Boolean =
-    prossimoSegmento == altro.prossimoSegmento && segmenti == altro.segmenti
+private fun SnastroDatabase.segmentiDi(r: RegistrazioneId): List<Segmento> =
+    segmentoQueries.trovaDiTrascritto(r.valore).executeAsList().map { it.inDominio() }
+
+/** The stored rows of [t]'s Parte are exactly [t]'s: same Segmento counter, same Segmenti (by id). */
+private fun SnastroDatabase.righeUguali(t: Trascritto): Boolean {
+    val riga = trascrittoQueries.trovaPerRegistrazione(t.registrazioneId.valore).executeAsOneOrNull()
+    return riga?.prossimo_segmento?.toInt() == t.prossimoSegmento &&
+        segmentiDi(t.registrazioneId).sortedBy { it.id.numero } == t.segmenti
+}
 
 /** [Segmento] is a plain read-copy VO (CR-15 gates only the aggregate's own `ricostituisci`). */
 private fun SegmentoRiga.inDominio(): Segmento =

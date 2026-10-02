@@ -104,6 +104,24 @@ class VociDellIncontroTest {
         v.riassegna(SegmentoRef(a, SegmentoId(12)), null).erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
     }
 
+    /**
+     * D-0007 release check of I1: Sintesi's `superato` compares the per-Parte `segmentoId:voceId` assignment, so a
+     * re-transcription of a one-Parte Incontro with the very same turns must never reproduce any pair of it.
+     */
+    @Test
+    fun `INV-I16 ritrascrivere con gli stessi turni non riproduce nessuna coppia segmentoId-voceId`() {
+        val v = VociDellIncontro.crea(incontroId)
+        v.completaParte(a, turni(0, 1), DURATA_TRASCRITTO_MS).atteso()
+        val prima = v.trascritto(a)?.segmenti?.map { it.id to it.voceId }.orEmpty()
+
+        v.completaParte(a, turni(0, 1), DURATA_TRASCRITTO_MS).atteso()
+        val dopo = v.trascritto(a)?.segmenti?.map { it.id to it.voceId }.orEmpty()
+
+        assertEquals(prima.size, dopo.size, "same turns, same shape")
+        assertTrue(prima.none { it in dopo }, "no pair survives: $prima vs $dopo")
+        assertTrue(prima.none { (s, _) -> dopo.any { it.first == s } }, "no segmentoId reused")
+    }
+
     // --- INV-6 ----------------------------------------------------------------------------------------------------
 
     @Test

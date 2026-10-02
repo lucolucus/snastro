@@ -27,15 +27,16 @@ public class StatiElaborazione(
 
     /**
      * AC-I41 (ADR 0033 §4): an open run wins (a re-run of a transcribed Parte too), then the Trascritto, then a failed
-     * run, else nothing yet. Derived from [stati]' row, so the latest-run rule lives in one place.
+     * run, else nothing yet. The latest-run rule is [stati]' own ([statoDi]); the Trascritto is only tested for
+     * existence ([VociDellIncontroRepository.conTrascritto], ids only), never loaded, and only when no run is open.
      */
     public fun statoParte(r: RegistrazioneId): StatoParte {
-        val riga = riga(r)
+        val stato = statoDi(ultima(r))
         return when {
-            riga.stato == StatoElaborazioneVista.IN_ATTESA || riga.stato == StatoElaborazioneVista.IN_CORSO ->
+            stato == StatoElaborazioneVista.IN_ATTESA || stato == StatoElaborazioneVista.IN_CORSO ->
                 StatoParte.IN_TRASCRIZIONE
-            riga.trascrittoDisponibile -> StatoParte.TRASCRITTA
-            riga.stato == StatoElaborazioneVista.FALLITA -> StatoParte.NON_RIUSCITA
+            r in trascritti.conTrascritto() -> StatoParte.TRASCRITTA
+            stato == StatoElaborazioneVista.FALLITA -> StatoParte.NON_RIUSCITA
             else -> StatoParte.DA_TRASCRIVERE
         }
     }
@@ -43,13 +44,7 @@ public class StatiElaborazione(
     private fun riga(id: RegistrazioneId): StatoRegistrazioneVista {
         val ultima = ultima(id)
         val trascritto = trascritti.trascritto(id) // ADR 0018: whatever the latest run's state (AC-165/AC-447)
-        val stato = when {
-            ultima == null -> StatoElaborazioneVista.NON_AVVIATA
-            ultima.completata -> StatoElaborazioneVista.COMPLETATA
-            ultima.fallita -> StatoElaborazioneVista.FALLITA
-            ultima.inAttesa -> StatoElaborazioneVista.IN_ATTESA
-            else -> StatoElaborazioneVista.IN_CORSO
-        }
+        val stato = statoDi(ultima)
         return StatoRegistrazioneVista(
             registrazioneId = id,
             stato = stato,
@@ -61,6 +56,14 @@ public class StatiElaborazione(
             trascrittoDisponibile = trascritto != null,
             elaborazioneId = ultima?.id, // AC-474
         )
+    }
+
+    private fun statoDi(ultima: Elaborazione?): StatoElaborazioneVista = when {
+        ultima == null -> StatoElaborazioneVista.NON_AVVIATA
+        ultima.completata -> StatoElaborazioneVista.COMPLETATA
+        ultima.fallita -> StatoElaborazioneVista.FALLITA
+        ultima.inAttesa -> StatoElaborazioneVista.IN_ATTESA
+        else -> StatoElaborazioneVista.IN_CORSO
     }
 
     /** AC-162/AC-447: the Registrazione's LATEST Elaborazione — deterministic, `creataAlle` then id (ADR 0018). */

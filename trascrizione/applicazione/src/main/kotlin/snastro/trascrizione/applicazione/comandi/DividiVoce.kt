@@ -8,8 +8,9 @@ import snastro.kernel.VoceId
 /**
  * Splits [segmenti] off [origine] into a new Voce, on the Trascritto of [registrazioneId] (actor: utente).
  * See [DividiVoceServizio].
- * [incontroDelleVoci] (INV-I7): the Incontro the caller read its [snastro.kernel.VoceRef]s from, when it knows it; a
- * Voce of another Incontro is `VoceNonTrovata`, nothing changes (the root only sees `VoceId`s). `null` = not stated.
+ * [incontroDelleVoci] (INV-I7): the Incontro the caller read its refs from, when it knows it; another Incontro is
+ * `SegmentoNonTrovato` of the first of [segmenti] as a `SegmentoRef` of this Parte (`VoceNonTrovata` of [origine] when
+ * [segmenti] is empty), refused before the root is touched; nothing changes. `null` = not stated.
  */
 public data class DividiVoce(
     val registrazioneId: RegistrazioneId,
