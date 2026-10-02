@@ -47,6 +47,7 @@ class VociDellIncontroRepositorySqlTest : VociDellIncontroRepositoryContratto() 
                 durataMs = 600_000L,
                 dataRegistrazione = "2026-09-23",
                 aggiuntaAlle = 0L,
+                oraDiInizio = null,
             )
         }
     }
