@@ -1,0 +1,4 @@
+package snastro.parlanti.applicazione.politiche
+/** Never `ImprontaVocale(ref)` here: the root creates prints. */
+fun f(p: Parlante, r: RegistrazioneId) = p.rimuoviImpronteDellaParte(r) // not ImprontaVocale(ref)
+fun g(i: ImprontaVocale) = ImprontaVocale.obsoleta("a", "b", "c", "d") || i.inImprontaVocale()

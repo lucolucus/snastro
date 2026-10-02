@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.comandi
+/* letto qui */ fun f(p: Parlante) = p.impronte

@@ -1,0 +1,2 @@
+package snastro.parlanti.adattatori.ml
+fun centroide(impronte: List<Impronta>) = impronte.mapNotNull { it }

@@ -1,0 +1,4 @@
+package snastro.progetto.dominio
+
+/** Only identity: nothing to aggiorna. */
+public class Incontro private constructor(public val id: IncontroId, public val progettoId: ProgettoId)

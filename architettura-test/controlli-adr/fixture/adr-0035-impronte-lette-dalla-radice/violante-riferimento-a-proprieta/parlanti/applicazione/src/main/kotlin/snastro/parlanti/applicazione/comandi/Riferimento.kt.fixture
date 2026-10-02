@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.comandi
+val letto = Parlante::impronte

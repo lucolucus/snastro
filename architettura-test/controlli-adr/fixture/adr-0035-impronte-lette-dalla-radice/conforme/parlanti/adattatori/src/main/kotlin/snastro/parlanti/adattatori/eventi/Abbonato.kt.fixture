@@ -1,0 +1,4 @@
+package snastro.parlanti.adattatori.eventi
+/* p.impronte non si legge qui */
+fun f(p: Parlante, impronte: List<Int>) { val impronte2 = impronte // p.impronte
+}

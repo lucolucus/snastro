@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.letture
+fun g(parlante: Parlante) = parlante.impronte.map { it.impronta }
