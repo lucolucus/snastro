@@ -15,7 +15,6 @@ import snastro.parlanti.applicazione.porte.Fascia
 import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
-import snastro.parlanti.applicazione.porte.voceNellaParte
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.SorgenteImpronta
@@ -31,8 +30,12 @@ import snastro.parlanti.dominio.TipoParlante
  * together with AC-309), until `RiallineaImpronte` refreshes them. RC-1: no rule is decided here
  * beyond ranking/shaping the view — [Parlante.attivo] and [ConfrontoImpronte] own the predicates.
  *
- * The result is cached per `Voce` (AC-422: [EstrattoreImpronta.estrai] is called exactly once per
- * computation, never once per Candidato) until [invalida] is called — by the future Revisione/
+ * [INV-20] over the Incontro: the Voce has one transient print per Parte it speaks in, the Galleria holds every
+ * print of the Progetto (the other Parti of the same Incontro included), a Candidato's Fascia is the best over the
+ * (slice, print) pairs and its extract comes from the Parte of the chosen print ([INV-I17]).
+ *
+ * The result is cached per `Voce` (AC-422: [EstrattoreImpronta.estrai] is called exactly once per Parte of the
+ * Voce per computation, never once per Candidato) until [invalida] is called — by the future Revisione/
  * Attribuzione/`ImpronteRiallineate` subscriber (AC-173: this block only exposes the invalidation, it
  * does not subscribe to `DispatcherEventi` itself, that belongs to `:parlanti:adattatori`). A
  * cancelled computation ([InterruptedException] from [EstrattoreImpronta.estrai], ADR 0017 §1.5)
@@ -74,44 +77,54 @@ public class Proposta(
     }
 
     private fun calcola(voceRef: VoceRef): PropostaVista? =
-        contesto(voceRef)?.let { (progettoId, parte, intervalli) ->
-            // AC-308: bounded by SorgenteImpronta.di, decoded exactly then; AC-422: ONE estrai, this Voce only.
-            val sorgente = SorgenteImpronta.di(intervalli)
-            val campioni = decodificatore.campioni(parte, sorgente.intervalli)
-            val impronta = estrattore.estrai(campioni) // puo lanciare InterruptedException (ADR 0017 S1.5): AC-423
+        contesto(voceRef)?.let { (progettoId, fette) ->
+            // AC-308: bounded by SorgenteImpronta.di, decoded exactly then; AC-422: ONE estrai per Parte, this Voce
+            // only — never one per Candidato. [INV-20]: one transient print per Parte the Voce speaks in.
+            val impronteVoce = fette.map { (parte, intervalli) ->
+                val campioni = decodificatore.campioni(parte, SorgenteImpronta.di(intervalli).intervalli)
+                estrattore.estrai(campioni) // puo lanciare InterruptedException (ADR 0017 S1.5): AC-423
+            }
             val candidati = parlanti.delProgetto(progettoId)
                 .filter { it.attivo }
-                .mapNotNull { candidato(it, impronta) }
+                .mapNotNull { candidato(it, impronteVoce) }
                 .sortedWith(ORDINE_CANDIDATI)
             PropostaVista(voceRef.voceId, candidati)
         }
 
-    /** `null` when [voceRef] has no Trascritto/Registrazione, or its Voce has no interval left. */
-    private fun contesto(voceRef: VoceRef): Contesto? =
-        voceNellaParte(voceRef, registrazioni, voci)?.let { letta ->
-            letta.voce.intervalli.takeIf { it.isNotEmpty() }?.let { intervalli ->
-                Contesto(letta.registrazione.progettoId, letta.registrazione.registrazioneId, intervalli)
-            }
-        }
+    /**
+     * The Voce's slices — (Parte, intervalli) for every Parte of its Incontro where it has an interval, in the
+     * Incontro's order — and the Progetto; `null` when the Voce/Incontro is unknown, has no Trascritto, or no slice.
+     */
+    private fun contesto(voceRef: VoceRef): Contesto? {
+        val perParte = voci.voci(voceRef.incontroId)?.find { it.voceRef == voceRef }?.intervalliPerParte.orEmpty()
+        val fette = registrazioni.parti(voceRef.incontroId).orEmpty()
+            .map { it.registrazioneId }
+            .mapNotNull { parte -> perParte[parte]?.takeIf { it.isNotEmpty() }?.let { parte to it } }
+        val progettoId = fette.firstOrNull()?.let { (parte, _) -> registrazioni.registrazione(parte)?.progettoId }
+        return progettoId?.let { Contesto(it, fette) }
+    }
 
-    /** AC-170/AC-309: the BEST Fascia among the impronte of the current [EstrattoreImpronta.modello] only. */
-    private fun candidato(parlante: Parlante, improntaVoce: Impronta): Candidato? =
+    /**
+     * AC-170/AC-309/[INV-20]: the BEST Fascia over every (Voce slice, print) pair, prints of the current
+     * [EstrattoreImpronta.modello] only — from any Parte of any Incontro, the other Parti of this one included.
+     * [INV-I17]: the extract comes from the Parte that sourced the chosen print.
+     */
+    private fun candidato(parlante: Parlante, impronteVoce: List<Impronta>): Candidato? =
         parlante.impronte
             .filter { it.modello == estrattore.modello }
-            .map { it to confronto.fascia(improntaVoce, listOf(it.impronta)) }
+            .map { iv -> iv to impronteVoce.minOf { fetta -> confronto.fascia(fetta, listOf(iv.impronta)) } }
             .minByOrNull { (_, fascia) -> fascia } // AC-309: nessuna impronta del modello corrente, non e Candidato
-            ?.let { (impronta, fascia) ->
-                // INV-20 "ogni Candidato ha un EstrattoAudio": per costruzione la Voce sorgente dell'impronta
-                // esiste ancora (la revisione-policy rimuove impronta e Attribuzione insieme, ADR 0012 (b) S3).
-                estrattoAudio.estratto(impronta.voceRef)?.let { estratto ->
+            ?.let { (iv, fascia) ->
+                // INV-20 "ogni Candidato ha un EstrattoAudio": la (Voce, Parte) sorgente dell'impronta ha ancora
+                // intervalli (la revisione-policy rimuove l'impronta della fetta svuotata, ADR 0035 §6).
+                estrattoAudio.estratto(iv.voceRef, iv.parte)?.let { estratto ->
                     Candidato(parlante.id, parlante.nome.valore, parlante.tipo.vista(), fascia, estratto)
                 }
             }
 
     private data class Contesto(
         val progettoId: ProgettoId,
-        val parte: RegistrazioneId,
-        val intervalli: List<IntervalloMs>,
+        val fette: List<Pair<RegistrazioneId, List<IntervalloMs>>>,
     )
 
     private companion object {
