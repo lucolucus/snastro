@@ -1,0 +1,5 @@
+package x
+/*
+ TrascrittoSostituito mentioned in a block comment
+*/
+val e = 1 /* TrascrittoSostituito */ + 2

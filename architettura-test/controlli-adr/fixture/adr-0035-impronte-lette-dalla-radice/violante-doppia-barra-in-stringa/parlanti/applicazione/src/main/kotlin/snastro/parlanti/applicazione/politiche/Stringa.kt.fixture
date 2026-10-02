@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.politiche
+fun f(p: Parlante) = listOf("http://x", p.impronte)

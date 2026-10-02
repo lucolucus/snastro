@@ -153,13 +153,13 @@ class TrascrittoSeparazioneTest {
             assertEquals(prima, t.stato(), caso)
         }
         assertEquals(
-            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(2), VoceId(2)),
+            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(registrazioneId, SegmentoId(2)), VoceId(2)),
             t.riassegnaInBlocco(listOf(valido, SpostamentoSegmento(s2.id, VoceId(2), VoceId(2), s2.intervallo)))
                 .erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>(),
         )
         assertEquals(prima, t.stato())
         assertEquals(
-            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoId(1), VoceId(3)),
+            ErroreTrascrizione.RiassegnazioneNonAmmessa(SegmentoRef(registrazioneId, SegmentoId(1)), VoceId(3)),
             t.riassegnaInBlocco(listOf(valido, t.sposta(1, verso = 3)))
                 .erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>(),
         )

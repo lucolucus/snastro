@@ -1,0 +1,10 @@
+package snastro.progetto.applicazione.porte
+
+public interface IncontroRepository {
+    // fun impostaIncontro( is forbidden
+    public fun trova(id: IncontroId): Incontro?
+    public fun partiDi(id: IncontroId): List<RegistrazioneId>
+    public fun salva(i: Incontro)
+    public fun rimuovi(id: IncontroId)
+    public fun assegnaParte(id: Int)
+}

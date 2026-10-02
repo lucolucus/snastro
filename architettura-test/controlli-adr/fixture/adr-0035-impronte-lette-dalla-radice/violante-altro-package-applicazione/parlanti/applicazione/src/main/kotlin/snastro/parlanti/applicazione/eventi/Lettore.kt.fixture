@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.eventi
+fun f(p: Parlante) = p.impronte

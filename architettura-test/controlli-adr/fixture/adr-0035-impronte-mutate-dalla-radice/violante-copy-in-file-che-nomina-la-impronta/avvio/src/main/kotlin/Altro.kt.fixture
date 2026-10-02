@@ -1,0 +1,2 @@
+import snastro.parlanti.dominio.ImprontaVocale
+fun g(i: ImprontaVocale) = i.copy(parte = i.parte)

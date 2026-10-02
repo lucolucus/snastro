@@ -10,9 +10,11 @@ import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
+import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreIncontroFinta
 import snastro.sintesi.applicazione.porte.LettoreNomiFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
+import snastro.sintesi.applicazione.porte.ParteSintesi
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
@@ -60,6 +62,49 @@ class RiassuntoVisteLetturaIncontroTest {
             VoceVista(7, "Voce 7", "Anna", presente = true),
             checkNotNull(ancoraPresente.mostrato).azioni.single().responsabile,
         )
+    }
+
+    @Test
+    fun `INV-I13 una Voce non piu nell Incontro e presente false senza Nome nel Sommario, nei testi e come parlante`() {
+        val bozza = BozzaRiassunto(
+            sommario = "{V7} apre.",
+            decisioni = listOf(BozzaElemento("{V7} decide.", listOf(2), null)),
+            questioniAperte = listOf(BozzaElemento("{V7} chiede.", listOf(2), null)),
+            azioni = emptyList(),
+            puntiChiave = listOf(BozzaElemento("{V7} insiste.", listOf(1), voce = 7)),
+        )
+        val riassunti = riassuntoPronto(bozza, mapOf(p1 to unaStruttura(1 to 7, 2 to 1)), listOf(p1 to 1, p1 to 2))
+        val nomi = LettoreNomiFinta(
+            attribuzioni = mapOf(VoceRef(incontro, VoceId(7)) to "p-7"),
+            nomiParlanti = mapOf("p-7" to "Anna"),
+        )
+        val assente = VoceVista(7, "Voce 7", null, presente = false)
+
+        // Voce 7 left the structure (the Parte was re-transcribed: Voce 1 only)
+        val mostrato = checkNotNull(vista(listOf(p1 to listOf(segmento(3, 1))), riassunti, nomi).mostrato)
+
+        assertEquals(ParteTestoVista.Voce(assente), checkNotNull(mostrato.sommario).first())
+        assertEquals(ParteTestoVista.Voce(assente), mostrato.decisioni.single().testo.first())
+        assertEquals(ParteTestoVista.Voce(assente), mostrato.questioniAperte.single().testo.first())
+        assertEquals(ParteTestoVista.Voce(assente), mostrato.puntiChiave.single().testo.first())
+        assertEquals(assente, mostrato.puntiChiave.single().parlante)
+    }
+
+    @Test
+    fun `un Incontro letto senza Parti non ha vista, mai un crash`() {
+        val senzaParti = object : LettoreIncontro {
+            override fun parti(incontroId: IncontroId): List<ParteSintesi> = emptyList()
+        }
+        val lettura = RiassuntoVisteLettura(
+            UnitaDiLavoroFinta(),
+            RiassuntoRepositoryFinta(),
+            LettoreTrascrittoFinta(),
+            senzaParti,
+            LettoreNomiFinta(),
+            DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
+        )
+
+        assertNull(lettura.di(incontro))
     }
 
     @Test

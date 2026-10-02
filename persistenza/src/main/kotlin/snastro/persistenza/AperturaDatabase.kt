@@ -22,8 +22,10 @@ public fun apriDatabaseProgetto(cartella: File): DatabaseProgetto {
     rifiutaSeSchemaPiuRecente(file)
     val driver = driverSqlite("jdbc:sqlite:${file.absolutePath}")
     val db = SnastroDatabase(driver)
+    // A non-empty -wal at open is a previous process killed before its checkpoint (ADR 0009): finish it first.
+    val walResiduo = File(cartella, "progetto.db-wal").length() > 0L
     try {
-        allineaSchema(driver, db)
+        allineaSchema(driver, db, walResiduo)
     } catch (e: SchemaProgettoRifiutatoException) {
         driver.close()
         throw e
@@ -107,7 +109,8 @@ private const val VERSIONE_MAI_RILASCIATA = 1L
  * [db] transaction: a crash between them must never leave a half-created schema at an unopenable
  * `user_version = 0`.
  */
-private fun allineaSchema(driver: SqlDriver, db: SnastroDatabase) {
+private fun allineaSchema(driver: SqlDriver, db: SnastroDatabase, walResiduo: Boolean) {
+    if (walResiduo) troncaWal(driver)
     val versioneAttesa = SnastroDatabase.Schema.version
     val versioneTrovata = versioneSchema(driver)
     when {
@@ -126,12 +129,32 @@ private fun allineaSchema(driver: SqlDriver, db: SnastroDatabase) {
             // ADR 0034 §3 / ADR 0009: 7.sqm copies every print and drops the old table (secure_delete zeroes the freed
             // pages); the checkpoint, outside any transaction, keeps the old pages from lingering in the -wal file.
             if (versioneTrovata < VERSIONE_INCONTRO && versioneAttesa >= VERSIONE_INCONTRO) {
-                db.transazioneQueries.walCheckpointTruncate()
+                troncaWal(driver)
             }
         }
         // else: versioneTrovata == versioneAttesa, gia allineato.
     }
 }
+
+/**
+ * `PRAGMA wal_checkpoint(TRUNCATE)` with its result read (SQLDelight's generated query cannot, see
+ * [checkpointDopoCommit]): a first column `busy = 1` means a reader blocked it and the -wal still holds the old
+ * pages, so it is retried [TENTATIVI_CHECKPOINT] times (each already waits `busy_timeout`) and then fails the open
+ * loudly, instead of leaving freed prints in the -wal. The next open retries it ([walResiduo]).
+ */
+private fun troncaWal(driver: SqlDriver) {
+    repeat(TENTATIVI_CHECKPOINT) {
+        val occupato = driver.executeQuery(null, "PRAGMA wal_checkpoint(TRUNCATE)", { cursore ->
+            QueryResult.Value(if (cursore.next().value) cursore.getLong(0) else 0L)
+        }, 0).value
+        if (occupato == 0L) return
+    }
+    throw SQLException(
+        "wal_checkpoint(TRUNCATE) still busy after $TENTATIVI_CHECKPOINT attempts: the -wal may keep old pages",
+    )
+}
+
+private const val TENTATIVI_CHECKPOINT = 3
 
 private fun versioneSchema(driver: SqlDriver): Long =
     driver.executeQuery(null, "PRAGMA user_version", { cursore ->

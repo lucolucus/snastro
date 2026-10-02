@@ -89,7 +89,7 @@ class RevisioneIncontroTest {
     }
 
     @Test
-    fun `INV-I7 una Voce di un altro Incontro e VoceNonTrovata in ogni comando e nulla cambia ne si pubblica`() {
+    fun `INV-I7 un altro Incontro e VoceNonTrovata o SegmentoNonTrovato in ogni comando e nulla cambia`() {
         incontroConDueParti()
         val altro = IncontroId("incontro-2")
         val prima = assertNotNull(trascritti.trascritto(B)).segmenti
@@ -123,6 +123,35 @@ class RevisioneIncontroTest {
 
         assertEquals(List(4) { atteso }, errori)
         assertEquals(prima, assertNotNull(trascritti.trascritto(B)).segmenti)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `INV-I7 DividiVoce senza Segmenti con un altro Incontro e VoceNonTrovata dell origine e nulla cambia`() {
+        incontroConDueParti()
+        val prima = trascritti.trovaRadice().trascritti.map { it.segmenti }
+
+        val errore = dividi.esegui(DividiVoce(B, VoceId(3), emptySet(), IncontroId("incontro-2")))
+            .erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
+
+        assertEquals(VoceId(3), errore.voceId)
+        assertEquals(prima, trascritti.trovaRadice().trascritti.map { it.segmenti })
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `RiassegnazioneNonAmmessa dice di quale Parte e il Segmento`() {
+        incontroConDueParti()
+        val voce = voceDi(B, 1)
+
+        val singolo = riassegna.esegui(RiassegnaSegmento(B, SegmentoId(1), voce))
+            .erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>()
+        val piano = listOf(SpostamentoSegmento(SegmentoId(1), voce, voce, IntervalloMs(0, 1_000)))
+        val blocco = riassegnaBlocco.esegui(RiassegnaSegmenti(B, piano))
+            .erroreAtteso<ErroreTrascrizione.RiassegnazioneNonAmmessa>()
+
+        assertEquals(SegmentoRef(B, SegmentoId(1)), singolo.segmento)
+        assertEquals(SegmentoRef(B, SegmentoId(1)), blocco.segmento)
         assertEquals(emptyList(), eventi.pubblicati)
     }
 

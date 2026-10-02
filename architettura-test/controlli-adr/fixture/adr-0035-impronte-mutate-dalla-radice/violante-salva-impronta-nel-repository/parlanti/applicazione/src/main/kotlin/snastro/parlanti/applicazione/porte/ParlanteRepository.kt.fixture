@@ -1,0 +1,10 @@
+package snastro.parlanti.applicazione.porte
+public interface ParlanteRepository {
+    public fun trova(id: ParlanteId): Parlante?
+    public fun salva(p: Parlante): Esito<Unit>
+    public fun rimuovi(id: ParlanteId)
+    public fun impronteDiRegistrazione(id: RegistrazioneId): List<RigaImpronta>
+    // fun rimuoviImpronteDellaParte( is not a port method: the root decides
+    public fun aggiornaImpronta(attesa: RigaImpronta, impronta: Impronta, sorgente: String, modello: String): Boolean
+    public fun salvaImpronta(id: ParlanteId, i: Impronta)
+}

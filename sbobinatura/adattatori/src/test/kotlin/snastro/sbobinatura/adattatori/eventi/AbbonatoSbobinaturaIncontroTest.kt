@@ -10,10 +10,12 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
+import snastro.kernel.EventoPubblicato
 import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.sbobinatura.applicazione.politiche.RigenerazioneSbobinaturaPolitica
@@ -25,6 +27,7 @@ import snastro.sbobinatura.applicazione.porte.SegmentoVista
 import snastro.sbobinatura.applicazione.porte.TrascrittoTesto
 import snastro.supporto.Segnalazione
 import snastro.trascrizione.applicazione.eventi.ElaborazioneCompletata
+import snastro.trascrizione.applicazione.eventi.SegmentoRiassegnato
 import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import java.time.LocalDate
@@ -131,6 +134,54 @@ class AbbonatoSbobinaturaIncontroTest {
         )
     }
 
+    // --- AC-I35 SegmentoRiassegnato: the Incontro's Parti, and no Parte of another Incontro --------------------
+
+    @Test
+    fun `AC-I35 SegmentoRiassegnato rigenera ogni Parte dell Incontro e nessuna di un altro`() = runTest {
+        val parteB = RegistrazioneId("parte-b")
+        val altra = RegistrazioneId("altra-incontro")
+        val lettore = LettoreTrascrittoFinta(
+            mapOf(
+                PARTE_A to unTrascritto(PARTE_A, "Parte A", INCONTRO_I),
+                parteB to unTrascritto(parteB, "Parte B", INCONTRO_I),
+                altra to unTrascritto(altra, "Altra", IncontroId("altro-incontro")),
+            ),
+        )
+        val scrittore = ScrittoreSbobinaturaFinta()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        abbonaSbobinatura(
+            dispatcher,
+            RigenerazioneSbobinaturaPolitica(lettore, LettoreNomiFinta(), scrittore),
+            lettore::registrazioniConTrascritto,
+            CoroutineScope(StandardTestDispatcher(testScheduler)),
+            Segnalazione { _, _ -> },
+            lettore::partiConTrascritto,
+        )
+        advanceUntilIdle()
+        val prima = scrittore.operazioni.size
+
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(
+                SegmentoRiassegnato(
+                    INCONTRO_I,
+                    SegmentoRef(parteB, SegmentoId(1)),
+                    da = VoceId(1),
+                    a = VoceId(2),
+                    daRimossa = false,
+                    aNuova = false,
+                ),
+            )
+            Esito.Ok(Unit)
+        }
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
+            scrittore.operazioni.drop(prima).map { (it as ScrittoreSbobinaturaFinta.Operazione.Scritto).nomeFile }
+                .sorted(),
+        )
+    }
+
     // --- AC-183: one write for ANY order of a burst mixing the Registrazione's own event and Incontro-wide ones ----
 
     @Test
@@ -174,6 +225,47 @@ class AbbonatoSbobinaturaIncontroTest {
     // --- AC-C46/AC-C47 for the Incontro fan-out: one failing listing never blocks another Registrazione ---------
 
     @Test
+    fun `AC-C46 un passo indietro per un elenco Parti non azzera il fallimento di una Registrazione che fallisce`() =
+        runTest {
+            val poisoned = RegistrazioneId("reg-poisoned")
+            val lettore = object : LettoreTrascritto {
+                override fun trascritto(id: RegistrazioneId): TrascrittoTesto? = error("guasto permanente per $id")
+                override fun partiConTrascritto(incontroId: IncontroId) = emptyList<RegistrazioneId>()
+                override fun registrazioniConTrascritto() = emptyList<RegistrazioneId>()
+            }
+            val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+            val messaggi = mutableListOf<String>()
+            val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+            try {
+                abbonaSbobinatura(
+                    dispatcher,
+                    RigenerazioneSbobinaturaPolitica(lettore, LettoreNomiFinta(), ScrittoreSbobinaturaFinta()),
+                    lettore::registrazioniConTrascritto,
+                    scope,
+                    { messaggio, _ -> messaggi += messaggio },
+                    lettore::partiConTrascritto,
+                )
+                runCurrent()
+                fun commit(evento: EventoPubblicato) = dispatcher.unitaDiLavoro.inTransazione {
+                    Esito.Ok(dispatcher.pubblica(evento))
+                }
+                commit(ElaborazioneCompletata(poisoned, INCONTRO_I))
+                runCurrent() // first failure: a retry is scheduled
+
+                // while it waits, its own event and an Incontro fan-out arrive in ONE batch, the key first
+                commit(ElaborazioneCompletata(poisoned, INCONTRO_I))
+                commit(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+                advanceTimeBy(60.seconds)
+                runCurrent()
+
+                assertTrue(messaggi.none { "riuscito" in it }, "mai un falso successo: $messaggi")
+                assertTrue(messaggi.any { "tentativo 2" in it }, "il contatore dei fallimenti prosegue: $messaggi")
+            } finally {
+                scope.cancel() // poisoned retries forever
+            }
+        }
+
+    @Test
     fun `AC-C46 un elenco Parti che fallisce sempre per X non blocca la scrittura di una Parte di Y`() = runTest {
         val incontroX = IncontroId("incontro-x")
         val incontroY = IncontroId("incontro-y")
@@ -194,22 +286,25 @@ class AbbonatoSbobinaturaIncontroTest {
                 check(incontro != incontroX) { "VociDellIncontro di X corrotto" }
                 lettore.partiConTrascritto(incontro)
             }
-            runCurrent()
+            try {
+                runCurrent()
 
-            val raffica = listOf(
-                VociUnite(incontroX, sopravvissuta = VoceId(1), rimossa = VoceId(2)),
-                ElaborazioneCompletata(b, incontroY),
-            )
-            raffica.forEach { evento ->
-                dispatcher.unitaDiLavoro.inTransazione {
-                    dispatcher.pubblica(evento)
-                    Esito.Ok(Unit)
+                val raffica = listOf(
+                    VociUnite(incontroX, sopravvissuta = VoceId(1), rimossa = VoceId(2)),
+                    ElaborazioneCompletata(b, incontroY),
+                )
+                raffica.forEach { evento ->
+                    dispatcher.unitaDiLavoro.inTransazione {
+                        dispatcher.pubblica(evento)
+                        Esito.Ok(Unit)
+                    }
+                    if (xGiaInRitento) runCurrent()
                 }
-                if (xGiaInRitento) runCurrent()
+                advanceTimeBy(120.seconds)
+                runCurrent()
+            } finally {
+                scope.cancel() // X retries forever: stop it, or runTest's final drain chases it endlessly
             }
-            advanceTimeBy(120.seconds)
-            runCurrent()
-            scope.cancel() // X retries forever: stop it, or runTest's final drain chases it endlessly
 
             assertEquals(
                 listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte B.md")),

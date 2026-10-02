@@ -1,0 +1,5 @@
+package snastro.parlanti.dominio
+public class Parlante private constructor() {
+    private val impronte = mutableListOf<ImprontaVocale>()
+    public fun aggiungiImpronta(v: VoceRef) { impronte.add(ImprontaVocale(v)) }
+}

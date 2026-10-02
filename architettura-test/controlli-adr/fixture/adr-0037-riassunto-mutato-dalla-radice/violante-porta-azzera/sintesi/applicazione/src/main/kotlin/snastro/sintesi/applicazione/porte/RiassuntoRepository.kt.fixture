@@ -1,0 +1,20 @@
+package snastro.sintesi.applicazione.porte
+
+public interface RiassuntoRepository {
+    public fun trova(id: RiassuntoId): Riassunto?
+
+    public fun trova(incontroId: IncontroId): List<Riassunto>
+
+    public fun inAttesa(): List<Riassunto>
+
+    public fun inCorso(): List<Riassunto>
+
+    public fun salva(r: Riassunto): Esito<Unit>
+
+    public fun concludi(r: Riassunto): Esito<Boolean>
+
+    public fun rimuovi(id: RiassuntoId): Esito<Unit>
+
+    public fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int>
+    public fun azzeraStruttura(id: RiassuntoId): Esito<Unit>
+}

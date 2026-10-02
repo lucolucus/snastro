@@ -5,7 +5,6 @@ import snastro.kernel.ErroreDominio
 import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
 import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 
@@ -58,11 +57,11 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
     public data class DivisioneNonAmmessa(val origine: VoceId, val segmenti: Set<SegmentoRef>) : ErroreTrascrizione
 
     /**
-     * INV-11: the Segmento is already on [destinazione], or [destinazione] is `null` (a new Voce) while the
-     * Segmento is the only one of its Voce — a move that changes no grouping yet would remove the Voce.
+     * INV-11: the [segmento] (with its Parte) is already on [destinazione], or [destinazione] is `null` (a new Voce)
+     * while the Segmento is the only one of its Voce — a move that changes no grouping yet would remove the Voce.
      */
     public data class RiassegnazioneNonAmmessa(
-        val segmentoId: SegmentoId,
+        val segmento: SegmentoRef,
         val destinazione: VoceId?,
     ) : ErroreTrascrizione
 

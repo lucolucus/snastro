@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.comandi
+fun f(p: Parlante) = with(p) { impronte.size }

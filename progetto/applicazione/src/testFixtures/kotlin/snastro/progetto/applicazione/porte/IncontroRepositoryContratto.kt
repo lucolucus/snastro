@@ -18,6 +18,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFails
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * Contract of [IncontroRepository] (boundary `repo-incontro`, AC-I18). One subclass per implementation
@@ -31,13 +32,6 @@ public abstract class IncontroRepositoryContratto {
         public val registrazioni: RegistrazioneRepository
         public val unitaDiLavoro: UnitaDiLavoro
         public val progettoId: ProgettoId
-
-        /**
-         * Capability: the implementation accepts an Incontro with more than one Parte. Always true on the Finta; on the
-         * real adapter it is switched on when the multi-file import (I2, ADR 0033 §6) lands. When false, the
-         * multi-Parte cases run with ONE Parte per Incontro: same assertions, never skipped.
-         */
-        public val incontriConPiuParti: Boolean
     }
 
     protected abstract fun ambiente(): Ambiente
@@ -74,7 +68,7 @@ public abstract class IncontroRepositoryContratto {
         val a = ambiente()
         val incontro = a.nuovoIncontro("incontro-a")
         val altro = a.nuovoIncontro("incontro-b")
-        val parti = a.partiDiProva().map { a.parte(incontro, it) }
+        val parti = PARTI.map { a.parte(incontro, it) }
         val parteDellAltro = a.parte(altro, "id-9")
 
         assertEquals(parti.toSet(), a.incontri.partiDi(incontro).toSet())
@@ -87,7 +81,7 @@ public abstract class IncontroRepositoryContratto {
     public fun `AC-I18 partiDi non elenca piu una Parte rimossa`() {
         val a = ambiente()
         val incontro = a.nuovoIncontro("incontro-a")
-        val parti = a.partiDiProva().map { a.parte(incontro, it) }
+        val parti = PARTI.map { a.parte(incontro, it) }
         a.inTransazione { registrazioni.rimuovi(parti.first()) }
         assertEquals(parti.drop(1).toSet(), a.incontri.partiDi(incontro).toSet())
     }
@@ -96,11 +90,15 @@ public abstract class IncontroRepositoryContratto {
     public fun `AC-I18 rimuovi di un Incontro che ha ancora una Parte e rifiutato e l'Incontro resta`() {
         val a = ambiente()
         val incontro = a.nuovoIncontro("incontro-a")
-        val parti = a.partiDiProva().map { a.parte(incontro, it) }
-        // With two Parti, one is removed first: the refusal holds while ANY Parte is left, not only the last.
-        if (parti.size > 1) a.inTransazione { registrazioni.rimuovi(parti.first()) }
+        val parti = PARTI.map { a.parte(incontro, it) }
+        // One of the two Parti is removed first: the refusal holds while ANY Parte is left, not only the last.
+        a.inTransazione { registrazioni.rimuovi(parti.first()) }
 
-        assertFails { a.inTransazione { incontri.rimuovi(incontro) } }
+        val rifiuto = assertFails { a.inTransazione { incontri.rimuovi(incontro) } }
+
+        // The FK refusal itself, not any failure (the Finta raises it like SQLite does).
+        val messaggi = generateSequence(rifiuto) { it.cause }.mapNotNull { it.message }.toList()
+        assertTrue(messaggi.any { "FOREIGN KEY constraint failed" in it }, "$messaggi")
 
         assertNotNull(a.incontri.trova(incontro))
         assertEquals(listOf(parti.last()), a.incontri.partiDi(incontro))
@@ -143,8 +141,10 @@ public abstract class IncontroRepositoryContratto {
         assertNull(a.incontri.trova(incontro.id))
     }
 
-    /** Two Parti when the implementation holds more than one per Incontro, one otherwise (never skipped). */
-    private fun Ambiente.partiDiProva(): List<String> = if (incontriConPiuParti) listOf("id-2", "id-3") else listOf("id-2")
+    private companion object {
+        /** Two Parti of one Incontro. */
+        val PARTI = listOf("id-2", "id-3")
+    }
 
     private fun Ambiente.nuovoIncontro(id: String): IncontroId {
         val incontro = Incontro.nuovo(IncontroId(id), progettoId)

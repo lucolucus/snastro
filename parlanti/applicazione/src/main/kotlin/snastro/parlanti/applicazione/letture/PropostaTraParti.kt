@@ -67,7 +67,8 @@ public class PropostaTraParti(
 
     private fun calcola(incontroId: IncontroId): List<CoppiaTraParti> {
         val numeri = registrazioni.parti(incontroId).orEmpty().associate { it.registrazioneId to it.numero }
-        val idonee = voci.voci(incontroId).orEmpty()
+        // A 1-Parte Incontro never has a pair: no read, no extraction under the shared ML lock.
+        val idonee = (if (numeri.size < 2) null else voci.voci(incontroId)).orEmpty()
             .filter { attribuzioni.trova(it.voceRef) == null }
             .map { v -> v.voceRef to v.intervalliPerParte.filterKeys { it in numeri }.filterValues { it.isNotEmpty() } }
             .filter { (_, fette) -> fette.isNotEmpty() }

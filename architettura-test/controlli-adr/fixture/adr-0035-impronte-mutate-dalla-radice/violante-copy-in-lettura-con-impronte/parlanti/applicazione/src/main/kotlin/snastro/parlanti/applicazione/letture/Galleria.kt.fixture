@@ -1,0 +1,2 @@
+package snastro.parlanti.applicazione.letture
+fun g(p: Parlante) = p.impronte.map { it.copy(sorgente = "x") }

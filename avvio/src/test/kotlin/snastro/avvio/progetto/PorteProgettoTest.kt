@@ -163,6 +163,7 @@ class PorteProgettoTest {
         const val PROGETTO_SQL = "snastro.progetto.adattatori.persistenza.ProgettoRepositorySql"
         const val REGISTRAZIONE_SQL = "snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql"
         const val IN_SOSPESO_SQL = "snastro.progetto.adattatori.persistenza.EliminazioniInSospesoSql"
+        const val INCONTRO_SQL = "snastro.progetto.adattatori.persistenza.IncontroRepositorySql"
         const val TRASCRITTO_SQL = "snastro.trascrizione.adattatori.persistenza.VociDellIncontroRepositorySql"
         const val ELABORAZIONE_SQL = "snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql"
         const val PARLANTE_SQL = "snastro.parlanti.adattatori.persistenza.ParlanteRepositorySql"
@@ -175,6 +176,7 @@ class PorteProgettoTest {
         val UNA_PER_APERTURA = listOf(
             PROGETTO_SQL,
             REGISTRAZIONE_SQL,
+            INCONTRO_SQL,
             IN_SOSPESO_SQL,
             TRASCRITTO_SQL,
             ELABORAZIONE_SQL,
@@ -208,6 +210,9 @@ class PorteProgettoTest {
             CATALOGO to REGISTRAZIONE_SQL,
             "snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio" to REGISTRAZIONE_SQL,
             "snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio" to IN_SOSPESO_SQL,
+            "snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio" to INCONTRO_SQL,
+            "snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio" to INCONTRO_SQL,
+            CATALOGO to INCONTRO_SQL,
             "snastro.progetto.applicazione.comandi.CompletaEliminazioniRegistrazioniServizio" to IN_SOSPESO_SQL,
             "snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazioneServizio" to TRASCRITTO_SQL,
             "snastro.trascrizione.applicazione.comandi.ConfermaSegmentoServizio" to TRASCRITTO_SQL,
