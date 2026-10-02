@@ -1186,6 +1186,7 @@ class RegistrazioniRenderCheckTest {
     /** Same mechanism as [catturaPng], but of the LAST semantics root — a `DropdownMenu` opens its
      * own Popup layer, so `onRoot()` (which requires exactly one root) cannot be used once it is open. */
     private fun ComposeUiTest.catturaPngUltimaRadice(nome: String, width: Int, height: Int, scuro: Boolean = false) {
+        check(nome in MENU_APERTI_ESCLUSI) { "INV-I3: $nome opens a menu but is not in MENU_APERTI_ESCLUSI" } // L201
         val suffisso = if (scuro) "-scuro" else ""
         val radici = onAllNodes(isRoot()).fetchSemanticsNodes()
         val png = File(outputDir, "$nome$suffisso-${width}x$height.png")
@@ -1204,18 +1205,36 @@ class RegistrazioniRenderCheckTest {
         verificaUgualeAOggi(png)
     }
 
+    @Test
+    fun `L201 la baseline non contiene fixture di menu aperto ne righe vecchie`() {
+        val nomi = BASELINE_1_PARTE.keys.map { it.replace(Regex("(-scuro)?-\\d+x\\d+\\.png$"), "") }.toSet()
+        check(nomi.none { it in MENU_APERTI_ESCLUSI }) { "stale baseline lines for an open-menu fixture" }
+        check(BASELINE_1_PARTE.size == 90) { "baseline has ${BASELINE_1_PARTE.size} entries, expected 90" }
+    }
+
     /**
      * INV-I3: every fixture of this class is a 1-part Incontro, and its PNG must equal the one S2 rendered BEFORE the
      * Incontri (the SHA-256 of today's PNG, `registrazioni-1-parte-baseline.txt`, taken at 1280x800 and 1024x640, light
-     * and dark). The three open-menu fixtures are not in it: their menu gains 'Aggiungi parti…' by design.
+     * and dark). The open-menu fixtures ([MENU_APERTI_ESCLUSI]) are not in it: their menu gains 'Aggiungi parti…' by
+     * design. L201: it fails CLOSED — a PNG that is in neither the baseline nor that list is a failure, not a skip.
      */
     private fun verificaUgualeAOggi(png: File) {
-        val atteso = BASELINE_1_PARTE[png.name] ?: return
+        val atteso = checkNotNull(BASELINE_1_PARTE[png.name]) {
+            "INV-I3: ${png.name} is not in registrazioni-1-parte-baseline.txt (and it is not an open-menu fixture)"
+        }
         val impronta = MessageDigest.getInstance("SHA-256").digest(png.readBytes())
         val effettivo = impronta.joinToString("") { "%02x".format(it) }
         check(effettivo == atteso) { "INV-I3: ${png.name} differs from today's PNG ($effettivo != $atteso)" }
     }
 }
+
+/** L201: the four fixtures that capture an OPEN More menu (`catturaPngUltimaRadice`), absent from the baseline. */
+private val MENU_APERTI_ESCLUSI = setOf(
+    "registrazioni-menu-completata-ritrascrivi-elimina",
+    "registrazioni-menu-elimina",
+    "registrazioni-menu-in-corso-disabilitato",
+    "registrazioni-ritrascrizione-non-riuscita",
+)
 
 private val BASELINE_1_PARTE: Map<String, String> =
     RegistrazioniRenderCheckTest::class.java.getResourceAsStream("/registrazioni-1-parte-baseline.txt")!!

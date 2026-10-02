@@ -625,7 +625,7 @@ internal class StatoVoci(
         val tutte = opzioni(v)
         // AC-I77: the Incontro's Voci that do not speak in this Parte, with the Parti they speak in.
         val inAltreParti = dati?.vociIncontro.orEmpty().filter { r -> v.voci.none { it.voceId == r.voceId } }
-            .map { OpzioneVoce(it.voceId, nomeDi(it.voceId) ?: it.etichetta, it.parti, nomeDi(it.voceId)) }
+            .map { r -> nomeDi(r.voceId).let { nome -> OpzioneVoce(r.voceId, nome ?: r.etichetta, r.parti, nome) } }
         return PannelloVoci(
             carte = v.voci.map { voce ->
                 CartaVoce(

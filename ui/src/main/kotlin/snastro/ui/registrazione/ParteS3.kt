@@ -10,10 +10,13 @@ import java.time.LocalTime
  * The two things S3 needs to be one Parte of a multi-part Incontro (ux-proposal "Screen S3"): [incontro]
  * reads the Incontro (its first Parte's title, this Parte's start time), [vaiAllaParte] opens S3 of another
  * Parte of it (`:avvio` binds the window's navigation; the per-window tab holder [SelezioneSchedaS3] keeps
- * the selected tab across the switch, AC-I74). MANDATORY collaborator (ADR 0030 §1).
+ * the selected tab across the switch, AC-I74). [incontroDi] reads the Incontro a Parte belongs to by the Parte's own
+ * id — the only handle S3 has on a Parte with no Trascritto yet ([RegistrazioneUiStato.ParteInAttesa], D-0051).
+ * MANDATORY collaborator (ADR 0030 §1).
  */
 class SorgentiParti(
     val incontro: (IncontroId) -> IncontroDelProgettoVista?,
+    val incontroDi: (RegistrazioneId) -> IncontroDelProgettoVista?,
     val vaiAllaParte: (RegistrazioneId) -> Unit,
 )
 

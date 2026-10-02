@@ -6,7 +6,7 @@ import java.time.LocalDate
 /** S4 · Parlanti del Progetto screen labels, Italian (dev-architecture `#presenter`: UI strings
  * live in `snastro.ui.testi`). */
 const val MESSAGGIO_PARLANTI_VUOTO: String =
-    "Nessun parlante. Nascono identificando le voci di una registrazione"
+    "Nessun parlante. Nascono identificando le voci di un incontro"
 
 const val ETICHETTA_SEZIONE_RICORRENTI: String = "Ricorrenti"
 const val ETICHETTA_SEZIONE_OCCASIONALI: String = "Occasionali"
@@ -33,8 +33,10 @@ const val MESSAGGIO_CONFERMA_ELIMINAZIONE_PARLANTE: String =
 /** M5-style distinct message for the INITIAL load failure (dev-architecture `#presenter`). */
 const val MESSAGGIO_ERRORE_CARICAMENTO_PARLANTI: String = "Non è stato possibile caricare i parlanti."
 
-/** AC-175: "N impronte · M incontri", plus "· ultima il dd/MM/yyyy" when known. */
+/** AC-175: "N impronte · M incontri" (singular-safe on both counts, L187), plus "· ultima il dd/MM/yyyy" when known. */
 fun etichettaDettaglioParlante(numImpronte: Int, numIncontri: Int, ultimaApparizione: LocalDate?): String {
-    val base = "$numImpronte impronte · $numIncontri incontri"
+    val impronte = if (numImpronte == 1) "1 impronta" else "$numImpronte impronte"
+    val incontri = if (numIncontri == 1) "1 incontro" else "$numIncontri incontri"
+    val base = "$impronte · $incontri"
     return if (ultimaApparizione != null) "$base · ultima il ${formattaData(ultimaApparizione)}" else base
 }

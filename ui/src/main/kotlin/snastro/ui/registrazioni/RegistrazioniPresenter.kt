@@ -264,11 +264,14 @@ class RegistrazioniPresenter(
         val titolo: String,
         val data: LocalDate,
         val parti: List<Pair<RegistrazioneDelProgettoVista, LocalTime?>>,
+        val noto: Boolean = true,
     )
 
     /**
      * AC-I69: the Incontri come from [incontri]; a failure of that read (or a Registrazione it does not list) must not
-     * fail the whole load — each such Registrazione is then an Incontro of its own, today's S2.
+     * fail the whole load — each such Registrazione is then an Incontro of its own, today's S2. Its id is only the
+     * Registrazione's (the migration's rule, wrong for a later UUID Incontro, L203): such a group is not [Gruppo.noto],
+     * so it offers no 'Aggiungi parti…' that would target an Incontro that may not exist.
      */
     private fun gruppi(progetto: List<RegistrazioneDelProgettoVista>): List<Gruppo> {
         val perId = progetto.associateBy { it.registrazioneId }
@@ -279,7 +282,8 @@ class RegistrazioniPresenter(
         }
         val coperti = raggruppati.flatMap { g -> g.parti.map { it.first.registrazioneId } }.toSet()
         val soli = progetto.filter { it.registrazioneId !in coperti }.map {
-            Gruppo(IncontroId(it.registrazioneId.valore), it.titolo, it.dataRegistrazione, listOf(it to null))
+            val id = IncontroId(it.registrazioneId.valore)
+            Gruppo(id, it.titolo, it.dataRegistrazione, listOf(it to null), noto = false)
         }
         return raggruppati + soli
     }
@@ -320,6 +324,7 @@ class RegistrazioniPresenter(
                 identificazione = conteggi[g.incontroId]?.takeIf { multi }
                     ?.let { IdentificazioneRiga(it.numVoci, it.numVociDaIdentificare) },
                 numeroPersone = if (multi) precompilato(g.incontroId) else "",
+                aggiungiPartiDisponibile = g.noto,
             )
         }
         return ListaS2(righe, incontriRighe)
