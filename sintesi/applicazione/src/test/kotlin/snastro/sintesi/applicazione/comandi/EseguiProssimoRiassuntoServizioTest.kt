@@ -5,9 +5,11 @@ import io.mockk.verify
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
@@ -21,6 +23,7 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
 import snastro.sintesi.applicazione.porte.ElementoRisposta
 import snastro.sintesi.applicazione.porte.ErroreApplicazioneSintesi
+import snastro.sintesi.applicazione.porte.LettoreIncontroFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.ModelloLinguistico
@@ -34,6 +37,7 @@ import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.StatoParteSintesi
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
+import snastro.sintesi.applicazione.porte.inIngresso
 import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
 import snastro.sintesi.applicazione.porte.statoOsservabile
 import snastro.sintesi.applicazione.porte.unRiassunto
@@ -46,6 +50,7 @@ import snastro.sintesi.dominio.RiassuntoId
 import snastro.sintesi.dominio.SegmentoIngresso
 import snastro.sintesi.dominio.StatoParte
 import snastro.sintesi.dominio.StrutturaIncontro
+import snastro.sintesi.dominio.StrutturaTrascritto
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
@@ -84,6 +89,29 @@ class EseguiProssimoRiassuntoServizioTest {
             disponibilita,
             eventi,
         )
+
+    /** An Incontro read live from [parti] (mutable on purpose); the Trascritti of REG1 and REG2 per the flags. */
+    private fun servizioMultiParte(
+        parti: Map<IncontroId, List<RegistrazioneId>>,
+        modello: ModelloLinguistico = this.modello,
+        conSegmenti: Boolean = true,
+        conSegmentiParte2: Boolean = true,
+        trascritti: Map<RegistrazioneId, List<SegmentoSintesi>>? = null,
+    ): EseguiProssimoRiassuntoServizio = EseguiProssimoRiassuntoServizio(
+        eventi.unitaDiLavoro,
+        orologio,
+        riassunti,
+        LettoreTrascrittoFinta(
+            trascritti ?: listOfNotNull(
+                (REG1 to SEGMENTI).takeIf { conSegmenti },
+                (REG2 to SEGMENTI_PARTE_2).takeIf { conSegmentiParte2 },
+            ).toMap(),
+        ),
+        LettoreIncontroFinta(parti),
+        modello,
+        DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
+        eventi,
+    )
 
     /** Wired with a Trascritto whose Segmenti match [SEGMENTI]: the model's default answer verifies whole. */
     private fun servizioConSegmenti(registrazioneId: RegistrazioneId = REG1): EseguiProssimoRiassuntoServizio =
@@ -351,17 +379,180 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `INV-S8 il Trascritto sparito dopo il claim e trattato come un CAS fallito, mai un throw`() {
+    fun `INV-I12 nessuna Parte con un Trascritto dopo il claim e fallito nessun_contenuto_verificabile`() {
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
 
-        // Nessun Trascritto per REG1: come se fosse sparito tra il claim e l'esecuzione (una policy concorrente
-        // di eliminazione/sostituzione, fuori da ogni transazione qui). Prima del fix, checkNotNull lanciava.
         servizio(trascritti = LettoreTrascrittoFinta()).esegui(EseguiProssimoRiassunto()).atteso()
 
         val riassunto = checkNotNull(riassunti.trova(RiassuntoId("r1")))
-        assertTrue(riassunto.inCorso, "resta in_corso: nessuna conclusione scritta")
-        // Il claim pubblica comunque RiassuntoAvviato (AC-S83); solo la conclusione e' saltata, come Annullato.
-        assertEquals(listOf(RiassuntoAvviato(unIncontroDi(REG1))), eventi.pubblicati)
+        assertTrue(riassunto.fallito)
+        assertEquals(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE, riassunto.motivoFallimento)
+        assertNull(modello.ultimaRichiesta, "il modello non e' chiamato senza testo")
+        assertTrue(eventi.pubblicati.contains(RiassuntoFallito(unIncontroDi(REG1), "nessun_contenuto_verificabile")))
+    }
+
+    @Test
+    fun `INV-I12 l Incontro cessato durante il run non scrive nulla e non pubblica la conclusione`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+        val parti = mutableMapOf(INCONTRO to listOf(REG1, REG2))
+        val modelloCheCessa = object : ModelloLinguistico {
+            override fun riassumi(richiesta: RichiestaRiassunto, annullato: () -> Boolean): Esito<RispostaModello> {
+                riassunti.rimuovi(RiassuntoId("r1")).atteso() // the Incontro ceased: its Riassunto is removed
+                return Esito.Ok(ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA)
+            }
+        }
+
+        servizioMultiParte(parti, modello = modelloCheCessa).esegui(EseguiProssimoRiassunto()).atteso()
+
+        assertNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(eventi.pubblicati.none { it is RiassuntoPronto || it is RiassuntoFallito })
+    }
+
+    @Test
+    fun `INV-I12 l Incontro gia cessato al run e trattato come CAS fallito, mai un throw`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+
+        servizioMultiParte(emptyMap()).esegui(EseguiProssimoRiassunto()).atteso()
+
+        assertTrue(checkNotNull(riassunti.trova(RiassuntoId("r1"))).inCorso)
+        assertNull(modello.ultimaRichiesta)
+        assertEquals(listOf(RiassuntoAvviato(INCONTRO)), eventi.pubblicati)
+    }
+
+    @Test
+    fun `un Incontro di 2 Parti manda al modello UN ingresso su entrambe e salva le Fonti giuste`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+        // s1..s3 = Parte 1, s4..s5 = Parte 2 (segmentoId 1 and 2 of REG2: the same numbers as REG1's, other Parte).
+        modello.rispondi(
+            RispostaModello(
+                sommario = "{V1} e {V3} riassumono.",
+                decisioni = listOf(ElementoRisposta("Si tiene il turni", fonti = listOf(1, 5))),
+                questioniAperte = emptyList(),
+                azioni = emptyList(),
+                puntiChiave = emptyList(),
+            ),
+        )
+
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2))).esegui(EseguiProssimoRiassunto()).atteso()
+
+        val atteso = IngressoRiassunto.costruisci(
+            listOf(
+                SEGMENTI.map { it.inIngresso(REG1) },
+                SEGMENTI_PARTE_2.map { it.inIngresso(REG2) },
+            ),
+        )
+        assertEquals(atteso.testo, checkNotNull(modello.ultimaRichiesta).ingresso)
+        assertTrue(atteso.testo.contains("[s4 V3] Seconda parte, uno."))
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto)
+        assertEquals(0, concluso.omessi)
+        assertEquals(
+            setOf(SegmentoRef(REG1, SegmentoId(1)), SegmentoRef(REG2, SegmentoId(2))),
+            concluso.decisioni.single().fonti,
+        )
+        val corrente = StrutturaIncontro(
+            listOf(REG1 to unaStruttura(1 to 1, 2 to 2, 3 to 1), REG2 to unaStruttura(1 to 3, 2 to 3)),
+        )
+        assertEquals(corrente.chiave, concluso.struttura)
+        assertTrue(!concluso.superato(corrente))
+    }
+
+    @Test
+    fun `INV-I12 la Parte 2 senza Trascritto al claim gira sulla sola Parte 1 e nasce superato`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2)), conSegmentiParte2 = false)
+            .esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto)
+        val soloParte1 = IngressoRiassunto.costruisci(listOf(SEGMENTI.map { it.inIngresso(REG1) }))
+        assertEquals(soloParte1.testo, checkNotNull(modello.ultimaRichiesta).ingresso)
+        val strutturaParte1 = unaStruttura(1 to 1, 2 to 2, 3 to 1)
+        assertEquals("${REG1.valore}=${strutturaParte1.chiave}", concluso.struttura)
+        assertTrue(!concluso.superato(StrutturaIncontro(listOf(REG1 to strutturaParte1))))
+        val conParte2Trascritta = StrutturaIncontro(listOf(REG1 to strutturaParte1, REG2 to unaStruttura(1 to 3)))
+        assertTrue(concluso.superato(conParte2Trascritta), "la Parte 2 senza Trascritto: nato superato")
+    }
+
+    @Test
+    fun `INV-I12 una Revisione tra Parti durante il run fa nascere il Riassunto superato`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+        val rivista = SEGMENTI_PARTE_2.map { it.copy(voceId = VoceId(1)) }
+        val trascritti = mutableMapOf(REG1 to SEGMENTI, REG2 to SEGMENTI_PARTE_2)
+        val modelloCheRivede = object : ModelloLinguistico {
+            override fun riassumi(richiesta: RichiestaRiassunto, annullato: () -> Boolean): Esito<RispostaModello> {
+                trascritti[REG2] = rivista // the Parte 2 is revised while the model runs
+                return Esito.Ok(ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA)
+            }
+        }
+        val strutturaRivista = StrutturaTrascritto.di(rivista.map { it.segmentoId to it.voceId })
+        val corrente = StrutturaIncontro(
+            listOf(REG1 to unaStruttura(1 to 1, 2 to 2, 3 to 1), REG2 to strutturaRivista),
+        )
+
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2)), modello = modelloCheRivede, trascritti = trascritti)
+            .esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto)
+        assertTrue(concluso.superato(corrente), "la struttura registrata e' quella letta dal run, non la rivista")
+    }
+
+    @Test
+    fun `AC-I210 una Parte non ultima eliminata prima del run il Riassunto completa sulle Parti rimaste`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+
+        // Parte 1 deleted while the Riassunto was queued: only REG2 is listed now.
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG2))).esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto, "mai lasciato in_corso")
+        assertEquals(
+            "${REG2.valore}=${unaStruttura(1 to 3, 2 to 3).chiave}",
+            concluso.struttura,
+        )
+        assertTrue(riassunti.inCorso().isEmpty() && riassunti.inAttesa().isEmpty())
+    }
+
+    @Test
+    fun `AC-I210 una Parte non ultima eliminata durante il run il Riassunto completa e nasce superato`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+        val parti = mutableMapOf(INCONTRO to listOf(REG1, REG2))
+        val modelloCheElimina = object : ModelloLinguistico {
+            override fun riassumi(richiesta: RichiestaRiassunto, annullato: () -> Boolean): Esito<RispostaModello> {
+                parti[INCONTRO] = listOf(REG2) // the Parte 1 is eliminated while the model runs
+                return Esito.Ok(
+                    RispostaModello(
+                        sommario = "{V3} riassume.",
+                        decisioni = emptyList(),
+                        questioniAperte = emptyList(),
+                        azioni = emptyList(),
+                        puntiChiave = emptyList(),
+                    ),
+                )
+            }
+        }
+
+        servizioMultiParte(parti, modello = modelloCheElimina).esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.pronto, "mai lasciato in_corso")
+        assertTrue(concluso.superato(StrutturaIncontro(listOf(REG2 to unaStruttura(1 to 3, 2 to 3)))))
+        assertTrue(riassunti.inCorso().isEmpty())
+    }
+
+    @Test
+    fun `AC-I210 con la sola Parte rimasta senza Trascritto il Riassunto e fallito, non in_corso`() {
+        riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
+
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2)), conSegmenti = false, conSegmentiParte2 = false)
+            .esegui(EseguiProssimoRiassunto()).atteso()
+
+        val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
+        assertTrue(concluso.fallito)
+        assertEquals(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE, concluso.motivoFallimento)
+        assertTrue(riassunti.inCorso().isEmpty())
     }
 
     @Test
@@ -451,6 +642,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val T1: Instant = Instant.parse("2026-09-26T10:00:00Z")
         val T2: Instant = Instant.parse("2026-09-26T11:00:00Z")
         val T3: Instant = Instant.parse("2026-09-26T11:30:00Z")
+        val INCONTRO: IncontroId = IncontroId("incontro-2-parti")
         val ADESSO: Instant = Instant.parse("2026-09-26T12:00:00Z")
 
         /** Matches [ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA]: the Verifica keeps it whole (omessi = 0). */
@@ -473,6 +665,12 @@ class EseguiProssimoRiassuntoServizioTest {
                 intervallo = IntervalloMs(15_000, 20_000),
                 testo = "Resta da capire quanti nemici per stanza.",
             ),
+        )
+
+        /** Parte 2 of [INCONTRO]: Voci 3 (a Voce of the Incontro unseen in Parte 1). */
+        val SEGMENTI_PARTE_2: List<SegmentoSintesi> = listOf(
+            SegmentoSintesi(SegmentoId(1), VoceId(3), IntervalloMs(0, 5_000), "Seconda parte, uno."),
+            SegmentoSintesi(SegmentoId(2), VoceId(3), IntervalloMs(5_000, 9_000), "Seconda parte, due."),
         )
 
         val BOZZA_SOLO_SOMMARIO: BozzaRiassunto = BozzaRiassunto(
