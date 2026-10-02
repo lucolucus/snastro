@@ -25,8 +25,7 @@ public class UnisciVociServizio(
     public fun esegui(c: UnisciVoci): Esito<Unit> = uow.inTransazione {
         val radice = trascritti.radiceDi(c.registrazioneId, registrazioni)
             ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
-        radice.vociDiQuestoIncontro(c.incontroDelleVoci, listOf(c.sopravvive, c.rimossa))
-            ?.let { return@inTransazione it }
+        radice.vociDiQuestoIncontro(c.incontroDelleVoci, c.sopravvive)?.let { return@inTransazione it }
         radice.unisci(c.sopravvive, c.rimossa).poi { evento ->
             trascritti.salva(radice)
             eventi.pubblica(evento.pubblicato())

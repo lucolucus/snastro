@@ -26,8 +26,12 @@ public class DividiVoceServizio(
     public fun esegui(c: DividiVoce): Esito<Unit> = uow.inTransazione {
         val radice = trascritti.radiceDi(c.registrazioneId, registrazioni)
             ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
-        radice.vociDiQuestoIncontro(c.incontroDelleVoci, listOf(c.origine))?.let { return@inTransazione it }
-        radice.dividi(c.origine, c.segmenti.mapTo(LinkedHashSet()) { SegmentoRef(c.registrazioneId, it) }).poi { e ->
+        val segmenti = c.segmenti.mapTo(LinkedHashSet()) { SegmentoRef(c.registrazioneId, it) }
+        val rifiuto = segmenti.firstOrNull()
+            ?.let { radice.segmentoDiQuestoIncontro(c.incontroDelleVoci, it) }
+            ?: radice.vociDiQuestoIncontro(c.incontroDelleVoci, c.origine)
+        rifiuto?.let { return@inTransazione it }
+        radice.dividi(c.origine, segmenti).poi { e ->
             trascritti.salva(radice)
             eventi.pubblica(e.pubblicato())
             Esito.Ok(Unit)

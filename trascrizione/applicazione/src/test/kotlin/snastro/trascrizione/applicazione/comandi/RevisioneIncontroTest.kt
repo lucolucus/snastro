@@ -96,11 +96,44 @@ class RevisioneIncontroTest {
 
         unisci.esegui(UnisciVoci(B, VoceId(2), VoceId(5), altro)).erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
         dividi.esegui(DividiVoce(B, VoceId(3), setOf(SegmentoId(1)), altro))
-            .erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
+            .erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
         riassegna.esegui(RiassegnaSegmento(B, SegmentoId(1), VoceId(4), altro))
-            .erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
+            .erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
         val piano = listOf(SpostamentoSegmento(SegmentoId(1), VoceId(3), VoceId(4), IntervalloMs(0, 1_000)))
-        riassegnaBlocco.esegui(RiassegnaSegmenti(B, piano, altro)).erroreAtteso<ErroreTrascrizione.VoceNonTrovata>()
+        riassegnaBlocco.esegui(RiassegnaSegmenti(B, piano, altro)).erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
+
+        assertEquals(prima, assertNotNull(trascritti.trascritto(B)).segmenti)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `Incontro dichiarato diverso da un Segmento e SegmentoNonTrovato col SegmentoRef della Parte`() {
+        incontroConDueParti()
+        val altro = IncontroId("incontro-2")
+        val prima = assertNotNull(trascritti.trascritto(B)).segmenti
+        val atteso = SegmentoRef(B, SegmentoId(1))
+        val piano = listOf(SpostamentoSegmento(SegmentoId(1), VoceId(3), VoceId(4), IntervalloMs(0, 1_000)))
+
+        val errori = listOf(
+            dividi.esegui(DividiVoce(B, VoceId(3), setOf(SegmentoId(1)), altro)),
+            riassegna.esegui(RiassegnaSegmento(B, SegmentoId(1), VoceId(4), altro)),
+            riassegnaBlocco.esegui(RiassegnaSegmenti(B, piano, altro)),
+            conferma.esegui(ConfermaSegmento(B, SegmentoId(1), true, altro)),
+        ).map { it.erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>().segmento }
+
+        assertEquals(List(4) { atteso }, errori)
+        assertEquals(prima, assertNotNull(trascritti.trascritto(B)).segmenti)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `un Incontro dichiarato diverso e rifiutato prima di toccare la radice anche con ogni Voce null`() {
+        incontroConDueParti()
+        val prima = assertNotNull(trascritti.trascritto(B)).segmenti
+
+        val comando = RiassegnaSegmento(B, SegmentoId(1), destinazione = null, incontroDelleVoci = IncontroId("altro"))
+        riassegna.esegui(comando)
+            .erroreAtteso<ErroreTrascrizione.SegmentoNonTrovato>()
 
         assertEquals(prima, assertNotNull(trascritti.trascritto(B)).segmenti)
         assertEquals(emptyList(), eventi.pubblicati)

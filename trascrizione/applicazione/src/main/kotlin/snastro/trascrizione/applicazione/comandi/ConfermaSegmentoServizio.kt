@@ -26,7 +26,9 @@ public class ConfermaSegmentoServizio(
     public fun esegui(c: ConfermaSegmento): Esito<Unit> = uow.inTransazione {
         val radice = trascritti.radiceDi(c.registrazioneId, registrazioni)
             ?: return@inTransazione Esito.Errore(TrascrittoNonTrovato(c.registrazioneId))
-        radice.confermaSegmento(SegmentoRef(c.registrazioneId, c.segmento), c.confermato).poi { evento ->
+        val rif = SegmentoRef(c.registrazioneId, c.segmento)
+        radice.segmentoDiQuestoIncontro(c.incontroDelleVoci, rif)?.let { return@inTransazione it }
+        radice.confermaSegmento(rif, c.confermato).poi { evento ->
             if (evento != null) {
                 trascritti.salva(radice)
                 eventi.pubblica(evento.pubblicato())
