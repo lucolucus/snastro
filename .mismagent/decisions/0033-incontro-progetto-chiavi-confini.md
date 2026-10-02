@@ -8,22 +8,37 @@ amended: 2026-10-01   # build-manifest checkpoint [user]: §6 two blocks in sequ
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0033-incontro-mutato-dalla-radice.sh
     from: incontro
-    # PROHIBITION (§7, state mutated only through the root): (1) in progetto/dominio/src/main no `var` declaration (any visibility,
-    # backing `_` names included) of incontroId, progettoId; (2) the class `Incontro` (the file of progetto/dominio declaring
-    # `class Incontro`) declares no `var` at all; (3) the interfaces `IncontroRepository` and `RegistrazioneRepository` (files of
-    # progetto/applicazione/src/main declaring them, found by content) declare no `fun` named aggiorna*/modifica*/imposta*/sposta*/
-    # cambia*/scrivi* — their only writes are salva(<root>) and rimuovi(<id>). Comment lines stripped. FAIL when progetto/dominio or
+    # PROHIBITION (§7, state mutated only through the root; clause 3 an ALLOW-LIST, amended 2026-10-03): (1) in progetto/dominio/src/main
+    # no `var` declaration (any visibility, backing `_` names included) of incontroId, progettoId; (2) the class `Incontro` (the file of
+    # progetto/dominio declaring `class Incontro`) declares no `var` at all; (3) the files of progetto/applicazione/src/main declaring
+    # `interface IncontroRepository` / `interface RegistrazioneRepository` (found by content) declare ONLY funs named salva, rimuovi (the
+    # only writes: salva(<root>), rimuovi(<id>)) and the reads trova, delProgetto, titoliDelProgetto, partiDi — any other name fails,
+    # mutators included; a new port method is an amendment of this list. Comments removed by lib/senza-commenti.awk (nested and
+    # multi-line /* */, trailing //; a `//` inside a string is code); build dirs excluded. FAIL when progetto/dominio or
     # progetto/applicazione is missing, or when no file declares `class Incontro` (target missing). Violating fixtures: a `private var
-    # _incontroId`, a `var progettoId` in Incontro, `fun aggiornaOraDiInizio(` in RegistrazioneRepository, `fun impostaIncontro(` in
-    # IncontroRepository; conforming: `private var _oraDiInizio` in Registrazione, the forbidden names only in KDoc.
+    # _incontroId`, a `var progettoId` in Incontro, `fun aggiornaOraDiInizio(` in RegistrazioneRepository, `fun riassegnaIncontro(` in
+    # IncontroRepository, `fun contaParti(` (a read not on the list); conforming: `private var _oraDiInizio` in Registrazione, the
+    # forbidden names only in KDoc.
   - check: architettura-test/controlli-adr/adr-0033-ordine-solo-nel-dominio.sh
     from: incontro
-    # PROHIBITION (§7, invariant fields read only inside the aggregate — [INV-I2]): in every */src/main *.kt OUTSIDE progetto/dominio and
-    # progetto/adattatori/src/main/kotlin/snastro/progetto/adattatori/persistenza/, no line where `oraDiInizio` or `aggiuntaAlle` appears
-    # together with sortedBy/sortedWith/sortedByDescending/compareBy/thenBy/thenByDescending/compareTo/maxBy/minBy (the order of the Parti is
-    # decided only by OrdineDelleParti). Displaying them is allowed. Comment lines stripped. FAIL when progetto/dominio is missing.
-    # Violating fixtures: `parti.sortedBy { it.oraDiInizio }` in sintesi/applicazione, `compareBy({ it.dataRegistrazione }, { it.aggiuntaAlle })`
-    # in ui; conforming: the same in progetto/dominio, `Text(parte.oraDiInizio …)` in ui.
+    # PROHIBITION (§7 as amended 2026-10-03 — invariant fields read only inside the aggregate, [INV-I2]: the Parte-order fields
+    # `oraDiInizio`, `aggiuntaAlle` / columns `ora_di_inizio`, `aggiunta_alle` are carried and displayed outside progetto/dominio, never
+    # compared). Comments removed by lib/senza-commenti.awk; build dirs excluded. Exempt everywhere: progetto/dominio/src/main and
+    # progetto/adattatori/src/main/kotlin/snastro/progetto/adattatori/persistenza/.
+    # (1) READERS (allow-list): in */src/main *.kt an occurrence of either identifier (`.x`, `?.x`, `::x`, bare in a scope function)
+    #     that is not a declaration (`val x`, `var x`, parameter `x:`) nor a named-argument target (`x =`, not `==`) lies only under
+    #     progetto/applicazione/src/main, progetto/adattatori/src/main/kotlin/snastro/progetto/adattatori/audio/,
+    #     ui/src/main/kotlin/snastro/ui/registrazioni/, ui/src/main/kotlin/snastro/ui/registrazione/; `aggiuntaAlle` only under progetto/.
+    # (2) NO COMPARISON in those readers: no code line naming either identifier contains sort/sorted*/sortBy*/sortWith/compareBy*/
+    #     compareTo/compareValues*/Comparator/thenBy*/thenComparing/maxBy*/minBy*/maxOf*/minOf*/maxWith/minWith/max(/min(/coerce*/
+    #     isBefore/isAfter/rangeTo/`..`/a spaced binary ` < `, ` > `, ` <= `, ` >= ` (`->` and generics are not spaced; `==`/`!=` allowed).
+    # (3) SQL: in every *.sq under */src/main/sqldelight (*.sqm migrations excluded), per statement (joined up to its `;`, `--` comments
+    #     stripped), neither column follows ORDER BY, sits inside MIN(/MAX(, or is an operand of <, >, <=, >=, BETWEEN.
+    # FAIL when progetto/dominio is missing. Violating fixtures: `parti.sortedBy { it.oraDiInizio }` in sintesi/applicazione (1),
+    # `p.aggiuntaAlle` in trascrizione/applicazione (1), `with(p) { oraDiInizio }` in sbobinatura (1), `.sortedWith(compareBy(Riga::oraDiInizio))`
+    # in ui/registrazioni (2), `maxOf { it.oraDiInizio!! }` in progetto/applicazione (2), an ORDER BY split over two lines ending in
+    # `ora_di_inizio` in a .sq (3); conforming: the same in progetto/dominio, `valore = riga.oraDiInizio` and `riga.oraDiInizio == null`
+    # in ui/registrazioni, `val oraDiInizio: LocalTime?` in a view of any context, `oraDiInizio = ora` named argument, the names in a KDoc.
 ---
 # 0033 — The `Incontro` in Progetto: the aggregate, the import command, and the keys and ports that cross contexts
 
@@ -235,3 +250,25 @@ For the `incontro` aggregate (block `incontro`; `invariant_fields`: `Registrazio
 check and rule CR-2 (no `java.nio.file.` in any `*/applicazione`). The command carries the source paths as `String`,
 as `percorsoSorgente`, `SondaAudio` and `ArchivioAudio` already do; the adapters turn them into `Path`. No exception
 is added to ADR 0002.
+
+## Amendment 2026-10-03 — §7 rules stated as enforced; `OraDiInizio` refuses fractions [I2 amendment pass, incontro D-0049]
+- **"Ordering the Parti outside the domain" (§7, third bullet), replaced text.** The Parte-order fields `oraDiInizio` and
+  `aggiuntaAlle` (columns `ora_di_inizio`, `aggiunta_alle`) leave `:progetto:dominio` only to be **carried and displayed**,
+  never compared: no code outside it sorts, ranks, compares by `<`/`>` or picks a minimum/maximum on them, in Kotlin or in
+  SQL. Equality (`== null` for "—:—") is display. Enforced in three clauses (`enforced_by` above): (1) a closed list of
+  **reader packages** — Progetto's application layer, the audio probe adapter, the two UI packages that show and edit the
+  time (`ui..registrazioni`, `ui..registrazione`); `aggiuntaAlle` never leaves `:progetto`. Any other context needing either
+  field is an amendment of this list. (2) No ordering or comparison token on a line of those readers naming a field.
+  (3) No SQL query orders by, compares or aggregates (MIN/MAX) either column: the repository returns the `Parte`s
+  unordered (§4.1) and `OrdineDelleParti` / `OrdineDelleRegistrazioni` order them. Discursive (code review, the reader
+  packages only): no multi-line sort key or alias carries a field into an ordering. `dataRegistrazione` stays outside the
+  check (also displayed and the S2 key of `OrdineDelleRegistrazioni`); the review criterion of § Consequences covers it.
+  Why an allow-list of readers rather than a longer list of sort functions: aliases, function references and multi-line
+  keys cannot be caught line by line; bounding who may read the field can, with no false positive on unrelated sorting.
+- **Mutation through the root (§7, second bullet).** The ports `IncontroRepository` and `RegistrazioneRepository` have a
+  **closed method set**: writes `salva`, `rimuovi`; reads `trova`, `delProgetto`, `titoliDelProgetto`, `partiDi`. Any
+  other method, a mutator or a new read, is an amendment of this ADR (the check is an allow-list, not a list of
+  forbidden prefixes).
+- **`OraDiInizio` (§1).** "To the second" means the VO holds no fraction: `OraDiInizio.di(LocalTime)` **refuses** a
+  value with a non-zero fraction of a second (`OraDiInizioNonValida`); callers truncate first (the import truncates
+  `InfoAudio.oraDiInizio` to seconds, ADR 0040).

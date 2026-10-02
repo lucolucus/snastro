@@ -8,29 +8,41 @@ from_note: incontro D-0010
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0037-nessun-riassunto-automatico.sh
     from: riassunto-incontro-politiche
-    # PROHIBITION: no `TrascrittoSostituito` (simple or fully-qualified name) in any *.kt under sintesi/*/src/main (comment lines
-    # `//`, `*`, `/*` excluded) — Sintesi never reacts to a re-transcription (D-0004, D-0007: no automatic Riassumi, superato is
-    # derived). FAIL when sintesi/ is missing. Violating fixtures: an import of snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
+    # PROHIBITION (scope as amended 2026-10-03): no `TrascrittoSostituito` (simple or fully-qualified name) in any *.kt under
+    # sintesi/*/src/main AND under Sintesi's composition avvio/src/main/kotlin/snastro/avvio/sintesi/ (comments removed by
+    # lib/senza-commenti.awk: nested and multi-line /* */, trailing //; a `//` inside a string is code; build dirs excluded) — Sintesi
+    # never reacts to a re-transcription (D-0004, D-0007: no automatic Riassumi, superato is derived). FAIL when sintesi/ is missing,
+    # when sintesi/*/src/main matches no directory, or when it holds no *.kt (an empty glob is not a PASS). Violating fixtures (also a
+    # subscription wired in avvio/…/avvio/sintesi): an import of snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
     # in sintesi/adattatori, a `is TrascrittoSostituito ->` branch in sintesi/applicazione, a fully-qualified use; conforming:
     # the name only in a KDoc line and in a // comment, `TrascrittoEliminato` used.
   - check: architettura-test/controlli-adr/adr-0037-riassunto-mutato-dalla-radice.sh
     from: riassunto-incontro
-    # PROHIBITION (§9, riassunto-incontro: state mutated only through the root): (1) the interface `RiassuntoRepository` (found by content in
-    # sintesi/applicazione/src/main) declares no fun named aggiorna*/modifica*/imposta*/sposta*/cambia*/scrivi*/inserisci* — its writes are
-    # salva(Riassunto), the compare-and-set concludi(Riassunto), rimuovi*; (2) in sintesi/dominio/src/main the element and Fonte types
+    # PROHIBITION (§9, riassunto-incontro: state mutated only through the root; clause 1 an ALLOW-LIST, amended 2026-10-03): (1) the file
+    # of sintesi/applicazione/src/main declaring `interface RiassuntoRepository` (found by content) declares ONLY funs named salva
+    # (salva(Riassunto)), concludi (the compare-and-set concludi(Riassunto)), rimuovi*, trova*, inAttesa, inCorso — any other name fails,
+    # mutators included; a new port method is an amendment of this list; (2) in sintesi/dominio/src/main the element and Fonte types
     # (`Decisione`, `QuestioneAperta`, `Azione`, `PuntoChiave`, `Fonte`, `StrutturaIncontro`, `StrutturaTrascritto`, found by their `class`
-    # declarations) declare no `var` and no `public fun` returning `Esito<` — only the root `Riassunto` changes state. Comment lines stripped.
-    # FAIL when no file declares `class Riassunto` or `interface RiassuntoRepository`. Violating fixtures: `fun aggiornaStruttura(` in the port,
-    # `var testo` in Decisione, `public fun verifica(…): Esito<…>` in StrutturaIncontro; conforming: `concludi(r: Riassunto)`, `private var _stato`
-    # in Riassunto.
+    # declarations) declare no `var` and no public `fun` returning `Esito<` (on the `fun` line or on a `): Esito<` continuation line) — only
+    # the root `Riassunto` changes state. Comments removed by lib/senza-commenti.awk; build dirs excluded. FAIL when no file declares
+    # `class Riassunto` or `interface RiassuntoRepository`. Violating fixtures: `fun aggiornaStruttura(` and `fun contaPronti(` in the port,
+    # `var testo` in Decisione, `public fun verifica(…): Esito<…>` in StrutturaIncontro; conforming: `concludi(r: Riassunto)`,
+    # `trovaPronto(…)`, `private var _stato` in Riassunto.
   - check: architettura-test/controlli-adr/adr-0037-struttura-letta-dalla-radice.sh
     from: riassunto-incontro
-    # PROHIBITION (§9, riassunto-incontro: invariant fields read only inside the aggregate — [INV-I11]): in sintesi/applicazione/src/main,
-    # sintesi/adattatori/src/main except …/snastro/sintesi/adattatori/persistenza/, ui/src/main and avvio/src/main: no `.chiave` access and no
-    # `==` / `!=` on a line naming `struttura` or `Struttura` — `superato` is decided only by the root's predicate (`Riassunto.superato(corrente)`).
-    # Passing a structure to the root (`completa(bozza, struttura)`) is allowed. Comment lines stripped. FAIL when sintesi/dominio is missing.
-    # Violating fixtures: `riassunto.struttura != corrente.chiave` in a letture file, `StrutturaIncontro.di(p) == registrata` in ui; conforming:
-    # `riassunto.superato(corrente)`, `completa(esecuzione.bozza, esecuzione.struttura)`, `.chiave` in dominio and in the persistence mapping.
+    # PROHIBITION (§9 as amended 2026-10-03, riassunto-incontro: invariant fields read only inside the aggregate — [INV-I11]: `superato`
+    # is decided only by `Riassunto.superato(corrente)`). The recorded structure of the root is the property `strutturaRegistrata`
+    # (renamed from `struttura`, so its name is unique in the codebase). In every */src/main *.kt OUTSIDE sintesi/dominio/src/main and
+    # sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/persistenza/ (the only legitimate reader, the mapping): (1) no
+    # occurrence of the identifier `strutturaRegistrata` in any form (`.x`, `?.x`, `::x`, bare in a scope function, inside `when (…)` or
+    # `.equals(…)`); (2) in sintesi/applicazione/src/main, sintesi/adattatori/src/main (persistenza/ exempt), ui/src/main and
+    # avvio/src/main only (other contexts own unrelated `chiave`s, e.g. SorgenteImpronta.chiave), no `chiave` member access (`.chiave`,
+    # `?.chiave`, `::chiave`) — a structure's key is compared only by the root.
+    # Comments removed by lib/senza-commenti.awk; build dirs excluded. FAIL when no file of sintesi/dominio/src/main declares
+    # `strutturaRegistrata` (target missing). Violating fixtures: `r.strutturaRegistrata != corrente.chiave` in letture,
+    # `with(r) { strutturaRegistrata }` in ui, `Riassunto::strutturaRegistrata` in avvio, `when (r.strutturaRegistrata)` and
+    # `corrente.chiave.equals(k)` in sintesi/applicazione; conforming: `riassunto.superato(corrente)`, `completa(esecuzione.bozza,
+    # esecuzione.struttura, …)`, `strutturaRegistrata = riga.struttura` in the persistence mapping, the name in a KDoc.
 ---
 # 0037 — The `Riassunto` of an `Incontro`: one pass over the `Parte`s, input labels, `Verifica` per `Parte`, `superato` derived from a per-`Parte` structure, no automatic re-summary
 
