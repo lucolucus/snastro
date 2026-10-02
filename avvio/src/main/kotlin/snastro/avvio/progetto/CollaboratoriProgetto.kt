@@ -11,6 +11,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
+import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.ui.AggiornamentiVista
@@ -30,6 +31,7 @@ import snastro.ui.lettore.LettoreAudio
 internal class CollaboratoriProgetto(
     val progettoId: ProgettoId,
     val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
+    val incontri: () -> List<IncontroDelProgettoVista>,
     val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
     val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,

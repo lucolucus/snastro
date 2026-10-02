@@ -82,6 +82,7 @@ class RegistrazioniPresenterConcorrenzaTest {
                 io = esecutoreIo.asCoroutineDispatcher(),
                 progettoId = ProgettoId("progetto-1"),
                 registrazioni = { listOf(rigaVista(REG_1)) },
+                incontri = { emptyList() },
                 aggiungiRegistrazione = { error("non atteso in questo test") },
                 modificaDataRegistrazione = { error("non atteso in questo test") },
                 rinominaRegistrazione = { error("non atteso in questo test") },
@@ -166,6 +167,7 @@ class RegistrazioniPresenterConcorrenzaTest {
                         else -> error("guasto del refresh piu nuovo") // the NEWER refresh: fails right away
                     }
                 },
+                incontri = { emptyList() },
                 aggiungiRegistrazione = { error("non atteso in questo test") },
                 modificaDataRegistrazione = { error("non atteso in questo test") },
                 rinominaRegistrazione = { error("non atteso in questo test") },

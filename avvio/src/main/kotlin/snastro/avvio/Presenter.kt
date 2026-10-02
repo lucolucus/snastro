@@ -72,6 +72,7 @@ internal fun costruisciRegistrazioniPresenter(
     io = grafo.io,
     progettoId = collaboratori.progettoId,
     registrazioni = collaboratori.registrazioni,
+    incontri = collaboratori.incontri,
     aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
     modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,
     rinominaRegistrazione = collaboratori.rinominaRegistrazione,

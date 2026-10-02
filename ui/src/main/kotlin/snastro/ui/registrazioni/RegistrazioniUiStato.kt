@@ -90,7 +90,15 @@ data class RigaRegistrazione(
     val annullabile: Boolean = false,
     val eliminazione: StatoEliminazione = StatoEliminazione.Disponibile,
     val confermaElimina: Boolean = false,
+    val parte: ParteDiIncontro? = null,
 )
+
+/**
+ * ADR 0038 §5: set only on a Parte that is NOT the last of its Incontro (an Incontro with two or more Parti): its
+ * Elimina confirmation then names the [numero] and the Incontro's [titoloIncontro] and says the Riassunto becomes
+ * superato. `null` (a 1-part Incontro, or the last Parte left) keeps today's dialog.
+ */
+data class ParteDiIncontro(val numero: Int, val titoloIncontro: String)
 
 /**
  * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu — ALWAYS one of these two (pre-release
