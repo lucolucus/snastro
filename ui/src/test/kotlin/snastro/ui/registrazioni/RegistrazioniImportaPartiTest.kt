@@ -41,6 +41,7 @@ class RegistrazioniImportaPartiTest {
             io = dispatcher,
             progettoId = PROGETTO,
             registrazioni = { emptyList() },
+            incontri = { emptyList() },
             aggiungiRegistrazione = aggiungi,
             modificaDataRegistrazione = { error("non atteso") },
             rinominaRegistrazione = { error("non atteso") },
