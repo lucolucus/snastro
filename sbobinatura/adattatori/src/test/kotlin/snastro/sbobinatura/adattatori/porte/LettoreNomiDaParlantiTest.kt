@@ -127,13 +127,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         override val piuPartiPerIncontro: Boolean = false
 
         override val lettore: LettoreNomi = LettoreNomiDaParlanti(
-            NomiDelleVoci(
-                attribuzioni,
-                parlanti,
-                LettoreRegistrazioneFintaParlanti(registrazioniVisteParlanti),
-                uowParlanti,
-            ),
-            catalogo,
+            NomiDelleVoci(attribuzioni, parlanti, uowParlanti),
         )
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(

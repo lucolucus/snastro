@@ -102,7 +102,7 @@ internal class PorteProgetto(
     val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti, registrazionePerTrascrizione)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Sbobinatura's and Sintesi's readers. */
-    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, registrazionePerParlanti, lettura)
+    val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
 
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 
@@ -110,9 +110,10 @@ internal class PorteProgetto(
         LettoreVociDaTrascrizione(vociDelTrascritto, registrazionePerParlanti)
     val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
-    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci, catalogo)
+    val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci)
     val trascrittoPerSintesi: LettoreTrascrittoSintesi = LettoreTrascrittoSintesi(vociDelTrascritto, statiElaborazione)
-    val nomiPerSintesi: LettoreNomiSintesi = LettoreNomiSintesi(nomiDelleVoci)
+    val nomiPerSintesi: LettoreNomiSintesi =
+        LettoreNomiSintesi(nomiDelleVoci) { catalogo.registrazione(it)?.incontroId }
 
     companion object {
         /** `SessioneProgettoSeams`' default: the production Registrazione repository, built through here only. */

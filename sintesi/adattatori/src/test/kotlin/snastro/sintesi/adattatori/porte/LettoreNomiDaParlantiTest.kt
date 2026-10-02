@@ -75,9 +75,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val vociViste = mutableMapOf<IncontroId, List<VoceVista>>()
 
         override val lettore: LettoreNomi =
-            LettoreNomiDaParlanti(
-                NomiDelleVoci(attribuzioni, parlanti, LettoreRegistrazioneFinta(registrazioniViste), unitaDiLavoro),
-            )
+            LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro)) {
+                registrazioniViste[it]?.incontroId
+            }
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
