@@ -71,4 +71,11 @@ class RiassumibilitaTest {
     fun `INV-I9 un Incontro senza Parti e un errore del programmatore`() {
         assertFailsWith<IllegalArgumentException> { Riassumibilita.valuta(true, emptyList(), false, null) }
     }
+
+    @Test
+    fun `INV-I9 un numero di Parte ripetuto e un errore del programmatore`() {
+        assertFailsWith<IllegalArgumentException> {
+            Riassumibilita.valuta(true, listOf(1 to TRASCRITTA, 1 to DA_TRASCRIVERE), false, null)
+        }
+    }
 }

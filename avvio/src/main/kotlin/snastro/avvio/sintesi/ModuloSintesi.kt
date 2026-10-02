@@ -81,10 +81,7 @@ internal class ModuloSintesi(
         val nomi = porte.nomiPerSintesi
         val incontri = porte.incontroPerSintesi
         val incontroDi = { r: RegistrazioneId -> porte.catalogo.registrazione(r)?.incontroId }
-        eliminazione = AbbonatoProgettoSintesi(
-            ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher),
-            incontroDi,
-        )
+        eliminazione = AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
         val esegui = EseguiProssimoRiassuntoServizio(
             uow,
             clock,

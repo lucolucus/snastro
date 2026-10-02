@@ -8,6 +8,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.kernel.poi
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreNomi
@@ -30,7 +31,8 @@ import snastro.sintesi.dominio.TestoConVoci
 /**
  * Read-model `vista-riassunto` (AC-S102..S108, ADR 0021 §3, ADR 0023 §4, ADR 0029 §5/AC-C32, ADR 0037 §6): builds
  * [RiassuntoVista] for one Incontro, over ALL its Parti in INV-I2 order, with no side effect, never calling
- * [snastro.sintesi.applicazione.porte.ModelloLinguistico]. `null` when the Incontro is unknown, or has one Parte
+ * [snastro.sintesi.applicazione.porte.ModelloLinguistico]. `null` when the Incontro is unknown (or read with no
+ * Parte), or has one Parte
  * with no Trascritto (the tab is not offered, INV-I3). Names for display are joined from [nomi] at read time
  * (INV-S5), for Voci still present only (INV-I13): a
  * rename never invalidates a stored Riassunto. [di] reads the Segmenti (through [trascritti]) and the
@@ -48,7 +50,7 @@ public class RiassuntoVisteLettura(
 ) {
     /** The Riassunto view of the Incontro [i] (ADR 0037 §1, §6), read through all its Parti. */
     public fun di(i: IncontroId): RiassuntoVista? = lettura.inLettura {
-        val parti = incontri.parti(i) ?: return@inLettura null
+        val parti = incontri.parti(i)?.takeIf { it.isNotEmpty() } ?: return@inLettura null
         val segmentiDi = parti.associate { it.registrazioneId to trascritti.segmenti(it.registrazioneId) }
         // INV-I3: a one-Parte Incontro with no Trascritto has no tab, as before (never "Parte 1 non riuscita")
         if (parti.size == 1 && segmentiDi.getValue(parti.single().registrazioneId) == null) return@inLettura null
@@ -76,20 +78,21 @@ public class RiassuntoVisteLettura(
      * the first one in Parte order.
      */
     private fun disponibilita(corrente: Corrente): DisponibilitaVista {
-        val ingresso = IngressoRiassunto.costruisci(
-            corrente.parti.map { p -> corrente.segmentiDi(p).map { it.inIngresso(p.registrazioneId) } },
-        ).testo
-        val esito = Riassumibilita.valuta(
-            modelloInstallato = true, // surfaced by `modello`, not `disponibilita`
-            stati = corrente.parti.map { it.numero to trascritti.statoParte(it.registrazioneId) },
-            riassuntoAperto = false, // surfaced by `richiestaAperta`, not `disponibilita`
-            stimaToken = LimiteIngresso.stimaToken(ingresso),
-        )
+        val stati = corrente.parti.map { it.numero to trascritti.statoParte(it.registrazioneId) }
+        // `modello` and `richiestaAperta` surface the other two reasons; the input is built only when no Parte blocks
+        val esito = Riassumibilita.valuta(modelloInstallato = true, stati, riassuntoAperto = false, stimaToken = null)
+            .poi { Riassumibilita.valuta(modelloInstallato = true, stati, riassuntoAperto = false, stimaDi(corrente)) }
         return when (esito) {
             is Esito.Ok -> DisponibilitaVista.Disponibile
             is Esito.Errore -> DisponibilitaVista.NonDisponibile(motivoDi(esito.errore))
         }
     }
+
+    private fun stimaDi(corrente: Corrente): Int = LimiteIngresso.stimaToken(
+        IngressoRiassunto.costruisci(
+            corrente.parti.map { p -> corrente.segmentiDi(p).map { it.inIngresso(p.registrazioneId) } },
+        ).testo,
+    )
 
     /** Only the four reasons reachable with `modelloInstallato = true` and `riassuntoAperto = false`. */
     private fun motivoDi(errore: ErroreDominio): MotivoNonDisponibile = when (errore) {
@@ -130,8 +133,11 @@ private class Corrente(
 
     fun parteDi(r: RegistrazioneId): ParteSintesi? = parti.firstOrNull { it.registrazioneId == r }
 
-    fun segmento(ref: SegmentoRef): SegmentoSintesi? =
-        segmenti[ref.registrazioneId]?.firstOrNull { it.segmentoId == ref.segmentoId }
+    private val perRiferimento: Map<SegmentoRef, SegmentoSintesi> = segmenti.entries
+        .flatMap { (r, s) -> s.orEmpty().map { SegmentoRef(r, it.segmentoId) to it } }
+        .toMap()
+
+    fun segmento(ref: SegmentoRef): SegmentoSintesi? = perRiferimento[ref]
 
     /** The structure the root's INV-I11 predicate compares: EVERY current Segmento of every Parte (an uncited one
      * moving also supera it), a Parte without Trascritto as `null`. */
