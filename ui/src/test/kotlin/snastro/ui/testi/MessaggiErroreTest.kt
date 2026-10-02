@@ -229,6 +229,7 @@ class MessaggiErroreTest {
                 ErroreSintesi.LunghezzaMassimaFuoriIntervallo(299, 300, 2500),
                 ErroreSintesi.TransizioneNonAmmessa("in_attesa", "in_corso"),
                 ErroreSintesi.RiassuntoNonTrovato("id-1"),
+                ErroreSintesi.IncontroNonTrovato(IncontroId("incontro-1")),
             ),
         ) { messaggioPer(it) }
     }
