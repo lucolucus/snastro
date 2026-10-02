@@ -6,6 +6,7 @@ import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.mappa
 import snastro.trascrizione.dominio.ErroreTrascrizione.DivisioneNonAmmessa
@@ -72,6 +73,8 @@ public class Trascritto private constructor(
         }
     }
 
+    private fun rif(s: SegmentoId) = SegmentoRef(registrazioneId, s)
+
     /**
      * INV-10: [segmenti], a non-empty proper subset of [origine]'s Segmenti, become a NEW Voce; each of them is
      * `confermato` afterwards (INV-26), the Segmenti left on [origine] keep their flags.
@@ -81,7 +84,7 @@ public class Trascritto private constructor(
         return when {
             diOrigine.isEmpty() -> Esito.Errore(VoceNonTrovata(origine))
             segmenti.isEmpty() || !diOrigine.containsAll(segmenti) || segmenti.size == diOrigine.size ->
-                Esito.Errore(DivisioneNonAmmessa(origine, segmenti))
+                Esito.Errore(DivisioneNonAmmessa(origine, segmenti.mapTo(mutableSetOf()) { rif(it) }))
             else -> {
                 val nuova = nuovaVoce()
                 sposta(segmenti, verso = nuova, conferma = true)
@@ -99,7 +102,7 @@ public class Trascritto private constructor(
      * `confermato` afterwards: a manual move is an explicit user act (INV-26).
      */
     internal fun riassegna(segmento: SegmentoId, destinazione: VoceId?): Esito<SegmentoRiassegnato> {
-        val da = _segmenti[segmento]?.voceId ?: return Esito.Errore(SegmentoNonTrovato(segmento))
+        val da = _segmenti[segmento]?.voceId ?: return Esito.Errore(SegmentoNonTrovato(rif(segmento)))
         return when {
             destinazione == da || destinazione == null && idsDi(da).size == 1 ->
                 Esito.Errore(RiassegnazioneNonAmmessa(segmento, destinazione))
@@ -155,7 +158,7 @@ public class Trascritto private constructor(
     internal fun confermaSegmento(segmento: SegmentoId, confermato: Boolean): Esito<SegmentoConfermato?> {
         val attuale = _segmenti[segmento]
         return when {
-            attuale == null -> Esito.Errore(SegmentoNonTrovato(segmento))
+            attuale == null -> Esito.Errore(SegmentoNonTrovato(SegmentoRef(registrazioneId, segmento)))
             attuale.confermato == confermato -> Esito.Ok(null)
             else -> {
                 _segmenti[segmento] = attuale.copy(confermato = confermato)

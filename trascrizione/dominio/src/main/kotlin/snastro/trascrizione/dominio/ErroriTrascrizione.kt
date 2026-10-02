@@ -5,6 +5,7 @@ import snastro.kernel.ErroreDominio
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 
 /** Expected rule violations of the Trascrizione context (ADR 0003). */
@@ -46,14 +47,14 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
     /** INV-9/10/11: the Voce is not (or no longer) a Voce of this [Trascritto]. */
     public data class VoceNonTrovata(val voceId: VoceId) : ErroreTrascrizione
 
-    /** INV-11: the Segmento is not a Segmento of this [Trascritto]. */
-    public data class SegmentoNonTrovato(val segmentoId: SegmentoId) : ErroreTrascrizione
+    /** INV-11: the Segmento (with its Parte) is not a Segmento of this Trascritto / Incontro. */
+    public data class SegmentoNonTrovato(val segmento: SegmentoRef) : ErroreTrascrizione
 
     /** INV-9: a Voce cannot be joined with itself. */
     public data class UnioneNonAmmessa(val sopravvive: VoceId, val rimossa: VoceId) : ErroreTrascrizione
 
     /** INV-10: the Segmenti to split off must be a non-empty proper subset of [origine]'s Segmenti. */
-    public data class DivisioneNonAmmessa(val origine: VoceId, val segmenti: Set<SegmentoId>) : ErroreTrascrizione
+    public data class DivisioneNonAmmessa(val origine: VoceId, val segmenti: Set<SegmentoRef>) : ErroreTrascrizione
 
     /**
      * INV-11: the Segmento is already on [destinazione], or [destinazione] is `null` (a new Voce) while the
