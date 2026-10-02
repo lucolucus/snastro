@@ -9,6 +9,7 @@ import snastro.kernel.Esito
 import snastro.kernel.SegmentoId
 import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.letture.VoceIdentificata
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -33,6 +34,8 @@ private val TRASCRITTO_UNA_VOCE = TrascrittoView(
     durataMs = 10_000,
     segmenti = listOf(SegmentoTrascrittoView(SegmentoId(1), V1, 0, 900, "Buongiorno.")),
     voci = listOf(VoceTrascrittoView(V1, "Voce 1")),
+    numeroParte = 1,
+    parti = listOf(ParteRef(REG, 1)),
 )
 
 private fun unoStatoVuoto(trascritto: TrascrittoView) = MutableStateFlow<RegistrazioneUiStato>(

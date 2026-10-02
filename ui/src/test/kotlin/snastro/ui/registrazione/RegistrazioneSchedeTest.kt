@@ -14,6 +14,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.unIncontroDi
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -40,6 +41,8 @@ private fun unaVista(registrazioneId: RegistrazioneId) = TrascrittoView(
     durataMs = 125_000,
     segmenti = listOf(SegmentoTrascrittoView(SegmentoId(1), VoceId(1), 0, 2_000, "Buongiorno a tutti.")),
     voci = listOf(VoceTrascrittoView(VoceId(1), "Voce 1")),
+    numeroParte = 1,
+    parti = listOf(ParteRef(registrazioneId, 1)),
 )
 
 private fun unaSorgente(segno: MutableStateFlow<SegnoScheda?> = MutableStateFlow(null)) =

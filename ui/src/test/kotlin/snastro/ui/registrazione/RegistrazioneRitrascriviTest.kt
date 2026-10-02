@@ -12,6 +12,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.unIncontroDi
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -39,6 +40,8 @@ private fun unaVista(generazione: Int = 1) = TrascrittoView(
     durataMs = 125_000,
     segmenti = listOf(SegmentoTrascrittoView(SegmentoId(1), VoceId(1), 0, 2_000, "generazione $generazione")),
     voci = listOf(VoceTrascrittoView(VoceId(1), "Voce 1")),
+    numeroParte = 1,
+    parti = listOf(ParteRef(REG_1, 1)),
 )
 
 private fun statoVista(stato: StatoElaborazioneVista) = StatoRegistrazioneVista(

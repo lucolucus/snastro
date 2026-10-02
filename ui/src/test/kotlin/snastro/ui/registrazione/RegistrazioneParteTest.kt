@@ -146,15 +146,6 @@ class RegistrazioneParteTest {
     }
 
     @Test
-    fun `INV-I3 una vista senza parti noto come oggi non ha intestazione`() = runTest {
-        val vista = vistaDi(1, parti = listOf(PARTI[0])).copy(parti = emptyList())
-        val presenter = presentatore(this, 1, vista = vista)
-        advanceUntilIdle()
-
-        assertNull(presenter.dati.parte)
-    }
-
-    @Test
     fun `AC-I75 una ritrascrizione sulla parte 3 blocca la parte 1 con il banner della parte 3`() = runTest {
         val lettore = LettoreAudioFinta()
         val presenter = presentatore(this, 1, vista = vistaDi(1, RitrascrizioneInCorso(3)), lettore = lettore)
