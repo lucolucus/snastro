@@ -132,6 +132,15 @@ class PropostaTraPartiTest {
     }
 
     @Test
+    fun `INV-I18 un Incontro di esattamente due Parti propone la coppia`() {
+        val a = ambiente(fetta(1, P1, A), fetta(2, P2, A), parti = listOf(P1, P2))
+
+        val coppia = a.api.perIncontro(INCONTRO).single()
+
+        assertEquals(VoceId(1) to VoceId(2), coppia.voceA to coppia.voceB)
+    }
+
+    @Test
     fun `AC-I48 un Incontro di una sola Parte non estrae nessuna impronta`() {
         val a = ambiente(fetta(1, P1, A), fetta(2, P1, A), parti = listOf(P1))
 
