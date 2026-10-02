@@ -13,8 +13,13 @@ import java.time.LocalDate
  * riferimento are the values at deletion — the only way after-commit consumers can locate the files.
  * [incontroId] is the Incontro the Parte belonged to; [incontroCessato] is true iff no other Parte of it exists, so the
  * Incontro ceases in this same transaction (ADR 0038 §1).
- * Delivery EXCEPTION: TWO SYNCHRONOUS subscribers (the Trascrizione veto + purge, the Parlanti purge + INV-25), whose
- * Errore dooms the command; every other subscriber runs after commit (the Sbobinatura removal, the file cleanup).
+ * Delivery EXCEPTION (ADR 0038 §2): TWO SYNCHRONOUS subscribers, in the declared module order (ADR 0030 §2), whose
+ * Errore dooms the command:
+ * - Sintesi: with [incontroCessato], every Riassunto of the Incontro goes;
+ * - Trascrizione: the veto on an open Elaborazione, then its purge, which publishes `TrascrittoEliminato` to the
+ *   Parlanti purge + INV-25 (nested).
+ * Parlanti no longer subscribes synchronously to this event. Every other subscriber runs after commit (the Sbobinatura
+ * removal, the file cleanup, the Parlanti view refresh).
  */
 public data class RegistrazioneEliminata(
     val registrazioneId: RegistrazioneId,

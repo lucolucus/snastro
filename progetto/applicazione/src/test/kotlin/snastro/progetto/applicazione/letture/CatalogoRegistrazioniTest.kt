@@ -131,7 +131,31 @@ class CatalogoRegistrazioniTest {
         registrazioni.salva(unaRegistrazione(RegistrazioneId("id-2"), "B", inc))
         assertEquals(LocalTime.of(10, 0, 5), catalogo.registrazione(con.id)?.oraDiInizio)
         assertNull(catalogo.registrazione(RegistrazioneId("id-2"))?.oraDiInizio)
-        assertEquals(catalogo.incontro(inc)!!.parti.map { it.registrazioneId }, catalogo.parti(inc))
+        assertEquals(catalogo.incontro(inc)!!.parti.map { it.registrazioneId }.toSet(), catalogo.parti(inc)?.toSet())
+    }
+
+    @Test
+    fun `AC-I203 parti non e' nell'ordine delle Parti, che resta solo di incontro`() {
+        val inc = IncontroId("incontro-a")
+        registrazioni.salva(unaRegistrazione(RegistrazioneId("a"), "Prima", inc, ora = LocalTime.of(9, 0)))
+        registrazioni.salva(unaRegistrazione(RegistrazioneId("b"), "Seconda", inc, ora = LocalTime.of(10, 0)))
+
+        assertEquals(listOf("a" to 1, "b" to 2), numeri(inc))
+        assertEquals(listOf(RegistrazioneId("b"), RegistrazioneId("a")), catalogo.parti(inc), "l'ordine della Finta")
+    }
+
+    @Test
+    fun `INV-I2 a parita di data e ora decide aggiuntaAlle, poi l id`() {
+        val inc = IncontroId("incontro-a")
+        val ora = LocalTime.of(9, 0)
+        val dopo = Instant.parse("2026-09-23T10:00:01Z")
+        listOf(
+            unaRegistrazione(RegistrazioneId("b"), "Pari b", inc, ora = ora),
+            unaRegistrazione(RegistrazioneId("d"), "Aggiunta dopo", inc, ora = ora, aggiuntaAlle = dopo),
+            unaRegistrazione(RegistrazioneId("c"), "Pari c", inc, ora = ora),
+        ).forEach(registrazioni::salva)
+
+        assertEquals(listOf("b" to 1, "c" to 2, "d" to 3), numeri(inc))
     }
 
     private fun numeri(inc: IncontroId) =
@@ -144,6 +168,7 @@ class CatalogoRegistrazioniTest {
         titolo: String,
         incontroId: IncontroId = IncontroId("incontro-di-${id.valore}"),
         ora: LocalTime? = null,
+        aggiuntaAlle: Instant = Instant.parse("2026-09-23T10:00:00Z"),
     ): Registrazione =
         Registrazione.aggiungi(
             id = id,
@@ -153,7 +178,7 @@ class CatalogoRegistrazioniTest {
             riferimentoAudio = RiferimentoAudio("audio/${id.valore}.m4a"),
             durataMs = 3_600_000L,
             dataRegistrazione = LocalDate.of(2026, 3, 12),
-            aggiuntaAlle = Instant.parse("2026-09-23T10:00:00Z"),
+            aggiuntaAlle = aggiuntaAlle,
             oraDiInizio = ora?.let(::oraDi),
         ).aggregato
 }
