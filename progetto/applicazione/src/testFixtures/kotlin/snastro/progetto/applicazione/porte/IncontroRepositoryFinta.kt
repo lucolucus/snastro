@@ -22,7 +22,9 @@ public class IncontroRepositoryFinta(private val registrazioni: RegistrazioneRep
     }
 
     override fun rimuovi(id: IncontroId) {
-        check(registrazioni.partiDi(id).isEmpty()) { "Incontro ${id.valore} ha ancora una Parte (INV-I1)" }
+        check(registrazioni.partiDi(id).isEmpty()) {
+            "FOREIGN KEY constraint failed: Incontro ${id.valore} ha ancora una Parte (INV-I1)"
+        }
         righe.remove(id)
     }
 

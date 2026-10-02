@@ -96,7 +96,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
         private val incontriProgetto = IncontroRepositoryFinta(registrazioniProgetto)
-        private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
+        private val eventiProgetto =
+            DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti, incontriProgetto))
         private val archivio = ArchivioAudioFinta()
         private val catalogo =
             CatalogoRegistrazioni(registrazioniProgetto, incontriProgetto)

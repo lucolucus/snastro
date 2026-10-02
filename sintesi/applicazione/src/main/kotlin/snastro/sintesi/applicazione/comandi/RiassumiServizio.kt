@@ -30,7 +30,7 @@ import java.time.Clock
  * Use-case `Riassumi` (AC-S77..S82; INV-S2, INV-S3, INV-S6, INV-S10; ADR 0021 §3). One transaction:
  * - reads the Incontro's Parti and every [Riassumibilita] guard (model `Installato`, EVERY Parte `TRASCRITTA`, no open
  *   Riassunto, the whole Incontro's labelled input within the limit — the same rule `riassunto-vista` shares) —
- *   INV-I9, D-0020; an unknown Incontro is `IncontroNonTrovato`;
+ *   INV-I9, D-0020; an unknown Incontro is `IncontroNonTrovato`, checked before every other guard;
  * - validates the [Argomento] (AFTER the guards: `What to do`);
  * - reads the Progetto's current lunghezza massima and fixes it on the new Riassunto (INV-S10);
  * - removes a previous `fallito` of the Incontro in this same transaction, leaving a `pronto`
@@ -56,20 +56,35 @@ public class RiassumiServizio(
 ) {
     public fun esegui(c: Riassumi): Esito<RiassuntoId> = uow.inTransazione {
         // ADR 0037 §2 / D-0020: every Parte of the Incontro, in INV-I2 order, read through the ports in this
-        // transaction; the verdict is Riassumibilita's (the same rule the view shows).
-        val parti = incontri.parti(c.incontroId)
+        // transaction; the verdict is Riassumibilita's (the same rule the view shows). The Incontro is looked up
+        // FIRST: an unknown (or ceased, or Parte-less) Incontro is IncontroNonTrovato before any Riassumibilita
+        // reason, the model's included — there is nothing to evaluate the guards on.
+        val parti = incontri.parti(c.incontroId)?.takeIf { it.isNotEmpty() }
         if (parti == null) {
             Esito.Errore(ErroreSintesi.IncontroNonTrovato(c.incontroId))
         } else {
-            val stati = parti.map { it.numero to trascritti.statoParte(it.registrazioneId) }
-            Riassumibilita.valuta(
-                modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
-                stati = stati,
-                riassuntoAperto = riassunti.trova(c.incontroId).any { it.aperto },
-                stimaToken = stimaDi(parti),
-            )
+            riassumibile(c.incontroId, parti)
                 .poi { Argomento.di(c.argomento) }
                 .poi { argomento -> crea(c.incontroId, argomento) }
+        }
+    }
+
+    /**
+     * [Riassumibilita] in two passes: the size estimate needs the whole labelled input (up to ~540k chars on a 3 h
+     * Incontro), so it is built only when every other precondition already holds. A `RiassuntoGiaAperto` carries
+     * [incontroId], equal to the repository backstop's own (INV-S2).
+     */
+    private fun riassumibile(incontroId: IncontroId, parti: List<ParteSintesi>): Esito<Unit> {
+        val modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato
+        val stati = parti.map { it.numero to trascritti.statoParte(it.registrazioneId) }
+        val riassuntoAperto = riassunti.trova(incontroId).any { it.aperto }
+        val esito = Riassumibilita.valuta(modelloInstallato, stati, riassuntoAperto, stimaToken = null)
+            .poi { Riassumibilita.valuta(modelloInstallato, stati, riassuntoAperto, stimaDi(parti)) }
+        val errore = (esito as? Esito.Errore)?.errore
+        return if (errore is ErroreSintesi.RiassuntoGiaAperto) {
+            Esito.Errore(ErroreSintesi.RiassuntoGiaAperto(incontroId))
+        } else {
+            esito
         }
     }
 
