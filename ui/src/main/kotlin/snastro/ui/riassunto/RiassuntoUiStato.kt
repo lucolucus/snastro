@@ -26,6 +26,8 @@ sealed interface RiassuntoUiStato {
         val messaggioErrore: String? = null,
         /** With a shown Riassunto, the Argomento/lunghezza form opens from the top bar's "Riassumi di nuovo". */
         val moduloAperto: Boolean = false,
+        /** "Riassunto dell'incontro · N parti": `null` on a one-Parte Incontro (INV-I3). */
+        val intestazioneTesto: String? = null,
     ) : RiassuntoUiStato {
         /**
          * The ONE bottom action-area variant, by PRECEDENCE (ux-proposal's own layout: model line at
