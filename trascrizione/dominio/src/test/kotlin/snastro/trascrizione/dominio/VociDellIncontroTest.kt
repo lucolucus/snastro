@@ -162,6 +162,40 @@ class VociDellIncontroTest {
         }
     }
 
+    @Test
+    fun `INV-I16 nessuna sequenza di comandi riusa un segmentoId di una Parte, nemmeno dopo rimuoviParte`() {
+        val parti = listOf(a, b, RegistrazioneId("parte-c"))
+        repeat(SEQUENZE) { seme ->
+            val caso = Random(seme)
+            val v = VociDellIncontro.crea(incontroId)
+            val usati = mutableMapOf<RegistrazioneId, MutableSet<SegmentoId>>()
+            repeat(PASSI) {
+                val prima = v.trascritti.associate { t -> t.registrazioneId to t.segmenti.map { it.id }.toSet() }
+                comandoCasuale(v, caso, parti)
+                v.trascritti.forEach { t ->
+                    val ids = t.segmenti.map { it.id }.toSet()
+                    val nuovi = ids - prima[t.registrazioneId].orEmpty()
+                    val riusati = nuovi intersect usati[t.registrazioneId].orEmpty()
+                    assertEquals(emptySet(), riusati, "seed $seme: ${t.registrazioneId} reuses a segmentoId")
+                    usati.getOrPut(t.registrazioneId) { mutableSetOf() } += ids
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `INV-I16 completare di nuovo una Parte rimossa numera i Segmenti dopo quelli che aveva`() {
+        val v = dueParti() // A: Segmenti 1..4
+        v.rimuoviParte(a).atteso()
+        val copia = v.copia()
+
+        v.completaParte(a, turni(0), DURATA_TRASCRITTO_MS).atteso()
+        copia.completaParte(a, turni(0), DURATA_TRASCRITTO_MS).atteso()
+
+        assertEquals(listOf(SegmentoId(5), SegmentoId(6)), v.trascritto(a)?.segmenti?.map { it.id })
+        assertEquals(listOf(SegmentoId(5), SegmentoId(6)), copia.trascritto(a)?.segmenti?.map { it.id }, "copied too")
+    }
+
     // --- INV-8 ----------------------------------------------------------------------------------------------------
 
     @Test

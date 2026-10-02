@@ -11,6 +11,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.unIncontroDi
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -46,6 +47,8 @@ private fun unaVista(
     durataMs = 125_000,
     segmenti = segmenti,
     voci = voci,
+    numeroParte = 1,
+    parti = listOf(ParteRef(REG_1, 1)),
 )
 
 private fun unSegmento(

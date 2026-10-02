@@ -24,6 +24,7 @@ import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.supporto.test.attendiFinche
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -73,6 +74,8 @@ private fun trascrittoRiferimenti(): TrascrittoView {
         8_000,
         segmenti,
         listOf(V1, V2, V3).map { VoceTrascrittoView(it, "Voce ${it.numero}") },
+        numeroParte = 1,
+        parti = listOf(ParteRef(REG, 1)),
     )
 }
 

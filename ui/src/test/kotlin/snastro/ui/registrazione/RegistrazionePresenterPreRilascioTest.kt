@@ -19,6 +19,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.unIncontroDi
 import snastro.supporto.test.attendiFinche
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
@@ -51,6 +52,8 @@ private fun unaVista(segmenti: List<SegmentoTrascrittoView>) = TrascrittoView(
     durataMs = 10_000,
     segmenti = segmenti,
     voci = segmenti.map { it.voceId }.distinct().map { VoceTrascrittoView(it, "Voce ${it.numero}") },
+    numeroParte = 1,
+    parti = listOf(ParteRef(REG_1, 1)),
 )
 
 private fun unSegmento(id: SegmentoId, inizioMs: Long, fineMs: Long) =
