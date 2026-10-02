@@ -51,6 +51,8 @@ import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
 private val REG_1 = RegistrazioneId("id-1")
+private val REG_2 = RegistrazioneId("id-2")
+private val REG_3 = RegistrazioneId("id-3")
 private val ISTANTE_0: Instant = Instant.parse("2026-09-26T10:00:00Z")
 
 /** A [Clock] whose [instant] a test moves forward explicitly — the running status line ticks off it. */
@@ -114,9 +116,10 @@ private fun unaVista(
     disponibilita: DisponibilitaVista = DisponibilitaVista.Disponibile,
     argomentoPrecompilato: String? = null,
     mostrato: RiassuntoMostrato? = null,
+    numParti: Int = 1,
 ) = RiassuntoVista(
     unIncontroDi(REG_1),
-    1,
+    numParti,
     modello,
     richiestaAperta,
     ultimoFallimento,
@@ -208,6 +211,8 @@ class RiassuntoPresenterTest {
         // single-flight reload only ever lets the LATEST trigger reach this last read.
         var chiamatePosizioni = 0
 
+        val eventi = mutableListOf<String>()
+
         val presenter = RiassuntoPresenter(
             scope = coroutineScope,
             io = io,
@@ -233,6 +238,8 @@ class RiassuntoPresenterTest {
             idModelloLinguistico = ID_MODELLO_LINGUISTICO,
             dimensioneModelloLinguisticoByte = 6_169_341_984,
             limiteCaratteriArgomento = limiteCaratteriArgomento,
+            vaiAllaParte = { parte -> eventi.add("vai:${parte.valore}") },
+            riproduciDa = { parte, ms -> eventi.add("play:${parte.valore}@$ms") },
         )
     }
 
@@ -427,6 +434,124 @@ class RiassuntoPresenterTest {
         a.vistaCorrente = unaVista(mostrato = unMostrato(omessi = 0))
         runCurrent()
         assertNull(requireNotNull(dati(a.presenter).contenuto).omessiTesto)
+    }
+
+    @Test
+    fun `AC-I80 su un incontro di una parte non c e intestazione e i testi sono quelli di oggi`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(
+            disponibilita = DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(1)),
+            mostrato = unMostrato(),
+        )
+        runCurrent()
+        val dati = dati(a.presenter)
+        assertEquals(null, dati.intestazioneTesto)
+        assertEquals(AreaAzione.NonDisponibile("Aspetta la fine della trascrizione."), dati.areaAzione)
+    }
+
+    @Test
+    fun `AC-I80 con tre parti l intestazione e i tre motivi nominano la parte che blocca`() = eseguiTest { a ->
+        val attesi = mapOf(
+            MotivoNonDisponibile.PartiNonTrascritte(2) to "Manca la trascrizione della parte 2.",
+            MotivoNonDisponibile.ElaborazioneAperta(1) to "Parte 1 in trascrizione.",
+            MotivoNonDisponibile.PartiFallite(1) to "Parte 1 non riuscita: riprova o eliminala.",
+        )
+        attesi.forEach { (motivo, testo) ->
+            a.vistaCorrente = unaVista(disponibilita = DisponibilitaVista.NonDisponibile(motivo), numParti = 3)
+            a.aggiornamenti.emetti(Cambiamento(REG_1))
+            runCurrent()
+            val dati = dati(a.presenter)
+            assertEquals("Riassunto dell'incontro · 3 parti", dati.intestazioneTesto)
+            assertEquals(AreaAzione.NonDisponibile(testo), dati.areaAzione)
+        }
+    }
+
+    @Test
+    fun `AC-I80 superato mostra il testo generico e Riassumi di nuovo`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(mostrato = unMostrato(superato = true), numParti = 2)
+        runCurrent()
+        val dati = dati(a.presenter)
+        assertTrue(requireNotNull(dati.contenuto).superato)
+        assertEquals(AreaAzione.Azionabile(nuovo = true), dati.areaAzione)
+        assertEquals(
+            "Il riassunto non corrisponde più alle parti attuali (voci, trascrizioni o ordine cambiati).",
+            snastro.ui.testi.AVVISO_SUPERATO,
+        )
+    }
+
+    @Test
+    fun `AC-I81 le chip sono ordinate per parte e minuto e dicono parte n e m ss`() = eseguiTest { a ->
+        val v = unaVoce(1)
+        val fonti = listOf(
+            FonteVista(REG_3, 3, 9, v, 750_000, segmentoPresente = true),
+            FonteVista(REG_1, 1, 2, v, 65_000, segmentoPresente = true),
+        )
+        a.vistaCorrente = unaVista(
+            mostrato = unMostrato(decisioni = listOf(unElemento("D", fonti))),
+            numParti = 3,
+        )
+        runCurrent()
+        val chip = requireNotNull(dati(a.presenter).contenuto).decisioni.single().fonti
+        assertEquals(listOf("parte 1 · 1:05", "parte 3 · 12:30"), chip.map { it.tempoTesto })
+        assertTrue(chip.all { it.cliccabile })
+    }
+
+    @Test
+    fun `AC-I81 cliccare una chip di un altra parte riproduce dal suo minuto e passa a quella parte`() =
+        eseguiTest { a ->
+            a.presenter.azioni.apriFonte(REG_3, 750_000)
+            runCurrent()
+            assertEquals(listOf("play:id-3@750000", "vai:id-3"), a.eventi)
+        }
+
+    @Test
+    fun `AC-I81 cliccare una chip della parte aperta riproduce senza cambiare parte`() = eseguiTest { a ->
+        a.presenter.azioni.apriFonte(REG_1, 65_000)
+        runCurrent()
+        assertEquals(listOf("play:id-1@65000"), a.eventi)
+    }
+
+    @Test
+    fun `INV-I3 su una parte sola le chip non sono cliccabili e non dicono parte`() = eseguiTest { a ->
+        a.vistaCorrente = unaVista(
+            mostrato = unMostrato(
+                decisioni = listOf(unElemento("D", listOf(unaFonte(1, unaVoce(1), 65_000)))),
+            ),
+        )
+        runCurrent()
+        val chip = requireNotNull(dati(a.presenter).contenuto).decisioni.single().fonti.single()
+        assertEquals("1:05", chip.tempoTesto)
+        assertEquals(false, chip.cliccabile)
+    }
+
+    @Test
+    fun `INV-I13 segmento sparito parte eliminata e voce non presente`() = eseguiTest { a ->
+        val assente = VoceVista(7, "Voce 7", null, presente = false)
+        val fonti = listOf(
+            FonteVista(REG_2, 2, 4, null, null, segmentoPresente = false),
+            FonteVista(REG_2, null, 5, null, null, segmentoPresente = false),
+            FonteVista(REG_1, 1, 6, assente, 90_000, segmentoPresente = true),
+        )
+        a.vistaCorrente = unaVista(
+            mostrato = unMostrato(
+                sommario = listOf(
+                    ParteTestoVista.Testo("Parla "),
+                    ParteTestoVista.Voce(assente),
+                ),
+                decisioni = listOf(unElemento("D", fonti)),
+            ),
+            numParti = 3,
+        )
+        runCurrent()
+        val c = requireNotNull(dati(a.presenter).contenuto)
+        assertEquals("Parla Voce 7 · non più presente", c.sommario)
+        val chip = c.decisioni.single().fonti
+        assertEquals(
+            listOf("parte 1 · 1:30", "parte 2 · non più presente", "non più presente"),
+            chip.map { it.tempoTesto },
+        )
+        assertEquals(listOf(true, false, false), chip.map { it.cliccabile })
+        assertEquals(listOf(true, false, false), chip.map { it.voceNonPresente })
+        assertEquals(listOf(7, null, null), chip.map { it.voceId })
     }
 
     @Test
@@ -768,6 +893,8 @@ class RiassuntoPresenterTest {
                 idModelloLinguistico = ID_MODELLO_LINGUISTICO,
                 dimensioneModelloLinguisticoByte = 1,
                 limiteCaratteriArgomento = 200,
+                vaiAllaParte = {},
+                riproduciDa = { _, _ -> },
             )
             attendiFinche(messaggio = "il primo caricamento non e' arrivato a in_corso") {
                 (presenter.stato.value as? RiassuntoUiStato.Dati)?.areaAzione is AreaAzione.InCorso
