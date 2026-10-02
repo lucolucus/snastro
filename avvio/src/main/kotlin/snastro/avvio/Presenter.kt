@@ -19,6 +19,7 @@ import snastro.ui.registrazione.RegistrazionePresenter
 import snastro.ui.registrazione.SelezioneSchedaS3
 import snastro.ui.registrazione.SorgenteRiassuntoS3
 import snastro.ui.registrazione.SorgentiParlanti
+import snastro.ui.registrazione.SorgentiParti
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.riassunto.RiassuntoPresenter
 import snastro.ui.riassunto.SchedaRiassunto
@@ -101,16 +102,18 @@ internal fun costruisciRegistrazioniPresenter(
  * (READ-ONLY while a re-run is queued or running, AC-461) and the Riassunto tab ([costruisciRiassuntoPresenter],
  * ADR 0021 §10) with the ONE per-window [selezioneSchedaS3] (AC-S121).
  */
+@Suppress("LongParameterList") // the app graph, the project's collaborators, and the screen's own five inputs
 internal fun costruisciRegistrazionePresenter(
     grafo: Grafo,
     collaboratori: CollaboratoriProgetto,
     id: RegistrazioneId,
     scope: CoroutineScope,
     selezioneSchedaS3: SelezioneSchedaS3,
+    vaiAllaParte: (RegistrazioneId) -> Unit,
 ): RegistrazionePresenter {
     val trascrizione = collaboratori.trascrizione
     val parlanti = collaboratori.parlanti
-    val riassunto = costruisciRiassuntoPresenter(grafo, collaboratori, id, scope)
+    val riassunto = costruisciRiassuntoPresenter(grafo, collaboratori, id, scope, vaiAllaParte)
     return RegistrazionePresenter(
         scope = scope,
         io = grafo.io,
@@ -140,6 +143,10 @@ internal fun costruisciRegistrazionePresenter(
         aggiornamenti = collaboratori.aggiornamentiVista,
         riassunto = sorgenteRiassunto(grafo, collaboratori, riassunto),
         selezioneSchedaS3 = selezioneSchedaS3,
+        parti = SorgentiParti(
+            incontro = { incontroId -> collaboratori.incontri().firstOrNull { it.incontroId == incontroId } },
+            vaiAllaParte = vaiAllaParte,
+        ),
     )
 }
 
@@ -162,6 +169,7 @@ internal fun costruisciRiassuntoPresenter(
     collaboratori: CollaboratoriProgetto,
     id: RegistrazioneId,
     scope: CoroutineScope,
+    vaiAllaParte: (RegistrazioneId) -> Unit,
 ): RiassuntoPresenter = RiassuntoPresenter(
     scope = scope,
     io = grafo.io,
@@ -177,9 +185,7 @@ internal fun costruisciRiassuntoPresenter(
     idModelloLinguistico = ID_MODELLO_LINGUISTICO,
     dimensioneModelloLinguisticoByte = DIMENSIONE_MODELLO_LINGUISTICO_BYTE,
     limiteCaratteriArgomento = Argomento.MASSIMO_CARATTERI,
-    // TRANSITION (D-0037): the Parte switch is `schermata-parte`'s (it owns the page and keeps the tab);
-    // until it lands there is one Parte per page, so a chip only plays.
-    vaiAllaParte = {},
+    vaiAllaParte = vaiAllaParte,
     riproduciDa = collaboratori.lettoreAudio::riproduciDa,
 )
 

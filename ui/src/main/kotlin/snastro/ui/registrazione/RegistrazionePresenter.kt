@@ -15,6 +15,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -28,6 +29,7 @@ import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
+import snastro.ui.testi.messaggioRitrascrizioneParteInCorso
 
 /**
  * State holder of S3 · Registrazione (RC-2, thin UI; AC-207/208/217/218). Joins `trascritto-view`
@@ -55,6 +57,9 @@ import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
  * status mark, [selezioneSchedaS3] the ONE per-window holder shared by every [RegistrazionePresenter] it
  * builds, so the selected tab survives navigating to another recording (AC-S121).
  *
+ * ADR 0035 §4/§8 (AC-I74..I76, [parti]): the header/switcher of a Parte of a multi-part Incontro, and the Incontro-wide
+ * read-only banner naming the Parte whose re-run is open.
+ *
  * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
  * wires all of them, so a missed wiring fails to compile instead of silently hiding a screen area.
  */
@@ -72,6 +77,7 @@ class RegistrazionePresenter(
     private val aggiornamenti: AggiornamentiVista,
     private val riassunto: SorgenteRiassuntoS3,
     private val selezioneSchedaS3: SelezioneSchedaS3,
+    private val parti: SorgentiParti,
 ) {
     private val io: CoroutineDispatcher = io
 
@@ -163,7 +169,8 @@ class RegistrazionePresenter(
             disponibilitaIncerta = disponibileEsito == null
             val disponibile = disponibileEsito ?: true
             val statoLettore = lettore.stato.value
-            val soloLettura = soloLetturaDi(withContext(io) { stati() })
+            // AC-I75: the read-only lock is the Incontro's — a re-run of ANY Parte (vista.solaLettura) or of this one.
+            val soloLettura = vista.solaLettura != null || soloLetturaDi(withContext(io) { stati() })
             voci.vista = vista
             _stato.value = RegistrazioneUiStato.Dati(
                 titolo = vista.titolo,
@@ -174,10 +181,11 @@ class RegistrazionePresenter(
                 audioDisponibile = disponibile,
                 sbobinaturaPercorso = percorso,
                 soloLettura = soloLettura,
-                bannerRitrascrizione = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_IN_CORSO else null,
+                bannerRitrascrizione = if (soloLettura) bannerSolaLettura(vista.solaLettura?.parte) else null,
                 contenutoRiassunto = contenutoRiassunto,
                 schedaSelezionata = selezioneSchedaS3.scheda,
                 segnoRiassunto = segnoRiassuntoAttuale,
+                parte = intestazioneParte(vista),
             )
             voci.pubblica()
         } catch (e: CancellationException) {
@@ -190,6 +198,23 @@ class RegistrazionePresenter(
             _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
         }
         if (_stato.value is RegistrazioneUiStato.Dati) voci.ricaricaParlanti()
+    }
+
+    private fun bannerSolaLettura(parteInCorso: Int?): String =
+        parteInCorso?.let(::messaggioRitrascrizioneParteInCorso) ?: MESSAGGIO_RITRASCRIZIONE_IN_CORSO
+
+    // AC-I74: `null` on a 1-Parte Incontro (INV-I3). A fault reading the Incontro never takes the screen to Errore:
+    // the title falls back to this Parte's and the time to none.
+    private suspend fun intestazioneParte(vista: TrascrittoView): IntestazioneParte? {
+        if (vista.parti.size < 2) return null
+        val incontro = catturaNonFatale { withContext(io) { parti.incontro(vista.incontroId) } }.getOrNull()
+        return IntestazioneParte(
+            numero = vista.numeroParte,
+            totale = vista.parti.size,
+            titoloIncontro = incontro?.titolo ?: vista.titolo,
+            ora = incontro?.parti?.firstOrNull { it.registrazioneId == registrazioneId }?.oraDiInizio,
+            parti = vista.parti,
+        )
     }
 
     // L573b: `sbobinatura()` degraded to `null` (same as it legitimately having none) — 'Apri sbobinatura'/
@@ -393,6 +418,7 @@ class RegistrazionePresenter(
         applicaSomiglianza = voci::applicaSomiglianza,
         annullaSomiglianza = voci::annullaSomiglianza,
         selezionaScheda = ::selezionaScheda,
+        vaiAllaParte = parti.vaiAllaParte,
     )
 
     companion object {

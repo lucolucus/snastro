@@ -81,6 +81,7 @@ class RegistrazioneRitrascriviTest {
             aggiornamenti = aggiornamenti,
             riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
             selezioneSchedaS3 = SelezioneSchedaS3(),
+            parti = unaSorgentiPartiInerte(),
         )
     }
 
@@ -135,6 +136,7 @@ class RegistrazioneRitrascriviTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
             selezioneSchedaS3 = SelezioneSchedaS3(),
+            parti = unaSorgentiPartiInerte(),
         )
         advanceUntilIdle()
 

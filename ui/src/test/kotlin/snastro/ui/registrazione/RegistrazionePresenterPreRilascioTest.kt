@@ -106,6 +106,7 @@ class RegistrazionePresenterPreRilascioTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
             selezioneSchedaS3 = SelezioneSchedaS3(),
+            parti = unaSorgentiPartiInerte(),
         )
     }
 
@@ -183,6 +184,7 @@ class RegistrazionePresenterPreRilascioTest {
                 aggiornamenti = AggiornamentiVistaFinta(),
                 riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
                 selezioneSchedaS3 = SelezioneSchedaS3(),
+                parti = unaSorgentiPartiInerte(),
             )
             attendiFinche(messaggio = "presenter con Dati") { presenter.stato.value is RegistrazioneUiStato.Dati }
 
