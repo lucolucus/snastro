@@ -97,26 +97,39 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
 
     @Test
     fun `INV-I12b incontroCessato false non tocca nulla in nessuno stato e non pubblica`() {
-        val r = RegistrazioneId("reg-parte")
-        val pronto = unRiassuntoPronto("pronto", r)
-        riassunti.salva(pronto).atteso()
-        val prima = riassunti.trova(unIncontroDi(r)).map { it.statoOsservabile() }
+        val scenari = listOf<Pair<String, (RegistrazioneId) -> List<Riassunto>>>(
+            "pronto" to { r -> listOf(unRiassuntoPronto("pronto-$r", r)) },
+            "pronto + in_attesa" to { r -> listOf(unRiassuntoPronto("pronto-$r", r), unRiassunto("attesa-$r", r)) },
+            "in_attesa" to { r -> listOf(unRiassunto("attesa-$r", r)) },
+            "fallito" to { r -> listOf(unRiassunto("fallito-$r", r).conAvvio().conFallimento()) },
+        )
+        scenari.forEachIndexed { i, (nome, costruisci) ->
+            val r = RegistrazioneId("reg-parte-$i")
+            costruisci(r).forEach { riassunti.salva(it).atteso() }
+            val prima = riassunti.trova(unIncontroDi(r)).map { it.statoOsservabile() }
 
-        assertEquals(Esito.Ok(Unit), applica(r, cessato = false))
+            assertEquals(Esito.Ok(Unit), applica(r, cessato = false), nome)
 
-        assertEquals(prima, riassunti.trova(unIncontroDi(r)).map { it.statoOsservabile() })
-        assertEquals(emptyList(), eventi.pubblicati)
+            assertEquals(prima, riassunti.trova(unIncontroDi(r)).map { it.statoOsservabile() }, nome)
+            assertEquals(emptyList(), eventi.pubblicati, nome)
+        }
     }
 
     @Test
     fun `INV-I12b incontroCessato false lascia anche un Riassunto in corso, il suo completamento resta valido`() {
         val r = RegistrazioneId("reg-corso")
-        riassunti.salva(unRiassunto("in-corso", r).conAvvio()).atteso()
+        val inCorso = unRiassunto("in-corso", r).conAvvio()
+        riassunti.salva(inCorso).atteso()
 
         assertEquals(Esito.Ok(Unit), applica(r, cessato = false))
-
-        assertEquals(1, riassunti.trova(unIncontroDi(r)).size)
         assertEquals(emptyList(), eventi.pubblicati)
+
+        // the run then completes: its compare-and-set still finds the in_corso row and writes the pronto
+        inCorso.conCompletamento(BOZZA, unaStruttura(1 to 1))
+        val scritto = eventi.unitaDiLavoro.inTransazione { riassunti.concludi(inCorso) }.atteso()
+
+        assertTrue(scritto)
+        assertEquals(listOf(true), riassunti.trova(unIncontroDi(r)).map { it.pronto })
     }
 
     @Test
@@ -139,16 +152,8 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
     ): Esito<Unit> = eventi.unitaDiLavoro.inTransazione { politica.applica(unIncontroDi(r), cessato) }
 
     /** A `pronto` Riassunto with a real Decisione + Fonte, to prove "elements and Fonti" are gone, not just the row. */
-    private fun unRiassuntoPronto(id: String, r: RegistrazioneId): Riassunto {
-        val bozza = BozzaRiassunto(
-            sommario = null,
-            decisioni = listOf(BozzaElemento("una decisione", listOf(1), null)),
-            questioniAperte = emptyList(),
-            azioni = emptyList(),
-            puntiChiave = emptyList(),
-        )
-        return unRiassunto(id, r).conAvvio().conCompletamento(bozza, unaStruttura(1 to 1))
-    }
+    private fun unRiassuntoPronto(id: String, r: RegistrazioneId): Riassunto =
+        unRiassunto(id, r).conAvvio().conCompletamento(BOZZA, unaStruttura(1 to 1))
 
     /** [RiassuntoRepository] whose [rimuoviDiRegistrazione] always answers with [guasto] (AC-S101). */
     private class RepositoryConGuasto(
@@ -160,5 +165,12 @@ class ApplicaEliminazioneRegistrazioneSintesiPoliticaTest {
 
     private companion object {
         val REGISTRAZIONE = RegistrazioneId("reg-1")
+        val BOZZA = BozzaRiassunto(
+            sommario = null,
+            decisioni = listOf(BozzaElemento("una decisione", listOf(1), null)),
+            questioniAperte = emptyList(),
+            azioni = emptyList(),
+            puntiChiave = emptyList(),
+        )
     }
 }

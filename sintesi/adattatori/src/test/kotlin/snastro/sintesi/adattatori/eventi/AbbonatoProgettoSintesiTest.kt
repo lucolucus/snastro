@@ -40,10 +40,7 @@ class AbbonatoProgettoSintesiTest {
         val dispatcher = spyk(DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti)))
 
         val abbonato: Any =
-            AbbonatoProgettoSintesi(
-                ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher),
-                ::unIncontroDi,
-            )
+            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
 
         assertIs<AbbonatoSincrono>(abbonato)
         assertFalse(abbonato is AbbonatoDopoCommit)
@@ -56,7 +53,7 @@ class AbbonatoProgettoSintesiTest {
         val riassunti = RiassuntoRepositoryFinta()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica, ::unIncontroDi))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(object : EventoPubblicato {})
@@ -73,7 +70,7 @@ class AbbonatoProgettoSintesiTest {
         riassunti.salva(unRiassunto("vecchio", REG)).atteso()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica, ::unIncontroDi))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(eliminata(REG))
@@ -91,7 +88,7 @@ class AbbonatoProgettoSintesiTest {
         riassunti.salva(unRiassunto("vecchio", REG)).atteso()
         val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
         val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
-        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica, ::unIncontroDi))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
 
         dispatcher.unitaDiLavoro.inTransazione {
             dispatcher.pubblica(eliminata(REG, cessato = false))
@@ -100,6 +97,24 @@ class AbbonatoProgettoSintesiTest {
 
         verify(exactly = 1) { politica.applica(unIncontroDi(REG), false) }
         assertEquals(1, riassunti.trova(unIncontroDi(REG)).size)
+    }
+
+    @Test
+    fun `INV-I12b l Incontro e quello che l evento porta, senza ricerca per Registrazione`() {
+        val riassunti = RiassuntoRepositoryFinta()
+        val incontro = IncontroId("incontro-senza-convenzione")
+        riassunti.salva(unRiassunto("vecchio", incontro)).atteso()
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(riassunti))
+        val politica = spyk(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassunti, dispatcher))
+        dispatcher.registraSincrono(AbbonatoProgettoSintesi(politica))
+
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(eliminata(REG).copy(incontroId = incontro))
+            Esito.Ok(Unit)
+        }.atteso()
+
+        verify(exactly = 1) { politica.applica(incontro, true) }
+        assertEquals(emptyList(), riassunti.trova(incontro))
     }
 
     @Test
@@ -112,10 +127,7 @@ class AbbonatoProgettoSintesiTest {
             override fun rimuoviDiIncontro(incontroId: IncontroId): Esito<Int> = guasto
         }
         dispatcher.registraSincrono(
-            AbbonatoProgettoSintesi(
-                ApplicaEliminazioneRegistrazioneSintesiPolitica(riassuntiGuasti, dispatcher),
-                ::unIncontroDi,
-            ),
+            AbbonatoProgettoSintesi(ApplicaEliminazioneRegistrazioneSintesiPolitica(riassuntiGuasti, dispatcher)),
         )
 
         val esito = dispatcher.unitaDiLavoro.inTransazione {
