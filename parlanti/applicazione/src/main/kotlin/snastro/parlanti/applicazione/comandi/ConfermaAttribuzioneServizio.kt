@@ -21,7 +21,6 @@ import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
-import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.SorgenteImpronta
@@ -58,20 +57,14 @@ public class ConfermaAttribuzioneServizio(
                 Esito.Ok(Unit) // AC-87 cheap refusal: nothing changes, no extraction, no event
             } else {
                 // AC-86: a decode/extract failure propagates here, before any transaction is opened.
-                val estratte = voce.parti.map { estrai(it) }
+                val estratte = voce.parti.map { it.estrai(decodificatore, estrattore) }
                 uow.inTransazione { confermaInTransazione(c, voce.sorgenti(), estratte) }
             }
         }
 
-    /** [INV-I8]: one print per Parte where the Voce speaks, each from its own bounded source. */
-    private fun estrai(inParte: VoceInParte): ImprontaEstratta {
-        val campioni = decodificatore.campioni(inParte.parte, inParte.sorgente.intervalli)
-        return ImprontaEstratta(estrattore.estrai(campioni), inParte.sorgente.chiave, inParte.parte)
-    }
-
     private fun confermaInTransazione(
         c: ConfermaAttribuzione,
-        sorgentiEstratte: List<Pair<RegistrazioneId, String>>,
+        sorgentiEstratte: Map<RegistrazioneId, String>,
         estratte: List<ImprontaEstratta>,
     ): Esito<Unit> =
         leggiVoceNelleParti(c.voceRef, registrazioni, lettoreVoci).poi { voce ->
@@ -184,8 +177,6 @@ public class ConfermaAttribuzioneServizio(
         return Esito.Ok(Unit)
     }
 }
-
-private class ImprontaEstratta(val impronta: Impronta, val sorgente: String, val parte: RegistrazioneId)
 
 private data class ObiettivoRisolto(val parlante: Parlante, val parlanteCreato: ParlanteCreato?)
 

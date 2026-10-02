@@ -97,8 +97,9 @@ public class Parlante private constructor(
     }
 
     /**
-     * Removes every print of [voceRef], in every Parte (a physical removal: biometric rows, ADR 0009). Kept for the
-     * whole-Voce removals of the Attribuzione move and of the revisione-policy (D-0034 lists it as transitional).
+     * Removes every print of [voceRef], in every Parte (a physical removal: biometric rows, ADR 0009) — for the
+     * removals that end the Voce's link to this Parlante as a whole: its Attribuzione moved to another Parlante, or
+     * the Voce ceased (revisione-policy). A per-Parte removal is [rimuoviImpronta] (voce, parte).
      */
     public fun rimuoviImpronta(voceRef: VoceRef) {
         _impronte.removeAll { it.voceRef == voceRef }
@@ -109,16 +110,12 @@ public class Parlante private constructor(
         _impronte.removeAll { it.voceRef == voce && it.parte == parte }
     }
 
-    /** Whether this Parlante holds at least one print of [voce], in any Parte. */
-    public fun haImprontaDi(voce: VoceRef): Boolean = _impronte.any { it.voceRef == voce }
-
     /**
      * [INV-21] a Revisione emptied the slices of [voce] outside [partiConFetta]: the prints of [voce] sourced from any
-     * other Parte have no source left and go; those of [partiConFetta] and of other Voci stay.
+     * other Parte have no source left and go; those of [partiConFetta] and of other Voci stay. `true` iff a print went.
      */
-    public fun rimuoviImpronteSenzaFetta(voce: VoceRef, partiConFetta: Set<RegistrazioneId>) {
+    public fun rimuoviImpronteSenzaFetta(voce: VoceRef, partiConFetta: Set<RegistrazioneId>): Boolean =
         _impronte.removeAll { it.voceRef == voce && it.parte !in partiConFetta }
-    }
 
     /** [INV-I8b] removes every print sourced from [parte], of any Voce; the other Parti's prints stay. */
     public fun rimuoviImpronteDellaParte(parte: RegistrazioneId) {

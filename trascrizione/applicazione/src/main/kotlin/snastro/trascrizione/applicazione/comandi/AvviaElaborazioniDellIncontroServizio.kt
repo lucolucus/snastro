@@ -30,6 +30,13 @@ import java.time.temporal.ChronoUnit
  * Incontro is `IncontroNonTrovato`, no eligible Parte is `NessunaParteDaTrascrivere`, an invalid number is
  * `NumeroPersoneFuoriIntervallo`; each leaves the store unchanged. No rule lives here: eligibility reads the
  * Trascritto via the repository and the open Elaborazioni via [ElaborazioneRepository].
+ *
+ * The [ElaborazioneAvviata] here is ADR 0039's, published at QUEUE time for a run still `in_attesa`: its
+ * `avviataAlle` is the run's `creataAlle`, not a start. The claim (`EseguiProssimaElaborazioneServizio`) publishes a
+ * second one for the same run with the real start. Both are after-commit refresh signals (S2 reloads the Parte's
+ * row, `AggiornamentiVistaTrascrizione`), idempotent for their only subscriber; no consumer may count them or read
+ * `avviataAlle` as the start time. The per-Parte `AvviaElaborazione` publishes none at queue time (unchanged): the
+ * domain's `ElaborazioneAccodata` stays unpublished until ADR 0039 is amended to use it.
  */
 @Suppress("LongParameterList") // one port per collaborator: clock, ids, Parti, Elaborazioni, Trascritti, events
 public class AvviaElaborazioniDellIncontroServizio(
