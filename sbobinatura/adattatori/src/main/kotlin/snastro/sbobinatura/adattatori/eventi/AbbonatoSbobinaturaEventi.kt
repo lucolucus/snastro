@@ -84,7 +84,7 @@ public class AbbonatoSbobinaturaEventi(
      */
     private val registrazioniConTrascritto: () -> List<RegistrazioneId>,
     /**
-     * The Parti of an Incontro, unordered (ADR 0033 §4.1, e.g. `CatalogoRegistrazioni::parti` bound at `:avvio`): an
+     * The transcribed Parti of an Incontro (ADR 0035 §7, `LettoreTrascritto::partiConTrascritto` bound at `:avvio`): an
      * [AttribuzioneConfermata] and a Revisione event ([VociUnite], [VoceDivisa], [SegmentoRiassegnato]) name the
      * Incontro, and each Parte has its own Sbobinatura.
      */
