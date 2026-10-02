@@ -17,8 +17,9 @@ private data class ContenutoBanner(val sfondo: Color, val icona: Icona, val icon
 
 /**
  * AC-566: a full-width, single-message banner — `radiusCard`, one icon, a bold title, one line of
- * body text, at most one [azione]. At most one banner per screen (review criterion).
+ * body text, at most one [azione], an optional [extra] line. At most one banner per screen (review criterion).
  */
+@Suppress("LongParameterList") // one slot per part of the banner; [extra] is the optional body line
 @Composable
 public fun BannerSn(
     tipo: TipoBanner,
@@ -26,6 +27,7 @@ public fun BannerSn(
     testo: String,
     modifier: Modifier = Modifier,
     azione: AzioneBanner? = null,
+    extra: (@Composable () -> Unit)? = null,
 ) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
@@ -53,6 +55,7 @@ public fun BannerSn(
             Column(Modifier.weight(1f)) {
                 Text(text = titolo, style = tipografia.heading)
                 Text(text = testo, style = tipografia.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                extra?.invoke()
             }
             if (azione != null) {
                 BottoneSn(etichetta = azione.etichetta, onClick = azione.onClick, variante = VarianteBottone.Link)

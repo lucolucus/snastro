@@ -2,6 +2,7 @@ package snastro.ui.registrazioni
 
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.RegistrazioneId
+import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import java.time.LocalDate
 
 /**
@@ -26,6 +27,7 @@ sealed interface RegistrazioniUiStato {
      * at most one banner on screen); it survives an unrelated background refresh (H1-style, preserved
      * by the merge) and is cleared by `AzioniRegistrazioni.chiudiAvviso` or by the presenter's own next
      * command (ADR 0020 §6 "fino a chiudiAvviso o al comando successivo").
+     * [titoloAvviso] is the notice's title: the Elimina one by default, 'Parti aggiunte' after AC-I71.
      */
     data class Dati(
         val righe: List<RigaRegistrazione>,
@@ -33,6 +35,8 @@ sealed interface RegistrazioniUiStato {
         val errore: String? = null,
         val erroreAggiornamento: String? = null,
         val avviso: String? = null,
+        val dialogoImporta: DialogoImporta? = null,
+        val titoloAvviso: String = ETICHETTA_REGISTRAZIONE_ELIMINATA,
     ) : RegistrazioniUiStato
 
     /**
@@ -44,6 +48,22 @@ sealed interface RegistrazioniUiStato {
      */
     data class Errore(val messaggio: String) : RegistrazioniUiStato
 }
+
+/**
+ * AC-I70: the import dialog of 2+ files ("Importare N file"): [percorsi] in the order the user selected them (the
+ * order the Parti will take, ties aside), [scelta] preselected as one Incontro in N parti, [errore] the all-or-nothing
+ * failure kept inside the dialog (AC-I71: nothing changed, the dialog stays open), [invioInCorso] while the single
+ * command is in flight.
+ */
+data class DialogoImporta(
+    val percorsi: List<String>,
+    val scelta: SceltaImporta = SceltaImporta.UnIncontro,
+    val errore: String? = null,
+    val invioInCorso: Boolean = false,
+)
+
+/** AC-I70: the two choices of the import dialog. */
+enum class SceltaImporta { UnIncontro, IncontriSeparati }
 
 /**
  * One row (AC-199..206, AC-342..344, AC-448..451/475/476). [elaborazione] is `null` when
@@ -90,7 +110,15 @@ data class RigaRegistrazione(
     val annullabile: Boolean = false,
     val eliminazione: StatoEliminazione = StatoEliminazione.Disponibile,
     val confermaElimina: Boolean = false,
+    val parte: ParteDiIncontro? = null,
 )
+
+/**
+ * ADR 0038 §5: set only on a Parte that is NOT the last of its Incontro (an Incontro with two or more Parti): its
+ * Elimina confirmation then names the [numero] and the Incontro's [titoloIncontro] and says the Riassunto becomes
+ * superato. `null` (a 1-part Incontro, or the last Parte left) keeps today's dialog.
+ */
+data class ParteDiIncontro(val numero: Int, val titoloIncontro: String)
 
 /**
  * ADR 0020 §6/AC-625: the row's 'Elimina…' state in the More menu — ALWAYS one of these two (pre-release

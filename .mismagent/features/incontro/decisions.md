@@ -619,3 +619,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [ADR 0019](../../decisions/0019-separazione-semi-automatica.md), [pre-release](pre-release.md)
 - Revisit: the plan's apply is made one unit of work.
+
+### D-0047 · Prove di revisione riallineate col delta
+- Meta: 2026-10-02; scope: feature; status: accepted; sha: a035d2ab
+- Question: 28 integrated blocks had stale review proofs only because ADR 0033 and 0019 were amended after their review (D-0045, D-0046); how are they realigned?
+- Options: A delta review: per group, check only the spec diff since each review against the integrated code (kept); B full re-review of 28 blocks; C re-record without review.
+- Hypothesis: n/a — decided by the user at a status anomaly, [pre-release](pre-release.md)
+- Check: n/a — decided by the user at a status anomaly, [pre-release](pre-release.md)
+- Result: n/a — decided by the user at a status anomaly, [pre-release](pre-release.md)
+- Debate: spec_hash includes the full text of every related ADR, and ADR 0033 is related to nearly every block; four read-only checkers found every block UNAFFECTED or CONSISTENT, no gap.
+- Decision: A; each proof re-recorded at its reviewed sha with the current spec_hash. Cost: an ADR amendment invalidates proofs feature-wide; amend ADRs sparingly during a build.
+- By: decided: user; recorded: Claude (worker-composer); consulted: four delta checkers
+- Docs: [pre-release](pre-release.md)
+- Revisit: a delta checker reports a GAP.

@@ -264,7 +264,7 @@ private fun RigaParlanteControlli(riga: RigaParlante, azioni: AzioniParlanti) {
         Column(modifier = Modifier.weight(1f)) {
             CampoNomeParlante(riga, azioni, richiestaFocus)
             Text(
-                text = etichettaDettaglioParlante(riga.numImpronte, riga.numRegistrazioni, riga.ultimaApparizione),
+                text = etichettaDettaglioParlante(riga.numImpronte, riga.numIncontri, riga.ultimaApparizione),
                 style = LocalSnastroTipografia.current.caption,
                 color = LocalSnastroColori.current.inkMuted,
                 modifier = Modifier.testTag("parlanti-dettaglio-${riga.parlanteId.valore}"),

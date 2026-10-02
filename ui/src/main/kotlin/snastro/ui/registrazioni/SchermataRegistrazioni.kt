@@ -98,7 +98,6 @@ import snastro.ui.testi.ETICHETTA_DA_IDENTIFICARE
 import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_IMPORTAZIONE_NON_RIUSCITA
 import snastro.ui.testi.ETICHETTA_IMPORTA_FILE
-import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_RITRASCRIVI
 import snastro.ui.testi.ETICHETTA_SCEGLI_FILE
@@ -106,6 +105,7 @@ import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO_RESIDUO
+import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_PARTE_CON_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_CONFERMA_RITRASCRIVI
 import snastro.ui.testi.MESSAGGIO_DATA_NON_VALIDA
@@ -118,6 +118,7 @@ import snastro.ui.testi.etichettaRitrascrizioneInAttesa
 import snastro.ui.testi.etichettaRitrascrizioneInCorso
 import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
 import snastro.ui.testi.titoloConfermaElimina
+import snastro.ui.testi.titoloConfermaEliminaParte
 import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -248,7 +249,7 @@ private fun ContenutoRegistrazioni(
                 Spacer(modifier = Modifier.height(SnastroMisure.space3))
                 BannerSn(
                     tipo = TipoBanner.Info,
-                    titolo = ETICHETTA_REGISTRAZIONE_ELIMINATA,
+                    titolo = stato.titoloAvviso,
                     testo = it,
                     azione = AzioneBanner(ETICHETTA_CHIUDI_ERRORE, azioni.chiudiAvviso),
                     modifier = Modifier.testTag("registrazioni-avviso"),
@@ -264,6 +265,10 @@ private fun ContenutoRegistrazioni(
                     modifier = Modifier.testTag("registrazioni-errore"),
                 )
             }
+        }
+        stato.dialogoImporta?.let {
+            Spacer(modifier = Modifier.height(SnastroMisure.space3))
+            DialogoImportaParti(it, azioni)
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         if (stato.righe.isEmpty()) {
@@ -544,14 +549,19 @@ private fun ConfermaElimina(riga: RigaRegistrazione, azioni: AzioniRegistrazioni
             .testTag("registrazioni-conferma-elimina-${id.valore}"),
     ) {
         Text(
-            text = titoloConfermaElimina(riga.titolo),
+            text = riga.parte?.let { titoloConfermaEliminaParte(it.numero, it.titoloIncontro) }
+                ?: titoloConfermaElimina(riga.titolo),
             style = LocalSnastroTipografia.current.title,
             color = colori.ink,
         )
         Spacer(modifier = Modifier.height(SnastroMisure.space1))
         Text(
             text = if (riga.trascrittoDisponibile) {
-                MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
+                if (riga.parte != null) {
+                    MESSAGGIO_CONFERMA_ELIMINA_PARTE_CON_TRASCRITTO
+                } else {
+                    MESSAGGIO_CONFERMA_ELIMINA_CON_TRASCRITTO
+                }
             } else {
                 MESSAGGIO_CONFERMA_ELIMINA_SENZA_TRASCRITTO
             },

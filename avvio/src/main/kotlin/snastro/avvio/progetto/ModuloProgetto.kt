@@ -29,6 +29,8 @@ import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.progetto.applicazione.letture.IncontriDelProgetto
+import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioniDelProgetto
 import snastro.progetto.applicazione.porte.RegistroProgetti
@@ -92,6 +94,7 @@ internal class ModuloProgetto(
             dispatcher,
         )
         val delProgetto = RegistrazioniDelProgetto(registrazioni)
+        val incontriDelProgetto = IncontriDelProgetto(registrazioni, porte.catalogo)
         val elimina = EliminaRegistrazioneServizio(
             uow,
             registrazioni,
@@ -101,6 +104,7 @@ internal class ModuloProgetto(
         )
         collaboratori = CollaboratoriRegistrazioni(
             registrazioni = { delProgetto.delProgetto(apertura.progettoId) },
+            incontri = { incontriDelProgetto.delProgetto(apertura.progettoId) },
             aggiungiRegistrazione = aggiungi::esegui,
             modificaDataRegistrazione = ModificaDataRegistrazioneServizio(uow, registrazioni, dispatcher)::esegui,
             rinominaRegistrazione = RinominaRegistrazioneServizio(uow, registrazioni, dispatcher)::esegui,
@@ -145,6 +149,7 @@ internal class ModuloProgetto(
 /** Progetto's collaborators of ONE open project: S2's list and its Registrazione commands (plain functions, CR-1). */
 internal class CollaboratoriRegistrazioni(
     val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
+    val incontri: () -> List<IncontroDelProgettoVista>,
     val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
     val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,

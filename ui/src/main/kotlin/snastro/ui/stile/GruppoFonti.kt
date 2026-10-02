@@ -16,7 +16,11 @@ import androidx.compose.ui.platform.testTag
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-public fun GruppoFonti(fonti: List<FonteChipDati>, modifier: Modifier = Modifier) {
+public fun GruppoFonti(
+    fonti: List<FonteChipDati>,
+    modifier: Modifier = Modifier,
+    onFonte: (FonteChipDati) -> Unit = {},
+) {
     FlowRow(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space2),
@@ -24,9 +28,8 @@ public fun GruppoFonti(fonti: List<FonteChipDati>, modifier: Modifier = Modifier
     ) {
         fonti.forEachIndexed { indice, fonte ->
             FonteChip(
-                voceId = fonte.voceId,
-                nome = fonte.nome,
-                inizioMs = fonte.inizioMs,
+                dati = fonte,
+                onClick = if (fonte.cliccabile) ({ onFonte(fonte) }) else null,
                 modifier = Modifier.testTag("fonte-chip-$indice"),
             )
         }

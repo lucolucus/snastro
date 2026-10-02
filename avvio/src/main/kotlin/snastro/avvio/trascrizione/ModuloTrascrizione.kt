@@ -105,7 +105,7 @@ internal class ModuloTrascrizione(
             porte.registrazionePerTrascrizione,
             porte.elaborazioni,
         )
-        val trascrittoQuery = TrascrittoQuery(porte.trascritti, porte.registrazionePerTrascrizione)
+        val trascrittoQuery = TrascrittoQuery(porte.trascritti, porte.registrazionePerTrascrizione, porte.elaborazioni)
         // ADR 0033 §4.1: every Revisione resolves the Parte's Incontro through the same reader.
         val registrazioni = porte.registrazionePerTrascrizione
         collaboratori = CollaboratoriTrascrizione(

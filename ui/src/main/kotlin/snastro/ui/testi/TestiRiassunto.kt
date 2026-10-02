@@ -27,8 +27,13 @@ const val ETICHETTA_RIASSUMI: String = "Riassumi"
 const val ETICHETTA_RIASSUMI_DI_NUOVO: String = "Riassumi di nuovo"
 const val PRIVACY_RIASSUNTO: String = "Il riassunto si fa sul tuo computer: nessun testo esce."
 const val NOTA_DURATA_RIASSUNTO: String = "Di solito ci vogliono circa 3 minuti per un'ora di registrazione."
-const val AVVISO_SUPERATO: String = "Hai corretto le voci dopo questo riassunto: alcune frasi citate " +
-    "potrebbero essere attribuite in modo diverso."
+
+/** AC-I80: the ONE generic superato text — never per cause (ux-proposal S3 Riassunto tab). */
+const val AVVISO_SUPERATO: String =
+    "Il riassunto non corrisponde più alle parti attuali (voci, trascrizioni o ordine cambiati)."
+
+/** The multi-part header of the tab (AC-I81 context): "Riassunto dell'incontro · 3 parti". */
+fun intestazioneIncontro(numParti: Int): String = "Riassunto dell'incontro · $numParti parti"
 
 const val ETICHETTA_SALVA: String = "Salva"
 const val CAPTION_SALVATO: String = "Salvato"
@@ -57,10 +62,11 @@ fun messaggioDownloadFallito(motivo: MotivoDownload, dimensioneModelloByte: Long
 }
 
 /** AC-S129: [MotivoNonDisponibile] — "1 h 10" is provisional (spike `contesto-lungo`). */
-fun messaggioNonDisponibile(motivo: MotivoNonDisponibile): String = when (motivo) {
+fun messaggioNonDisponibile(motivo: MotivoNonDisponibile, numParti: Int): String = when (motivo) {
     MotivoNonDisponibile.TroppoLunga -> "La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa)."
-    // TRANSITION (D-0037): the wording per Parte comes with scheda-riassunto-incontro; one-Parte text unchanged.
-    is MotivoNonDisponibile.ElaborazioneAperta -> "Aspetta la fine della trascrizione."
+    // AC-I80: names the blocking Parte on a multi-part Incontro; the one-Parte text is today's (INV-I3).
+    is MotivoNonDisponibile.ElaborazioneAperta ->
+        if (numParti > 1) "Parte ${motivo.parte} in trascrizione." else "Aspetta la fine della trascrizione."
     is MotivoNonDisponibile.PartiNonTrascritte -> "Manca la trascrizione della parte ${motivo.parte}."
     is MotivoNonDisponibile.PartiFallite -> "Parte ${motivo.parte} non riuscita: riprova o eliminala."
 }
