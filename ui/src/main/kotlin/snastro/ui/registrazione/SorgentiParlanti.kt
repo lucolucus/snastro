@@ -2,7 +2,9 @@ package snastro.ui.registrazione
 
 import snastro.kernel.Esito
 import snastro.kernel.EstrattoRef
+import snastro.kernel.IncontroId
 import snastro.kernel.VoceRef
+import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
@@ -43,4 +45,6 @@ class SorgentiParlanti(
     val clock: Clock,
     val confermaSegmento: (ConfermaSegmento) -> Esito<Unit>,
     val somiglianza: AzioniSomiglianza,
+    /** ADR 0036 §3: `PropostaTraParti::perIncontro`. BLOCKING (extracts prints); never called while read-only. */
+    val traParti: (IncontroId) -> List<CoppiaTraParti>,
 )
