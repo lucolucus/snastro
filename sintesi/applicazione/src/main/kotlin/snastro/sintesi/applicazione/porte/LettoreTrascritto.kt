@@ -1,10 +1,17 @@
 package snastro.sintesi.applicazione.porte
 
 import snastro.kernel.RegistrazioneId
+import snastro.sintesi.dominio.StatoParte
 
 /**
- * Consumer-owned, read-only port through which Sintesi reads a Trascritto and the state of its latest
- * Elaborazione from Trascrizione (boundary `trascritto-per-sintesi`, ADR 0021 §3, Published Language only).
+ * The state of a Parte as Sintesi's [LettoreTrascritto] reports it (ADR 0033 §4): the domain [StatoParte] that
+ * `Riassumibilita` reads, named for the port; one enum, no mapping table.
+ */
+public typealias StatoParteSintesi = StatoParte
+
+/**
+ * Consumer-owned, read-only port through which Sintesi reads, per Parte, a Trascritto and the state of its
+ * Elaborazioni from Trascrizione (boundary `porte-sintesi`, ADR 0033 §4, ADR 0021 §3, Published Language only).
  * Same name as Sbobinatura's port, another package: each consumer owns its own need.
  */
 public interface LettoreTrascritto {
@@ -16,6 +23,11 @@ public interface LettoreTrascritto {
      */
     public fun segmenti(r: RegistrazioneId): List<SegmentoSintesi>?
 
-    /** `true` iff the latest Elaborazione of [r] is in_attesa or in_corso. */
-    public fun elaborazioneAperta(r: RegistrazioneId): Boolean
+    /**
+     * The state of the Parte [r] (D-0020): [StatoParte.IN_TRASCRIZIONE] when its latest Elaborazione is in_attesa or
+     * in_corso (a re-run of a transcribed Parte too); otherwise [StatoParte.TRASCRITTA] with a Trascritto,
+     * [StatoParte.NON_RIUSCITA] without one when the latest Elaborazione failed, else [StatoParte.DA_TRASCRIVERE]
+     * (an unknown [r] included).
+     */
+    public fun statoParte(r: RegistrazioneId): StatoParteSintesi
 }

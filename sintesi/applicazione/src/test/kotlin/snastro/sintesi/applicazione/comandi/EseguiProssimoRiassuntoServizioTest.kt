@@ -31,6 +31,7 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import snastro.sintesi.applicazione.porte.RispostaModello
 import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
+import snastro.sintesi.applicazione.porte.StatoParteSintesi
 import snastro.sintesi.applicazione.porte.conAvvio
 import snastro.sintesi.applicazione.porte.conCompletamento
 import snastro.sintesi.applicazione.porte.ogniIncontroConUnaParte
@@ -43,6 +44,7 @@ import snastro.sintesi.dominio.MotivoFallimento
 import snastro.sintesi.dominio.Riassunto
 import snastro.sintesi.dominio.RiassuntoId
 import snastro.sintesi.dominio.SegmentoIngresso
+import snastro.sintesi.dominio.StatoParte
 import snastro.sintesi.dominio.StrutturaIncontro
 import java.time.Clock
 import java.time.Instant
@@ -497,7 +499,7 @@ private class LettoreTrascrittoConGuardia(
         return delegato.segmenti(r)
     }
 
-    override fun elaborazioneAperta(r: RegistrazioneId): Boolean = delegato.elaborazioneAperta(r)
+    override fun statoParte(r: RegistrazioneId): StatoParteSintesi = delegato.statoParte(r)
 }
 
 /**
@@ -517,5 +519,5 @@ private class LettoreTrascrittoConRevisioneTardiva(
         return if (chiamate == 1) original else dopoRevisione
     }
 
-    override fun elaborazioneAperta(r: RegistrazioneId): Boolean = false
+    override fun statoParte(r: RegistrazioneId): StatoParteSintesi = StatoParte.TRASCRITTA
 }
