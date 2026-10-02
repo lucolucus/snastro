@@ -20,6 +20,7 @@ public class TrascrittoQuery(
     private val trascritti: VociDellIncontroRepository,
     private val registrazioni: LettoreRegistrazione,
     private val elaborazioni: ElaborazioneRepository,
+    private val numeroPersone: NumeroPersoneDellIncontro = NumeroPersoneDellIncontro(registrazioni, elaborazioni),
 ) {
     /** AC-167: the view of [registrazioneId]'s Parte; AC-168: `null` without a Trascritto (AC-I43, AC-I44). */
     public fun vista(registrazioneId: RegistrazioneId): TrascrittoView? =
@@ -85,4 +86,8 @@ public class TrascrittoQuery(
             VociIncontro(righe, righe.size)
         }
     }
+
+    /** Pinned `numeroPersonePrecompilato(incontroId)`, delegated to [NumeroPersoneDellIncontro] (no second copy). */
+    public fun numeroPersonePrecompilato(incontroId: IncontroId): Int? =
+        numeroPersone.numeroPersonePrecompilato(incontroId)
 }

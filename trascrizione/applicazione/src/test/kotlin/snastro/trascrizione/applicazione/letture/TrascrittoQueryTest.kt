@@ -14,6 +14,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
+import snastro.trascrizione.dominio.NumeroPersone
 import snastro.trascrizione.dominio.VociDellIncontro
 import snastro.trascrizione.dominio.unSegmentoIniziale
 import snastro.trascrizione.dominio.unaElaborazione
@@ -227,6 +228,15 @@ class TrascrittoQueryTest {
         assertEquals(listOf(1, 2, 3, 5).map { VoceId(it) }, voci.voci.map { it.voceId })
         assertEquals(listOf(listOf(1), listOf(1, 2, 3), listOf(2), listOf(3)), voci.voci.map { it.parti })
         assertEquals(4, voci.numVoci)
+    }
+
+    @Test
+    fun `numeroPersonePrecompilato della vista e quello dell'ultima Elaborazione sull'Incontro`() {
+        val (_, query, elaborazioni) = treParti()
+        assertNull(query.numeroPersonePrecompilato(INCONTRO))
+        elaborazioni.salva(unaElaborazione(registrazioneId = P2, numeroPersone = NumeroPersone.di(3).atteso()))
+
+        assertEquals(3, query.numeroPersonePrecompilato(INCONTRO))
     }
 
     private fun treParti(): Triple<VociDellIncontro, TrascrittoQuery, ElaborazioneRepositoryFinta> {
