@@ -140,7 +140,7 @@ class StatoVociRicaricaTest {
     }
 
     @Test
-    fun `ricaricare le Voci non rilegge il Trascritto dal repository`() {
+    fun `ricaricare le Voci senza vista caricata non rilegge il Trascritto dal repository`() {
         val eseguitori = Executors.newFixedThreadPool(2)
         val ioReale = eseguitori.asCoroutineDispatcher()
         try {
@@ -158,8 +158,9 @@ class StatoVociRicaricaTest {
                 letture.incrementAndGet()
                 trascritto
             }
+            // L32: no `vista` yet (the first load still in flight) — the Incontro must not be fetched
+            // through `trascritto()`, a repository read reachable from the UI thread.
             val voci = StatoVoci(sorgenti, progetto, ioReale, REG, leggiTrascritto, statoFlow) { emptyList() }
-            voci.vista = trascritto
             val conclusa = CountDownLatch(1)
 
             progetto.launch {
@@ -168,7 +169,7 @@ class StatoVociRicaricaTest {
             }
 
             assertTrue(conclusa.await(5, TimeUnit.SECONDS), "la lettura non si e conclusa")
-            assertEquals(0, letture.get(), "l'Incontro viene dalla vista caricata, mai da una lettura del repository")
+            assertEquals(0, letture.get(), "l'Incontro viene solo dalla vista caricata, mai da una lettura del repository")
         } finally {
             eseguitori.shutdownNow()
         }
