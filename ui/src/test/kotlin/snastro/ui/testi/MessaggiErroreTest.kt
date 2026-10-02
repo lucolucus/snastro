@@ -92,6 +92,7 @@ class MessaggiErroreTest {
                 ErroreApplicazioneProgetto.AudioNonLeggibile("x"),
                 ErroreApplicazioneProgetto.FormatoNonSupportato("x"),
                 ErroreApplicazioneProgetto.CopiaFallita("x"),
+                ErroreApplicazioneProgetto.IncontroNonTrovato(IncontroId("i")),
             ),
         ) { messaggioPer(it) }
     }

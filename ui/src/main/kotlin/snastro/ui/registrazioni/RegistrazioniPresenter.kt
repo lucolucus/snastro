@@ -9,9 +9,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.ConteggioIdentificazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
@@ -91,6 +93,7 @@ import java.time.LocalDate
 class RegistrazioniPresenter(
     private val scope: CoroutineScope,
     io: CoroutineDispatcher,
+    private val progettoId: ProgettoId,
     private val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
     private val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     private val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
@@ -372,7 +375,9 @@ class RegistrazioniPresenter(
             val errori = mutableListOf<String>()
             for (percorso in percorsi) {
                 try {
-                    when (val esito = withContext(io) { aggiungiRegistrazione(AggiungiRegistrazione(percorso)) }) {
+                    val comando =
+                        AggiungiRegistrazione(progettoId, listOf(percorso), Destinazione.NuovoIncontro)
+                    when (val esito = withContext(io) { aggiungiRegistrazione(comando) }) {
                         is Esito.Ok -> {}
                         is Esito.Errore -> errori += messaggioImportFallito(percorso, messaggioPer(esito.errore))
                     }
