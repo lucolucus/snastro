@@ -71,7 +71,7 @@ class CablaggioParlantiTest {
                 .filter { a -> a.evento == RegistrazioneEliminata::class }
                 .map { a -> a.abbonato::class.simpleName }
             assertEquals(
-                listOf("AbbonatoProgettoSintesi", "AbbonatoRevisioneParlanti", "AbbonatoEliminazioneRegistrazione"),
+                listOf("AbbonatoProgettoSintesi", "AbbonatoEliminazioneRegistrazione"),
                 purghe,
             )
             assertTrue(registrazioniPrimaDellaCoda(it.costruzioniApertura), "registrate prima della coda")
