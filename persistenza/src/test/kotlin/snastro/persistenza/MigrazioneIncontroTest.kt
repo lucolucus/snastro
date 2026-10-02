@@ -82,18 +82,17 @@ class MigrazioneIncontroTest {
         }
     }
 
-    /** INV-I3: the re-encoded `struttura` equals `<registrazioneId>=` + the key recomputed from the Trascritto. */
+    /**
+     * INV-I3, rows only: that the migrated `pronto` Riassunto is not `superato` is proven with the domain predicate in
+     * `sintesi:adattatori` (`RiassuntoMigratoDaV7Test`), not by rebuilding the key here.
+     */
     @Test
-    fun `INV-I3 il Riassunto pronto migrato non e superato e ogni riga di riassunto, elemento e fonte e conservata`(
+    fun `INV-I3 ogni riga di riassunto, elemento e fonte e conservata con la struttura ri-codificata`(
         @TempDir cartella: Path,
     ) {
         val aperto = migraDaV7(cartella)
         try {
             val d = aperto.driver
-            val chiave = righe(d, "SELECT numero || ':' || voce_numero FROM segmento ORDER BY numero").joinToString(",")
-            val struttura = righe(d, "SELECT struttura FROM riassunto WHERE stato = 'pronto'").single()
-            assertEquals("reg-1=$chiave", struttura, "non superato: la chiave ricalcolata coincide")
-
             assertEquals(
                 listOf(
                     "'r-fallito'|'reg-1'|'fallito'|NULL|NULL|NULL",
