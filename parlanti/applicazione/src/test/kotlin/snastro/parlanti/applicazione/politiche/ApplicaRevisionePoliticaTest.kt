@@ -1,6 +1,7 @@
 package snastro.parlanti.applicazione.politiche
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -12,9 +13,12 @@ import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
 import snastro.kernel.unicaParteDi
 import snastro.parlanti.applicazione.porte.AttribuzioneRepositoryFinta
+import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
+import snastro.parlanti.applicazione.porte.SegmentoDiVoce
+import snastro.parlanti.applicazione.porte.VoceVista
 import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
@@ -183,6 +187,57 @@ class ApplicaRevisionePoliticaTest {
         politicaConLettore.applicaVoceDivisa(voce.incontroId, voce.voceId).atteso()
 
         assertEquals(listOf(REGISTRAZIONE), impronteDi(p).map { it.parte })
+    }
+
+    @Test
+    fun `INV-21 riassegnare senza svuotare la sorgente toglie l impronta della Parte svuotata e tiene le altre`() {
+        val p = unParlante("id-p")
+        val parteB = RegistrazioneId("registrazione-b")
+        val voce = unaVoce(1)
+        listOf(REGISTRAZIONE, parteB).forEach {
+            p.aggiungiImpronta(voce, it, Impronta(floatArrayOf(1f)), SORGENTE_INIZIALE, MODELLO).atteso()
+        }
+        parlanti.salva(p).atteso()
+        attribuzioni.salva(Attribuzione.conferma(voce, PROGETTO, p.id).aggregato)
+        val lettore = LettoreVociFinta(
+            mapOf(
+                voce.incontroId to listOf(
+                    VoceVista(voce, mapOf(REGISTRAZIONE to listOf(IntervalloMs(0, 1_000)), parteB to emptyList())),
+                ),
+            ),
+        )
+
+        ApplicaRevisionePolitica(parlanti, attribuzioni, lettore)
+            .applicaSegmentoRiassegnato(voce.incontroId, voce.voceId, VoceId(2), daRimossa = false, aNuova = false)
+            .atteso()
+
+        assertEquals(listOf(REGISTRAZIONE), impronteDi(p).map { it.parte })
+    }
+
+    @Test
+    fun `INV-21 una Parte con lista di intervalli vuota non ha fetta e perde l impronta`() {
+        val p = unParlante("id-p")
+        val voce = unaVoce(1)
+        attribuisci(voce, p)
+        val lettore = LettoreVociFinta(
+            mapOf(voce.incontroId to listOf(VoceVista(voce, mapOf(REGISTRAZIONE to emptyList())))),
+        )
+
+        ApplicaRevisionePolitica(parlanti, attribuzioni, lettore).applicaVoceDivisa(voce.incontroId, voce.voceId)
+            .atteso()
+
+        assertEquals(emptyList(), impronteDi(p))
+    }
+
+    @Test
+    fun `una Voce senza Attribuzione non legge il LettoreVoci`() {
+        val lettore = object : LettoreVoci {
+            override fun voci(incontroId: IncontroId): List<VoceVista>? = error("non deve leggere")
+            override fun segmenti(incontroId: IncontroId): List<SegmentoDiVoce>? = error("non deve leggere")
+        }
+
+        ApplicaRevisionePolitica(parlanti, attribuzioni, lettore)
+            .applicaVoceDivisa(unIncontroDi(REGISTRAZIONE), VoceId(1)).atteso()
     }
 
     @Test

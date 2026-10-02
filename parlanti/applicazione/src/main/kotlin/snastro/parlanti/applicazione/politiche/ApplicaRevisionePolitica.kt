@@ -122,12 +122,16 @@ public class ApplicaRevisionePolitica(
      * applied in this unit); a Voce the reader no longer knows is handled by its own removal path.
      */
     private fun rimuoviImprontePerParteSvuotate(voceRef: VoceRef): Esito<Unit> {
-        val attribuzione = attribuzioni.trova(voceRef)
-        val parti = voci.voci(voceRef.incontroId)?.find { it.voceRef == voceRef }?.intervalliPerParte?.keys
-        if (attribuzione == null || parti == null) return Esito.Ok(Unit)
-        val parlante = parlanteDi(attribuzione)
-        parlante.rimuoviImpronteSenzaFetta(voceRef, parti)
-        return parlanti.salva(parlante)
+        val attribuzione = attribuzioni.trova(voceRef) ?: return Esito.Ok(Unit) // nothing attributed: no read
+        val parti = voci.voci(voceRef.incontroId)?.find { it.voceRef == voceRef }
+            ?.intervalliPerParte?.filterValues { it.isNotEmpty() }?.keys
+        return if (parti == null) {
+            Esito.Ok(Unit)
+        } else {
+            val parlante = parlanteDi(attribuzione)
+            parlante.rimuoviImpronteSenzaFetta(voceRef, parti)
+            parlanti.salva(parlante)
+        }
     }
 
     private fun parlanteDi(attribuzione: Attribuzione): Parlante =
