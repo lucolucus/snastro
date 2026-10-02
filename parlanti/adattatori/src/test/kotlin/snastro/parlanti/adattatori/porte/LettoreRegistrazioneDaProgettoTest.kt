@@ -100,7 +100,13 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
             ).incontroId
 
         override fun elimina(id: RegistrazioneId) {
-            EliminaRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, EliminazioniInSospesoFinta(), eventi)
+            EliminaRegistrazioneServizio(
+                eventi.unitaDiLavoro,
+                registrazioni,
+                IncontroRepositoryFinta(registrazioni),
+                EliminazioniInSospesoFinta(),
+                eventi,
+            )
                 .esegui(EliminaRegistrazione(id)).atteso()
         }
 

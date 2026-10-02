@@ -15,6 +15,7 @@ import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.progetto.applicazione.porte.IncontroRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.sintesi.adattatori.persistenza.LunghezzaMassimaRiassuntoRepositorySql
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
@@ -66,7 +67,8 @@ internal class PorteProgetto(
     val registrazioni: RegistrazioneRepository = costruisciRegistrazioni(database)
     val progetti: ProgettoRepositorySql = ProgettoRepositorySql(database)
     val eliminazioniInSospeso: EliminazioniInSospesoSql = EliminazioniInSospesoSql(database, clock)
-    val catalogo: CatalogoRegistrazioni = CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))
+    val incontri: IncontroRepository = IncontroRepositorySql(database)
+    val catalogo: CatalogoRegistrazioni = CatalogoRegistrazioni(registrazioni, incontri)
     val elaborazioni: ElaborazioneRepositorySql = ElaborazioneRepositorySql(database)
     val parlanti: ParlanteRepositorySql = ParlanteRepositorySql(
         database,
