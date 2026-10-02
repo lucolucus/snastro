@@ -360,11 +360,35 @@ class AbbonatoSbobinaturaEventiTest {
 
     @Test
     fun `AC-I35 VociUnite rigenera ogni Parte trascritta dell Incontro e nessuna di un altro`() = runTest {
-        val ambiente = ambienteDueParti()
+        assertRigeneraSoloLeParti(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+    }
+
+    @Test
+    fun `AC-I35 VoceDivisa rigenera ogni Parte dell Incontro e nessuna di un altro`() = runTest {
+        assertRigeneraSoloLeParti(
+            VoceDivisa(
+                INCONTRO_I,
+                origine = VoceId(1),
+                nuova = VoceId(5),
+                spostati = listOf(SegmentoRef(PARTE_B, SegmentoId(2))),
+            ),
+        )
+    }
+
+    @Test
+    fun `AC-I35 AttribuzioneConfermata rigenera ogni Parte dell Incontro e nessuna di un altro`() = runTest {
+        assertRigeneraSoloLeParti(
+            AttribuzioneConfermata(VoceRef(INCONTRO_I, VoceId(1)), PARLANTE, precedente = null),
+        )
+    }
+
+    private suspend fun TestScope.assertRigeneraSoloLeParti(evento: EventoPubblicato) {
+        val altra = RegistrazioneId("altra-incontro")
+        val ambiente = ambienteDueParti(altre = mapOf(altra to unTrascritto(altra, titolo = "Altra")))
         advanceUntilIdle()
         val prima = ambiente.operazioni().size
 
-        ambiente.commit(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        ambiente.commit(evento)
         advanceUntilIdle()
 
         assertEquals(
