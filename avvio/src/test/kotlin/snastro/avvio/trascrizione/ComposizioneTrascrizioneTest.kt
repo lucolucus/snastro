@@ -223,9 +223,12 @@ class ComposizioneTrascrizioneTest {
                 rigaDi(presenter.stato.value, b) is StatoElaborazioneRiga.InAttesa
             }
             presenter.avviaElaborazione(c)
+            // `operazioneInCorso` too: the row turns InAttesa BEFORE the 'Trascrivi' operation's own flag is cleared,
+            // and an 'Annulla' sent on a row with an operation in flight is (by design, M3) silently ignored.
             attendiFinche(timeout = 30.seconds, messaggio = "B 'In coda (1)' annullabile, C 'In coda (2)'") {
                 val rigaB = rigaCompleta(presenter.stato.value, b)
                 rigaB?.elaborazione == StatoElaborazioneRiga.InAttesa(1) && rigaB.annullabile &&
+                    !rigaB.operazioneInCorso &&
                     rigaDi(presenter.stato.value, c) == StatoElaborazioneRiga.InAttesa(2)
             }
 
