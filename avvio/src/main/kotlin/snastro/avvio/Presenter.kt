@@ -60,7 +60,8 @@ internal fun costruisciModelliPresenter(grafo: Grafo): ModelliPresenter =
  * S2 on the project's session scope (H2): the Trascrizione sources (AC-355: status, 'Trascrivi'/'Riprova',
  * 'Annulla' on a queued row AC-478, the queue positions ADR 0023 §4), the identification badge (AC-204/AC-345),
  * 'Ritrascrivi' (ADR 0018, AC-457: the composition registers the synchronous Parlanti purge) and 'Elimina…'
- * (ADR 0020, AC-630: it registers all three synchronous purges of `RegistrazioneEliminata`). A row with a Trascritto
+ * (ADR 0020, AC-630: it registers the synchronous purges: Sintesi and Trascrizione on `RegistrazioneEliminata`,
+ * Parlanti's on the `TrascrittoEliminato` the latter publishes). A row with a Trascritto
  * opens S3 ([apriRegistrazione]).
  */
 internal fun costruisciRegistrazioniPresenter(
@@ -72,6 +73,7 @@ internal fun costruisciRegistrazioniPresenter(
     io = grafo.io,
     progettoId = collaboratori.progettoId,
     registrazioni = collaboratori.registrazioni,
+    incontri = collaboratori.incontri,
     aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
     modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,
     rinominaRegistrazione = collaboratori.rinominaRegistrazione,

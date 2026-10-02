@@ -74,7 +74,7 @@ class SmokeTest {
     lateinit var cartella: Path
 
     @Test
-    fun `AC-237 AC-351 AC-357 AC-S151 smoke salva S1, S2, S3, S3 Riassunto, S4 e S5 del fixture, senza nativi`() {
+    fun `AC-237 AC-351 AC-357 AC-S151 AC-I88 smoke salva ogni schermata del fixture, senza nativi`() {
         val cartellaFixture = cartella.resolve("Fixture.snastro")
         costruisciProgettoFixture(cartellaFixture)
         SCHERMATE.forEach { Files.deleteIfExists(Path.of("build/smoke/$it.png")) }
