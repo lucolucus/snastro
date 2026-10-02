@@ -14,6 +14,7 @@ import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.mappa
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
+import snastro.progetto.dominio.ErroreProgetto
 import snastro.sintesi.adattatori.eventi.AbbonatoProgettoSintesi
 import snastro.sintesi.applicazione.comandi.EseguiProssimoRiassuntoServizio
 import snastro.sintesi.applicazione.comandi.ModificaLunghezzaMassimaRiassunto
@@ -134,8 +135,9 @@ internal class ModuloSintesi(
             vista = { r -> incontroDi(r)?.let(vista::di) },
             impostazioni = { impostazioni.di(progettoId) },
             riassumi = { r, argomento ->
-                val incontroId = checkNotNull(incontroDi(r)) { "Riassumi di una Registrazione sconosciuta: $r" }
-                riassumi.esegui(Riassumi(incontroId, argomento)).mappa { }
+                // A Registrazione deleted while S3 was open: an expected failure (ADR 0003), never a throw.
+                incontroDi(r)?.let { incontroId -> riassumi.esegui(Riassumi(incontroId, argomento)).mappa { } }
+                    ?: Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(r))
             },
             modificaLunghezzaMassima = { parole ->
                 modifica.esegui(ModificaLunghezzaMassimaRiassunto(progettoId, parole))

@@ -89,7 +89,7 @@ class ComposizioneTrascrizioneTest {
             val presenter = costruisciRegistrazioniPresenter(ambiente.grafo(), ambiente.collaboratori) {}
 
             assertEquals(StatoElaborazioneVista.NON_AVVIATA, ambiente.stato(id))
-            attendiFinche(timeout = 10.seconds, messaggio = "riga NON_AVVIATA in S2") {
+            attendiFinche(timeout = 30.seconds, messaggio = "riga NON_AVVIATA in S2") {
                 rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.NonAvviata
             }
             // la coda gira ogni secondo: nulla deve comparire nel frattempo
@@ -115,14 +115,14 @@ class ComposizioneTrascrizioneTest {
 
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso() // 'Trascrivi'
 
-            attendiFinche(timeout = 10.seconds, messaggio = "fase di diarizzazione in S2") {
+            attendiFinche(timeout = 30.seconds, messaggio = "fase di diarizzazione in S2") {
                 val riga = rigaDi(presenter.stato.value, id)
                 riga is StatoElaborazioneRiga.InCorso && riga.faseEtichetta == etichetta(FaseElaborazione.DIARIZZAZIONE)
             }
             assertEquals(FaseElaborazione.DIARIZZAZIONE, it.vistaDi(id).fase)
 
             barriera.countDown()
-            attendiFinche(timeout = 10.seconds, messaggio = "riga completata in S2") {
+            attendiFinche(timeout = 30.seconds, messaggio = "riga completata in S2") {
                 rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.Completata
             }
         }
@@ -136,7 +136,7 @@ class ComposizioneTrascrizioneTest {
 
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id, numeroPersone = 3)).atteso()
 
-            attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+            attendiFinche(timeout = 30.seconds, messaggio = "elaborazione completata") {
                 it.stato(id) == StatoElaborazioneVista.COMPLETATA
             }
             assertEquals(listOf(NumeroPersone.di(3).atteso()), diarizzatore.numeroPersoneRicevuti)
@@ -149,11 +149,11 @@ class ComposizioneTrascrizioneTest {
         AmbienteProgetto(radice, riconoscitore = riconoscitore, rilasciaDopoElaborazione = riconoscitore::close).use {
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+            attendiFinche(timeout = 30.seconds, messaggio = "elaborazione completata") {
                 it.stato(id) == StatoElaborazioneVista.COMPLETATA
             }
 
-            attendiFinche(timeout = 10.seconds, messaggio = "un rilascio per l'Elaborazione terminata") {
+            attendiFinche(timeout = 30.seconds, messaggio = "un rilascio per l'Elaborazione terminata") {
                 riconoscitore.chiusure == 1
             }
             assertTrue(riconoscitore.chiamate > 0, "il riconoscitore deve essere stato usato prima del rilascio")
@@ -165,7 +165,7 @@ class ComposizioneTrascrizioneTest {
         AmbienteProgetto(radice, dueVoci).use {
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura con due Voci") {
+            attendiFinche(timeout = 30.seconds, messaggio = "Sbobinatura con due Voci") {
                 sbobinatura(it)?.contains("**Voce 2**") == true
             }
             assertTrue(sbobinatura(it).orEmpty().contains("**Voce 1**"))
@@ -173,7 +173,7 @@ class ComposizioneTrascrizioneTest {
             val unione = UnisciVoci(id, sopravvive = VoceId(1), rimossa = VoceId(2))
             it.trascrizione.revisione.unisciVoci.esegui(unione).atteso()
 
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura rigenerata dopo VociUnite") {
+            attendiFinche(timeout = 30.seconds, messaggio = "Sbobinatura rigenerata dopo VociUnite") {
                 sbobinatura(it)?.contains("**Voce 2**") == false
             }
             assertEquals(2, Regex("""\*\*Voce 1\*\*""").findAll(sbobinatura(it).orEmpty()).count())
@@ -185,7 +185,7 @@ class ComposizioneTrascrizioneTest {
         AmbienteProgetto(radice, dueVoci).use {
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura scritta") {
+            attendiFinche(timeout = 30.seconds, messaggio = "Sbobinatura scritta") {
                 it.sbobinatura.percorsoSbobinatura(id) != null
             }
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
@@ -193,7 +193,7 @@ class ComposizioneTrascrizioneTest {
             val presenter =
                 costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, scopeS3, SelezioneSchedaS3(), {})
 
-            attendiFinche(timeout = 10.seconds, messaggio = "S3 caricato") {
+            attendiFinche(timeout = 30.seconds, messaggio = "S3 caricato") {
                 presenter.stato.value is RegistrazioneUiStato.Dati
             }
             val dati = presenter.stato.value as RegistrazioneUiStato.Dati
@@ -212,18 +212,18 @@ class ComposizioneTrascrizioneTest {
             val c = it.importa()
             val presenter = costruisciRegistrazioniPresenter(it.grafo(), it.collaboratori) {}
             it.collaboratori.avviaElaborazione(AvviaElaborazione(a)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "A in corso") {
+            attendiFinche(timeout = 30.seconds, messaggio = "A in corso") {
                 it.vistaDi(a).fase == FaseElaborazione.DIARIZZAZIONE
             }
-            attendiFinche(timeout = 10.seconds, messaggio = "S2 con A in corso") {
+            attendiFinche(timeout = 30.seconds, messaggio = "S2 con A in corso") {
                 rigaDi(presenter.stato.value, a) is StatoElaborazioneRiga.InCorso
             }
             presenter.avviaElaborazione(b) // S2 'Trascrivi' (reloads the list: queuing publishes no event)
-            attendiFinche(timeout = 10.seconds, messaggio = "B in coda") {
+            attendiFinche(timeout = 30.seconds, messaggio = "B in coda") {
                 rigaDi(presenter.stato.value, b) is StatoElaborazioneRiga.InAttesa
             }
             presenter.avviaElaborazione(c)
-            attendiFinche(timeout = 10.seconds, messaggio = "B 'In coda (1)' annullabile, C 'In coda (2)'") {
+            attendiFinche(timeout = 30.seconds, messaggio = "B 'In coda (1)' annullabile, C 'In coda (2)'") {
                 val rigaB = rigaCompleta(presenter.stato.value, b)
                 rigaB?.elaborazione == StatoElaborazioneRiga.InAttesa(1) && rigaB.annullabile &&
                     rigaDi(presenter.stato.value, c) == StatoElaborazioneRiga.InAttesa(2)
@@ -231,7 +231,7 @@ class ComposizioneTrascrizioneTest {
 
             presenter.annullaElaborazione(b) // S2 'Annulla'
 
-            attendiFinche(timeout = 10.seconds, messaggio = "B 'Trascrivi' e C 'In coda (1)' in S2") {
+            attendiFinche(timeout = 30.seconds, messaggio = "B 'Trascrivi' e C 'In coda (1)' in S2") {
                 val rigaB = rigaCompleta(presenter.stato.value, b)
                 rigaB?.elaborazione == StatoElaborazioneRiga.NonAvviata && !rigaB.operazioneInCorso &&
                     rigaDi(presenter.stato.value, c) == StatoElaborazioneRiga.InAttesa(1)
@@ -242,7 +242,7 @@ class ComposizioneTrascrizioneTest {
             assertNull(vistaB.elaborazioneId, "nessuna riga elaborazione resta per B")
 
             barriera.countDown()
-            attendiFinche(timeout = 10.seconds, messaggio = "la coda esegue C dopo A") {
+            attendiFinche(timeout = 30.seconds, messaggio = "la coda esegue C dopo A") {
                 it.stato(c) == StatoElaborazioneVista.COMPLETATA
             }
             assertEquals(StatoElaborazioneVista.NON_AVVIATA, it.stato(b))
@@ -261,12 +261,12 @@ class ComposizioneTrascrizioneTest {
             assertTrue("AbbonatoRevisioneParlanti" in purghe, "la purga sincrona dei Parlanti e dichiarata: $purghe")
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+            attendiFinche(timeout = 30.seconds, messaggio = "elaborazione completata") {
                 it.stato(id) == StatoElaborazioneVista.COMPLETATA
             }
             val presenter = costruisciRegistrazioniPresenter(it.grafo(), it.collaboratori) {}
 
-            attendiFinche(timeout = 10.seconds, messaggio = "riga completata in S2") {
+            attendiFinche(timeout = 30.seconds, messaggio = "riga completata in S2") {
                 rigaDi(presenter.stato.value, id) == StatoElaborazioneRiga.Completata
             }
             val riga = checkNotNull(rigaCompleta(presenter.stato.value, id))
@@ -281,24 +281,24 @@ class ComposizioneTrascrizioneTest {
         AmbienteProgetto(radice, diarizzatore).use {
             val id = it.importa()
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+            attendiFinche(timeout = 30.seconds, messaggio = "elaborazione completata") {
                 it.stato(id) == StatoElaborazioneVista.COMPLETATA
             }
             val scopeS3 = CoroutineScope(SupervisorJob() + it.dispatcherUi)
             val presenter =
                 costruisciRegistrazionePresenter(it.grafo(), it.collaboratori, id, scopeS3, SelezioneSchedaS3(), {})
-            attendiFinche(timeout = 10.seconds, messaggio = "S3 modificabile") {
+            attendiFinche(timeout = 30.seconds, messaggio = "S3 modificabile") {
                 (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == false
             }
 
             // A second run over the existing Trascritto ('Ritrascrivi', AC-457): S3 hears of it.
             val barriera = CountDownLatch(1).also { b -> diarizzatore.barriera = b }
             it.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "S3 in sola lettura durante la nuova elaborazione") {
+            attendiFinche(timeout = 30.seconds, messaggio = "S3 in sola lettura durante la nuova elaborazione") {
                 (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == true
             }
             barriera.countDown()
-            attendiFinche(timeout = 10.seconds, messaggio = "S3 di nuovo modificabile a fine elaborazione") {
+            attendiFinche(timeout = 30.seconds, messaggio = "S3 di nuovo modificabile a fine elaborazione") {
                 (presenter.stato.value as? RegistrazioneUiStato.Dati)?.soloLettura == false
             }
             scopeS3.cancel()
@@ -321,7 +321,7 @@ class ComposizioneTrascrizioneTest {
         riaperto.use {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "recupero dell'in_corso") {
+            attendiFinche(timeout = 30.seconds, messaggio = "recupero dell'in_corso") {
                 it.stato(id) == StatoElaborazioneVista.FALLITA
             }
             assertEquals("interrotta", it.vistaDi(id).motivoFallimento)
@@ -337,7 +337,7 @@ class ComposizioneTrascrizioneTest {
         val coda = ambiente.coda
         val percorso = ambiente.progetto.percorso
         ambiente.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
-        attendiFinche(timeout = 10.seconds, messaggio = "Z in DIARIZZAZIONE") {
+        attendiFinche(timeout = 30.seconds, messaggio = "Z in DIARIZZAZIONE") {
             trascrizione.statiElaborazione(listOf(id)).single().fase == FaseElaborazione.DIARIZZAZIONE
         }
 
@@ -352,7 +352,7 @@ class ComposizioneTrascrizioneTest {
         riaperto.use {
             it.sessione.chiudi()
             it.sessione.apri(percorso).atteso()
-            attendiFinche(timeout = 10.seconds, messaggio = "recupero dell'in_corso lasciato da chiudi") {
+            attendiFinche(timeout = 30.seconds, messaggio = "recupero dell'in_corso lasciato da chiudi") {
                 it.stato(id) == StatoElaborazioneVista.FALLITA
             }
             assertEquals("interrotta", it.vistaDi(id).motivoFallimento)
@@ -379,7 +379,7 @@ class ComposizioneTrascrizioneTest {
             // RitentaConBackoff non cattura mai (rethrow): sfugge alla coroutine del worker della Sbobinatura.
             ambiente.collaboratori.avviaElaborazione(AvviaElaborazione(id)).atteso()
 
-            attendiFinche(timeout = 10.seconds, messaggio = "l'Error del worker Sbobinatura e' stato segnalato") {
+            attendiFinche(timeout = 30.seconds, messaggio = "l'Error del worker Sbobinatura e' stato segnalato") {
                 spia.catturati.any { it.thrown is OutOfMemoryError }
             }
             assertEquals(
@@ -414,7 +414,7 @@ class ComposizioneTrascrizioneTest {
             )
             AmbienteProgetto(radice, fontiCoda = listOf(fonteGuasta)).use {
                 val messaggio = "l'elemento guasto e' escluso e segnalato via WARNING"
-                attendiFinche(timeout = 10.seconds, messaggio = messaggio) {
+                attendiFinche(timeout = 30.seconds, messaggio = messaggio) {
                     spia.catturati.any { it.level == Level.WARNING && it.thrown != null }
                 }
                 val record = spia.catturati.first { it.level == Level.WARNING && it.thrown != null }

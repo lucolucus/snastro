@@ -5,6 +5,7 @@ import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
+import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.ui.registrazione.FraseRef
@@ -54,5 +55,15 @@ class ServiziFraseTest {
         servizi.esegui(frase, PassiNominaFrase.AttribuisciVoce(VoceId(2), ObiettivoNome.Nuovo("Anna", false)))
 
         assertEquals(listOf(incontro), conferme.map { it.incontroDelleVoci })
+    }
+
+    @Test
+    fun `una frase di una Registrazione sconosciuta e un Errore, mai un'eccezione, e nessun comando parte`() {
+        val sconosciuta = RegistrazioneId("eliminata")
+
+        val esito = servizi.esegui(FraseRef(sconosciuta, SegmentoId(1)), PassiNominaFrase.SoloConferma)
+
+        assertEquals(Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(sconosciuta)), esito)
+        assertEquals(emptyList(), conferme)
     }
 }

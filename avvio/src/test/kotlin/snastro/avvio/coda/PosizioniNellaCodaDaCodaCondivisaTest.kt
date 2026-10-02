@@ -26,7 +26,7 @@ class PosizioniNellaCodaDaCodaCondivisaTest : PosizioniNellaCodaContratto() {
         val elementi = scenario.inAttesa.mapIndexed { indice, elemento ->
             elemento.tipo to ElementoInCoda(
                 id = "id-$indice",
-                registrazioneId = elemento.registrazioneId.valore,
+                oggettoId = elemento.registrazioneId.valore,
                 istante = ISTANTE_BASE.plusMillis(indice.toLong()), // list order, strictly increasing
             )
         }

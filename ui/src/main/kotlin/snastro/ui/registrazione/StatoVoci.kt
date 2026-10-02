@@ -61,9 +61,12 @@ internal class StatoVoci(
     /** The trascritto the panel is built on; set by the presenter's own load, refreshed after a Revisione. */
     var vista: TrascrittoView? = null
 
-    /** ADR 0033 §4.1: the Voci are the Incontro's, so their VoceRef carries the Incontro of the trascritto shown. */
+    /**
+     * ADR 0033 §4.1: the Voci are the Incontro's, so their VoceRef carries the Incontro of the trascritto shown.
+     * Read off [vista] alone, never through [trascritto]: that is a repository read, only for [io].
+     */
     private val incontroId: IncontroId?
-        get() = (vista ?: trascritto())?.incontroId
+        get() = vista?.incontroId
 
     private fun voceRef(voceId: VoceId): VoceRef =
         VoceRef(checkNotNull(incontroId) { "Voce $voceId senza trascritto caricato" }, voceId)
@@ -162,7 +165,7 @@ internal class StatoVoci(
         var nuovi: DatiParlanti? = null
         var fallito = false
         // AC-I77: the Incontro's Voci are read only when there is another Parte to merge with.
-        val incontroDaLeggere = incontroId.takeIf { (vista ?: trascritto())?.parti.orEmpty().size > 1 }
+        val incontroDaLeggere = incontroId.takeIf { vista?.parti.orEmpty().size > 1 }
         try {
             nuovi = withContext(io) {
                 DatiParlanti(

@@ -80,6 +80,8 @@ class EliminaRegistrazioneTest {
                 riga(s2, s.r)?.eliminazione == StatoEliminazione.Disponibile
             }
 
+            assertEquals(1, righe(it, s.r).getValue("incontro"), "prima: l'Incontro di R c'e'")
+            assertEquals(1, righe(it, s.r).getValue("voci_incontro"), "prima: la radice Voci di R c'e'")
             s2.elimina(s.r)
             attendiFinche(timeout = 10.seconds, messaggio = "conferma") { riga(s2, s.r)?.confermaElimina == true }
             val contato = database.last()
@@ -91,6 +93,8 @@ class EliminaRegistrazioneTest {
             }
             assertEquals(NESSUNA_RIGA, righe(it, s.r), "righe di R per tabella: solo quella in sospeso")
             assertEquals(1, righe(it, s.q).getValue("registrazione"))
+            assertEquals(1, righe(it, s.q).getValue("incontro"), "l'Incontro di Q resta")
+            assertEquals(1, righe(it, s.q).getValue("voci_incontro"), "la radice Voci di Q resta")
             val galleria = it.parlanti.letture.parlantiDelProgetto().associateBy { p -> p.nome }
             assertEquals(setOf("Mario", "Terzo"), galleria.keys, "l'Ospite non esiste piu'")
             assertEquals(1, galleria.getValue("Mario").numImpronte)
@@ -100,9 +104,11 @@ class EliminaRegistrazioneTest {
             val lapide = checkNotNull(parlanti.trova(s.terzo))
             assertTrue(lapide.eliminato, "la lapide resta eliminata")
             assertEquals("Terzo", lapide.nome.valore)
-            assertFalse(Files.exists(cartella.resolve(audio(s.r))))
-            assertFalse(Files.exists(cartella.resolve(wav(s.r))))
-            attendiFinche(timeout = 10.seconds, messaggio = "Sbobinatura di R rimossa") { !Files.exists(sbobinaturaR) }
+            // The files are removed after the commit (EliminazioniInSospeso completion): wait, never assert at once.
+            attendiFinche(timeout = 30.seconds, messaggio = "audio e wav di R rimossi") {
+                !Files.exists(cartella.resolve(audio(s.r))) && !Files.exists(cartella.resolve(wav(s.r)))
+            }
+            attendiFinche(timeout = 30.seconds, messaggio = "Sbobinatura di R rimossa") { !Files.exists(sbobinaturaR) }
             assertTrue(Files.exists(cartella.resolve(audio(s.q))))
             assertTrue(Files.exists(cartella.resolve(wav(s.q))))
             assertTrue(Files.exists(sbobinaturaQ))
@@ -336,6 +342,9 @@ class EliminaRegistrazioneTest {
         val trascritto = ambiente.porte.trascritti.trascritto(id)
         return mapOf(
             "registrazione" to listOfNotNull(RegistrazioneRepositorySql(db).trova(id)).size,
+            // Real SQLite: the Incontro row and its Voci root (voci_incontro) cease with the LAST Parte (ADR 0038).
+            "incontro" to listOfNotNull(ambiente.porte.incontri.trova(ambiente.incontroDi(id))).size,
+            "voci_incontro" to listOfNotNull(ambiente.porte.trascritti.trova(ambiente.incontroDi(id))).size,
             "elaborazione" to ElaborazioneRepositorySql(db).diRegistrazione(id).size,
             "trascritto" to listOfNotNull(trascritto).size,
             "voce" to (trascritto?.voci?.size ?: 0),
@@ -393,6 +402,8 @@ class EliminaRegistrazioneTest {
         /** INV-28 after the COMMIT: nothing keyed by the Registrazione but its pending row. */
         val NESSUNA_RIGA = mapOf(
             "registrazione" to 0,
+            "incontro" to 0,
+            "voci_incontro" to 0,
             "elaborazione" to 0,
             "trascritto" to 0,
             "voce" to 0,

@@ -6,6 +6,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
+import snastro.supporto.test.pausaInTempoReale
 import java.nio.file.Path
 import java.util.concurrent.Callable
 import java.util.concurrent.CyclicBarrier
@@ -13,6 +14,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * AC-I32 (INV-I1, ADR 0033 §2, D-0038): `AggiungiRegistrazione` into an `Incontro` against `EliminaRegistrazione` of
@@ -37,15 +40,21 @@ class AggiungiRegistrazioneCorsaTest {
                     val ultima = ambiente.importa()
                     val incontro = ambiente.incontroDi(ultima)
                     val barriera = CyclicBarrier(2)
+                    // One round in 3 is a pure race; the others give one side a head start (real time is the
+                    // subject: whoever begins its transaction first wins), so BOTH orderings really occur.
+                    val ritardaImporto = n % 3 == 1
+                    val ritardaEliminazione = n % 3 == 2
                     val eliminazione = esecutore.submit(
                         Callable {
                             barriera.await()
+                            if (ritardaEliminazione) pausaInTempoReale(VANTAGGIO, motivo = "l'import parte per primo")
                             elimina(EliminaRegistrazione(ultima))
                         },
                     )
                     val importo = esecutore.submit(
                         Callable {
                             barriera.await()
+                            if (ritardaImporto) pausaInTempoReale(VANTAGGIO, motivo = "l'eliminazione parte per prima")
                             ambiente.importaIn(Destinazione.Incontro(incontro))
                         },
                     )
@@ -56,6 +65,10 @@ class AggiungiRegistrazioneCorsaTest {
                     "$n: " + classifica(esitoEliminazione, esitoImporto, incontroEsiste, parti, ultima)
                 }
                 assertEquals(emptyList(), esiti.filter { "ANOMALO" in it })
+                // Not vacuous: each ordering happened in at least one round.
+                for (esito in listOf("eliminata prima", "importata prima")) {
+                    assertTrue(esiti.any { it.endsWith(esito) }, "mai visto '$esito' in $RIPETIZIONI giri: $esiti")
+                }
             } finally {
                 esecutore.shutdownNow()
             }
@@ -84,5 +97,6 @@ class AggiungiRegistrazioneCorsaTest {
     private companion object {
         const val RIPETIZIONI = 50
         const val ATTESA_S = 30L
+        val VANTAGGIO = 100.milliseconds
     }
 }

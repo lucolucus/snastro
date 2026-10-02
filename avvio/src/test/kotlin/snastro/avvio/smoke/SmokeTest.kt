@@ -207,22 +207,19 @@ class SmokeTest {
     ): ConfermaAttribuzioneServizio {
         val unitaDiLavoroSql = UnitaDiLavoroSql(database)
         val eventi = DispatcherEventiInMemoria(unitaDiLavoroSql)
+        val catalogo = CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))
         return ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             GeneratoreIdFinto(),
-            LettoreRegistrazioneDaProgetto(CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database))),
+            LettoreRegistrazioneDaProgetto(catalogo),
             LettoreVociDaTrascrizione(
                 VociDelTrascritto(
                     VociDellIncontroRepositorySql(
                         database,
                         unitaDiLavoroSql,
-                        LettoreRegistrazioneTrascrizione(
-                            CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
-                        ),
+                        LettoreRegistrazioneTrascrizione(catalogo),
                     ),
-                    LettoreRegistrazioneTrascrizione(
-                        CatalogoRegistrazioni(registrazioni, IncontroRepositorySql(database)),
-                    ),
+                    LettoreRegistrazioneTrascrizione(catalogo),
                 ),
             ),
             ParlanteRepositorySql(database, unitaDiLavoroSql),

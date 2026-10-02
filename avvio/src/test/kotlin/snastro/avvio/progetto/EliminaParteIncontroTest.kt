@@ -1,34 +1,32 @@
 package snastro.avvio.progetto
 
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.io.TempDir
+import snastro.avvio.coda.Campanello
 import snastro.avvio.parlanti.ModuloParlanti
 import snastro.avvio.sintesi.ModuloSintesi
 import snastro.avvio.trascrizione.ModuloTrascrizione
 import snastro.kernel.AbbonatoSincrono
-import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.IncontroId
-import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.kernel.atteso
-import snastro.parlanti.dominio.Attribuzione
-import snastro.parlanti.dominio.Impronta
-import snastro.parlanti.dominio.Nome
-import snastro.parlanti.dominio.Parlante
-import snastro.parlanti.dominio.TipoParlante
-import snastro.persistenza.UnitaDiLavoroSql
 import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
+import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
+import snastro.ui.registrazione.ComandoVoce
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
@@ -81,9 +79,14 @@ class EliminaParteIncontroTest {
         }
     }
 
+    /**
+     * Each missing synchronous subscriber makes the deleting transaction fail, and for ITS OWN reason (ADR 0038):
+     * Sintesi's `riassunto` and Trascrizione's `voci_incontro` FKs are immediate (the DELETE statement fails), the
+     * Parlanti ones are deferred (the COMMIT fails). Nothing changes (rollback) and the complete deletion then works.
+     */
     @Test
     fun `AC-I86 senza il sottoscrittore di Sintesi, Trascrizione o la purga Parlanti l eliminazione fallisce`() {
-        SOTTOSCRITTORI.forEach { mancante ->
+        SOTTOSCRITTORI.forEach { (mancante, alCommit) ->
             AmbienteProgetto(
                 radice.resolve(mancante).also { d -> d.toFile().mkdirs() },
                 estrattore = EstrattoreConMutex(),
@@ -94,8 +97,9 @@ class EliminaParteIncontroTest {
 
                 val esito = runCatching { eliminaSenza(it, mancante, s.a) }
 
-                val fallita = esito.isFailure || esito.getOrThrow() is Esito.Errore
-                assertTrue(fallita, "$mancante: l'eliminazione e' riuscita")
+                val errore = assertNotNull(esito.exceptionOrNull(), "$mancante: l'eliminazione e' riuscita: $esito")
+                assertEquals("SQLiteException", causaRadice(errore)::class.simpleName, "$mancante: $errore")
+                assertEquals(alCommit, fallitaAlCommit(errore), "$mancante: ${if (alCommit) "COMMIT" else "statement"}")
                 assertEquals(prima, conteggi(it, s.incontro), "$mancante: nulla e' cambiato (rollback)")
                 it.collaboratori.eliminaRegistrazione(EliminaRegistrazione(s.a)).atteso() // la completa riesce
                 assertEquals(0, conteggi(it, s.incontro).getValue("incontro"))
@@ -116,14 +120,34 @@ class EliminaParteIncontroTest {
         }
     }
 
-    /** The real deleting service and repositories, over a dispatcher holding every synchronous pair BUT [senza]. */
+    /**
+     * The real deleting service over a SECOND, self-consistent composition of the same database (its own unit of work,
+     * dispatcher and modules), holding every synchronous subscriber BUT the one of [senza] (a subscriber class name).
+     * Never the production dispatcher: that holds them all, and a half-wired one over another unit of work would fail
+     * for the wrong reason.
+     */
     private fun eliminaSenza(ambiente: AmbienteProgetto, senza: String, id: RegistrazioneId): Esito<Unit> {
-        val porte = ambiente.porte
-        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroSql(porte.database))
-        ambiente.composto.ordineSincroni.flatMap { m -> m.abbonatiSincroni() }
+        val cartella = Path.of(ambiente.progetto.percorso)
+        val porte = PorteProgetto(ambiente.porte.database, ambiente.clock, cartella.toFile())
+        val apertura = AperturaProgetto(
+            ambiente.progetto.progettoId,
+            cartella,
+            ambiente.scope,
+            ambiente.collaboratori.lettoreAudio,
+            GeneratoreIdFinto(),
+            ambiente.clock,
+            SondaAudioFinta(emptyMap()),
+        )
+        val trascrizione = ModuloTrascrizione(porte, apertura, ambiente.app, Campanello())
+        val moduli = listOf(
+            ModuloSintesi(porte, apertura, ambiente.app, Campanello()),
+            ModuloParlanti(porte, apertura, ambiente.app, trascrizione.collaboratori),
+            trascrizione,
+        )
+        moduli.flatMap { m -> m.abbonatiSincroni() }
             .filter { a -> a.abbonato::class.simpleName != senza }
             .forEach { a ->
-                dispatcher.registraSincrono(
+                porte.dispatcher.registraSincrono(
                     object : AbbonatoSincrono {
                         override fun ricevi(evento: EventoPubblicato): Esito<Unit> =
                             if (a.evento.isInstance(evento)) a.abbonato.ricevi(evento) else Esito.Ok(Unit)
@@ -131,20 +155,26 @@ class EliminaParteIncontroTest {
                 )
             }
         return EliminaRegistrazioneServizio(
-            dispatcher.unitaDiLavoro,
+            porte.unitaDiLavoro,
             porte.registrazioni,
             porte.incontri,
             porte.eliminazioniInSospeso,
-            dispatcher,
+            porte.dispatcher,
         ).esegui(EliminaRegistrazione(id))
     }
+
+    private fun causaRadice(e: Throwable): Throwable = generateSequence(e) { it.cause }.last()
+
+    /** True when the failure came out of the transaction's COMMIT (a deferred FK), not of a statement before it. */
+    private fun fallitaAlCommit(e: Throwable): Boolean = generateSequence(e) { it.cause }
+        .flatMap { it.stackTrace.asSequence() }
+        .any { f -> f.methodName == "endTransaction" } // the driver runs COMMIT there
 
     private class Scenario(val incontro: IncontroId, val a: RegistrazioneId, val b: RegistrazioneId)
 
     /**
-     * An Incontro of two transcribed Parti, [Scenario.a] first: its Riassunto is made while [Scenario.a] is alone (the
-     * real Sintesi reader refuses a two-Parti Incontro until I2), then [Scenario.b] joins, so the Riassunto is
-     * `superato`. Each Parte has one identified Voce (seeded: the real Parlanti reader refuses it too).
+     * An Incontro of two transcribed Parti, [Scenario.a] first: its Riassunto is made while [Scenario.a] is alone, then
+     * [Scenario.b] joins, so the Riassunto is `superato`. Each Parte has one Voce identified through the real command.
      */
     private fun preparaDueParti(ambiente: AmbienteProgetto): Scenario {
         val a = ambiente.importa()
@@ -157,8 +187,8 @@ class EliminaParteIncontroTest {
         val b = ambiente.collaboratori.registrazioni().map { r -> r.registrazioneId }.single { r -> r !in prima }
         ambiente.rendiLeggibile(b)
         ambiente.trascrivi(b)
-        identifica(ambiente, "Anna", VoceRef(incontro, vociDi(ambiente, a).first()), a)
-        identifica(ambiente, "Berta", VoceRef(incontro, vociDi(ambiente, b).first()), b)
+        identifica(ambiente, "Anna", VoceRef(incontro, vociDi(ambiente, a).first()))
+        identifica(ambiente, "Berta", VoceRef(incontro, vociDi(ambiente, b).first()))
         return Scenario(incontro, a, b)
     }
 
@@ -166,16 +196,8 @@ class EliminaParteIncontroTest {
         ambiente.porte.trascritti.trascritto(parte)!!.segmenti.map { sg -> sg.voceId }.distinct()
             .sortedBy { v -> v.numero }
 
-    private fun identifica(ambiente: AmbienteProgetto, nome: String, voce: VoceRef, parte: RegistrazioneId) {
-        val progetto = ambiente.progetto.progettoId
-        val id = ParlanteId("p-$nome")
-        val parlante = Parlante.crea(id, progetto, Nome.di(nome).atteso(), TipoParlante.OCCASIONALE).aggregato
-        parlante.aggiungiImpronta(voce, parte, Impronta(floatArrayOf(1f, 0f)), "sorgente", "modello").atteso()
-        ambiente.porte.unitaDiLavoro.inTransazione {
-            ambiente.porte.parlanti.salva(parlante).atteso()
-            ambiente.porte.attribuzioni.salva(Attribuzione.conferma(voce, progetto, id).aggregato)
-            Esito.Ok(Unit)
-        }.atteso()
+    private fun identifica(ambiente: AmbienteProgetto, nome: String, voce: VoceRef) {
+        assertEquals(Esito.Ok(Unit), runBlocking { ambiente.parlanti.comandi.esegui(ComandoVoce.Nuovo(voce, nome)) })
     }
 
     /**
@@ -201,10 +223,11 @@ class EliminaParteIncontroTest {
     }
 
     private companion object {
+        /** The subscriber class and whether its absence fails at COMMIT (deferred FK) or at a statement (immediate). */
         val SOTTOSCRITTORI = listOf(
-            "AbbonatoProgettoSintesi",
-            "AbbonatoEliminazioneRegistrazione",
-            "AbbonatoRevisioneParlanti",
+            "AbbonatoProgettoSintesi" to false,
+            "AbbonatoEliminazioneRegistrazione" to false,
+            "AbbonatoRevisioneParlanti" to true,
         )
         val TABELLE = listOf(
             "incontro",

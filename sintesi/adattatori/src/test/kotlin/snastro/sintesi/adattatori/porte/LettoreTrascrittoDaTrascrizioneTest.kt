@@ -95,8 +95,8 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
      * AC-S51: a synchronous subscriber of `TrascrittoSostituito`, registered on Trascrizione's own
      * dispatcher, reads [LettoreTrascritto.segmenti] from INSIDE the completion transaction of a
      * re-run — after ADR 0018 §2 has already replaced the Trascritto in that same transaction, before
-     * it commits. The sostituzione-trascritto policy (`:sintesi:applicazione ..politiche`) relies on
-     * this: it reads the NEW Trascritto, not the one being replaced.
+     * it commits: a synchronous reader sees the NEW Trascritto, not the one being replaced (no Sintesi policy reacts to
+     * `TrascrittoSostituito` any more, ADR 0037 §7).
      */
     @Test
     fun `AC-S51 nel completamento di una rielaborazione segmenti da gia il nuovo Trascritto`() {

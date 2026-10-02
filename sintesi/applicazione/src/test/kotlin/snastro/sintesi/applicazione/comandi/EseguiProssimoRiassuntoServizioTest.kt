@@ -366,7 +366,7 @@ class EseguiProssimoRiassuntoServizioTest {
         riassunti.salva(unRiassunto("r1", REG1, richiestoAlle = T1)).atteso()
         val modelloCheRimuove = object : ModelloLinguistico {
             override fun riassumi(richiesta: RichiestaRiassunto, annullato: () -> Boolean): Esito<RispostaModello> {
-                riassunti.rimuovi(RiassuntoId("r1")).atteso() // a concurrent eliminazione/sostituzione policy
+                riassunti.rimuovi(RiassuntoId("r1")).atteso() // a concurrent eliminazione policy
                 return Esito.Ok(ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA)
             }
         }

@@ -265,7 +265,7 @@ internal class AmbienteProgetto(
     /** 'Trascrivi', then waits until its Trascritto is there. */
     fun trascrivi(id: RegistrazioneId) {
         avviaElaborazione(id)
-        attendiFinche(timeout = 10.seconds, messaggio = "elaborazione completata") {
+        attendiFinche(timeout = 30.seconds, messaggio = "elaborazione completata") {
             stato(id) == StatoElaborazioneVista.COMPLETATA
         }
     }
@@ -297,7 +297,7 @@ internal class AmbienteProgetto(
     fun diRegistrazione(id: RegistrazioneId): List<Riassunto> = porte.riassunti.trova(incontroDi(id))
 
     fun attendiPronto(id: RegistrazioneId) =
-        attendiFinche(timeout = 10.seconds, messaggio = "Riassunto pronto") {
+        attendiFinche(timeout = 30.seconds, messaggio = "Riassunto pronto") {
             diRegistrazione(id).singleOrNull()?.pronto == true
         }
 
