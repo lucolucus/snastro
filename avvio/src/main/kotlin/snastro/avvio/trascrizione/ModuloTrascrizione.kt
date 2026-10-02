@@ -61,9 +61,8 @@ internal class ModuloTrascrizione(
         ApplicaEliminazioneRegistrazionePolitica(
             porte.elaborazioni,
             porte.trascritti,
-            porte.registrazionePerTrascrizione,
+            porte.dispatcher,
         ),
-        porte.registrazionePerTrascrizione,
     )
     private val fonte: FonteCoda
 

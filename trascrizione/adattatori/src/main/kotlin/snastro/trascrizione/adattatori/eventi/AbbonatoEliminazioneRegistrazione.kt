@@ -5,7 +5,6 @@ import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.trascrizione.applicazione.politiche.ApplicaEliminazioneRegistrazionePolitica
-import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 
 /**
  * The Trascrizione synchronous subscriber of [RegistrazioneEliminata] (ADR 0020 §2 step 4, AC-612): translates it into
@@ -18,17 +17,13 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
  */
 public class AbbonatoEliminazioneRegistrazione(
     private val politica: ApplicaEliminazioneRegistrazionePolitica,
-    private val registrazioni: LettoreRegistrazione,
 ) : AbbonatoSincrono {
     override fun ricevi(evento: EventoPubblicato): Esito<Unit> = when (evento) {
         is RegistrazioneEliminata -> applica(evento)
         else -> Esito.Ok(Unit)
     }
 
-    // Delivered before Progetto removes the row (ADR 0020 §2): the Parte, and so its Incontro, is still in the
-    // catalogue (ADR 0033 §4.1). An id the catalogue does not know has no Elaborazione nor Trascritto (their FKs).
+    // The event carries the Incontro and whether it ceased (ADR 0038): nothing to re-derive from the catalogue.
     private fun applica(evento: RegistrazioneEliminata): Esito<Unit> =
-        registrazioni.registrazione(evento.registrazioneId)
-            ?.let { politica.applica(evento.registrazioneId, it.incontroId) }
-            ?: Esito.Ok(Unit)
+        politica.applica(evento.registrazioneId, evento.incontroId, evento.incontroCessato)
 }

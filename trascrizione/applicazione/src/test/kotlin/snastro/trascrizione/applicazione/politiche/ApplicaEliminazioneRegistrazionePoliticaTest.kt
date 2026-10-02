@@ -1,19 +1,19 @@
 package snastro.trascrizione.applicazione.politiche
 
+import snastro.kernel.DispatcherEventi
 import snastro.kernel.ElaborazioneId
+import snastro.kernel.EventoPubblicato
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
 import snastro.kernel.unIncontroDi
+import snastro.trascrizione.applicazione.eventi.TrascrittoEliminato
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
-import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
-import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
-import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
-import snastro.trascrizione.applicazione.porte.unaRegistrazioneVista
 import snastro.trascrizione.dominio.DURATA_TRASCRITTO_MS
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.StatoElaborazione
@@ -30,12 +30,14 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The Trascrizione half of INV-28 (ADR 0020 §2 step 4): veto while an Elaborazione is open, otherwise purge. */
 class ApplicaEliminazioneRegistrazionePoliticaTest {
     private val elaborazioni = ElaborazioneRepositoryContata(ElaborazioneRepositoryFinta())
     private val trascritti = VociDellIncontroRepositoryContata(VociDellIncontroRepositoryFinta())
-    private val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, ogniRegistrazioneNota())
+    private val pubblicati = mutableListOf<EventoPubblicato>()
+    private val politica = politicaCon(pubblicati)
 
     @Test
     fun `AC-608 INV-28 con un Elaborazione in attesa o in corso anche accanto a una completata nulla e tolto`() {
@@ -46,7 +48,8 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
                 salva(aperta, "aperta-$r", r, DOPO)
                 trascritti.salva(unaRadice(registrazioneId = r))
 
-                val errore = politica.applica(r, unIncontroDi(r)).erroreAtteso<ElaborazioneGiaAperta>()
+                val esito = politica.applica(r, unIncontroDi(r), incontroCessato = true)
+                val errore = esito.erroreAtteso<ElaborazioneGiaAperta>()
 
                 assertEquals(ElaborazioneGiaAperta(r), errore)
                 assertEquals(if (conCompletata) 2 else 1, elaborazioni.diRegistrazione(r).size)
@@ -65,7 +68,7 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
         salva(IN_ATTESA, "altra-in-attesa", ALTRA, DOPO)
         trascritti.salva(unaRadice(registrazioneId = ALTRA))
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        politica.applica(R, unIncontroDi(R), incontroCessato = true).atteso()
 
         assertEquals(emptyList(), elaborazioni.diRegistrazione(R))
         assertNull(trascritti.trascritto(R))
@@ -78,35 +81,88 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
 
     @Test
     fun `AC-610 senza Elaborazione e senza Trascritto e Ok e nessuna chiamata rimuove qualcosa`() {
-        politica.applica(R, unIncontroDi(R)).atteso()
+        politica.applica(R, unIncontroDi(R), incontroCessato = true).atteso()
 
         assertEquals(0, elaborazioni.rimozioni + trascritti.rimozioni)
     }
 
     @Test
-    fun `AC-611 i collaboratori sono due repository e il lettore delle Parti - nessun decodificatore`() {
+    fun `AC-611 i collaboratori sono due repository e il dispatcher - nessun lettore, nessun decodificatore`() {
         val collaboratori = ApplicaEliminazioneRegistrazionePolitica::class.java.constructors.single().parameterTypes
 
         assertEquals(
             listOf(
                 ElaborazioneRepository::class.java,
                 VociDellIncontroRepository::class.java,
-                LettoreRegistrazione::class.java,
+                DispatcherEventi::class.java,
             ),
             collaboratori.toList(),
         )
     }
 
     @Test
+    fun `INV-I6 una Parte non ultima toglie le Voci solo sue, tiene le condivise e pubblica TrascrittoEliminato`() {
+        val radice = VociDellIncontro.crea(INCONTRO)
+        radice.completaParte(R, dueVoci, DURATA_TRASCRITTO_MS).atteso() // Voce 1, Voce 2
+        radice.completaParte(ALTRA, dueVoci, DURATA_TRASCRITTO_MS).atteso() // Voce 3, Voce 4
+        radice.unisci(VoceId(2), VoceId(3)).atteso() // Voce 2 speaks in both Parti, Voce 4 only in ALTRA
+        trascritti.salva(radice)
+
+        politica.applica(ALTRA, INCONTRO, incontroCessato = false).atteso()
+
+        val rimasta = assertNotNull(trascritti.trova(INCONTRO))
+        assertNull(rimasta.trascritto(ALTRA))
+        assertEquals(listOf(VoceId(1), VoceId(2)), rimasta.voci)
+        assertEquals<List<EventoPubblicato>>(listOf(TrascrittoEliminato(ALTRA, INCONTRO, setOf(VoceId(4)))), pubblicati)
+    }
+
+    @Test
+    fun `INV-I6 una Elaborazione aperta di un altra Parte non pone il veto`() {
+        val radice = VociDellIncontro.crea(INCONTRO)
+        radice.completaParte(R, listOf(unSegmentoIniziale(0, 0)), DURATA_TRASCRITTO_MS).atteso()
+        trascritti.salva(radice)
+        salva(IN_ATTESA, "altra-aperta", ALTRA, DOPO)
+
+        politica.applica(R, INCONTRO, incontroCessato = false).atteso()
+
+        assertEquals(1, elaborazioni.diRegistrazione(ALTRA).size)
+        assertEquals(1, pubblicati.size)
+    }
+
+    @Test
+    fun `INV-28 una Parte senza Trascritto non pubblica TrascrittoEliminato`() {
+        val radice = VociDellIncontro.crea(INCONTRO)
+        radice.completaParte(ALTRA, listOf(unSegmentoIniziale(0, 0)), DURATA_TRASCRITTO_MS).atteso()
+        trascritti.salva(radice)
+        salva(FALLITA, "fallita", R, PRIMA)
+
+        politica.applica(R, INCONTRO, incontroCessato = false).atteso()
+
+        assertTrue(pubblicati.isEmpty())
+        assertEquals(emptyList(), elaborazioni.diRegistrazione(R))
+        assertNotNull(trascritti.trascritto(ALTRA))
+    }
+
+    @Test
+    fun `INV-28 il veto non pubblica nulla`() {
+        trascritti.salva(unaRadice(registrazioneId = R))
+        salva(IN_ATTESA, "aperta", R, DOPO)
+
+        politica.applica(R, unIncontroDi(R), incontroCessato = true).erroreAtteso<ElaborazioneGiaAperta>()
+
+        assertTrue(pubblicati.isEmpty())
+    }
+
+    @Test
     fun `INV-I4 eliminare una Parte che non e' l'ultima toglie il suo Trascritto e tiene la radice col contatore`() {
-        val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, dueParti)
+        val politica = politicaCon(pubblicati)
         val radice = VociDellIncontro.crea(INCONTRO)
         radice.completaParte(R, listOf(unSegmentoIniziale(0, 0)), DURATA_TRASCRITTO_MS).atteso()
         radice.completaParte(ALTRA, listOf(unSegmentoIniziale(0, 0)), DURATA_TRASCRITTO_MS).atteso()
         trascritti.salva(radice)
         salva(COMPLETATA, "completata", R, PRIMA)
 
-        politica.applica(R, INCONTRO).atteso()
+        politica.applica(R, INCONTRO, incontroCessato = false).atteso()
 
         val rimasta = assertNotNull(trascritti.trova(INCONTRO))
         assertNull(rimasta.trascritto(R))
@@ -122,10 +178,31 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
         radice.rimuoviParte(R).atteso() // the counter outlives its last Trascritto
         trascritti.salva(radice)
 
-        politica.applica(R, unIncontroDi(R)).atteso()
+        politica.applica(R, unIncontroDi(R), incontroCessato = true).atteso()
 
         assertNull(trascritti.trova(unIncontroDi(R)))
         assertEquals(1, trascritti.rimozioni)
+        assertTrue(pubblicati.isEmpty(), "no Trascritto of the Parte: nothing to announce")
+    }
+
+    @Test
+    fun `INV-I6 l'ultima Parte con un Trascritto toglie la radice e pubblica TrascrittoEliminato`() {
+        trascritti.salva(unaRadice(registrazioneId = R, voci = 2))
+
+        politica.applica(R, unIncontroDi(R), incontroCessato = true).atteso()
+
+        assertNull(trascritti.trova(unIncontroDi(R)))
+        val attesi = setOf(VoceId(1), VoceId(2))
+        assertEquals<List<EventoPubblicato>>(listOf(TrascrittoEliminato(R, unIncontroDi(R), attesi)), pubblicati)
+    }
+
+    private fun politicaCon(dove: MutableList<EventoPubblicato>) =
+        ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, registra(dove))
+
+    private fun registra(dove: MutableList<EventoPubblicato>) = object : DispatcherEventi {
+        override fun pubblica(evento: EventoPubblicato) {
+            dove += evento
+        }
     }
 
     private fun salva(stato: StatoElaborazione, id: String, r: RegistrazioneId, creataAlle: Instant) {
@@ -157,10 +234,7 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
         val ALTRA = RegistrazioneId("reg-2")
         val INCONTRO = IncontroId("incontro-a-b")
 
-        /** [R] then [ALTRA], the two Parti of [INCONTRO]. */
-        val dueParti = LettoreRegistrazioneFinta(
-            listOf(R, ALTRA).associateWith { unaRegistrazioneVista(it).copy(incontroId = INCONTRO) },
-        )
+        val dueVoci = listOf(unSegmentoIniziale(0, 0), unSegmentoIniziale(1, 1_000))
         val PRIMA: Instant = Instant.parse("2026-09-25T09:00:00Z")
         val DOPO: Instant = Instant.parse("2026-09-25T10:00:00Z")
     }

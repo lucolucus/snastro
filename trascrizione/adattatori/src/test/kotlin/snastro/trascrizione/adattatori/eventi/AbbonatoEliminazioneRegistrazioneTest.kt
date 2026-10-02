@@ -22,7 +22,6 @@ import snastro.trascrizione.applicazione.politiche.ApplicaEliminazioneRegistrazi
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepository
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
-import snastro.trascrizione.applicazione.porte.ogniRegistrazioneNota
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
 import snastro.trascrizione.dominio.StatoElaborazione.COMPLETATA
 import snastro.trascrizione.dominio.StatoElaborazione.IN_ATTESA
@@ -43,8 +42,8 @@ class AbbonatoEliminazioneRegistrazioneTest {
     private val elaborazioni = ElaborazioneRepositoryContata(ElaborazioneRepositoryFinta())
     private val trascritti = VociDellIncontroRepositoryFinta()
     private val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta(elaborazioni.delegato, trascritti)).also {
-        val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, ogniRegistrazioneNota())
-        it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica, ogniRegistrazioneNota()))
+        val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, it)
+        it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica))
     }
 
     @Test
@@ -95,9 +94,8 @@ class AbbonatoEliminazioneRegistrazioneTest {
         val elaborazioniSql = ElaborazioneRepositorySql(db)
         val trascrittiSql = repositorySql(db, uow)
         val sql = DispatcherEventiInMemoria(uow).also {
-            val politica =
-                ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql, ogniRegistrazioneNota())
-            it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica, ogniRegistrazioneNota()))
+            val politica = ApplicaEliminazioneRegistrazionePolitica(elaborazioniSql, trascrittiSql, it)
+            it.registraSincrono(AbbonatoEliminazioneRegistrazione(politica))
         }
         elaborazioniSql.salva(unaElaborazione(COMPLETATA, ElaborazioneId("completata"), R)).atteso()
         trascrittiSql.salva(unaRadice(registrazioneId = R))
