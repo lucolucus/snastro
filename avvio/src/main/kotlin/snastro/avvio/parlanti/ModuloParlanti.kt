@@ -48,6 +48,7 @@ import snastro.parlanti.applicazione.letture.ParlantiAttivi
 import snastro.parlanti.applicazione.letture.ParlantiDelProgetto
 import snastro.parlanti.applicazione.letture.PianoRiassegnazioneQuery
 import snastro.parlanti.applicazione.letture.Proposta
+import snastro.parlanti.applicazione.letture.PropostaTraParti
 import snastro.parlanti.applicazione.letture.PropostaUnione
 import snastro.parlanti.applicazione.letture.PropostaVista
 import snastro.parlanti.applicazione.politiche.ApplicaRevisionePolitica
@@ -63,6 +64,7 @@ import snastro.trascrizione.applicazione.eventi.TrascrittoSostituito
 import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import snastro.ui.AggiornamentiVista
+import java.util.concurrent.locks.ReentrantLock
 import java.util.logging.Level
 import java.util.logging.Logger
 
@@ -101,6 +103,7 @@ internal class ModuloParlanti(
     private val aggiornamenti: AggiornamentiVistaParlanti
     private val riallineamento: AbbonatoRiallineamentoImpronte
     private val riallineaTutte: RiallineaTutteLeImpronteServizio
+    private val traParti: PropostaTraPartiProgetto
 
     /** The per-project Parlanti scope (AC-C56 figlioDi of the session scope): commands, S3 screens, similarity. */
     private val scopeProgetto: CoroutineScope = figlioDi(apertura.scope, app.io, gestoreErrori)
@@ -120,6 +123,7 @@ internal class ModuloParlanti(
         val registrazione = porte.registrazionePerParlanti
         val decodificatore = ml.decodificatore(apertura.cartella)
         val estrattoAudio = EstrattoAudio(voci, registrazione)
+        val lettureSerializzate = ReentrantLock(true)
         val proposte = ProposteSerializzate(
             Proposta(
                 voci,
@@ -130,6 +134,19 @@ internal class ModuloParlanti(
                 ConfrontoImpronteCoseno(),
                 estrattoAudio,
             ),
+            lettureSerializzate,
+        )
+        traParti = PropostaTraPartiProgetto(
+            PropostaTraParti(
+                voci,
+                registrazione,
+                porte.attribuzioni,
+                decodificatore,
+                ml.estrattore,
+                ConfrontoImpronteCoseno(),
+                estrattoAudio,
+            ),
+            lettureSerializzate,
         )
         aggiornamenti = AggiornamentiVistaParlanti(proposte) { i -> registrazione.parti(i)?.map { it.registrazioneId } }
         val riallinea = RiallineaImpronteServizio(
@@ -190,6 +207,7 @@ internal class ModuloParlanti(
             letture = LettureParlanti(
                 identificazione = IdentificazioneVoci(voci, porte.attribuzioni, porte.parlanti, registrazione)::voci,
                 proposta = if (ml.proposte) proposte::perVoce else galleriaVuota,
+                traParti = if (ml.proposte) traParti::perIncontro else { _ -> emptyList() },
                 unioni = { r -> registrazione.registrazione(r)?.incontroId?.let(unioni::proposte).orEmpty() },
                 parlantiAttivi = { attivi.parlanti(progettoId) },
                 estratto = estrattoAudio::estratto,
@@ -231,7 +249,7 @@ internal class ModuloParlanti(
         TrascrittoEliminato::class,
     )
 
-    override fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = abbonamenti(
+    override fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = invalidazioneTraParti() + abbonamenti(
         aggiornamenti,
         AttribuzioneConfermata::class,
         ImpronteRiallineate::class,
@@ -246,6 +264,10 @@ internal class ModuloParlanti(
         VoceDivisa::class,
         SegmentoRiassegnato::class,
     ) + abbonamenti(riallineamento, VociUnite::class, VoceDivisa::class, SegmentoRiassegnato::class)
+
+    /** AC-I49: the tra-Parti invalidation first, so a proposal is dropped before any screen hears of the change. */
+    private fun invalidazioneTraParti(): List<Abbonamento<AbbonatoDopoCommit>> =
+        PropostaTraPartiProgetto.EVENTI_INVALIDANTI.map { Abbonamento(it, traParti) }
 
     override fun avvia(scope: CoroutineScope) {
         val figlio = figlioDi(scope, app.io, gestoreErrori) // AC-C56

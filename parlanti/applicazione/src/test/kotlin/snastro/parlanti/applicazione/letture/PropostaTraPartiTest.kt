@@ -154,6 +154,40 @@ class PropostaTraPartiTest {
         assertEquals(2, a.estrazioni)
     }
 
+    @Test
+    fun `AC-I49 un invalida durante il calcolo scarta il risultato, non resta in cache e il successivo ricalcola`() {
+        val a = ambiente(fetta(1, P1, A), fetta(2, P2, A))
+        a.durante = {
+            a.api.invalida(INCONTRO)
+            a.durante = {}
+        }
+
+        a.api.perIncontro(INCONTRO) // computed from pre-invalida data: returned, but never stored
+        assertEquals(2, a.estrazioni)
+        a.api.perIncontro(INCONTRO)
+
+        assertEquals(4, a.estrazioni, "il risultato calcolato prima dell'invalida non e stato memorizzato")
+        a.api.perIncontro(INCONTRO)
+        assertEquals(4, a.estrazioni, "il calcolo successivo e in cache")
+    }
+
+    @Test
+    fun `AC-I49 accessi concorrenti a perIncontro e invalida non corrompono la cache`() {
+        val a = ambiente(fetta(1, P1, A), fetta(2, P2, A))
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(THREAD)
+        try {
+            val lavori = List(THREAD * 20) { i ->
+                pool.submit<Int> {
+                    if (i % 3 == 0) a.api.invalida(INCONTRO)
+                    a.api.perIncontro(INCONTRO).size
+                }
+            }
+            lavori.forEach { assertEquals(1, it.get(10, java.util.concurrent.TimeUnit.SECONDS)) }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
     // --- fixture -----------------------------------------------------------------------------------------------
 
     private data class Fetta(val voce: Int, val parte: RegistrazioneId, val stampa: Int)
@@ -166,6 +200,9 @@ class PropostaTraPartiTest {
     private class Ambiente(fette: List<Fetta>, debole: Set<Int>) {
         var estrazioni = 0
         var annullaAllaProssima = false
+
+        @Volatile var durante: () -> Unit = {}
+
         val attribuzioni = AttribuzioneRepositoryFinta()
 
         private val impronte = STAMPE.map { Impronta(it) }
@@ -190,7 +227,8 @@ class PropostaTraPartiTest {
                     annullaAllaProssima = false
                     throw InterruptedException()
                 }
-                estrazioni++
+                synchronized(this@Ambiente) { estrazioni++ }
+                durante()
                 return impronte[indici[c.campioni[0].toInt()].first.stampa]
             }
         }
@@ -214,6 +252,7 @@ class PropostaTraPartiTest {
 
     private companion object {
         const val UNITA = 1_000L
+        const val THREAD = 8
         const val A = 0
         const val B = 1
         val STAMPE = listOf(floatArrayOf(1f, 0f, 0f), floatArrayOf(0f, 1f, 0f))

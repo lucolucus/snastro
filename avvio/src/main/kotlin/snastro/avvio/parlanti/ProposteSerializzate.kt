@@ -23,8 +23,11 @@ import java.util.concurrent.locks.ReentrantLock
  * Invalidation is project-wide: a Conferma, a Revisione, an `ImpronteRiallineate` or any Parlante change
  * alters the Galleria every other Voce is compared against, so every cached Registrazione is forgotten.
  */
-internal class ProposteSerializzate(private val proposta: Proposta) {
-    private val lock = ReentrantLock(true)
+internal class ProposteSerializzate(
+    private val proposta: Proposta,
+    /** Shared with [PropostaTraPartiProgetto]: ONE read of the project waits on the native Mutex at a time. */
+    private val lock: ReentrantLock = ReentrantLock(true),
+) {
     private val daInvalidare = AtomicBoolean(false)
     private val inCache = mutableSetOf<VoceRef>() // guarded by lock
 
