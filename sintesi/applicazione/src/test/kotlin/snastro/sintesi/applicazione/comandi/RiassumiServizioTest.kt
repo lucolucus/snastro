@@ -450,6 +450,12 @@ class RiassumiServizioTest {
             assertEquals(0, checkNotNull(a.letture).segmenti, nome)
         }
 
+        val aperto = unAmbienteMultiParte(trascritte = setOf(REG1, REG2), letture = LettureContate())
+        aperto.servizio.esegui(Riassumi(INCONTRO)).atteso()
+        val letturePrima = checkNotNull(aperto.letture).segmenti
+        aperto.servizio.esegui(Riassumi(INCONTRO)).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
+        assertEquals(letturePrima, checkNotNull(aperto.letture).segmenti, "Riassunto aperto: l ingresso non e letto")
+
         val ok = unAmbienteMultiParte(trascritte = setOf(REG1, REG2), letture = LettureContate())
         ok.servizio.esegui(Riassumi(INCONTRO)).atteso()
         assertEquals(2, checkNotNull(ok.letture).segmenti, "con le guardie superate la stima legge ogni Parte")
