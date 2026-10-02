@@ -1,6 +1,7 @@
 package snastro.trascrizione.applicazione.letture
 
 import snastro.kernel.IncontroId
+import snastro.kernel.LetturaCoerente
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceRef
@@ -12,12 +13,16 @@ import snastro.trascrizione.dominio.Trascritto
  * Public query API of the Trascrizione context (Published Language): the shapes read-models of other
  * contexts are built from (`voci-per-parlanti`, `trascritto-per-sbobinatura`) — those consumer-owned
  * ports map [VoceVista] / [SegmentoVista] into their own DTOs, never re-deciding anything (RC-1).
- * Read-only: every method reads one Parte through [VociDellIncontroRepository.trascritto] (ADR 0035 §1); no rule
- * lives here.
+ * Read-only, no rule lives here. Each call is ONE consistent read (ADR 0029): a per-Registrazione method reads one
+ * Parte through [VociDellIncontroRepository.trascritto] (ADR 0035 §1); a per-Incontro method reads the Parti's order
+ * and the root inside one [lettura] snapshot. Two calls are two snapshots: a consumer that combines a per-Registrazione
+ * read ([voci], [segmenti], [trascritto] of `r`, [registrazioniConTrascritto]) with a per-Incontro one may see a
+ * transcription committed in between — it must tolerate that (or read both inside its own `inLettura`).
  */
 public class VociDelTrascritto(
     private val trascritti: VociDellIncontroRepository,
     private val registrazioni: LettoreRegistrazione,
+    private val lettura: LetturaCoerente,
 ) {
     /** AC-98: the Voci of [registrazioneId]'s Trascritto, ordered by id, or `null` without one (INV-5). */
     public fun voci(registrazioneId: RegistrazioneId): List<VoceVista>? =
@@ -82,10 +87,14 @@ public class VociDelTrascritto(
             )
         }
 
-    /** The transcribed Parti of [incontroId], in the order Progetto gives (never re-ordered here); `null` if none. */
-    private fun trascrittiInOrdine(incontroId: IncontroId): List<Trascritto>? {
+    /**
+     * The transcribed Parti of [incontroId], in the order Progetto gives (never re-ordered here); `null` if none. The
+     * order and the root are read in the SAME snapshot (AC-I42), so a Parte added or removed in between is never
+     * half-seen.
+     */
+    private fun trascrittiInOrdine(incontroId: IncontroId): List<Trascritto>? = lettura.inLettura {
         val ordine = registrazioni.parti(incontroId)?.map { it.registrazioneId }
         val radice = ordine?.let { trascritti.trova(incontroId) }
-        return radice?.let { r -> ordine.mapNotNull { r.trascritto(it) }.ifEmpty { null } }
+        radice?.let { r -> ordine.mapNotNull { r.trascritto(it) }.ifEmpty { null } }
     }
 }

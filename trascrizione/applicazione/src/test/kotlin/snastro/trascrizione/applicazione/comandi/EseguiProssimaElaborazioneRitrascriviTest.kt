@@ -341,7 +341,8 @@ private class AllineatoreGuasto : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = error("modello guasto")
 }
 
-private class AllineatoreMuto : Allineatore {
+/** No speech aligned: `completaParte` refuses it (`NessunParlatoRilevato`). Shared by this package's tests. */
+internal class AllineatoreMuto : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = emptyList()
 }
 

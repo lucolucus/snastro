@@ -7,9 +7,10 @@ SELECT incontro_id, prossima_voce FROM voci_incontro WHERE incontro_id = :incont
 inserisci:
 INSERT INTO voci_incontro(incontro_id, prossima_voce) VALUES (:incontroId, :prossimaVoce);
 
--- The root only raises its counter (INV-I4); the SET never names incontro_id (D-0028).
+-- The root only raises its counter (INV-I4); MAX is the store's backstop: a stale root never lowers it. The SET never
+-- names incontro_id (D-0028).
 aggiorna:
-UPDATE voci_incontro SET prossima_voce = :prossimaVoce WHERE incontro_id = :incontroId;
+UPDATE voci_incontro SET prossima_voce = max(prossima_voce, :prossimaVoce) WHERE incontro_id = :incontroId;
 
 -- ADR 0035 §1: the root ceases only with its Incontro, never with its last Trascritto (the counter survives, INV-I4).
 elimina:

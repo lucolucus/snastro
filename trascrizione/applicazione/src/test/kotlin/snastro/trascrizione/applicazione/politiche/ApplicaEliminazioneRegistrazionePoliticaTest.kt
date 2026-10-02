@@ -196,6 +196,64 @@ class ApplicaEliminazioneRegistrazionePoliticaTest {
         assertEquals<List<EventoPubblicato>>(listOf(TrascrittoEliminato(R, unIncontroDi(R), attesi)), pubblicati)
     }
 
+    @Test
+    fun `INV-I4 togliere l unica Parte di un Incontro che non cessa tiene la radice col contatore`() {
+        val radice = VociDellIncontro.crea(INCONTRO)
+        radice.completaParte(R, dueVoci, DURATA_TRASCRITTO_MS).atteso() // Voce 1, Voce 2
+        trascritti.salva(radice)
+
+        politica.applica(R, INCONTRO, incontroCessato = false).atteso()
+
+        val rimasta = assertNotNull(trascritti.trova(INCONTRO), "the root outlives its last Trascritto (INV-I4)")
+        assertTrue(rimasta.trascritti.isEmpty())
+        assertEquals(3, rimasta.prossimaVoce)
+        assertEquals(0, trascritti.rimozioni)
+        val attesi = setOf(VoceId(1), VoceId(2))
+        assertEquals<List<EventoPubblicato>>(listOf(TrascrittoEliminato(R, INCONTRO, attesi)), pubblicati)
+    }
+
+    @Test
+    fun `INV-I6 la radice e scritta e le Elaborazioni tolte prima che TrascrittoEliminato sia pubblicato`() {
+        val radice = VociDellIncontro.crea(INCONTRO)
+        radice.completaParte(R, dueVoci, DURATA_TRASCRITTO_MS).atteso()
+        radice.completaParte(ALTRA, dueVoci, DURATA_TRASCRITTO_MS).atteso()
+        trascritti.salva(radice)
+        salva(COMPLETATA, "completata", R, PRIMA)
+        val visto = mutableListOf<Pair<Boolean?, Int>>()
+        val politica = ApplicaEliminazioneRegistrazionePolitica(
+            elaborazioni,
+            trascritti,
+            object : DispatcherEventi {
+                override fun pubblica(evento: EventoPubblicato) {
+                    visto += trascritti.trova(INCONTRO)?.haParte(R) to elaborazioni.diRegistrazione(R).size
+                }
+            },
+        )
+
+        politica.applica(R, INCONTRO, incontroCessato = false).atteso()
+
+        assertEquals(listOf<Pair<Boolean?, Int>>(false to 0), visto)
+    }
+
+    @Test
+    fun `INV-I6 con l ultima Parte la radice e gia tolta quando TrascrittoEliminato e pubblicato`() {
+        trascritti.salva(unaRadice(registrazioneId = R, voci = 2))
+        val visto = mutableListOf<Boolean>()
+        val politica = ApplicaEliminazioneRegistrazionePolitica(
+            elaborazioni,
+            trascritti,
+            object : DispatcherEventi {
+                override fun pubblica(evento: EventoPubblicato) {
+                    visto += trascritti.trova(unIncontroDi(R)) == null
+                }
+            },
+        )
+
+        politica.applica(R, unIncontroDi(R), incontroCessato = true).atteso()
+
+        assertEquals(listOf(true), visto)
+    }
+
     private fun politicaCon(dove: MutableList<EventoPubblicato>) =
         ApplicaEliminazioneRegistrazionePolitica(elaborazioni, trascritti, registra(dove))
 

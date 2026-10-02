@@ -97,7 +97,7 @@ internal class PorteProgetto(
     val statiElaborazione: StatiElaborazione = StatiElaborazione(elaborazioni, trascritti, fasiInCorso)
 
     /** Trascrizione's public read API over [trascritti], shared by every cross-context reader below. */
-    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti, registrazionePerTrascrizione)
+    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti, registrazionePerTrascrizione, lettura)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Sbobinatura's and Sintesi's readers. */
     val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
