@@ -28,7 +28,7 @@ Implement VociDellIncontroRepository in SQL (the only writer of voci_incontro, v
 ## Tasks
 - AC-I56 VociDellIncontroRepositoryContratto runs green on the SQL adapter: a 2-Parte root round-trips; prossima_voce and prossimo_segmento never decrease; saving after a change in Parte B rewrites no row of Parte A (statement count on the fake driver or row timestamps)
 - AC-I57 LettoreRegistrazioneContratto (Trascrizione) runs green on the adapter seeded through AggiungiRegistrazione / ModificaDataRegistrazione
-- AC-I58 a forgotten voce_incontro delete after rimuoviParte fails the COMMIT on the deferred FK (fail closed)
+- AC-I58 a Voce removed by rimuoviParte whose Parlanti rows were not purged fails the COMMIT on the deferred FK (fail closed); the adapter deletes its voce_incontro row
 
 ## Dependencies
 - `agg-voci-dell-incontro` (consumes it; owner `voci-dell-incontro`) — consumers: `porte-trascrizione-incontro`, `esegui-elaborazione-incontro`, `revisione-incontro`, `eliminazione-parte-trascrizione`, `voci-del-trascritto-incontro`, `viste-parte-incontro`, `adattatori-trascrizione-incontro` · contract_test: invariant-test

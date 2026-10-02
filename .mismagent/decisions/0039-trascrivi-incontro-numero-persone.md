@@ -43,3 +43,10 @@ arbitrary `Parte` first.
 - ADR 0014 and ADR 0023 gain dated pointers. The queue (`CodaCondivisa`) is untouched.
 - Tests: three `Parte`s with the middle one already transcribed → only the other two queued, in order, with
   increasing `creataAlle`; the claim takes them in `Parte` order; an equal-instant clock in the fake still yields the order.
+
+## Amendment 2026-10-03 — the command carries `Int?` [I2 amendment pass, incontro D-0049]
+`AvviaElaborazioniDellIncontro.numeroPersone` is `Int?`, as in `AvviaElaborazione` (ADR 0014): the raw user value. The
+service validates it with `NumeroPersone.di` right after the `Incontro` lookup and before any write
+(`NumeroPersoneFuoriIntervallo`, nothing written; `IncontroNonTrovato` comes first)
+and stores the `NumeroPersone?` on each `Elaborazione`. "`numeroPersone: NumeroPersone?`" in the Decision names the
+validated value, not the command field.

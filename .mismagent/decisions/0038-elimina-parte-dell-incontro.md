@@ -100,3 +100,11 @@ since a `Voce` number may disappear from their legend. S3 of the deleted `Parte`
 - Tests: delete a non-last `Parte` with a shared `Voce` (it survives with its name, loses this `Parte`'s print); delete
   the last `Parte` (every row of the `Incontro` gone, `incontro` row gone); a missing Sintesi or Trascrizione subscriber
   fails the last-`Parte` delete on the immediate FKs; a missing Parlanti purge fails the COMMIT on the deferred FKs.
+
+## Amendment 2026-10-03 — §2 order inside Trascrizione's subscriber, as built [I2 amendment pass, incontro D-0049]
+Confirmed, and stated exactly: `ApplicaEliminazioneRegistrazionePolitica` (1) vetoes on an open `Elaborazione` of this
+`Parte`; (2) removes its `Elaborazione`s **first**; (3) `rimuoviParte` on the root, if the `Parte` has a `Trascritto`;
+(4) persists the root — `rimuovi(incontroId)` when `incontroCessato`, else `salva(root)`; (5) **then** publishes
+`TrascrittoEliminato` for the Parlanti purge. The root's rows go before the purge runs: the `voce_incontro` / `voce`
+references from Parlanti are deferred FKs, so the order is safe and checked at COMMIT (step 6); Parlanti reads only the
+event payload (`vociRimosse`). "After `rimuoviParte`" in §2 means step 4 above.

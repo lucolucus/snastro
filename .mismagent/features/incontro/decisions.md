@@ -697,3 +697,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
 - Docs: [pre-release](pre-release.md)
 - Revisit: the redundant write becomes visible to the user.
+
+### D-0053 · Emendamenti ADR di I2 in un passaggio
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: c5d74d98
+- Question: How are the pending ADR and pin texts (0033 §7, 0034 §4, 0035, 0037 §2/§9, 0038 §2, 0039, OraDiInizio, IncontroNonTrovato order, AC-I58) amended?
+- Options: A one architect pass: reader allow-list for oraDiInizio/aggiuntaAlle, closed port method sets, strutturaRegistrata rename, pins and AC-I58 updated (kept); B extend line-based detection.
+- Hypothesis: n/a — decided by the architect under D-0049, [pre-release](pre-release.md)
+- Check: n/a — decided by the architect under D-0049, [pre-release](pre-release.md)
+- Result: n/a — decided by the architect under D-0049, [pre-release](pre-release.md)
+- Debate: aliases, :: references and multi-line keys defeat line-based sort detection; an allow-list of readers has no false positives.
+- Decision: A; scripts, rename and the Registrazione.sq ORDER BY drop go to fix group pre-I2-9. Cost: a new reader of oraDiInizio needs an ADR 0033 amendment.
+- By: decided: mismagent-architect; recorded: Claude (worker-composer); consulted: verifier findings
+- Docs: [pre-release](pre-release.md)
+- Revisit: the reader allow-list blocks a legitimate new screen.

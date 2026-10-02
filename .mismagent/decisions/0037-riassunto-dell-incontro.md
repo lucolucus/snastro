@@ -159,3 +159,22 @@ decision they carry, `superato`, is the root's).
   appears twice — a `tests_nl` of the esegui-riassunto block (build-manifest). Not verifiable in the gate.
 - Enforcement: the prohibition above; the label round-trip, [INV-I10] and [INV-I11] table tests; the migration test of
   ADR 0034. Discursive (code review): the label table never leaves the run; the policy deletes only on `incontroCessato`.
+
+## Amendment 2026-10-03 — rule-9 checks stated as enforced; `IncontroNonTrovato` first [I2 amendment pass, incontro D-0049]
+- **§2, order of the refusals.** `Riassumi` reads the `Incontro`'s `Parte`s (`LettoreIncontro.parti`) **before** any
+  guard: an unknown, ceased or `Parte`-less `Incontro` answers `Errore(IncontroNonTrovato(incontroId))` and nothing else —
+  it precedes `ModelloNonInstallato` and every `Riassumibilita` reason, since there is nothing to evaluate them on.
+  `IncontroNonTrovato` is the command's error, not `Riassumibilita`'s (its pure `valuta` never sees a missing `Incontro`);
+  the view, keyed by an existing `incontroId`, never shows it. Then `Riassumibilita` in its order, then `Argomento`.
+- **§9, invariant fields read only inside — replaced text.** The recorded structure of a `Riassunto` (§5 "Recorded") is
+  read by **no one but the persistence mapping**: the view and every command go through `superato(corrente)`. To make
+  that enforceable without guessing types, the root's property is named **`strutturaRegistrata`** (was `struttura`, a name
+  shared with the run's `StrutturaIncontro` and the row's column) and the identifier is forbidden in every `src/main`
+  outside `:sintesi:dominio` and `..sintesi.adattatori.persistenza` — any access form, `when`, `equals`, references and
+  scope functions included. The `chiave` ban stays for Sintesi, `:ui` and `:avvio`. The former `==`/`!=` line heuristic
+  is dropped (evadable and noisy). Persisted names are unchanged (column `struttura`, ADR 0034).
+- **§9, mutated only through the root.** `RiassuntoRepository` has a **closed method set**: `salva`, `concludi`
+  (compare-and-set), `rimuovi*`, `trova*`, `inAttesa`, `inCorso`. Any other method is an amendment of this ADR (the check
+  is an allow-list, not a list of forbidden prefixes).
+- **§7, `nessun-riassunto-automatico` scope.** The check also covers Sintesi's composition package
+  `avvio..avvio.sintesi` (a subscription wired there is a reaction too) and fails on an empty scan.

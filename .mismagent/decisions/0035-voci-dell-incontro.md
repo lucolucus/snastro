@@ -27,21 +27,31 @@ enforced_by:   # §9 (rule 9). Writes-only-in-the-adapter is ADR 0034's adr-0034
     # avvio/; conforming: both in dominio and in the persistence mapping, the names in a KDoc.
   - check: architettura-test/controlli-adr/adr-0035-impronte-mutate-dalla-radice.sh
     from: parlante-impronte-per-parte
-    # PROHIBITION (parlante-impronte-per-parte: state mutated only through the root): (1) no constructor call `ImprontaVocale(` in */src/main
-    # outside parlanti/dominio/src/main and parlanti/adattatori/src/main/kotlin/snastro/parlanti/adattatori/persistenza/ (a print is created only
-    # by Parlante's methods, rebuilt only by its repository); (2) the interface `ParlanteRepository` (found by content in
-    # parlanti/applicazione/src/main) declares no fun named aggiorna*/modifica*/imposta*/sposta*/cambia*/scrivi*/inserisci*/registra*/rimuoviImpront*
-    # EXCEPT `aggiornaImpronta` — the compare-and-set of `RiallineaImpronte`, the documented exception of ADR 0012 (b). Comment lines stripped.
-    # FAIL when parlanti/dominio is missing or no file declares `class Parlante`. Violating fixtures: `ImprontaVocale(ref, …)` in
-    # parlanti/applicazione/politiche, `fun rimuoviImpronteDellaParte(` in ParlanteRepository; conforming: the constructor in dominio and in the
-    # persistence mapping, `aggiornaImpronta` in the port.
+    # PROHIBITION (parlante-impronte-per-parte: state mutated only through the root; clause 2 an ALLOW-LIST, amended 2026-10-03):
+    # (1) no construction of `ImprontaVocale` (`ImprontaVocale(`, simple or qualified, or `::ImprontaVocale`) in */src/main outside
+    # parlanti/dominio/src/main and parlanti/adattatori/src/main/kotlin/snastro/parlanti/adattatori/persistenza/ (a print is created only by
+    # Parlante's methods, rebuilt only by its repository); (2) the file of parlanti/applicazione/src/main declaring `interface
+    # ParlanteRepository` (found by content) declares ONLY funs named trova, delProgetto, nomeAttivoInUso, salva, rimuovi,
+    # impronteDiRegistrazione, impronteDelProgetto and `aggiornaImpronta` (the compare-and-set of `RiallineaImpronte`, ADR 0012 (b)) — any
+    # other name fails, mutators included; a new port method is an amendment of this list; (3) ImprontaVocale is a data class, so `.copy(`
+    # is a construction too: in the files of clause 1, a file naming `ImprontaVocale` or reading `.impronte`/`::impronte` has no `.copy(`.
+    # Comments removed by lib/senza-commenti.awk; build dirs excluded. FAIL when parlanti/dominio/src/main is missing, no file there declares
+    # `class Parlante`, or no file declares `interface ParlanteRepository`. Violating fixtures: `ImprontaVocale(ref, …)` and
+    # `::ImprontaVocale` in parlanti/applicazione/politiche, `fun rimuoviImpronteDellaParte(` in ParlanteRepository, `i.copy(voceRef = n)` on a
+    # print in a comandi file; conforming: the constructor in dominio and in the persistence mapping, `aggiornaImpronta` in the port.
   - check: architettura-test/controlli-adr/adr-0035-impronte-lette-dalla-radice.sh
     from: parlante-impronte-per-parte
-    # PROHIBITION (parlante-impronte-per-parte: invariant fields read only inside the aggregate — [INV-I8], [INV-I8b], [INV-21]): no access
-    # `.impronte` (property of Parlante) in parlanti/applicazione/src/main/kotlin/snastro/parlanti/applicazione/comandi/ or …/politiche/ — which
-    # print to keep, re-key or remove per (VoceRef, Parte) is decided by Parlante's methods; the read-models in …/letture/ may read prints to
-    # compare (Galleria). Comment lines stripped. FAIL when comandi/ or politiche/ is missing. Violating fixtures: `p.impronte.filter { it.registrazioneId == r }`
-    # in a politiche file, `parlante.impronte.size` in a comandi file; conforming: `parlante.impronte` in letture/, `p.rimuoviImpronteDellaParte(r)` in politiche/.
+    # PROHIBITION (parlante-impronte-per-parte: invariant fields read only inside the aggregate — [INV-I8], [INV-I8b], [INV-21]; scope as
+    # amended 2026-10-03): (1) no read of the Parlante property `impronte` (`.impronte`, `?.impronte`, `::impronte`; `.impronteDiRegistrazione`
+    # & co. are other names) in any *.kt under parlanti/applicazione/src/main EXCEPT …/applicazione/letture/ (the read-models may read prints
+    # to compare, Galleria) and under parlanti/adattatori/src/main EXCEPT …/adattatori/persistenza/ (the mapping) — so comandi/, politiche/,
+    # any other applicazione package and the adattatori subscribers (eventi/, porte/) alike; (2) implicit receiver: in comandi/, politiche/,
+    # adattatori/eventi/ and adattatori/porte/ the bare identifier `impronte` (scope functions `with`/`run`/`apply`) fails too, except as a
+    # declaration (`val impronte`, `impronte:`, `impronte ->`, `impronte =`). Which print to keep, re-key or remove per (VoceRef, Parte) is
+    # decided by Parlante's methods. Comments removed by lib/senza-commenti.awk; build dirs excluded. FAIL when comandi/ or politiche/ is
+    # missing. Violating fixtures: `p.impronte.filter { it.registrazioneId == r }` in a politiche file, `parlante.impronte.size` in a comandi
+    # file, `Parlante::impronte` in adattatori/eventi, `with(p) { impronte.size }` in comandi; conforming: `parlante.impronte` in letture/,
+    # `p.rimuoviImpronteDellaParte(r)` in politiche/, `val impronte = …` declared in comandi.
 ---
 # 0035 — The Voci dell'Incontro: one root per `Incontro`, numbers and `segmentoId`s never reused, the Parlanti consequences per `Parte`
 
@@ -174,3 +184,16 @@ termine" (multi-part) or today's banner (1-part). A first transcription of a new
 - Enforcement: invariant tests on the root ([INV-6], [INV-8], [INV-I4], [INV-I5], [INV-I7], [INV-I16]); the FK backstops
   and the table-ownership check of ADR 0034; the prohibitions of ADR 0018 and ADR 0012 (b), unchanged. Discursive (code
   review): the purge never runs after commit; `TrascrittoSostituito` precedes `ElaborazioneCompletata`; no path renumbers.
+
+## Amendment 2026-10-03 — §9 rules stated as enforced [I2 amendment pass, incontro D-0049]
+- **`parlante-impronte-per-parte`, mutated only through the root.** `ParlanteRepository` has a **closed method set**:
+  `trova`, `delProgetto`, `nomeAttivoInUso`, `impronteDiRegistrazione`, `impronteDelProgetto` (reads), `salva`, `rimuovi`
+  and `aggiornaImpronta` (ADR 0012 (b)'s compare-and-set, still the one write besides the root's). Any other method is an
+  amendment of this ADR: the check is an allow-list, not a list of forbidden prefixes. A print is also not built by
+  `ImprontaVocale.copy(…)` or `::ImprontaVocale` outside the domain and the mapping.
+- **`parlante-impronte-per-parte`, invariant fields read only inside.** The read of `Parlante.impronte` is confined to
+  `..applicazione.letture` and the persistence mapping — every other package of `:parlanti:applicazione` and
+  `:parlanti:adattatori` (subscribers in `eventi`/`porte` included), also through an implicit receiver. This is wider than
+  the 2026-10-01 text (comandi/ and politiche/ only); the §9 table row is read with this scope.
+- `voci-dell-incontro`'s mutation check (`adr-0035-voci-mutate-dalla-radice.sh`) is unchanged: clause 3 still names
+  forbidden prefixes for `VociDellIncontroRepository`.

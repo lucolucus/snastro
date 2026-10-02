@@ -146,7 +146,7 @@ blocks:
     invariants:
       - "INV-I1 every Registrazione is a Parte of exactly one Incontro of the same Progetto; its incontroId is set at creation and never changes (the set half — never empty, created with its first Parte, gone with its last — is tested on aggiungi-registrazione-incontro and elimina-parte)"
       - "INV-I2 the Parti of an Incontro are in the total order (DataRegistrazione, OraDiInizio empty last, aggiuntaAlle, registrazioneId); numero della parte = 1-based rank"
-      - "INV-I14 OraDiInizio, when present, is a valid local time of day to the second in [00:00:00, 24:00:00); empty is legal, also after an edit"
+      - "INV-I14 OraDiInizio, when present, is a valid local time of day to the second in [00:00:00, 24:00:00) — a LocalTime with a non-zero fraction of a second is refused (OraDiInizioNonValida; callers truncate first); empty is legal, also after an edit"
     invariant_fields: ["Registrazione.incontroId", "Registrazione.oraDiInizio", "Incontro.progettoId"]
     identity: "IncontroId (kernel) minted by aggiungi-registrazione-incontro via GeneratoreId (UUID v4); migrated Incontri by 7.sqm"
     tables: ["incontro", "registrazione (incontro_id, ora_di_inizio)"]
@@ -154,7 +154,7 @@ blocks:
     tests_nl:
       - "INV-I1 Registrazione exposes incontroId, no method changes it, and reconstitution with a different incontroId than the stored one is impossible through the API (invariant test: every mutating method keeps incontroId)"
       - "INV-I2 OrdineDelleParti table test: (a) different dates order by date; (b) same date: 09:00 before 10:00; (c) same date, one empty: the timed one first, the empty last; (d) A 09:00 imported 3rd, B empty imported 2nd, C 10:00 imported 1st → A, C, B on every permutation of the input (transitive); (e) full tie → by aggiuntaAlle then registrazioneId; numbers are 1..N"
-      - "INV-I14 OraDiInizio.di table test: '00:00:00' and '23:59:59' → Ok; '24:00:00', '12:60:00', '-1', '' as a time → Errore(OraDiInizioNonValida); null → empty (legal)"
+      - "INV-I14 OraDiInizio.di table test: '00:00:00' and '23:59:59' → Ok; '24:00:00', '12:60:00', '-1', '' as a time → Errore(OraDiInizioNonValida); null → empty (legal); OraDiInizio.di(LocalTime.of(12, 0, 0, 500_000_000)) → Errore(OraDiInizioNonValida)"
       - "AC-I14 modificaOraDiInizio(nuova) returns OraDiInizioModificata(precedente, nuova); the same value (also empty → empty) returns no event; clearing a set time is allowed and returns an event"
       - "AC-I15 Incontro holds only identity and progettoId: title, date, numero della parte and '· N parti' are not fields (by-construction: covered by a Konsist assertion on the class's properties, not counted)"
   - id: "voci-dell-incontro"
@@ -569,6 +569,7 @@ blocks:
     commands: ["Riassumi"]
     tests_nl_status: "confirmed"
     tests_nl:
+      - "Riassumi on an unknown Incontro with the LLM model not installed → Errore(IncontroNonTrovato), not ModelloNonInstallato; nothing written"
       - "Riassumi(i) with both Parti TRASCRITTA and the model installed → a Riassunto in_attesa keyed by i, RiassuntoRichiesto(i) after commit"
       - "Riassumi(i) with Parte 2 DA_TRASCRIVERE → Errore(PartiNonTrascritte(parte 2)); with Parte 1 IN_TRASCRIZIONE → Errore(ElaborazioneGiaAperta(parte 1)); a Riassunto already open → Errore(RiassuntoGiaAperto); nothing written"
       - "Riassumi(i) whose concatenated input exceeds LimiteIngresso → Errore(IngressoTroppoLungo) (scope: the whole Incontro); an unknown Incontro → Errore(IncontroNonTrovato)"
@@ -857,7 +858,7 @@ blocks:
     tests_nl:
       - "AC-I56 VociDellIncontroRepositoryContratto runs green on the SQL adapter: a 2-Parte root round-trips; prossima_voce and prossimo_segmento never decrease; saving after a change in Parte B rewrites no row of Parte A (statement count on the fake driver or row timestamps)"
       - "AC-I57 LettoreRegistrazioneContratto (Trascrizione) runs green on the adapter seeded through AggiungiRegistrazione / ModificaDataRegistrazione"
-      - "AC-I58 a forgotten voce_incontro delete after rimuoviParte fails the COMMIT on the deferred FK (fail closed)"
+      - "AC-I58 a Voce removed by rimuoviParte whose Parlanti rows were not purged fails the COMMIT on the deferred FK (fail closed); the adapter deletes its voce_incontro row"
   - id: "adattatori-parlanti-incontro"
     type: "adapter"
     context: "parlanti"
@@ -1397,7 +1398,7 @@ boundaries:
     pinned_types:
       "Riassunto (amended)": "richiedi(id, incontroId: IncontroId, argomento, lunghezzaMassima, richiestoAlle); completa(bozza, struttura: StrutturaIncontro, etichette: List<SegmentoRef>); superato(corrente: StrutturaIncontro): Boolean; Fonti as Set<SegmentoRef>"
       StrutturaIncontro: "(parti: List<Pair<RegistrazioneId, StrutturaTrascritto?>>) in Parte order; chiave = '<registrazioneId>=<StrutturaTrascritto.chiave or empty>' joined by ';'"
-      Riassumibilita: "valuta(modelloInstallato: Boolean, stati: List<Pair<Int /* numero */, StatoParte>>, riassuntoAperto: Boolean, stimaToken: Int?): Esito<Unit> — errors ModelloNonInstallato, PartiNonTrascritte(parte), ElaborazioneGiaAperta(parte), PartiFallite(parte), RiassuntoGiaAperto, IngressoTroppoLungo; first blocking Parte in order"
+      Riassumibilita: "valuta(modelloInstallato: Boolean, stati: List<Pair<Int /* numero */, StatoParte>>, riassuntoAperto: Boolean, stimaToken: Int?): Esito<Unit> — errors ModelloNonInstallato, PartiNonTrascritte(parte), ElaborazioneGiaAperta(parte), PartiFallite(parte), RiassuntoGiaAperto, IngressoTroppoLungo; first blocking Parte in order; IncontroNonTrovato is NOT a valuta error: the Riassumi command answers Errore(IncontroNonTrovato) for an unknown, ceased or Parte-less Incontro BEFORE valuta, so it precedes ModelloNonInstallato (ADR 0037 Amendment 2026-10-03)"
       IngressoRiassunto: "costruisci(parti: List<List<SegmentoIngresso>> /* Parte order */): IngressoEtichettato(testo: String, etichette: List<SegmentoRef>) — '[s<k> V<n>] <testo>', legend 'V<n> = Voce n'"
     keys:
       k: "minted by IngressoRiassunto per run — the 1-based position in the input, lives only in memory for the run"

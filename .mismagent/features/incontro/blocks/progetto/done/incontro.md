@@ -15,7 +15,7 @@ related_adrs:
 invariants:
   - "INV-I1 every Registrazione is a Parte of exactly one Incontro of the same Progetto; its incontroId is set at creation and never changes (the set half — never empty, created with its first Parte, gone with its last — is tested on aggiungi-registrazione-incontro and elimina-parte)"
   - "INV-I2 the Parti of an Incontro are in the total order (DataRegistrazione, OraDiInizio empty last, aggiuntaAlle, registrazioneId); numero della parte = 1-based rank"
-  - "INV-I14 OraDiInizio, when present, is a valid local time of day to the second in [00:00:00, 24:00:00); empty is legal, also after an edit"
+  - "INV-I14 OraDiInizio, when present, is a valid local time of day to the second in [00:00:00, 24:00:00) — a LocalTime with a non-zero fraction of a second is refused (OraDiInizioNonValida; callers truncate first); empty is legal, also after an edit"
 invariant_fields:
   - Registrazione.incontroId
   - Registrazione.oraDiInizio
@@ -34,12 +34,12 @@ Add the Incontro root (identity + progettoId, nothing else), amend Registrazione
 ## Invariants
 - INV-I1 every Registrazione is a Parte of exactly one Incontro of the same Progetto; its incontroId is set at creation and never changes (the set half — never empty, created with its first Parte, gone with its last — is tested on aggiungi-registrazione-incontro and elimina-parte)
 - INV-I2 the Parti of an Incontro are in the total order (DataRegistrazione, OraDiInizio empty last, aggiuntaAlle, registrazioneId); numero della parte = 1-based rank
-- INV-I14 OraDiInizio, when present, is a valid local time of day to the second in [00:00:00, 24:00:00); empty is legal, also after an edit
+- INV-I14 OraDiInizio, when present, is a valid local time of day to the second in [00:00:00, 24:00:00) — a LocalTime with a non-zero fraction of a second is refused (OraDiInizioNonValida; callers truncate first); empty is legal, also after an edit
 
 ## Tasks
 - INV-I1 Registrazione exposes incontroId, no method changes it, and reconstitution with a different incontroId than the stored one is impossible through the API (invariant test: every mutating method keeps incontroId)
 - INV-I2 OrdineDelleParti table test: (a) different dates order by date; (b) same date: 09:00 before 10:00; (c) same date, one empty: the timed one first, the empty last; (d) A 09:00 imported 3rd, B empty imported 2nd, C 10:00 imported 1st → A, C, B on every permutation of the input (transitive); (e) full tie → by aggiuntaAlle then registrazioneId; numbers are 1..N
-- INV-I14 OraDiInizio.di table test: '00:00:00' and '23:59:59' → Ok; '24:00:00', '12:60:00', '-1', '' as a time → Errore(OraDiInizioNonValida); null → empty (legal)
+- INV-I14 OraDiInizio.di table test: '00:00:00' and '23:59:59' → Ok; '24:00:00', '12:60:00', '-1', '' as a time → Errore(OraDiInizioNonValida); null → empty (legal); OraDiInizio.di(LocalTime.of(12, 0, 0, 500_000_000)) → Errore(OraDiInizioNonValida)
 - AC-I14 modificaOraDiInizio(nuova) returns OraDiInizioModificata(precedente, nuova); the same value (also empty → empty) returns no event; clearing a set time is allowed and returns an event
 - AC-I15 Incontro holds only identity and progettoId: title, date, numero della parte and '· N parti' are not fields (by-construction: covered by a Konsist assertion on the class's properties, not counted)
 

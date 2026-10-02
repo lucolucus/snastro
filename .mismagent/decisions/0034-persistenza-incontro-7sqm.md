@@ -247,3 +247,14 @@ owner's persistence package), so its owner stays `persistenza-incontro` (wave 1)
   script does not exist yet — see the feature's architecture overview, "Gate note"). Discursive (code review): no
   shipped `.sqm` edited (CR-13); child rows deleted explicitly, never by cascade; the struttura re-encoding in SQL equals
   `StrutturaIncontro.chiave` for one `Parte` (the migration test proves it).
+
+## Amendment 2026-10-03 — where the "not superato" migration proof lives [I2 amendment pass, incontro D-0049]
+- **§4, the bullet "the migrated `pronto` `Riassunto` is NOT `superato`"** is proven in `:sintesi:adattatori`
+  (`RiassuntoMigratoDaV7Test`), not in `:persistenza:test`: `:persistenza` cannot depend on `:sintesi:dominio`. The test
+  writes a schema-7 file, opens it with the real `apriDatabaseProgetto` (migration to 8), reads the `Riassunto` through
+  `RiassuntoRepositorySql` (stored key taken verbatim) and runs the domain predicate `superato(corrente)` against the
+  `StrutturaIncontro` the domain builds from the migrated `segmento` rows. The other §4 bullets stay in `:persistenza:test`.
+- **No prefix strip exists.** D-0029's transient strip-on-read ended with `riassunto-incontro`: the stored `struttura` is
+  `StrutturaIncontro.chiave`, read and compared as is. § Consequences' "the struttura re-encoding in SQL equals
+  `StrutturaIncontro.chiave` for one `Parte` (the migration test proves it)" means the test above.
+- Accepted coupling: the test reads `segmento` rows by raw JDBC column names (the existing pattern of migration tests).
