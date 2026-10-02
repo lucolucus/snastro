@@ -48,6 +48,7 @@ class RegistrazioniRinominaTest {
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
             registrazioni = registrazioni,
+            incontri = { emptyList() },
             aggiungiRegistrazione = { error("aggiungi non atteso in questo test") },
             modificaDataRegistrazione = { error("modificaData non atteso in questo test") },
             rinominaRegistrazione = rinomina,

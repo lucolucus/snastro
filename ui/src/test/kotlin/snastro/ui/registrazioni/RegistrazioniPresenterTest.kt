@@ -104,6 +104,7 @@ class RegistrazioniPresenterTest {
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
             registrazioni = registrazioni,
+            incontri = { emptyList() },
             aggiungiRegistrazione = aggiungi,
             modificaDataRegistrazione = modificaData,
             rinominaRegistrazione = rinomina,
