@@ -33,8 +33,8 @@ const val MESSAGGIO_CONFERMA_ELIMINAZIONE_PARLANTE: String =
 /** M5-style distinct message for the INITIAL load failure (dev-architecture `#presenter`). */
 const val MESSAGGIO_ERRORE_CARICAMENTO_PARLANTI: String = "Non è stato possibile caricare i parlanti."
 
-/** AC-175: "N impronte · M registrazioni", plus "· ultima il dd/MM/yyyy" when known. */
-fun etichettaDettaglioParlante(numImpronte: Int, numRegistrazioni: Int, ultimaApparizione: LocalDate?): String {
-    val base = "$numImpronte impronte · $numRegistrazioni registrazioni"
+/** AC-175: "N impronte · M incontri", plus "· ultima il dd/MM/yyyy" when known. */
+fun etichettaDettaglioParlante(numImpronte: Int, numIncontri: Int, ultimaApparizione: LocalDate?): String {
+    val base = "$numImpronte impronte · $numIncontri incontri"
     return if (ultimaApparizione != null) "$base · ultima il ${formattaData(ultimaApparizione)}" else base
 }
