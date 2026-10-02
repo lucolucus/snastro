@@ -72,7 +72,7 @@ import java.util.logging.Logger
  * cross-context readers), plus Trascrizione's typed collaborators its glue composes ([trascrizione]):
  * - its SYNCHRONOUS subscriber [AbbonatoRevisioneParlanti]: the revisione-policy on every Revisione (AC-359), the
  *   purge on `TrascrittoSostituito` (ADR 0018 §3, AC-457) and on `TrascrittoEliminato`, published by the Trascrizione
- *   elimination policy inside the deleting unit, nested and depth-first (ADR 0038 §2, AC-I87): none on
+ *   elimination policy inside the deleting unit, nested and depth-first (ADR 0038 §2, AC-I87, AC-I61): none on
  *   `RegistrazioneEliminata`;
  * - its after-commit subscribers: [AggiornamentiVistaParlanti] (Proposta invalidation + `Cambiamento`, AC-317) and
  *   [AbbonatoRiallineamentoImpronte] (AC-315), whose worker starts at [avvia];

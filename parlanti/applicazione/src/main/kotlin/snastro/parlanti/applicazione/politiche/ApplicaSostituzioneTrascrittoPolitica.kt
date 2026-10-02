@@ -49,25 +49,6 @@ public class ApplicaSostituzioneTrascrittoPolitica(
         }
     }
 
-    /**
-     * Transitional (until `eliminazione-parte-trascrizione` publishes `TrascrittoEliminato` from the deleting unit,
-     * ADR 0038 §2): `RegistrazioneEliminata` of the LAST Parte ([incontroCessato]) ends every Voce of the Incontro; a
-     * non-last Parte purges its prints only. The Voci a non-last Parte's removal ends are unknown here (Parlanti never
-     * reads Trascrizione's mind), so multi-Parte elimination stays behind the capability flag until I2.
-     */
-    public fun applicaEliminazioneRegistrazione(
-        registrazioneId: RegistrazioneId,
-        incontroId: IncontroId,
-        incontroCessato: Boolean,
-    ): Esito<Unit> {
-        val voci = if (incontroCessato) {
-            attribuzioni.diIncontro(incontroId).mapTo(HashSet()) { it.voceRef.voceId }
-        } else {
-            emptySet()
-        }
-        return applica(registrazioneId, incontroId, voci)
-    }
-
     /** [INV-I8b] removes the prints of [parte] and of the ceased [voceRimosse] of this [Parlante], then [INV-25]. */
     private fun purgaParlante(parlanteId: ParlanteId, parte: RegistrazioneId, voceRimosse: Set<VoceRef>): Esito<Unit> {
         val parlante = parlanteDi(parlanteId)
