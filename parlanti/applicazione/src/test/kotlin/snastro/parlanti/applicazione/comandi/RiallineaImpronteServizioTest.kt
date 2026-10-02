@@ -66,13 +66,13 @@ class RiallineaImpronteServizioTest {
         )
 
     private fun esegui(servizio: RiallineaImpronteServizio = servizio()) =
-        servizio.esegui(RiallineaImpronte(REGISTRAZIONE))
+        servizio.esegui(RiallineaImpronte(unIncontroDi(REGISTRAZIONE)))
 
     /** Seeds a Parlante [id] holding one print per (voce, sorgente, modello). */
     private fun unParlanteConImpronte(id: String, vararg impronte: Triple<Int, String, String>): ParlanteId {
         val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di(id).atteso(), TipoParlante.RICORRENTE).aggregato
         impronte.forEach { (voce, sorgente, modello) ->
-            p.registraImpronta(ref(voce), VECCHIA, sorgente, modello, unicaParteDi(ref(voce))).atteso()
+            p.aggiungiImpronta(ref(voce), unicaParteDi(ref(voce)), VECCHIA, sorgente, modello).atteso()
         }
         parlanti.salva(p).atteso()
         return p.id
@@ -153,7 +153,7 @@ class RiallineaImpronteServizioTest {
             eventi,
         )
 
-        servizio.esegui(RiallineaImpronte(REGISTRAZIONE)).atteso()
+        servizio.esegui(RiallineaImpronte(unIncontroDi(REGISTRAZIONE))).atteso()
 
         assertEquals(listOf(true, true), osservato.aggiornamentiInTransazione, "uno per Voce, in transazione")
         assertEquals(0, osservato.salvataggi, "mai salva (che inserirebbe): solo aggiornaImpronta")
@@ -207,7 +207,7 @@ class RiallineaImpronteServizioTest {
             ImprontaVocale(ref(2), attesa(nuovi), chiave(nuovi), MODELLO, unicaParteDi(ref(2))),
             impronta(id, 2),
         )
-        assertEquals(listOf(ImpronteRiallineate(REGISTRAZIONE)), riallineate())
+        assertEquals(listOf(ImpronteRiallineate(unIncontroDi(REGISTRAZIONE))), riallineate())
     }
 
     @Test
@@ -247,7 +247,7 @@ class RiallineaImpronteServizioTest {
 
         esegui().atteso()
 
-        assertEquals(listOf(ImpronteRiallineate(REGISTRAZIONE)), riallineate())
+        assertEquals(listOf(ImpronteRiallineate(unIncontroDi(REGISTRAZIONE))), riallineate())
     }
 
     @Test
@@ -311,7 +311,11 @@ class RiallineaImpronteServizioTest {
             impronta(id, 2),
             "Voce 2 intatta",
         )
-        assertEquals(listOf(ImpronteRiallineate(REGISTRAZIONE)), riallineate(), "la Voce 1 cambiata e annunciata")
+        assertEquals(
+            listOf(ImpronteRiallineate(unIncontroDi(REGISTRAZIONE))),
+            riallineate(),
+            "la Voce 1 cambiata e annunciata",
+        )
     }
 
     @Test

@@ -22,6 +22,7 @@ import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.TipoParlante
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
+import snastro.persistenza.incontroDi
 import snastro.persistenza.seminaRegistrazioneDiProva
 import snastro.persistenza.seminaTrascrittoDiProva
 import snastro.persistenza.seminaVoceDiProva
@@ -53,7 +54,7 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     @Test
     fun `AC-622 lo spostamento di un impronta su un altra Voce e una rimozione e registra 1 checkpoint`() {
         val p = conImpronte(V1)
-        p.trasferisciImpronta(V1, V2)
+        p.riassegnaImpronte(V1, V2)
 
         inTransazione { repo.salva(p) }
 
@@ -77,13 +78,13 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     @Test
     fun `AC-622 un salva che non toglie impronte non registra nessun checkpoint`() {
         val p = conImpronte(V1)
-        p.registraImpronta(V2, Impronta(floatArrayOf(4f)), "0-1000", "modello-1", unicaParteDi(V2)).atteso()
-        p.registraImpronta(
+        p.aggiungiImpronta(V2, unicaParteDi(V2), Impronta(floatArrayOf(4f)), "0-1000", "modello-1").atteso()
+        p.aggiungiImpronta(
             V1,
+            unicaParteDi(V1),
             Impronta(floatArrayOf(5f)),
             "0-1000",
             "modello-1",
-            unicaParteDi(V1),
         ).atteso() // replaced in place
         p.rinomina(Nome.di("Marta").atteso()).atteso()
 
@@ -134,12 +135,26 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
         assertEquals(listOf(false, false), driver.checkpoint, "Q-1: nessuna deduplica per transazione")
     }
 
+    @Test
+    fun `INV-I8 AC-622 togliere l impronta di una sola Parte di una Voce registra 1 checkpoint`() {
+        val p = conImpronte(V1)
+        p.aggiungiImpronta(V1, R2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "modello-1").atteso()
+        inTransazione { repo.salva(p) }
+        driver.checkpoint.clear()
+        p.rimuoviImpronta(V1, R2)
+
+        inTransazione { repo.salva(p) }
+
+        assertEquals(listOf(false), driver.checkpoint, "la riga di (V1, R2) e sparita: pagine da troncare")
+        assertEquals(listOf(R), repo.trova(p.id)?.impronte?.map { it.parte })
+    }
+
     /** A saved attivo Parlante holding one print per [voci]; the checkpoint counter starts after it. */
     private fun conImpronte(vararg voci: VoceRef, id: String = "id-1"): Parlante {
         val p = Parlante.crea(ParlanteId(id), PROGETTO, Nome.di("Marco $id").atteso(), TipoParlante.RICORRENTE)
             .aggregato
         voci.forEach {
-            p.registraImpronta(it, Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1", unicaParteDi(it)).atteso()
+            p.aggiungiImpronta(it, unicaParteDi(it), Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1").atteso()
         }
         inTransazione { repo.salva(p) }
         driver.checkpoint.clear()
@@ -164,6 +179,20 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
         seminaTrascrittoDiProva(registrazioneId = R.valore)
         seminaVoceDiProva(registrazioneId = R.valore, numero = 1L)
         seminaVoceDiProva(registrazioneId = R.valore, numero = 2L)
+        // A second Parte of the same Incontro (seeded by hand: the I2 import does not exist yet) where V1 also speaks.
+        registrazioneQueries.inserisci(
+            id = R2.valore,
+            progettoId = PROGETTO.valore,
+            incontroId = incontroDi(R.valore),
+            titolo = "Registrazione 2",
+            riferimentoAudio = "audio/r2.wav",
+            durataMs = 600_000L,
+            dataRegistrazione = "2026-09-26",
+            aggiuntaAlle = 1L,
+            oraDiInizio = null,
+        )
+        seminaTrascrittoDiProva(registrazioneId = R2.valore)
+        seminaVoceDiProva(registrazioneId = R2.valore, numero = 1L)
     }
 
     /** Counts `wal_checkpoint` statements; each entry = "a transaction was open when it ran". */
@@ -199,6 +228,7 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
     private companion object {
         val PROGETTO = ProgettoId("progetto-1")
         val R = RegistrazioneId("registrazione-1")
+        val R2 = RegistrazioneId("registrazione-2")
         val V1 = VoceRef(unIncontroDi(R), VoceId(1))
         val V2 = VoceRef(unIncontroDi(R), VoceId(2))
 

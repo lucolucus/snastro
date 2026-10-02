@@ -54,12 +54,10 @@ public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
         modello: String,
     ): Boolean {
         val p = righe[attesa.parlanteId] ?: return false
-        val attuale = p.impronte.singleOrNull { it.voceRef == attesa.voceRef } ?: return false
+        val attuale = p.impronte.singleOrNull { it.voceRef == attesa.voceRef && it.parte == attesa.parte } ?: return false
         if (attuale.sorgente != attesa.sorgente || attuale.modello != attesa.modello) return false
         val aggiornato = p.copia()
-        check(
-            aggiornato.registraImpronta(attesa.voceRef, impronta, sorgente, modello, unicaParteDi(attesa.voceRef)) is Esito.Ok,
-        )
+        check(aggiornato.aggiungiImpronta(attesa.voceRef, attesa.parte, impronta, sorgente, modello) is Esito.Ok)
         righe[p.id] = aggiornato
         return true
     }
@@ -84,7 +82,7 @@ public class ParlanteRepositoryFinta : ParlanteRepository, Ripristinabile {
     private fun Parlante.copia(): Parlante {
         val copia = Parlante.crea(id, progettoId, nome, tipo).aggregato
         impronte.forEach {
-            check(copia.registraImpronta(it.voceRef, it.impronta, it.sorgente, it.modello, it.parte) is Esito.Ok)
+            check(copia.aggiungiImpronta(it.voceRef, it.parte, it.impronta, it.sorgente, it.modello) is Esito.Ok)
         }
         if (eliminato) check(copia.elimina() is Esito.Ok)
         return copia

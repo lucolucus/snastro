@@ -38,5 +38,5 @@ public class AbbonatoProgettoSintesi(
     // ADR 0033 §4.1: the Riassunti are the Incontro's. Delivered before Progetto removes the row (ADR 0020 §2), so the
     // catalogue still knows the Parte; an id it does not know has no Incontro, so no Riassunto.
     private fun applica(evento: RegistrazioneEliminata): Esito<Unit> =
-        incontroDi(evento.registrazioneId)?.let(politica::applica) ?: Esito.Ok(Unit)
+        incontroDi(evento.registrazioneId)?.let { politica.applica(it, evento.incontroCessato) } ?: Esito.Ok(Unit)
 }

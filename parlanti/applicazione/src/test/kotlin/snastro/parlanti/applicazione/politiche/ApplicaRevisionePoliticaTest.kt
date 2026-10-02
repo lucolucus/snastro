@@ -47,7 +47,7 @@ class ApplicaRevisionePoliticaTest {
     private fun attribuisci(voceRef: VoceRef, parlante: Parlante, valore: Float = voceRef.voceId.numero.toFloat()) {
         if (parlante.attivo) {
             val impronta = Impronta(floatArrayOf(valore))
-            parlante.registraImpronta(voceRef, impronta, SORGENTE_INIZIALE, MODELLO, unicaParteDi(voceRef)).atteso()
+            parlante.aggiungiImpronta(voceRef, unicaParteDi(voceRef), impronta, SORGENTE_INIZIALE, MODELLO).atteso()
         }
         parlanti.salva(parlante).atteso()
         attribuzioni.salva(Attribuzione.conferma(voceRef, PROGETTO, parlante.id).aggregato)

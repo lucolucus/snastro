@@ -91,8 +91,8 @@ class ParlanteRepositorySqlRitentaCheckpointTest {
     private fun unParlanteConImpronta(repo: ParlanteRepositorySql, uow: UnitaDiLavoroSql): Parlante {
         val p = Parlante.crea(ParlanteId("id-1"), PROGETTO, Nome.di("Marco").atteso(), TipoParlante.RICORRENTE)
             .aggregato
-        p.registraImpronta(V1, Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1", unicaParteDi(V1)).atteso()
-        p.registraImpronta(V2, Impronta(floatArrayOf(3f, 4f)), "0-1000", "modello-1", unicaParteDi(V2)).atteso()
+        p.aggiungiImpronta(V1, unicaParteDi(V1), Impronta(floatArrayOf(1f, 2f)), "0-1000", "modello-1").atteso()
+        p.aggiungiImpronta(V2, unicaParteDi(V2), Impronta(floatArrayOf(3f, 4f)), "0-1000", "modello-1").atteso()
         uow.inTransazione { repo.salva(p) }.atteso()
         return p
     }

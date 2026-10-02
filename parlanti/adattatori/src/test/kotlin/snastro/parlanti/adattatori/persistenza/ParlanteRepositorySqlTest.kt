@@ -91,7 +91,7 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
             val uowScrittore = UnitaDiLavoroSql(scrittore)
             val repoScrittore = ParlanteRepositorySql(scrittore, uowScrittore)
             val vecchio = unParlante()
-            vecchio.registraImpronta(V1, Impronta(floatArrayOf(1f)), "0-1000", "modello-1", unicaParteDi(V1)).atteso()
+            vecchio.aggiungiImpronta(V1, unicaParteDi(V1), Impronta(floatArrayOf(1f)), "0-1000", "modello-1").atteso()
             repoScrittore.salva(vecchio).atteso()
 
             val parcheggiato = CountDownLatch(1)
@@ -106,8 +106,8 @@ class ParlanteRepositorySqlTest : ParlanteRepositoryContratto() {
                 parcheggiato.count == 0L
             }
             val nuovo = unParlante()
-            nuovo.registraImpronta(V1, Impronta(floatArrayOf(1f)), "0-1000", "modello-1", unicaParteDi(V1)).atteso()
-            nuovo.registraImpronta(V2, Impronta(floatArrayOf(2f)), "0-1000", "modello-1", unicaParteDi(V2)).atteso()
+            nuovo.aggiungiImpronta(V1, unicaParteDi(V1), Impronta(floatArrayOf(1f)), "0-1000", "modello-1").atteso()
+            nuovo.aggiungiImpronta(V2, unicaParteDi(V2), Impronta(floatArrayOf(2f)), "0-1000", "modello-1").atteso()
             repoScrittore.salva(nuovo).atteso()
             via.countDown()
             lettura.join(ATTESA_FINE_MS)
