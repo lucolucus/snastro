@@ -136,11 +136,11 @@ class ParlanteImprontePerParteTest {
         p.aggiungi(unaVoce(1), PARTE_B, 2f)
         p.aggiungi(unaVoce(2), PARTE_B, 3f)
 
-        p.rimuoviImpronteSenzaFetta(unaVoce(1), setOf(PARTE_A))
+        val tolta = p.rimuoviImpronteSenzaFetta(unaVoce(1), setOf(PARTE_A))
 
         assertEquals(setOf(stampa(unaVoce(1), PARTE_A, 1f), stampa(unaVoce(2), PARTE_B, 3f)), p.impronte.toSet())
-        assertEquals(true, p.haImprontaDi(unaVoce(1)))
-        assertEquals(false, p.haImprontaDi(unaVoce(9)))
+        assertEquals(true, tolta)
+        assertEquals(false, p.rimuoviImpronteSenzaFetta(unaVoce(1), setOf(PARTE_A)), "nulla da togliere")
     }
 
     private companion object {

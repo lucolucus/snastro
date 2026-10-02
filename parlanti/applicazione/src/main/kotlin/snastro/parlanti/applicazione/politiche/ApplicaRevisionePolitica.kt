@@ -96,14 +96,13 @@ public class ApplicaRevisionePolitica(
      * ([Attribuzione.trasferisci], valid for an `eliminato` tombstone too) and the Parlante's print row
      * ([Parlante.riassegnaImpronte], keeping `sorgente`/`modello`: stale by construction; a no-op for an
      * `eliminato`, which has no print). The Parlante keeps an Attribuzione, so [INV-25] never fires here.
+     * A print the Parlante already held for the unattributed [perSopravvissuta] (stray data, never written by a
+     * command) is not a failure: the root keeps it in its Parte, and the inherited Attribuzione now covers it.
      */
     private fun eredita(daRimossa: Attribuzione, perSopravvissuta: VoceRef): Esito<Unit> {
         attribuzioni.rimuovi(daRimossa.voceRef)
         attribuzioni.salva(daRimossa.trasferisci(perSopravvissuta))
         val parlante = parlanteDi(daRimossa)
-        check(!parlante.haImprontaDi(perSopravvissuta)) {
-            "$perSopravvissuta ha un'impronta di ${parlante.id} ma nessuna Attribuzione"
-        }
         parlante.riassegnaImpronte(da = daRimossa.voceRef, a = perSopravvissuta)
         return parlanti.salva(parlante)
     }
@@ -119,19 +118,16 @@ public class ApplicaRevisionePolitica(
     /**
      * [INV-21] a print whose (Voce, Parte) slice a Revisione emptied has no source left and goes (its FK would fail
      * the COMMIT, ADR 0034 §2). The surviving slices are read through [LettoreVoci] (the Revisione is already
-     * applied in this unit); a Voce the reader no longer knows is handled by its own removal path.
+     * applied in this unit); a Voce the reader no longer knows is handled by its own removal path. The Parlante is
+     * saved only when a print really went.
      */
     private fun rimuoviImprontePerParteSvuotate(voceRef: VoceRef): Esito<Unit> {
         val attribuzione = attribuzioni.trova(voceRef) ?: return Esito.Ok(Unit) // nothing attributed: no read
         val parti = voci.voci(voceRef.incontroId)?.find { it.voceRef == voceRef }
             ?.intervalliPerParte?.filterValues { it.isNotEmpty() }?.keys
-        return if (parti == null) {
-            Esito.Ok(Unit)
-        } else {
-            val parlante = parlanteDi(attribuzione)
-            parlante.rimuoviImpronteSenzaFetta(voceRef, parti)
-            parlanti.salva(parlante)
-        }
+        val parlante = parti?.let { parlanteDi(attribuzione) }
+        val tolte = parlante?.rimuoviImpronteSenzaFetta(voceRef, parti) == true
+        return if (tolte) parlanti.salva(parlante) else Esito.Ok(Unit)
     }
 
     private fun parlanteDi(attribuzione: Attribuzione): Parlante =

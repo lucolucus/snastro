@@ -1,6 +1,7 @@
 package snastro.parlanti.applicazione.letture
 
 import snastro.kernel.EstrattoRef
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -68,11 +69,12 @@ public class Proposta(
         cache.remove(voceRef)
     }
 
-    /** AC-173: forgets every cached Proposta of a Registrazione (a Revisione, `ImpronteRiallineate`). */
-    public fun invalida(registrazioneId: RegistrazioneId) {
-        // ADR 0033 §4.1: the cached Voci are keyed by the Incontro the Registrazione is a Parte of. A Registrazione the
-        // catalogue no longer knows has no Voce left to ask for: its entries are never read again.
-        val incontroId = registrazioni.registrazione(registrazioneId)?.incontroId ?: return
+    /**
+     * AC-173, ADR 0035 §6: forgets every cached Proposta of the Incontro [incontroId] (a Revisione,
+     * `ImpronteRiallineate`, a deleted Parte) — keyed by the event's Incontro, never looked up through a Parte the
+     * catalogue may no longer know.
+     */
+    public fun invalida(incontroId: IncontroId) {
         cache.keys.removeAll { it.incontroId == incontroId }
     }
 
@@ -109,6 +111,9 @@ public class Proposta(
      * [EstrattoreImpronta.modello] only — from any Parte of any Incontro, the other Parti of this one included.
      * [INV-I17]: the extract comes from the Parte that sourced the chosen print — the first print of that best Fascia
      * whose (Voce, Parte) slice still has an excerpt (a tie falls through to the next equal print, never a worse one).
+     * A Parlante whose best-Fascia prints ALL lack an excerpt is not a Candidato (intentional: a worse Fascia is never
+     * shown under a better label, and [INV-20] wants an extract for every Candidato; the revisione-policy removes such
+     * prints, so this is transient).
      */
     private fun candidato(parlante: Parlante, impronteVoce: List<Impronta>): Candidato? {
         val valutate = parlante.impronte

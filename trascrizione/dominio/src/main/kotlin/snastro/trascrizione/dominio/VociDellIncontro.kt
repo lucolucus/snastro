@@ -22,22 +22,33 @@ import snastro.trascrizione.dominio.ErroreTrascrizione.VoceNonTrovata
  *
  * A Voce exists iff at least one Segmento of some Parte is assigned to it (INV-6 by construction). Every new Voce takes
  * the counter, which only grows (INV-I4); each Parte numbers its Segmenti from its own counter, kept across
- * replacements (INV-I16). The Parti keep the order in which they were first completed (or rebuilt).
+ * replacements and, within this instance, across a [rimuoviParte] (INV-I16). Once saved, a removed Parte's counter is
+ * gone with its rows: a Parte is removed only with its Registrazione (ADR 0038), whose id is never reused, and a
+ * completion that outlived it is refused before it reaches the root (`EseguiProssimaElaborazioneServizio`).
+ *
+ * The Parti carry NO Incontro order: they keep the order in which this instance first held them (completion order, or
+ * the store's on rebuild), which changes on a replacement or a reload and differs between stores. Every list below
+ * that has "the Parti" in it is in that arbitrary order: a caller that needs the Incontro's order (the earlier Parte
+ * of a tie, INV-I17, D-0014, D-0017) takes it from the catalogue's `numero` (`LettoreRegistrazione.parti`, INV-I2).
  */
 @Suppress("TooManyFunctions") // the pinned API of ADR 0035 §1: seven commands, the named predicates, private helpers
 public class VociDellIncontro private constructor(
     public val incontroId: IncontroId,
     trascritti: List<Trascritto>,
     prossimaVoce: Int,
+    segmentiDelleRimosse: Map<RegistrazioneId, Int> = emptyMap(),
 ) {
     private val parti: MutableMap<RegistrazioneId, Trascritto> =
         trascritti.associateByTo(LinkedHashMap()) { it.registrazioneId }
     private var _prossimaVoce = prossimaVoce
 
+    /** INV-I16: the Segmento counter of each Parte removed from this instance, should it be completed again. */
+    private val rimosse: MutableMap<RegistrazioneId, Int> = segmentiDelleRimosse.toMutableMap()
+
     /** Persisted counter: the `VoceId` the next new Voce takes. For persistence only — never decide on it. */
     public val prossimaVoce: Int get() = _prossimaVoce
 
-    /** Detached copies of the Parti's Trascritti, in Parte order: changing them never changes the root. */
+    /** Detached copies of the Parti's Trascritti, in NO Incontro order (see the class): never change the root. */
     public val trascritti: List<Trascritto> get() = parti.values.map { it.copia(_prossimaVoce) }
 
     /** Every existing Voce of the Incontro, by number. */
@@ -46,7 +57,10 @@ public class VociDellIncontro private constructor(
     /** True iff [registrazioneId] is a transcribed Parte of this Incontro. */
     public fun haParte(registrazioneId: RegistrazioneId): Boolean = registrazioneId in parti
 
-    /** The Parti where [voce] has Segmenti, in Parte order; empty for a Voce that does not exist. */
+    /**
+     * The Parti where [voce] has Segmenti, in NO Incontro order (see the class: never take `first()` as the earliest
+     * Parte); empty for a Voce that does not exist.
+     */
     public fun partiDi(voce: VoceId): List<RegistrazioneId> =
         parti.values.filter { t -> t.segmenti.any { it.voceId == voce } }.map { it.registrazioneId }
 
@@ -54,10 +68,10 @@ public class VociDellIncontro private constructor(
     public fun trascritto(registrazioneId: RegistrazioneId): Trascritto? = parti[registrazioneId]?.copia(_prossimaVoce)
 
     /**
-     * A detached copy of the whole root (same Parti in the same order, same counter): changing either never changes the
-     * other. For in-memory stores, which may not reconstitute (CR-15) yet must never alias what they keep.
+     * A detached copy of the whole root (same Parti in the same order, same counters): changing either never changes
+     * the other. For in-memory stores, which may not reconstitute (CR-15) yet must never alias what they keep.
      */
-    public fun copia(): VociDellIncontro = VociDellIncontro(incontroId, trascritti, _prossimaVoce)
+    public fun copia(): VociDellIncontro = VociDellIncontro(incontroId, trascritti, _prossimaVoce, rimosse)
 
     /**
      * INV-I5: the first transcription (or a replacement) of the Parte [registrazioneId] from the pipeline's turns. Only
@@ -79,8 +93,9 @@ public class VociDellIncontro private constructor(
             durataMs,
             segmentiIniziali,
             primaVoce = _prossimaVoce,
-            primoSegmento = vecchio?.prossimoSegmento ?: 1,
+            primoSegmento = vecchio?.prossimoSegmento ?: rimosse[registrazioneId] ?: 1,
         ).mappa { nuovo ->
+            rimosse.remove(registrazioneId)
             val prima = voci.toSet()
             parti.remove(registrazioneId)
             val rimaste = voci.toSet()
@@ -97,12 +112,14 @@ public class VociDellIncontro private constructor(
 
     /**
      * INV-I6: the Parte [registrazioneId] leaves the root with its Segmenti; a Voce left empty is removed and returned,
-     * the others keep identity and number. The counter is untouched (INV-I4). Not a Parte → `TrascrittoNonTrovato`.
+     * the others keep identity and number. The counters are untouched (INV-I4), the Parte's Segmento counter kept
+     * should this instance complete it again (INV-I16). Not a Parte → `TrascrittoNonTrovato`.
      */
     public fun rimuoviParte(registrazioneId: RegistrazioneId): Esito<Set<VoceId>> {
-        if (registrazioneId !in parti) return Esito.Errore(TrascrittoNonTrovato(registrazioneId))
+        val rimossa = parti[registrazioneId] ?: return Esito.Errore(TrascrittoNonTrovato(registrazioneId))
         val prima = voci.toSet()
         parti.remove(registrazioneId)
+        rimosse[registrazioneId] = rimossa.prossimoSegmento
         return Esito.Ok(prima - voci.toSet())
     }
 

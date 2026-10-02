@@ -148,7 +148,8 @@ public class AbbonatoSbobinaturaEventi(
      * Registrazioni whose LAST run failed. Such a key never steps back behind an Incontro fan-out: [RitentaConBackoff]
      * would count the step-back (`true`) as a success — a false "riuscito dopo n tentativi", the backoff counter reset
      * and the scheduled retry replaced by an immediate one. It runs (and may fail again) so the failure state stays
-     * with [ritenta]; the fan-out's extra write for it is the price, paid only while it keeps failing.
+     * with [ritenta]; while it keeps failing the price is one extra immediate attempt per fan-out; the fan-out's
+     * extra write for it is paid only on recovery.
      */
     private val fallite = ConcurrentHashMap.newKeySet<RegistrazioneId>()
     private val ritenta = RitentaConBackoff<Chiave>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)

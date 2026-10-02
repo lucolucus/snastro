@@ -5,7 +5,6 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.VoceRef
 import snastro.kernel.poi
@@ -20,7 +19,6 @@ import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.AttribuzioneConfermata
 import snastro.parlanti.dominio.ErroreParlanti
-import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.Nome
 import snastro.parlanti.dominio.Parlante
 import snastro.parlanti.dominio.ParlanteCreato
@@ -66,7 +64,7 @@ public class SaltaVoceServizio(
         val voceRef = comando.voceRef
         return voceLibera(voceRef).poi { letta ->
             // [INV-I8]: one print per Parte where the Voce speaks, extracted outside any transaction.
-            val estratte = letta.parti.map { estrai(it) }
+            val estratte = letta.parti.map { it.estrai(decodificatore, estrattore) }
             uow.inTransazione {
                 voceLibera(voceRef).poi { attuale ->
                     if (attuale.sorgenti() != letta.sorgenti()) {
@@ -79,18 +77,13 @@ public class SaltaVoceServizio(
         }
     }
 
-    private fun estrai(inParte: VoceInParte): ImprontaDellaParte {
-        val impronta = estrattore.estrai(decodificatore.campioni(inParte.parte, inParte.sorgente.intervalli))
-        return ImprontaDellaParte(inParte.parte, impronta, inParte.sorgente.chiave)
-    }
-
     /** AC-89 first, then the Voce read in its Parti (ADR 0033 §4.1: TrascrittoNonTrovato / VoceNonTrovata). */
     private fun voceLibera(voceRef: VoceRef): Esito<VoceNelleParti> {
         if (attribuzioni.trova(voceRef) != null) return Esito.Errore(ErroreParlanti.VoceGiaAttribuita(voceRef))
         return leggiVoceNelleParti(voceRef, registrazioni, voci)
     }
 
-    private fun creaOspite(voceRef: VoceRef, voce: VoceNelleParti, estratte: List<ImprontaDellaParte>): Esito<Unit> {
+    private fun creaOspite(voceRef: VoceRef, voce: VoceNelleParti, estratte: List<ImprontaEstratta>): Esito<Unit> {
         // [INV-19]: the Incontro's date is its FIRST Parte's, whether or not the Voce speaks there.
         val nome = nomeOspiteLibero(voce.progettoId, voce.dataDelIncontro)
         val (parlante, evParlante) =
@@ -129,8 +122,6 @@ public class SaltaVoceServizio(
         val FORMATO_DATA: DateTimeFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy", Locale.ROOT)
     }
 }
-
-private class ImprontaDellaParte(val parte: RegistrazioneId, val impronta: Impronta, val sorgente: String)
 
 private fun ParlanteCreato.pubblicato(): ParlanteCreatoPubblicato =
     ParlanteCreatoPubblicato(parlanteId, progettoId, nome, tipo.pubblicato())
