@@ -71,7 +71,7 @@ import kotlin.test.assertEquals
  * calls the aggregate's own `Elaborazione.avvia` directly and `salva`s it — the one instance method
  * accessed through inference, never imported by name (CR-1: `sintesi:adattatori` never imports
  * `trascrizione.dominio`) — so [StatiElaborazione] genuinely reports `IN_CORSO` in between (dropping it
- * from `LettoreTrascrittoDaTrascrizione.APERTI` now turns AC-S6's "in_corso" assertion red).
+ * from `LettoreTrascrittoDaTrascrizione.APERTI` now turns AC-I29's "in_corso" assertion red).
  * [AmbienteReale.fallisciElaborazione] takes that SAME `Elaborazione` to `fallita` the same way
  * (`Elaborazione.fallisci`, Trascritto untouched). [AmbienteReale.completaElaborazione] cannot: only
  * [EseguiProssimaElaborazioneServizio] reaches `Trascritto.crea` (a `trascrizione.dominio` factory this

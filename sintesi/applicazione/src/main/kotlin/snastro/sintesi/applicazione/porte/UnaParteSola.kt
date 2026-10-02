@@ -15,13 +15,6 @@ internal const val PRIMA_PARTE: Int = 1
 internal fun SegmentoSintesi.inIngresso(parte: RegistrazioneId): SegmentoIngresso =
     SegmentoIngresso(parte, segmentoId, voceId, intervallo.inizioMs, testo)
 
-/**
- * The [StatoParte] of [parte] from today's port, in INV-S6's order: no Trascritto ([segmenti] null) first, then an open
- * Elaborazione. `NON_RIUSCITA` is not readable here (`statoParte` comes with porte-sintesi-incontro).
- */
-internal fun LettoreTrascritto.statoParte(parte: RegistrazioneId?, segmenti: List<SegmentoSintesi>?): StatoParte =
-    when {
-        parte == null || segmenti == null -> StatoParte.DA_TRASCRIVERE
-        elaborazioneAperta(parte) -> StatoParte.IN_TRASCRIZIONE
-        else -> StatoParte.TRASCRITTA
-    }
+/** The [StatoParte] of the one Parte (ADR 0033 §4); no Parte (unknown or ceased Incontro) is DA_TRASCRIVERE. */
+internal fun LettoreTrascritto.statoDi(parte: RegistrazioneId?): StatoParte =
+    parte?.let(::statoParte) ?: StatoParte.DA_TRASCRIVERE
