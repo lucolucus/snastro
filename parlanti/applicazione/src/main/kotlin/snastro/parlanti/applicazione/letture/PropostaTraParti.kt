@@ -14,6 +14,7 @@ import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.dominio.Impronta
 import snastro.parlanti.dominio.SorgenteImpronta
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Read-model `PropostaTraParti` ([INV-I18], ADR 0036, AC-I48/AC-I49): per Incontro, the pairs of not-yet-attributed
@@ -37,15 +38,31 @@ public class PropostaTraParti(
     private val confronto: ConfrontoImpronte,
     private val estrattoAudio: EstrattoAudio,
 ) {
-    private val cache: MutableMap<IncontroId, List<CoppiaTraParti>> = mutableMapOf()
+    /** Thread-safe: `perIncontro` runs on the multi-threaded io dispatcher, `invalida` on the committing thread. */
+    private val cache = ConcurrentHashMap<IncontroId, List<CoppiaTraParti>>()
+
+    /** Per-Incontro generation: bumped by [invalida]; a result computed under an older one is never stored. */
+    private val generazioni = ConcurrentHashMap<IncontroId, Long>()
 
     /** [INV-I18]: the pairs of [incontroId], `voceA`'s first Parte before `voceB`'s; empty when none or unknown. */
-    public fun perIncontro(incontroId: IncontroId): List<CoppiaTraParti> =
-        cache[incontroId] ?: calcola(incontroId).also { cache[incontroId] = it } // AC-I49: only a finished computation
+    public fun perIncontro(incontroId: IncontroId): List<CoppiaTraParti> {
+        cache[incontroId]?.let { return it }
+        val generazione = generazioni[incontroId] ?: 0L
+        val calcolato = calcola(incontroId) // AC-I49: only a finished computation is ever stored
+        generazioni.compute(incontroId) { _, attuale ->
+            // Atomic with invalida's bump: stored only if no invalida ran since the computation began.
+            if ((attuale ?: 0L) == generazione) cache[incontroId] = calcolato
+            attuale
+        }
+        return calcolato
+    }
 
-    /** AC-I49: forgets the cached proposal of one Incontro. */
+    /** AC-I49: forgets the cached proposal of one Incontro, and any computation still in flight for it. */
     public fun invalida(incontroId: IncontroId) {
-        cache.remove(incontroId)
+        generazioni.compute(incontroId) { _, attuale ->
+            cache.remove(incontroId)
+            (attuale ?: 0L) + 1
+        }
     }
 
     private fun calcola(incontroId: IncontroId): List<CoppiaTraParti> {

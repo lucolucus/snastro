@@ -134,8 +134,7 @@ internal fun costruisciRegistrazionePresenter(
             clock = grafo.clock,
             confermaSegmento = trascrizione.confermaSegmento,
             somiglianza = parlanti.somiglianza,
-            // compile-only (D-0037): PropostaTraParti is wired by avvio-proposta-tra-parti; until then no pair.
-            traParti = { emptyList() },
+            traParti = parlanti.letture.traParti,
             vociIncontro = trascrizione.vociIncontro,
         ),
         stati = { trascrizione.statiElaborazione(listOf(id)).firstOrNull() },

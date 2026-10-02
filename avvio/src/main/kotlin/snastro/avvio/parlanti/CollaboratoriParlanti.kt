@@ -9,6 +9,7 @@ import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.comandi.EliminaParlante
 import snastro.parlanti.applicazione.comandi.PromuoviParlante
 import snastro.parlanti.applicazione.comandi.RinominaParlante
+import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
@@ -21,6 +22,8 @@ import snastro.parlanti.applicazione.letture.VoceIdentificata
 internal class LettureParlanti(
     val identificazione: (RegistrazioneId) -> List<VoceIdentificata>,
     val proposta: (VoceRef) -> PropostaVista?,
+    /** `proposta-tra-parti` (ADR 0036 §3): BLOCKING (banner, io dispatcher); empty without models. */
+    val traParti: (IncontroId) -> List<CoppiaTraParti>,
     val unioni: (RegistrazioneId) -> List<PropostaDiUnione>,
     val parlantiAttivi: () -> List<ParlanteAttivo>,
     val estratto: (VoceRef) -> EstrattoRef?,
