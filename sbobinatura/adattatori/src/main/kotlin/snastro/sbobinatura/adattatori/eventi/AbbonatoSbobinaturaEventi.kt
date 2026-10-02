@@ -45,11 +45,12 @@ import kotlin.time.Duration.Companion.seconds
  * [ritenta], ONE [RitentaConBackoff] shared by its four unit kinds ([Chiave]) — so they stay
  * serialized (AC-C92) — keyed by [RegistrazioneId] ([pendenti]), by [ParlanteId] for the two Parlanti events whose
  * effect spans every Registrazione attributed to a Parlante, or by [IncontroId] for the Incontro-wide events (the
- * Parti are listed inside the retried unit, never on the committing thread). Several events for the SAME
- * [RegistrazioneId] piling up before their run collapse into ONE regeneration (AC-183): [pendenti] holds at
- * most one entry per key, merged by [primaArrivata]; [RitentaConBackoff] itself coalesces KEYS only, so this
- * per-key payload stays here. A failed unit is reported through [segnalazione] and retried with backoff, never
- * silently, never dropped (AC-184, AC-C46): a poisoned Registrazione's failure never blocks another
+ * Parti are listed inside the retried unit, never on the committing thread; a Registrazione's run yields its turn
+ * to an Incontro fan-out requested and not yet attempted, so the two merge into one write, AC-183). Several
+ * events for the SAME [RegistrazioneId] piling up before their run collapse into ONE regeneration (AC-183):
+ * [pendenti] holds at most one entry per key, merged by [primaArrivata]; [RitentaConBackoff] itself coalesces
+ * KEYS only, so this per-key payload stays here. A failed unit is reported through [segnalazione] and retried
+ * with backoff, never silently, never dropped (AC-184, AC-C46): a poisoned Registrazione's failure never blocks another
  * Registrazione's, nor the startup sweep's, own progress (AC-C47) — each is its own [Chiave], and
  * [RitentaConBackoff] never lets one key's backoff wait hold up another's turn. A unit that THROWS (e.g. a
  * Trascritto read failing its rebuild, D-0008) is retried the same way: [ritenta] is the only place that catches
@@ -135,8 +136,13 @@ public class AbbonatoSbobinaturaEventi(
 
     private val pendenti = ConcurrentHashMap<RegistrazioneId, LavoroPendente>()
 
-    /** Incontri whose Parti fan-out is requested and not done: a [Chiave.PerRegistrazione] run drains them first. */
-    private val incontriPendenti = ConcurrentHashMap.newKeySet<IncontroId>()
+    /**
+     * Incontri whose [Chiave.PerIncontro] was requested by an event and has NOT been attempted since: while one is
+     * here, a [Chiave.PerRegistrazione] run yields its turn to it (AC-183, any burst order). Removed when its unit
+     * STARTS, success or not: a listing that keeps failing is retried by [ritenta] under its own key and never
+     * holds up any Registrazione's run (AC-C46).
+     */
+    private val incontriDaElencare = ConcurrentHashMap.newKeySet<IncontroId>()
     private val ritenta = RitentaConBackoff<Chiave>(::esegui, segnalazione, ritardoIniziale, ritardoMassimo)
 
     init {
@@ -174,7 +180,7 @@ public class AbbonatoSbobinaturaEventi(
 
     /** Only requests the fan-out: the Parti are listed by [Chiave.PerIncontro]'s unit, inside [ritenta]. */
     private fun accodaParti(incontroId: IncontroId) {
-        incontriPendenti.add(incontroId)
+        incontriDaElencare.add(incontroId)
         ritenta.richiedi(Chiave.PerIncontro(incontroId))
     }
 
@@ -188,19 +194,24 @@ public class AbbonatoSbobinaturaEventi(
         Chiave.Sweep -> avviaSweep()
         is Chiave.PerParlante -> politica.perParlanteRinominato(chiave.id) is Esito.Ok
         is Chiave.PerIncontro -> fanOutParti(chiave.id)
-        is Chiave.PerRegistrazione -> eseguiRegistrazione(chiave.id)
+        is Chiave.PerRegistrazione -> if (incontriDaElencare.isEmpty()) {
+            eseguiRegistrazione(chiave.id)
+        } else {
+            // AC-183 for ANY burst order: an Incontro fan-out requested and not yet attempted is already queued in
+            // [ritenta] — this key goes back behind it, so the fan-out merges into the ONE run that follows. The
+            // listing never runs here: a failing Incontro leaves [incontriDaElencare] once attempted (AC-C46).
+            ritenta.richiedi(chiave)
+            true
+        }
     }
 
-    /** Like [avviaSweep]: only LISTS the Parti and fans each into its OWN [Chiave.PerRegistrazione]; never writes. */
+    /**
+     * Like [avviaSweep]: only LISTS the Parti and fans each into its OWN [Chiave.PerRegistrazione]; never writes.
+     * A throwing listing is retried by [ritenta] under this [Chiave.PerIncontro] alone.
+     */
     private fun fanOutParti(incontroId: IncontroId): Boolean {
-        if (!incontriPendenti.remove(incontroId)) return true // already drained by a Registrazione's run
-        var elencate = false
-        try {
-            partiDellIncontro(incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
-            elencate = true
-        } finally {
-            if (!elencate) incontriPendenti.add(incontroId) // the listing failed: the retried unit still owes it
-        }
+        incontriDaElencare.remove(incontroId) // attempted: from now on no Registrazione waits for it
+        partiDellIncontro(incontroId).orEmpty().forEach { accoda(it, LavoroPendente()) }
         return true
     }
 
@@ -222,8 +233,6 @@ public class AbbonatoSbobinaturaEventi(
      * [ritenta]'s own retry, never a second loop.
      */
     private fun eseguiRegistrazione(id: RegistrazioneId): Boolean {
-        // AC-183 for ANY burst order: Incontro fan-outs already requested are done first, so they merge into THIS run.
-        incontriPendenti.toList().forEach(::fanOutParti)
         val lavoro = pendenti.remove(id) ?: return true
         var esito: Esito<Unit>? = null
         try {

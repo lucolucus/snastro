@@ -2,8 +2,11 @@ package snastro.sbobinatura.adattatori.eventi
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
@@ -29,6 +32,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /** The Incontro-wide fan-out of [AbbonatoSbobinaturaEventi] (AC-I63, ADR 0038 / ADR 0035 §7). */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -164,6 +168,54 @@ class AbbonatoSbobinaturaIncontroTest {
             advanceUntilIdle()
 
             assertEquals(1, scrittore.operazioni.size - prima, "ordine: ${raffica.map { it::class.simpleName }}")
+        }
+    }
+
+    // --- AC-C46/AC-C47 for the Incontro fan-out: one failing listing never blocks another Registrazione ---------
+
+    @Test
+    fun `AC-C46 un elenco Parti che fallisce sempre per X non blocca la scrittura di una Parte di Y`() = runTest {
+        val incontroX = IncontroId("incontro-x")
+        val incontroY = IncontroId("incontro-y")
+        val b = RegistrazioneId("parte-b-di-y")
+        // X is already failing before b's event arrives, or both arrive in the same burst (X first).
+        listOf(true, false).forEach { xGiaInRitento ->
+            val lettore = LettoreTrascrittoFinta(mapOf(b to unTrascritto(b, "Parte B", incontroY)))
+            val scrittore = ScrittoreSbobinaturaFinta()
+            val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+            val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
+            abbonaSbobinatura(
+                dispatcher,
+                RigenerazioneSbobinaturaPolitica(lettore, LettoreNomiFinta(), scrittore),
+                { emptyList() },
+                scope,
+                Segnalazione { _, _ -> },
+            ) { incontro ->
+                check(incontro != incontroX) { "VociDellIncontro di X corrotto" }
+                lettore.partiConTrascritto(incontro)
+            }
+            runCurrent()
+
+            val raffica = listOf(
+                VociUnite(incontroX, sopravvissuta = VoceId(1), rimossa = VoceId(2)),
+                ElaborazioneCompletata(b, incontroY),
+            )
+            raffica.forEach { evento ->
+                dispatcher.unitaDiLavoro.inTransazione {
+                    dispatcher.pubblica(evento)
+                    Esito.Ok(Unit)
+                }
+                if (xGiaInRitento) runCurrent()
+            }
+            advanceTimeBy(120.seconds)
+            runCurrent()
+            scope.cancel() // X retries forever: stop it, or runTest's final drain chases it endlessly
+
+            assertEquals(
+                listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte B.md")),
+                scrittore.operazioni,
+                "X gia in ritento: $xGiaInRitento",
+            )
         }
     }
 
