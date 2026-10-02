@@ -35,6 +35,7 @@ import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
+import snastro.supporto.test.OrologioFinto
 import snastro.sbobinatura.applicazione.porte.AmbienteLettoreNomi
 import snastro.sbobinatura.applicazione.porte.LettoreNomi
 import snastro.sbobinatura.applicazione.porte.LettoreNomiContratto
@@ -44,16 +45,16 @@ import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.PortePipeline
+import snastro.trascrizione.applicazione.letture.VociDelTrascritto
 import snastro.trascrizione.applicazione.porte.AllineatoreFinta
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
-import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
+import kotlin.time.Duration.Companion.seconds
 import snastro.parlanti.applicazione.porte.DecodificatoreAudioFinta as DecodificatoreAudioFintaParlanti
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta as LettoreRegistrazioneFintaParlanti
 import snastro.parlanti.applicazione.porte.LettoreVociFinta as LettoreVociFintaParlanti
@@ -83,16 +84,18 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
     override fun ambiente(): AmbienteLettoreNomi = AmbienteReale()
 
     private class AmbienteReale : AmbienteLettoreNomi {
-        private val clock = Clock.fixed(Instant.parse("2026-09-24T10:00:00Z"), ZoneOffset.UTC)
+        // Advances at every import, so the import order is a real aggiuntaAlle order (INV-I2), never an id tie-break.
+        private val clock = OrologioFinto(Instant.parse("2026-09-24T10:00:00Z"))
         private val generatoreId = GeneratoreIdFinto()
 
         // Progetto: seeded only through CreaProgettoServizio / AggiungiRegistrazioneServizio.
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
-        private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
+        private val incontriProgetto = IncontroRepositoryFinta(registrazioniProgetto)
+        private val eventiProgetto =
+            DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti, incontriProgetto))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo =
-            CatalogoRegistrazioni(registrazioniProgetto, IncontroRepositoryFinta(registrazioniProgetto))
+        private val catalogo = CatalogoRegistrazioni(registrazioniProgetto, incontriProgetto)
 
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio
         // (to mint real Voci — Parlanti's Attribuzioni need real VoceRefs).
@@ -100,6 +103,13 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val trascritti = VociDellIncontroRepositoryFinta()
         private val eventiTrascrizione = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
         private val registrazioniVisteTrascrizione = mutableMapOf<RegistrazioneId, RegistrazioneVistaTrascrizione>()
+
+        /** Trascrizione's own read of the Voci dell'Incontro: what Parlanti's `LettoreVoci` sees across the Parti. */
+        private val vociDelTrascritto = VociDelTrascritto(
+            trascritti,
+            LettoreRegistrazioneFintaTrascrizione(registrazioniVisteTrascrizione),
+            UnitaDiLavoroFinta(),
+        )
 
         // Parlanti: seeded only through ConfermaAttribuzioneServizio / RinominaParlanteServizio /
         // EliminaParlanteServizio.
@@ -120,12 +130,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 .atteso()
         }
 
-        /**
-         * Off until the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands: Progetto's
-         * commands cannot give an Incontro a second Parte yet, so the contract's multi-Parte cases are not registered
-         * here (D-0037). Switch it on, and implement [aggiungiParte] through that command, when it does.
-         */
-        override val piuPartiPerIncontro: Boolean = false
+        /** On (D-0037): [aggiungiParte] goes through Progetto's own import into the Incontro (I2). */
+        override val piuPartiPerIncontro: Boolean = true
 
         override val lettore: LettoreNomi = LettoreNomiDaParlanti(
             NomiDelleVoci(attribuzioni, parlanti, uowParlanti),
@@ -147,36 +153,35 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
-            return completaElaborazione(aggiungiRegistrazioneProgetto(), voci)
+            return completaElaborazione(aggiungiRegistrazioneProgetto(Destinazione.NuovoIncontro), voci)
         }
 
-        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata =
-            error("una seconda Parte richiede l'import in un Incontro (I2): piuPartiPerIncontro e' false")
+        override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneConiata {
+            require(voci >= 1) { "voci deve essere >= 1: $voci" }
+            return completaElaborazione(aggiungiRegistrazioneProgetto(Destinazione.Incontro(incontroId)), voci)
+        }
 
         /** Progetto: CreaProgetto (già in [init]) + AggiungiRegistrazione, poi le due viste dello stesso dato. */
-        private fun aggiungiRegistrazioneProgetto(): RegistrazioneId {
+        private fun aggiungiRegistrazioneProgetto(destinazione: Destinazione): RegistrazioneId {
             val percorso = "/sorgenti/registrazione-${contatore++}.wav"
             archivio.conSorgente(percorso)
             val sonda = SondaAudioFinta(
                 leggibili = mapOf(percorso to InfoAudio(DURATA_REGISTRAZIONE_MS, LocalDate.of(2026, 9, 20))),
             )
+            clock.avanza(1.seconds)
             val servizioAggiungi = AggiungiRegistrazioneServizio(
                 eventiProgetto.unitaDiLavoro,
                 generatoreId,
                 clock,
                 progetti,
                 registrazioniProgetto,
-                IncontroRepositoryFinta(registrazioniProgetto),
+                incontriProgetto,
                 sonda,
                 archivio,
                 eventiProgetto,
             )
             servizioAggiungi.esegui(
-                AggiungiRegistrazione(
-                    checkNotNull(progetti.trova()).id,
-                    listOf(percorso),
-                    Destinazione.NuovoIncontro,
-                ),
+                AggiungiRegistrazione(checkNotNull(progetti.trova()).id, listOf(percorso), destinazione),
             ).atteso()
 
             val id = eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
@@ -233,10 +238,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             ).esegui(EseguiProssimaElaborazione()).atteso()
 
             val trascritto = checkNotNull(trascritti.trascritto(id))
-            vociVisteParlanti[trascritto.incontroId] = trascritto.voci.map { voce ->
-                val intervalli = voce.segmenti.map { it.intervallo }
-                VoceVistaParlanti(VoceRef(trascritto.incontroId, voce.id), mapOf(id to intervalli))
-            }
+            // Every Voce of the Incontro with its intervals in each Parte (Trascrizione's own read), not only this Parte's.
+            vociVisteParlanti[trascritto.incontroId] = checkNotNull(vociDelTrascritto.voci(trascritto.incontroId))
+                .map { VoceVistaParlanti(it.voceRef, it.intervalliPerParte) }
             return RegistrazioneConiata(
                 id,
                 trascritto.incontroId,

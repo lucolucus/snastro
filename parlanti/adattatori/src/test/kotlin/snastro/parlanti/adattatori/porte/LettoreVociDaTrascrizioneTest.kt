@@ -27,6 +27,7 @@ import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
+import snastro.supporto.test.OrologioFinto
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
@@ -53,10 +54,9 @@ import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
-import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneOffset
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * D2 (dev-architecture-app.md#porta-contratto): [LettoreVociDaTrascrizione] passes
@@ -80,16 +80,18 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
     override fun ambiente(): AmbienteLettoreVoci = AmbienteReale()
 
     private class AmbienteReale : AmbienteLettoreVoci {
-        private val clock = Clock.fixed(Instant.parse("2026-09-24T10:00:00Z"), ZoneOffset.UTC)
+        // Advances at every import, so the import order is a real aggiuntaAlle order (INV-I2), never an id tie-break.
+        private val clock = OrologioFinto(Instant.parse("2026-09-24T10:00:00Z"))
         private val generatoreId = GeneratoreIdFinto()
 
         // Progetto: seeded only through CreaProgettoServizio / AggiungiRegistrazioneServizio.
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
-        private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
+        private val incontriProgetto = IncontroRepositoryFinta(registrazioniProgetto)
+        private val eventiProgetto =
+            DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti, incontriProgetto))
         private val archivio = ArchivioAudioFinta()
-        private val catalogo =
-            CatalogoRegistrazioni(registrazioniProgetto, IncontroRepositoryFinta(registrazioniProgetto))
+        private val catalogo = CatalogoRegistrazioni(registrazioniProgetto, incontriProgetto)
 
         // Trascrizione: seeded only through AvviaElaborazioneServizio / EseguiProssimaElaborazioneServizio /
         // UnisciVociServizio / DividiVoceServizio / RiassegnaSegmentoServizio.
@@ -111,36 +113,35 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste), UnitaDiLavoroFinta()),
         )
 
-        /** D-0037: off until the I2 multi-file import into an Incontro lands (then seeded through it). */
-        override val piuPartiPerIncontro: Boolean = false
+        /** On (D-0037): [aggiungiParte] goes through Progetto's own import into the Incontro (I2). */
+        override val piuPartiPerIncontro: Boolean = true
 
-        override fun aggiungiParte(incontroId: IncontroId): RegistrazioneId =
-            error("Progetto non importa ancora una parte in un Incontro esistente (rilascio I2)")
+        override fun aggiungiParte(incontroId: IncontroId): RegistrazioneId = importa(Destinazione.Incontro(incontroId))
 
-        override fun aggiungiRegistrazione(): RegistrazioneId {
+        override fun aggiungiRegistrazione(): RegistrazioneId = importa(Destinazione.NuovoIncontro)
+
+        /** Progetto's AggiungiRegistrazione to [destinazione], then Trascrizione's own view of the new Parte. */
+        private fun importa(destinazione: Destinazione): RegistrazioneId {
             val percorso = "/sorgenti/registrazione-${contatore++}.wav"
             archivio.conSorgente(percorso)
             val sonda = SondaAudioFinta(
                 leggibili = mapOf(percorso to InfoAudio(DURATA_REGISTRAZIONE_MS, LocalDate.of(2026, 9, 20))),
             )
+            clock.avanza(1.seconds)
             val servizio = AggiungiRegistrazioneServizio(
                 eventiProgetto.unitaDiLavoro,
                 generatoreId,
                 clock,
                 progetti,
                 registrazioniProgetto,
-                IncontroRepositoryFinta(registrazioniProgetto),
+                incontriProgetto,
                 sonda,
                 archivio,
                 eventiProgetto,
             )
 
             servizio.esegui(
-                AggiungiRegistrazione(
-                    checkNotNull(progetti.trova()).id,
-                    listOf(percorso),
-                    Destinazione.NuovoIncontro,
-                ),
+                AggiungiRegistrazione(checkNotNull(progetti.trova()).id, listOf(percorso), destinazione),
             ).atteso()
 
             val id = eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
@@ -184,27 +185,28 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
         }
 
         override fun unisci(incontroId: IncontroId, sopravvive: VoceId, rimossa: VoceId) {
-            val registrazioneId = unicaParte(incontroId)
+            val registrazioneId = unaParteTrascritta(incontroId)
             UnisciVociServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
                 LettoreRegistrazioneFinta(registrazioniViste),
                 eventiTrascrizione,
             )
-                .esegui(UnisciVoci(registrazioneId, sopravvive, rimossa))
+                .esegui(UnisciVoci(registrazioneId, sopravvive, rimossa, incontroDelleVoci = incontroId))
                 .atteso()
         }
 
         override fun dividi(incontroId: IncontroId, origine: VoceId, segmenti: Set<SegmentoRef>): VoceId {
-            val registrazioneId = unicaParte(incontroId)
-            require(segmenti.all { it.registrazioneId == registrazioneId })
+            // DividiVoce is per Parte: the Segmenti to split all belong to one Parte of the Incontro.
+            val registrazioneId = segmenti.map { it.registrazioneId }.distinct().single()
+            require(registrazioniViste.getValue(registrazioneId).incontroId == incontroId)
             DividiVoceServizio(
                 eventiTrascrizione.unitaDiLavoro,
                 trascritti,
                 LettoreRegistrazioneFinta(registrazioniViste),
                 eventiTrascrizione,
             )
-                .esegui(DividiVoce(registrazioneId, origine, segmenti.map { it.segmentoId }.toSet()))
+                .esegui(DividiVoce(registrazioneId, origine, segmenti.map { it.segmentoId }.toSet(), incontroId))
                 .atteso()
             return eventiTrascrizione.pubblicati.filterIsInstance<VoceDivisa>().last().nuova
         }
@@ -232,9 +234,11 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
                 .atteso()
         }
 
-        /** One Parte per Incontro until the I2 import: the seeded Registrazione of [incontroId]. */
-        private fun unicaParte(incontroId: IncontroId): RegistrazioneId =
-            registrazioniViste.values.single { it.incontroId == incontroId }.registrazioneId
+        /** A Parte of [incontroId] with a Trascritto: the commands of the Voci dell'Incontro go through any of them. */
+        private fun unaParteTrascritta(incontroId: IncontroId): RegistrazioneId =
+            registrazioniViste.values
+                .first { it.incontroId == incontroId && trascritti.trascritto(it.registrazioneId) != null }
+                .registrazioneId
 
         private fun avvia(registrazioneId: RegistrazioneId) {
             AvviaElaborazioneServizio(

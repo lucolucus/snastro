@@ -111,11 +111,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         override val lettore: LettoreNomi =
             LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro))
 
-        /**
-         * Off (D-0037) until the I2 capability switch (its own change): [aggiungiParte] already imports through
-         * Progetto's `AggiungiRegistrazione` into the Incontro, so switching it on registers the multi-Parte cases.
-         */
-        override val piuPartiPerIncontro: Boolean = false
+        /** On (D-0037): [aggiungiParte] imports through Progetto's `AggiungiRegistrazione` into the Incontro (I2). */
+        override val piuPartiPerIncontro: Boolean = true
 
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
@@ -138,8 +135,8 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         }
 
         /**
-         * Implemented for when [piuPartiPerIncontro] is switched on (pre-I2-8): Progetto's AggiungiRegistrazione into
-         * the existing Incontro, whose new Voci are numbered after its existing ones (INV-I4).
+         * Progetto's AggiungiRegistrazione into the existing Incontro, whose new Voci are numbered after its existing
+         * ones (INV-I4).
          */
         override fun aggiungiParte(incontroId: IncontroId, voci: Int): RegistrazioneSeminata {
             require(voci >= 1) { "voci deve essere >= 1: $voci" }
