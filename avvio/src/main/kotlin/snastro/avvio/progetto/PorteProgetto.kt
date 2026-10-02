@@ -97,7 +97,7 @@ internal class PorteProgetto(
     val statiElaborazione: StatiElaborazione = StatiElaborazione(elaborazioni, trascritti, fasiInCorso)
 
     /** Trascrizione's public read API over [trascritti], shared by every cross-context reader below. */
-    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti)
+    val vociDelTrascritto: VociDelTrascritto = VociDelTrascritto(trascritti, registrazionePerTrascrizione)
 
     /** Parlanti's public names query over [attribuzioni]/[parlanti], shared by Sbobinatura's and Sintesi's readers. */
     val nomiDelleVoci: NomiDelleVoci = NomiDelleVoci(attribuzioni, parlanti, lettura)
@@ -105,7 +105,7 @@ internal class PorteProgetto(
     // --- the cross-context readers (ADR 0030 §1): each consumer context's own port, built once here -------------
 
     val vociPerParlanti: LettoreVociDaTrascrizione =
-        LettoreVociDaTrascrizione(vociDelTrascritto, registrazionePerParlanti)
+        LettoreVociDaTrascrizione(vociDelTrascritto)
     val trascrittoPerSbobinatura: LettoreTrascrittoSbobinatura =
         LettoreTrascrittoSbobinatura(vociDelTrascritto, catalogo)
     val nomiPerSbobinatura: LettoreNomiSbobinatura = LettoreNomiSbobinatura(nomiDelleVoci)
