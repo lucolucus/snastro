@@ -11,6 +11,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazioneServizio
 import snastro.progetto.applicazione.eventi.ProgettoCreato
@@ -80,7 +81,9 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
                 eventi,
             )
 
-            servizio.esegui(AggiungiRegistrazione(percorso)).atteso()
+            servizio.esegui(
+                AggiungiRegistrazione(progettoId, listOf(percorso), Destinazione.NuovoIncontro),
+            ).atteso()
 
             return eventi.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }

@@ -27,6 +27,7 @@ import snastro.progetto.dominio.Registrazione
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
+import java.time.LocalTime
 import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -45,9 +46,10 @@ class AggiungiRegistrazioneServizioTest {
     private val incontri = IncontroRepositoryFinta(registrazioni)
     private val generatoreId = GeneratoreIdFinto()
     private val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioni, incontri))
-    private val sonda = SondaAudioFinta(
-        leggibili = mapOf(SORGENTE to InfoAudio(durataMs = 3_600_000, dataFile = LocalDate.of(2026, 3, 12))),
+    private val infoLeggibili = mutableMapOf(
+        SORGENTE to InfoAudio(durataMs = 3_600_000, dataFile = LocalDate.of(2026, 3, 12)),
     )
+    private val sonda = SondaAudioFinta(leggibili = infoLeggibili)
     private val archivio = ArchivioAudioFinta().apply { conSorgente(SORGENTE) }
     private val servizio = AggiungiRegistrazioneServizio(
         eventi.unitaDiLavoro,
@@ -61,9 +63,22 @@ class AggiungiRegistrazioneServizioTest {
         eventi,
     )
 
+    private fun comando(vararg file: String, destinazione: Destinazione = Destinazione.NuovoIncontro) =
+        AggiungiRegistrazione(progettoId, file.toList(), destinazione)
+
+    private fun importa(vararg file: String, destinazione: Destinazione = Destinazione.NuovoIncontro) =
+        servizio.esegui(comando(*file, destinazione = destinazione))
+
+    private fun leggibili(vararg file: String, ora: LocalTime? = null) {
+        file.forEach { f ->
+            infoLeggibili[f] = InfoAudio(durataMs = 1_000, dataFile = LocalDate.of(2026, 3, 12), oraDiInizio = ora)
+            archivio.conSorgente(f)
+        }
+    }
+
     @Test
     fun `AC-56 un file leggibile crea la Registrazione con titolo, durata e data dalla sonda e pubblica l'evento`() {
-        servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
+        servizio.esegui(comando(SORGENTE)).atteso()
 
         val salvata = assertNotNull(registrazioni.trova(RegistrazioneId("id-1")))
         assertEquals("Seduta del 12 marzo", salvata.titolo)
@@ -78,7 +93,7 @@ class AggiungiRegistrazioneServizioTest {
 
     @Test
     fun `AC-I55 l'import salva l'Incontro della Parte attraverso la porta, nella stessa transazione`() {
-        servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
+        servizio.esegui(comando(SORGENTE)).atteso()
 
         val salvata = assertNotNull(registrazioni.trova(RegistrazioneId("id-1")))
         assertEquals(progettoId, assertNotNull(incontri.trova(salvata.incontroId)).progettoId)
@@ -86,8 +101,98 @@ class AggiungiRegistrazioneServizioTest {
     }
 
     @Test
+    fun `AC-I1 tre file e NuovoIncontro creano UN Incontro con tre Registrazioni e tre eventi`() {
+        leggibili(A, B, C)
+
+        importa(A, B, C).atteso()
+
+        val parti = registrazioni.delProgetto(progettoId)
+        assertEquals(setOf("a", "b", "c"), parti.map { it.titolo }.toSet())
+        val incontroId = parti.map { it.incontroId }.distinct().single()
+        assertEquals(progettoId, assertNotNull(incontri.trova(incontroId)).progettoId)
+        assertEquals(parti.map { it.id }.toSet(), incontri.partiDi(incontroId).toSet())
+        assertEquals(
+            parti.map { RegistrazioneAggiunta(it.id, progettoId, incontroId) }.toSet(),
+            eventi.pubblicati.toSet(),
+        )
+        assertEquals(3, eventi.pubblicati.size)
+    }
+
+    @Test
+    fun `AC-I1 tre file e IncontriSeparati creano tre Incontri con una Parte ciascuno`() {
+        leggibili(A, B, C)
+
+        importa(A, B, C, destinazione = Destinazione.IncontriSeparati).atteso()
+
+        val parti = registrazioni.delProgetto(progettoId)
+        assertEquals(3, parti.map { it.incontroId }.distinct().size)
+        parti.forEach { assertEquals(listOf(it.id), incontri.partiDi(it.incontroId)) }
+        assertEquals(3, eventi.pubblicati.size)
+    }
+
+    @Test
+    fun `AC-I1 con Incontro(id) i file diventano Parti di QUELL'Incontro, titoli unici anche nell'import`() {
+        leggibili("/x/riunione.m4a", "/y/Riunione.m4a")
+        importa(SORGENTE).atteso()
+        val esistente = registrazioni.delProgetto(progettoId).single().incontroId
+
+        importa("/x/riunione.m4a", "/y/Riunione.m4a", destinazione = Destinazione.Incontro(esistente)).atteso()
+
+        val parti = registrazioni.delProgetto(progettoId)
+        assertEquals(setOf(esistente), parti.map { it.incontroId }.toSet())
+        assertEquals(3, incontri.partiDi(esistente).size)
+        assertEquals(
+            setOf("Seduta del 12 marzo", "riunione", "Riunione (2)"),
+            parti.map { it.titolo }.toSet(),
+        )
+    }
+
+    @Test
+    fun `INV-I1 verso un Incontro altrui o sconosciuto, IncontroNonTrovato, nulla scritto, copie scartate`() {
+        leggibili(A, B)
+        val altroProgetto = ProgettoId("altro")
+        val altroIncontro = IncontroId("incontro-altrui")
+        incontri.salva(snastro.progetto.dominio.Incontro.nuovo(altroIncontro, altroProgetto))
+
+        listOf(altroIncontro, IncontroId("sconosciuto")).forEach { destinazione ->
+            importa(A, B, destinazione = Destinazione.Incontro(destinazione))
+                .erroreAtteso<ErroreApplicazioneProgetto.IncontroNonTrovato>()
+        }
+
+        assertEquals(emptyList(), registrazioni.delProgetto(progettoId))
+        assertEquals(emptySet(), archivio.archiviati)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `INV-I1 con il secondo di tre file illeggibile, Errore sul file, nulla scritto, copia del primo scartata`() {
+        leggibili(A, C)
+
+        importa(A, "/sorgenti/rotto.m4a", C).erroreAtteso<ErroreApplicazioneProgetto.AudioNonLeggibile>().also {
+            assertEquals("/sorgenti/rotto.m4a", it.percorsoSorgente)
+        }
+
+        assertEquals(emptyList(), registrazioni.delProgetto(progettoId))
+        assertNull(incontri.trova(IncontroId("id-2"))) // the Incontro that would have been minted
+        assertEquals(emptySet(), archivio.archiviati)
+        assertEquals(emptyList(), eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-I31 OraDiInizio viene da InfoAudio e senza ora la Registrazione non ne ha`() {
+        leggibili(A, ora = LocalTime.of(9, 30, 15))
+        leggibili(B)
+
+        importa(A, B).atteso()
+
+        val perTitolo = registrazioni.delProgetto(progettoId).associateBy { it.titolo }
+        assertEquals(LocalTime.of(9, 30, 15), assertNotNull(perTitolo.getValue("a").oraDiInizio).valore)
+        assertNull(perTitolo.getValue("b").oraDiInizio)
+    }
+
+    @Test
     fun `AC-57 un file illeggibile non crea nulla e non lascia file in audio`() {
-        servizio.esegui(AggiungiRegistrazione("/sorgenti/sconosciuto.m4a"))
+        servizio.esegui(comando("/sorgenti/sconosciuto.m4a"))
             .erroreAtteso<ErroreApplicazioneProgetto.AudioNonLeggibile>()
 
         assertEquals(emptyList(), registrazioni.delProgetto(progettoId))
@@ -109,7 +214,7 @@ class AggiungiRegistrazioneServizioTest {
             eventi,
         )
 
-        servizioFormato.esegui(AggiungiRegistrazione(SORGENTE))
+        servizioFormato.esegui(comando(SORGENTE))
             .erroreAtteso<ErroreApplicazioneProgetto.FormatoNonSupportato>()
 
         assertEquals(emptyList(), registrazioni.delProgetto(progettoId))
@@ -131,7 +236,7 @@ class AggiungiRegistrazioneServizioTest {
             eventi,
         )
 
-        servizioGuasto.esegui(AggiungiRegistrazione(SORGENTE)).erroreAtteso<ErroreApplicazioneProgetto.CopiaFallita>()
+        servizioGuasto.esegui(comando(SORGENTE)).erroreAtteso<ErroreApplicazioneProgetto.CopiaFallita>()
 
         assertEquals(emptyList(), registrazioni.delProgetto(progettoId))
         assertEquals(emptySet(), archivioGuasto.archiviati)
@@ -139,7 +244,7 @@ class AggiungiRegistrazioneServizioTest {
 
     @Test
     fun `AC-59 il riferimento salvato e quello restituito da ArchivioAudio, relativo alla cartella del progetto`() {
-        servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
+        servizio.esegui(comando(SORGENTE)).atteso()
 
         val salvata = assertNotNull(registrazioni.trova(RegistrazioneId("id-1")))
         assertEquals(RiferimentoAudio("audio/id-1.m4a"), salvata.riferimentoAudio)
@@ -152,7 +257,7 @@ class AggiungiRegistrazioneServizioTest {
             if (evento is RegistrazioneAggiunta) Esito.Errore(ErroreDiProva.Fallito("coda piena")) else Esito.Ok(Unit)
         }
 
-        servizio.esegui(AggiungiRegistrazione(SORGENTE)).erroreAtteso<ErroreDiProva.Fallito>()
+        servizio.esegui(comando(SORGENTE)).erroreAtteso<ErroreDiProva.Fallito>()
 
         assertNull(registrazioni.trova(RegistrazioneId("id-1")))
         assertEquals(emptySet(), archivio.archiviati)
@@ -165,7 +270,7 @@ class AggiungiRegistrazioneServizioTest {
             if (evento is RegistrazioneAggiunta) throw GuastoDiProva() else Esito.Ok(Unit)
         }
 
-        assertFailsWith<GuastoDiProva> { servizio.esegui(AggiungiRegistrazione(SORGENTE)) }
+        assertFailsWith<GuastoDiProva> { servizio.esegui(comando(SORGENTE)) }
 
         assertNull(registrazioni.trova(RegistrazioneId("id-1")))
         assertEquals(emptySet(), archivio.archiviati)
@@ -174,8 +279,8 @@ class AggiungiRegistrazioneServizioTest {
 
     @Test
     fun `AC-61 aggiungere due volte lo stesso file crea due Registrazioni distinte, la seconda con titolo (2)`() {
-        servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
-        servizio.esegui(AggiungiRegistrazione(SORGENTE)).atteso()
+        servizio.esegui(comando(SORGENTE)).atteso()
+        servizio.esegui(comando(SORGENTE)).atteso()
 
         val salvate = registrazioni.delProgetto(progettoId)
         assertEquals(setOf(RegistrazioneId("id-1"), RegistrazioneId("id-3")), salvate.map { it.id }.toSet())
@@ -320,7 +425,8 @@ class AggiungiRegistrazioneServizioTest {
             eventiLocali,
         )
 
-        servizioLocale.esegui(AggiungiRegistrazione(percorsoSorgente)).atteso()
+        val comando = AggiungiRegistrazione(progettoId, listOf(percorsoSorgente), Destinazione.NuovoIncontro)
+        servizioLocale.esegui(comando).atteso()
 
         return registrazioniLocali.delProgetto(progettoId).single { it.id !in prima }.titolo
     }
@@ -331,5 +437,8 @@ class AggiungiRegistrazioneServizioTest {
 
     private companion object {
         const val SORGENTE = "/sorgenti/Seduta del 12 marzo.m4a"
+        const val A = "/sorgenti/a.m4a"
+        const val B = "/sorgenti/b.m4a"
+        const val C = "/sorgenti/c.m4a"
     }
 }

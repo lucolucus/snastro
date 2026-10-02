@@ -4,19 +4,26 @@ import snastro.kernel.DispatcherEventi
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.IncontroId
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.RiferimentoAudio
 import snastro.kernel.UnitaDiLavoro
+import snastro.kernel.mappa
 import snastro.kernel.poi
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.porte.ArchivioAudio
+import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.progetto.applicazione.porte.IncontroRepository
+import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.SondaAudio
 import snastro.progetto.dominio.Incontro
+import snastro.progetto.dominio.OraDiInizio
 import snastro.progetto.dominio.Registrazione
 import java.text.Normalizer
 import java.time.Clock
+import java.time.temporal.ChronoUnit
 
 /**
  * Use-case `AggiungiRegistrazione` (AC-56..AC-61, AC-322..324, ADR 0010): probes the source, copies it into
@@ -45,41 +52,80 @@ public class AggiungiRegistrazioneServizio(
 ) {
     public fun esegui(c: AggiungiRegistrazione): Esito<Unit> {
         val progetto = requireNotNull(progetti.trova()) { "AggiungiRegistrazione richiede un Progetto gia' creato" }
-        return sonda.sonda(c.percorsoSorgente).poi { info ->
-            val id = RegistrazioneId(generatoreId.nuovo())
-            archivio.copia(c.percorsoSorgente, id).poi { riferimento ->
-                var confermata = false
-                try {
-                    uow.inTransazione {
-                        val creato = Registrazione.aggiungi(
-                            id = id,
-                            progettoId = progetto.id,
-                            // ADR 0033 §4.1: one new Incontro per imported file until the multi-file import (I2)
-                            incontroId = IncontroId(generatoreId.nuovo()),
-                            // AC-322: read + insert in this same transaction; one writer per project (ADR 0010 .lock)
-                            titolo = TitoloRegistrazione.unico(
-                                base = titoloDa(c.percorsoSorgente),
-                                titoliEsistenti = registrazioni.titoliDelProgetto(progetto.id),
-                            ),
-                            riferimentoAudio = riferimento,
-                            durataMs = info.durataMs,
-                            dataRegistrazione = info.dataFile,
-                            aggiuntaAlle = clock.instant(),
-                        )
-                        // The Incontro is saved before its Parte (IncontroRepository is its only writer, AC-I55).
-                        incontri.salva(Incontro.nuovo(creato.aggregato.incontroId, progetto.id))
-                        registrazioni.salva(creato.aggregato)
-                        eventi.pubblica(creato.evento.pubblicato(creato.aggregato.incontroId))
-                        Esito.Ok(Unit)
-                    }.also { confermata = it is Esito.Ok }
-                } finally {
-                    // AC-60: no file without its row, whether the transaction returns Errore or throws
-                    if (!confermata) archivio.scarta(riferimento)
+        require(c.progettoId == progetto.id) { "AggiungiRegistrazione e' di un altro Progetto" }
+        require(c.file.isNotEmpty()) { "AggiungiRegistrazione richiede almeno un file" }
+        val copie = mutableListOf<FileCopiato>()
+        var confermata = false
+        try {
+            // Probe and copy every file OUTSIDE the transaction (ADR 0012); the first failure stops the import.
+            for (file in c.file) {
+                val percorso = file
+                val copiato = sonda.sonda(percorso).poi { info ->
+                    oraDi(info).poi { ora ->
+                        val id = RegistrazioneId(generatoreId.nuovo())
+                        archivio.copia(percorso, id).mappa { FileCopiato(id, percorso, info, ora, it) }
+                    }
+                }
+                when (copiato) {
+                    is Esito.Ok -> copie += copiato.valore
+                    is Esito.Errore -> return copiato
                 }
             }
+            return uow.inTransazione { importa(progetto.id, c.destinazione, copie) }
+                .also { confermata = it is Esito.Ok }
+        } finally {
+            // AC-60: no file without its row, whether the transaction returns Errore or throws
+            if (!confermata) copie.forEach { archivio.scarta(it.riferimento) }
         }
     }
+
+    /** The ONE transaction: the target Incontro (or the new ones), then one Registrazione per file, then the events. */
+    private fun importa(progettoId: ProgettoId, destinazione: Destinazione, copie: List<FileCopiato>): Esito<Unit> {
+        val incontroEsistente = (destinazione as? Destinazione.Incontro)?.let { d ->
+            // INV-I1: re-read inside the transaction; another Progetto's or a ceased Incontro is unknown
+            incontri.trova(d.incontroId)?.takeIf { it.progettoId == progettoId }
+                ?: return Esito.Errore(ErroreApplicazioneProgetto.IncontroNonTrovato(d.incontroId))
+        }
+        val titoli = registrazioni.titoliDelProgetto(progettoId).toMutableList()
+        var incontroComune = incontroEsistente?.id
+        val eventiDaPubblicare = mutableListOf<RegistrazioneAggiunta>()
+        for (copia in copie) {
+            val incontroId = incontroComune ?: IncontroId(generatoreId.nuovo()).also { nuovo ->
+                incontri.salva(Incontro.nuovo(nuovo, progettoId)) // saved before its Parte (AC-I55)
+                if (destinazione is Destinazione.NuovoIncontro) incontroComune = nuovo
+            }
+            val titolo = TitoloRegistrazione.unico(titoloDa(copia.percorso), titoli) // AC-322: also among this import
+            titoli += titolo
+            val creato = Registrazione.aggiungi(
+                id = copia.id,
+                progettoId = progettoId,
+                incontroId = incontroId,
+                titolo = titolo,
+                riferimentoAudio = copia.riferimento,
+                durataMs = copia.info.durataMs,
+                dataRegistrazione = copia.info.dataFile,
+                aggiuntaAlle = clock.instant(),
+                oraDiInizio = copia.ora,
+            )
+            registrazioni.salva(creato.aggregato)
+            eventiDaPubblicare += creato.evento.pubblicato(incontroId)
+        }
+        eventiDaPubblicare.forEach(eventi::pubblica)
+        return Esito.Ok(Unit)
+    }
 }
+
+/** AC-I31: the OraDiInizio of the probe, to the second; empty when the probe has none. */
+private fun oraDi(info: InfoAudio): Esito<OraDiInizio?> =
+    info.oraDiInizio?.let { OraDiInizio.di(it.truncatedTo(ChronoUnit.SECONDS)) } ?: Esito.Ok(null)
+
+private data class FileCopiato(
+    val id: RegistrazioneId,
+    val percorso: String,
+    val info: InfoAudio,
+    val ora: OraDiInizio?,
+    val riferimento: RiferimentoAudio,
+)
 
 /**
  * The base titolo (AC-56, AC-322): the source file's name without its extension, NFC-normalized and

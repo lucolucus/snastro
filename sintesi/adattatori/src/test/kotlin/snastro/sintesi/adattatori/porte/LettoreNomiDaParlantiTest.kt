@@ -33,6 +33,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
@@ -156,6 +157,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         /** Progetto's AggiungiRegistrazione: the one Parte of a new Incontro. */
         private fun importa(): RegistrazioneId {
+            val idProgetto = checkNotNull(progetti.trova()).id
             val percorso = "/sorgenti/parte-${++contatore}.m4a"
             archivio.conSorgente(percorso)
             val sonda = SondaAudioFinta(leggibili = mapOf(percorso to InfoAudio(60_000L, LocalDate.of(2026, 10, 1))))
@@ -169,7 +171,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 sonda,
                 archivio,
                 eventiProgetto,
-            ).esegui(AggiungiRegistrazione(percorso)).atteso()
+            ).esegui(AggiungiRegistrazione(idProgetto, listOf(percorso), Destinazione.NuovoIncontro)).atteso()
             return eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
         }
 

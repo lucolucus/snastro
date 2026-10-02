@@ -14,6 +14,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
@@ -126,7 +127,13 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 eventiProgetto,
             )
 
-            servizio.esegui(AggiungiRegistrazione(percorso)).atteso()
+            servizio.esegui(
+                AggiungiRegistrazione(
+                    checkNotNull(progetti.trova()).id,
+                    listOf(percorso),
+                    Destinazione.NuovoIncontro,
+                ),
+            ).atteso()
 
             val id = eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
             val v = checkNotNull(catalogo.registrazione(id))
