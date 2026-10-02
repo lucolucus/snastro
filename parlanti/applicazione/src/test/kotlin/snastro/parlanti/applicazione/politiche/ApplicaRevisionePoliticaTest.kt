@@ -169,7 +169,7 @@ class ApplicaRevisionePoliticaTest {
     }
 
     @Test
-    fun `INV-21 una Revisione che svuota la fetta di una Parte toglie quella impronta e tiene le altre`() {
+    fun `INV-21 una Parte assente da intervalliPerParte dopo la Revisione perde l impronta, le altre restano`() {
         val p = unParlante("id-p")
         val parteB = RegistrazioneId("registrazione-b")
         val voce = unaVoce(1)
@@ -178,7 +178,7 @@ class ApplicaRevisionePoliticaTest {
         }
         parlanti.salva(p).atteso()
         attribuzioni.salva(Attribuzione.conferma(voce, PROGETTO, p.id).aggregato)
-        // dopo la Revisione la Voce parla ancora solo nella Parte REGISTRAZIONE
+        // dopo la Revisione la Voce parla ancora solo nella Parte REGISTRAZIONE: parteB non e piu una chiave
         val lettore = LettoreVociFinta(
             mapOf(voce.incontroId to listOf(unaVoceVista(voce, listOf(IntervalloMs(0, 1_000))))),
         )
@@ -212,6 +212,7 @@ class ApplicaRevisionePoliticaTest {
             .atteso()
 
         assertEquals(listOf(REGISTRAZIONE), impronteDi(p).map { it.parte })
+        assertEquals(p.id, assertNotNull(attribuzioni.trova(voce)).parlanteId, "la sorgente resta attribuita")
     }
 
     @Test

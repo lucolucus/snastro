@@ -107,20 +107,23 @@ public class Proposta(
     /**
      * AC-170/AC-309/[INV-20]: the BEST Fascia over every (Voce slice, print) pair, prints of the current
      * [EstrattoreImpronta.modello] only — from any Parte of any Incontro, the other Parti of this one included.
-     * [INV-I17]: the extract comes from the Parte that sourced the chosen print.
+     * [INV-I17]: the extract comes from the Parte that sourced the chosen print — the first print of that best Fascia
+     * whose (Voce, Parte) slice still has an excerpt (a tie falls through to the next equal print, never a worse one).
      */
-    private fun candidato(parlante: Parlante, impronteVoce: List<Impronta>): Candidato? =
-        parlante.impronte
+    private fun candidato(parlante: Parlante, impronteVoce: List<Impronta>): Candidato? {
+        val valutate = parlante.impronte
             .filter { it.modello == estrattore.modello }
             .map { iv -> iv to impronteVoce.minOf { fetta -> confronto.fascia(fetta, listOf(iv.impronta)) } }
-            .minByOrNull { (_, fascia) -> fascia } // AC-309: nessuna impronta del modello corrente, non e Candidato
-            ?.let { (iv, fascia) ->
-                // INV-20 "ogni Candidato ha un EstrattoAudio": la (Voce, Parte) sorgente dell'impronta ha ancora
-                // intervalli (la revisione-policy rimuove l'impronta della fetta svuotata, ADR 0035 §6).
-                estrattoAudio.estratto(iv.voceRef, iv.parte)?.let { estratto ->
-                    Candidato(parlante.id, parlante.nome.valore, parlante.tipo.vista(), fascia, estratto)
-                }
+        // AC-309: nessuna impronta del modello corrente, non e Candidato
+        val migliore = valutate.minOfOrNull { (_, fascia) -> fascia } ?: return null
+        // INV-20 "ogni Candidato ha un EstrattoAudio": la (Voce, Parte) sorgente dell'impronta ha ancora intervalli
+        // (la revisione-policy rimuove l'impronta della fetta svuotata, ADR 0035 §6).
+        return valutate.filter { (_, fascia) -> fascia == migliore }.firstNotNullOfOrNull { (iv, _) ->
+            estrattoAudio.estratto(iv.voceRef, iv.parte)?.let { estratto ->
+                Candidato(parlante.id, parlante.nome.valore, parlante.tipo.vista(), migliore, estratto)
             }
+        }
+    }
 
     private data class Contesto(
         val progettoId: ProgettoId,

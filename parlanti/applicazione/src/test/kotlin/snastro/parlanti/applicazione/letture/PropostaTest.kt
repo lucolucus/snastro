@@ -183,6 +183,47 @@ class PropostaTest {
     }
 
     @Test
+    fun `AC-170 a parita di Fascia l estratto viene dalla prima impronta`() {
+        val prima = impronta(30f)
+        val seconda = impronta(31f)
+        val programmate = mapOf(prima to Fascia.DEBOLE, seconda to Fascia.DEBOLE)
+        val ambiente = AmbienteDueParti(
+            voce5 = mapOf(PARTE_2 to listOf(IntervalloMs(0, 4_000))),
+            confronto = ConfrontoImpronteFinta(programmate),
+        )
+        val anna = unParlante("p-anna", "Anna")
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_1, prima, "s1", MODELLO).atteso()
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_2, seconda, "s2", MODELLO).atteso()
+        ambiente.parlanti.salva(anna).atteso()
+
+        val candidato = assertNotNull(ambiente.api.perVoce(VOCE_5)).candidati.single()
+
+        assertEquals(Fascia.DEBOLE, candidato.fascia)
+        assertEquals(ambiente.estrattoAudio.estratto(VOCE_ANNA, PARTE_1), candidato.estratto, "la prima delle pari")
+    }
+
+    @Test
+    fun `INV-20 se la fetta della prima impronta migliore e vuota l estratto viene da un altra di pari Fascia`() {
+        val senzaFetta = impronta(30f)
+        val pari = impronta(31f)
+        val programmate = mapOf(senzaFetta to Fascia.DEBOLE, pari to Fascia.DEBOLE)
+        val ambiente = AmbienteDueParti(
+            voce5 = mapOf(PARTE_2 to listOf(IntervalloMs(0, 4_000))),
+            confronto = ConfrontoImpronteFinta(programmate),
+        )
+        val anna = unParlante("p-anna", "Anna")
+        // la Voce 7 non parla piu in nessuna Parte: la sua impronta non ha estratto
+        anna.aggiungiImpronta(VoceRef(INCONTRO, VoceId(7)), PARTE_1, senzaFetta, "s7", MODELLO).atteso()
+        anna.aggiungiImpronta(VOCE_ANNA, PARTE_2, pari, "s2", MODELLO).atteso()
+        ambiente.parlanti.salva(anna).atteso()
+
+        val candidato = assertNotNull(ambiente.api.perVoce(VOCE_5)).candidati.single()
+
+        assertEquals(Fascia.DEBOLE, candidato.fascia)
+        assertEquals(ambiente.estrattoAudio.estratto(VOCE_ANNA, PARTE_2), candidato.estratto)
+    }
+
+    @Test
     fun `AC-309 un Parlante con solo impronte di un altro modello non e Candidato`() {
         val ambiente = Ambiente()
         val p = unParlante("p-1", "Marco")
