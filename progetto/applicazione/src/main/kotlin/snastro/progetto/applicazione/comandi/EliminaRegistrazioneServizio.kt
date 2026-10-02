@@ -19,8 +19,8 @@ import snastro.progetto.dominio.ErroreProgetto
  * 4. `pubblica`: the SYNCHRONOUS subscribers run here — the Trascrizione veto (`ElaborazioneGiaAperta`, returned
  *    unchanged: the dispatcher dooms the transaction) + purge, and the Parlanti purge + INV-25;
  * 5. `rimuovi` of the registrazione row — AFTER 4: the elaborazione / trascritto FKs are immediate;
- * 6. `incontri.rimuovi` — AFTER 5, the `registrazione → incontro` FK is immediate
- *    (every Incontro has exactly one Parte until I2).
+ * 6. if it was the last Parte (`incontroCessato`, read at 1 from `partiDi`, ADR 0038 §1): `incontri.rimuovi` — AFTER 5,
+ *    the `registrazione → incontro` FK is immediate (the call is a no-op if the row is already gone).
  *
  * No file I/O here: the files go after commit, each with its owner's subscriber. No Trascrizione / Parlanti query.
  */
@@ -35,19 +35,21 @@ public class EliminaRegistrazioneServizio(
         val registrazione = registrazioni.trova(c.registrazioneId)
             ?: return@inTransazione Esito.Errore(ErroreProgetto.RegistrazioneNonTrovata(c.registrazioneId))
         val evento = registrazione.elimina()
+        val incontroCessato = incontri.partiDi(registrazione.incontroId).none { it != evento.id }
         inSospeso.registra(
             EliminazioneInSospeso(evento.id, evento.titolo, evento.dataRegistrazione, evento.riferimentoAudio),
         )
-        eventi.pubblica(evento.pubblicato(registrazione.incontroId))
+        eventi.pubblica(evento.pubblicato(registrazione.incontroId, incontroCessato))
         registrazioni.rimuovi(evento.id)
-        incontri.rimuovi(registrazione.incontroId)
+        if (incontroCessato) incontri.rimuovi(registrazione.incontroId)
         Esito.Ok(Unit)
     }
 }
 
-// incontroCessato = true: until block elimina-parte computes it from IncontroRepository.partiDi (ADR 0038 §1), every
-// Incontro has exactly one Parte (ADR 0033 §6), so deleting a Parte always ends its Incontro.
-private fun snastro.progetto.dominio.RegistrazioneEliminata.pubblicato(incontroId: IncontroId): RegistrazioneEliminata =
+private fun snastro.progetto.dominio.RegistrazioneEliminata.pubblicato(
+    incontroId: IncontroId,
+    incontroCessato: Boolean,
+): RegistrazioneEliminata =
     RegistrazioneEliminata(
         registrazioneId = id,
         progettoId = progettoId,
@@ -55,5 +57,5 @@ private fun snastro.progetto.dominio.RegistrazioneEliminata.pubblicato(incontroI
         dataRegistrazione = dataRegistrazione,
         riferimentoAudio = riferimentoAudio,
         incontroId = incontroId,
-        incontroCessato = true,
+        incontroCessato = incontroCessato,
     )

@@ -11,9 +11,12 @@ import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianza
 import snastro.parlanti.applicazione.porte.Classificazione
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
+import snastro.parlanti.applicazione.porte.segmentiDellaParte
+import snastro.parlanti.applicazione.porte.vociDellaParte
 import snastro.parlanti.dominio.DURATA_MINIMA_SEGMENTO_MS
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -45,7 +48,7 @@ import snastro.parlanti.dominio.SorgenteImpronta
  * on its target Voce yields neither a move nor an `incerta`. The result carries no similarity number
  * and no [Impronta] survives the call (ADR 0009, ADR 0019 §4.8).
  */
-@Suppress("LongParameterList") // one parameter per collaborator: 2 repositories, 1 cross-ctx port, 3 technical ports
+@Suppress("LongParameterList") // one parameter per collaborator: 2 repositories, 2 cross-ctx ports, 3 technical ports
 public class PianoRiassegnazioneQuery(
     private val voci: LettoreVoci,
     private val attribuzioni: AttribuzioneRepository,
@@ -53,6 +56,7 @@ public class PianoRiassegnazioneQuery(
     private val decodificatore: DecodificatoreAudio,
     private val estrattore: EstrattoreImpronta,
     private val classificatore: ClassificatoreSomiglianza,
+    private val registrazioni: LettoreRegistrazione,
 ) {
     /**
      * Errors: [ErroreParlanti.TrascrittoNonTrovato] (no Trascritto, INV-5),
@@ -62,7 +66,8 @@ public class PianoRiassegnazioneQuery(
      * with a constant `totale`.
      */
     public fun calcola(id: RegistrazioneId, progresso: (fatti: Int, totale: Int) -> Unit): Esito<PianoRiassegnazione> {
-        val segmenti = voci.segmenti(id) ?: return Esito.Errore(ErroreParlanti.TrascrittoNonTrovato(id))
+        val segmenti = voci.segmentiDellaParte(id, registrazioni)
+            ?: return Esito.Errore(ErroreParlanti.TrascrittoNonTrovato(id))
         return calcolaPiano(id, segmenti, progresso)
     }
 
@@ -73,7 +78,7 @@ public class PianoRiassegnazioneQuery(
         progresso: (fatti: Int, totale: Int) -> Unit,
     ): Esito<PianoRiassegnazione> {
         // ADR 0033 §4.1: the Attribuzioni of the Voci of this Parte (an Attribuzione is per Voce of the Incontro).
-        val vociDi: Map<ParlanteId, List<VoceId>> = voci.voci(id).orEmpty()
+        val vociDi: Map<ParlanteId, List<VoceId>> = voci.vociDellaParte(id, registrazioni).orEmpty()
             .mapNotNull { attribuzioni.trova(it.voceRef) }
             .groupBy({ it.parlanteId }, { it.voceRef.voceId })
         val segmentiPerVoce: Map<VoceId, List<SegmentoDiVoce>> = segmenti.groupBy { it.voceId }
@@ -179,6 +184,9 @@ public class PianoRiassegnazioneQuery(
     }
 
     private val IntervalloMs.durataMs: Long get() = fineMs - inizioMs
+
+    /** Within ONE Parte a [SegmentoId] is the exact key (the Parte is [calcola]'s). */
+    private val SegmentoDiVoce.segmentoId: SegmentoId get() = segmento.segmentoId
 }
 
 /** `piano` view_shape: the plan of "Riassegna per somiglianza" — no similarity number, no [Impronta]. */

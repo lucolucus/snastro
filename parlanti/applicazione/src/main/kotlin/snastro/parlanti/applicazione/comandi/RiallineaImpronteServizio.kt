@@ -9,9 +9,11 @@ import snastro.kernel.poi
 import snastro.parlanti.applicazione.eventi.ImpronteRiallineate
 import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
+import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.RigaImpronta
+import snastro.parlanti.applicazione.porte.vociDellaParte
 import snastro.parlanti.dominio.ImprontaVocale
 import snastro.parlanti.dominio.SorgenteImpronta
 
@@ -30,10 +32,11 @@ import snastro.parlanti.dominio.SorgenteImpronta
  * [ImpronteRiallineate] is published (delivered after its commit) iff >= 1 row was updated — also when a
  * later Voce throws: that exception then propagates (ADR 0003, the caller retries), after the event.
  */
-@Suppress("LongParameterList") // one parameter per collaborator: uow, reader, repo, 2 technical ports, eventi
+@Suppress("LongParameterList") // one parameter per collaborator: uow, 2 readers, repo, 2 technical ports, eventi
 public class RiallineaImpronteServizio(
     private val uow: UnitaDiLavoro,
     private val lettoreVoci: LettoreVoci,
+    private val registrazioni: LettoreRegistrazione,
     private val parlanti: ParlanteRepository,
     private val decodificatore: DecodificatoreAudio,
     private val estrattore: EstrattoreImpronta,
@@ -48,7 +51,7 @@ public class RiallineaImpronteServizio(
 
     /** Stale rows per Voce, each with the source it must be re-derived from; absent Voci are skipped (AC-299). */
     private fun obsolete(registrazioneId: RegistrazioneId, modello: String): List<VoceObsoleta> {
-        val sorgenti = lettoreVoci.voci(registrazioneId).orEmpty()
+        val sorgenti = lettoreVoci.vociDellaParte(registrazioneId, registrazioni).orEmpty()
             .filter { it.intervalli.isNotEmpty() }
             .associate { it.voceRef to SorgenteImpronta.di(it.intervalli) }
         return parlanti.impronteDiRegistrazione(registrazioneId)
@@ -90,7 +93,7 @@ public class RiallineaImpronteServizio(
         val campioni = decodificatore.campioni(voce.parte, voce.sorgente.intervalli)
         val impronta = estrattore.estrai(campioni)
         return uow.inTransazione {
-            val attuale = lettoreVoci.voci(voce.parte)
+            val attuale = lettoreVoci.vociDellaParte(voce.parte, registrazioni)
                 ?.find { it.voceRef == voce.voceRef }
                 ?.takeIf { it.intervalli.isNotEmpty() }
             if (attuale == null || SorgenteImpronta.di(attuale.intervalli) != voce.sorgente) {

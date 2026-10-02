@@ -4,6 +4,7 @@ import snastro.kernel.CampioniAudio
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.Esito
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -26,12 +27,13 @@ import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.applicazione.porte.EstrattoreImprontaFinta
 import snastro.parlanti.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.parlanti.applicazione.porte.LettoreVoci
-import snastro.parlanti.applicazione.porte.LettoreVociFinta
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.ParlanteRepositoryFinta
 import snastro.parlanti.applicazione.porte.RegistrazioneVista
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
 import snastro.parlanti.applicazione.porte.VoceVista
+import snastro.parlanti.applicazione.porte.lettoreVociDiUnicheParti
+import snastro.parlanti.applicazione.porte.unaVoceVista
 import snastro.parlanti.dominio.Attribuzione
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -93,8 +95,8 @@ class SaltaVoceServizioTest {
             ),
         )
 
-    private fun unaVoce(voceRef: VoceRef = VOCE, id: RegistrazioneId = REGISTRAZIONE): LettoreVociFinta =
-        LettoreVociFinta(mapOf(id to listOf(VoceVista(voceRef, listOf(IntervalloMs(0, 1_000))))))
+    private fun unaVoce(voceRef: VoceRef = VOCE, id: RegistrazioneId = REGISTRAZIONE): LettoreVoci =
+        lettoreVociDiUnicheParti(mapOf(id to listOf(unaVoceVista(voceRef, listOf(IntervalloMs(0, 1_000))))))
 
     private fun unNome(testo: String): Nome = Nome.di(testo).atteso()
 
@@ -141,11 +143,11 @@ class SaltaVoceServizioTest {
 
         // La Registrazione ha ora una DataRegistrazione diversa (una ModificaDataRegistrazione a monte).
         val altraVoce = VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(2))
-        val vociAggiornate = LettoreVociFinta(
+        val vociAggiornate = lettoreVociDiUnicheParti(
             mapOf(
                 REGISTRAZIONE to listOf(
-                    VoceVista(VOCE, listOf(IntervalloMs(0, 1_000))),
-                    VoceVista(altraVoce, listOf(IntervalloMs(1_000, 2_000))),
+                    unaVoceVista(VOCE, listOf(IntervalloMs(0, 1_000))),
+                    unaVoceVista(altraVoce, listOf(IntervalloMs(1_000, 2_000))),
                 ),
             ),
         )
@@ -198,7 +200,7 @@ class SaltaVoceServizioTest {
 
     @Test
     fun `una Registrazione senza Trascritto e TrascrittoNonTrovato`() {
-        val servizio = servizio(unaRegistrazione(), LettoreVociFinta(emptyMap()))
+        val servizio = servizio(unaRegistrazione(), lettoreVociDiUnicheParti(emptyMap()))
 
         val errore = servizio.esegui(SaltaVoce(VOCE)).erroreAtteso<ErroreParlanti.TrascrittoNonTrovato>()
 
@@ -235,8 +237,8 @@ class SaltaVoceServizioTest {
     @Test
     fun `AC-286 se la Voce cambia tra l estrazione e la transazione e VoceCambiata e nessun Parlante e creato`() {
         val voci = LettoreVociCheCambia(
-            primaLettura = listOf(VoceVista(VOCE, listOf(IntervalloMs(0, 2_000)))),
-            poi = listOf(VoceVista(VOCE, listOf(IntervalloMs(0, 2_000), IntervalloMs(4_000, 7_000)))),
+            primaLettura = listOf(unaVoceVista(VOCE, listOf(IntervalloMs(0, 2_000)))),
+            poi = listOf(unaVoceVista(VOCE, listOf(IntervalloMs(0, 2_000), IntervalloMs(4_000, 7_000)))),
         )
 
         val errore = servizio(unaRegistrazione(), voci).esegui(SaltaVoce(VOCE))
@@ -252,7 +254,7 @@ class SaltaVoceServizioTest {
     fun `AC-287 per una Voce di oltre 30 s si decodifica solo SorgenteImpronta, 30 000 ms in tutto`() {
         val intervalliVoce = listOf(IntervalloMs(0, 20_000), IntervalloMs(25_000, 45_000), IntervalloMs(50_000, 50_500))
         val registra = DecodificatoreAudioContaChiamate(decodificatore)
-        val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(VOCE, intervalliVoce))))
+        val voci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(VOCE, intervalliVoce))))
 
         servizio(unaRegistrazione(), voci, decoder = registra).esegui(SaltaVoce(VOCE)).atteso()
 
@@ -274,7 +276,7 @@ class SaltaVoceServizioTest {
     @Test
     fun `AC-289 la riga d impronta del nuovo occasionale conserva sorgente = chiave e modello dell estrattore`() {
         val intervalli = listOf(IntervalloMs(1_200, 5_400), IntervalloMs(8_000, 15_000))
-        val voci = LettoreVociFinta(mapOf(REGISTRAZIONE to listOf(VoceVista(VOCE, intervalli))))
+        val voci = lettoreVociDiUnicheParti(mapOf(REGISTRAZIONE to listOf(unaVoceVista(VOCE, intervalli))))
 
         servizio(unaRegistrazione(), voci).esegui(SaltaVoce(VOCE)).atteso()
 
@@ -338,9 +340,9 @@ class SaltaVoceServizioTest {
     ) : LettoreVoci {
         private var letture = 0
 
-        override fun voci(id: RegistrazioneId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
+        override fun voci(incontroId: IncontroId): List<VoceVista> = if (letture++ == 0) primaLettura else poi
 
-        override fun segmenti(id: RegistrazioneId): List<SegmentoDiVoce> = error("non usato da questo test (AC-494)")
+        override fun segmenti(incontroId: IncontroId): List<SegmentoDiVoce> = error("non usato da questo test (AC-494)")
     }
 
     /**

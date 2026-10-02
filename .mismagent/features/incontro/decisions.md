@@ -502,3 +502,42 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer)
 - Docs: [manifest](building-blocks.yaml)
 - Revisit: a caller edit changes behaviour or a block's diff becomes unreviewable.
+
+### D-0038 · AC-I32 passa all'import
+- Meta: 2026-10-02; scope: block:elimina-parte; status: accepted; sha: 33a3d2bc
+- Question: AC-I32 (an import into an Incontro whose last Parte was just deleted fails) needs the import service, absent when elimina-parte is built.
+- Options: A move AC-I32 to aggiungi-registrazione-incontro, which owns the import side of the race (kept); B write it later as a pre-release item; C hold elimina-parte until the import exists, against the integration order of D-0032.
+- Hypothesis: n/a — decided by the composer on the worker's partial report, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the composer on the worker's partial report, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the composer on the worker's partial report, [manifest](building-blocks.yaml)
+- Debate: none; the serialization it relies on (BEGIN IMMEDIATE) is unchanged by elimina-parte.
+- Decision: A. Cost: elimina-parte lands without the concurrency proof, which arrives with the import block.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: mismagent-worker (elimina-parte)
+- Docs: [manifest](building-blocks.yaml)
+- Revisit: none expected.
+
+### D-0039 · L'import multi-parte entra per ultimo
+- Meta: 2026-10-02; scope: block:aggiungi-registrazione-incontro; status: accepted
+- Question: aggiungi-registrazione-incontro can create Incontri with several Parti; which deletion paths must already be per-Parte when it lands?
+- Options: A after elimina-parte, eliminazione-parte-sintesi, politiche-parlanti-incontro, enforced by after: (kept); B rely on the composer's memory of the review notes.
+- Hypothesis: n/a — decided by the composer on the reviews of porte-progetto-incontro and elimina-parte, [pre-release](pre-release.md)
+- Check: n/a — decided by the composer on the reviews of porte-progetto-incontro and elimina-parte, [pre-release](pre-release.md)
+- Result: n/a — decided by the composer on the reviews of porte-progetto-incontro and elimina-parte, [pre-release](pre-release.md)
+- Debate: reviews found that deleting a non-last Parte would wipe the Incontro's Riassunto (Sintesi) and all its Attribuzioni (Parlanti) until those blocks land (D-0003, INV-28).
+- Decision: A, mechanical via the manifest. Cost: the import block waits for three more blocks.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: code-review (elimina-parte, porte-progetto-incontro)
+- Docs: [manifest](building-blocks.yaml), [pre-release](pre-release.md)
+- Revisit: none expected.
+
+### D-0040 · conTrascritto e copia della radice
+- Meta: 2026-10-02; scope: block:porte-trascrizione-incontro; status: accepted; sha: 63ffda57
+- Question: The sweep to VociDellIncontroRepository needs a list of transcribed Registrazioni (Sbobinatura startup sweep) and an alias-free root copy for the Finta; both touch pinned shapes.
+- Options: A add conTrascritto() to the repository port and a public VociDellIncontro.copia() (kept); B a separate listing port plus root replay in the Finta, heavier.
+- Hypothesis: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Debate: verifier and code-review judged both additive and asked to record them in the pin.
+- Decision: A; the repo-voci-incontro pin is amended. Cost: one more port method and one public root method.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (porte-trascrizione-incontro), mismagent-verifier, code-review
+- Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+- Revisit: none expected.

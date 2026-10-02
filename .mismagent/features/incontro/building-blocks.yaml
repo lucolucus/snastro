@@ -361,11 +361,13 @@ blocks:
       - "ADR 0033 §2"
       - "tactical-model.md § Progetto commands"
       - "decisions.md D-0008, D-0016, D-0019"
+    after: ["elimina-parte", "eliminazione-parte-sintesi", "politiche-parlanti-incontro"]  # D-0039: no multi-Parte Incontro before the per-Parte deletion paths
     consumes: ["kernel-incontro", "agg-incontro", "repo-incontro", "eventi-progetto-incontro"]
     related_adrs: ["0012", "0033"]
     commands: ["AggiungiRegistrazione"]
     tests_nl_status: "confirmed"
     tests_nl:
+      - "AC-I32 concurrent (moved from elimina-parte, D-0038): an import into an Incontro whose last Parte was deleted first answers IncontroNonTrovato (BEGIN IMMEDIATE serialization; two real-SQLite transactions)"
       - "AggiungiRegistrazione with 3 readable files and NuovoIncontro → ONE new Incontro with 3 Registrazioni (incontroId equal), 3 RegistrazioneAggiunta events after commit, each carrying that incontroId; no Elaborazione created"
       - "AggiungiRegistrazione with 3 files and IncontriSeparati → 3 new Incontri with one Parte each (today's multi-file behaviour)"
       - "AggiungiRegistrazione with Incontro(id) of the same Progetto → the files become Parti of THAT Incontro; titles unique also among the files of the same import"
@@ -412,7 +414,6 @@ blocks:
       - "EliminaRegistrazione of the only Parte → RegistrazioneEliminata(incontroCessato = true), the registrazione and incontro rows gone in one transaction"
       - "EliminaRegistrazione of Parte 2 of 3 → RegistrazioneEliminata(incontroCessato = false), the Incontro and its other Parti stay"
       - "INV-I1 a subscriber error (e.g. ElaborazioneGiaAperta veto) → nothing deleted, the Incontro and the Parte stay; an unknown Registrazione → Errore(RegistrazioneNonTrovata)"
-      - "AC-I32 concurrent: an import into an Incontro whose last Parte was deleted first answers IncontroNonTrovato (BEGIN IMMEDIATE serialization; two real-SQLite transactions)"
   - id: "avvia-elaborazioni-incontro"
     type: "application-service"
     context: "trascrizione"
@@ -1295,6 +1296,7 @@ boundaries:
     consumers: ["avvia-elaborazioni-incontro", "esegui-elaborazione-incontro", "revisione-incontro", "eliminazione-parte-trascrizione", "voci-del-trascritto-incontro", "viste-parte-incontro", "adattatori-trascrizione-incontro"]
     projection: "in-process"
     pinned_types:
+      "VociDellIncontroRepository (amended 2026-10-02, D-0040)": "+ conTrascritto(): List<RegistrazioneId> /* read-only, the Sbobinatura startup sweep */; VociDellIncontro.copia(): VociDellIncontro is public (whole-root read copy, used by the Finta)"
       VociDellIncontroRepository: "interface { fun trova(id: IncontroId): VociDellIncontro? /* one LetturaCoerente snapshot */; fun salva(root: VociDellIncontro) /* rewrites only changed Parti */; fun rimuovi(id: IncontroId); fun trascritto(r: RegistrazioneId): Trascritto? }"
     keys:
       incontroId: "as kernel-incontro"

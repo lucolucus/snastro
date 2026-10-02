@@ -2,6 +2,7 @@ package snastro.sintesi.adattatori.porte
 
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.GeneratoreIdFinto
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.ProgettoId
@@ -71,7 +72,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
 
         /** Parlanti's OWN view of each Registrazione/Voce seeded so far (its consumed ports' fakes). */
         private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
-        private val vociViste = mutableMapOf<RegistrazioneId, List<VoceVista>>()
+        private val vociViste = mutableMapOf<IncontroId, List<VoceVista>>()
 
         override val lettore: LettoreNomi =
             LettoreNomiDaParlanti(
@@ -105,9 +106,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 dataRegistrazione = LocalDate.of(2026, 9, 23),
                 durataMs = DURATA_REGISTRAZIONE_MS,
             )
-            vociViste[id] = refs.map { ref ->
+            vociViste[unIncontroDi(id)] = refs.map { ref ->
                 val inizio = (ref.voceId.numero - 1) * 2_000L
-                VoceVista(ref, listOf(IntervalloMs(inizio, inizio + 1_000L)))
+                VoceVista(ref, mapOf(id to listOf(IntervalloMs(inizio, inizio + 1_000L))))
             }
             return RegistrazioneSeminata(id, refs)
         }

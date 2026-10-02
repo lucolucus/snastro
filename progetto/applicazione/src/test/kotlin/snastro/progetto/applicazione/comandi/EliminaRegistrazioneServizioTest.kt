@@ -22,6 +22,7 @@ import snastro.progetto.applicazione.porte.IncontroRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.dominio.ErroreProgetto
+import snastro.progetto.dominio.Incontro
 import snastro.progetto.dominio.Registrazione
 import java.time.Instant
 import java.time.LocalDate
@@ -42,7 +43,8 @@ class EliminaRegistrazioneServizioTest {
     private val passi = mutableListOf<String>()
     private val registrazioni = RegistrazioneRepositoryFinta()
     private val inSospeso = EliminazioniInSospesoFinta()
-    private val uow = UnitaDiLavoroContata(UnitaDiLavoroFinta(registrazioni, inSospeso))
+    private val incontri = IncontroRepositoryFinta(registrazioni)
+    private val uow = UnitaDiLavoroContata(UnitaDiLavoroFinta(registrazioni, incontri, inSospeso))
     private val dispatcher = DispatcherEventiInMemoria(uow)
     private val sincroni = mutableListOf<EventoPubblicato>()
     private val dopoCommit = mutableListOf<EventoPubblicato>()
@@ -53,12 +55,14 @@ class EliminaRegistrazioneServizioTest {
     private val servizio = EliminaRegistrazioneServizio(
         dispatcher.unitaDiLavoro,
         RegistrazioniRegistrate(registrazioni, passi) { elaborazioneAperta },
-        IncontroRepositoryFinta(registrazioni),
+        IncontriRegistrati(incontri, passi),
         InSospesoRegistrate(inSospeso, passi),
         dispatcher,
     )
 
     init {
+        incontri.salva(Incontro.nuovo(IncontroId("incontro-di-id-1"), progettoId))
+        incontri.salva(Incontro.nuovo(IncontroId("incontro-di-id-2"), progettoId))
         registrazioni.salva(unaRegistrazione())
         registrazioni.salva(unaRegistrazione(RegistrazioneId("id-2"), "Altra"))
         dispatcher.registraSincrono { e ->
@@ -74,7 +78,11 @@ class EliminaRegistrazioneServizioTest {
         servizio.esegui(EliminaRegistrazione(id)).atteso()
 
         assertEquals(1, uow.transazioni, "una sola inTransazione")
-        assertEquals(listOf("trova", "registra", "pubblica", "rimuovi"), passi)
+        assertEquals(
+            listOf("trova", "parti", "registra", "pubblica", "rimuovi", "rimuoviIncontro"),
+            passi,
+        )
+        assertNull(incontri.trova(IncontroId("incontro-di-id-1")), "l'Incontro cessa con la sua ultima Parte")
         assertEquals(
             listOf(EliminazioneInSospeso(id, "Seduta rinominata", DATA_SCELTA, RiferimentoAudio("audio/id-1.m4a"))),
             inSospeso.elenco(),
@@ -121,6 +129,42 @@ class EliminaRegistrazioneServizioTest {
         assertEquals("Seduta rinominata", assertNotNull(registrazioni.trova(id)).titolo)
         assertEquals(emptyList(), inSospeso.elenco(), "nessuna riga eliminazione_in_sospeso")
         assertEquals(emptyList(), dopoCommit, "nessun abbonato dopo-commit")
+        assertNotNull(incontri.trova(IncontroId("incontro-di-id-1")), "l'Incontro resta")
+    }
+
+    @Test
+    fun `INV-I1 il veto su un ultimo Parte lascia l Incontro e la Parte`() {
+        veto = Esito.Errore(ErroreDiProva.Fallito("ElaborazioneGiaAperta(id-1)"))
+
+        servizio.esegui(EliminaRegistrazione(id)).erroreAtteso<ErroreDiProva.Fallito>()
+
+        assertNotNull(registrazioni.trova(id))
+        assertNotNull(incontri.trova(IncontroId("incontro-di-id-1")))
+    }
+
+    @Test
+    fun `AC-I31 la Parte 2 di 3 pubblica incontroCessato falso e l Incontro con le altre Parti resta`() {
+        val incontro = IncontroId("incontro-di-id-1")
+        registrazioni.salva(unaRegistrazione(RegistrazioneId("id-1b"), "B", incontro))
+        registrazioni.salva(unaRegistrazione(RegistrazioneId("id-1c"), "C", incontro))
+
+        servizio.esegui(EliminaRegistrazione(RegistrazioneId("id-1b"))).atteso()
+
+        val evento = sincroni.single() as RegistrazioneEliminata
+        assertEquals(false, evento.incontroCessato)
+        assertEquals(incontro, evento.incontroId)
+        assertEquals(setOf(id, RegistrazioneId("id-1c")), incontri.partiDi(incontro).toSet())
+        assertNotNull(incontri.trova(incontro))
+        assertEquals(listOf("trova", "parti", "registra", "pubblica", "rimuovi"), passi)
+    }
+
+    @Test
+    fun `eliminare l ultima Parte con la riga Incontro gia sparita non fallisce`() {
+        // No Incontro row at all for this Parte: the explicit rimuovi is a no-op (SQL auto-deletes it with the Parte).
+        registrazioni.salva(unaRegistrazione(RegistrazioneId("id-3"), "Senza riga"))
+        servizio.esegui(EliminaRegistrazione(RegistrazioneId("id-3"))).atteso()
+
+        assertNull(registrazioni.trova(RegistrazioneId("id-3")))
     }
 
     @Test
@@ -153,10 +197,11 @@ class EliminaRegistrazioneServizioTest {
     private fun unaRegistrazione(
         registrazioneId: RegistrazioneId = id,
         titolo: String = "Seduta",
+        incontro: IncontroId = IncontroId("incontro-di-${registrazioneId.valore}"),
     ): Registrazione = Registrazione.aggiungi(
         id = registrazioneId,
         progettoId = progettoId,
-        incontroId = IncontroId("incontro-di-${registrazioneId.valore}"),
+        incontroId = incontro,
         titolo = titolo,
         riferimentoAudio = RiferimentoAudio("audio/${registrazioneId.valore}.m4a"),
         durataMs = 3_600_000,
@@ -189,6 +234,18 @@ class EliminaRegistrazioneServizioTest {
         override fun rimuovi(id: RegistrazioneId) {
             passi += "rimuovi"
             check(!elaborazioneAperta()) { "FOREIGN KEY constraint failed (elaborazione.registrazione_id)" }
+            delegata.rimuovi(id)
+        }
+    }
+
+    private class IncontriRegistrati(
+        private val delegata: IncontroRepository,
+        private val passi: MutableList<String>,
+    ) : IncontroRepository by delegata {
+        override fun partiDi(id: IncontroId) = delegata.partiDi(id).also { passi += "parti" }
+
+        override fun rimuovi(id: IncontroId) {
+            passi += "rimuoviIncontro"
             delegata.rimuovi(id)
         }
     }
