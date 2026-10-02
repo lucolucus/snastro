@@ -156,7 +156,6 @@ fun messaggioImportTuttoONiente(errore: ErroreDominio): String = when (errore) {
 
 /** AC-I66..I68: S2 per Incontro (ux-proposal § S2). The title is the first Parte's, derived — never a field. */
 fun titoloIncontro(titolo: String, numParti: Int): String = "$titolo · $numParti parti"
-fun etichettaParte(numero: Int): String = "Parte $numero"
 const val ETICHETTA_ESPANDI_PARTI: String = "Mostra le parti"
 const val ETICHETTA_COMPRIMI_PARTI: String = "Nascondi le parti"
 
