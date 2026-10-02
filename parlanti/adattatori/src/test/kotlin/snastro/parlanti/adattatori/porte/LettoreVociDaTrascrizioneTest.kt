@@ -129,6 +129,7 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
                 clock,
                 progetti,
                 registrazioniProgetto,
+                IncontroRepositoryFinta(registrazioniProgetto),
                 sonda,
                 archivio,
                 eventiProgetto,

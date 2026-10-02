@@ -8,6 +8,7 @@ import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.atteso
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.databaseInMemoria
+import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
@@ -54,6 +55,7 @@ class ComandiConEventiUnitaDiLavoroTest {
             orologio,
             progetti,
             registrazioni,
+            IncontroRepositorySql(db),
             SondaAudioFinta(leggibili = mapOf("/prova.wav" to InfoAudio(1_000, LocalDate.parse("2026-01-01")))),
             ArchivioAudioFinta().conSorgente("/prova.wav"),
             dispatcher,
@@ -85,6 +87,7 @@ class ComandiConEventiUnitaDiLavoroTest {
             orologio,
             progetti,
             registrazioni,
+            IncontroRepositorySql(db),
             SondaAudioFinta(leggibili = mapOf("/prova.wav" to InfoAudio(1_000, LocalDate.parse("2026-01-01")))),
             ArchivioAudioFinta().conSorgente("/prova.wav"),
             dispatcher,

@@ -120,6 +120,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 clock,
                 progetti,
                 registrazioniProgetto,
+                IncontroRepositoryFinta(registrazioniProgetto),
                 sonda,
                 archivio,
                 eventiProgetto,
