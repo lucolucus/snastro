@@ -34,6 +34,8 @@ import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
+import snastro.progetto.applicazione.comandi.Destinazione
+import snastro.progetto.applicazione.comandi.Destinazione.NuovoIncontro
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
@@ -222,12 +224,19 @@ internal class AmbienteProgetto(
     /** Imports the test source through the REAL AggiungiRegistrazione; returns the NEW Registrazione. */
     fun importa(): RegistrazioneId {
         val prima = collaboratori.registrazioni().map { it.registrazioneId }.toSet()
-        collaboratori.aggiungiRegistrazione(AggiungiRegistrazione(sorgente.toString())).atteso()
+        val comando = AggiungiRegistrazione(progetto.progettoId, listOf(sorgente.toString()), NuovoIncontro)
+        collaboratori.aggiungiRegistrazione(comando).atteso()
         val id = collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prima }
         incontroDi(id) // remembered for voce(), and for a test reading rows after the deletion
         rendiLeggibile(id)
         return id
     }
+
+    /** Imports the test source through the REAL AggiungiRegistrazione to [destinazione]; the raw outcome. */
+    fun importaIn(destinazione: Destinazione): Esito<Unit> =
+        collaboratori.aggiungiRegistrazione(
+            AggiungiRegistrazione(progetto.progettoId, listOf(sorgente.toString()), destinazione),
+        )
 
     /** Makes [id]'s copied audio decodable by the fake decoder — also a Registrazione imported by another session. */
     fun rendiLeggibile(id: RegistrazioneId) {

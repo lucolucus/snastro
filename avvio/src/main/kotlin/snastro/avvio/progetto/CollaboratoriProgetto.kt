@@ -6,6 +6,7 @@ import snastro.avvio.sbobinatura.CollaboratoriSbobinatura
 import snastro.avvio.sintesi.CollaboratoriSintesi
 import snastro.avvio.trascrizione.CollaboratoriTrascrizione
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
@@ -27,6 +28,7 @@ import snastro.ui.lettore.LettoreAudio
  */
 @Suppress("LongParameterList") // one parameter per collaborator of the open project's presenters
 internal class CollaboratoriProgetto(
+    val progettoId: ProgettoId,
     val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
     val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,

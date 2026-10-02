@@ -70,6 +70,7 @@ internal fun costruisciRegistrazioniPresenter(
 ): RegistrazioniPresenter = RegistrazioniPresenter(
     scope = collaboratori.scope,
     io = grafo.io,
+    progettoId = collaboratori.progettoId,
     registrazioni = collaboratori.registrazioni,
     aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
     modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,

@@ -43,6 +43,7 @@ fun messaggioPer(errore: ErroreApplicazioneProgetto): String = when (errore) {
     is ErroreApplicazioneProgetto.AudioNonLeggibile -> "Il file audio non può essere letto."
     is ErroreApplicazioneProgetto.FormatoNonSupportato -> "Il formato del file audio non è supportato."
     is ErroreApplicazioneProgetto.CopiaFallita -> "La copia del file nel progetto non è riuscita."
+    is ErroreApplicazioneProgetto.IncontroNonTrovato -> "Incontro non trovato."
 }
 
 fun messaggioPer(errore: ErroreProgetto): String = when (errore) {
@@ -74,6 +75,8 @@ fun messaggioPer(errore: ErroreTrascrizione): String = when (errore) {
     is ErroreTrascrizione.DivisioneNonAmmessa -> "La selezione non può essere divisa in una nuova voce."
     is ErroreTrascrizione.RiassegnazioneNonAmmessa -> "Questo segmento non può essere riassegnato a questa voce."
     is ErroreTrascrizione.NumeroPersoneFuoriIntervallo -> MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
+    is ErroreTrascrizione.IncontroNonTrovato -> "Incontro non trovato."
+    is ErroreTrascrizione.NessunaParteDaTrascrivere -> "Tutte le parti sono già trascritte o in corso."
     is ErroreTrascrizione.TrascrittoCambiato -> "La trascrizione è cambiata dopo il confronto: ricalcola l'anteprima"
 }
 

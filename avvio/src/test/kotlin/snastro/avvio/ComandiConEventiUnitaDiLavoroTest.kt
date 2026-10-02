@@ -15,6 +15,7 @@ import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
 import snastro.progetto.applicazione.comandi.CreaProgetto
 import snastro.progetto.applicazione.comandi.CreaProgettoServizio
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.porte.ArchivioAudioFinta
 import snastro.progetto.applicazione.porte.InfoAudio
@@ -45,6 +46,7 @@ class ComandiConEventiUnitaDiLavoroTest {
         val registrazioni = RegistrazioneRepositorySql(db)
         CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
             .esegui(CreaProgetto("Prova")).atteso()
+        val progettoId = checkNotNull(progetti.trova()).id
 
         val ricevuti = mutableListOf<EventoPubblicato>()
         dispatcher.registraDopoCommit { ricevuti += it }
@@ -61,7 +63,8 @@ class ComandiConEventiUnitaDiLavoroTest {
             dispatcher,
         )
 
-        servizio.esegui(AggiungiRegistrazione("/prova.wav")).atteso()
+        val comando = AggiungiRegistrazione(progettoId, listOf("/prova.wav"), Destinazione.NuovoIncontro)
+        servizio.esegui(comando).atteso()
 
         val messaggio = "l'abbonato dopo-commit deve ricevere RegistrazioneAggiunta"
         assertTrue(ricevuti.any { it is RegistrazioneAggiunta }, messaggio)
@@ -76,6 +79,7 @@ class ComandiConEventiUnitaDiLavoroTest {
         val registrazioni = RegistrazioneRepositorySql(db)
         CreaProgettoServizio(dispatcher.unitaDiLavoro, generatoreId, progetti, dispatcher)
             .esegui(CreaProgetto("Prova")).atteso()
+        val progettoId = checkNotNull(progetti.trova()).id
 
         dispatcher.registraSincrono { Esito.Errore(ErroreDiProva.Fallito("mai")) }
         val ricevuti = mutableListOf<EventoPubblicato>()
@@ -93,7 +97,8 @@ class ComandiConEventiUnitaDiLavoroTest {
             dispatcher,
         )
 
-        val esito = servizio.esegui(AggiungiRegistrazione("/prova.wav"))
+        val comando = AggiungiRegistrazione(progettoId, listOf("/prova.wav"), Destinazione.NuovoIncontro)
+        val esito = servizio.esegui(comando)
 
         assertTrue(esito is Esito.Errore, "il comando deve fallire (annullato dall'abbonato sincrono)")
         assertTrue(ricevuti.isEmpty(), "nessun evento deve raggiungere l'abbonato dopo-commit dopo un rollback")

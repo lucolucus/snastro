@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
+import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
@@ -52,6 +53,7 @@ class RegistrazioniPresenterAggiornamentoTest {
         return RegistrazioniPresenter(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
+            progettoId = ProgettoId("progetto-1"),
             registrazioni = registrazioni,
             aggiungiRegistrazione = aggiungi,
             modificaDataRegistrazione = { error("modificaData non atteso in questo test") },
@@ -112,7 +114,7 @@ class RegistrazioniPresenterAggiornamentoTest {
         val presenter = presentatore(
             this,
             registrazioni = { listOf(rigaVista(REG_1)) },
-            aggiungi = { Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(it.percorsoSorgente)) },
+            aggiungi = { Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(it.file.single())) },
             aggiornamenti = aggiornamenti,
         )
         advanceUntilIdle()

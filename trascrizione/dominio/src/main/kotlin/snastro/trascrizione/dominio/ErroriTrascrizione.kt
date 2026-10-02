@@ -2,6 +2,7 @@ package snastro.trascrizione.dominio
 
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.ErroreDominio
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -70,4 +71,10 @@ public sealed interface ErroreTrascrizione : ErroreDominio {
      * is missing, moved, re-timed or confermato, or a destination Voce is gone). Nothing was applied.
      */
     public data class TrascrittoCambiato(val registrazioneId: RegistrazioneId) : ErroreTrascrizione
+
+    /** ADR 0039: the Incontro [incontroId] is unknown to the supplier of the Parti. */
+    public data class IncontroNonTrovato(val incontroId: IncontroId) : ErroreTrascrizione
+
+    /** ADR 0039: every Parte of [incontroId] already has a Trascritto or an open Elaborazione; nothing to queue. */
+    public data class NessunaParteDaTrascrivere(val incontroId: IncontroId) : ErroreTrascrizione
 }
