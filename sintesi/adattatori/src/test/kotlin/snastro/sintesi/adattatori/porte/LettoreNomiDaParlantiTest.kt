@@ -146,7 +146,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 dataRegistrazione = LocalDate.of(2026, 9, 23),
                 durataMs = DURATA_REGISTRAZIONE_MS,
             )
-            vociViste[unIncontroDi(id)] = refs.map { ref ->
+            vociViste[incontroId] = refs.map { ref ->
                 val inizio = (ref.voceId.numero - 1) * 2_000L
                 VoceVista(ref, mapOf(id to listOf(IntervalloMs(inizio, inizio + 1_000L))))
             }
