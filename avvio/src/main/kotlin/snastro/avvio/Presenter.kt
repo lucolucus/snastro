@@ -108,7 +108,7 @@ internal fun costruisciRegistrazionePresenter(
 ): RegistrazionePresenter {
     val trascrizione = collaboratori.trascrizione
     val parlanti = collaboratori.parlanti
-    val riassunto = costruisciRiassuntoPresenter(grafo, collaboratori, id, scope)
+    val riassunto = costruisciRiassuntoPresenter(grafo, collaboratori, id, scope, vaiAllaParte)
     return RegistrazionePresenter(
         scope = scope,
         io = grafo.io,
@@ -164,6 +164,7 @@ internal fun costruisciRiassuntoPresenter(
     collaboratori: CollaboratoriProgetto,
     id: RegistrazioneId,
     scope: CoroutineScope,
+    vaiAllaParte: (RegistrazioneId) -> Unit,
 ): RiassuntoPresenter = RiassuntoPresenter(
     scope = scope,
     io = grafo.io,
@@ -179,9 +180,7 @@ internal fun costruisciRiassuntoPresenter(
     idModelloLinguistico = ID_MODELLO_LINGUISTICO,
     dimensioneModelloLinguisticoByte = DIMENSIONE_MODELLO_LINGUISTICO_BYTE,
     limiteCaratteriArgomento = Argomento.MASSIMO_CARATTERI,
-    // TRANSITION (D-0037): the Parte switch is `schermata-parte`'s (it owns the page and keeps the tab);
-    // until it lands there is one Parte per page, so a chip only plays.
-    vaiAllaParte = {},
+    vaiAllaParte = vaiAllaParte,
     riproduciDa = collaboratori.lettoreAudio::riproduciDa,
 )
 
