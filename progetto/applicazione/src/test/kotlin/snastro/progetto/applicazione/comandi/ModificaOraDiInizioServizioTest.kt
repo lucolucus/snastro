@@ -110,13 +110,10 @@ class ModificaOraDiInizioServizioTest {
     }
 
     @Test
-    fun `un'ora non valida e' rifiutata da OraDiInizio_di prima del comando e non scrive nulla`() {
-        listOf("24:00:00", "12:60:00", "").forEach {
+    fun `un'ora non valida non diventa un comando - OraDiInizio_di la rifiuta, stretta HH_mm_ss`() {
+        listOf("24:00:00", "12:60:00", "", " 09:05:00", "9:05:00").forEach {
             OraDiInizio.di(it).erroreAtteso<ErroreProgetto.OraDiInizioNonValida>()
         }
         OraDiInizio.di(LocalTime.of(10, 25, 0, 1)).erroreAtteso<ErroreProgetto.OraDiInizioNonValida>()
-
-        assertNull(assertNotNull(registrazioni.trova(id)).oraDiInizio)
-        assertEquals(emptyList(), eventi.pubblicati)
     }
 }

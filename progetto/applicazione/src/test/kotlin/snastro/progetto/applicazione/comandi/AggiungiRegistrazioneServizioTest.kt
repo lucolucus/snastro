@@ -10,6 +10,7 @@ import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
+import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.UnitaDiLavoroFinta
 import snastro.kernel.atteso
 import snastro.kernel.erroreAtteso
@@ -25,6 +26,8 @@ import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
 import snastro.progetto.dominio.Incontro
 import snastro.progetto.dominio.NomeProgetto
+import snastro.progetto.dominio.OrdineDelleParti
+import snastro.progetto.dominio.ParteDaOrdinare
 import snastro.progetto.dominio.Progetto
 import snastro.progetto.dominio.Registrazione
 import java.time.Clock
@@ -308,6 +311,52 @@ class AggiungiRegistrazioneServizioTest {
         val salvate = registrazioni.delProgetto(progettoId)
         assertEquals(2, salvate.size, "il commit e' avvenuto prima dell'abbonato")
         assertEquals(salvate.map { it.riferimentoAudio }.toSet(), archivio.archiviati)
+    }
+
+    @Test
+    fun `AC-60 commit fallito e controllo delle righe fallito, resta l eccezione originale e l audio`() {
+        leggibili(A, B)
+        val commitGuasto = object : UnitaDiLavoro {
+            override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> =
+                eventi.unitaDiLavoro.inTransazione {
+                    blocco()
+                    throw GuastoDiProva() // the block ran, then COMMIT fails
+                }
+        }
+        val trovaGuasta = object : RegistrazioneRepository by registrazioni {
+            override fun trova(id: RegistrazioneId): Registrazione? = error("disco non leggibile")
+        }
+        val servizioGuasto = AggiungiRegistrazioneServizio(
+            commitGuasto, generatoreId, clock, progetti, trovaGuasta, incontri, sonda, archivio, eventi,
+        )
+
+        val originale = assertFailsWith<GuastoDiProva> { servizioGuasto.esegui(comando(A, B)) }
+
+        assertEquals("disco non leggibile", originale.suppressed.single().message)
+
+        assertEquals(emptyList(), registrazioni.delProgetto(progettoId), "rollback")
+        assertEquals(2, archivio.archiviati.size, "senza sapere se il commit c'e' stato, l'audio non si scarta")
+    }
+
+    @Test
+    fun `INV-I2 le Parti di un import con stessa data e senza ora seguono l ordine di selezione, non gli id`() {
+        leggibili(A, B, C)
+        var n = 10
+        val idDecrescenti = object : GeneratoreId {
+            override fun nuovo(): String = "id-${--n}" // id-9, id-8, ...: the id order is the reverse of the selection
+        }
+        val servizioOrdinato = AggiungiRegistrazioneServizio(
+            eventi.unitaDiLavoro, idDecrescenti, clock, progetti, registrazioni, incontri, sonda, archivio, eventi,
+        )
+
+        servizioOrdinato.esegui(comando(C, A, B)).atteso()
+
+        val parti = registrazioni.delProgetto(progettoId)
+        val ordinate = OrdineDelleParti.ordina(
+            parti.map { ParteDaOrdinare(it.id, it.dataRegistrazione, it.oraDiInizio, it.aggiuntaAlle) },
+        )
+        val titoli = parti.associate { it.id to it.titolo }
+        assertEquals(listOf("c", "a", "b"), ordinate.map { titoli.getValue(it.registrazioneId) })
     }
 
     @Test
