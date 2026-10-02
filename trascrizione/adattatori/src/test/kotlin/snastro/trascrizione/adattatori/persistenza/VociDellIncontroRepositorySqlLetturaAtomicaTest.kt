@@ -87,7 +87,7 @@ class VociDellIncontroRepositorySqlLetturaAtomicaTest {
      * ADR 0029 §5, AC-C28: called OUTSIDE any unit of work, [VociDellIncontroRepositorySql.trova] opens the outermost
      * `BEGIN DEFERRED` read (rule 1) — it never queues behind a writer's uncommitted `BEGIN IMMEDIATE`, unlike the
      * raw `db.transactionWithResult` it replaced (D-0008/CR-3b). The writer takes the write lock BEFORE the reader
-     * starts (latch-driven, no sleep): the OLD `VociDellIncontroRepositorySql.trova` (a plain `transactionWithResult`,
+     * starts (latch-driven, no sleep): the OLD `TrascrittoRepositorySql.trova` (a plain `transactionWithResult`,
      * itself `BEGIN IMMEDIATE`) would queue behind it up to `busy_timeout` (5 s) or throw `SQLITE_BUSY`; this
      * discriminates because [VociDellIncontroRepositorySqlLetturaAtomicaTest]'s own AC-C31 case (reader parked FIRST,
      * writer committing after) passes even with that old, IMMEDIATE `trova` — a throwaway revert to a raw

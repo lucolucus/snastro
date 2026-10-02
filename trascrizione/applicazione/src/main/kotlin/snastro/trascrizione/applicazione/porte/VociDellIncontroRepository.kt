@@ -30,7 +30,7 @@ public interface VociDellIncontroRepository {
 
     /**
      * Every Registrazione that has a Trascritto, each once, in no guaranteed order. Carried over from the retired
-     * `VociDellIncontroRepository` so `VociDelTrascritto.registrazioniConTrascritto()` stays unchanged (ADR 0033 §4).
+     * `TrascrittoRepository` so `VociDelTrascritto.registrazioniConTrascritto()` stays unchanged (ADR 0033 §4).
      */
     public fun conTrascritto(): List<RegistrazioneId>
 }
