@@ -94,10 +94,11 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         private val clock = Clock.fixed(Instant.parse("2026-10-01T10:00:00Z"), ZoneOffset.UTC)
         private val progetti = ProgettoRepositoryFinta()
         private val registrazioniProgetto = RegistrazioneRepositoryFinta()
+        private val incontriProgetto = IncontroRepositoryFinta(registrazioniProgetto)
         private val eventiProgetto = DispatcherEventiFinta(UnitaDiLavoroFinta(registrazioniProgetto, progetti))
         private val archivio = ArchivioAudioFinta()
         private val catalogo =
-            CatalogoRegistrazioni(registrazioniProgetto, IncontroRepositoryFinta(registrazioniProgetto))
+            CatalogoRegistrazioni(registrazioniProgetto, incontriProgetto)
         private var contatore = 0
 
         init {
@@ -167,6 +168,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 clock,
                 progetti,
                 registrazioniProgetto,
+                incontriProgetto,
                 sonda,
                 archivio,
                 eventiProgetto,
