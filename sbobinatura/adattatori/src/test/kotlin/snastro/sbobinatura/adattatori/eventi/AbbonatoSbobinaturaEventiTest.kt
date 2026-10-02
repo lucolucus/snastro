@@ -31,6 +31,7 @@ import snastro.parlanti.applicazione.eventi.ParlanteEliminato
 import snastro.parlanti.applicazione.eventi.ParlantePromosso
 import snastro.parlanti.applicazione.eventi.ParlanteRinominato
 import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
+import snastro.progetto.applicazione.eventi.OraDiInizioModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
 import snastro.sbobinatura.applicazione.politiche.RigenerazioneSbobinaturaPolitica
 import snastro.sbobinatura.applicazione.porte.LettoreNomiFinta
@@ -50,6 +51,7 @@ import snastro.trascrizione.applicazione.eventi.VoceDivisa
 import snastro.trascrizione.applicazione.eventi.VociUnite
 import java.io.IOException
 import java.time.LocalDate
+import java.time.LocalTime
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -91,7 +93,14 @@ class AbbonatoSbobinaturaEventiTest {
 
         init {
             val scope = CoroutineScope(StandardTestDispatcher(scheduler))
-            abbonaSbobinatura(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
+            abbonaSbobinatura(
+                dispatcher,
+                politica,
+                lettore::registrazioniConTrascritto,
+                scope,
+                segnalazioni,
+                lettore::partiConTrascritto,
+            )
         }
 
         fun commit(evento: EventoPubblicato) {
@@ -344,6 +353,174 @@ class AbbonatoSbobinaturaEventiTest {
         assertEquals(
             listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Uno.md")),
             ambiente.operazioni().drop(primaDelRename),
+        )
+    }
+
+    // --- AC-I35 (Incontro fan-out, ADR 0035 §7) ----------------------------------------------------
+
+    @Test
+    fun `AC-I35 VociUnite rigenera ogni Parte trascritta dell Incontro e nessuna di un altro`() = runTest {
+        assertRigeneraSoloLeParti(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+    }
+
+    @Test
+    fun `AC-I35 VoceDivisa rigenera ogni Parte dell Incontro e nessuna di un altro`() = runTest {
+        assertRigeneraSoloLeParti(
+            VoceDivisa(
+                INCONTRO_I,
+                origine = VoceId(1),
+                nuova = VoceId(5),
+                spostati = listOf(SegmentoRef(PARTE_B, SegmentoId(2))),
+            ),
+        )
+    }
+
+    @Test
+    fun `AC-I35 AttribuzioneConfermata rigenera ogni Parte dell Incontro e nessuna di un altro`() = runTest {
+        assertRigeneraSoloLeParti(
+            AttribuzioneConfermata(VoceRef(INCONTRO_I, VoceId(1)), PARLANTE, precedente = null),
+        )
+    }
+
+    private suspend fun TestScope.assertRigeneraSoloLeParti(evento: EventoPubblicato) {
+        val altra = RegistrazioneId("altra-incontro")
+        val ambiente = ambienteDueParti(altre = mapOf(altra to unTrascritto(altra, titolo = "Altra")))
+        advanceUntilIdle()
+        val prima = ambiente.operazioni().size
+
+        ambiente.commit(evento)
+        advanceUntilIdle()
+
+        assertEquals(
+            setOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
+            ambiente.operazioni().drop(prima).map { (it as ScrittoreSbobinaturaFinta.Operazione.Scritto).nomeFile }
+                .toSet(),
+        )
+    }
+
+    @Test
+    fun `AC-I35 una Parte dell Incontro senza Trascritto non viene scritta`() = runTest {
+        val ambiente = ambienteDueParti(parteBTrascritta = false)
+        advanceUntilIdle()
+        val prima = ambiente.operazioni().size
+
+        ambiente.commit(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte A.md")),
+            ambiente.operazioni().drop(prima),
+        )
+    }
+
+    @Test
+    fun `AC-I35 ElaborazioneCompletata di B rigenera solo B`() = runTest {
+        val ambiente = ambienteDueParti()
+        advanceUntilIdle()
+        val prima = ambiente.operazioni().size
+
+        ambiente.commit(ElaborazioneCompletata(PARTE_B, INCONTRO_I))
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte B.md")),
+            ambiente.operazioni().drop(prima),
+        )
+    }
+
+    @Test
+    fun `AC-I35 DataRegistrazioneModificata di B rigenera solo B`() = runTest {
+        val ambiente = ambienteDueParti()
+        advanceUntilIdle()
+        val prima = ambiente.operazioni().size
+
+        ambiente.commit(
+            DataRegistrazioneModificata(PARTE_B, LocalDate.of(2026, 9, 12), LocalDate.of(2026, 9, 12), INCONTRO_I),
+        )
+        advanceUntilIdle()
+
+        assertEquals(
+            listOf(ScrittoreSbobinaturaFinta.Operazione.Scritto("2026-09-12 Parte B.md")),
+            ambiente.operazioni().drop(prima),
+        )
+    }
+
+    @Test
+    fun `AC-I35 OraDiInizioModificata non rigenera nulla`() = runTest {
+        val ambiente = ambienteDueParti()
+        advanceUntilIdle()
+        val prima = ambiente.operazioni().size
+
+        ambiente.commit(OraDiInizioModificata(PARTE_B, INCONTRO_I, precedente = null, nuova = LocalTime.of(9, 30)))
+        advanceUntilIdle()
+
+        assertEquals(emptyList(), ambiente.operazioni().drop(prima))
+    }
+
+    @Test
+    fun `AC-I35 il rename di un Parlante rigenera ogni Parte di ogni Incontro in incontriCon`() = runTest {
+        val altra = RegistrazioneId("altra")
+        val ambiente = ambienteDueParti(
+            altre = mapOf(altra to unTrascritto(altra, titolo = "Altra")),
+        )
+        advanceUntilIdle()
+        val prima = ambiente.operazioni().size
+
+        ambiente.commit(ParlanteRinominato(PARLANTE, "Marco Rossi"))
+        advanceUntilIdle()
+
+        assertEquals(
+            setOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
+            ambiente.operazioni().drop(prima).map { (it as ScrittoreSbobinaturaFinta.Operazione.Scritto).nomeFile }
+                .toSet(),
+        )
+    }
+
+    @Test
+    fun `INV-23 rigenerare una Parte non toccata scrive byte-identico`() = runTest {
+        val ambiente = ambienteDueParti()
+        advanceUntilIdle()
+        val prima = ambiente.sbobinature()
+
+        ambiente.commit(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
+        advanceUntilIdle()
+
+        assertEquals(prima, ambiente.sbobinature())
+    }
+
+    @Test
+    fun `INV-24 la Sbobinatura della Parte 2 rende il Nome dell Incontro e Voce n per le non attribuite`() = runTest {
+        val ambiente = ambienteDueParti()
+        advanceUntilIdle()
+
+        val parteB = ambiente.sbobinature().getValue("2026-09-12 Parte B.md")
+
+        assertTrue(parteB.contains("**Marco Rossi** (0:00): Ciao."))
+        assertTrue(parteB.contains("**Voce 4** (0:02): Altro."))
+    }
+
+    private fun TestScope.ambienteDueParti(
+        parteBTrascritta: Boolean = true,
+        altre: Map<RegistrazioneId, TrascrittoTesto> = emptyMap(),
+    ): Ambiente {
+        val parteB = unTrascritto(PARTE_B, titolo = "Parte B", incontro = INCONTRO_I).copy(
+            segmenti = listOf(
+                SegmentoVista(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "Ciao."),
+                SegmentoVista(SegmentoId(2), VoceId(4), IntervalloMs(2_000, 3_000), "Altro."),
+            ),
+        )
+        val trascritti = buildMap {
+            put(PARTE_A, unTrascritto(PARTE_A, titolo = "Parte A", incontro = INCONTRO_I))
+            if (parteBTrascritta) put(PARTE_B, parteB)
+            putAll(altre)
+        }
+        return Ambiente(
+            testScheduler,
+            trascritti,
+            LettoreNomiFinta(
+                mapOf(VoceRef(INCONTRO_I, VoceId(1)) to PARLANTE),
+                mapOf(PARLANTE to "Marco Rossi"),
+            ),
         )
     }
 
@@ -844,15 +1021,19 @@ class AbbonatoSbobinaturaEventiTest {
 
     private companion object {
         val REG_1 = RegistrazioneId("reg-1")
+        val PARTE_A = RegistrazioneId("parte-a")
+        val PARTE_B = RegistrazioneId("parte-b")
+        val INCONTRO_I = IncontroId("incontro-i")
         val PARLANTE = ParlanteId("parlante-1")
 
         fun unTrascritto(
             id: RegistrazioneId,
             titolo: String = "Riunione",
             data: LocalDate = LocalDate.of(2026, 9, 12),
+            incontro: IncontroId = unIncontroDi(id),
         ) = TrascrittoTesto(
             registrazioneId = id,
-            incontroId = unIncontroDi(id),
+            incontroId = incontro,
             titolo = titolo,
             dataRegistrazione = data,
             segmenti = listOf(SegmentoVista(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "Ciao.")),

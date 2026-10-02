@@ -1,6 +1,7 @@
 package snastro.sbobinatura.applicazione.letture
 
 import org.junit.jupiter.api.Test
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -94,6 +95,54 @@ class SbobinaturaTest {
 
         assertTrue(vista.markdown.contains("**Voce 5** (0:00): Ciao."))
         assertFalse(vista.markdown.contains("Anna Bianchi"))
+    }
+
+    @Test
+    fun `INV-24 un Incontro di una sola Parte rende byte-identico al golden file di oggi`() {
+        val trascritto = unTrascritto(
+            titolo = "Riunione di prova",
+            data = LocalDate.of(2026, 9, 12),
+            segmenti = listOf(
+                unSegmento(1, 1, 0, 3_000, "Buongiorno a tutti."),
+                unSegmento(2, 2, 65_000, 70_000, "Good morning, ciao."),
+                unSegmento(3, 1, 3_723_000, 3_730_000, "Chiudiamo qui."),
+            ),
+        )
+        val nomi = mapOf(VoceRef(unIncontroDi(REGISTRAZIONE), VoceId(1)) to "Marco")
+
+        // Golden: the exact bytes today's single-Parte Sbobinatura has (ADR 0010; never read back from disk).
+        val atteso = "# Riunione di prova\n\nRegistrata il 12/09/2026\n\n" +
+            "**Marco** (0:00): Buongiorno a tutti.\n\n" +
+            "**Voce 2** (1:05): Good morning, ciao.\n\n" +
+            "**Marco** (62:03): Chiudiamo qui.\n\n"
+
+        assertContentEquals(
+            atteso.toByteArray(Charsets.UTF_8),
+            Sbobinatura.proietta(trascritto, nomi).markdown.toByteArray(Charsets.UTF_8),
+        )
+    }
+
+    @Test
+    fun `INV-24 la Sbobinatura della Parte 2 rende il Nome dell Incontro e Voce 4 per la non attribuita`() {
+        val parte2 = RegistrazioneId("parte-2")
+        val incontro = IncontroId("incontro-multi")
+        val trascritto = TrascrittoTesto(
+            parte2,
+            incontro,
+            "Seconda parte",
+            LocalDate.of(2026, 9, 12),
+            listOf(unSegmento(1, 1, 0, 1_000, "Ciao."), unSegmento(2, 4, 2_000, 3_000, "Altro.")),
+        )
+        val nomi = mapOf(
+            VoceRef(incontro, VoceId(1)) to "Anna Bianchi",
+            VoceRef(unIncontroDi(parte2), VoceId(4)) to "Altro incontro",
+        )
+
+        val markdown = Sbobinatura.proietta(trascritto, nomi).markdown
+
+        assertTrue(markdown.contains("**Anna Bianchi** (0:00): Ciao."))
+        assertTrue(markdown.contains("**Voce 4** (0:02): Altro."))
+        assertFalse(markdown.contains("Altro incontro"))
     }
 
     @Test
