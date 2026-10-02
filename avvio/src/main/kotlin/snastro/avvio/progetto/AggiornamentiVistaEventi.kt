@@ -10,8 +10,11 @@ import snastro.progetto.applicazione.eventi.DataRegistrazioneModificata
 import snastro.progetto.applicazione.eventi.OraDiInizioModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.supporto.catturaNonFatale
 import snastro.ui.AggiornamentiVista
 import snastro.ui.Cambiamento
+import java.util.logging.Level
+import java.util.logging.Logger
 
 /**
  * [AggiornamentiVista] fed by `RegistrazioneAggiunta`/`DataRegistrazioneModificata`/`OraDiInizioModificata`/
@@ -21,12 +24,14 @@ import snastro.ui.Cambiamento
  * is removed, not deferred — ADR 0014). `replay = 1`: a collector that starts AFTER a [Cambiamento] already fired
  * (a screen mounted between the commit and its own `init`) still sees it once and refreshes — never stuck showing a
  * stale list.
+ * The buffer is unbounded (L208): one k-file import into an n-Parte Incontro emits up to k*(n+k) Cambiamenti, and a
+ * `tryEmit` past a bounded buffer would DROP a refresh silently while a screen reloads; a Cambiamento is two words.
  */
 internal class AggiornamentiVistaEventi(
     /** ADR 0033 §4.1: the Parti of an Incontro (each may have its S3 open), `null` once it ceased. */
     private val partiDi: (IncontroId) -> List<RegistrazioneId>?,
 ) : AggiornamentiVista, AbbonatoDopoCommit {
-    private val _cambiamenti = MutableSharedFlow<Cambiamento>(replay = 1, extraBufferCapacity = EXTRA_BUFFER)
+    private val _cambiamenti = MutableSharedFlow<Cambiamento>(replay = 1, extraBufferCapacity = Int.MAX_VALUE)
     override val cambiamenti = _cambiamenti.asSharedFlow()
 
     override fun ricevi(evento: EventoPubblicato) {
@@ -46,10 +51,17 @@ internal class AggiornamentiVistaEventi(
         else -> emptyList()
     }
 
-    private fun conParti(id: RegistrazioneId, incontroId: IncontroId): List<RegistrazioneId> =
-        (listOf(id) + partiDi(incontroId).orEmpty()).distinct()
+    /** A failed read of the Parti (after the commit: nothing to undo) still refreshes the event's own Registrazione. */
+    private fun conParti(id: RegistrazioneId, incontroId: IncontroId): List<RegistrazioneId> {
+        // ADR 0003: a SQL fault, logged, never rethrown out of the after-commit delivery.
+        val parti = catturaNonFatale { partiDi(incontroId).orEmpty() }.getOrElse { e ->
+            log.log(Level.WARNING, "Parti di $incontroId non lette: rinfresco solo $id", e)
+            emptyList()
+        }
+        return (listOf(id) + parti).distinct()
+    }
 
     private companion object {
-        const val EXTRA_BUFFER = 8
+        val log: Logger = Logger.getLogger(AggiornamentiVistaEventi::class.java.name)
     }
 }

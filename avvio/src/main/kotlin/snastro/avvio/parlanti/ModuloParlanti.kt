@@ -224,6 +224,7 @@ internal class ModuloParlanti(
                 scopeProgetto,
                 app.io,
                 clock,
+                uow,
                 piano::calcola,
                 trascrizione.riassegnaSegmenti,
             ),

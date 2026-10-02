@@ -9,10 +9,12 @@ import snastro.avvio.parlanti.ModuloParlanti
 import snastro.avvio.progetto.AmbienteProgetto
 import snastro.avvio.progetto.EstrattoreConMutex
 import snastro.avvio.progetto.SondaCostruzioni
+import snastro.avvio.progetto.causaRadice
+import snastro.avvio.progetto.eliminaSenza
+import snastro.avvio.progetto.fallitaAlCommit
 import snastro.avvio.progetto.parteDi
 import snastro.avvio.progetto.voce
 import snastro.avvio.trascrizione.ModuloTrascrizione
-import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.ElaborazioneId
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
@@ -24,7 +26,6 @@ import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
-import snastro.progetto.applicazione.comandi.EliminaRegistrazioneServizio
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
 import snastro.sintesi.applicazione.eventi.RiassuntoAvviato
@@ -232,26 +233,13 @@ class ComposizioneSintesiTest {
             r.conCompletamento(BOZZA, unaStruttura(1 to 1, 2 to 2), parte = a)
             it.porte.unitaDiLavoro.inTransazione { repo.concludi(r).poiUnit() }.atteso()
             val figli = conteggiFigli(db, r.id)
-            // ADR 0024 §1 "fails closed": the declared list MINUS Sintesi (the same subscriber values the modules
-            // expose), on a dispatcher of its own over the same database — the `riassunto` IMMEDIATE FK refuses.
-            val senzaSintesi = DispatcherEventiInMemoria(UnitaDiLavoroSql(db))
-            it.composto.ordineSincroni.filterNot { m -> m is ModuloSintesi }.flatMap { m -> m.abbonatiSincroni() }
-                .forEach { ab ->
-                    senzaSintesi.registraSincrono { e ->
-                        if (ab.evento.isInstance(e)) ab.abbonato.ricevi(e) else Esito.Ok(Unit)
-                    }
-                }
-            val elimina = EliminaRegistrazioneServizio(
-                senzaSintesi.unitaDiLavoro,
-                it.porte.registrazioni,
-                it.porte.incontri,
-                it.porte.eliminazioniInSospeso,
-                senzaSintesi,
-            )
+            // ADR 0024 §1 "fails closed": a SECOND self-consistent composition of the same database holding every
+            // synchronous subscriber but Sintesi's (as AC-I86) — the `riassunto` IMMEDIATE FK refuses the DELETE.
+            val esito = runCatching { eliminaSenza(it, "AbbonatoProgettoSintesi", a) }
 
-            val esito = runCatching { elimina.esegui(EliminaRegistrazione(a)) }
-
-            assertFalse(esito.getOrNull() is Esito.Ok, "l'eliminazione non riesce: $esito")
+            val errore = assertNotNull(esito.exceptionOrNull(), "l'eliminazione e' riuscita: $esito")
+            assertEquals("SQLiteException", causaRadice(errore)::class.simpleName, "$errore")
+            assertFalse(fallitaAlCommit(errore), "l'FK di riassunto e' immediata: fallisce lo statement, non il COMMIT")
             assertTrue(it.collaboratori.registrazioni().any { x -> x.registrazioneId == a })
             assertTrue(repo.trova(it.incontroDi(a)).single().pronto)
             assertEquals(figli, conteggiFigli(db, r.id))
