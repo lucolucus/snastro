@@ -22,14 +22,3 @@ public data class ParteSintesi(val registrazioneId: RegistrazioneId, val numero:
         require(numero >= 1) { "numero della parte da 1: $numero" }
     }
 }
-
-/**
- * The one Parte of [incontroId], `null` when the Incontro is unknown or ceased. TRANSITION (ADR 0033 §6, D-0033): the
- * Sintesi callers read one Parte until riassumi-, esegui-riassunto- and riassunto-vista-incontro read them all; a
- * second Parte here is a programmer error, never silently ignored.
- */
-internal fun LettoreIncontro.parteUnica(incontroId: IncontroId): RegistrazioneId? =
-    parti(incontroId)?.let { parti ->
-        check(parti.size == 1) { "Incontro $incontroId con ${parti.size} Parti: letture multi-Parte dei wave 5/6" }
-        parti.single().registrazioneId
-    }

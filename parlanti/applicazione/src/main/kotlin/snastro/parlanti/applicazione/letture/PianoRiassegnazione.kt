@@ -1,10 +1,11 @@
 package snastro.parlanti.applicazione.letture
 
 import snastro.kernel.Esito
+import snastro.kernel.IncontroId
 import snastro.kernel.IntervalloMs
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
+import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
 import snastro.parlanti.applicazione.porte.ClassificatoreSomiglianza
@@ -15,8 +16,6 @@ import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.LettoreVoci
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 import snastro.parlanti.applicazione.porte.SegmentoDiVoce
-import snastro.parlanti.applicazione.porte.segmentiDellaParte
-import snastro.parlanti.applicazione.porte.vociDellaParte
 import snastro.parlanti.dominio.DURATA_MINIMA_SEGMENTO_MS
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
@@ -25,7 +24,7 @@ import snastro.parlanti.dominio.SorgenteImpronta
 /**
  * Read-model `piano-per-somiglianza` ([INV-27], ADR 0019 §4.1-4.4, §4.7-4.8 + Amendment 2026-09-24
  * (b).1): the plan of "Riassegna per somiglianza" — computed, never stored, never writes. It:
- * 1. derives, per `attivo` Parlante attributed in the Registrazione, its REFERENCE set ("frasi
+ * 1. derives, per `attivo` Parlante attributed in the Incontro, its REFERENCE set ("frasi
  *    confermate" — its `confermato` Segmenti >= 1 000 ms — if it has any, else "intera Voce" — every
  *    Segmento >= 1 000 ms on its Voci, ADR 0019 Amendment (b).1);
  * 2. keeps only the `attivo` Parlanti with >= 1 reference as REFERENCE Parlanti; fewer than 2 →
@@ -40,7 +39,7 @@ import snastro.parlanti.dominio.SorgenteImpronta
  *    centroids, and plans a move to each Sicura Parlante's target Voce (its lowest attributed
  *    voceId) when the Segmento is not already there;
  * 6. applies the [INV-27] last-Segmento guard: a reference Parlante is never left with zero Segmenti
- *    in the Registrazione — every move out of its Voci is dropped (and counted as `incerte`) until
+ *    in the Incontro — every move out of its Voci is dropped (and counted as `incerte`) until
  *    stable.
  *
  * Movable Segmenti shorter than 1 000 ms are never extracted and always count once in `incerte`, as
@@ -59,26 +58,40 @@ public class PianoRiassegnazioneQuery(
     private val registrazioni: LettoreRegistrazione,
 ) {
     /**
-     * Errors: [ErroreParlanti.TrascrittoNonTrovato] (no Trascritto, INV-5),
+     * [INV-27] over the WHOLE Incontro the Parte [id] belongs to (the Parte the user asked from): references, target
+     * Voci, movable Segmenti and the last-Segmento guard span every transcribed Parte of the Incontro.
+     * Errors: [ErroreParlanti.TrascrittoNonTrovato] ([id] unknown, or no Parte of its Incontro has a Trascritto,
+     * INV-5),
      * [ErroreParlanti.RiferimentiInsufficienti] (fewer than 2 reference Parlanti, no extraction ran).
      * May throw [InterruptedException] (ADR 0017 §1.5): no result, nothing written, a later `calcola`
      * starts extraction over from the start. [progresso] is called once per extraction, in order,
      * with a constant `totale`.
      */
     public fun calcola(id: RegistrazioneId, progresso: (fatti: Int, totale: Int) -> Unit): Esito<PianoRiassegnazione> {
-        val segmenti = voci.segmentiDellaParte(id, registrazioni)
+        val incontroId = registrazioni.registrazione(id)?.incontroId
+        val segmenti = incontroId?.let { voci.segmenti(it) }
             ?: return Esito.Errore(ErroreParlanti.TrascrittoNonTrovato(id))
-        return calcolaPiano(id, segmenti, progresso)
+        // [INV-27] over the Incontro: the Parti in the Incontro's order, each Parte's Segmenti by (inizio, segmentoId).
+        val numero = registrazioni.parti(incontroId).orEmpty().associate { it.registrazioneId to it.numero }
+        val ordinati = segmenti.sortedWith(
+            compareBy(
+                { numero[it.segmento.registrazioneId] ?: Int.MAX_VALUE },
+                { it.intervallo.inizioMs },
+                { it.segmento.segmentoId.numero },
+            ),
+        )
+        return calcolaPiano(id, incontroId, ordinati, progresso)
     }
 
     @Suppress("LongMethod") // one read-model pipeline, ADR 0019 S4.1-4.4: splitting it would scatter the steps
     private fun calcolaPiano(
         id: RegistrazioneId,
+        incontroId: IncontroId,
         segmenti: List<SegmentoDiVoce>,
         progresso: (fatti: Int, totale: Int) -> Unit,
     ): Esito<PianoRiassegnazione> {
-        // ADR 0033 §4.1: the Attribuzioni of the Voci of this Parte (an Attribuzione is per Voce of the Incontro).
-        val vociDi: Map<ParlanteId, List<VoceId>> = voci.vociDellaParte(id, registrazioni).orEmpty()
+        // [INV-27]: the Attribuzioni of the CURRENT Voci of the whole Incontro.
+        val vociDi: Map<ParlanteId, List<VoceId>> = voci.voci(incontroId).orEmpty()
             .mapNotNull { attribuzioni.trova(it.voceRef) }
             .groupBy({ it.parlanteId }, { it.voceRef.voceId })
         val segmentiPerVoce: Map<VoceId, List<SegmentoDiVoce>> = segmenti.groupBy { it.voceId }
@@ -93,14 +106,13 @@ public class PianoRiassegnazioneQuery(
         val (corti, movibiliValidi) = movibili.partition { it.intervallo.durataMs < DURATA_MINIMA_SEGMENTO_MS }
         var incerte = corti.size
 
-        val daEstrarre = (riferimenti.values.flatten() + movibiliValidi)
-            .distinctBy { it.segmentoId }
-            .sortedBy { it.segmentoId.numero }
-        val impronteDi = estrai(id, daEstrarre, progresso)
+        val scelti = (riferimenti.values.flatten() + movibiliValidi).map { it.segmento }.toSet()
+        val daEstrarre = segmenti.filter { it.segmento in scelti } // each once, in (Parte, inizio, segmentoId) order
+        val impronteDi = estrai(daEstrarre, progresso)
 
         val riferimentiImpronte: Map<ParlanteId, List<Impronta>> =
-            riferimenti.mapValues { (_, segs) -> segs.map { impronteDi.getValue(it.segmentoId) } }
-        val frasi = movibiliValidi.map { impronteDi.getValue(it.segmentoId) }
+            riferimenti.mapValues { (_, segs) -> segs.map { impronteDi.getValue(it.segmento) } }
+        val frasi = movibiliValidi.map { impronteDi.getValue(it.segmento) }
         val classificazioni = classificatore.classifica(riferimentiImpronte, frasi)
 
         val candidati = mutableListOf<SpostamentoProposto>()
@@ -110,7 +122,7 @@ public class PianoRiassegnazioneQuery(
                 is Classificazione.Sicura -> {
                     val destinazione = target.getValue(c.parlanteId)
                     if (s.voceId != destinazione) {
-                        candidati += SpostamentoProposto(s.segmentoId, s.voceId, destinazione, s.intervallo)
+                        candidati += SpostamentoProposto(s.segmento, s.voceId, destinazione, s.intervallo)
                     }
                 }
             }
@@ -120,8 +132,9 @@ public class PianoRiassegnazioneQuery(
         val (attivi, incerteGuardia) = applicaGuardiaUltimoSegmento(candidati, segmenti, riferimentiPerGuardia)
         incerte += incerteGuardia
 
-        val spostamenti = attivi.sortedWith(compareBy({ it.intervallo.inizioMs }, { it.segmentoId.numero }))
-        return Esito.Ok(PianoRiassegnazione(id, spostamenti, incerte))
+        val ordine = segmenti.map { it.segmento }.withIndex().associate { (i, ref) -> ref to i }
+        val spostamenti = attivi.sortedBy { ordine.getValue(it.segmento) }
+        return Esito.Ok(PianoRiassegnazione(incontroId, spostamenti, incerte))
     }
 
     /** Per `attivo` Parlante attributed in R with >= 1 reference: "frasi confermate" if any, else "intera Voce". */
@@ -141,15 +154,15 @@ public class PianoRiassegnazioneQuery(
 
     /** One [EstrattoreImpronta.estrai] per Segmento of [daEstrarre], outside any transaction (ADR 0017 §1.2). */
     private fun estrai(
-        id: RegistrazioneId,
         daEstrarre: List<SegmentoDiVoce>,
         progresso: (fatti: Int, totale: Int) -> Unit,
-    ): Map<SegmentoId, Impronta> {
+    ): Map<SegmentoRef, Impronta> {
         val totale = daEstrarre.size
-        val impronte = LinkedHashMap<SegmentoId, Impronta>(totale)
+        val impronte = LinkedHashMap<SegmentoRef, Impronta>(totale)
         daEstrarre.forEachIndexed { i, s ->
-            val campioni = decodificatore.campioni(id, SorgenteImpronta.di(listOf(s.intervallo)).intervalli)
-            impronte[s.segmentoId] = estrattore.estrai(campioni) // puo lanciare InterruptedException (ADR 0017 S1.5)
+            val parte = s.segmento.registrazioneId
+            val campioni = decodificatore.campioni(parte, SorgenteImpronta.di(listOf(s.intervallo)).intervalli)
+            impronte[s.segmento] = estrattore.estrai(campioni) // puo lanciare InterruptedException (ADR 0017 S1.5)
             progresso(i + 1, totale)
         }
         return impronte
@@ -170,7 +183,7 @@ public class PianoRiassegnazioneQuery(
         var incerteAggiuntive = 0
         var cambiato = true
         while (cambiato) {
-            fun voceFinale(s: SegmentoDiVoce): VoceId = attivi.find { it.segmentoId == s.segmentoId }?.a ?: s.voceId
+            fun voceFinale(s: SegmentoDiVoce): VoceId = attivi.find { it.segmento == s.segmento }?.a ?: s.voceId
             val violanti = vociDiRiferimento.filterValues { voci -> segmenti.none { voceFinale(it) in voci } }.keys
             val vociViolanti = violanti.flatMap { vociDiRiferimento.getValue(it) }.toSet()
             val daRimuovere = attivi.filter { it.da in vociViolanti }
@@ -184,21 +197,24 @@ public class PianoRiassegnazioneQuery(
     }
 
     private val IntervalloMs.durataMs: Long get() = fineMs - inizioMs
-
-    /** Within ONE Parte a [SegmentoId] is the exact key (the Parte is [calcola]'s). */
-    private val SegmentoDiVoce.segmentoId: SegmentoId get() = segmento.segmentoId
 }
 
-/** `piano` view_shape: the plan of "Riassegna per somiglianza" — no similarity number, no [Impronta]. */
+/**
+ * `piano` view_shape: the plan of "Riassegna per somiglianza" over the Incontro [incontroId] ([INV-27]) — no
+ * similarity number, no [Impronta].
+ */
 public data class PianoRiassegnazione(
-    val registrazioneId: RegistrazioneId,
+    val incontroId: IncontroId,
     val spostamenti: List<SpostamentoProposto>,
     val incerte: Int,
 )
 
-/** One planned move, ordered by (intervallo.inizioMs, segmentoId) in [PianoRiassegnazione.spostamenti]. */
+/**
+ * One planned move of the Segmento [segmento] (its Parte + segmentoId), ordered in [PianoRiassegnazione.spostamenti]
+ * by (the Parte's place in the Incontro, intervallo.inizioMs, segmentoId).
+ */
 public data class SpostamentoProposto(
-    val segmentoId: SegmentoId,
+    val segmento: SegmentoRef,
     val da: VoceId,
     val a: VoceId,
     val intervallo: IntervalloMs,

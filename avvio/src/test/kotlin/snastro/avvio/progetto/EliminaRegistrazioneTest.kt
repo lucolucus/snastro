@@ -94,7 +94,7 @@ class EliminaRegistrazioneTest {
             val galleria = it.parlanti.letture.parlantiDelProgetto().associateBy { p -> p.nome }
             assertEquals(setOf("Mario", "Terzo"), galleria.keys, "l'Ospite non esiste piu'")
             assertEquals(1, galleria.getValue("Mario").numImpronte)
-            assertEquals(1, galleria.getValue("Mario").numRegistrazioni)
+            assertEquals(1, galleria.getValue("Mario").numIncontri)
             val parlanti = ParlanteRepositorySql(it.porte.database, it.porte.lettura)
             assertEquals(1, parlanti.impronteDiRegistrazione(s.q).size)
             val lapide = checkNotNull(parlanti.trova(s.terzo))

@@ -5,7 +5,6 @@ import snastro.kernel.Esito
 import snastro.kernel.GeneratoreId
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.poi
 import snastro.sintesi.applicazione.eventi.RiassuntoRichiesto
@@ -13,14 +12,12 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
-import snastro.sintesi.applicazione.porte.PRIMA_PARTE
+import snastro.sintesi.applicazione.porte.ParteSintesi
 import snastro.sintesi.applicazione.porte.RiassuntoRepository
-import snastro.sintesi.applicazione.porte.SegmentoSintesi
 import snastro.sintesi.applicazione.porte.StatoModelloLinguistico
 import snastro.sintesi.applicazione.porte.inIngresso
-import snastro.sintesi.applicazione.porte.parteUnica
-import snastro.sintesi.applicazione.porte.statoDi
 import snastro.sintesi.dominio.Argomento
+import snastro.sintesi.dominio.ErroreSintesi
 import snastro.sintesi.dominio.IngressoRiassunto
 import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.Riassumibilita
@@ -31,9 +28,9 @@ import java.time.Clock
 
 /**
  * Use-case `Riassumi` (AC-S77..S82; INV-S2, INV-S3, INV-S6, INV-S10; ADR 0021 §3). One transaction:
- * - reads every [Riassumibilita] guard (model `Installato`, the Parte `TRASCRITTA` — Trascritto present, no open
- *   Elaborazione —, no open Riassunto, the labelled input's estimate within the limit — the same rule
- *   `riassunto-vista` shares) — INV-I9;
+ * - reads the Incontro's Parti and every [Riassumibilita] guard (model `Installato`, EVERY Parte `TRASCRITTA`, no open
+ *   Riassunto, the whole Incontro's labelled input within the limit — the same rule `riassunto-vista` shares) —
+ *   INV-I9, D-0020; an unknown Incontro is `IncontroNonTrovato`;
  * - validates the [Argomento] (AFTER the guards: `What to do`);
  * - reads the Progetto's current lunghezza massima and fixes it on the new Riassunto (INV-S10);
  * - removes a previous `fallito` of the Incontro in this same transaction, leaving a `pronto`
@@ -58,23 +55,35 @@ public class RiassumiServizio(
     private val eventi: DispatcherEventi,
 ) {
     public fun esegui(c: Riassumi): Esito<RiassuntoId> = uow.inTransazione {
-        // ADR 0033 §4.1: the Incontro's Parte, then its per-Parte reads; an unknown Incontro has no Trascritto.
-        // TRANSITION (D-0033): the one Parte is Parte 1; multi-Parte reads come with riassumi-incontro.
-        val parte = incontri.parteUnica(c.incontroId)
-        val segmenti = parte?.let(trascritti::segmenti)
-        val stimaToken = if (parte != null && segmenti != null) {
-            LimiteIngresso.stimaToken(ingressoDi(parte, segmenti))
+        // ADR 0037 §2 / D-0020: every Parte of the Incontro, in INV-I2 order, read through the ports in this
+        // transaction; the verdict is Riassumibilita's (the same rule the view shows).
+        val parti = incontri.parti(c.incontroId)
+        if (parti == null) {
+            Esito.Errore(ErroreSintesi.IncontroNonTrovato(c.incontroId))
         } else {
-            null
+            val stati = parti.map { it.numero to trascritti.statoParte(it.registrazioneId) }
+            Riassumibilita.valuta(
+                modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
+                stati = stati,
+                riassuntoAperto = riassunti.trova(c.incontroId).any { it.aperto },
+                stimaToken = stimaDi(parti),
+            )
+                .poi { Argomento.di(c.argomento) }
+                .poi { argomento -> crea(c.incontroId, argomento) }
         }
-        Riassumibilita.valuta(
-            modelloInstallato = disponibilita.stato() is StatoModelloLinguistico.Installato,
-            stati = listOf(PRIMA_PARTE to trascritti.statoDi(parte)),
-            riassuntoAperto = riassunti.trova(c.incontroId).any { it.aperto },
-            stimaToken = stimaToken,
-        )
-            .poi { Argomento.di(c.argomento) }
-            .poi { argomento -> crea(c.incontroId, argomento) }
+    }
+
+    /**
+     * The estimate of the whole labelled input ([IngressoRiassunto], no names, ADR 0032) over every Parte; `null`
+     * when a Parte has no Trascritto (the input is not built: that Parte blocks first).
+     */
+    private fun stimaDi(parti: List<ParteSintesi>): Int? {
+        val lette = parti.map { p -> trascritti.segmenti(p.registrazioneId)?.map { it.inIngresso(p.registrazioneId) } }
+        return if (lette.any { it == null }) {
+            null
+        } else {
+            LimiteIngresso.stimaToken(IngressoRiassunto.costruisci(lette.map { it.orEmpty() }).testo)
+        }
     }
 
     /**
@@ -94,10 +103,6 @@ public class RiassumiServizio(
             }
         }
     }
-
-    /** The pure labelled input ([IngressoRiassunto]), without names (ADR 0032), of the one Parte. */
-    private fun ingressoDi(parte: RegistrazioneId, segmenti: List<SegmentoSintesi>): String =
-        IngressoRiassunto.costruisci(listOf(segmenti.map { it.inIngresso(parte) })).testo
 }
 
 private fun RiassuntoRichiestoDominio.pubblicato(): RiassuntoRichiesto = RiassuntoRichiesto(incontroId)

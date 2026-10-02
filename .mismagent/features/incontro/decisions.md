@@ -593,3 +593,29 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [pre-release](pre-release.md)
 - Revisit: Registrazione ids become reusable.
+
+### D-0045 · AggiungiRegistrazione porta i percorsi come String
+- Meta: 2026-10-02; scope: block:aggiungi-registrazione-incontro; status: accepted; sha: c85950cc
+- Question: ADR 0033 §2 pins file: List<Path>, but the ADR 0002 check and rule CR-2 forbid java.nio.file in applicazione; which yields?
+- Options: A file: List<String>, amend ADR 0033 §2 (kept); B keep List<Path>, add an exception to the ADR 0002 check and CR-2.
+- Hypothesis: n/a — decided by the user at the worker's bounce, [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Check: n/a — decided by the user at the worker's bounce, [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Result: n/a — decided by the user at the worker's bounce, [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Debate: the worker recommended A: percorsoSorgente, SondaAudio and ArchivioAudio already take String.
+- Decision: A; ADR 0033 gains a dated amendment. Cost: the command no longer types its paths.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-worker
+- Docs: [ADR 0033](../../decisions/0033-incontro-progetto-chiavi-confini.md)
+- Revisit: the applicazione layer is allowed a file-path type.
+
+### D-0046 · Il piano di riassegnazione e' per Incontro
+- Meta: 2026-10-02; scope: block:letture-parlanti-incontro; status: accepted; sha: e6cdeed1
+- Question: The block reshaped the pinned PianoRiassegnazione and SpostamentoProposto of boundary piano-per-somiglianza; accept the pin amendment?
+- Options: A accept: incontroId, SegmentoRef, order by Parte numero then inizio (kept); B rework to the old per-Registrazione shape.
+- Hypothesis: n/a — decided by the user after review, [ADR 0019](../../decisions/0019-separazione-semi-automatica.md)
+- Check: n/a — decided by the user after review, [ADR 0019](../../decisions/0019-separazione-semi-automatica.md)
+- Result: n/a — decided by the user after review, [ADR 0019](../../decisions/0019-separazione-semi-automatica.md)
+- Debate: verifier flagged the reshape as outside D-0037; it is forced by ADR 0035 §6, ADR 0019 and ADR 0033 §1, and the only consumer is updated in the same diff.
+- Decision: A; ADR 0019 gains a dated amendment. Cost: the per-Parte apply is not atomic, a must-fix before I2.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [ADR 0019](../../decisions/0019-separazione-semi-automatica.md), [pre-release](pre-release.md)
+- Revisit: the plan's apply is made one unit of work.

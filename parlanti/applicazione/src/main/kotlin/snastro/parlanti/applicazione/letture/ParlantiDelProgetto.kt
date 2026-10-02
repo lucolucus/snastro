@@ -14,8 +14,8 @@ import java.time.LocalDate
 /**
  * Read-model `ParlantiDelProgetto` (S4 Galleria, AC-175/AC-176): every Parlante of a Progetto,
  * `eliminato` tombstones included (S4 shows them too, ADR 0009). RC-1: no rule is decided here —
- * [Parlante] owns `attivo`/`eliminato`/its prints, [AttribuzioneRepository] owns which Registrazioni
- * a Parlante appears in (an `eliminato`'s past Attribuzioni are never removed, so `numRegistrazioni`
+ * [Parlante] owns `attivo`/`eliminato`/its prints, [AttribuzioneRepository] owns which Incontri
+ * a Parlante appears in (an `eliminato`'s past Attribuzioni are never removed, so `numIncontri`
  * survives Eliminazione even though its prints — and so `numImpronte`/`estratto` — do not, AC-176).
  */
 public class ParlantiDelProgetto(
@@ -29,24 +29,22 @@ public class ParlantiDelProgetto(
         parlanti.delProgetto(progettoId).map { riga(it) }
 
     private fun riga(p: Parlante): ParlanteDelProgetto {
-        // AC-175/AC-176: distinct registrazioneId (una Voce unita/proposta di unione puo dare piu
-        // Attribuzioni nella STESSA Registrazione, INV-22) — mai toccate da EliminaParlante.
-        // ADR 0033 §4.1: an Attribuzione is per Voce of the Incontro; its Registrazioni are the Incontro's Parti.
-        val registrazioniIds = attribuzioni.diParlante(p.id).map { it.voceRef.incontroId }.distinct()
-            .flatMap { registrazioni.parti(it).orEmpty().map { parte -> parte.registrazioneId } }
-            .distinct()
-        val ultimaApparizione = registrazioniIds
-            .mapNotNull { registrazioni.registrazione(it)?.dataRegistrazione }
-            .maxOrNull()
+        // AC-I47/AC-176: distinct Incontri (piu Voci dello STESSO Incontro possono essere attribuite allo stesso
+        // Parlante, INV-22) — mai toccate da EliminaParlante.
+        val incontri = attribuzioni.diParlante(p.id).map { it.voceRef.incontroId }.distinct()
+        val ultimaApparizione = incontri
+            .flatMap { registrazioni.parti(it).orEmpty() }
+            .maxOfOrNull { it.dataRegistrazione }
         // AC-176: un eliminato non ha piu impronte (ADR 0009), quindi ne' numImpronte ne' un estratto.
-        val estratto = p.impronte.firstOrNull()?.let { estrattoAudio.estratto(it.voceRef) }
+        // INV-I17: l'estratto di un'impronta viene dalla Parte che l'ha generata.
+        val estratto = p.impronte.firstOrNull()?.let { estrattoAudio.estratto(it.voceRef, it.parte) }
         return ParlanteDelProgetto(
             parlanteId = p.id,
             nome = p.nome.valore,
             tipoParlante = p.tipo.vista(),
             statoParlante = p.statoVista(),
             numImpronte = p.impronte.size,
-            numRegistrazioni = registrazioniIds.size,
+            numIncontri = incontri.size,
             ultimaApparizione = ultimaApparizione,
             estratto = estratto,
         )
@@ -60,7 +58,8 @@ public data class ParlanteDelProgetto(
     val tipoParlante: TipoParlanteVista,
     val statoParlante: StatoParlanteVista,
     val numImpronte: Int,
-    val numRegistrazioni: Int,
+    /** AC-I47: the distinct Incontri where the Parlante has an Attribuzione (replaces `numRegistrazioni`). */
+    val numIncontri: Int,
     val ultimaApparizione: LocalDate?,
     val estratto: EstrattoRef?,
 )

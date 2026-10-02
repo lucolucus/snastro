@@ -134,6 +134,7 @@ fun messaggioPer(errore: ErroreSintesi): String = when (errore) {
     // names no state, same rationale as `ErroreTrascrizione.TransizioneNonAmmessa`'s own mapping.
     is ErroreSintesi.TransizioneNonAmmessa -> "Operazione non ammessa nello stato attuale del riassunto."
     is ErroreSintesi.RiassuntoNonTrovato -> "Riassunto non trovato."
+    is ErroreSintesi.IncontroNonTrovato -> "Incontro non trovato."
 }
 
 /**
