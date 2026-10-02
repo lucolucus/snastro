@@ -18,6 +18,7 @@ import snastro.kernel.unIncontroDi
 import snastro.sintesi.applicazione.eventi.RiassuntoRichiesto
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguistico
 import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
+import snastro.sintesi.applicazione.porte.LettoreIncontroFinta
 import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.LunghezzaMassimaRiassuntoRepository
@@ -323,6 +324,101 @@ class RiassumiServizioTest {
         a.servizio.esegui(Riassumi(unIncontroDi(REGISTRAZIONE))).atteso()
     }
 
+    @Test
+    fun `AC-I62 Parti 1 e 2 TRASCRITTE e modello installato creano un in_attesa, pubblicato dopo commit`() {
+        val a = unAmbienteMultiParte(trascritte = setOf(REG1, REG2))
+
+        val id = a.servizio.esegui(Riassumi(INCONTRO)).atteso()
+
+        assertEquals(listOf(id), a.riassunti.trova(INCONTRO).map { it.id })
+        assertEquals(StatoRiassunto.IN_ATTESA, checkNotNull(a.riassunti.trova(id)).stato)
+        assertEquals(listOf(RiassuntoRichiesto(INCONTRO)), a.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-I63 Parte 2 DA_TRASCRIVERE rifiuta con PartiNonTrascritte(2) e non scrive`() {
+        val a = unAmbienteMultiParte(trascritte = setOf(REG1))
+
+        val errore = a.servizio.esegui(Riassumi(INCONTRO)).erroreAtteso<ErroreSintesi.PartiNonTrascritte>()
+
+        assertEquals(2, errore.parte)
+        assertEquals(emptyList(), a.riassunti.trova(INCONTRO))
+        assertEquals(emptyList(), a.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-I63 Parte 1 IN_TRASCRIZIONE rifiuta con ElaborazioneGiaAperta(1) prima della Parte 2 e non scrive`() {
+        val a = unAmbienteMultiParte(trascritte = setOf(REG1), aperte = setOf(REG1))
+
+        val errore = a.servizio.esegui(Riassumi(INCONTRO)).erroreAtteso<ErroreSintesi.ElaborazioneGiaAperta>()
+
+        assertEquals(1, errore.parte)
+        assertEquals(emptyList(), a.riassunti.trova(INCONTRO))
+        assertEquals(emptyList(), a.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-I63 un Riassunto gia aperto dell'Incontro rifiuta con RiassuntoGiaAperto e non scrive altro`() {
+        val a = unAmbienteMultiParte(trascritte = setOf(REG1, REG2))
+        val aperto = unRiassunto("aperto-1", INCONTRO)
+        a.riassunti.salva(aperto).atteso()
+
+        a.servizio.esegui(Riassumi(INCONTRO)).erroreAtteso<ErroreSintesi.RiassuntoGiaAperto>()
+
+        assertEquals(listOf(aperto.id), a.riassunti.trova(INCONTRO).map { it.id })
+        assertEquals(emptyList(), a.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-I64 l'ingresso concatenato di tutte le Parti oltre il limite rifiuta con IngressoTroppoLungo`() {
+        // each Parte alone fits LimiteIngresso, together they do not (the scope is the whole Incontro).
+        val meta = "a".repeat(LimiteIngresso.LIMITE_TOKEN * 2)
+        val a = unAmbienteMultiParte(
+            trascritte = setOf(REG1, REG2),
+            segmenti = mapOf(
+                REG1 to listOf(unSegmentoSintesi(testo = meta)),
+                REG2 to listOf(unSegmentoSintesi(testo = meta)),
+            ),
+        )
+
+        a.servizio.esegui(Riassumi(INCONTRO)).erroreAtteso<ErroreSintesi.IngressoTroppoLungo>()
+
+        assertEquals(emptyList(), a.riassunti.trova(INCONTRO))
+        assertEquals(emptyList(), a.eventi.pubblicati)
+    }
+
+    @Test
+    fun `AC-I64 un Incontro sconosciuto rifiuta con IncontroNonTrovato e non scrive`() {
+        val a = unAmbienteMultiParte(trascritte = setOf(REG1, REG2))
+        val ignoto = IncontroId("ignoto")
+
+        val errore = a.servizio.esegui(Riassumi(ignoto)).erroreAtteso<ErroreSintesi.IncontroNonTrovato>()
+
+        assertEquals(ignoto, errore.incontroId)
+        assertEquals(emptyList(), a.riassunti.trova(ignoto))
+        assertEquals(emptyList(), a.eventi.pubblicati)
+    }
+
+    private fun unAmbienteMultiParte(
+        trascritte: Set<RegistrazioneId>,
+        aperte: Set<RegistrazioneId> = emptySet(),
+        segmenti: Map<RegistrazioneId, List<SegmentoSintesi>> =
+            trascritte.associateWith { listOf(unSegmentoSintesi()) },
+    ): Ambiente {
+        val riassunti = RiassuntoRepositoryFinta()
+        val lunghezze = LunghezzaMassimaRiassuntoRepositoryFinta()
+        val eventi = DispatcherEventiFinta(UnitaDiLavoroFinta(riassunti, lunghezze))
+        val servizio = RiassumiServizio(
+            eventi.unitaDiLavoro, GeneratoreIdFinto(), CLOCK, PROGETTO,
+            riassunti, lunghezze,
+            LettoreTrascrittoFinta(segmenti.filterKeys { it in trascritte }, aperte),
+            LettoreIncontroFinta(mapOf(INCONTRO to listOf(REG1, REG2))),
+            DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
+            eventi,
+        )
+        return Ambiente(servizio, riassunti, lunghezze, eventi)
+    }
+
     private class LettoreTrascrittoSpia(
         private val delega: LettoreTrascritto,
         private val transazione: UnitaDiLavoroFinta,
@@ -403,6 +499,9 @@ class RiassumiServizioTest {
     private companion object {
         const val PACCHETTO = "snastro.sintesi.applicazione.comandi"
         val REGISTRAZIONE = RegistrazioneId("registrazione-1")
+        val REG1 = RegistrazioneId("r1")
+        val REG2 = RegistrazioneId("r2")
+        val INCONTRO = IncontroId("incontro-multi")
         val PROGETTO = ProgettoId("progetto-1")
         val CLOCK: Clock = Clock.fixed(Instant.parse("2026-09-26T12:00:00Z"), ZoneOffset.UTC)
     }
