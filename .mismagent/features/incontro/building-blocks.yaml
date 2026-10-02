@@ -1296,6 +1296,7 @@ boundaries:
     consumers: ["avvia-elaborazioni-incontro", "esegui-elaborazione-incontro", "revisione-incontro", "eliminazione-parte-trascrizione", "voci-del-trascritto-incontro", "viste-parte-incontro", "adattatori-trascrizione-incontro"]
     projection: "in-process"
     pinned_types:
+      "VociDellIncontroRepository (amended 2026-10-02, D-0040)": "+ conTrascritto(): List<RegistrazioneId> /* read-only, the Sbobinatura startup sweep */; VociDellIncontro.copia(): VociDellIncontro is public (whole-root read copy, used by the Finta)"
       VociDellIncontroRepository: "interface { fun trova(id: IncontroId): VociDellIncontro? /* one LetturaCoerente snapshot */; fun salva(root: VociDellIncontro) /* rewrites only changed Parti */; fun rimuovi(id: IncontroId); fun trascritto(r: RegistrazioneId): Trascritto? }"
     keys:
       incontroId: "as kernel-incontro"

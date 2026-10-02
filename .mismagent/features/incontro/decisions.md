@@ -528,3 +528,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: code-review (elimina-parte, porte-progetto-incontro)
 - Docs: [manifest](building-blocks.yaml), [pre-release](pre-release.md)
 - Revisit: none expected.
+
+### D-0040 · conTrascritto e copia della radice
+- Meta: 2026-10-02; scope: block:porte-trascrizione-incontro; status: accepted; sha: 63ffda57
+- Question: The sweep to VociDellIncontroRepository needs a list of transcribed Registrazioni (Sbobinatura startup sweep) and an alias-free root copy for the Finta; both touch pinned shapes.
+- Options: A add conTrascritto() to the repository port and a public VociDellIncontro.copia() (kept); B a separate listing port plus root replay in the Finta, heavier.
+- Hypothesis: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Check: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Result: n/a — decided by the user on the worker's DEVIATIONS, [manifest](building-blocks.yaml)
+- Debate: verifier and code-review judged both additive and asked to record them in the pin.
+- Decision: A; the repo-voci-incontro pin is amended. Cost: one more port method and one public root method.
+- By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (porte-trascrizione-incontro), mismagent-verifier, code-review
+- Docs: [manifest](building-blocks.yaml), [ADR 0035](../../decisions/0035-voci-dell-incontro.md)
+- Revisit: none expected.
