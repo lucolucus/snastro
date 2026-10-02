@@ -111,9 +111,6 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
         override val lettore: LettoreNomi =
             LettoreNomiDaParlanti(NomiDelleVoci(attribuzioni, parlanti, unitaDiLavoro))
 
-        /** On (D-0037): [aggiungiParte] imports through Progetto's `AggiungiRegistrazione` into the Incontro (I2). */
-        override val piuPartiPerIncontro: Boolean = true
-
         private val confermaAttribuzione = ConfermaAttribuzioneServizio(
             eventi.unitaDiLavoro,
             generatoreId,

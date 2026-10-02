@@ -1,9 +1,6 @@
 package snastro.trascrizione.applicazione.porte
 
-import org.junit.jupiter.api.DynamicTest
-import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestFactory
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.RiferimentoAudio
@@ -16,8 +13,6 @@ import kotlin.test.assertNull
  * Consumer-driven contract of [LettoreRegistrazione] (boundary `registrazione-per-trascrizione`):
  * one subclass per implementation — the fake (D1) and `registrazione-da-progetto-tr` (D2).
  * Every read reflects the CURRENT state of the supplier (e.g. a changed `dataRegistrazione`).
- * D-0037: the cases on an Incontro with more than one Parte are built only when the environment declares
- * [AmbienteLettoreRegistrazione.piuPartiPerIncontro]; otherwise that factory runs the one-Parte guard (never skipped).
  */
 public abstract class LettoreRegistrazioneContratto {
     /** A fresh supplier with one Progetto and no Registrazione. */
@@ -120,35 +115,16 @@ public abstract class LettoreRegistrazioneContratto {
         assertEquals(listOf(ParteDiIncontro(id, 1)), ambiente.lettore.parti(ambiente.incontroDi(id)))
     }
 
-    @TestFactory
-    public fun `AC-I22 parti di un Incontro con piu' Parti`(): List<DynamicTest> {
+    @Test
+    public fun `AC-I22 parti restituisce le Parti di un Incontro nell'ordine del fornitore, numerate 1 a N`() {
         val ambiente = ambiente()
-        return if (ambiente.piuPartiPerIncontro) {
-            listOf(
-                dynamicTest("AC-I22 parti restituisce le Parti nell'ordine del fornitore, numerate 1..N") {
-                    val incontro = ambiente.seminaIncontro(listOf(RIUNIONE, INTERVISTA, RIPRESA))
-                    val ordine = ambiente.ordineDelleParti(incontro)
+        val incontro = ambiente.seminaIncontro(listOf(RIUNIONE, INTERVISTA, RIPRESA))
+        val ordine = ambiente.ordineDelleParti(incontro)
 
-                    assertEquals(3, ordine.size)
-                    val attese = ordine.mapIndexed { i, r -> ParteDiIncontro(r, i + 1) }
-                    assertEquals(attese, ambiente.lettore.parti(incontro))
-                    ordine.forEach { assertEquals(incontro, ambiente.lettore.registrazione(it)?.incontroId) }
-                },
-            )
-        } else {
-            listOf(
-                dynamicTest("AC-I22 ambiente con una Parte per Incontro: ogni import ha il suo Incontro di una Parte") {
-                    val prima = ambiente.semina(RIUNIONE)
-                    val seconda = ambiente.semina(INTERVISTA)
-
-                    assertEquals(listOf(ParteDiIncontro(prima, 1)), ambiente.lettore.parti(ambiente.incontroDi(prima)))
-                    assertEquals(
-                        listOf(ParteDiIncontro(seconda, 1)),
-                        ambiente.lettore.parti(ambiente.incontroDi(seconda)),
-                    )
-                },
-            )
-        }
+        assertEquals(3, ordine.size)
+        val attese = ordine.mapIndexed { i, r -> ParteDiIncontro(r, i + 1) }
+        assertEquals(attese, ambiente.lettore.parti(incontro))
+        ordine.forEach { assertEquals(incontro, ambiente.lettore.registrazione(it)?.incontroId) }
     }
 
     private companion object {

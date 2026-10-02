@@ -69,9 +69,6 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
 
         override val lettore: LettoreRegistrazione = LettoreRegistrazioneDaProgetto(catalogo)
 
-        /** On (D-0037): [aggiungiParte] goes through Progetto's own import into the Incontro (I2). */
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun semina(seme: SemeRegistrazione): RegistrazioneId = importa(seme, Destinazione.NuovoIncontro)
 
         override fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId =
@@ -103,8 +100,13 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
         override fun incontroDi(id: RegistrazioneId): IncontroId = checkNotNull(catalogo.registrazione(id)).incontroId
 
         override fun elimina(id: RegistrazioneId) {
-            EliminaRegistrazioneServizio(eventi.unitaDiLavoro, registrazioni, incontri, EliminazioniInSospesoFinta(), eventi)
-                .esegui(EliminaRegistrazione(id)).atteso()
+            EliminaRegistrazioneServizio(
+                eventi.unitaDiLavoro,
+                registrazioni,
+                incontri,
+                EliminazioniInSospesoFinta(),
+                eventi,
+            ).esegui(EliminaRegistrazione(id)).atteso()
         }
 
         override fun modificaData(id: RegistrazioneId, data: LocalDate) {

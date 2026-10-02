@@ -13,8 +13,7 @@ import kotlin.test.assertNull
 
 /**
  * Consumer-driven contract of [LettoreIncontro] (boundary `porte-sintesi`, ADR 0033 §4; AC-I204, AC-I28): one subclass
- * per implementation — [LettoreIncontroFinta] (D1) and `LettoreIncontroDaProgetto` (D2). The multi-Parte cases are
- * registered only when [AmbienteLettoreIncontro.piuPartiPerIncontro] (D-0037), never skipped.
+ * per implementation — [LettoreIncontroFinta] (D1) and `LettoreIncontroDaProgetto` (D2).
  */
 public abstract class LettoreIncontroContratto {
     /** A fresh supplier: one Progetto, no Registrazione. */
@@ -70,21 +69,17 @@ public abstract class LettoreIncontroContratto {
         assertEquals(listOf(ParteSintesi(seconda, 1)), a.lettore.parti(a.incontroDi(seconda)))
     }
 
-    /** AC-I28 on an Incontro of several Parti (registered only when the supplier can seed one, D-0037). */
+    /** AC-I28 on an Incontro of several Parti. */
     @TestFactory
     public fun `AC-I28 Incontro con piu Parti`(): List<DynamicTest> =
-        if (!ambiente().piuPartiPerIncontro) {
-            emptyList()
-        } else {
-            listOf(
-                dynamicTest("AC-I28 parti in ordine per data, ora di inizio (vuota in fondo), import, numerate 1..N") {
-                    ordinateENumerate()
-                },
-                dynamicTest("AC-I28 una modifica della data o dell'ora di inizio riordina le Parti") { riordinate() },
-                dynamicTest("AC-I28 una Parte eliminata sparisce e le altre si rinumerano") { eliminataSparisce() },
-                dynamicTest("AC-I204 un Incontro di piu Parti non elenca le Parti di un altro") { soloLeSue() },
-            )
-        }
+        listOf(
+            dynamicTest("AC-I28 parti in ordine per data, ora di inizio (vuota in fondo), import, numerate 1..N") {
+                ordinateENumerate()
+            },
+            dynamicTest("AC-I28 una modifica della data o dell'ora di inizio riordina le Parti") { riordinate() },
+            dynamicTest("AC-I28 una Parte eliminata sparisce e le altre si rinumerano") { eliminataSparisce() },
+            dynamicTest("AC-I204 un Incontro di piu Parti non elenca le Parti di un altro") { soloLeSue() },
+        )
 
     private fun ordinateENumerate() {
         val a = ambiente()

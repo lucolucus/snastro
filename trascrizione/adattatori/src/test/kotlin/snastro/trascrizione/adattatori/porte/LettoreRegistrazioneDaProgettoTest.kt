@@ -79,9 +79,6 @@ class LettoreRegistrazioneDaProgettoTest : LettoreRegistrazioneContratto() {
                 .esegui(ModificaDataRegistrazione(id, data)).atteso()
         }
 
-        /** On (D-0037): [seminaIncontro] is Progetto's own multi-file import into ONE new Incontro (I2). */
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun seminaIncontro(semi: List<SemeRegistrazione>): IncontroId {
             importa(semi)
             return eventi.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().incontroId

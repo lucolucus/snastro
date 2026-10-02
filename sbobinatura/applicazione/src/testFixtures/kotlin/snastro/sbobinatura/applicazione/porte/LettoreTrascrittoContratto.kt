@@ -17,8 +17,7 @@ import kotlin.test.assertTrue
 /**
  * Consumer-driven contract of [LettoreTrascritto] (boundary `porte-sbobinatura`): one
  * subclass per implementation — [LettoreTrascrittoFinta] (D1) and `LettoreTrascrittoDaTrascrizione`
- * (D2, real-on-real). The multi-Parte cases are registered only when
- * [AmbienteLettoreTrascritto.piuPartiPerIncontro] (D-0037), never skipped.
+ * (D2, real-on-real).
  */
 public abstract class LettoreTrascrittoContratto {
     /** A fresh supplier: one Progetto, no Registrazione. */
@@ -205,21 +204,17 @@ public abstract class LettoreTrascrittoContratto {
         assertEquals(3, setOf(a.incontroDi(mai), a.incontroDi(fallita), a.incontroDi(trascritta)).size)
     }
 
-    /** AC-I26 on an Incontro of several Parti (registered only when the supplier can seed one, D-0037). */
+    /** AC-I26 on an Incontro of several Parti. */
     @TestFactory
     public fun `AC-I26 Incontro con piu Parti`(): List<DynamicTest> =
-        if (!ambiente().piuPartiPerIncontro) {
-            emptyList()
-        } else {
-            listOf(
-                dynamicTest("AC-I26 partiConTrascritto elenca solo le Parti trascritte nell ordine delle Parti") {
-                    soloLePartiTrascritteInOrdine()
-                },
-                dynamicTest("AC-I26 ogni Parte porta l Incontro e i numeri di Voce dell Incontro") {
-                    numeriDiVoceDellIncontro()
-                },
-            )
-        }
+        listOf(
+            dynamicTest("AC-I26 partiConTrascritto elenca solo le Parti trascritte nell ordine delle Parti") {
+                soloLePartiTrascritteInOrdine()
+            },
+            dynamicTest("AC-I26 ogni Parte porta l Incontro e i numeri di Voce dell Incontro") {
+                numeriDiVoceDellIncontro()
+            },
+        )
 
     private fun soloLePartiTrascritteInOrdine() {
         val a = ambiente()

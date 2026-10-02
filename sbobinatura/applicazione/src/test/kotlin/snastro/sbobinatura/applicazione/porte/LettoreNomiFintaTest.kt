@@ -33,8 +33,6 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
         private val eliminati = mutableSetOf<ParlanteId>()
         private val occasionali = mutableSetOf<ParlanteId>()
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override val lettore: LettoreNomi = LettoreNomiFinta(attribuzioni, nomi)
 
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneConiata =

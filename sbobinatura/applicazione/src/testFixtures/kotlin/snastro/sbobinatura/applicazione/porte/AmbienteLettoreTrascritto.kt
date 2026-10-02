@@ -15,13 +15,6 @@ public interface AmbienteLettoreTrascritto {
     public val lettore: LettoreTrascritto
 
     /**
-     * Capability: the supplier can give an Incontro more than one Parte ([aggiungiParte]). The multi-Parte cases of
-     * [LettoreTrascrittoContratto] are registered only when it is `true` (D-0037): the real supplier switches it on
-     * when the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands.
-     */
-    public val piuPartiPerIncontro: Boolean
-
-    /**
      * Adds one Registrazione to the Progetto as the one Parte of a new Incontro, with no Elaborazione completata;
      * returns its minted id.
      */
@@ -29,7 +22,7 @@ public interface AmbienteLettoreTrascritto {
 
     /**
      * Adds one Registrazione to the Progetto as a further Parte of the existing Incontro [incontroId], with no
-     * Elaborazione completata; returns its minted id. Only called when [piuPartiPerIncontro]. The Parti are ordered
+     * Elaborazione completata; returns its minted id. The Parti are ordered
      * by the supplier's rule (INV-I2): [SemeRegistrazione.dataRegistrazione] first, then the order they were added.
      */
     public fun aggiungiParte(incontroId: IncontroId, seme: SemeRegistrazione): RegistrazioneId

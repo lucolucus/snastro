@@ -23,13 +23,13 @@ import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
-import snastro.supporto.test.OrologioFinto
 import snastro.sbobinatura.applicazione.porte.AmbienteLettoreTrascritto
 import snastro.sbobinatura.applicazione.porte.LettoreTrascritto
 import snastro.sbobinatura.applicazione.porte.LettoreTrascrittoContratto
 import snastro.sbobinatura.applicazione.porte.SegmentoConiato
 import snastro.sbobinatura.applicazione.porte.SemeRegistrazione
 import snastro.sbobinatura.applicazione.porte.SemeTurno
+import snastro.supporto.test.OrologioFinto
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
@@ -104,9 +104,6 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 .esegui(CreaProgetto("Progetto di prova"))
                 .atteso()
         }
-
-        /** On (D-0037): [aggiungiParte] goes through Progetto's own import into the Incontro (I2). */
-        override val piuPartiPerIncontro: Boolean = true
 
         override val lettore: LettoreTrascritto =
             LettoreTrascrittoDaTrascrizione(

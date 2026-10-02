@@ -14,17 +14,10 @@ public interface AmbienteLettoreIncontro {
     /** The implementation under contract, reading what has been seeded (and changed) so far. */
     public val lettore: LettoreIncontro
 
-    /**
-     * Capability (D-0037): the supplier can give an Incontro more than one Parte ([aggiungiParte]). The multi-Parte
-     * cases of [LettoreIncontroContratto] are registered only when it is `true`; the real supplier switches it on when
-     * the multi-file import into an Incontro (I2, `aggiungi-registrazione-incontro`) lands.
-     */
-    public val piuPartiPerIncontro: Boolean
-
     /** Imports one Registrazione dated [data] with [ora] as its OraDiInizio, the one Parte of a new Incontro. */
     public fun importa(data: LocalDate = DATA, ora: LocalTime? = null): RegistrazioneId
 
-    /** Imports one Registrazione into the existing Incontro [incontroId]; only called when [piuPartiPerIncontro]. */
+    /** Imports one Registrazione into the existing Incontro [incontroId] */
     public fun aggiungiParte(incontroId: IncontroId, data: LocalDate = DATA, ora: LocalTime? = null): RegistrazioneId
 
     /** The Incontro the supplier made [registrazioneId] a Parte of, at import. */
@@ -33,7 +26,7 @@ public interface AmbienteLettoreIncontro {
     /** ModificaDataRegistrazione of [registrazioneId]. */
     public fun modificaData(registrazioneId: RegistrazioneId, data: LocalDate)
 
-    /** ModificaOraDiInizio of [registrazioneId] (`null` = unknown); only called when [piuPartiPerIncontro]. */
+    /** ModificaOraDiInizio of [registrazioneId] (`null` = unknown) */
     public fun modificaOraDiInizio(registrazioneId: RegistrazioneId, ora: LocalTime?)
 
     /** Deletes the Registrazione [registrazioneId] in the supplier. */

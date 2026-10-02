@@ -24,8 +24,6 @@ class LettoreNomiFintaTest : LettoreNomiContratto() {
 
         override val lettore: LettoreNomi = LettoreNomiFinta(attribuzioni, nomi)
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun aggiungiRegistrazione(voci: Int): RegistrazioneSeminata =
             aggiungi(IncontroId(generatore.nuovo()), voci)
 

@@ -113,9 +113,6 @@ class LettoreVociDaTrascrizioneTest : LettoreVociContratto() {
             VociDelTrascritto(trascritti, LettoreRegistrazioneFinta(registrazioniViste), UnitaDiLavoroFinta()),
         )
 
-        /** On (D-0037): [aggiungiParte] goes through Progetto's own import into the Incontro (I2). */
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun aggiungiParte(incontroId: IncontroId): RegistrazioneId = importa(Destinazione.Incontro(incontroId))
 
         override fun aggiungiRegistrazione(): RegistrazioneId = importa(Destinazione.NuovoIncontro)

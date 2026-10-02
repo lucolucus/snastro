@@ -18,17 +18,10 @@ public interface AmbienteLettoreVoci {
     /** The implementation under contract, reading everything seeded so far (and later). */
     public val lettore: LettoreVoci
 
-    /**
-     * Capability flag (D-0037): `true` iff this supplier can give an Incontro a second Parte ([aggiungiParte]).
-     * The real adapter switches it on when the I2 multi-file import lands; until then [LettoreVociContratto]
-     * registers its multi-Parte cases only where it is `true` — never a skipped test.
-     */
-    public val piuPartiPerIncontro: Boolean
-
     /** Adds one Registrazione (at least 60 000 ms long) as the one Parte of a new Incontro, with no Elaborazione. */
     public fun aggiungiRegistrazione(): RegistrazioneId
 
-    /** Adds one more Parte (at least 60 000 ms long, no Elaborazione) to the Incontro [incontroId]: only when [piuPartiPerIncontro]. */
+    /** Adds one more Parte (at least 60 000 ms long, no Elaborazione) to the Incontro [incontroId]. */
     public fun aggiungiParte(incontroId: IncontroId): RegistrazioneId
 
     /**

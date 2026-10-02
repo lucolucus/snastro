@@ -25,12 +25,6 @@ public interface AmbienteLettoreRegistrazione {
     /** Changes the DataRegistrazione of the seeded Registrazione [id] in the supplier. */
     public fun modificaData(id: RegistrazioneId, data: LocalDate)
 
-    /**
-     * Environment capability (D-0037): the supplier can give an Incontro more than one Parte (Progetto: once the I2
-     * multi-file import exists). Without it [seminaIncontro] is never called.
-     */
-    public val piuPartiPerIncontro: Boolean
-
     /** Adds the Registrazioni of [semi] as the Parti of ONE new Incontro of [progettoId] and returns that Incontro. */
     public fun seminaIncontro(semi: List<SemeRegistrazione>): IncontroId
 

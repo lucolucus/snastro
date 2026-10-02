@@ -35,11 +35,11 @@ import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.ProgettoRepositoryFinta
 import snastro.progetto.applicazione.porte.RegistrazioneRepositoryFinta
 import snastro.progetto.applicazione.porte.SondaAudioFinta
-import snastro.supporto.test.OrologioFinto
 import snastro.sbobinatura.applicazione.porte.AmbienteLettoreNomi
 import snastro.sbobinatura.applicazione.porte.LettoreNomi
 import snastro.sbobinatura.applicazione.porte.LettoreNomiContratto
 import snastro.sbobinatura.applicazione.porte.RegistrazioneConiata
+import snastro.supporto.test.OrologioFinto
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioneServizio
 import snastro.trascrizione.applicazione.comandi.EseguiProssimaElaborazione
@@ -129,9 +129,6 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 .esegui(CreaProgetto("Progetto di prova"))
                 .atteso()
         }
-
-        /** On (D-0037): [aggiungiParte] goes through Progetto's own import into the Incontro (I2). */
-        override val piuPartiPerIncontro: Boolean = true
 
         override val lettore: LettoreNomi = LettoreNomiDaParlanti(
             NomiDelleVoci(attribuzioni, parlanti, uowParlanti),
@@ -238,8 +235,9 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
             ).esegui(EseguiProssimaElaborazione()).atteso()
 
             val trascritto = checkNotNull(trascritti.trascritto(id))
-            // Every Voce of the Incontro with its intervals in each Parte (Trascrizione's own read), not only this Parte's.
-            vociVisteParlanti[trascritto.incontroId] = checkNotNull(vociDelTrascritto.voci(trascritto.incontroId))
+            // Every Voce of the Incontro with its intervals in each Parte (Trascrizione's own read).
+            val incontro = trascritto.incontroId
+            vociVisteParlanti[incontro] = checkNotNull(vociDelTrascritto.voci(incontro))
                 .map { VoceVistaParlanti(it.voceRef, it.intervalliPerParte) }
             return RegistrazioneConiata(
                 id,

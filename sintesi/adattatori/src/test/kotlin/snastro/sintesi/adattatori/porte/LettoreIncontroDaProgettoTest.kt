@@ -41,7 +41,8 @@ import kotlin.test.assertEquals
 /**
  * D2 (AC-I204, AC-I28): [LettoreIncontroDaProgetto] passes [LettoreIncontroContratto] real-on-real. Progetto is seeded
  * only through ITS commands (`CreaProgetto`, `AggiungiRegistrazione`, `ModificaDataRegistrazione`,
- * `ModificaOraDiInizio`, `EliminaRegistrazione`) over its own port fakes; the Incontro of an import is read back through its public read API.
+ * `ModificaOraDiInizio`, `EliminaRegistrazione`) over its own port fakes; the Incontro of an import is read back
+ * through its public read API.
  */
 class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
     override fun ambiente(): AmbienteLettoreIncontro = AmbienteReale()
@@ -94,9 +95,6 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
         }
 
         override val lettore: LettoreIncontro = LettoreIncontroDaProgetto(catalogo)
-
-        /** On (D-0037): Parti enter an Incontro through Progetto's own import into it (I2). */
-        override val piuPartiPerIncontro: Boolean = true
 
         override fun importa(data: LocalDate, ora: LocalTime?): RegistrazioneId =
             importaIn(Destinazione.NuovoIncontro, data, ora)

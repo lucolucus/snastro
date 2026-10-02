@@ -21,8 +21,6 @@ class LettoreRegistrazioneFintaTest : LettoreRegistrazioneContratto() {
 
         override val lettore: LettoreRegistrazione = LettoreRegistrazioneFinta(registrazioni, ordine)
 
-        override val piuPartiPerIncontro: Boolean = true
-
         override fun semina(seme: SemeRegistrazione): RegistrazioneId = semina(seme, IncontroId(generatore.nuovo()))
 
         /** The supplier's order is not the seeding order: each new Parte goes first (a reader must not re-sort). */
