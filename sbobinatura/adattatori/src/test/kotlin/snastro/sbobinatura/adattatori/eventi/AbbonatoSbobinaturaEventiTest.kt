@@ -391,10 +391,11 @@ class AbbonatoSbobinaturaEventiTest {
         ambiente.commit(evento)
         advanceUntilIdle()
 
+        // a list, not a set: a duplicate write of a Parte must fail (one write per Parte)
         assertEquals(
-            setOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
+            listOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
             ambiente.operazioni().drop(prima).map { (it as ScrittoreSbobinaturaFinta.Operazione.Scritto).nomeFile }
-                .toSet(),
+                .sorted(),
         )
     }
 
@@ -469,10 +470,11 @@ class AbbonatoSbobinaturaEventiTest {
         ambiente.commit(ParlanteRinominato(PARLANTE, "Marco Rossi"))
         advanceUntilIdle()
 
+        // a list, not a set: a duplicate write of a Parte must fail (one write per Parte)
         assertEquals(
-            setOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
+            listOf("2026-09-12 Parte A.md", "2026-09-12 Parte B.md"),
             ambiente.operazioni().drop(prima).map { (it as ScrittoreSbobinaturaFinta.Operazione.Scritto).nomeFile }
-                .toSet(),
+                .sorted(),
         )
     }
 
@@ -481,10 +483,12 @@ class AbbonatoSbobinaturaEventiTest {
         val ambiente = ambienteDueParti()
         advanceUntilIdle()
         val prima = ambiente.sbobinature()
+        val scritturePrima = ambiente.operazioni().size
 
         ambiente.commit(VociUnite(INCONTRO_I, sopravvissuta = VoceId(1), rimossa = VoceId(2)))
         advanceUntilIdle()
 
+        assertEquals(2, ambiente.operazioni().size - scritturePrima, "le due Parti sono state riscritte davvero")
         assertEquals(prima, ambiente.sbobinature())
     }
 
@@ -607,27 +611,29 @@ class AbbonatoSbobinaturaEventiTest {
         val segnalazioni = SegnalazioniRegistrate()
         val scope = CoroutineScope(StandardTestDispatcher(testScheduler))
         abbonaSbobinatura(dispatcher, politica, lettore::registrazioniConTrascritto, scope, segnalazioni)
-        advanceTimeBy(1.seconds)
-        runCurrent() // lo sweep di avvio: puo' fallire su poisoned, irrilevante qui
+        try {
+            advanceTimeBy(1.seconds)
+            runCurrent() // lo sweep di avvio: puo' fallire su poisoned, irrilevante qui
 
-        dispatcher.unitaDiLavoro.inTransazione {
-            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(poisoned, unIncontroDi(poisoned))))
+            dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(poisoned, unIncontroDi(poisoned))))
+            }
+            dispatcher.unitaDiLavoro.inTransazione {
+                Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra, unIncontroDi(altra))))
+            }
+            advanceTimeBy(10.seconds)
+            runCurrent()
+
+            assertTrue(scrittore.sbobinature.containsKey("2026-09-12 Y.md"), "altra rigenerata nonostante X fallisca")
+            assertFalse(scrittore.sbobinature.containsKey("2026-09-12 X.md"))
+            val righeX = segnalazioni.tutte.filter { poisoned.valore in it.messaggio }
+            assertTrue(righeX.size >= 2, "un report per ogni tentativo fallito di X, mai uno solo: $righeX")
+            assertTrue(righeX.all { it.causa is IllegalStateException }, "$righeX")
+        } finally {
+            // poisoned ritenta per sempre: senza cancellare lo scope, il drain automatico di fine-runTest
+            // continuerebbe ad avanzare il tempo virtuale all'infinito inseguendo un lavoro che non finisce mai.
+            scope.cancel()
         }
-        dispatcher.unitaDiLavoro.inTransazione {
-            Esito.Ok(dispatcher.pubblica(ElaborazioneCompletata(altra, unIncontroDi(altra))))
-        }
-        advanceTimeBy(10.seconds)
-        runCurrent()
-
-        assertTrue(scrittore.sbobinature.containsKey("2026-09-12 Y.md"), "altra e' rigenerata nonostante X fallisca")
-        assertFalse(scrittore.sbobinature.containsKey("2026-09-12 X.md"))
-        val righeX = segnalazioni.tutte.filter { poisoned.valore in it.messaggio }
-        assertTrue(righeX.size >= 2, "un report per ogni tentativo fallito di X, mai uno solo: $righeX")
-        assertTrue(righeX.all { it.causa is IllegalStateException }, "$righeX")
-
-        // poisoned ritenta per sempre: senza cancellare lo scope qui, il drain automatico di fine-runTest
-        // continuerebbe ad avanzare il tempo virtuale all'infinito inseguendo un lavoro che non finisce mai.
-        scope.cancel()
     }
 
     @Test
