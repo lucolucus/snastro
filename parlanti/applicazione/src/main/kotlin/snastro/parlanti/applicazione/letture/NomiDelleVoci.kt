@@ -1,48 +1,37 @@
 package snastro.parlanti.applicazione.letture
 
+import snastro.kernel.IncontroId
 import snastro.kernel.LetturaCoerente
 import snastro.kernel.ParlanteId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.porte.AttribuzioneRepository
-import snastro.parlanti.applicazione.porte.LettoreRegistrazione
 import snastro.parlanti.applicazione.porte.ParlanteRepository
 
 /**
- * Public query API of the Parlanti context (Published Language): the shape the `nomi-per-sbobinatura`
- * port `LettoreNomi` pins exactly, so its future adapter (`lettore-nomi-da-parlanti`) only delegates
- * here (RC-1). Read-only: every method reads through [AttribuzioneRepository] / [ParlanteRepository],
- * no rule lives here.
+ * Public query API of the Parlanti context (Published Language): the shape the `nomi-incontro`
+ * boundary pins (ADR 0033 §4), so the Sbobinatura/Sintesi adapters only delegate here (RC-1). Read-only: every
+ * method reads through [AttribuzioneRepository] / [ParlanteRepository], no rule lives here.
  */
 public class NomiDelleVoci(
     private val attribuzioni: AttribuzioneRepository,
     private val parlanti: ParlanteRepository,
-    private val registrazioni: LettoreRegistrazione,
     private val lettura: LetturaCoerente,
 ) {
     /**
-     * AC-101: the Nome of the Parlante each attributed Voce of [id] is attributed to, keyed by its
-     * [VoceRef] — the Parlante's CURRENT Nome, even when it is `eliminato` (tombstone, INV-13/INV-24).
-     * A Voce without Attribuzione is absent.
+     * AC-I46: the Nome of the Parlante each attributed Voce of the Incontro [id] is attributed to, keyed by its
+     * [VoceRef] — one entry per attributed Voce whatever the Parti it spans; the Parlante's CURRENT Nome, even when
+     * it is `eliminato` (tombstone, INV-13/INV-24). A Voce without Attribuzione is absent.
      *
      * B33: one [attribuzioni] read + one [parlanti].trova per attributed Voce — wrapped in ONE [lettura]
-     * snapshot (ADR 0029 §5) so outside a unit every `trova` doesn't open its own read transaction (overhead)
-     * and the names are all read from the SAME instant, never a mix of an old and a newer Parlante state.
+     * snapshot (ADR 0029 §5): the names are all read from the SAME instant.
      */
-    public fun nomi(id: RegistrazioneId): Map<VoceRef, String> = lettura.inLettura {
-        // ADR 0033 §4.1: the Voci, and so their names, are the Incontro's the Registrazione is a Parte of.
-        val incontroId = registrazioni.registrazione(id)?.incontroId ?: return@inLettura emptyMap()
-        attribuzioni.diIncontro(incontroId)
+    public fun nomi(id: IncontroId): Map<VoceRef, String> = lettura.inLettura {
+        attribuzioni.diIncontro(id)
             .mapNotNull { a -> parlanti.trova(a.parlanteId)?.let { p -> a.voceRef to p.nome.valore } }
             .toMap()
     }
 
-    /**
-     * AC-102: the distinct Registrazioni with at least one Attribuzione to [parlanteId]: every Parte of each Incontro
-     * holding one (ADR 0033 §4.1, unordered).
-     */
-    public fun registrazioniCon(parlanteId: ParlanteId): List<RegistrazioneId> =
+    /** AC-I46: each Incontro (once) where [parlanteId] has at least one Attribuzione (unordered). */
+    public fun incontriCon(parlanteId: ParlanteId): List<IncontroId> =
         attribuzioni.diParlante(parlanteId).map { it.voceRef.incontroId }.distinct()
-            .flatMap { registrazioni.parti(it).orEmpty().map { parte -> parte.registrazioneId } }
-            .distinct()
 }
