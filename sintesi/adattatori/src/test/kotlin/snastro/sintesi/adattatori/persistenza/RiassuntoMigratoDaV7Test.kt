@@ -37,7 +37,7 @@ class RiassuntoMigratoDaV7Test {
 
             val corrente = StrutturaIncontro(listOf(RegistrazioneId("reg-1") to strutturaMigrata(cartella)))
 
-            val motivo = "pronto 1-Parte come oggi: ${pronto.struttura} vs ${corrente.chiave}"
+            val motivo = "pronto 1-Parte come oggi: ${pronto.strutturaRegistrata} vs ${corrente.chiave}"
             assertFalse(pronto.superato(corrente), motivo)
         } finally {
             progetto.chiudi()

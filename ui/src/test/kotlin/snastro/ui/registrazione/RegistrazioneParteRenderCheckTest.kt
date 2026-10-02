@@ -19,6 +19,9 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.ui.lettore.LettoreUiStato
+import snastro.ui.testi.messaggioParteInTrascrizione
+import snastro.ui.testi.messaggioParteNonTrascritta
+import snastro.ui.testi.messaggioParteTrascrizioneFallita
 import snastro.ui.testi.messaggioRitrascrizioneParteInCorso
 import java.awt.image.BufferedImage
 import java.io.File
@@ -53,10 +56,22 @@ private fun statoParte(
     contenutoRiassunto = { Text("Riassunto dell'incontro · 3 parti") },
     schedaSelezionata = scheda,
     parte = if (totale > 1) {
-        IntestazioneParte(numero, totale, titoloIncontro, LocalTime.of(10, 25), TRE_PARTI.take(totale))
+        IntestazioneParte(
+            numero = numero,
+            totale = totale,
+            titoloIncontro = titoloIncontro,
+            ora = LocalTime.of(10, 25),
+            parti = (1..totale).map { ParteRef(RegistrazioneId("parte-$it"), it) },
+        )
     } else {
         null
     },
+)
+
+private fun parteInAttesa(numero: Int, messaggio: String) = RegistrazioneUiStato.ParteInAttesa(
+    titolo = "Parte $numero della riunione",
+    parte = IntestazioneParte(numero, 3, "Riunione di progetto", LocalTime.of(10, 25), TRE_PARTI),
+    messaggio = messaggio,
 )
 
 /**
@@ -150,6 +165,36 @@ class RegistrazioneParteRenderCheckTest {
         scena("audio-mancante", statoParte(2, audio = false)) {
             intestazione(2)
             onNodeWithText("Sorgente audio non disponibile").assertIsDisplayed()
+        }
+
+    @Test
+    fun `D-0051 una Parte in trascrizione mostra Parte in attesa con il selettore`() =
+        scena("in-attesa-in-trascrizione", parteInAttesa(3, messaggioParteInTrascrizione(3))) {
+            onNodeWithTag("registrazione-parte-in-attesa").assertIsDisplayed()
+            onNodeWithText("Registrazioni › Riunione di progetto · 3 parti").assertIsDisplayed()
+            onNodeWithText(messaggioParteInTrascrizione(3)).assertIsDisplayed()
+            (0..2).forEach { onNodeWithTag("parte-$it").assertIsDisplayed() }
+            assertEquals(0, onAllNodes(hasTestTag("registrazione-errore-caricamento")).fetchSemanticsNodes().size)
+        }
+
+    @Test
+    fun `D-0051 una Parte non ancora trascritta mostra Parte in attesa`() =
+        scena("in-attesa-non-trascritta", parteInAttesa(2, messaggioParteNonTrascritta(2))) {
+            onNodeWithText(messaggioParteNonTrascritta(2)).assertIsDisplayed()
+            (0..2).forEach { onNodeWithTag("parte-$it").assertIsDisplayed() }
+        }
+
+    @Test
+    fun `D-0051 una Parte con trascrizione fallita mostra Parte in attesa`() =
+        scena("in-attesa-fallita", parteInAttesa(3, messaggioParteTrascrizioneFallita(3))) {
+            onNodeWithText(messaggioParteTrascrizioneFallita(3)).assertIsDisplayed()
+        }
+
+    @Test
+    fun `L200 molte Parti scorrono nel selettore invece di farlo traboccare`() =
+        scena("molte-parti", statoParte(4, totale = 12)) {
+            onNodeWithTag("parte-3").assertIsDisplayed() // the selected one stays in view
+            (0..11).forEach { onNodeWithTag("parte-$it").assertExists() }
         }
 
     @Test

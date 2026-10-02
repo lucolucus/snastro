@@ -444,7 +444,12 @@ private fun IncontroItem(incontro: RigaIncontro, parti: List<RigaRegistrazione>,
         if (percorsi.isNotEmpty()) azioni.aggiungiParti(incontro.incontroId, incontro.titolo, percorsi)
     }
     if (!incontro.multiParte || parti.size == 1) {
-        RigaRegistrazioneItem(parti.first(), azioni, aggiungiParti, incontro.incontroId)
+        RigaRegistrazioneItem(
+            parti.first(),
+            azioni,
+            aggiungiParti.takeIf { incontro.aggiungiPartiDisponibile },
+            incontro.incontroId,
+        )
         return
     }
     val colori = LocalSnastroColori.current
@@ -1146,7 +1151,8 @@ private fun <T> CampoInline(
                             .focusRequester(focusTesto)
                             .focusable()
                             .clickable(enabled = abilitato) {
-                                testo = testoModifica(valore)
+                                // L205: an invalid typed text is what the user came back to fix — keep it.
+                                if (!nonValido) testo = testoModifica(valore)
                                 inModifica = true
                             }
                             .testTag(tag),

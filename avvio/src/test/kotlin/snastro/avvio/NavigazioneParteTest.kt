@@ -23,6 +23,7 @@ import snastro.supporto.test.attendiFinche
 import snastro.supporto.test.pausaInTempoReale
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreAudioFinta
+import snastro.ui.lettore.StatoLettore
 import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.time.Duration.Companion.milliseconds
@@ -77,13 +78,14 @@ class NavigazioneParteTest {
     fun `AC-I90 il chip di un altra Parte apre la pagina di quella Parte, il chip della Parte aperta no`() {
         AmbienteProgetto(radice).use { ambiente ->
             val (_, parti) = incontroDiTreParti(ambiente)
-            val (p1, p2) = parti
+            val (p1, _, p3) = parti
             val aperte = mutableListOf<RegistrazioneId>()
             val scope = ambiente.parlanti.scopeSchermata(ambiente.collaboratori.scope)
             // The chip plays from the Parte's audio first: a finta player (the real one decodes through FFmpeg).
+            val lettore = LettoreAudioFinta()
             val presenter = costruisciRiassuntoPresenter(
                 ambiente.grafo(),
-                conLettore(ambiente.collaboratori, LettoreAudioFinta()),
+                conLettore(ambiente.collaboratori, lettore),
                 p1,
                 scope,
             ) { aperte += it }
@@ -91,10 +93,13 @@ class NavigazioneParteTest {
             runBlocking(ambiente.dispatcherUi) { presenter.azioni.apriFonte(p1, 0L) }
             pausaInTempoReale(ATTESA_NESSUNA_APERTURA, motivo = "il chip della stessa Parte non apre nulla")
             assertEquals(emptyList(), aperte)
-            runBlocking(ambiente.dispatcherUi) { presenter.azioni.apriFonte(p2, 0L) }
+            // RELEASE CHECK I2 (L193): a "parte 3 · 12:30" chip on Parte 1's Riassunto plays Parte 3 from 12:30 and
+            // opens Parte 3's page (the Riassunto tab stays: ONE selection per window, AC-S121 in ContenutoAppTest).
+            runBlocking(ambiente.dispatcherUi) { presenter.azioni.apriFonte(p3, MINUTO_12_30_MS) }
 
-            attendiFinche(timeout = 10.seconds, messaggio = "la pagina della Parte 2") { aperte.isNotEmpty() }
-            assertEquals(listOf(p2), aperte)
+            attendiFinche(timeout = 10.seconds, messaggio = "la pagina della Parte 3") { aperte.isNotEmpty() }
+            assertEquals(listOf(p3), aperte)
+            assertEquals(StatoLettore(p3, MINUTO_12_30_MS, inRiproduzione = true), lettore.stato.value)
         }
     }
 
@@ -155,5 +160,6 @@ class NavigazioneParteTest {
 
     private companion object {
         val ATTESA_NESSUNA_APERTURA = 300.milliseconds
+        const val MINUTO_12_30_MS = 750_000L
     }
 }

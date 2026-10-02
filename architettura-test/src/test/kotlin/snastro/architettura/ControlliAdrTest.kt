@@ -21,7 +21,8 @@ import kotlin.test.fail
  *    `violante*` tree must FAIL. Fixture files carry a `.fixture` suffix on every file (and on the
  *    directories git or the scans would skip: `build`, `.gradle`, `.mismagent`), stripped when the
  *    tree is materialized under `build/tmp/controlli-adr/`; so no fixture is ever seen by a real scan,
- *    by Konsist or by git. A case holding a `.repository-git` marker is materialized as a git repo.
+ *    by Konsist or by git. A case holding a `.repository-git` marker is materialized as a git repo; a case holding
+ *    a `.uscita-attesa` file must also print each of its non-blank lines (e.g. the allow-list FAIL message).
  * 2. The project tree: every applicable check must PASS. A check with `from:` is applicable once that
  *    block is integrated ([RegistroControlliAdr.applicabile], the tool's own rule). Before that its
  *    result on the tree is reported, not enforced: the `from` block's own review runs it directly
@@ -99,6 +100,13 @@ class ControlliAdrTest {
                         esito.uscita.contains("${c.esitoAtteso}: $etichetta"),
                         "${c.nome}: output does not name the result\n${esito.uscita}",
                     )
+                    File(caso, USCITA_ATTESA).takeIf { it.isFile }?.readLines().orEmpty().filter { it.isNotBlank() }
+                        .forEach { attesa ->
+                            assertTrue(
+                                esito.uscita.contains(attesa),
+                                "${c.nome} on fixture ${caso.name}: output lacks \"$attesa\"\n${esito.uscita}",
+                            )
+                        }
                 }
             }
         }
@@ -127,7 +135,7 @@ class ControlliAdrTest {
         val destinazione = File(cartellaLavoro, "${c.nome}/${caso.name}")
         destinazione.deleteRecursively()
         destinazione.mkdirs()
-        caso.walkTopDown().filter { it.isFile && it.name != MARCATORE_GIT }.forEach { sorgente ->
+        caso.walkTopDown().filter { it.isFile && it.name !in MARCATORI }.forEach { sorgente ->
             val relativo = sorgente.relativeTo(caso).invariantSeparatorsPath
             if (!relativo.endsWith(SUFFISSO)) {
                 fail("${c.nome}/${caso.name}: fixture file $relativo lacks the $SUFFISSO suffix")
@@ -170,6 +178,8 @@ class ControlliAdrTest {
         const val VIOLANTE = "violante"
         const val SUFFISSO = ".fixture"
         const val MARCATORE_GIT = ".repository-git"
+        const val USCITA_ATTESA = ".uscita-attesa"
+        val MARCATORI = setOf(MARCATORE_GIT, USCITA_ATTESA)
         const val TIMEOUT_SECONDI = 60L
     }
 }

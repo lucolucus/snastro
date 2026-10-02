@@ -1,4 +1,5 @@
 package snastro.sintesi.applicazione.letture
 
-// never parti.sortedBy { it.oraDiInizio }: the parti arrive already ordered
-fun parti(lettore: LettoreIncontro, i: IncontroId) = lettore.parti(i)
+public data class ParteDelRiassunto(val numero: Int, val oraDiInizio: LocalTime?)
+internal fun parte(n: Int, ora: LocalTime?) = ParteDelRiassunto(numero = n, oraDiInizio = ora)
+internal fun costruisci(oraDiInizio: LocalTime?, ordinate: List<Int>) = ordinate.sorted()

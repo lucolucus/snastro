@@ -528,7 +528,8 @@ class RiassuntoVisteLetturaTest {
     /** Every observable field but the id, to compare a row before/after an unrelated read (no write happened). */
     private fun Riassunto.statoRigaPerTest(): List<Any?> = listOf(
         incontroId, argomento, lunghezzaMassima, richiestoAlle, stato, avviatoAlle, motivoFallimento, sommario,
-        decisioni.toList(), questioniAperte.toList(), azioni.toList(), puntiChiave.toList(), omessi, struttura,
+        decisioni.toList(), questioniAperte.toList(), azioni.toList(), puntiChiave.toList(), omessi,
+        strutturaRegistrata,
     )
 
     private class RiassuntoRepositorySpia(private val delega: RiassuntoRepository) : RiassuntoRepository by delega {

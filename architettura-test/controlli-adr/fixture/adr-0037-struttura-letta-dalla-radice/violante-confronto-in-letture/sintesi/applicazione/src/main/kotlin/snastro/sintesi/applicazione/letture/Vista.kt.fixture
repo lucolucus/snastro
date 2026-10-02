@@ -1,6 +1,5 @@
 package snastro.sintesi.applicazione.letture
 
+/** Never reads [Riassunto.strutturaRegistrata]: asks the root. */
 internal fun superatoDi(riassunto: Riassunto, corrente: StrutturaIncontro): Boolean = riassunto.superato(corrente)
-
-internal fun superatoAMano(riassunto: Riassunto, corrente: StrutturaIncontro): Boolean =
-    riassunto.struttura != corrente.chiave
+// riassunto.strutturaRegistrata != corrente.chiave would re-decide superato outside the root.

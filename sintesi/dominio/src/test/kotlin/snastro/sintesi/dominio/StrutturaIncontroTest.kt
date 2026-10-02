@@ -32,7 +32,7 @@ class StrutturaIncontroTest {
     fun `INV-I11 superato per ogni cambio di struttura e non piu quando la struttura esatta torna`() {
         val r = prontoSu(registrata)
 
-        assertEquals(registrata.chiave, r.struttura)
+        assertEquals(registrata.chiave, r.strutturaRegistrata)
         assertFalse(r.superato(registrata), "stessa struttura")
         val cambi = mapOf(
             "Revisione tra Parti" to struttura(a to unaStruttura(1 to 1, 2 to 3), b to unaStruttura(1 to 3)),
@@ -62,7 +62,7 @@ class StrutturaIncontroTest {
     fun `INV-I11 una Parte senza Trascritto alla lettura non e registrata e il Riassunto nasce superato`() {
         val r = prontoSu(struttura(a to unaStruttura(1 to 1), b to null))
 
-        assertEquals("A=1:1", r.struttura)
+        assertEquals("A=1:1", r.strutturaRegistrata)
         assertTrue(r.superato(struttura(a to unaStruttura(1 to 1), b to null)))
     }
 

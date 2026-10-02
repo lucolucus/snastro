@@ -1,6 +1,8 @@
 package snastro.ui.registrazioni
 
-@Composable
-fun RigaParte(parte: ParteVista) {
-    Text(parte.oraDiInizio?.toString() ?: "")
-}
+/** Shows [Riga.oraDiInizio]; never sorts by oraDiInizio (sortedBy { it.oraDiInizio } is the domain's). */
+internal fun campo(riga: Riga) = CampoOra(
+    valore = riga.oraDiInizio,
+    suggerimento = if (riga.oraDiInizio == null) "—:—" else null, // riga.oraDiInizio < x
+)
+internal fun ore(i: Incontro) = i.parti.mapNotNull { p -> perId[p.id]?.let { it to p.oraDiInizio } }

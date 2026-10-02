@@ -16,6 +16,7 @@ import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.supporto.catturaNonFatale
+import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -29,6 +30,9 @@ import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_IN_CORSO
+import snastro.ui.testi.messaggioParteInTrascrizione
+import snastro.ui.testi.messaggioParteNonTrascritta
+import snastro.ui.testi.messaggioParteTrascrizioneFallita
 import snastro.ui.testi.messaggioRitrascrizioneParteInCorso
 
 /**
@@ -147,7 +151,7 @@ class RegistrazionePresenter(
             voci.deseleziona()
             val vista = withContext(io) { trascritto() }
             if (vista == null) {
-                _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
+                _stato.value = statoSenzaTrascritto()
                 return
             }
             // L573b: `sbobinatura()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
@@ -171,6 +175,8 @@ class RegistrazionePresenter(
             val statoLettore = lettore.stato.value
             // AC-I75: the read-only lock is the Incontro's — a re-run of ANY Parte (vista.solaLettura) or of this one.
             val soloLettura = vista.solaLettura != null || soloLetturaDi(withContext(io) { stati() })
+            // L199: on a multi-Parte page the banner always names the Parte (this one's when the lock is its own run).
+            val parteInCorso = vista.solaLettura?.parte ?: vista.numeroParte.takeIf { vista.parti.size > 1 }
             voci.vista = vista
             _stato.value = RegistrazioneUiStato.Dati(
                 titolo = vista.titolo,
@@ -181,7 +187,7 @@ class RegistrazionePresenter(
                 audioDisponibile = disponibile,
                 sbobinaturaPercorso = percorso,
                 soloLettura = soloLettura,
-                bannerRitrascrizione = if (soloLettura) bannerSolaLettura(vista.solaLettura?.parte) else null,
+                bannerRitrascrizione = if (soloLettura) bannerSolaLettura(parteInCorso) else null,
                 contenutoRiassunto = contenutoRiassunto,
                 schedaSelezionata = selezioneSchedaS3.scheda,
                 segnoRiassunto = segnoRiassuntoAttuale,
@@ -199,6 +205,39 @@ class RegistrazionePresenter(
         }
         if (_stato.value is RegistrazioneUiStato.Dati) voci.ricaricaParlanti()
     }
+
+    /**
+     * D-0051 (L198): no Trascritto for [registrazioneId]. On a Parte of a multi-part Incontro whose Elaborazione is
+     * queued/running/never started/failed that is the dedicated [RegistrazioneUiStato.ParteInAttesa]; everything else
+     * (a 1-Parte Incontro, an unreadable Incontro or state, a COMPLETATA without Trascritto) stays the generic Errore.
+     */
+    private suspend fun statoSenzaTrascritto(): RegistrazioneUiStato {
+        val elaborazione = catturaNonFatale { withContext(io) { stati() } }.getOrNull()?.stato
+        val incontro = catturaNonFatale { withContext(io) { parti.incontroDi(registrazioneId) } }.getOrNull()
+            ?.takeIf { it.parti.size > 1 }
+        val questa = incontro?.parti?.firstOrNull { it.registrazioneId == registrazioneId }
+        val messaggio = questa?.let { elaborazione?.let { e -> messaggioParteSenzaTrascritto(e, it.numero) } }
+        return if (incontro == null || questa == null || messaggio == null) {
+            RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
+        } else {
+            val intestazione = IntestazioneParte(
+                numero = questa.numero,
+                totale = incontro.parti.size,
+                titoloIncontro = incontro.titolo,
+                ora = questa.oraDiInizio,
+                parti = incontro.parti.map { ParteRef(it.registrazioneId, it.numero) },
+            )
+            RegistrazioneUiStato.ParteInAttesa(questa.titolo, intestazione, messaggio)
+        }
+    }
+
+    private fun messaggioParteSenzaTrascritto(elaborazione: StatoElaborazioneVista, numero: Int): String? =
+        when (elaborazione) {
+            StatoElaborazioneVista.IN_ATTESA, StatoElaborazioneVista.IN_CORSO -> messaggioParteInTrascrizione(numero)
+            StatoElaborazioneVista.NON_AVVIATA -> messaggioParteNonTrascritta(numero)
+            StatoElaborazioneVista.FALLITA -> messaggioParteTrascrizioneFallita(numero)
+            StatoElaborazioneVista.COMPLETATA -> null
+        }
 
     private fun bannerSolaLettura(parteInCorso: Int?): String =
         parteInCorso?.let(::messaggioRitrascrizioneParteInCorso) ?: MESSAGGIO_RITRASCRIZIONE_IN_CORSO

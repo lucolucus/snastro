@@ -42,6 +42,13 @@ fun messaggioRitrascrizioneParteInCorso(parte: Int): String =
     "Ritrascrizione della parte $parte in corso: modifiche disabilitate fino al termine\n" +
         "La trascrizione della parte $parte sarà sostituita quando la nuova sarà pronta."
 
+/** D-0051 (L198): what a Parte with no Trascritto yet says in S3, by the state of its latest Elaborazione. */
+fun messaggioParteInTrascrizione(parte: Int): String =
+    "La parte $parte è in trascrizione. Si aprirà da sola quando sarà pronta."
+fun messaggioParteNonTrascritta(parte: Int): String = "La parte $parte non è ancora stata trascritta."
+fun messaggioParteTrascrizioneFallita(parte: Int): String =
+    "La trascrizione della parte $parte non è riuscita. Riprovala dall'elenco delle registrazioni."
+
 /** AC-I74: the multi-part breadcrumb tail, the subtitle prefix and the switcher label. */
 fun testoBriciolaIncontro(titolo: String, totale: Int): String = "$titolo · $totale parti"
 fun testoParteDi(numero: Int, totale: Int): String = "Parte $numero di $totale"

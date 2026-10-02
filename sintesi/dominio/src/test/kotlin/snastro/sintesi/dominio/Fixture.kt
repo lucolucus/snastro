@@ -76,7 +76,7 @@ internal data class Istantanea(
         sommario = r.sommario,
         elementi = r.decisioni + r.questioniAperte + r.azioni + r.puntiChiave,
         omessi = r.omessi,
-        struttura = r.struttura,
+        struttura = r.strutturaRegistrata,
         lunghezza = r.lunghezzaMassima,
     )
 }

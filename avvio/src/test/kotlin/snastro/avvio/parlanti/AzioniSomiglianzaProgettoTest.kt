@@ -12,6 +12,7 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.SegmentoRef
+import snastro.kernel.UnitaDiLavoro
 import snastro.kernel.VoceId
 import snastro.kernel.unIncontroDi
 import snastro.parlanti.applicazione.letture.PianoRiassegnazione
@@ -44,6 +45,23 @@ import kotlin.time.Duration.Companion.seconds
 
 private val REG = RegistrazioneId("id-1")
 
+/** A unit of work that runs its block and counts the transactions, and whether one is open (no SQL). */
+private class UnitaDiLavoroContata : UnitaDiLavoro {
+    val transazioni = AtomicInteger()
+
+    @Volatile var aperta = false
+
+    override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> {
+        transazioni.incrementAndGet()
+        aperta = true
+        return try {
+            blocco()
+        } finally {
+            aperta = false
+        }
+    }
+}
+
 /** The plan whose grouping is [gruppi]: each group expanded into `frasi` moves of distinct Segmenti. */
 private fun pianoDi(id: RegistrazioneId, gruppi: List<GruppoSpostamenti>, incerte: Int): PianoRiassegnazione {
     var n = 0
@@ -65,6 +83,7 @@ class AzioniSomiglianzaProgettoContrattoTest : AzioniSomiglianzaContratto() {
             progetto,
             bg,
             clock,
+            UnitaDiLavoroContata(),
             { id, _ -> Esito.Ok(pianoDi(id, scenario.gruppi, scenario.incerte)) },
             {
                 applicazioni.incrementAndGet()
@@ -83,12 +102,15 @@ class AzioniSomiglianzaProgettoContrattoTest : AzioniSomiglianzaContratto() {
 class AzioniSomiglianzaProgettoTest {
     private val progetto = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val applicati = CopyOnWriteArrayList<RiassegnaSegmenti>()
-    private var esitoApplica: Esito<Unit> = Esito.Ok(Unit)
+    private var esitoApplica: (RiassegnaSegmenti) -> Esito<Unit> = { Esito.Ok(Unit) }
+    private val unita = UnitaDiLavoroContata()
+    private val inTransazione = CopyOnWriteArrayList<Boolean>()
 
     private fun porta(calcola: (RegistrazioneId, (Int, Int) -> Unit) -> Esito<PianoRiassegnazione>) =
-        AzioniSomiglianzaProgetto(progetto, Dispatchers.IO, Clock.systemUTC(), calcola) {
+        AzioniSomiglianzaProgetto(progetto, Dispatchers.IO, Clock.systemUTC(), unita, calcola) {
             applicati += it
-            esitoApplica
+            inTransazione += unita.aperta
+            esitoApplica(it)
         }
 
     private val piano = pianoDi(
@@ -200,12 +222,34 @@ class AzioniSomiglianzaProgettoTest {
         p.applica(REG)
         attendiFinche(timeout = 10.seconds, messaggio = "esito") { p.stato.value[REG] is StatoSomiglianza.Esito }
         assertEquals(listOf(REG, parte2), applicati.map { it.registrazioneId })
+        assertEquals(listOf(listOf(1), listOf(2, 3)), applicati.map { c -> c.spostamenti.map { it.segmentoId.numero } })
         assertTrue(applicati.all { it.incontroDelleVoci == unIncontroDi(REG) })
+        assertEquals(1, unita.transazioni.get(), "ADR 0019 §4.5: ONE unit of work for the whole plan")
+        assertEquals(listOf(true, true), inTransazione.toList())
+    }
+
+    @Test
+    fun `AC-I79 piano su tre Parti, la seconda fallisce - la terza non parte, tutto in una transazione, Errore`() {
+        val (p2, p3) = RegistrazioneId("id-2") to RegistrazioneId("id-3")
+        val mosse = listOf(REG, p2, p3).mapIndexed { i, parte ->
+            val intervallo = IntervalloMs(i * 1_000L, i * 1_000L + 900)
+            SpostamentoProposto(SegmentoRef(parte, SegmentoId(i + 1)), VoceId(3), VoceId(1), intervallo)
+        }
+        esitoApplica = { c ->
+            if (c.registrazioneId == p2) Esito.Errore(ErroreTrascrizione.TrascrittoCambiato(p2)) else Esito.Ok(Unit)
+        }
+        val p = porta { _, _ -> Esito.Ok(PianoRiassegnazione(unIncontroDi(REG), mosse, 0)) }.inAnteprima()
+        p.applica(REG)
+        attendiFinche(timeout = 10.seconds, messaggio = "errore") { p.stato.value[REG] is StatoSomiglianza.Errore }
+        assertEquals(StatoSomiglianza.Errore(ErroreSomiglianzaUi.TrascrittoCambiato), p.stato.value[REG])
+        assertEquals(listOf(REG, p2), applicati.map { it.registrazioneId }, "the first Errore stops the rest")
+        assertEquals(1, unita.transazioni.get())
+        assertEquals(listOf(true, true), inTransazione.toList())
     }
 
     @Test
     fun `AC-549 errori mappati, TrascrittoCambiato scarta il piano e applica poi non invia nulla`() {
-        esitoApplica = Esito.Errore(ErroreTrascrizione.TrascrittoCambiato(REG))
+        esitoApplica = { Esito.Errore(ErroreTrascrizione.TrascrittoCambiato(REG)) }
         val p = porta { _, _ -> Esito.Ok(piano) }.inAnteprima()
         p.applica(REG)
         attendiFinche(timeout = 10.seconds, messaggio = "errore") { p.stato.value[REG] is StatoSomiglianza.Errore }

@@ -1,9 +1,6 @@
 package snastro.sintesi.applicazione.comandi
 
-// riassunto.struttura != corrente.chiave would re-decide superato outside the root.
 internal fun concludi(riassunto: Riassunto, esecuzione: Completata) =
     riassunto.completa(esecuzione.bozza, esecuzione.struttura, esecuzione.etichette)
 
-internal fun stessa(a: Int, b: Int): Boolean = a == b
-
-internal fun chiaveDiAltro(x: Altro): String = x.chiaveDiAltro
+internal fun chiaveDiAltro(x: Altro): String = x.chiaveDiAltro /* x.chiave */

@@ -486,7 +486,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val corrente = StrutturaIncontro(
             listOf(REG1 to unaStruttura(1 to 1, 2 to 2, 3 to 1), REG2 to unaStruttura(1 to 3, 2 to 3)),
         )
-        assertEquals(corrente.chiave, concluso.struttura)
+        assertEquals(corrente.chiave, concluso.strutturaRegistrata)
         assertTrue(!concluso.superato(corrente))
     }
 
@@ -502,7 +502,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val soloParte1 = IngressoRiassunto.costruisci(listOf(SEGMENTI.map { it.inIngresso(REG1) }))
         assertEquals(soloParte1.testo, checkNotNull(modello.ultimaRichiesta).ingresso)
         val strutturaParte1 = unaStruttura(1 to 1, 2 to 2, 3 to 1)
-        assertEquals("${REG1.valore}=${strutturaParte1.chiave}", concluso.struttura)
+        assertEquals("${REG1.valore}=${strutturaParte1.chiave}", concluso.strutturaRegistrata)
         assertTrue(!concluso.superato(StrutturaIncontro(listOf(REG1 to strutturaParte1))))
         val conParte2Trascritta = StrutturaIncontro(listOf(REG1 to strutturaParte1, REG2 to unaStruttura(1 to 3)))
         assertTrue(concluso.superato(conParte2Trascritta), "la Parte 2 senza Trascritto: nato superato")
@@ -543,7 +543,7 @@ class EseguiProssimoRiassuntoServizioTest {
         assertTrue(concluso.pronto, "mai lasciato in_corso")
         assertEquals(
             "${REG2.valore}=${unaStruttura(1 to 3, 2 to 3).chiave}",
-            concluso.struttura,
+            concluso.strutturaRegistrata,
         )
         assertTrue(riassunti.inCorso().isEmpty() && riassunti.inAttesa().isEmpty())
     }
@@ -640,7 +640,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
         assertTrue(concluso.pronto)
         val strutturaLettaNelRun = unaStruttura(1 to 1, 2 to 2, 3 to 1) // SEGMENTI, as the run's OWN read saw it
-        assertEquals("${REG1.valore}=${strutturaLettaNelRun.chiave}", concluso.struttura)
+        assertEquals("${REG1.valore}=${strutturaLettaNelRun.chiave}", concluso.strutturaRegistrata)
         val strutturaCorrenteDelLettore = unaStruttura(1 to 2, 2 to 1, 3 to 2) // what a fresh read gives NOW
         assertTrue(concluso.superato(StrutturaIncontro(listOf(REG1 to strutturaCorrenteDelLettore))))
     }
@@ -662,7 +662,7 @@ class EseguiProssimoRiassuntoServizioTest {
         val strutturaRivista = unaStruttura(1 to 3, 2 to 2, 3 to 3)
         assertEquals(
             "${REG1.valore}=${strutturaRivista.chiave}",
-            concluso.struttura,
+            concluso.strutturaRegistrata,
             "il run vede la revisione, non uno stato precedente",
         )
     }

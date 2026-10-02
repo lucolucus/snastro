@@ -1,0 +1,13 @@
+-- ORDER BY ora_di_inizio is the domain's job.
+trovaDelProgetto:
+SELECT * FROM registrazione WHERE progetto_id = :progettoId;
+
+trovaConOra:
+SELECT * FROM registrazione WHERE ora_di_inizio IS NULL OR ora_di_inizio = :ora OR aggiunta_alle <> :a
+    ORDER BY data_registrazione, id;
+
+inserisci:
+INSERT INTO registrazione(id, aggiunta_alle, ora_di_inizio) VALUES (:id, :aggiuntaAlle, :oraDiInizio);
+
+aggiorna:
+UPDATE registrazione SET ora_di_inizio = :oraDiInizio WHERE id = :id;

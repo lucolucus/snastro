@@ -21,6 +21,7 @@ import snastro.parlanti.applicazione.porte.DecodificatoreAudio
 import snastro.parlanti.applicazione.porte.EstrattoreImpronta
 import snastro.parlanti.dominio.ErroreParlanti
 import snastro.parlanti.dominio.Impronta
+import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.supporto.test.attendiFinche
 import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
@@ -262,6 +263,33 @@ class SomiglianzaTest {
                 listOf(GruppoSpostamenti(VoceId(3), VoceId(1), 1), GruppoSpostamenti(VoceId(4), VoceId(1), 1)),
                 gruppi.filter { it.a == VoceId(1) }.senzaParti(),
             )
+        }
+    }
+
+    @Test
+    fun `AC-I79 piano su due Parti - la seconda scaduta rifiuta tutto, la prima Parte resta intatta`() {
+        ambiente().use { a ->
+            val id = prepara(a)
+            val prime = a.collaboratori.registrazioni().map { it.registrazioneId }.toSet()
+            a.importaIn(Destinazione.Incontro(a.incontroDi(id))).atteso()
+            val altra = a.collaboratori.registrazioni().map { it.registrazioneId }.single { it !in prime }
+            a.rendiLeggibile(altra)
+            a.trascrivi(altra)
+
+            val anteprima = calcola(a, id) as StatoSomiglianza.Anteprima
+            val parti = anteprima.gruppi.flatMap { g -> g.perParte.map { it.registrazioneId } }.toSet()
+            assertEquals(setOf(id, altra), parti, "il piano sposta frasi in entrambe le Parti")
+            // Plan order is Parte order (ADR 0019 Amendment 2026-10-02): the second Parte's command runs last.
+            val (prima, seconda) = checkNotNull(a.porte.catalogo.parti(a.incontroDi(id)))
+            // The second Parte's command goes stale: a manual move of one of its planned Segmenti.
+            val mossa = RiassegnaSegmento(seconda, SegmentoId(3), VoceId(2))
+            a.trascrizione.revisione.riassegnaSegmento.esegui(mossa).atteso()
+            val righePrima = righe(a, prima)
+            val righeSeconda = righe(a, seconda)
+
+            assertEquals(StatoSomiglianza.Errore(ErroreSomiglianzaUi.TrascrittoCambiato), applica(a, id))
+            assertEquals(righePrima, righe(a, prima), "ADR 0019 §4.5: una sola unita di lavoro, la prima Parte resta")
+            assertEquals(righeSeconda, righe(a, seconda))
         }
     }
 

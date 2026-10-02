@@ -1,0 +1,3 @@
+package snastro.progetto.adattatori.audio
+
+internal fun prima(a: InfoFile, b: LocalTime) = a.oraDiInizio?.isBefore(b) == true

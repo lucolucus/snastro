@@ -439,4 +439,20 @@ class ParlantiIncontriTest {
             snastro.ui.testi.etichettaDettaglioParlante(riga.numImpronte, riga.numIncontri, riga.ultimaApparizione),
         )
     }
+
+    @Test
+    fun `L187 il dettaglio del parlante usa il singolare per 1 impronta e 1 incontro`() {
+        assertEquals("1 impronta · 1 incontro", snastro.ui.testi.etichettaDettaglioParlante(1, 1, null))
+        assertEquals("1 impronta · 2 incontri", snastro.ui.testi.etichettaDettaglioParlante(1, 2, null))
+        assertEquals("2 impronte · 1 incontro", snastro.ui.testi.etichettaDettaglioParlante(2, 1, null))
+        assertEquals("0 impronte · 0 incontri", snastro.ui.testi.etichettaDettaglioParlante(0, 0, null))
+    }
+
+    @Test
+    fun `L188 lo stato vuoto parla di incontro`() {
+        assertEquals(
+            "Nessun parlante. Nascono identificando le voci di un incontro",
+            snastro.ui.testi.MESSAGGIO_PARLANTI_VUOTO,
+        )
+    }
 }

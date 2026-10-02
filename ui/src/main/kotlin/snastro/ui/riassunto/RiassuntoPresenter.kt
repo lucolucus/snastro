@@ -22,6 +22,7 @@ import snastro.sintesi.applicazione.letture.ImpostazioniSintesiVista
 import snastro.sintesi.applicazione.letture.RiassuntoVista
 import snastro.sintesi.applicazione.letture.RichiestaApertaVista
 import snastro.sintesi.applicazione.letture.StatoModelloVista
+import snastro.supporto.catturaNonFatale
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.modelli.ServizioModelli
@@ -394,11 +395,12 @@ class RiassuntoPresenter(
 
     /**
      * AC-I81: a Fonte chip of [parte]: the audio plays from [daMs] (off the UI thread), then another Parte's page
-     * is opened (the tab stays). Playing first: the switch may dispose this presenter's own scope.
+     * is opened (the tab stays). Playing first: the switch may dispose this presenter's own scope. L194: a failing
+     * playback (no audio, a port fault) never escapes the coroutine and never stops the switch to the Parte.
      */
     private fun apriFonte(parte: RegistrazioneId, daMs: Long) {
         scope.launch {
-            withContext(io) { riproduciDa(parte, daMs) }
+            catturaNonFatale { withContext(io) { riproduciDa(parte, daMs) } }
             if (parte != registrazioneId) vaiAllaParte(parte)
         }
     }

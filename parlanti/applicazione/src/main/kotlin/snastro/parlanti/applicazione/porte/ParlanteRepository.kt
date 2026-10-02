@@ -11,6 +11,8 @@ import snastro.parlanti.dominio.Parlante
 /**
  * Repository port of the [Parlante] aggregate (boundary `repo-parlanti`, ADR 0006/0007/0009). Runs inside
  * the caller's transaction, never opens one. Contract: `ParlanteRepositoryContratto`.
+ *
+ * Method set closed by ADR 0035 (allow-list check); a new method is an ADR amendment.
  */
 public interface ParlanteRepository {
     public fun trova(id: ParlanteId): Parlante?

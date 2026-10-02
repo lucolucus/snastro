@@ -1,0 +1,7 @@
+package snastro.sintesi.dominio
+
+public class Riassunto(strutturaRegistrata: String?) {
+    private var _strutturaRegistrata = strutturaRegistrata
+    public val strutturaRegistrata: String? get() = _strutturaRegistrata
+    public fun superato(corrente: StrutturaIncontro): Boolean = corrente.chiave != _strutturaRegistrata
+}

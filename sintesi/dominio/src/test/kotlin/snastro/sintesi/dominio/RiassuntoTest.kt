@@ -87,7 +87,7 @@ class RiassuntoTest {
 
             assertEquals(ConclusioneRiassunto.Fallito(MotivoFallimento.NESSUN_CONTENUTO_VERIFICABILE), conclusione)
             assertTrue(r.fallito, "struttura $struttura")
-            assertNull(r.struttura)
+            assertNull(r.strutturaRegistrata)
         }
     }
 
@@ -142,7 +142,7 @@ class RiassuntoTest {
             assertEquals(pronto, r.decisioni.isNotEmpty(), "$stato decisioni")
             assertTrue(r.questioniAperte.isEmpty() && r.azioni.isEmpty() && r.puntiChiave.isEmpty(), "$stato")
             assertEquals(pronto, r.omessi != null, "$stato omessi")
-            assertEquals(pronto, r.struttura != null, "$stato struttura")
+            assertEquals(pronto, r.strutturaRegistrata != null, "$stato struttura")
             assertEquals(stato == StatoRiassunto.FALLITO, r.motivoFallimento != null, "$stato motivo")
         }
     }
@@ -204,7 +204,7 @@ class RiassuntoTest {
         assertFalse(r.superato(inUnaParte()), "non pronto: mai superato")
         r.completaInUnaParte(bozzaValida, unaStruttura(1 to 1, 2 to 2, 3 to 1)).atteso()
 
-        assertEquals("parte-1=1:1,2:2,3:1", r.struttura)
+        assertEquals("parte-1=1:1,2:2,3:1", r.strutturaRegistrata)
         assertEquals(PARTE, r.parte)
         assertFalse(r.superato(inUnaParte(unaStruttura(3 to 1, 1 to 1, 2 to 2))), "stessa assegnazione")
         assertTrue(r.superato(inUnaParte(unaStruttura(1 to 1, 2 to 1, 3 to 1))), "segmento 2 passa da V2 a V1")
@@ -216,7 +216,7 @@ class RiassuntoTest {
         val r = unRiassuntoInCorso().also { it.fallisci(MotivoFallimento.ERRORE_MODELLO).atteso() }
 
         assertFalse(r.superato(inUnaParte(StrutturaTrascritto.di(listOf(SegmentoId(9) to VoceId(9))))))
-        assertNull(r.struttura)
+        assertNull(r.strutturaRegistrata)
     }
 
     @Test

@@ -1,0 +1,3 @@
+package snastro.sintesi.applicazione.comandi
+
+internal fun quale(r: Riassunto): Int = when (r.strutturaRegistrata) { null -> 0; else -> 1 }

@@ -186,4 +186,50 @@ class RegistrazioniImportaPartiTest {
         assertNull(dati(p).avviso)
         assertEquals(false, dati(p).importoInCorso)
     }
+
+    @Test
+    fun `L183 un secondo Importa mentre il comando e in corso non ne invia un altro`() = runTest {
+        val inviati = mutableListOf<AggiungiRegistrazione>()
+        val p = presentatore(this) { registra(inviati, it) }
+        advanceUntilIdle()
+        p.azioni.importa(TRE_FILE)
+
+        p.azioni.confermaImporta()
+        p.azioni.confermaImporta() // still in flight: the first has not run yet
+        advanceUntilIdle()
+
+        assertEquals(1, inviati.size)
+    }
+
+    @Test
+    fun `L183 Annulla e la scelta mentre il comando e in corso non fanno nulla`() = runTest {
+        val inviati = mutableListOf<AggiungiRegistrazione>()
+        val p = presentatore(this) { registra(inviati, it) }
+        advanceUntilIdle()
+        p.azioni.importa(TRE_FILE)
+
+        p.azioni.confermaImporta()
+        p.azioni.annullaImporta()
+        p.azioni.scegliImporta(SceltaImporta.IncontriSeparati)
+
+        val dialogo = assertNotNull(dati(p).dialogoImporta)
+        assertEquals(true, dialogo.invioInCorso)
+        assertEquals(SceltaImporta.UnIncontro, dialogo.scelta)
+        advanceUntilIdle()
+        assertEquals(listOf(AggiungiRegistrazione(PROGETTO, TRE_FILE, Destinazione.NuovoIncontro)), inviati)
+        assertNull(dati(p).dialogoImporta)
+    }
+
+    @Test
+    fun `L183 un nuovo drop mentre il dialogo e aperto e ignorato e il dialogo resta com e`() = runTest {
+        val p = presentatore(this) { error("nessun comando") }
+        advanceUntilIdle()
+        p.azioni.importa(TRE_FILE)
+
+        p.azioni.importa(listOf("/altro/d.m4a", "/altro/e.m4a"))
+        p.azioni.importa(listOf("/altro/f.m4a"))
+        advanceUntilIdle()
+
+        assertEquals(DialogoImporta(TRE_FILE, SceltaImporta.UnIncontro), dati(p).dialogoImporta)
+    }
 }

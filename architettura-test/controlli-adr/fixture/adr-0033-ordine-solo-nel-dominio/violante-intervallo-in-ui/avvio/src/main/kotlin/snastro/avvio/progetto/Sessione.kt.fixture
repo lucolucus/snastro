@@ -1,0 +1,3 @@
+package snastro.avvio.progetto
+
+internal fun voce(ora: Instant) = VoceRegistro(aggiunta = ora, oraDiInizio = ora) // registro.oraDiInizio.sortedBy

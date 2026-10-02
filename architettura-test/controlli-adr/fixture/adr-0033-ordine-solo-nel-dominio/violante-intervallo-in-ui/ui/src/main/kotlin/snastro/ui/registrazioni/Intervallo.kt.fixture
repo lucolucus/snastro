@@ -1,0 +1,3 @@
+package snastro.ui.registrazioni
+
+internal fun dentro(r: Riga, a: LocalTime, b: LocalTime) = r.oraDiInizio in a..b

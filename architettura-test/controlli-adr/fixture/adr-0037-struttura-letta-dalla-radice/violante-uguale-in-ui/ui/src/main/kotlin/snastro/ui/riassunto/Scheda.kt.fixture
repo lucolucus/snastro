@@ -1,3 +1,0 @@
-package snastro.ui.riassunto
-
-internal fun cambiata(p: List<String>, registrata: StrutturaIncontro): Boolean = StrutturaIncontro.di(p) == registrata
