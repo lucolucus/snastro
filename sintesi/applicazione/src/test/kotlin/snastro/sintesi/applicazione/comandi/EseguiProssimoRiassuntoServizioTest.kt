@@ -96,12 +96,13 @@ class EseguiProssimoRiassuntoServizioTest {
         modello: ModelloLinguistico = this.modello,
         conSegmenti: Boolean = true,
         conSegmentiParte2: Boolean = true,
+        trascritti: Map<RegistrazioneId, List<SegmentoSintesi>>? = null,
     ): EseguiProssimoRiassuntoServizio = EseguiProssimoRiassuntoServizio(
         eventi.unitaDiLavoro,
         orologio,
         riassunti,
         LettoreTrascrittoFinta(
-            listOfNotNull(
+            trascritti ?: listOfNotNull(
                 (REG1 to SEGMENTI).takeIf { conSegmenti },
                 (REG2 to SEGMENTI_PARTE_2).takeIf { conSegmentiParte2 },
             ).toMap(),
@@ -419,7 +420,7 @@ class EseguiProssimoRiassuntoServizioTest {
     }
 
     @Test
-    fun `AC-I36 un Incontro di 2 Parti manda al modello UN ingresso su entrambe e salva le Fonti giuste`() {
+    fun `un Incontro di 2 Parti manda al modello UN ingresso su entrambe e salva le Fonti giuste`() {
         riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
         // s1..s3 = Parte 1, s4..s5 = Parte 2 (segmentoId 1 and 2 of REG2: the same numbers as REG1's, other Parte).
         modello.rispondi(
@@ -478,16 +479,19 @@ class EseguiProssimoRiassuntoServizioTest {
     fun `INV-I12 una Revisione tra Parti durante il run fa nascere il Riassunto superato`() {
         riassunti.salva(unRiassunto("r1", INCONTRO, richiestoAlle = T1)).atteso()
         val rivista = SEGMENTI_PARTE_2.map { it.copy(voceId = VoceId(1)) }
+        val trascritti = mutableMapOf(REG1 to SEGMENTI, REG2 to SEGMENTI_PARTE_2)
         val modelloCheRivede = object : ModelloLinguistico {
-            override fun riassumi(richiesta: RichiestaRiassunto, annullato: () -> Boolean): Esito<RispostaModello> =
-                Esito.Ok(ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA)
+            override fun riassumi(richiesta: RichiestaRiassunto, annullato: () -> Boolean): Esito<RispostaModello> {
+                trascritti[REG2] = rivista // the Parte 2 is revised while the model runs
+                return Esito.Ok(ModelloLinguisticoFinto.RISPOSTA_PREDEFINITA)
+            }
         }
         val strutturaRivista = StrutturaTrascritto.di(rivista.map { it.segmentoId to it.voceId })
         val corrente = StrutturaIncontro(
             listOf(REG1 to unaStruttura(1 to 1, 2 to 2, 3 to 1), REG2 to strutturaRivista),
         )
 
-        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2)), modello = modelloCheRivede)
+        servizioMultiParte(mapOf(INCONTRO to listOf(REG1, REG2)), modello = modelloCheRivede, trascritti = trascritti)
             .esegui(EseguiProssimoRiassunto()).atteso()
 
         val concluso = checkNotNull(riassunti.trova(RiassuntoId("r1")))
