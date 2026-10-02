@@ -49,7 +49,9 @@ abstract class AzioniSomiglianzaContratto {
         val s = sonda()
         s.porta.calcola(id)
         advanceUntilIdle()
-        assertEquals(StatoSomiglianza.Anteprima(gruppi, 1), s.porta.stato.value[id])
+        // The split per Parte (AC-I79) is the adapter's own detail: the contract compares the lines' (da, a, frasi).
+        val anteprima = s.porta.stato.value[id] as? StatoSomiglianza.Anteprima
+        assertEquals(StatoSomiglianza.Anteprima(gruppi, 1), anteprima?.copy(gruppi = anteprima.gruppi.map { it.copy(perParte = emptyList()) }))
         assertEquals(0, s.applicazioni())
     }
 

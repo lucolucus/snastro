@@ -29,6 +29,7 @@ import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.letture.TrascrittoView
+import snastro.trascrizione.applicazione.letture.VoceIncontroRiga
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_PROPOSTA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
@@ -94,6 +95,8 @@ internal class StatoVoci(
         val identificate: Map<VoceId, VoceIdentificata>,
         val attivi: List<ParlanteAttivo>,
         val unioni: List<PropostaDiUnione>,
+        /** AC-I77: the Incontro's Voci (empty over a 1-Parte Incontro: not read). */
+        val vociIncontro: List<VoceIncontroRiga>,
     )
 
     private class RisultatoRevisione(val esito: Esito<Unit>, val modificato: Boolean)
@@ -158,12 +161,15 @@ internal class StatoVoci(
         val generazione = ++generazioneParlanti
         var nuovi: DatiParlanti? = null
         var fallito = false
+        // AC-I77: the Incontro's Voci are read only when there is another Parte to merge with.
+        val incontroDaLeggere = incontroId.takeIf { (vista ?: trascritto())?.parti.orEmpty().size > 1 }
         try {
             nuovi = withContext(io) {
                 DatiParlanti(
                     identificate = sorgenti.identificazione().associateBy { it.voceId },
                     attivi = sorgenti.parlantiAttivi(),
                     unioni = sorgenti.unioni(),
+                    vociIncontro = incontroDaLeggere?.let { sorgenti.vociIncontro(it)?.voci }.orEmpty(),
                 )
             }
         } catch (e: CancellationException) {
@@ -405,7 +411,9 @@ internal class StatoVoci(
         val barra = vista?.let(::barraDi)?.takeIf { it.dividiAbilitato && it.abilitata } ?: return
         val segmenti = selezione
         eseguiRevisione {
-            val esito = sorgenti.dividi(DividiVoce(registrazioneId, barra.voceId, segmenti))
+            val esito = sorgenti.dividi(
+                DividiVoce(registrazioneId, barra.voceId, segmenti, incontroDelleVoci = incontroId),
+            )
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }
@@ -425,7 +433,9 @@ internal class StatoVoci(
         var errore: Esito.Errore? = null
         var spostati = 0
         for (segmento in segmenti) {
-            val esito = sorgenti.riassegna(RiassegnaSegmento(registrazioneId, segmento, verso))
+            val esito = sorgenti.riassegna(
+                RiassegnaSegmento(registrazioneId, segmento, verso, incontroDelleVoci = incontroId),
+            )
             if (esito is Esito.Errore) {
                 errore = esito
                 break
@@ -441,7 +451,9 @@ internal class StatoVoci(
     fun unisci(sopravvive: VoceId, rimossa: VoceId) {
         if (sopravvive == rimossa) return
         eseguiRevisione {
-            val esito = sorgenti.unisci(UnisciVoci(registrazioneId, sopravvive, rimossa))
+            val esito = sorgenti.unisci(
+                UnisciVoci(registrazioneId, sopravvive, rimossa, incontroDelleVoci = incontroId),
+            )
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }
@@ -488,6 +500,7 @@ internal class StatoVoci(
             esistenti.map { it.segmentoId }.toSet()
         }
         proposte.clear()
+        lavoroTraParti?.cancel()
         coppiaTraParti = null // AC-I84: a Revisione may have joined the pair — never offer a stale one
         ricaricaParlanti()
     }
@@ -534,7 +547,8 @@ internal class StatoVoci(
     fun togliConferma() {
         val menu = vista?.let(::barraDi)?.frase?.takeIf { it.abilitata && it.confermato } ?: return
         eseguiRevisione {
-            val comando = ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false)
+            val comando =
+                ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false, incontroDelleVoci = incontroId)
             val esito = sorgenti.confermaSegmento(comando)
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
@@ -591,6 +605,9 @@ internal class StatoVoci(
 
     private fun pannelloDi(v: TrascrittoView, audioDisponibile: Boolean): PannelloVoci {
         val tutte = opzioni(v)
+        // AC-I77: the Incontro's Voci that do not speak in this Parte, with the Parti they speak in.
+        val inAltreParti = dati?.vociIncontro.orEmpty().filter { r -> v.voci.none { it.voceId == r.voceId } }
+            .map { OpzioneVoce(it.voceId, nomeDi(it.voceId) ?: it.etichetta, it.parti, nomeDi(it.voceId)) }
         return PannelloVoci(
             carte = v.voci.map { voce ->
                 CartaVoce(
@@ -600,6 +617,8 @@ internal class StatoVoci(
                     inCorso = attesaDi(VoceRef(v.incontroId, voce.voceId)),
                     errore = erroriCarta[voce.voceId],
                     altreVoci = tutte.filter { it.voceId != voce.voceId },
+                    altreParti = voce.altreParti,
+                    vociAltreParti = inAltreParti,
                     // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' disabled while read-only —
                     // and while a similarity run is open (AC-531/AC-545).
                     soloLettura = modificheBloccate,
@@ -609,12 +628,15 @@ internal class StatoVoci(
             unioni = dati?.unioni.orEmpty(),
             traParti = coppiaTraParti.takeIf { bannerTraPartiAmmesso },
             estrattiDisponibili = audioDisponibile,
+            altreParti = v.parti.filter { it.registrazioneId != v.registrazioneId }
+                .associate { it.registrazioneId to it.numero },
             // AC-454: the merge banner's action disabled too — '▶ estratto' stays governed only by
             // estrattiDisponibili (audio availability), untouched by soloLettura.
             unioneAbilitata = !revisioneInCorso && !modificheBloccate,
             somiglianza = somiglianza.pannello(
                 riferimentiDi(v, dati?.identificate.orEmpty(), dati?.attivi.orEmpty()),
                 bloccato = soloLettura || comandiPendenti || revisioneInCorso || dati == null,
+                parti = v.parti.associate { it.registrazioneId to it.numero },
             ) { etichetta(v, it) },
         )
     }

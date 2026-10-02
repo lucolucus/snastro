@@ -72,6 +72,8 @@ import snastro.ui.testi.ETICHETTA_CONFERMA
 import snastro.ui.testi.ETICHETTA_CREA
 import snastro.ui.testi.ETICHETTA_DAI_UN_NOME
 import snastro.ui.testi.ETICHETTA_ESTRATTO
+import snastro.ui.testi.ETICHETTA_GRUPPO_ALTRE_PARTI
+import snastro.ui.testi.ETICHETTA_GRUPPO_QUESTA_PARTE
 import snastro.ui.testi.ETICHETTA_NOME
 import snastro.ui.testi.ETICHETTA_NUOVA_PERSONA
 import snastro.ui.testi.ETICHETTA_OCCASIONALE
@@ -84,7 +86,10 @@ import snastro.ui.testi.MESSAGGIO_ESTRATTI_NON_DISPONIBILI
 import snastro.ui.testi.MESSAGGIO_PROPOSTA_IN_ATTESA
 import snastro.ui.testi.SUGGERIMENTO_PRIMA_REGISTRAZIONE
 import snastro.ui.testi.TITOLO_PANNELLO_VOCI
+import snastro.ui.testi.testoAncheInParti
 import snastro.ui.testi.testoConferma
+import snastro.ui.testi.testoEstrattoParte
+import snastro.ui.testi.testoParti
 import snastro.ui.testi.testoTraParti
 import snastro.ui.testi.testoUnione
 
@@ -276,6 +281,14 @@ private fun CartaVoceVista(
             verticalArrangement = Arrangement.spacedBy(SnastroMisure.space3),
         ) {
             IntestazioneCarta(carta, pannello, durata, azioni, onNuovo = { nuovoAperto = !nuovoAperto })
+            if (carta.altreParti.isNotEmpty()) {
+                Text(
+                    testoAncheInParti(carta.altreParti),
+                    style = LocalSnastroTipografia.current.caption,
+                    color = LocalSnastroColori.current.inkMuted,
+                    modifier = Modifier.testTag("voce-$n-altre-parti"),
+                )
+            }
             ContenutoCartaVista(carta, pannello, azioni)
             AttesaCarta(carta, azioni)
             carta.errore?.let { ErroreCarta(n, it) { azioni.chiudiErroreVoce(carta.voceId) } }
@@ -387,7 +400,9 @@ private fun ContenutoCartaVista(carta: CartaVoce, pannello: PannelloVoci, azioni
                 } else if (proposta.candidati.isNotEmpty()) {
                     Text("Sembra", style = LocalSnastroTipografia.current.overline, color = colori.inkMuted)
                     proposta.candidati.forEachIndexed { i, c ->
-                        RigaCandidato(n, i, c, pannello.estrattiDisponibili) { azioni.riproduciEstratto(c.estratto) }
+                        RigaCandidato(n, i, c, pannello.estrattiDisponibili, pannello.parteDelloEstratto(c.estratto)) {
+                            azioni.riproduciEstratto(c.estratto)
+                        }
                     }
                 }
             }
@@ -395,40 +410,53 @@ private fun ContenutoCartaVista(carta: CartaVoce, pannello: PannelloVoci, azioni
     }
 }
 
+@Suppress("LongParameterList") // one parameter per input of the row
 @Composable
 private fun RigaCandidato(
     n: Int,
     indice: Int,
     candidato: Candidato,
     estrattiDisponibili: Boolean,
+    parteEstratto: Int?,
     onEstratto: () -> Unit,
 ) {
     val colori = LocalSnastroColori.current
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.testTag("voce-$n-candidato-$indice")) {
-        Column(modifier = Modifier.width(LARGHEZZA_NOME_CANDIDATO)) {
-            Text(
-                candidato.nome,
-                style = LocalSnastroTipografia.current.label.copy(fontWeight = FontWeight.SemiBold),
-                color = colori.ink,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Text(
-                etichettaTipo(candidato.tipoParlante),
-                style = LocalSnastroTipografia.current.caption,
-                color = colori.inkMuted,
+    Column(modifier = Modifier.testTag("voce-$n-candidato-$indice")) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.width(LARGHEZZA_NOME_CANDIDATO)) {
+                Text(
+                    candidato.nome,
+                    style = LocalSnastroTipografia.current.label.copy(fontWeight = FontWeight.SemiBold),
+                    color = colori.ink,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    etichettaTipo(candidato.tipoParlante),
+                    style = LocalSnastroTipografia.current.caption,
+                    color = colori.inkMuted,
+                )
+            }
+            Spacer(Modifier.width(SnastroMisure.space2))
+            MisuratoreFascia(candidato.fascia, Modifier.testTag("voce-$n-candidato-$indice-fascia"))
+            Spacer(Modifier.weight(1f))
+            BottoneIconaSn(
+                Icona.Listen,
+                ETICHETTA_ESTRATTO,
+                onClick = onEstratto,
+                abilitato = estrattiDisponibili,
+                piccolo = true,
             )
         }
-        Spacer(Modifier.width(SnastroMisure.space2))
-        MisuratoreFascia(candidato.fascia, Modifier.testTag("voce-$n-candidato-$indice-fascia"))
-        Spacer(Modifier.weight(1f))
-        BottoneIconaSn(
-            Icona.Listen,
-            ETICHETTA_ESTRATTO,
-            onClick = onEstratto,
-            abilitato = estrattiDisponibili,
-            piccolo = true,
-        )
+        // AC-I78: an extract that is not from the open Parte says which one.
+        parteEstratto?.let {
+            Text(
+                testoEstrattoParte(it),
+                style = LocalSnastroTipografia.current.caption,
+                color = colori.inkMuted,
+                modifier = Modifier.testTag("voce-$n-candidato-$indice-parte"),
+            )
+        }
     }
 }
 
@@ -598,7 +626,7 @@ private fun MenuAltreAzioniCarta(
     var aperto by remember { mutableStateOf(false) }
     val n = carta.voceId.numero
     val haCambia = contenuto != null && carta.azioniAbilitate
-    val haUnisci = carta.altreVoci.isNotEmpty()
+    val haUnisci = carta.altreVoci.isNotEmpty() || carta.vociAltreParti.isNotEmpty()
     val altriParlanti = contenuto?.let { c -> pannello.parlantiAttivi.filter { it.parlanteId != c.parlanteId } }
         .orEmpty()
     Box {
@@ -638,18 +666,31 @@ private fun MenuAltreAzioniCarta(
             if (haUnisci) {
                 if (contenuto != null) HorizontalDivider()
                 EtichettaGruppoMenu(ETICHETTA_UNISCI_CON)
-                carta.altreVoci.forEach { v ->
-                    DropdownMenuItem(
-                        text = { EtichettaMenuVoce(v, pannello.carte) },
-                        enabled = pannello.unioneAbilitata,
-                        onClick = {
-                            aperto = false
-                            azioni.unisci(carta.voceId, v.voceId)
-                        },
-                    )
-                }
+                VociDaUnire(carta, pannello, azioni) { aperto = false }
             }
         }
+    }
+}
+
+/**
+ * AC-I77: the items of 'Unisci con…' — once the Incontro has Voci in other Parti, 'In questa parte' first, then
+ * 'In altre parti' (each with its 'parte n'); over one Parte the flat list of today.
+ */
+@Composable
+private fun VociDaUnire(carta: CartaVoce, pannello: PannelloVoci, azioni: AzioniRegistrazione, chiudi: () -> Unit) {
+    val conGruppi = carta.vociAltreParti.isNotEmpty()
+    if (conGruppi && carta.altreVoci.isNotEmpty()) EtichettaGruppoMenu(ETICHETTA_GRUPPO_QUESTA_PARTE)
+    (carta.altreVoci + carta.vociAltreParti).forEachIndexed { i, v ->
+        if (conGruppi && i == carta.altreVoci.size) EtichettaGruppoMenu(ETICHETTA_GRUPPO_ALTRE_PARTI)
+        DropdownMenuItem(
+            text = { EtichettaMenuVoce(v, pannello.carte) },
+            enabled = pannello.unioneAbilitata,
+            onClick = {
+                chiudi()
+                azioni.unisci(carta.voceId, v.voceId)
+            },
+            modifier = Modifier.testTag("voce-${carta.voceId.numero}-unisci-${v.voceId.numero}"),
+        )
     }
 }
 
@@ -688,7 +729,19 @@ private fun EtichettaMenu(nome: String, tipo: String) {
 @Composable
 private fun EtichettaMenuVoce(opzione: OpzioneVoce, carte: List<CartaVoce>) {
     val nome = (carte.find { it.voceId == opzione.voceId }?.contenuto as? ContenutoCarta.Attribuita)?.nome
-    EtichettaVoce(voceId = opzione.voceId, nome = nome)
+        ?: opzione.nome
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Box(modifier = Modifier.weight(1f, fill = false)) { EtichettaVoce(voceId = opzione.voceId, nome = nome) }
+        // AC-I77: a Voce of another Parte carries the Parti it speaks in.
+        if (opzione.parti.isNotEmpty()) {
+            Text(
+                testoParti(opzione.parti),
+                style = LocalSnastroTipografia.current.caption,
+                color = LocalSnastroColori.current.inkMuted,
+                modifier = Modifier.padding(start = SnastroMisure.space2),
+            )
+        }
+    }
 }
 
 /** AC-586: 'Riassegna a'/'Altri'/'Dai un nome a questa frase' menus — one item per Parlante

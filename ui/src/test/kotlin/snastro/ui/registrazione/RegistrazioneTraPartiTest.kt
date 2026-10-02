@@ -69,7 +69,8 @@ class RegistrazioneTraPartiTest {
 
         presenter.azioni.unisci(V1, V3)
         advanceUntilIdle()
-        assertEquals(listOf<Any>(UnisciVoci(REG, sopravvive = V1, rimossa = V3)), a.revisioni)
+        val atteso = UnisciVoci(REG, sopravvive = V1, rimossa = V3, incontroDelleVoci = INCONTRO_REG)
+        assertEquals(listOf<Any>(atteso), a.revisioni)
     }
 
     @Test

@@ -15,6 +15,7 @@ import snastro.ui.testi.testoAnteprima
 import snastro.ui.testi.testoConfronto
 import snastro.ui.testi.testoEsitoSomiglianza
 import snastro.ui.testi.testoGruppo
+import snastro.ui.testi.testoGruppoPerParte
 
 /**
  * The shortest Segmento that can be a reference (ADR 0019 Amendment (b).1/(b).6): the S3 enabling rule
@@ -95,6 +96,7 @@ internal fun faseDi(
     applicaInviato: Boolean,
     oraMs: Long,
     registrazioneId: RegistrazioneId,
+    parti: Map<RegistrazioneId, Int>,
     etichetta: (VoceId) -> String,
 ): FaseSomiglianza = when (stato) {
     null -> FaseSomiglianza.Inattiva
@@ -104,8 +106,8 @@ internal fun faseDi(
         totale = stato.totale,
         inAttesa = oraMs - stato.ultimoAvanzamentoMs >= RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS,
     )
-    is StatoSomiglianza.Anteprima -> anteprimaDi(stato, applicaInviato, etichetta)
-    StatoSomiglianza.Applicazione -> ultimaAnteprima?.let { anteprimaDi(it, true, etichetta) }
+    is StatoSomiglianza.Anteprima -> anteprimaDi(stato, applicaInviato, parti, etichetta)
+    StatoSomiglianza.Applicazione -> ultimaAnteprima?.let { anteprimaDi(it, true, parti, etichetta) }
         ?: FaseSomiglianza.Anteprima(
             MESSAGGIO_APPLICAZIONE_IN_CORSO,
             emptyList(),
@@ -127,14 +129,25 @@ internal fun faseDi(
 private fun anteprimaDi(
     a: StatoSomiglianza.Anteprima,
     inApplicazione: Boolean,
+    parti: Map<RegistrazioneId, Int>,
     etichetta: (VoceId) -> String,
 ): FaseSomiglianza.Anteprima {
     val n = a.gruppi.sumOf { it.frasi }
     return FaseSomiglianza.Anteprima(
         titolo = testoAnteprima(n, a.incerte),
         righe = a.gruppi.sortedWith(compareBy({ it.a.numero }, { it.da.numero }))
-            .map { testoGruppo(etichetta(it.da), etichetta(it.a), it.frasi) },
+            .map { riga(it, parti, etichetta) },
         applicabile = n > 0,
         inApplicazione = inApplicazione,
     )
+}
+
+/** AC-I79: "Voce 3 → Anna: 8", plus "(parte 1: 3, parte 2: 5)" over a multi-Parte Incontro (as today for one Parte). */
+private fun riga(g: GruppoSpostamenti, parti: Map<RegistrazioneId, Int>, etichetta: (VoceId) -> String): String {
+    val perParte = g.perParte.mapNotNull { f -> parti[f.registrazioneId]?.let { it to f.frasi } }
+    return if (parti.size > 1 && perParte.isNotEmpty()) {
+        testoGruppoPerParte(etichetta(g.da), etichetta(g.a), g.frasi, perParte.sortedBy { it.first })
+    } else {
+        testoGruppo(etichetta(g.da), etichetta(g.a), g.frasi)
+    }
 }

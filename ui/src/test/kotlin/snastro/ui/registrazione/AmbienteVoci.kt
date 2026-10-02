@@ -32,6 +32,7 @@ import snastro.trascrizione.applicazione.letture.SegmentoTrascrittoView
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceTrascrittoView
+import snastro.trascrizione.applicazione.letture.VociIncontro
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.ApriEsternoFinta
 import snastro.ui.lettore.LettoreAudioFinta
@@ -48,6 +49,8 @@ internal val V2 = VoceId(2)
 internal val V3 = VoceId(3)
 internal val MARCO = ParlanteAttivo(ParlanteId("p-marco"), "Marco", TipoParlanteVista.RICORRENTE)
 internal val GIULIA = ParlanteAttivo(ParlanteId("p-giulia"), "Giulia", TipoParlanteVista.OCCASIONALE)
+
+internal val INCONTRO_REG = unIncontroDi(REG)
 
 internal fun ref(voce: VoceId) = VoceRef(unIncontroDi(REG), voce)
 
@@ -74,6 +77,7 @@ internal fun unaSorgentiParlantiInerte(scope: CoroutineScope, clock: Clock = Clo
     confermaSegmento = { Esito.Ok(Unit) },
     somiglianza = AzioniSomiglianzaFinta(clock),
     traParti = { emptyList() },
+    vociIncontro = { null },
 )
 
 internal fun unCandidato(parlante: ParlanteAttivo = MARCO, fascia: Fascia = Fascia.FORTE) = Candidato(
@@ -141,6 +145,10 @@ internal class AmbienteVoci(
     var identificazioneRotta = false
 
     /** ADR 0036: what `PropostaTraParti.perIncontro` answers; [chiamateTraParti] records each computation. */
+    /** AC-I77: what `TrascrittoQuery.vociIncontro` answers; [chiamateVociIncontro] records each read. */
+    var vociIncontro: VociIncontro? = null
+    val chiamateVociIncontro: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
+
     var traParti: List<CoppiaTraParti> = emptyList()
     var traPartiRotta = false
     val chiamateTraParti: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
@@ -184,6 +192,10 @@ internal class AmbienteVoci(
             chiamateTraParti += incontro
             check(!traPartiRotta) { "estrazione fallita" }
             traParti
+        },
+        vociIncontro = { incontro ->
+            chiamateVociIncontro += incontro
+            vociIncontro
         },
     )
 
