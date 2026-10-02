@@ -104,7 +104,7 @@ public abstract class LettoreRegistrazioneContratto {
     }
 
     @Test
-    public fun `AC-I205 parti restituisce l'insieme delle Registrazioni dell'Incontro, in nessun ordine garantito`() {
+    public fun `AC-I205 parti restituisce le Registrazioni dell'Incontro (ordine e numeri in AC-I25)`() {
         val ambiente = ambiente()
         val id = ambiente.semina(RIUNIONE)
 

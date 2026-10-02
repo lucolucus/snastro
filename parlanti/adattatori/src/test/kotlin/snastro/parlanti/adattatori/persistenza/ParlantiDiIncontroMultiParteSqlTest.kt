@@ -136,6 +136,36 @@ class ParlantiDiIncontroMultiParteSqlTest {
     }
 
     @Test
+    fun `ADR 0038 eliminare l'ultima Parte purga ogni impronta e Attribuzione dell'Incontro cessato`() {
+        seminaIncontro(mapOf(P1 to listOf(1L, 2L)))
+        val mario = parlante("mario", TipoParlante.RICORRENTE)
+        val ospite = parlante("ospite", TipoParlante.OCCASIONALE)
+        stampa(mario, 1, P1)
+        stampa(ospite, 2, P1)
+        unita.inTransazione {
+            parlanti.salva(mario).atteso()
+            parlanti.salva(ospite)
+        }.atteso()
+        unita.inTransazione {
+            attribuisci(1, mario)
+            attribuisci(2, ospite)
+            Esito.Ok(Unit)
+        }.atteso()
+        val dispatcher = dispatcher()
+
+        // The deleting unit of the LAST Parte ends every Voce of the Incontro.
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(TrascrittoEliminato(RegistrazioneId(P1), INCONTRO, setOf(VoceId(1), VoceId(2))))
+            Esito.Ok(Unit)
+        }.atteso()
+
+        assertEquals(0, impronteTotali(), "nessuna impronta resta")
+        assertEquals(emptyList(), attribuzioni.diIncontro(INCONTRO), "nessuna Attribuzione resta")
+        assertNull(parlanti.trova(ospite.id), "INV-25: l'occasionale senza Attribuzioni cessa")
+        assertNotNull(parlanti.trova(mario.id), "il ricorrente resta, senza impronte")
+    }
+
+    @Test
     fun `AC-I61 RegistrazioneEliminata pubblicato non cancella nessuna Attribuzione dell'Incontro`() {
         seminaIncontro(mapOf(P1 to listOf(1L), P2 to listOf(2L)))
         val mario = parlante("mario", TipoParlante.RICORRENTE)

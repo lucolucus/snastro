@@ -132,6 +132,14 @@ class PropostaTraPartiTest {
     }
 
     @Test
+    fun `AC-I48 un Incontro di una sola Parte non estrae nessuna impronta`() {
+        val a = ambiente(fetta(1, P1, A), fetta(2, P1, A), parti = listOf(P1))
+
+        assertEquals(emptyList(), a.api.perIncontro(INCONTRO))
+        assertEquals(0, a.estrazioni)
+    }
+
+    @Test
     fun `AC-I49 non scrive nulla`() {
         val a = ambiente(fetta(1, P1, A), fetta(2, P2, A))
         a.attribuzioni.salva(Attribuzione.conferma(VoceRef(INCONTRO, VoceId(9)), PROGETTO, ParlanteId("p-1")).aggregato)
@@ -194,10 +202,14 @@ class PropostaTraPartiTest {
 
     private fun fetta(voce: Int, parte: RegistrazioneId, stampa: Int) = Fetta(voce, parte, stampa)
 
-    private fun ambiente(vararg fette: Fetta, debole: Set<Int> = emptySet()) = Ambiente(fette.toList(), debole)
+    private fun ambiente(
+        vararg fette: Fetta,
+        debole: Set<Int> = emptySet(),
+        parti: List<RegistrazioneId> = listOf(P1, P2, P3),
+    ) = Ambiente(fette.toList(), debole, parti)
 
     /** Each slice is one interval whose start encodes its index; the extractor maps the index to the slice's print. */
-    private class Ambiente(fette: List<Fetta>, debole: Set<Int>) {
+    private class Ambiente(fette: List<Fetta>, debole: Set<Int>, parti: List<RegistrazioneId>) {
         var estrazioni = 0
         var annullaAllaProssima = false
 
@@ -233,7 +245,7 @@ class PropostaTraPartiTest {
             }
         }
         private val registrazioni = LettoreRegistrazioneFinta(
-            listOf(P1, P2, P3).associateWith { unaRegistrazioneVista(it, PROGETTO).copy(incontroId = INCONTRO) },
+            parti.associateWith { unaRegistrazioneVista(it, PROGETTO).copy(incontroId = INCONTRO) },
         )
         private val lettoreVoci = LettoreVociFinta(mapOf(INCONTRO to voci))
 
