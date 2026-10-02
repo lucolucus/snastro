@@ -74,6 +74,7 @@ class RegistrazioneSchedeTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = riassunto,
             selezioneSchedaS3 = selezioneSchedaS3,
+            parti = unaSorgentiPartiInerte(),
         )
     }
 

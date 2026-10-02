@@ -56,6 +56,9 @@ internal fun ref(voce: VoceId) = VoceRef(unIncontroDi(REG), voce)
  * the collaborator is mandatory, but a fixture that does not exercise it needs no behaviour from it) —
  * every source empty/no-op. Prefer [AmbienteVoci] instead when the test DOES exercise the panel.
  */
+/** A [SorgentiParti] with no Incontro to read and a switch that goes nowhere — for tests of a 1-Parte screen. */
+internal fun unaSorgentiPartiInerte() = SorgentiParti(incontro = { null }, vaiAllaParte = {})
+
 internal fun unaSorgentiParlantiInerte(scope: CoroutineScope, clock: Clock = Clock.systemUTC()) = SorgentiParlanti(
     identificazione = { emptyList() },
     proposta = { null },
@@ -289,5 +292,6 @@ internal class AmbienteVoci(
         aggiornamenti = if (conStati) aggiornamenti else aggiornamentiBase,
         riassunto = riassunto,
         selezioneSchedaS3 = selezioneSchedaS3,
+        parti = unaSorgentiPartiInerte(),
     )
 }
