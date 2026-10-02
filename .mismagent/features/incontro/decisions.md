@@ -567,3 +567,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user (Luca Parsani); recorded: Claude (worker-composer); consulted: mismagent-worker (riassunto-vista-incontro)
 - Docs: [manifest](building-blocks.yaml), [ADR 0037](../../decisions/0037-riassunto-dell-incontro.md)
 - Revisit: none expected.
+
+### D-0043 · Prova multi-parte su SQL rimandata a I2
+- Meta: 2026-10-02; scope: block:politiche-parlanti-incontro; status: accepted; sha: 943799ba
+- Question: Task 3 wants a real-SQLite proof that emptying a slice removes its print before COMMIT, but the real LettoreVoci fails closed above one Parte.
+- Options: A fake-based tests now, real-SQLite multi-Parte proof as an I2 release check (kept); B build a test-only multi-Parte LettoreVoci over SQLite now; C wait for voci-del-trascritto-incontro.
+- Hypothesis: n/a — decided by the composer under D-0037, [rework](rework/politiche-parlanti-incontro-1.md)
+- Check: n/a — decided by the composer under D-0037, [rework](rework/politiche-parlanti-incontro-1.md)
+- Result: n/a — decided by the composer under D-0037, [rework](rework/politiche-parlanti-incontro-1.md)
+- Debate: verifier FAIL on missing SQL proof; code-review showed on a SQLite copy that COMMIT fails without the removal and succeeds with it. Task 4 (RiallineaImpronte) is attribuzione-incontro's, already tested.
+- Decision: A; the rework fixes the read order, tests the SegmentoRiassegnato branch, ignores empty slices. Cost: multi-Parte SQL behaviour proven only at I2.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [rework](rework/politiche-parlanti-incontro-1.md), [pre-release](pre-release.md)
+- Revisit: the I2 release check fails.
