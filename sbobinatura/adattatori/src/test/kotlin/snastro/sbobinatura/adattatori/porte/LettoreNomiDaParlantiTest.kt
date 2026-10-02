@@ -171,6 +171,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 clock,
                 progetti,
                 registrazioniProgetto,
+                IncontroRepositoryFinta(registrazioniProgetto),
                 sonda,
                 archivio,
                 eventiProgetto,

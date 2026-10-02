@@ -86,6 +86,7 @@ internal class ModuloProgetto(
             apertura.clock,
             porte.progetti,
             registrazioni,
+            porte.incontri,
             apertura.sondaAudio,
             archivio,
             dispatcher,

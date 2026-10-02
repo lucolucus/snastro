@@ -136,7 +136,7 @@ class MigrazioneSchemaTest {
         db.trascrittoQueries.elimina(registrazioneId)
         db.elaborazioneQueries.eliminaDiRegistrazione(registrazioneId)
         db.registrazioneQueries.elimina(registrazioneId)
-        db.incontroQueries.eliminaSeSenzaParti(incontroDiProva)
+        db.incontroQueries.elimina(incontroDiProva)
         db.eliminazioneInSospesoQueries.inserisci(registrazioneId, "titolo", "2026-09-23", "audio/reg-1.wav", 0L)
         db.eliminazioneInSospesoQueries.elenco().executeAsOne()
         db.eliminazioneInSospesoQueries.elimina(registrazioneId)
@@ -160,7 +160,7 @@ class MigrazioneSchemaTest {
         db.incontroQueries.trovaDelProgetto(progettoId).executeAsList()
         db.registrazioneQueries.trovaPerId(registrazioneId).executeAsOne()
         db.registrazioneQueries.trovaDelProgetto(progettoId).executeAsList()
-        db.registrazioneQueries.aggiorna("titolo rinominato", "2026-09-24", registrazioneId)
+        db.registrazioneQueries.aggiorna("titolo rinominato", "2026-09-24", null, registrazioneId)
 
         db.parlanteQueries.inserisci(parlanteId, progettoId, "Marco", "marco", "ricorrente", "attivo")
         db.parlanteQueries.trovaPerId(parlanteId).executeAsOne()

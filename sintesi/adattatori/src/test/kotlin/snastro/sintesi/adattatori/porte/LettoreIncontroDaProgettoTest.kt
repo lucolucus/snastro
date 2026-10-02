@@ -65,6 +65,7 @@ class LettoreIncontroDaProgettoTest : LettoreIncontroContratto() {
                 clock,
                 progetti,
                 registrazioni,
+                IncontroRepositoryFinta(registrazioni),
                 sonda,
                 archivio,
                 eventi,

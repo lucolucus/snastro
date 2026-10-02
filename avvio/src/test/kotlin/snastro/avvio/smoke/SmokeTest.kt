@@ -29,6 +29,7 @@ import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
 import snastro.progetto.adattatori.persistenza.ProgettoRepositorySql
 import snastro.progetto.adattatori.persistenza.RegistrazioneRepositorySql
 import snastro.progetto.applicazione.letture.CatalogoRegistrazioni
+import snastro.progetto.dominio.Incontro
 import snastro.progetto.dominio.NomeProgetto
 import snastro.progetto.dominio.Progetto
 import snastro.progetto.dominio.Registrazione
@@ -120,6 +121,8 @@ class SmokeTest {
             dataRegistrazione = LocalDate.parse("2026-01-01"),
             aggiuntaAlle = Instant.parse("2026-01-01T10:00:00Z"),
         )
+        val incontro = Incontro.nuovo(registrazione.aggregato.incontroId, progetto.aggregato.id)
+        IncontroRepositorySql(db.database).salva(incontro)
         registrazioni.salva(registrazione.aggregato)
 
         // AC-351: a completed Elaborazione + its Trascritto (two Voci, no Parlanti -> 'Voce 1'/'Voce 2').

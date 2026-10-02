@@ -33,45 +33,39 @@ public class RegistrazioneRepositorySql(private val db: SnastroDatabase) : Regis
     override fun titoliDelProgetto(id: ProgettoId): List<String> =
         db.registrazioneQueries.titoliDelProgetto(id.valore).executeAsList()
 
+    // The Incontro row is IncontroRepository's: the caller saved it first, the immediate FK refuses a Parte without it.
     override fun salva(r: Registrazione) {
-        val esistente = db.registrazioneQueries.trovaPerId(r.id.valore).executeAsOneOrNull()
-        if (esistente == null) {
-            // The Incontro row comes with its first Parte (INV-I1: an Incontro never exists without one); its id is
-            // minted by the command through GeneratoreId (ADR 0033 §4.1). incontro_id is written once, never updated.
-            val incontroId = r.incontroId.valore
-            if (db.incontroQueries.trovaPerId(incontroId).executeAsOneOrNull() == null) {
-                db.incontroQueries.inserisci(id = incontroId, progettoId = r.progettoId.valore)
-            }
+        val ora = r.oraDiInizio?.valore?.format(ORA)
+        if (db.registrazioneQueries.trovaPerId(r.id.valore).executeAsOneOrNull() == null) {
             db.registrazioneQueries.inserisci(
                 id = r.id.valore,
                 progettoId = r.progettoId.valore,
-                incontroId = incontroId,
+                incontroId = r.incontroId.valore,
                 titolo = r.titolo,
                 riferimentoAudio = r.riferimentoAudio.percorsoRelativo,
                 durataMs = r.durataMs,
                 dataRegistrazione = r.dataRegistrazione.toString(),
                 aggiuntaAlle = r.aggiuntaAlle.toEpochMilli(),
+                oraDiInizio = ora,
             )
         } else {
             db.registrazioneQueries.aggiorna(
                 titolo = r.titolo,
                 dataRegistrazione = r.dataRegistrazione.toString(),
+                oraDiInizio = ora,
                 id = r.id.valore,
             )
         }
-        db.registrazioneQueries.scriviOraDiInizio(oraDiInizio = r.oraDiInizio?.valore?.format(ORA), id = r.id.valore)
     }
 
     // ADR 0020: the elaborazione / trascritto FKs are immediate — their rows must already be gone.
-    // The Incontro ceases with its last Parte (ADR 0034 §2); still referenced (a Riassunto) the DELETE fails closed.
+    // The Incontro is not touched: its ceasing is IncontroRepository.rimuovi, called by the deletion command.
     override fun rimuovi(id: RegistrazioneId) {
-        val incontroId = db.registrazioneQueries.trovaPerId(id.valore).executeAsOneOrNull()?.incontro_id
         db.registrazioneQueries.elimina(id.valore)
-        if (incontroId != null) db.incontroQueries.eliminaSeSenzaParti(incontroId)
     }
 }
 
-/** The database is trusted, nothing is re-validated (CR-15). */
+/** The database is trusted (CR-15): nothing is re-validated, and one bad row never breaks a list. */
 @OptIn(RicostituzioneDaPersistenza::class)
 private fun RegistrazioneRiga.inDominio(): Registrazione = Registrazione.ricostituisci(
     id = RegistrazioneId(id),
@@ -82,12 +76,8 @@ private fun RegistrazioneRiga.inDominio(): Registrazione = Registrazione.ricosti
     durataMs = durata_ms,
     dataRegistrazione = LocalDate.parse(data_registrazione),
     aggiuntaAlle = Instant.ofEpochMilli(aggiunta_alle),
-    oraDiInizio = ora_di_inizio?.let { testo ->
-        when (val ora = OraDiInizio.di(testo)) {
-            is Esito.Ok -> ora.valore
-            is Esito.Errore -> error("registrazione $id con ora_di_inizio non valida: $testo")
-        }
-    },
+    // The VO has no trusted factory: an unreadable text (never written by this repository) is the empty time.
+    oraDiInizio = (OraDiInizio.di(ora_di_inizio) as? Esito.Ok)?.valore,
 )
 
 /** 'HH:MM:SS', the stored form of an OraDiInizio (7.sqm). */
