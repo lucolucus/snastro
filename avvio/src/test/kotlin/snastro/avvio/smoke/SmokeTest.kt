@@ -219,6 +219,7 @@ class SmokeTest {
                         unitaDiLavoroSql,
                         LettoreRegistrazioneTrascrizione(catalogo),
                     ),
+                    LettoreRegistrazioneTrascrizione(catalogo),
                     unitaDiLavoroSql,
                 ),
             ),
