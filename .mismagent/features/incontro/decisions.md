@@ -762,3 +762,68 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
 - Docs: [pre-release](pre-release.md)
 - Revisit: the strict reading suppresses proposals the user expected on real Incontri.
+
+### D-0058 · Righe I3 rinunciate con Codex
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 08d2fff3
+- Question: Waive the I3 lines left unchanged with reviewer-verified reasons, and fix the L237 after-commit throw?
+- Options: A waive those, listed in release-decisions/I3.md; fix the after-commit throw in pre-I3-7. B fix every line, including kernel commit-boundary dedup and an orphan-audio sweep.
+- Hypothesis: n/a — decided by Codex, delegated by the user, [release decisions](release-decisions/I3.md)
+- Check: n/a — decided by Codex, delegated by the user, [release decisions](release-decisions/I3.md)
+- Result: n/a — decided by Codex, delegated by the user, [release decisions](release-decisions/I3.md)
+- Debate: verifiers confirmed each reason; the after-commit throw tells the user a committed change failed, so it is fixed.
+- Decision: A. Cost: duplicate S2/S4 reloads, rare orphan audio after a double DB fault, banner waits behind the shared lock.
+- By: decided: codex (delegated by user); recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [release decisions](release-decisions/I3.md)
+- Revisit: users see slow Proposte or orphan files.
+
+### D-0059 · Istanti di import dopo l'ultimo del Progetto
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: cbd4e0f3
+- Question: How are aggiuntaAlle instants minted so two imports into one Progetto never interleave?
+- Options: A domain Registrazione.istantiDiAggiunta = max(now truncated to ms, latest in Progetto + 1 ms), +1 ms per file, read inside the transaction. B keep the clock value per import.
+- Hypothesis: n/a — decided by the worker in fix group pre-I3-4, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I3-4, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I3-4, [pre-release](pre-release.md)
+- Debate: code-review: race-free only because writes BEGIN IMMEDIATE; aggiuntaAlle is an ordering key, not wall-clock truth.
+- Decision: A (ADR 0033 §7 keeps the comparison in the domain). Cost: one more read per import transaction.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: code-review, mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: imports into very large Progetti become slow.
+
+### D-0060 · Caso non fissato nel contratto VociDellIncontro
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: f3427bb9
+- Question: Fake and SQL number Segmenti differently when a removed Parte is completed again after a reload: align them or state it?
+- Options: A state in contract and port KDoc that the case is unpinned and unreachable. B make copia() drop rimosse (breaks INV-I16) or store a removed Parte's counter (new column).
+- Hypothesis: n/a — decided by the worker in fix group pre-I3-5, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I3-5, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I3-5, [pre-release](pre-release.md)
+- Debate: verifier and code-review: unreachable, since rimuoviParte runs only on RegistrazioneEliminata and EseguiProssimaElaborazione refuses a missing Registrazione.
+- Decision: A. Cost: fake and SQL still differ on an unreachable case.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [pre-release](pre-release.md)
+- Revisit: a Parte becomes removable without its Registrazione.
+
+### D-0061 · Invalidazione tra Parti prima di ogni modulo
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 4295576d
+- Question: How does the tra-Parti cache invalidation run before any module's reload on the same event?
+- Options: A a priority hook ModuloComposizione.abbonatiDopoCommitPrioritari, registered before every ordinary subscriber. B reorder the module list (pinned by ADR 0030). C add the events to Parlanti's aggiornamenti.
+- Hypothesis: n/a — decided by the worker in fix group pre-I3-3, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I3-3, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I3-3, [pre-release](pre-release.md)
+- Debate: verifier: holds per event, not per commit; an E1-then-E2 commit could still read stale (I4 MED).
+- Decision: A. Cost: one more hook on ModuloComposizione.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: another cache needs priority, or the per-commit gap becomes reachable.
+
+### D-0062 · Consegna dopo-commit fallita come tipo distinto
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: cce1e9f4
+- Question: To tell a committed change apart from a commit failure (L237), may the kernel wrap after-commit subscriber failures in a new type?
+- Options: A ConsegnaDopoCommitFallita(cause = first, suppressed = others), changing the documented rethrow; edit AC-60. B a second unit-of-work view for :avvio only. C waive for I3.
+- Hypothesis: n/a — decided by the user at the I3 pre-release review, [pre-release](pre-release.md)
+- Check: n/a — decided by the user at the I3 pre-release review, [pre-release](pre-release.md)
+- Result: n/a — decided by the user at the I3 pre-release review, [pre-release](pre-release.md)
+- Debate: worker: no additive design can rethrow the original and be a distinct type; only AC-60 asserted the raw type, no main code.
+- Decision: A. applica shows the committed Esito plus a WARNING log; ComandiVoceProgetto.esegui Ok; nominaFrase stays NonRiuscito. Cost: the kernel's after-commit guarantee changes.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-worker
+- Docs: [pre-release](pre-release.md)
+- Revisit: a caller needs the raw subscriber exception type.
