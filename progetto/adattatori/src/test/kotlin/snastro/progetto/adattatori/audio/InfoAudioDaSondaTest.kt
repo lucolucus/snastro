@@ -13,14 +13,14 @@ import kotlin.test.assertEquals
  */
 class InfoAudioDaSondaTest {
     @Test
-    fun `AC-I52 la sonda porta in InfoAudio durata, data e ora di inizio`() {
+    fun `la sonda porta in InfoAudio durata, data e ora di inizio`() {
         val info = InfoFile(1_500, LocalDate.of(2026, 9, 21), LocalTime.of(22, 22, 13))
 
         assertEquals(InfoAudio(1_500, LocalDate.of(2026, 9, 21), LocalTime.of(22, 22, 13)), info.inInfoAudio())
     }
 
     @Test
-    fun `AC-I53 senza ora nella sonda InfoAudio non ha ora di inizio`() {
+    fun `senza ora nella sonda InfoAudio non ha ora di inizio`() {
         val info = InfoFile(1_500, LocalDate.of(2026, 9, 21), oraDiInizio = null)
 
         assertEquals(InfoAudio(1_500, LocalDate.of(2026, 9, 21), oraDiInizio = null), info.inInfoAudio())
