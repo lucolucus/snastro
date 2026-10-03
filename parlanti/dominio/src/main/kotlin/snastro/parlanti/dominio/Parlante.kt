@@ -86,13 +86,30 @@ public class Parlante private constructor(
     /**
      * POLICY-ONLY ([INV-21] `unire(A = [a], B = [da])`): each print of [da] is re-keyed onto [a] keeping its Parte,
      * impronta, sorgente and modello (stale by construction, refreshed after commit by `RiallineaImpronte`) — unless [a]
-     * already has a print in that Parte: then [a]'s is kept and [da]'s dropped. Covers the inheritance case ([a] holds
-     * none). No print for [da], or [da] == [a] → no-op (the former always so for an `eliminato`, [INV-13]).
+     * already has a print in that Parte: then [a]'s is kept and [da]'s dropped (both Voci are attributed to this
+     * Parlante). The inheritance case ([a] unattributed) is [ereditaImpronte]. No print for [da], or [da] == [a] →
+     * no-op (the former always so for an `eliminato`, [INV-13]).
      */
     public fun riassegnaImpronte(da: VoceRef, a: VoceRef) {
         if (da == a) return // re-keying a Voce onto itself changes nothing (never drop its prints)
-        val partiDiA = _impronte.filter { it.voceRef == a }.map { it.parte }.toSet()
-        _impronte.removeAll { it.voceRef == da && it.parte in partiDiA }
+        richiava(da, a, vince = a)
+    }
+
+    /**
+     * POLICY-ONLY ([INV-21] `unire` inheritance: [a] is unattributed and inherits [da]'s Attribuzione): like
+     * [riassegnaImpronte], but where both hold a print of the same Parte [da]'s wins — it is the print of the confirmed
+     * Attribuzione, [a]'s is stray data no command wrote. [a]'s prints of the other Parti are kept.
+     */
+    public fun ereditaImpronte(da: VoceRef, a: VoceRef) {
+        if (da == a) return
+        richiava(da, a, vince = da)
+    }
+
+    /** Re-keys [da]'s prints onto [a]; in a Parte where both have one, only [vince]'s survives. */
+    private fun richiava(da: VoceRef, a: VoceRef, vince: VoceRef) {
+        val perde = if (vince == a) da else a
+        val partiDiVince = _impronte.filter { it.voceRef == vince }.map { it.parte }.toSet()
+        _impronte.removeAll { it.voceRef == perde && it.parte in partiDiVince }
         _impronte.replaceAll { if (it.voceRef == da) it.copy(voceRef = a) else it }
     }
 

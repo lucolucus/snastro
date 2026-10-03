@@ -241,7 +241,7 @@ class ApplicaRevisionePoliticaTest {
     }
 
     @Test
-    fun `INV-21 unire con A senza Attribuzione ma con un impronta vagante dello stesso Parlante non fallisce`() {
+    fun `INV-21 unire con A senza Attribuzione ma con un impronta vagante tiene nella Parte quella confermata di B`() {
         val p = unParlante("id-p")
         attribuisci(unaVoce(2), p)
         val vagante = Impronta(floatArrayOf(9f))
@@ -254,7 +254,7 @@ class ApplicaRevisionePoliticaTest {
         assertNull(attribuzioni.trova(unaVoce(2)))
         val righe = impronteDi(p)
         assertEquals(listOf(unaVoce(1) to REGISTRAZIONE), righe.map { it.voceRef to it.parte }, "una riga per Parte")
-        assertEquals(vagante, righe.single().impronta, "nella stessa Parte resta quella di A")
+        assertEquals(Impronta(floatArrayOf(2f)), righe.single().impronta, "nella stessa Parte vince quella di B")
     }
 
     @Test

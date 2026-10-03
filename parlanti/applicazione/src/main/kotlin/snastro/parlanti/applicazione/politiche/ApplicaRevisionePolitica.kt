@@ -94,16 +94,17 @@ public class ApplicaRevisionePolitica(
     /**
      * [INV-21] `unire` inheritance: [daRimossa] is RE-KEYED to [perSopravvissuta] — the Attribuzione
      * ([Attribuzione.trasferisci], valid for an `eliminato` tombstone too) and the Parlante's print row
-     * ([Parlante.riassegnaImpronte], keeping `sorgente`/`modello`: stale by construction; a no-op for an
+     * ([Parlante.ereditaImpronte], keeping `sorgente`/`modello`: stale by construction; a no-op for an
      * `eliminato`, which has no print). The Parlante keeps an Attribuzione, so [INV-25] never fires here.
      * A print the Parlante already held for the unattributed [perSopravvissuta] (stray data, never written by a
-     * command) is not a failure: the root keeps it in its Parte, and the inherited Attribuzione now covers it.
+     * command) is not a failure: in a Parte where [daRimossa] has its confirmed print, that print wins; elsewhere the
+     * root keeps the stray one, and the inherited Attribuzione now covers it.
      */
     private fun eredita(daRimossa: Attribuzione, perSopravvissuta: VoceRef): Esito<Unit> {
         attribuzioni.rimuovi(daRimossa.voceRef)
         attribuzioni.salva(daRimossa.trasferisci(perSopravvissuta))
         val parlante = parlanteDi(daRimossa)
-        parlante.riassegnaImpronte(da = daRimossa.voceRef, a = perSopravvissuta)
+        parlante.ereditaImpronte(da = daRimossa.voceRef, a = perSopravvissuta)
         return parlanti.salva(parlante)
     }
 
