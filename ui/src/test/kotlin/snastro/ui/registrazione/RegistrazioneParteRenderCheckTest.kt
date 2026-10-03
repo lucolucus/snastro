@@ -198,6 +198,12 @@ class RegistrazioneParteRenderCheckTest {
         }
 
     @Test
+    fun `L235 la scheda della Parte selezionata e portata in vista tra molte Parti`() =
+        scena("molte-parti-ultima", statoParte(11, totale = 12)) {
+            onNodeWithTag("parte-10").assertIsDisplayed()
+        }
+
+    @Test
     fun `AC-I76 caricamento mostra lo scheletro`() =
         scena("caricamento", RegistrazioneUiStato.Caricamento) {
             onNodeWithTag("registrazione-scheletro").assertIsDisplayed()

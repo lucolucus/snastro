@@ -508,6 +508,10 @@ internal class StatoVoci(
     }
 
     private suspend fun ricaricaDopoRevisione(azzeraSelezione: Boolean) {
+        // AC-I84 (L189): cancel BEFORE the reload read — an in-flight pre-join pair must never be published meanwhile.
+        lavoroTraParti?.cancel()
+        coppiaTraParti = null
+        pubblica()
         val nuova = withContext(io) { trascritto() } ?: return
         vista = nuova
         stato.update { d -> if (d is RegistrazioneUiStato.Dati) d.copy(segmenti = segmentiDi(nuova)) else d }
@@ -518,8 +522,6 @@ internal class StatoVoci(
             esistenti.map { it.segmentoId }.toSet()
         }
         proposte.clear()
-        lavoroTraParti?.cancel()
-        coppiaTraParti = null // AC-I84: a Revisione may have joined the pair — never offer a stale one
         ricaricaParlanti()
     }
 

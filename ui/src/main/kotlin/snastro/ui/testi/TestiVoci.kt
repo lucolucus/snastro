@@ -70,9 +70,15 @@ const val DESCRIZIONE_FASCIA_NESSUNA: String = "nessuna somiglianza"
 /** AC-216: the merge banner, e.g. "Voce 1 e Voce 3 sono entrambe Marco". */
 fun testoUnione(voceA: Int, voceB: Int, nome: String): String = "Voce $voceA e Voce $voceB sono entrambe $nome"
 
-/** AC-I83 (ux S3): the cross-Parte banner; [parteA] is the first Parte of voce A, the one named in brackets. */
+/**
+ * AC-I83 (ux S3): the cross-Parte banner; [parteA] is the Parte voce A's estratto plays from (D-0057; it may be
+ * later than voce B's), the one named in brackets.
+ */
 fun testoTraParti(voceA: Int, parteA: Int, voceB: Int): String =
     "Voce $voceB e Voce $voceA (parte $parteA) sembrano la stessa persona"
+
+/** L191: the accessible name of a '▶' estratto button of the cross-Parte banner. */
+fun descrizioneAscoltaVoce(voce: Int): String = "Ascolta la Voce $voce"
 
 /** AC-209: the toolbar's summary of the selection. */
 fun testoSelezione(numero: Int, etichetta: String): String =
