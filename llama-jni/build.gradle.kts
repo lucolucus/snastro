@@ -47,6 +47,14 @@ detekt {
     baseline = null
 }
 
+// CR-6 (no `!!`): `UnsafeCallOnNullableType` needs type resolution, which the plain `detekt` task lacks. The
+// type-resolved `detektMain` runs that one rule only (config/detekt-cr6.yml, no default config) and joins `check`.
+tasks.named<io.gitlab.arturbosch.detekt.Detekt>("detektMain") {
+    buildUponDefaultConfig = false
+    config.setFrom(files("config/detekt-cr6.yml"))
+}
+tasks.named("check") { dependsOn("detektMain") }
+
 // The unit tests run over a fake NativeBridge: no native library, no model, no C compiler.
 tasks.named<Test>("test") {
     useJUnitPlatform {

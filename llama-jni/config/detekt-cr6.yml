@@ -1,0 +1,12 @@
+# llama-jni — detekt config for the type-resolved run (detektMain), CR-6 ONLY: no `!!`.
+# `UnsafeCallOnNullableType` needs type resolution, which the plain `detekt` task lacks. Every other rule runs in the
+# plain task (detekt.yml); this file keeps the type-resolved pass to the one rule that needs it. Used WITHOUT the
+# default config (build.gradle.kts), so nothing else is active here. Self-contained (ADR 0027 §1).
+
+build:
+  maxIssues: 0
+
+potential-bugs:
+  UnsafeCallOnNullableType:
+    active: true
+    excludes: ['**/build/**'] # generated sources, if any, are not ours to fix.
