@@ -44,7 +44,8 @@ import snastro.trascrizione.applicazione.porte.AllineatoreFinta
 import snastro.trascrizione.applicazione.porte.DecodificatoreAudioFinta
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
-import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
+import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
+import snastro.trascrizione.applicazione.porte.ParteDiIncontro
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
@@ -91,12 +92,28 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         private val trascritti = VociDellIncontroRepositoryFinta()
         private val eventiTrascrizione = DispatcherEventiFinta(UnitaDiLavoroFinta(elaborazioni, trascritti))
 
-        /** Trascrizione's own view of each Registrazione seeded so far (its `LettoreRegistrazione` port). */
-        private val registrazioniViste = mutableMapOf<RegistrazioneId, RegistrazioneVista>()
+        /**
+         * Trascrizione's `LettoreRegistrazione` port read LIVE from Progetto's catalogue at every call, as the app
+         * wires it: a Parte's date or time changed after its import reorders the Parti here too (INV-I2), never a
+         * stale copy.
+         */
+        private val lettoreRegistrazione = object : LettoreRegistrazione {
+            override fun registrazione(id: RegistrazioneId): RegistrazioneVista? =
+                catalogo.registrazione(id)?.let { v ->
+                    RegistrazioneVista(
+                        registrazioneId = v.registrazioneId,
+                        progettoId = v.progettoId,
+                        incontroId = v.incontroId,
+                        titolo = v.titolo,
+                        riferimentoAudio = v.riferimentoAudio,
+                        dataRegistrazione = v.dataRegistrazione,
+                        durataMs = v.durataMs,
+                    )
+                }
 
-        /** Each Incontro's Parti in PROGETTO's order (INV-I2), copied from its catalogue after each import. */
-        private val ordineParti = mutableMapOf<IncontroId, List<RegistrazioneId>>()
-        private val lettoreRegistrazione = LettoreRegistrazioneFinta(registrazioniViste, ordineParti)
+            override fun parti(incontroId: IncontroId): List<ParteDiIncontro>? =
+                catalogo.incontro(incontroId)?.parti?.map { ParteDiIncontro(it.registrazioneId, it.numero) }
+        }
         private var contatore = 0
 
         init {
@@ -140,17 +157,6 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             ).atteso()
 
             val id = eventiProgetto.pubblicati.filterIsInstance<RegistrazioneAggiunta>().last().registrazioneId
-            val v = checkNotNull(catalogo.registrazione(id))
-            registrazioniViste[id] = RegistrazioneVista(
-                registrazioneId = v.registrazioneId,
-                progettoId = v.progettoId,
-                incontroId = v.incontroId,
-                titolo = v.titolo,
-                riferimentoAudio = v.riferimentoAudio,
-                dataRegistrazione = v.dataRegistrazione,
-                durataMs = v.durataMs,
-            )
-            ordineParti[v.incontroId] = checkNotNull(catalogo.incontro(v.incontroId)).parti.map { it.registrazioneId }
             return id
         }
 
@@ -173,7 +179,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
         }
 
         override fun incontroDi(registrazioneId: RegistrazioneId): IncontroId =
-            registrazioniViste.getValue(registrazioneId).incontroId
+            checkNotNull(lettoreRegistrazione.registrazione(registrazioneId)).incontroId
 
         override fun fallisciElaborazione(registrazioneId: RegistrazioneId) {
             avvia(registrazioneId)
@@ -208,7 +214,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
             diarizzatore: DiarizzatoreFinta,
             allineatore: Allineatore,
         ) {
-            val vista = registrazioniViste.getValue(registrazioneId)
+            val vista = checkNotNull(lettoreRegistrazione.registrazione(registrazioneId))
             val decodificatore = DecodificatoreAudioFinta(mapOf(vista.riferimentoAudio to vista.durataMs))
             val pipeline = PortePipeline(
                 lettoreRegistrazione,

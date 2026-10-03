@@ -179,7 +179,7 @@ class ParlanteRepositorySqlCheckpointPerRimozioneTest {
         seminaTrascrittoDiProva(registrazioneId = R.valore)
         seminaVoceDiProva(registrazioneId = R.valore, numero = 1L)
         seminaVoceDiProva(registrazioneId = R.valore, numero = 2L)
-        // A second Parte of the same Incontro (seeded by hand: the I2 import does not exist yet) where V1 also speaks.
+        // A second Parte of the same Incontro (its rows seeded directly, no import needed) where V1 also speaks.
         registrazioneQueries.inserisci(
             id = R2.valore,
             progettoId = PROGETTO.valore,

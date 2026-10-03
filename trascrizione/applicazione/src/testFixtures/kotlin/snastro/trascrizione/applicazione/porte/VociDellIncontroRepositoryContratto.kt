@@ -28,6 +28,12 @@ import kotlin.test.assertTrue
  * INV-I16): a full round-trip of the root (Voce counter, each Parte's Segmenti and Segmento counter), the counter
  * surviving the removal of every Trascritto, a Parte read alone, no aliasing. One subclass per implementation (the
  * Finta here, the SQL adapter in `:trascrizione:adattatori`).
+ *
+ * Deliberately NOT pinned: the Segmento ids of a Parte completed again AFTER a reload of a root that removed it. The
+ * Finta keeps a whole copy of the root, so it numbers after the ids the Parte had; the SQL store drops the Parte's
+ * rows, its Segmento counter with them, and numbers from 1. The case is unreachable: a Parte is removed only with its
+ * Registrazione (ADR 0038), whose id is never reused, and a completion that outlived it is refused before the root
+ * (see `VociDellIncontro`). The tests below that complete a removed Parte again assert its Voci, never its Segmenti.
  */
 public abstract class VociDellIncontroRepositoryContratto {
     /** A fresh, empty repository. */
@@ -238,7 +244,6 @@ public abstract class VociDellIncontroRepositoryContratto {
         },
     )
 
-    /** Without the capability, the one-Parte shape every Incontro of this environment has still round-trips. */
     /** The root of [INCONTRO]: Parte A with Voci 1, 2 (Segmenti 1..4), Parte B with Voci 3, 4, 5 (Segmenti 1..6). */
     private fun dueParti(): VociDellIncontro {
         val radice = VociDellIncontro.crea(INCONTRO)

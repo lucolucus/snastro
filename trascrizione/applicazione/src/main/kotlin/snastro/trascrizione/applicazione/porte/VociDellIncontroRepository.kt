@@ -18,7 +18,9 @@ public interface VociDellIncontroRepository {
 
     /**
      * Inserts or replaces the root: its counter, the Parti it holds (rows of a Parte it no longer holds go), its Voci.
-     * The counters it stores never decrease (INV-I4, INV-I16): the root only ever raises them.
+     * The counters it stores never decrease (INV-I4, INV-I16): the root only ever raises them. A Parte's Segmento
+     * counter goes with that Parte's rows, so the ids of a removed Parte completed again after a reload are not part
+     * of the contract (unreachable: see `VociDellIncontroRepositoryContratto`).
      */
     public fun salva(root: VociDellIncontro)
 
