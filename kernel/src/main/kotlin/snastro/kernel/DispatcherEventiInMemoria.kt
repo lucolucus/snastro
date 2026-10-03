@@ -21,14 +21,19 @@ import kotlin.coroutines.cancellation.CancellationException
  * - [AbbonatoDopoCommit]s receive the transaction's events, in publication order, only after
  *   [delegata] committed. They never run after a rollback or an exception. The priority ones
  *   ([registraDopoCommitPrioritario], e.g. a cache invalidation) receive EVERY event of the commit before
- *   any ordinary one receives the first (L255). Every after-commit subscriber receives every event even if
+ *   any ordinary one receives the first (L255). If a priority one fails, the ordinary ones receive NONE of the
+ *   commit's events (L272: an invalidation that did not happen must not let a reload read the stale cache and
+ *   show it as fresh); the other priority ones still receive every event. A priority subscriber must not open a
+ *   transaction (D-0066): its nested commit would deliver in full — ordinary subscribers included — before the
+ *   remaining priority subscribers see the outer events (L271). Unreachable today: the only priority subscriber,
+ *   the tra-Parti invalidation, opens none. Otherwise every after-commit subscriber receives every event even if
  *   one throws. Then a [ConsegnaDopoCommitFallita] is thrown, its cause the first exception and the others
  *   attached to it as suppressed (the command is already committed; a commit failure is never wrapped). A
  *   subscriber's own [ConsegnaDopoCommitFallita] (a transaction it opened) contributes its failures, never
  *   itself, so nothing is wrapped twice (L258). A fatal throwable (any [Error] — a programmer error such as an
  *   `AssertionError` is never turned into "committed, follow-up failed" (L261) —, [CancellationException],
  *   [InterruptedException] — the interrupt flag is restored) stops delivery and propagates at once, unwrapped,
- *   carrying the earlier failures as suppressed.
+ *   carrying the earlier failures as suppressed (from a priority subscriber it thus also skips the ordinary ones).
  *
  * Services must receive [unitaDiLavoro] (not [delegata]); publishing outside it is a programmer error.
  * Wiring: register the subscribers at startup (`:avvio`), before the first command.
@@ -84,7 +89,10 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
         dopoCommit += abbonato
     }
 
-    /** An after-commit subscriber that receives every event of a commit before any [registraDopoCommit] one. */
+    /**
+     * An after-commit subscriber that receives every event of a commit before any [registraDopoCommit] one; its
+     * failure withholds the commit from the ordinary ones (L272). It must not open a transaction (L271, D-0066).
+     */
     public fun registraDopoCommitPrioritario(abbonato: AbbonatoDopoCommit) {
         dopoCommitPrioritari += abbonato
     }
@@ -122,6 +130,7 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
     private fun consegnaDopoCommit(eventi: List<EventoPubblicato>) {
         val fallimenti = mutableListOf<Throwable>()
         for (abbonati in listOf(dopoCommitPrioritari, dopoCommit)) {
+            if (abbonati === dopoCommit && fallimenti.isNotEmpty()) break // L272: never reload on a stale cache
             for (evento in eventi) {
                 for (abbonato in abbonati) {
                     runCatching { abbonato.ricevi(evento) }.onFailure { e ->

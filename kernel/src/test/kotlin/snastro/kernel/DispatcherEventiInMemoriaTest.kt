@@ -103,6 +103,27 @@ class DispatcherEventiInMemoriaTest : DispatcherEventiContratto() {
         assertEquals(listOf("invalida", "ricarica-per-primo"), visti)
     }
 
+    @Test
+    fun `L272 un prioritario che fallisce ferma le consegne ordinarie del commit, non gli altri prioritari`() {
+        val visti = mutableListOf<String>()
+        val guasto = IllegalStateException("invalidazione")
+        val secondo = object : EventoPubblicato {}
+        reale.registraDopoCommitPrioritario { e -> if (e == Evento) throw guasto }
+        reale.registraDopoCommitPrioritario { e -> visti += if (e == Evento) "invalida-1" else "invalida-2" }
+        reale.registraDopoCommit { visti += "ricarica" }
+        val lanciata = assertFailsWith<ConsegnaDopoCommitFallita> {
+            reale.unitaDiLavoro.inTransazione {
+                effetti.scrivi("comando")
+                reale.pubblica(Evento)
+                reale.pubblica(secondo)
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(guasto, lanciata.cause)
+        assertEquals(listOf("invalida-1", "invalida-2"), visti, "nessuna ricarica sulla cache non invalidata")
+        assertEquals(setOf("comando"), effetti.visibili(), "il comando resta confermato")
+    }
+
     /** A delegate that dooms nothing: the dispatcher alone must carry the nested-failure rule. */
     private val ingenua = object : UnitaDiLavoro {
         override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> = blocco()
