@@ -2,6 +2,7 @@ package snastro.progetto.adattatori.audio
 
 import snastro.audio.AudioIlleggibile
 import snastro.audio.FormatoNonSupportato
+import snastro.audio.InfoFile
 import snastro.audio.SondaFfmpeg
 import snastro.kernel.Esito
 import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
@@ -25,12 +26,7 @@ public class SondaAudioFfmpeg(private val sonda: SondaFfmpeg = SondaFfmpeg()) : 
     override fun sonda(percorsoSorgente: String): Esito<InfoAudio> = try {
         val info = sonda.sonda(Path.of(percorsoSorgente))
         if (info.durataMs > 0) {
-            val infoAudio = InfoAudio(
-                durataMs = info.durataMs,
-                dataFile = info.dataRegistrazione,
-                oraDiInizio = info.oraDiInizio,
-            )
-            Esito.Ok(infoAudio)
+            Esito.Ok(info.inInfoAudio())
         } else {
             Esito.Errore(ErroreApplicazioneProgetto.FormatoNonSupportato(percorsoSorgente))
         }
@@ -44,3 +40,7 @@ public class SondaAudioFfmpeg(private val sonda: SondaFfmpeg = SondaFfmpeg()) : 
         Esito.Errore(ErroreApplicazioneProgetto.AudioNonLeggibile(percorsoSorgente))
     }
 }
+
+/** The probe's answer in the port's Published Language: duration, file date and start time (ADR 0040). */
+internal fun InfoFile.inInfoAudio(): InfoAudio =
+    InfoAudio(durataMs = durataMs, dataFile = dataRegistrazione, oraDiInizio = oraDiInizio)
