@@ -879,3 +879,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [pre-release](pre-release.md)
 - Revisit: a priority subscriber needs to write.
+
+### D-0067 · Prioritario fallito, consegne ordinarie ferme
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 8f17306e
+- Question: When a priority after-commit subscriber (a cache invalidation) fails with an ordinary exception, do that commit's ordinary subscribers still run (post-I4 L272)?
+- Options: A stop the ordinary deliveries, keep the other priority ones, throw ConsegnaDopoCommitFallita. B keep delivering: ordinary reloads read the stale Proposta cache, shown as Ok plus a WARNING.
+- Hypothesis: n/a — decided by the worker in fix group post-I4-3, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group post-I4-3, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group post-I4-3, [pre-release](pre-release.md)
+- Debate: verifier and code-review: no queue wake-up can be skipped; Progetto pulizia, Sbobinatura and riallineamento wait for their at-open recovery. Unreachable today: invalida cannot throw.
+- Decision: A, the guarantee D-0066 bought, matching D-0065 for an Error. Cost: side-effecting ordinary subscribers wait for the next project open.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [pre-release](pre-release.md)
+- Revisit: a priority subscriber that can really fail, or an ordinary subscriber with no at-open recovery.
