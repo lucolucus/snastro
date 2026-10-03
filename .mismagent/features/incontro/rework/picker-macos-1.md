@@ -1,0 +1,10 @@
+# picker-macos — native macOS file picker for audio import (user request, 2026-10-03)
+
+The user asked: "fai usare il picker di macos". Today S2's audio pickers are Swing `JFileChooser` (ui/src/main/kotlin/snastro/ui/registrazioni/SchermataRegistrazioni.kt:1499-1520, `sceltaFileAudio` and `sceltaFileAudioMultipla`), built inside the composable with a `null` owner — not the macOS picker. Also "Importa file audio…" (lines ~320 and ~381) picks ONE file only, so the I2 multi-file import ("Un incontro in N parti" / "N incontri separati", AC-I70) is reachable only by drag-and-drop.
+
+## Do
+1. Follow the existing folder-picker pattern (L464d, ui/.../progetti/SceltaCartella.kt + avvio/.../SceltaCartellaFileDialog.kt): a ui-side interface for choosing audio files, implemented in :avvio over `java.awt.FileDialog` OWNED by the app window, multi-select (`isMultipleMode = true`, `dialogo.files`), injected into SchermataRegistrazioni the same way SceltaCartella reaches S1. Remove `JFileChooser` from SchermataRegistrazioni.
+2. "Importa file audio…" (both call sites) uses the multi-select picker: 1 file → today's single import; ≥2 files → the existing multi-file path (the same one drag-and-drop uses), which opens the AC-I70 dialog. 'Aggiungi parti…' uses it too.
+3. macOS gotcha: `Main.kt` sets `apple.awt.fileDialogForDirectories=true` globally for the folder picker. The file picker must show FILES: set the property to "false" right before creating/showing the file FileDialog and back to "true" for the folder one (or set it per dialog in both implementations); never leave the folder picker broken. Optionally a `FilenameFilter` for audio extensions (the OS filter may ignore it on macOS — do not rely on it).
+4. Tests: a fake of the new interface drives the presenter/composable paths (1 file → single import; 2 files → multi-file path/AC-I70 dialog; cancel → nothing); the FileDialog adapter itself is not headless-testable (state it in its KDoc, like SceltaCartellaFileDialog). Keep :ui:renderCheck green.
+5. Gate `./gradlew check` green.
