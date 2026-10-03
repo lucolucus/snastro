@@ -1,0 +1,2 @@
+prima:
+SELECT * FROM registrazione WHERE id = (SELECT id FROM registrazione ORDER BY coalesce(x, 0), ora_di_inizio LIMIT 1);

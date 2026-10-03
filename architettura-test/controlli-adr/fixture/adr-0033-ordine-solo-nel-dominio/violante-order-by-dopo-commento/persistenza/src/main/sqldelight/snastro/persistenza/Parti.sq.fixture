@@ -1,0 +1,3 @@
+parti:
+SELECT * FROM registrazione /* in ordine; */ ORDER BY data_registrazione, -- poi
+    ora_di_inizio;

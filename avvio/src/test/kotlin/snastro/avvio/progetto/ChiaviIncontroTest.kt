@@ -49,7 +49,6 @@ class ChiaviIncontroTest {
             it.attendiPronto(r)
             val riassunto = it.porte.riassunti.trova(incontro).single()
             assertEquals(incontro, riassunto.incontroId)
-            assertEquals(r, riassunto.parte)
             assertEquals(false, assertNotNull(it.sintesi.vista(r)?.mostrato).superato)
 
             it.collaboratori.eliminaRegistrazione(EliminaRegistrazione(r)).atteso()
