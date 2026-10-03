@@ -42,8 +42,7 @@ import kotlin.test.assertNull
 
 /**
  * ConfermaAttribuzione / SaltaVoce / RiallineaImpronte on an Incontro of TWO Parti (ADR 0035 §6, [INV-I8], [INV-19]):
- * the Incontro is built on the fakes of the ports, so it is the same in every supplier (the real multi-Parte supplier
- * comes with the I2 import).
+ * the Incontro is built on the fakes of the ports, so it is the same in every supplier.
  */
 class AttribuzioneIncontroTest {
     private val parlanti = ParlanteRepositoryFinta()

@@ -124,9 +124,8 @@ fun messaggioPer(errore: ErroreComandoVoce): String = when (errore) {
 fun messaggioPer(errore: ErroreSintesi): String = when (errore) {
     is ErroreSintesi.RiassuntoGiaAperto -> "C'è già un riassunto in coda o in corso per questa registrazione."
     ErroreSintesi.ModelloNonInstallato -> "Il modello di linguaggio non è installato."
-    // TRANSITION (D-0033): one Parte per Incontro, so the texts stay those of the Registrazione; the per-Parte hints
-    // ("Manca la trascrizione della parte n", D-0020) come with the Incontro screens.
-    is ErroreSintesi.PartiNonTrascritte -> "Questa registrazione non ha ancora una trascrizione."
+    // The Riassunto tab's hint for the same refusal (`MotivoNonDisponibile.PartiNonTrascritte`, D-0020).
+    is ErroreSintesi.PartiNonTrascritte -> "Manca la trascrizione della parte ${errore.parte}."
     is ErroreSintesi.ElaborazioneGiaAperta -> "Aspetta la fine della trascrizione."
     is ErroreSintesi.PartiFallite -> "Parte ${errore.parte} non riuscita: riprova o eliminala."
     is ErroreSintesi.IngressoTroppoLungo -> "La registrazione è troppo lunga per il riassunto."

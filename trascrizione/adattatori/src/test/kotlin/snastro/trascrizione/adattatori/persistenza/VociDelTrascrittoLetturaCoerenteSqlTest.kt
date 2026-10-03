@@ -4,7 +4,9 @@ import app.cash.sqldelight.db.QueryResult
 import app.cash.sqldelight.db.SqlCursor
 import app.cash.sqldelight.db.SqlDriver
 import app.cash.sqldelight.db.SqlPreparedStatement
+import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import org.junit.jupiter.api.io.TempDir
+import org.sqlite.SQLiteConfig
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
@@ -13,7 +15,6 @@ import snastro.kernel.SegmentoRef
 import snastro.kernel.VoceId
 import snastro.kernel.atteso
 import snastro.kernel.unIncontroDi
-import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
@@ -49,9 +50,8 @@ class VociDelTrascrittoLetturaCoerenteSqlTest {
     fun `AC-I42 l ordine delle Parti e la radice vengono dalla stessa istantanea con una Revisione in mezzo`(
         @TempDir cartella: File,
     ) {
-        val reale = apriDatabaseProgetto(cartella)
+        val driverReale = driverSuFile(cartella)
         try {
-            val driverReale = driverDi(reale)
             val scrittore = SnastroDatabase(driverReale)
             predisponi(scrittore)
             val uowScrittore = UnitaDiLavoroSql(scrittore)
@@ -82,7 +82,7 @@ class VociDelTrascrittoLetturaCoerenteSqlTest {
             val dopo = VociDelTrascritto(repoScrittore, PartiDalDatabase(scrittore), uowScrittore)
             assertEquals(3, dopo.voci(INCONTRO)?.size, "the Revisione did commit: a fresh read sees its Voce")
         } finally {
-            reale.chiudi()
+            driverReale.close()
         }
     }
 
@@ -116,10 +116,17 @@ class VociDelTrascrittoLetturaCoerenteSqlTest {
         )
     }
 
-    /** [DatabaseProgetto] keeps its production driver private (the app never needs it): tests only. */
-    private fun driverDi(database: DatabaseProgetto): SqlDriver {
-        val campo = DatabaseProgetto::class.java.getDeclaredField("driver").apply { isAccessible = true }
-        return campo.get(database) as SqlDriver
+    /**
+     * A driver of its own on the `progetto.db` that [apriDatabaseProgetto] creates (schema and migrations as in the
+     * app), WAL and foreign keys on: a file, so each thread gets its own connection and WAL snapshot.
+     */
+    private fun driverSuFile(cartella: File): SqlDriver {
+        apriDatabaseProgetto(cartella).chiudi()
+        val config = SQLiteConfig().apply {
+            enforceForeignKeys(true)
+            setJournalMode(SQLiteConfig.JournalMode.WAL)
+        }
+        return JdbcSqliteDriver("jdbc:sqlite:${File(cartella, "progetto.db").absolutePath}", config.toProperties())
     }
 
     /** Blocks the FIRST `executeQuery` on `registrazione` after it ran, until [via]; everything else passes through. */
