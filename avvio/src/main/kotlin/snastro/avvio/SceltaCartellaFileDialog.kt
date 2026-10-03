@@ -9,8 +9,10 @@ import java.io.File
  * [SceltaCartella] over `java.awt.FileDialog` (frugality rung 3: the platform's own native picker),
  * OWNED by [finestra] — the app's real window (L464d: never a dialog with no owner, the former
  * `JFileChooser(null)` inside `SchermataProgetti`'s own composable). macOS (ADR 0010: v1 is Mac-only)
- * needs `apple.awt.fileDialogForDirectories=true`, set once in `main()` BEFORE any [FileDialog] is
- * realized (`Main.kt`), to switch it from picking files to picking folders — with that set,
+ * needs `apple.awt.fileDialogForDirectories=true` to switch it from picking files to picking folders. It is
+ * a JVM-global property read when the dialog is realized, and [SceltaFileAudioFileDialog] needs it `false`, so
+ * each implementation sets its own value right before showing (never relies on a global one-time setting) — with
+ * `true`,
  * [FileDialog.getFile] names the chosen folder and [FileDialog.getDirectory] its parent; either being
  * `null` means the user cancelled.
  *
@@ -21,6 +23,7 @@ import java.io.File
  */
 internal class SceltaCartellaFileDialog(private val finestra: Frame) : SceltaCartella {
     override fun scegli(titolo: String): String? {
+        System.setProperty(PROPRIETA_CARTELLE, "true")
         val dialogo = FileDialog(finestra, titolo, FileDialog.LOAD)
         dialogo.isVisible = true
         val cartella = dialogo.directory

@@ -30,6 +30,7 @@ import snastro.ui.progetti.SceltaCartella
 import snastro.ui.registrazione.RegistrazioneRoute
 import snastro.ui.registrazione.SelezioneSchedaS3
 import snastro.ui.registrazioni.RegistrazioniRoute
+import snastro.ui.registrazioni.SceltaFileAudio
 
 /** AC-341/AC-177: the shell's sections — Registrazioni and Parlanti (S4). The app's ONE set (ADR 0030 §1). */
 internal val SEZIONI_SHELL: Set<DestinazioneShell> = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
@@ -52,7 +53,7 @@ internal fun schermataIniziale(servizioModelli: ServizioModelli): SchermataR1 =
  * The window follows the theme saved in Impostazioni ([LocalTemaApp]).
  */
 @Composable
-internal fun ContenutoApp(grafo: Grafo, sceltaCartella: SceltaCartella) {
+internal fun ContenutoApp(grafo: Grafo, sceltaCartella: SceltaCartella, sceltaFileAudio: SceltaFileAudio) {
     val shellPresenter = remember { costruisciShellPresenter(grafo) }
     val modelliPresenter = remember { costruisciModelliPresenter(grafo) }
     val impostazioniPresenter = remember { costruisciImpostazioniPresenter(grafo) }
@@ -95,6 +96,7 @@ internal fun ContenutoApp(grafo: Grafo, sceltaCartella: SceltaCartella) {
                         conProgetto = conProgetto,
                         navigazione = navigazione,
                         selezioneScheda = selezioneScheda,
+                        sceltaFileAudio = sceltaFileAudio,
                         impostazioni = {
                             val lunghezza = remember { costruisciLunghezzaRiassuntoPresenter(grafo, collaboratori) }
                             ImpostazioniRoute(
@@ -129,6 +131,7 @@ private fun ContenutoConProgetto(
     conProgetto: ShellUiStato.ConProgetto,
     navigazione: NavigazioneProgetto,
     selezioneScheda: SelezioneSchedaS3,
+    sceltaFileAudio: SceltaFileAudio,
     impostazioni: @Composable () -> Unit,
 ) {
     val progettoId = conProgetto.progetto.progettoId
@@ -146,7 +149,7 @@ private fun ContenutoConProgetto(
     ContenutoProgetto(
         conProgetto = conProgetto,
         navigazione = navigazione,
-        elenco = { RegistrazioniRoute(registrazioniPresenter) },
+        elenco = { RegistrazioniRoute(registrazioniPresenter, sceltaFileAudio) },
         registrazione = { id ->
             SchermataRegistrazione(grafo, collaboratori, id, selezioneScheda) { navigazione.apriRegistrazione(it) }
         },

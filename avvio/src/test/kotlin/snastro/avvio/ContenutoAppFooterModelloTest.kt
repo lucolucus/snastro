@@ -38,7 +38,7 @@ class ContenutoAppFooterModelloTest {
         runDesktopComposeUiTest {
             AmbienteProgetto(radice).use { ambiente ->
                 val servizio = servizio()
-                setContent { ContenutoApp(ambiente.grafo(servizio), sceltaCartella = { null }) }
+                setContent { ContenutoApp(ambiente.grafo(servizio), { null }, { emptyList() }) }
                 attendiPiede(visibile = false, "piede senza riga (NonInstallato)")
 
                 servizio.emetti(StatoModelloFacoltativo.InDownload(2_100_000_000, DIMENSIONE_TOTALE))
@@ -62,7 +62,7 @@ class ContenutoAppFooterModelloTest {
         runDesktopComposeUiTest {
             AmbienteProgetto(radice).use { ambiente ->
                 val servizio = servizio()
-                setContent { ContenutoApp(ambiente.grafo(servizio), sceltaCartella = { null }) }
+                setContent { ContenutoApp(ambiente.grafo(servizio), { null }, { emptyList() }) }
                 attendiPiede(visibile = false, "piede senza riga (NonInstallato)")
 
                 servizio.emetti(StatoModelloFacoltativo.InDownload(1_000_000_000, DIMENSIONE_TOTALE))
