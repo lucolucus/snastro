@@ -827,3 +827,29 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-worker
 - Docs: [pre-release](pre-release.md)
 - Revisit: a caller needs the raw subscriber exception type.
+
+### D-0063 · Nessuna query MAX per aggiuntaAlle
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: cb699ec4
+- Question: Should AggiungiRegistrazioneServizio read the latest aggiuntaAlle with a MAX(aggiunta_alle) port query instead of loading delProgetto (I4 L244)?
+- Options: A keep delProgetto in the write transaction (D-0059). B a MAX port query: forbidden by ADR 0033 §7 clause 3 and the closed RegistrazioneRepository method list. C amend ADR 0033 for an unmeasured speed gain.
+- Hypothesis: n/a — decided by the worker in fix group pre-I4-1, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I4-1, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I4-1, [pre-release](pre-release.md)
+- Debate: verifier and code-review confirmed the two ADR 0033 checks forbid B; L242's race is pinned instead by ImportConcorrenteSqlTest (red under BEGIN DEFERRED, 5/5).
+- Decision: A, L244 waived. Cost: one full Registrazione read per import transaction.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [pre-release](pre-release.md)
+- Revisit: imports into large Progetti become slow.
+
+### D-0064 · Righe nuove dopo I4 marcate post-I4
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 9faf7402
+- Question: I4 is the manifest's last release; which release do the new MED/LOW findings of the I4 fix groups go to?
+- Options: A a `post-I4` label, outside every release, so I4 can go green. B count them in I4: a fix loop that never closes. C open an I5 in the manifest: build-manifest's job, with no goal behind it.
+- Hypothesis: n/a — decided by the composer at the I4 pre-release fixes, [pre-release](pre-release.md)
+- Check: n/a — decided by the composer at the I4 pre-release fixes, [pre-release](pre-release.md)
+- Result: n/a — decided by the composer at the I4 pre-release fixes, [pre-release](pre-release.md)
+- Debate: none.
+- Decision: A. Cost: post-I4 lines are a residue backlog with no release that closes them.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer)
+- Docs: [pre-release](pre-release.md)
+- Revisit: the feature gets a new release.
