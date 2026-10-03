@@ -1479,7 +1479,7 @@ boundaries:
     consumers: ["banner-proposta-tra-parti", "avvio-proposta-tra-parti"]
     projection: "in-process"
     pinned_types:
-      PropostaTraParti: "List<CoppiaTraParti(voceA: VoceId, parteA: Int, estrattoA: EstrattoRef, voceB: VoceId, parteB: Int, estrattoB: EstrattoRef)> per incontroId — parteA < parteB"
+      PropostaTraParti: "List<CoppiaTraParti(voceA: VoceId, parteA: Int, estrattoA: EstrattoRef, voceB: VoceId, parteB: Int, estrattoB: EstrattoRef)> per incontroId — voceA = the Voce whose first Parte is earlier (it survives Unisci); parteA/parteB = the Parte its estratto plays from (the Parte where that Voce speaks most), so parteA > parteB is possible"
     keys:
       voceRef: "as kernel-incontro"
     contract_test: "consumer-driven"

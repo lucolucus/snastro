@@ -34,7 +34,7 @@ The second banner kind of the Voci panel: 'Voce 5 e Voce 1 (parte 1) sembrano la
   - key `voceId`: minted by voci-dell-incontro from the Incontro counter (prossimaVoce) — unique in the Incontro, never reused (INV-I4)
   - key `segmentoId`: minted by voci-dell-incontro from the Parte's prossimoSegmento — unique in its Registrazione across generations (INV-I16)
 - `vista-proposta-tra-parti` (consumes it; owner `proposta-tra-parti`) — consumers: `banner-proposta-tra-parti`, `avvio-proposta-tra-parti` · contract_test: consumer-driven
-  - pinned `PropostaTraParti`: List<CoppiaTraParti(voceA: VoceId, parteA: Int, estrattoA: EstrattoRef, voceB: VoceId, parteB: Int, estrattoB: EstrattoRef)> per incontroId — parteA < parteB
+  - pinned `PropostaTraParti`: List<CoppiaTraParti(voceA: VoceId, parteA: Int, estrattoA: EstrattoRef, voceB: VoceId, parteB: Int, estrattoB: EstrattoRef)> per incontroId — voceA = the Voce whose first Parte is earlier (it survives Unisci); parteA/parteB = the Parte its estratto plays from (the Parte where that Voce speaks most), so parteA > parteB is possible
   - key `voceRef`: as kernel-incontro
 
 Sources: UI/ux-proposal.md § S3 cross-Parte proposal · ADR 0036 §1, §3
