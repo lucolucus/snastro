@@ -102,6 +102,9 @@ public class AggiungiRegistrazioneServizio(
         // INV-I2 (ADR 0033 §2): ONE instant per import, +1 ms per file in the user's selection order, after every
         // Registrazione already in the Progetto, so Parti with the same data and no OraDiInizio follow the selection
         // and then the import order (a per-file clock.instant() ties at the stored ms).
+        // This read-then-mint is race-free only because the transaction holds the write lock from its start: the
+        // SQL UnitaDiLavoro begins every write transaction `BEGIN IMMEDIATE` (DriverSqliteImmediato), so a concurrent
+        // import waits at its BEGIN, then reads these rows. Pinned by ImportConcorrenteSqlTest (:progetto:adattatori).
         val giaNelProgetto = registrazioni.delProgetto(progettoId)
         val aggiunte = Registrazione.istantiDiAggiunta(clock.instant(), copie.size, giaNelProgetto)
         for ((indice, copia) in copie.withIndex()) {

@@ -18,6 +18,7 @@ import java.time.temporal.ChronoUnit
  * [modificaData].
  * [titolo] starts as the source file name without extension (R6) and is never blank; only [rinomina]
  * changes it (AC-360) — the audio file stored in the project is never renamed with it (AC-362).
+ * [aggiuntaAlle] is the import ordering key of INV-I2 (minted by [istantiDiAggiunta]), not wall-clock truth.
  */
 public class Registrazione
 @Suppress("LongParameterList") // one parameter per field of the root
@@ -125,6 +126,9 @@ private constructor(
          * plus 1 ms per file, the instant being [adesso] (to the millisecond) but never before 1 ms after the latest of
          * [esistenti] (the Progetto's Registrazioni). A later import's Parti so follow an earlier one's even when the
          * clock reads the same millisecond, lags the previous import's +n ms, or steps back.
+         *
+         * [aggiuntaAlle] is therefore an ORDERING key, not wall-clock truth: once a clock jumped forward, that instant
+         * stays stored and every later import mints after it, even when the clock is back to the right time.
          */
         public fun istantiDiAggiunta(adesso: Instant, quanti: Int, esistenti: List<Registrazione>): List<Instant> {
             val dopoLUltima = esistenti.maxOfOrNull { it.aggiuntaAlle }?.plusMillis(1) ?: Instant.MIN
