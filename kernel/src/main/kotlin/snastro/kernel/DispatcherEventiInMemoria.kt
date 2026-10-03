@@ -19,12 +19,16 @@ import kotlin.coroutines.cancellation.CancellationException
  *   returned and the transaction rolls back: the exception is only the doom's consequence (ADR 0020
  *   §2). A fatal throwable, or an exception with no Errore doom, still propagates.
  * - [AbbonatoDopoCommit]s receive the transaction's events, in publication order, only after
- *   [delegata] committed. They never run after a rollback or an exception. Every after-commit
- *   subscriber receives every event even if one throws. Then a [ConsegnaDopoCommitFallita] is thrown,
- *   its cause the first exception and the others attached to it as suppressed (the command is already
- *   committed; a commit failure is never wrapped). A fatal throwable
- *   ([VirtualMachineError], [CancellationException], [InterruptedException] — the interrupt flag is
- *   restored) stops delivery and propagates at once, carrying the earlier failures as suppressed.
+ *   [delegata] committed. They never run after a rollback or an exception. The priority ones
+ *   ([registraDopoCommitPrioritario], e.g. a cache invalidation) receive EVERY event of the commit before
+ *   any ordinary one receives the first (L255). Every after-commit subscriber receives every event even if
+ *   one throws. Then a [ConsegnaDopoCommitFallita] is thrown, its cause the first exception and the others
+ *   attached to it as suppressed (the command is already committed; a commit failure is never wrapped). A
+ *   subscriber's own [ConsegnaDopoCommitFallita] (a transaction it opened) contributes its failures, never
+ *   itself, so nothing is wrapped twice (L258). A fatal throwable (any [Error] — a programmer error such as an
+ *   `AssertionError` is never turned into "committed, follow-up failed" (L261) —, [CancellationException],
+ *   [InterruptedException] — the interrupt flag is restored) stops delivery and propagates at once, unwrapped,
+ *   carrying the earlier failures as suppressed.
  *
  * Services must receive [unitaDiLavoro] (not [delegata]); publishing outside it is a programmer error.
  * Wiring: register the subscribers at startup (`:avvio`), before the first command.
@@ -62,6 +66,7 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
 
     private val sincroni = CopyOnWriteArrayList<AbbonatoSincrono>()
     private val dopoCommit = CopyOnWriteArrayList<AbbonatoDopoCommit>()
+    private val dopoCommitPrioritari = CopyOnWriteArrayList<AbbonatoDopoCommit>()
     private val corrente = ThreadLocal<Transazione>()
 
     public val unitaDiLavoro: UnitaDiLavoro = object : UnitaDiLavoro {
@@ -77,6 +82,11 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
 
     public fun registraDopoCommit(abbonato: AbbonatoDopoCommit) {
         dopoCommit += abbonato
+    }
+
+    /** An after-commit subscriber that receives every event of a commit before any [registraDopoCommit] one. */
+    public fun registraDopoCommitPrioritario(abbonato: AbbonatoDopoCommit) {
+        dopoCommitPrioritari += abbonato
     }
 
     override fun pubblica(evento: EventoPubblicato) {
@@ -111,24 +121,27 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
 
     private fun consegnaDopoCommit(eventi: List<EventoPubblicato>) {
         val fallimenti = mutableListOf<Throwable>()
-        for (evento in eventi) {
-            for (abbonato in dopoCommit) {
-                runCatching { abbonato.ricevi(evento) }.onFailure { e ->
-                    if (e is InterruptedException) Thread.currentThread().interrupt()
-                    if (e.fatale()) {
-                        fallimenti.distinct().forEach(e::addSuppressed)
-                        throw e
+        for (abbonati in listOf(dopoCommitPrioritari, dopoCommit)) {
+            for (evento in eventi) {
+                for (abbonato in abbonati) {
+                    runCatching { abbonato.ricevi(evento) }.onFailure { e ->
+                        if (e is InterruptedException) Thread.currentThread().interrupt()
+                        if (e.fatale()) {
+                            fallimenti.distinct().forEach(e::addSuppressed)
+                            throw e
+                        }
+                        fallimenti += if (e is ConsegnaDopoCommitFallita) e.fallimenti() else listOf(e)
                     }
-                    fallimenti += e
                 }
             }
         }
         val unici = fallimenti.distinct()
-        val fallita = ConsegnaDopoCommitFallita(unici.firstOrNull() ?: return)
-        unici.drop(1).forEach(fallita::addSuppressed)
-        throw fallita
+        throw ConsegnaDopoCommitFallita(unici.firstOrNull() ?: return, unici.drop(1))
     }
 }
 
 private fun Throwable.fatale(): Boolean =
-    this is VirtualMachineError || this is CancellationException || this is InterruptedException
+    this is Error || this is CancellationException || this is InterruptedException
+
+/** L258: the failures a nested delivery collected — its cause, then its suppressed. */
+private fun ConsegnaDopoCommitFallita.fallimenti(): List<Throwable> = listOfNotNull(cause) + suppressed

@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.ConsegnaDopoCommitFallita
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
@@ -68,6 +69,35 @@ class RegistrazioniImportaPartiTest {
     }
 
     private fun TestScope.dati(p: RegistrazioniPresenter) = assertIs<RegistrazioniUiStato.Dati>(p.stato.value)
+
+    private fun confermatoMaSeguitoFallito(inviati: MutableList<AggiungiRegistrazione>, c: AggiungiRegistrazione):
+        Esito<Unit> {
+        inviati += c
+        throw ConsegnaDopoCommitFallita(IllegalStateException("abbonato dopo-commit fallito"))
+    }
+
+    @Test
+    fun `L260 un import confermato con un abbonato dopo-commit fallito non mostra errore`() = runTest {
+        val inviati = mutableListOf<AggiungiRegistrazione>()
+        val p = presentatore(this) { confermatoMaSeguitoFallito(inviati, it) }
+        advanceUntilIdle()
+
+        p.azioni.importa(listOf("/sorgenti/a.m4a"))
+        advanceUntilIdle()
+        assertNull(dati(p).errore)
+        assertEquals(false, dati(p).importoInCorso)
+
+        p.azioni.importa(TRE_FILE)
+        p.azioni.confermaImporta()
+        advanceUntilIdle()
+        assertNull(dati(p).dialogoImporta, "il dialogo si chiude come su Ok")
+
+        p.azioni.aggiungiParti(INCONTRO, "Riunione", TRE_FILE)
+        advanceUntilIdle()
+        assertNull(dati(p).errore)
+        assertNotNull(dati(p).avviso)
+        assertEquals(3, inviati.size)
+    }
 
     @Test
     fun `AC-I70 un file solo non apre il dialogo e invia NuovoIncontro`() = runTest {

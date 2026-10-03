@@ -30,6 +30,7 @@ import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceIncontroRiga
+import snastro.ui.comandoConfermato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_PROPOSTA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
@@ -429,9 +430,9 @@ internal class StatoVoci(
         val barra = vista?.let(::barraDi)?.takeIf { it.dividiAbilitato && it.abilitata } ?: return
         val segmenti = selezione
         eseguiRevisione {
-            val esito = sorgenti.dividi(
-                DividiVoce(registrazioneId, barra.voceId, segmenti, incontroDelleVoci = incontroId),
-            )
+            val esito = comandoConfermato("dividi ${barra.voceId}") {
+                sorgenti.dividi(DividiVoce(registrazioneId, barra.voceId, segmenti, incontroDelleVoci = incontroId))
+            }
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }
@@ -451,9 +452,9 @@ internal class StatoVoci(
         var errore: Esito.Errore? = null
         var spostati = 0
         for (segmento in segmenti) {
-            val esito = sorgenti.riassegna(
-                RiassegnaSegmento(registrazioneId, segmento, verso, incontroDelleVoci = incontroId),
-            )
+            val esito = comandoConfermato("riassegna $segmento") {
+                sorgenti.riassegna(RiassegnaSegmento(registrazioneId, segmento, verso, incontroDelleVoci = incontroId))
+            }
             if (esito is Esito.Errore) {
                 errore = esito
                 break
@@ -469,9 +470,9 @@ internal class StatoVoci(
     fun unisci(sopravvive: VoceId, rimossa: VoceId) {
         if (sopravvive == rimossa) return
         eseguiRevisione {
-            val esito = sorgenti.unisci(
-                UnisciVoci(registrazioneId, sopravvive, rimossa, incontroDelleVoci = incontroId),
-            )
+            val esito = comandoConfermato("unisci $rimossa in $sopravvive") {
+                sorgenti.unisci(UnisciVoci(registrazioneId, sopravvive, rimossa, incontroDelleVoci = incontroId))
+            }
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }
@@ -479,7 +480,8 @@ internal class StatoVoci(
     /**
      * AC-404: a Revisione error is an inline message in the transcript — the transcript and the selection
      * stay as they were (only a partly applied multi-Segmento Riassegna re-reads what did change). A
-     * success re-reads the transcript and the panel (the merge banner disappears on its own, AC-216).
+     * success re-reads the transcript and the panel (the merge banner disappears on its own, AC-216). A command that
+     * committed but whose after-commit follow-up failed is a success (D-0062, [comandoConfermato]).
      * One at a time (no double submit); never blocked by a pending card command (AC-414).
      */
     private fun eseguiRevisione(blocco: () -> RisultatoRevisione) {
@@ -512,7 +514,12 @@ internal class StatoVoci(
         lavoroTraParti?.cancel()
         coppiaTraParti = null
         pubblica()
-        val nuova = withContext(io) { trascritto() } ?: return
+        val nuova = withContext(io) { trascritto() }
+        if (nuova == null) {
+            // L253: the pair was cleared above — recompute it anyway, the banner never waits for the next trigger.
+            ricaricaParlanti()
+            return
+        }
         vista = nuova
         stato.update { d -> if (d is RegistrazioneUiStato.Dati) d.copy(segmenti = segmentiDi(nuova)) else d }
         val esistenti = nuova.segmenti.filter { it.segmentoId in selezione }
@@ -569,7 +576,7 @@ internal class StatoVoci(
         eseguiRevisione {
             val comando =
                 ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false, incontroDelleVoci = incontroId)
-            val esito = sorgenti.confermaSegmento(comando)
+            val esito = comandoConfermato("togli conferma ${menu.segmentoId}") { sorgenti.confermaSegmento(comando) }
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }

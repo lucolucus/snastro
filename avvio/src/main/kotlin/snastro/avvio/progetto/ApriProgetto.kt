@@ -30,7 +30,8 @@ import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
  *    AC-S143 — correctness does not depend on it: all run in the command's single transaction);
  * 3. the after-commit subscribers, from ONE declared list: Sintesi → Parlanti → Trascrizione → Sbobinatura → Progetto
  *    (a Proposta is invalidated before ANY module's subscriber hears of the change, AC-317/AC-I49: the cache
- *    invalidations are the modules' `abbonatiDopoCommitPrioritari`, registered before every other);
+ *    invalidations are the modules' `abbonatiDopoCommitPrioritari`, delivered every event of a commit before every
+ *    other, L255);
  * 4. the shared queue ([CodaCondivisa]) over the sources of every module (+ [fontiAggiuntive], a test seam only);
  * 5. the startup recoveries of every source (AC-S145/AC-C71: before the first claim, and before the Parlanti
  *    realignment of step 6, AC-316);
@@ -125,10 +126,11 @@ internal fun registraAbbonati(
     dopoCommit: List<ModuloComposizione>,
 ) {
     sincroni.flatMap { it.abbonatiSincroni() }.forEach { dispatcher.registraSincrono(IscrizioneSincrona(it)) }
-    // The priority subscribers (cache invalidations) of EVERY module first, then the declared order.
-    val prioritari = dopoCommit.flatMap { it.abbonatiDopoCommitPrioritari() }
-    val ordinari = dopoCommit.flatMap { it.abbonatiDopoCommit() }
-    (prioritari + ordinari).forEach { dispatcher.registraDopoCommit(IscrizioneDopoCommit(it)) }
+    // The priority subscribers (cache invalidations) of EVERY module hear EVERY event of a commit before any
+    // ordinary subscriber hears the first (L255: per commit, not only per event); then the declared order.
+    dopoCommit.flatMap { it.abbonatiDopoCommitPrioritari() }
+        .forEach { dispatcher.registraDopoCommitPrioritario(IscrizioneDopoCommit(it)) }
+    dopoCommit.flatMap { it.abbonatiDopoCommit() }.forEach { dispatcher.registraDopoCommit(IscrizioneDopoCommit(it)) }
 }
 
 /** A registered synchronous [Abbonamento]: delivers only events of its type (the rest are Ok, untouched). */

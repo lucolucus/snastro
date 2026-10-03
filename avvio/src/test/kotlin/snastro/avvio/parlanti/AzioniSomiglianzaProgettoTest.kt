@@ -1,11 +1,13 @@
 package snastro.avvio.parlanti
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.job
 import kotlinx.coroutines.runBlocking
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
@@ -221,6 +223,26 @@ class AzioniSomiglianzaProgettoTest {
             p.stato.value[REG].let { it is StatoSomiglianza.Esito || it is StatoSomiglianza.Errore }
         }
         assertEquals(StatoSomiglianza.Esito(3, 1), p.stato.value[REG], "il piano e confermato")
+    }
+
+    @Test
+    fun `L262 una CancellationException durante applica non diventa un Errore ingoiato e libera il pannello`() {
+        val dentro = CountDownLatch(1)
+        val via = CountDownLatch(1)
+        esitoApplica = {
+            dentro.countDown()
+            via.await(5, TimeUnit.SECONDS)
+            throw CancellationException("cancellazione trapelata")
+        }
+        val p = porta { _, _ -> Esito.Ok(piano) }.inAnteprima()
+        p.applica(REG)
+        assertTrue(dentro.await(10, TimeUnit.SECONDS), "applica non e partito")
+        val lavori = progetto.coroutineContext.job.children.flatMap { it.children }.filter { it.isActive }.toList()
+        via.countDown()
+        attendiFinche(timeout = 10.seconds, messaggio = "fine") { p.stato.value[REG] is StatoSomiglianza.Errore }
+        runBlocking { lavori.forEach { it.join() } }
+        assertEquals(1, lavori.size)
+        assertTrue(lavori.single().isCancelled, "la cancellazione si propaga, non e convertita in un esito")
     }
 
     @Test

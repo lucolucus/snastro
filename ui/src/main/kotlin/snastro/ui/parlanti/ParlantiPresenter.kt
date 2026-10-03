@@ -18,6 +18,7 @@ import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
 import snastro.parlanti.applicazione.letture.StatoParlanteVista
 import snastro.ui.AggiornamentiVista
+import snastro.ui.comandoConfermato
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_PARLANTI
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
@@ -28,10 +29,11 @@ import snastro.ui.testi.messaggioPer
  * (AC-175/AC-176/AC-220..222) and triggers `RinominaParlante`/`PromuoviParlante`/`EliminaParlante`
  * (AC-223..226). Refreshes on [AggiornamentiVista] (R15) or after a successful
  * `rinomina`/`promuovi`/`confermaEliminazione` (never after a failure — H1: "nulla cambia" beyond the
- * inline message). A refresh MERGES the freshly-read rows into the current [ParlantiUiStato] instead
- * of rebuilding it from scratch (same fix as `RegistrazioniPresenter`'s M1), so a refresh landing
- * mid-flight of an unrelated in-progress operation never wipes a row's `operazioneInCorso`/
- * `erroreRiga`/`confermaEliminazione`; a generation counter drops a [carica] result that resolves
+ * inline message; a command that committed but whose after-commit follow-up failed is a success, D-0062).
+ * A refresh MERGES the freshly-read rows into the current [ParlantiUiStato] instead of rebuilding it from
+ * scratch (same fix as `RegistrazioniPresenter`'s M1), so a refresh landing mid-flight of an unrelated
+ * in-progress operation never wipes a row's `operazioneInCorso`/`erroreRiga`/`confermaEliminazione`;
+ * a generation counter drops a [carica] result that resolves
  * after a newer one already has (out-of-order completion). The INITIAL load failing (no rows known
  * yet) is a distinct [ParlantiUiStato.Errore] with a retry action, never the misleading AC-220 empty
  * message.
@@ -137,12 +139,20 @@ class ParlantiPresenter(
 
     /** AC-223: renames the Parlante from its row's inline Nome field. */
     fun rinomina(id: ParlanteId, nuovoNome: String) =
-        suRiga(id) { withContext(io) { rinominaParlante(RinominaParlante(id, nuovoNome)) } }
+        suRiga(id) {
+            withContext(io) {
+                comandoConfermato("rinomina di $id") { rinominaParlante(RinominaParlante(id, nuovoNome)) }
+            }
+        }
 
     /** AC-224: only shown for an `occasionale` row (the view's own decision, exactly like
      * `RegistrazioniPresenter`'s `apribile`); no rename bundled here (out of this block's AC scope). */
     fun promuovi(id: ParlanteId) =
-        suRiga(id) { withContext(io) { promuoviParlante(PromuoviParlante(id, nome = null)) } }
+        suRiga(id) {
+            withContext(io) {
+                comandoConfermato("promozione di $id") { promuoviParlante(PromuoviParlante(id, nome = null)) }
+            }
+        }
 
     /** AC-225: opens the row's inline confirmation — no command sent yet. */
     fun chiediConfermaEliminazione(id: ParlanteId) = aggiornaRiga(id) { it.copy(confermaEliminazione = true) }
@@ -152,7 +162,9 @@ class ParlantiPresenter(
 
     /** AC-225: the confirmed tombstone. */
     fun confermaEliminazione(id: ParlanteId) =
-        suRiga(id) { withContext(io) { eliminaParlante(EliminaParlante(id)) } }
+        suRiga(id) {
+            withContext(io) { comandoConfermato("eliminazione di $id") { eliminaParlante(EliminaParlante(id)) } }
+        }
 
     private fun suRiga(id: ParlanteId, operazione: suspend () -> Esito<Unit>) {
         val riga = trovaRiga(id) ?: return

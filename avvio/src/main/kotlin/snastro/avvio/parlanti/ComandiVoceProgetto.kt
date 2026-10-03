@@ -64,8 +64,8 @@ internal class ComandiVoceProgetto(
                 try {
                     esecutore(comando)
                 } catch (e: ConsegnaDopoCommitFallita) {
-                    // L237: ONE command, committed; only an after-commit follow-up (a view refresh) failed.
-                    log.log(Level.WARNING, "${comando.voceRef} confermato, aggiornamento dopo il commit fallito", e)
+                    // L237: ONE command, committed; only an after-commit subscriber then failed.
+                    log.log(Level.WARNING, "${comando.voceRef} confermato, un abbonato dopo-commit e fallito", e)
                     Esito.Ok(Unit)
                 }
             }

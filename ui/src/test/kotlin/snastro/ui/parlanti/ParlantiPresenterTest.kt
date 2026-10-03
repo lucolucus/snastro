@@ -6,6 +6,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.ConsegnaDopoCommitFallita
 import snastro.kernel.Esito
 import snastro.kernel.EstrattoRef
 import snastro.kernel.IntervalloMs
@@ -115,6 +116,64 @@ class ParlantiPresenterTest {
         assertEquals(listOf(PARLANTE_1), dati.ricorrenti.map { it.parlanteId })
         assertEquals(listOf(PARLANTE_2), dati.occasionali.map { it.parlanteId })
         assertEquals(listOf("Luca"), dati.eliminati.map { it.nome })
+    }
+
+    // --- L259 (D-0062): a committed command whose after-commit follow-up failed is a success ---------
+
+    private fun comandoConfermatoMaSeguitoFallito(applica: () -> Unit): Esito<Unit> {
+        applica()
+        throw ConsegnaDopoCommitFallita(IllegalStateException("abbonato dopo-commit fallito"))
+    }
+
+    @Test
+    fun `L259 rinomina promuovi ed elimina confermati con un abbonato dopo-commit fallito ricaricano senza errore`() =
+        runTest {
+            var nome = "Ospite"
+            var tipo = TipoParlanteVista.OCCASIONALE
+            var stato = StatoParlanteVista.ATTIVO
+            val presenter = presentatore(
+                this,
+                parlanti = { listOf(unParlante(nome = nome, tipo = tipo, stato = stato)) },
+                rinomina = { c -> comandoConfermatoMaSeguitoFallito { nome = c.nome } },
+                promuovi = { comandoConfermatoMaSeguitoFallito { tipo = TipoParlanteVista.RICORRENTE } },
+                elimina = { comandoConfermatoMaSeguitoFallito { stato = StatoParlanteVista.ELIMINATO } },
+            )
+            advanceUntilIdle()
+
+            presenter.azioni.rinomina(PARLANTE_1, "Marco")
+            advanceUntilIdle()
+            val rinominato = assertIs<ParlantiUiStato.Dati>(presenter.stato.value).occasionali.single()
+            assertEquals("Marco", rinominato.nome)
+            assertNull(rinominato.erroreRiga)
+
+            presenter.azioni.promuovi(PARLANTE_1)
+            advanceUntilIdle()
+            val promosso = assertIs<ParlantiUiStato.Dati>(presenter.stato.value).ricorrenti.single()
+            assertNull(promosso.erroreRiga)
+            assertEquals(false, promosso.operazioneInCorso)
+
+            presenter.azioni.chiediConfermaEliminazione(PARLANTE_1)
+            presenter.azioni.confermaEliminazione(PARLANTE_1)
+            advanceUntilIdle()
+            val dati = assertIs<ParlantiUiStato.Dati>(presenter.stato.value)
+            assertEquals(listOf("Marco"), dati.eliminati.map { it.nome })
+            assertTrue(dati.ricorrenti.isEmpty())
+        }
+
+    @Test
+    fun `L259 un guasto che non e una consegna dopo-commit resta il messaggio generico`() = runTest {
+        val presenter = presentatore(
+            this,
+            parlanti = { listOf(unParlante()) },
+            rinomina = { throw IllegalStateException("guasto SQL") },
+        )
+        advanceUntilIdle()
+
+        presenter.azioni.rinomina(PARLANTE_1, "Marco Rossi")
+        advanceUntilIdle()
+
+        val riga = assertIs<ParlantiUiStato.Dati>(presenter.stato.value).ricorrenti.single()
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, riga.erroreRiga)
     }
 
     // --- AC-223: inline rename -----------------------------------------------------------------

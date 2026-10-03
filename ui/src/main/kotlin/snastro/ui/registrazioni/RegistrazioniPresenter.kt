@@ -31,6 +31,7 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
+import snastro.ui.comandoConfermato
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
 import snastro.ui.testi.ETICHETTA_PARTI_AGGIUNTE
@@ -552,12 +553,12 @@ class RegistrazioniPresenter(
         }
     }
 
-    /** Runs [comando] off the UI thread; `null` on success, otherwise the user-facing failure text. */
+    /** Runs [comando] off the UI thread; `null` on success (a committed import too, D-0062), else the failure text. */
     private suspend fun inviaImport(
         comando: AggiungiRegistrazione,
         messaggio: (ErroreDominio) -> String = ::messaggioImportTuttoONiente,
     ): String? = try {
-        when (val esito = withContext(io) { aggiungiRegistrazione(comando) }) {
+        when (val esito = withContext(io) { comandoConfermato("import") { aggiungiRegistrazione(comando) } }) {
             is Esito.Ok -> null
             is Esito.Errore -> messaggio(esito.errore)
         }
