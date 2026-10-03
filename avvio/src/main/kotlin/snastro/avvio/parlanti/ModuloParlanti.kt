@@ -250,7 +250,7 @@ internal class ModuloParlanti(
         TrascrittoEliminato::class,
     )
 
-    override fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = invalidazioneTraParti() + abbonamenti(
+    override fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = abbonamenti(
         aggiornamenti,
         AttribuzioneConfermata::class,
         ImpronteRiallineate::class,
@@ -266,8 +266,11 @@ internal class ModuloParlanti(
         SegmentoRiassegnato::class,
     ) + abbonamenti(riallineamento, VociUnite::class, VoceDivisa::class, SegmentoRiassegnato::class)
 
-    /** AC-I49: the tra-Parti invalidation first, so a proposal is dropped before any screen hears of the change. */
-    private fun invalidazioneTraParti(): List<Abbonamento<AbbonatoDopoCommit>> =
+    /**
+     * AC-I49: the tra-Parti invalidation before EVERY module's subscribers (not only Parlanti's own): a proposal is
+     * dropped before any screen, of any module, can reload on the change and read the stale cache.
+     */
+    override fun abbonatiDopoCommitPrioritari(): List<Abbonamento<AbbonatoDopoCommit>> =
         PropostaTraPartiProgetto.EVENTI_INVALIDANTI.map { Abbonamento(it, traParti) }
 
     override fun avvia(scope: CoroutineScope) {
