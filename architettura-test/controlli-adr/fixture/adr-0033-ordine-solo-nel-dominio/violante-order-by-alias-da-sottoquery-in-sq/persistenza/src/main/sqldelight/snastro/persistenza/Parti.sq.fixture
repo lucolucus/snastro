@@ -1,0 +1,2 @@
+perSottoquery:
+SELECT o FROM (SELECT ora_di_inizio AS o FROM registrazione) ORDER BY o;

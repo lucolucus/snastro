@@ -50,11 +50,17 @@ class RiassumibilitaInDuePassiTest {
     }
 
     @Test
-    fun `L229 una Parte TRASCRITTA senza Segmenti letti blocca come in elaborazione, mai saltando la stima`() {
+    fun `L229 una Parte TRASCRITTA senza Segmenti letti blocca con ElaborazioneGiaAperta, stima non saltata`() {
+        val parti = listOf(ParteSintesi(RegistrazioneId("r1"), 1), ParteSintesi(RegistrazioneId("r2"), 2))
+        val segmento = SegmentoSintesi(SegmentoId(1), VoceId(1), IntervalloMs(0, 1_000), "Testo di prova.")
+        var stime = 0
+
         val esito = riassumibilitaInDuePassi(true, trascritta, false) {
-            Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(2))
+            stime++
+            stimaTokenDi(parti) { r -> if (r.valore == "r2") null else listOf(segmento) }
         }
 
+        assertEquals(1, stime)
         assertEquals(Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(2)), esito)
     }
 

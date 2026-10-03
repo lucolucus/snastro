@@ -36,3 +36,9 @@ SELECT * FROM registrazione WHERE data_registrazione BETWEEN (CASE WHEN 1 AND 2 
 limitata:
 SELECT data_registrazione AS d, ora_di_inizio, id FROM registrazione ORDER BY d, 3
     LIMIT (SELECT count(*) FROM registrazione WHERE ora_di_inizio = :ora);
+
+-- A call on the column compared by equality, a JSON path that is not a comparison, an item ending in IS NOT NULL.
+confrontiAmmessi:
+SELECT ora_di_inizio IS NOT NULL, coalesce(ora_di_inizio, 0) AS c, nota->>ora_di_inizio, nota->ora_di_inizio
+    FROM registrazione WHERE coalesce(ora_di_inizio, 0) = :ora AND abs(aggiunta_alle) <> :a
+    ORDER BY null, c2;
