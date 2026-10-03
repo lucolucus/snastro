@@ -749,3 +749,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
 - Docs: [release decisions](release-decisions/I2.md)
 - Revisit: users hit the open failure in practice.
+
+### D-0057 · Rivali e Parte nella proposta tra Parti
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 8f1e32ce
+- Question: In PropostaTraParti, which Voci count as A's rivals, which Parte does the banner name, and must AC-I92 run on real models before I3?
+- Options: A strict: any FORTE Voce is a rival; parteA/parteB = the estratto's Parte; AC-I92 rewritten (one Incontro, 4 CoppiaTraParti) and run on real models before I3. B disjoint rivals only; first Parte, reworded banner; real-model run deferred.
+- Hypothesis: n/a — decided by the user at the I3 pre-release review, [pre-release](pre-release.md)
+- Check: n/a — decided by the user at the I3 pre-release review, [pre-release](pre-release.md)
+- Result: n/a — decided by the user at the I3 pre-release review, [pre-release](pre-release.md)
+- Debate: verifier: the code counted rivals only among disjoint Voci and named the first Parte while the estratto plays from the Parte where the Voce speaks most; AC-I92 [@modelli] had no test.
+- Decision: A; implemented by fix groups pre-I3-1 (parlanti) and pre-I3-3 (avvio). Cost: fewer cross-Parte proposals; the real-model run is a release blocker for I3.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [pre-release](pre-release.md)
+- Revisit: the strict reading suppresses proposals the user expected on real Incontri.

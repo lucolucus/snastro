@@ -1,0 +1,14 @@
+# pre-I3-3 — piattaforma (avvio): open I3 pre-release lines
+
+Fix every line below (MED and LOW) in this group's modules, or, for a line you judge wrong, already fixed, or not worth fixing, say why under DECISIONS so the composer can waive it with the user. Each fix with a test where the line is about behaviour or test discrimination. Lines marked USER DECISION are decided (D-0057 in decisions.md): implement the decision as stated below, do not waive it.
+
+Blocks involved (specs: .mismagent/features/incontro/blocks/*/done/<id>.md): avvio-proposta-tra-parti, avvio-incontro-parti, pre-I2-6
+
+## User decision (D-0057)
+- L211: REWRITE avvio/src/test/kotlin/snastro/avvio/spike/SpikeIncontroTest.kt so the two-part sample (New Recording 4 = part 1, Via Roquel = part 2, Numero di persone = 4) is imported as ONE Incontro and traParti/PropostaTraParti is asserted to propose 4 CoppiaTraParti. It stays [@modelli] opt-in (outside the gate). Compile it and run the gate; the real-model run is a separate step before release — if the inputs (env var / sample dir) are available on this machine, run it with `./gradlew modelliTest` filtered to that test and report the result; otherwise report exactly the command to run.
+- L212: register the PropostaTraParti invalidation before every module's aggiornamenti (or add ElaborazioneCompletata/TrascrittoEliminato to Parlanti's), with a test that fails if an S3 reload can read the stale cache.
+
+## Lines (pre-release.md line number: text)
+- L211: I3 · avvio-proposta-tra-parti · MED · avvio/src/test/kotlin/snastro/avvio/spike/SpikeIncontroTest.kt:46-104 · USER DECISION: the AC-I92 [@modelli] clause ("the real two-part sample still proposes the 4 pairs") has no test: the spike imports each part as its own Incontro and never calls traParti; rewrite (one Incontro, assert 4 CoppiaTraParti) and run on real models before I3? · verifier · 2026-10-02
+- L212: I3 · avvio-proposta-tra-parti · MED · avvio/src/main/kotlin/snastro/avvio/parlanti/ModuloParlanti.kt:268-270, avvio/src/main/kotlin/snastro/avvio/progetto/ApriProgetto.kt:54 · invalidation runs first only within Parlanti's list; Trascrizione's aggiornamenti (registered earlier) can trigger an S3 reload that hits the stale cache on ElaborazioneCompletata/TrascrittoEliminato; register the invalidation before every module or add those events to Parlanti's aggiornamenti · verifier · 2026-10-02
+- L237: I3 · pre-I2-6 · LOW · avvio/src/main/kotlin/snastro/avvio/progetto/AggiornamentiVistaEventi.kt:34, avvio/src/main/kotlin/snastro/avvio/parlanti/AzioniSomiglianzaProgetto.kt:162-167 · unbounded buffer not deduplicated (S2/S4 reload once per duplicate; emit once per distinct id per commit); a throwing after-commit subscriber shows a generic Errore though the plan committed · verifier · 2026-10-03
