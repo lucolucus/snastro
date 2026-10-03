@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.runInterruptible
 import snastro.avvio.gestoreErrori
+import snastro.kernel.ConsegnaDopoCommitFallita
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -38,7 +39,8 @@ import java.util.logging.Logger
  *   `runInterruptible(bg)`, so [annulla] interrupts a thread waiting on the native Mutex
  *   (`lockInterruptibly`, ADR 0017 §1.4) and nothing is written (the wait happens before any transaction).
  * - A body that THROWS becomes `Esito.Errore(ErroreComandoVoce.NonRiuscito)` (logged): the card shows an
- *   inline message and the port stays usable.
+ *   inline message and the port stays usable. L237: in [esegui] (one command) a [ConsegnaDopoCommitFallita] is the
+ *   committed `Ok` (logged); in [nominaFrase] it stays `NonRiuscito`, since the steps after it did not run.
  * - At most one command per [VoceRef]: S3 disables a pending card (AC-411), so a second [esegui] for a
  *   [VoceRef] already running JOINS that one instead of starting a second write.
  * - ADR 0019 §5: [nominaFrase] is the same machinery keyed by [FraseRef] ([statoFrasi], [annullaFrase]),
@@ -58,7 +60,15 @@ internal class ComandiVoceProgetto(
 
     override suspend fun esegui(comando: ComandoVoce): Esito<Unit>? =
         voci.esegui(comando.voceRef) {
-            protetto("comando ${comando::class.simpleName} su ${comando.voceRef}") { esecutore(comando) }
+            protetto("comando ${comando::class.simpleName} su ${comando.voceRef}") {
+                try {
+                    esecutore(comando)
+                } catch (e: ConsegnaDopoCommitFallita) {
+                    // L237: ONE command, committed; only an after-commit follow-up (a view refresh) failed.
+                    log.log(Level.WARNING, "${comando.voceRef} confermato, aggiornamento dopo il commit fallito", e)
+                    Esito.Ok(Unit)
+                }
+            }
         }
 
     override fun annulla(voceRef: VoceRef) = voci.annulla(voceRef)

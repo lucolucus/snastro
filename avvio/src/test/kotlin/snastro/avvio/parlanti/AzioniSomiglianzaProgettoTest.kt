@@ -7,7 +7,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
+import snastro.kernel.EventoPubblicato
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
@@ -106,8 +108,11 @@ class AzioniSomiglianzaProgettoTest {
     private val unita = UnitaDiLavoroContata()
     private val inTransazione = CopyOnWriteArrayList<Boolean>()
 
-    private fun porta(calcola: (RegistrazioneId, (Int, Int) -> Unit) -> Esito<PianoRiassegnazione>) =
-        AzioniSomiglianzaProgetto(progetto, Dispatchers.IO, Clock.systemUTC(), unita, calcola) {
+    private fun porta(
+        unitaDelComando: UnitaDiLavoro = unita,
+        calcola: (RegistrazioneId, (Int, Int) -> Unit) -> Esito<PianoRiassegnazione>,
+    ) =
+        AzioniSomiglianzaProgetto(progetto, Dispatchers.IO, Clock.systemUTC(), unitaDelComando, calcola) {
             applicati += it
             inTransazione += unita.aperta
             esitoApplica(it)
@@ -199,6 +204,23 @@ class AzioniSomiglianzaProgettoTest {
         assertEquals(listOf(comando), applicati.toList())
         p.applica(REG)
         assertEquals(1, applicati.size)
+    }
+
+    @Test
+    fun `L237 un abbonato dopo-commit che lancia mostra l Esito confermato, mai l Errore generico`() {
+        val eventi = DispatcherEventiInMemoria(unita)
+        val riassegnati = object : EventoPubblicato {}
+        eventi.registraDopoCommit { throw IllegalStateException("aggiornamento della vista fallito") }
+        esitoApplica = {
+            eventi.pubblica(riassegnati)
+            Esito.Ok(Unit)
+        }
+        val p = porta(eventi.unitaDiLavoro) { _, _ -> Esito.Ok(piano) }.inAnteprima()
+        p.applica(REG)
+        attendiFinche(timeout = 10.seconds, messaggio = "fine") {
+            p.stato.value[REG].let { it is StatoSomiglianza.Esito || it is StatoSomiglianza.Errore }
+        }
+        assertEquals(StatoSomiglianza.Esito(3, 1), p.stato.value[REG], "il piano e confermato")
     }
 
     @Test

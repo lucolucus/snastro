@@ -9,8 +9,9 @@ import kotlin.test.assertSame
 /**
  * Contract of [DispatcherEventi] (ADR 0012): synchronous subscribers run in publication order
  * inside the transaction and an [Esito.Errore] or exception of theirs dooms the command (rollback);
- * after-commit subscribers run only after commit, never after a rollback, and a fatal throwable
- * stops their delivery at once. One subclass per implementation.
+ * after-commit subscribers run only after commit, never after a rollback; an ordinary failure of theirs
+ * surfaces as [ConsegnaDopoCommitFallita] (the command stays committed), a fatal throwable stops their
+ * delivery at once. One subclass per implementation.
  */
 public abstract class DispatcherEventiContratto {
     /** A fresh environment: dispatcher, the unit of work services receive, a transactional effect. */
@@ -155,7 +156,7 @@ public abstract class DispatcherEventiContratto {
         a.registraDopoCommit { throw primo }
         a.registraDopoCommit { ricevuti += "sano-${(it as EventoDiProva).n}" }
         a.registraDopoCommit { if ((it as EventoDiProva).n == 2) throw secondo }
-        val lanciata = assertFailsWith<GuastoDiProva> {
+        val lanciata = assertFailsWith<ConsegnaDopoCommitFallita> {
             a.unitaDiLavoro.inTransazione {
                 a.scrivi("comando")
                 a.dispatcher.pubblica(EventoDiProva(1))
@@ -163,7 +164,7 @@ public abstract class DispatcherEventiContratto {
                 Esito.Ok(Unit)
             }
         }
-        assertSame(primo, lanciata)
+        assertSame(primo, lanciata.cause, "il primo guasto e la causa")
         assertEquals(listOf<Throwable>(secondo), lanciata.suppressed.toList())
         assertEquals(listOf("sano-1", "sano-2"), ricevuti)
         assertEquals(setOf("comando"), a.effetti(), "il comando resta confermato")
