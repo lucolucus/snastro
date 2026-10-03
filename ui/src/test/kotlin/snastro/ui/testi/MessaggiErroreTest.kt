@@ -247,6 +247,11 @@ class MessaggiErroreTest {
     }
 
     @Test
+    fun `AC-I80 PartiNonTrascritte nomina la parte`() {
+        assertEquals("Manca la trascrizione della parte 2.", messaggioPer(ErroreSintesi.PartiNonTrascritte(2)))
+    }
+
+    @Test
     fun `AC-S139 ErroreApplicazioneSintesi`() {
         verificaCopertura(
             ErroreApplicazioneSintesi::class.java,

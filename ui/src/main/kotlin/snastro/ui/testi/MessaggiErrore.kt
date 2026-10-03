@@ -125,7 +125,7 @@ fun messaggioPer(errore: ErroreSintesi): String = when (errore) {
     is ErroreSintesi.RiassuntoGiaAperto -> "C'è già un riassunto in coda o in corso per questa registrazione."
     ErroreSintesi.ModelloNonInstallato -> "Il modello di linguaggio non è installato."
     // The Riassunto tab's hint for the same refusal (`MotivoNonDisponibile.PartiNonTrascritte`, D-0020).
-    is ErroreSintesi.PartiNonTrascritte -> "Manca la trascrizione della parte ${errore.parte}."
+    is ErroreSintesi.PartiNonTrascritte -> testoParteNonTrascritta(errore.parte)
     is ErroreSintesi.ElaborazioneGiaAperta -> "Aspetta la fine della trascrizione."
     is ErroreSintesi.PartiFallite -> "Parte ${errore.parte} non riuscita: riprova o eliminala."
     is ErroreSintesi.IngressoTroppoLungo -> "La registrazione è troppo lunga per il riassunto."
