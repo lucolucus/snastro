@@ -139,7 +139,6 @@ import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import java.time.format.ResolverStyle
-import javax.swing.JFileChooser
 
 private val DIMENSIONE_INDICATORE_PICCOLO = 18.dp
 private val LARGHEZZA_CONFERMA_RITRASCRIVI = 320.dp
@@ -170,8 +169,9 @@ fun SchermataRegistrazioni(
     azioni: AzioniRegistrazioni,
     scuro: Boolean = temaScuro(),
     riduciMovimento: Boolean? = null,
+    sceltaFileAudio: SceltaFileAudio = SceltaFileAudio { emptyList() },
 ) {
-    SchermataRegistrazioni(stato, azioni, scuro, riduciMovimento, dragIniziale = false)
+    SchermataRegistrazioni(stato, azioni, scuro, riduciMovimento, dragIniziale = false, sceltaFileAudio)
 }
 
 /**
@@ -179,6 +179,7 @@ fun SchermataRegistrazioni(
  * already over the window, so the `over` fixture is the REAL screen — no native-drag simulation API
  * exists in the test harness. Production always goes through the public overload (`false`).
  */
+@Suppress("LongParameterList") // render-check entry: the public overload's five parameters + the drag fixture
 @Composable
 internal fun SchermataRegistrazioni(
     stato: RegistrazioniUiStato,
@@ -186,12 +187,13 @@ internal fun SchermataRegistrazioni(
     scuro: Boolean,
     riduciMovimento: Boolean?,
     dragIniziale: Boolean,
+    sceltaFileAudio: SceltaFileAudio = SceltaFileAudio { emptyList() },
 ) {
     SnastroTema(scuro = scuro, riduciMovimento = riduciMovimento) {
         Surface(modifier = Modifier.fillMaxSize()) {
             when (stato) {
                 RegistrazioniUiStato.Caricamento -> IndicatoreCaricamentoRegistrazioni()
-                is RegistrazioniUiStato.Dati -> ContenutoRegistrazioni(stato, azioni, dragIniziale)
+                is RegistrazioniUiStato.Dati -> ContenutoRegistrazioni(stato, azioni, dragIniziale, sceltaFileAudio)
                 is RegistrazioniUiStato.Errore -> ErroreCaricamentoRegistrazioni(stato.messaggio, azioni.riprova)
             }
         }
@@ -235,6 +237,7 @@ private fun ContenutoRegistrazioni(
     stato: RegistrazioniUiStato.Dati,
     azioni: AzioniRegistrazioni,
     dragIniziale: Boolean,
+    sceltaFileAudio: SceltaFileAudio,
 ) {
     var dragAttivo by remember { mutableStateOf(dragIniziale) }
     Column(
@@ -249,9 +252,9 @@ private fun ContenutoRegistrazioni(
             .verticalScroll(rememberScrollState()),
     ) {
         if (stato.righe.isNotEmpty()) {
-            IntestazioneRegistrazioni(stato, azioni)
+            IntestazioneRegistrazioni(stato, azioni, sceltaFileAudio)
         } else {
-            BarraImportazione(azioni, stato.importoInCorso)
+            BarraImportazione(azioni, stato.importoInCorso, sceltaFileAudio)
         }
         // L485a: `errore` (import) and `erroreAggiornamento` (background refresh) are two SEPARATE
         // lifecycles on the presenter (only a success clears the latter; an unrelated refresh never
@@ -287,9 +290,9 @@ private fun ContenutoRegistrazioni(
         }
         Spacer(modifier = Modifier.height(SnastroMisure.space4))
         if (stato.righe.isEmpty()) {
-            DropZoneVuota(inDrop = dragAttivo, importoInCorso = stato.importoInCorso, azioni = azioni)
+            DropZoneVuota(dragAttivo, stato.importoInCorso, azioni, sceltaFileAudio)
         } else {
-            ElencoRegistrazioni(stato, azioni, inDrop = dragAttivo)
+            ElencoRegistrazioni(stato, azioni, inDrop = dragAttivo, sceltaFileAudio = sceltaFileAudio)
         }
     }
 }
@@ -298,7 +301,11 @@ private fun ContenutoRegistrazioni(
  * rows already in state) + 'Importa audio…' `Primario`. Hidden when the list is empty (rework cycle 1
  * — a "0 registrazioni · 0 min" caption next to an empty `DropZone` says nothing useful). */
 @Composable
-private fun IntestazioneRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: AzioniRegistrazioni) {
+private fun IntestazioneRegistrazioni(
+    stato: RegistrazioniUiStato.Dati,
+    azioni: AzioniRegistrazioni,
+    sceltaFileAudio: SceltaFileAudio,
+) {
     val colori = LocalSnastroColori.current
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         val durataTotale = stato.righe.sumOf { it.durataMs }
@@ -308,16 +315,16 @@ private fun IntestazioneRegistrazioni(stato: RegistrazioniUiStato.Dati, azioni: 
             color = colori.inkMuted,
             modifier = Modifier.weight(1f),
         )
-        BarraImportazione(azioni, stato.importoInCorso)
+        BarraImportazione(azioni, stato.importoInCorso, sceltaFileAudio)
     }
 }
 
 @Composable
-private fun BarraImportazione(azioni: AzioniRegistrazioni, importoInCorso: Boolean) {
+private fun BarraImportazione(azioni: AzioniRegistrazioni, importoInCorso: Boolean, sceltaFileAudio: SceltaFileAudio) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         BottoneSn(
             etichetta = ETICHETTA_IMPORTA_FILE,
-            onClick = { sceltaFileAudio()?.let { azioni.importa(listOf(it)) } },
+            onClick = { importaScelti(sceltaFileAudio, azioni) },
             variante = VarianteBottone.Primario,
             icona = Icona.Import,
             abilitato = !importoInCorso,
@@ -342,7 +349,12 @@ private fun BarraImportazione(azioni: AzioniRegistrazioni, importoInCorso: Boole
  * importare".
  */
 @Composable
-private fun DropZoneVuota(inDrop: Boolean, importoInCorso: Boolean, azioni: AzioniRegistrazioni) {
+private fun DropZoneVuota(
+    inDrop: Boolean,
+    importoInCorso: Boolean,
+    azioni: AzioniRegistrazioni,
+    sceltaFileAudio: SceltaFileAudio,
+) {
     val colori = LocalSnastroColori.current
     val bordo = if (inDrop) colori.accentInk else colori.lineStrong
     val fondo = if (inDrop) colori.accentSoft else colori.sunken
@@ -378,7 +390,7 @@ private fun DropZoneVuota(inDrop: Boolean, importoInCorso: Boolean, azioni: Azio
             Spacer(modifier = Modifier.height(SnastroMisure.space3))
             BottoneSn(
                 etichetta = ETICHETTA_SCEGLI_FILE,
-                onClick = { sceltaFileAudio()?.let { azioni.importa(listOf(it)) } },
+                onClick = { importaScelti(sceltaFileAudio, azioni) },
                 variante = VarianteBottone.Secondario,
                 piccolo = true,
                 abilitato = !importoInCorso,
@@ -407,6 +419,7 @@ private fun ElencoRegistrazioni(
     stato: RegistrazioniUiStato.Dati,
     azioni: AzioniRegistrazioni,
     inDrop: Boolean = false,
+    sceltaFileAudio: SceltaFileAudio,
 ) {
     val colori = LocalSnastroColori.current
     val perId = stato.righe.associateBy { it.registrazioneId }
@@ -425,7 +438,7 @@ private fun ElencoRegistrazioni(
             stato.incontri.forEachIndexed { indice, incontro ->
                 key(incontro.incontroId) {
                     if (indice > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(colori.line))
-                    IncontroItem(incontro, incontro.parti.mapNotNull(perId::get), azioni)
+                    IncontroItem(incontro, incontro.parti.mapNotNull(perId::get), azioni, sceltaFileAudio)
                 }
             }
         }
@@ -437,10 +450,15 @@ private fun ElencoRegistrazioni(
  * a multi-part one is [RigaIncontroItem] and, when expanded, its Parti as indented sub-rows in Parte order.
  */
 @Composable
-private fun IncontroItem(incontro: RigaIncontro, parti: List<RigaRegistrazione>, azioni: AzioniRegistrazioni) {
+private fun IncontroItem(
+    incontro: RigaIncontro,
+    parti: List<RigaRegistrazione>,
+    azioni: AzioniRegistrazioni,
+    sceltaFileAudio: SceltaFileAudio,
+) {
     if (parti.isEmpty()) return
     val aggiungiParti: () -> Unit = {
-        val percorsi = sceltaFileAudioMultipla()
+        val percorsi = sceltaFileAudio.scegli()
         if (percorsi.isNotEmpty()) azioni.aggiungiParti(incontro.incontroId, incontro.titolo, percorsi)
     }
     if (!incontro.multiParte || parti.size == 1) {
@@ -1496,29 +1514,6 @@ private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit, tag: 
     }
 }
 
-/** Native file picker (frugality rung 3), audio files only by extension is left to the OS dialog's own filter. */
-private fun sceltaFileAudio(): String? {
-    val selettore = JFileChooser().apply { fileSelectionMode = JFileChooser.FILES_ONLY }
-    return if (selettore.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-        selettore.selectedFile.absolutePath
-    } else {
-        null
-    }
-}
-
-/** 'Aggiungi parti…': the same native picker, several files at once (AC-I71); empty when cancelled. */
-private fun sceltaFileAudioMultipla(): List<String> {
-    val selettore = JFileChooser().apply {
-        fileSelectionMode = JFileChooser.FILES_ONLY
-        isMultiSelectionEnabled = true
-    }
-    return if (selettore.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-        selettore.selectedFiles.map { it.absolutePath }
-    } else {
-        emptyList()
-    }
-}
-
 /**
  * AC-199..201/LOW/AC-576: an OS drag-and-drop of one or more files hands every SUCCESSFULLY decoded
  * path to [onFiles] (`snastro.ui.registrazioni` `percorsoDaUriFile`, H1: correct on non-ASCII paths —
@@ -1551,3 +1546,10 @@ private fun registrazioneDropTarget(onFiles: (List<String>) -> Unit, onDragOverC
             return true
         }
     }
+
+/** 'Importa file audio…': the picked files go to the same [AzioniRegistrazioni.importa] as a drop (1 = single import,
+ * 2+ = the AC-I70 dialog); nothing when the user cancelled. */
+private fun importaScelti(sceltaFileAudio: SceltaFileAudio, azioni: AzioniRegistrazioni) {
+    val percorsi = sceltaFileAudio.scegli()
+    if (percorsi.isNotEmpty()) azioni.importa(percorsi)
+}

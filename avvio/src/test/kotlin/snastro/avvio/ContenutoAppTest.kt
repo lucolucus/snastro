@@ -41,7 +41,7 @@ class ContenutoAppTest {
             AmbienteProgetto(radice).use { ambiente ->
                 val a = ambiente.registrazioneTrascritta()
                 val b = ambiente.registrazioneTrascritta()
-                setContent { ContenutoApp(ambiente.grafo(), sceltaCartella = { null }) }
+                setContent { ContenutoApp(ambiente.grafo(), { null }, { emptyList() }) }
 
                 apri(a)
                 scheda(1).performClick()

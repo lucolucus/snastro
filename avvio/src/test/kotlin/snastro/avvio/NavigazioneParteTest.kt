@@ -45,7 +45,7 @@ class NavigazioneParteTest {
             AmbienteProgetto(radice).use { ambiente ->
                 val (incontro, parti) = incontroDiTreParti(ambiente)
                 val (p1, p2, p3) = parti
-                setContent { ContenutoApp(ambiente.grafo(), sceltaCartella = { null }) }
+                setContent { ContenutoApp(ambiente.grafo(), { null }, { emptyList() }) }
 
                 attendi("la riga dell'Incontro") { esiste("registrazioni-incontro-chevron-${incontro.valore}") }
                 onNodeWithTag("registrazioni-incontro-chevron-${incontro.valore}").performClick()

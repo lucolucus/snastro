@@ -23,6 +23,7 @@ import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.ui.DestinazioneShell
 import snastro.ui.modelli.StatoModelli
 import snastro.ui.progetti.SceltaCartella
+import snastro.ui.registrazioni.SceltaFileAudio
 import snastro.ui.testi.ETICHETTA_SCARICA
 import snastro.ui.testi.etichetta
 import snastro.ui.testi.etichettaIdentificazione
@@ -68,7 +69,7 @@ internal fun eseguiSmoke(fixtureDir: String) {
             // The smoke script never exercises S1's folder pickers (it opens the fixture project
             // directly through `sessione.apri`, below) — a `SceltaCartella` that always "cancels" is
             // enough; a real `java.awt.FileDialog` has no owner window in this OFFSCREEN test harness.
-            setContent { ContenutoApp(grafo, SceltaCartella { null }) }
+            setContent { ContenutoApp(grafo, SceltaCartella { null }, SceltaFileAudio { emptyList() }) }
 
             attendi { esisteTag("progetti-lista") || esisteTag("progetti-vuoto") }
             salvaSchermata(outputDir, "s1")

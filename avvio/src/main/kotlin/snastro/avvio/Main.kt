@@ -36,10 +36,6 @@ fun main(args: Array<String>) {
     // (eseguiSmoke never calls this) nor in any :avvio test, so no test ever writes to it.
     configuraLoggingApp()
 
-    // L464d (ADR 0010: v1 is Mac-only) — switches java.awt.FileDialog from picking FILES to picking
-    // DIRECTORIES; must be set before any FileDialog is realized (SceltaCartellaFileDialog, below).
-    System.setProperty("apple.awt.fileDialogForDirectories", "true")
-
     val grafo = costruisciGrafo()
     val icona = iconaApp()
     icona?.let(::iconaNelDock)
@@ -59,7 +55,8 @@ fun main(args: Array<String>) {
         Window(onCloseRequest = esci, state = statoFinestra, title = "snastro", icon = iconaFinestra) {
             finestra = window
             val sceltaCartella = remember { SceltaCartellaFileDialog(window) }
-            ContenutoApp(grafo, sceltaCartella)
+            val sceltaFileAudio = remember { SceltaFileAudioFileDialog(window) }
+            ContenutoApp(grafo, sceltaCartella, sceltaFileAudio)
         }
     }
 }

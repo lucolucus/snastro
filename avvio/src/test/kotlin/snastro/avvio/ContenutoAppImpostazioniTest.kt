@@ -27,7 +27,7 @@ class ContenutoAppImpostazioniTest {
             AmbienteProgetto(radice).use { ambiente ->
                 ambiente.sessione.chiudi()
                 val mancanti = ServizioModelliFinta(StatoModelli.Mancanti(numero = 2, totaleByte = 1))
-                setContent { ContenutoApp(ambiente.grafo(mancanti), sceltaCartella = { null }) }
+                setContent { ContenutoApp(ambiente.grafo(mancanti), { null }, { emptyList() }) }
                 attendi("S1") { esiste("progetti-impostazioni") }
 
                 onNodeWithTag("progetti-impostazioni").performClick()
@@ -42,7 +42,7 @@ class ContenutoAppImpostazioniTest {
     fun `con un progetto aperto il piede apre Impostazioni e Riassunto mostra la lunghezza del progetto`() =
         runDesktopComposeUiTest {
             AmbienteProgetto(radice).use { ambiente ->
-                setContent { ContenutoApp(ambiente.grafo(), sceltaCartella = { null }) }
+                setContent { ContenutoApp(ambiente.grafo(), { null }, { emptyList() }) }
                 attendi("la shell del progetto") { esiste("shell-piede") }
 
                 onNodeWithTag("shell-piede").performClick()
