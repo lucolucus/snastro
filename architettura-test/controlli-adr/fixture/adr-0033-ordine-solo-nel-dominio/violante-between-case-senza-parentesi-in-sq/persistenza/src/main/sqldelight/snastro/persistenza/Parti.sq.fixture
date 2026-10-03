@@ -1,0 +1,2 @@
+tra:
+SELECT * FROM registrazione WHERE :x BETWEEN CASE WHEN 1 AND 2 THEN 1 END AND r.aggiunta_alle;

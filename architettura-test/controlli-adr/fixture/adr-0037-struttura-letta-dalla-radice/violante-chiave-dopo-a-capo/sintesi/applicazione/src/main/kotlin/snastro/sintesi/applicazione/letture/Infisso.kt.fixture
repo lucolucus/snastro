@@ -1,0 +1,4 @@
+package snastro.sintesi.applicazione.letture
+
+internal fun giaNota(s: StrutturaIncontro, c: Set<String>): Boolean = s.
+    chiave in c

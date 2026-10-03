@@ -1,0 +1,2 @@
+prima:
+SELECT * FROM registrazione WHERE :x >= 1 + aggiunta_alle;

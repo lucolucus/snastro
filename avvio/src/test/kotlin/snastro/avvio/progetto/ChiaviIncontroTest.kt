@@ -13,6 +13,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
  * AC-I12 (incontro-chiavi, ADR 0033 §4.1/§6) end-to-end on the REAL composition and SQLite: transcribe, name a Voce,
@@ -49,6 +50,11 @@ class ChiaviIncontroTest {
             it.attendiPronto(r)
             val riassunto = it.porte.riassunti.trova(incontro).single()
             assertEquals(incontro, riassunto.incontroId)
+            val struttura = assertNotNull(riassunto.strutturaRegistrata)
+            assertTrue(
+                struttura.startsWith("${r.valore}=") && ';' !in struttura,
+                "il Riassunto registra la struttura della sua unica Parte: $struttura",
+            )
             assertEquals(false, assertNotNull(it.sintesi.vista(r)?.mostrato).superato)
 
             it.collaboratori.eliminaRegistrazione(EliminaRegistrazione(r)).atteso()

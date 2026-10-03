@@ -225,7 +225,7 @@ class RiassuntoVisteLetturaIncontroTest {
     }
 
     @Test
-    fun `L229 una Parte TRASCRITTA i cui Segmenti mancano nella lettura e da trascrivere, mai Disponibile`() {
+    fun `L229 L248 una Parte TRASCRITTA i cui Segmenti mancano nella lettura e in elaborazione, mai Disponibile`() {
         val tutti = LettoreTrascrittoFinta(listOf(p1, p2).associateWith { listOf(segmento(1, 1)) })
         // statoParte says TRASCRITTA, the Segmenti read in the same snapshot are gone (a concurrent re-run)
         val senzaSegmenti2 = object : LettoreTrascritto by tutti {
@@ -233,7 +233,7 @@ class RiassuntoVisteLetturaIncontroTest {
         }
 
         assertEquals(
-            DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.PartiNonTrascritte(2)),
+            DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.ElaborazioneAperta(2)),
             vistaDi(listOf(p1, p2), senzaSegmenti2, RiassuntoRepositoryFinta()).disponibilita,
         )
     }

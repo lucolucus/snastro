@@ -1,0 +1,2 @@
+perAlias:
+SELECT id, ora_di_inizio AS o FROM registrazione ORDER BY o DESC;

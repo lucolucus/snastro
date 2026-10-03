@@ -25,8 +25,9 @@ internal fun riassumibilitaInDuePassi(
 /**
  * The token estimate of the whole labelled input ([IngressoRiassunto], no names, ADR 0032) over [parti] in order, each
  * Parte's Segmenti read through [segmenti]. A Parte whose Segmenti read `null` (its state said TRASCRITTA, but a
- * concurrent re-run left no Trascritto in this read) is [ErroreSintesi.PartiNonTrascritte], the first one in order:
- * the size check is never skipped, and the command and the view agree on the same reads.
+ * concurrent run on it left no Trascritto in this read) is [ErroreSintesi.ElaborazioneGiaAperta], the first one in
+ * order: the Parte is being worked on, not missing its transcription, so the hint says so until the next read settles
+ * it. The size check is never skipped, and the command and the view agree on the same reads.
  */
 internal fun stimaTokenDi(
     parti: List<ParteSintesi>,
@@ -34,7 +35,7 @@ internal fun stimaTokenDi(
 ): Esito<Int> {
     val lette = parti.map { p ->
         segmenti(p.registrazioneId)?.map { it.inIngresso(p.registrazioneId) }
-            ?: return Esito.Errore(ErroreSintesi.PartiNonTrascritte(p.numero))
+            ?: return Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(p.numero))
     }
     return Esito.Ok(LimiteIngresso.stimaToken(IngressoRiassunto.costruisci(lette).testo))
 }

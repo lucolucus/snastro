@@ -1,0 +1,4 @@
+package snastro.sintesi.applicazione.letture
+
+internal fun chiaveDi(s: StrutturaIncontro): String = s.chiave
+internal fun altro(): Int = 1

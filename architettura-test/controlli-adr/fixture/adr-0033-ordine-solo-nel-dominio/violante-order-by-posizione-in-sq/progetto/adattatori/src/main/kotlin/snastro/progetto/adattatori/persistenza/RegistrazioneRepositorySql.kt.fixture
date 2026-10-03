@@ -1,0 +1,4 @@
+package snastro.progetto.adattatori.persistenza
+
+internal fun mappa(r: Riga) = Registrazione(aggiuntaAlle = r.aggiunta_alle, oraDiInizio = r.ora_di_inizio?.let(::ora))
+internal fun ordinate(r: List<Riga>) = r.sortedBy { it.aggiuntaAlle }

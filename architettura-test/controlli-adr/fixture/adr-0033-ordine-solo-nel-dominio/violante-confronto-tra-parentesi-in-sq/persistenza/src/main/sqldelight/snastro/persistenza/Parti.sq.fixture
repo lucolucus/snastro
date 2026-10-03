@@ -1,0 +1,2 @@
+dopo:
+SELECT * FROM registrazione WHERE (ora_di_inizio) > :x;

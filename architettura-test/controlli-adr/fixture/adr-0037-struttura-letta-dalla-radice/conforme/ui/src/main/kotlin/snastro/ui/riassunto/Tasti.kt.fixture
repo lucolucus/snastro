@@ -3,3 +3,6 @@ package snastro.ui.riassunto
 // Another type's FUNCTION named chiave: a call, never the structure's key property.
 internal fun tasto(mappa: Tastiera): String = mappa.chiave(1) + mappa?.chiave (2) + mappa.chiave { it.nome }
 internal fun altro(t: Tastiera?): String = t?.chiave(1) + t!!.chiave	(3) + t.chiave	{ it.nome }
+internal fun tipato(t: Tastiera): String = t.chiave<Int>(1) + t.chiave<List<String>> { it.nome }
+internal fun lambdaSotto(t: Tastiera): String = t.chiave
+{ it.nome }
