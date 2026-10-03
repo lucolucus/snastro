@@ -736,3 +736,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier
 - Docs: [pre-release](pre-release.md)
 - Revisit: a new Ambiente cannot seed several Parti.
+
+### D-0056 · Chiusura delle righe I2
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 58c4ea6d
+- Question: Waive the 10 I2 lines left unchanged with reviewer-verified reasons, and keep the fail-closed open on a busy WAL checkpoint?
+- Options: A waive them, listed in release-decisions/I2.md; keep fail-closed open (kept); B review them line by line, and open best-effort with a later WAL truncate.
+- Hypothesis: n/a — decided by the user at the I2 pre-release review, [release decisions](release-decisions/I2.md)
+- Check: n/a — decided by the user at the I2 pre-release review, [release decisions](release-decisions/I2.md)
+- Result: n/a — decided by the user at the I2 pre-release review, [release decisions](release-decisions/I2.md)
+- Debate: the busy checkpoint is reachable only with an external reader, since the project lock is taken first; failing keeps freed print pages out of the WAL.
+- Decision: A. Cost: opening fails while an external tool reads progetto.db.
+- By: decided: user; recorded: Claude (worker-composer); consulted: mismagent-verifier
+- Docs: [release decisions](release-decisions/I2.md)
+- Revisit: users hit the open failure in practice.
