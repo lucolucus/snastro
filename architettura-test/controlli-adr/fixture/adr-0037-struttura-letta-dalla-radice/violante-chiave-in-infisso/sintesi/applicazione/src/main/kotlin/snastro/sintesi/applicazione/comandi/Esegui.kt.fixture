@@ -1,0 +1,6 @@
+package snastro.sintesi.applicazione.comandi
+
+internal fun concludi(riassunto: Riassunto, esecuzione: Completata) =
+    riassunto.completa(esecuzione.bozza, esecuzione.struttura, esecuzione.etichette)
+
+internal fun chiaveDiAltro(x: Altro): String = x.chiaveDiAltro /* x.chiave */

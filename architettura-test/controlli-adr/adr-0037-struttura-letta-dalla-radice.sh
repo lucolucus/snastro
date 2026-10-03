@@ -8,8 +8,9 @@
 #      inside `when (…)` or `.equals(…)`);
 #   2. under sintesi/applicazione/src/main, sintesi/adattatori/src/main, ui/src/main and avvio/src/main only (other
 #      contexts own unrelated `chiave`s), no `chiave` property access (`.chiave`, `?.chiave`, `::chiave`): a structure's key
-#      is compared only by the root. `StrutturaIncontro.chiave` is a property, so a call `x.chiave(…)` or
-#      `x.chiave { … }` (another type's function) is not flagged.
+#      is compared only by the root. `StrutturaIncontro.chiave` is a property, so only a call is exempt: the
+#      next non-space character after `chiave` is `(` or `{` (`x.chiave(…)`, `x.chiave { … }`, another type's
+#      function); infix use (`s.chiave in c`, `as`, `to`, `shl`, also after a tab) is flagged.
 # Comments are removed by lib/senza-commenti.awk (nested and multi-line /* */, trailing //; a `//` inside a string is
 # code); build dirs excluded. FAIL when no file of sintesi/dominio/src/main declares `strutturaRegistrata` (target
 # missing).
@@ -33,6 +34,6 @@ V2=$(printf '%s\n' "$FUORI" | while IFS= read -r f; do
   case "$f" in (./sintesi/applicazione/src/main/*|./sintesi/adattatori/src/main/*|./ui/src/main/*|./avvio/src/main/*) ;;
     (*) continue ;; esac
   awk -f "$AWK" "$f"
-done | grep -E "(\\.|::)[[:space:]]*chiave[[:space:]]*([^A-Za-z0-9_({[:space:]]|$)")
+done | grep -E "(\\.|::)[[:space:]]*chiave([^A-Za-z0-9_({[:space:]]|[[:space:]]+[^({[:space:]]|[[:space:]]*$)")
 [ -z "$V1$V2" ] || { echo "$N: FAIL"; for v in "$V1" "$V2"; do [ -z "$v" ] || printf '%s\n' "$v"; done; exit 1; }
 echo "$N: PASS"
