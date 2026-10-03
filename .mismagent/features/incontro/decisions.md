@@ -853,3 +853,29 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: Claude (worker-composer); recorded: Claude (worker-composer)
 - Docs: [pre-release](pre-release.md)
 - Revisit: the feature gets a new release.
+
+### D-0065 · Ogni Error dopo il commit è fatale
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: dba405ce
+- Question: Which after-commit subscriber failures does ConsegnaDopoCommitFallita wrap, and which propagate at once (I4 L261, L257)?
+- Options: A every Error is fatal: delivery stops, the Error propagates unwrapped with earlier failures suppressed. B only VirtualMachineError fatal: AssertionError, LinkageError, NotImplementedError become Ok plus a WARNING, hiding programmer errors. C unwrap at each caller.
+- Hypothesis: n/a — decided by the worker in fix group pre-I4-5, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I4-5, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I4-5, [pre-release](pre-release.md)
+- Debate: verifier: within D-0062 and ADR 0012's 2026-09-27 rethrow rule. code-review: the stated cost was wrong — an Error now escapes the presenters' catch(Exception), S4 suRiga can stay stuck in progress (post-I4 MED).
+- Decision: A; ConsegnaDopoCommitFallita(prima, altre) keeps the instance across withContext. Cost: remaining subscribers miss the event; the presenter may be left in progress after a committed write.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [pre-release](pre-release.md)
+- Revisit: a real subscriber throws a recoverable Error.
+
+### D-0066 · Abbonati prioritari per commit nel dispatcher
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: dba405ce
+- Question: How does the tra-Parti invalidation run before every ordinary reload of the same commit, not only of the same event (I4 L255, D-0061's gap)?
+- Options: A a separate priority list, DispatcherEventiInMemoria.registraDopoCommitPrioritario, that receives all of a commit's events first. B reverse the delivery loops, changing the contract's interleaving and fatal stop. C leave the gap, unreachable today.
+- Hypothesis: n/a — decided by the worker in fix group pre-I4-5, [pre-release](pre-release.md)
+- Check: n/a — decided by the worker in fix group pre-I4-5, [pre-release](pre-release.md)
+- Result: n/a — decided by the worker in fix group pre-I4-5, [pre-release](pre-release.md)
+- Debate: code-review: breaks if a priority subscriber opens a transaction (unreachable today; KDoc owed, post-I4 LOW).
+- Decision: A, on the concrete class, the DispatcherEventi port untouched. Cost: one more public kernel method; priority subscribers must not open transactions.
+- By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
+- Docs: [pre-release](pre-release.md)
+- Revisit: a priority subscriber needs to write.
