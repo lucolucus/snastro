@@ -118,6 +118,32 @@ class ParlanteImprontePerParteTest {
     }
 
     @Test
+    fun `INV-21 ereditaImpronte fa vincere le impronte di B e tiene quelle di A dove B non ne ha`() {
+        val p = unParlante()
+        val a = unaVoce(1)
+        val b = unaVoce(2)
+        p.aggiungi(a, PARTE_A, 1f)
+        p.aggiungi(a, PARTE_B, 4f)
+        p.aggiungi(b, PARTE_A, 2f)
+
+        p.ereditaImpronte(da = b, a = a)
+
+        assertEquals(setOf(stampa(a, PARTE_A, 2f), stampa(a, PARTE_B, 4f)), p.impronte.toSet())
+        assertEquals(2, p.impronte.size, "una riga per (Voce, Parte)")
+    }
+
+    @Test
+    fun `ereditaImpronte di una Voce su se stessa non cancella nulla`() {
+        val p = unParlante()
+        val a = unaVoce(1)
+        p.aggiungi(a, PARTE_A, 1f)
+
+        p.ereditaImpronte(da = a, a = a)
+
+        assertEquals(listOf(stampa(a, PARTE_A, 1f)), p.impronte)
+    }
+
+    @Test
     fun `riassegnaImpronte di una Voce su se stessa non cancella nulla`() {
         val p = unParlante()
         val a = unaVoce(1)

@@ -18,10 +18,11 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Read-model `PropostaTraParti` ([INV-I18], ADR 0036, AC-I48/AC-I49): per Incontro, the pairs of not-yet-attributed
- * Voci of DIFFERENT Parti that are each other's only FORTE. Never automatic, never written: the transient prints
- * live in memory only (ADR 0009), extracted outside any transaction, ONE `estrai` per eligible (Voce, Parte) slice
- * per computation (ADR 0017). The similarity of two Voci is the best [Fascia] over their slice pairs, judged by
- * [ConfrontoImpronte] — the same `SoglieFascia` as [Proposta]. No rule beyond shaping the view lives here.
+ * Voci sharing no Parte that are each other's only FORTE among ALL the eligible Voci (D-0057). Never automatic, never
+ * written: the transient prints live in memory only (ADR 0009), extracted outside any transaction, ONE `estrai` per
+ * eligible (Voce, Parte) slice per computation (ADR 0017). The similarity of two Voci is the best [Fascia] over their
+ * slice pairs, judged by [ConfrontoImpronte] — the same `SoglieFascia` as [Proposta]. No rule beyond shaping the
+ * view lives here.
  *
  * The result is cached per Incontro until [invalida] — called by the subscriber of `VociUnite`, `VoceDivisa`,
  * `SegmentoRiassegnato`, `ElaborazioneCompletata`, `TrascrittoSostituito`, `TrascrittoEliminato`,
@@ -44,7 +45,11 @@ public class PropostaTraParti(
     /** Per-Incontro generation: bumped by [invalida]; a result computed under an older one is never stored. */
     private val generazioni = ConcurrentHashMap<IncontroId, Long>()
 
-    /** [INV-I18]: the pairs of [incontroId], `voceA`'s first Parte before `voceB`'s; empty when none or unknown. */
+    /**
+     * [INV-I18]: the pairs of [incontroId] ([CoppiaTraParti]), by `voceA`; empty when none or unknown. A failure of
+     * the extractor or the decoder (and an [InterruptedException] on cancellation) propagates to the caller and caches
+     * nothing: the consumer guards it, as for any port call.
+     */
     public fun perIncontro(incontroId: IncontroId): List<CoppiaTraParti> {
         cache[incontroId]?.let { return it }
         val generazione = generazioni[incontroId] ?: 0L
@@ -80,46 +85,47 @@ public class PropostaTraParti(
                 estrattore.estrai(decodificatore.campioni(parte, SorgenteImpronta.di(intervalli).intervalli))
             }
         }
-        val forti = idonee.associate { (a, fetteA) ->
-            a to idonee.map { it.first }.filter { b ->
-                val fetteB = impronte.getValue(b)
-                b != a && fetteA.keys.none { it in fetteB } && forte(impronte.getValue(a), fetteB)
-            }
+        // [INV-I18] strict reading (D-0057): EVERY eligible FORTE counts as a rival, a Voce sharing a Parte included;
+        // only a mutual, unique FORTE sharing no Parte with A is paired.
+        val forti = idonee.associate { (a, _) ->
+            a to idonee.map { it.first }.filter { b -> b != a && forte(impronte.getValue(a), impronte.getValue(b)) }
         }
+        fun prima(v: VoceRef) = impronte.getValue(v).keys.minOf { numeri.getValue(it) }
+        fun disgiunte(a: VoceRef, b: VoceRef) = impronte.getValue(a).keys.none { it in impronte.getValue(b) }
+        fun reciproca(a: VoceRef, b: VoceRef) = forti.getValue(b) == listOf(a) && disgiunte(a, b)
         return forti.mapNotNull { (a, candidati) ->
-            val b = candidati.singleOrNull()
-            b?.takeIf { forti.getValue(it) == listOf(a) }?.let { coppia(a, it, numeri, impronte) }
-        }.sortedBy { it.voceA.numero }
+            candidati.singleOrNull()?.takeIf { reciproca(a, it) }?.let { setOf(a, it) }
+        }
+            .distinct() // each mutual pair is found from both of its Voci: kept once
+            .map { it.sortedBy(::prima) } // [INV-I2] the Voce whose first Parte is earlier is A, the survivor
+            .mapNotNull { (a, b) -> coppia(a, b, numeri) }
+            .sortedBy { it.voceA.numero }
     }
 
     /** Best Fascia over the slice pairs is FORTE. */
     private fun forte(a: Map<RegistrazioneId, Impronta>, b: Map<RegistrazioneId, Impronta>): Boolean =
         a.values.any { fa -> confronto.fascia(fa, b.values.toList()) == Fascia.FORTE }
 
-    /** Keeps each pair once, with the Voce whose first Parte is earlier as A; `null` when an excerpt is gone. */
-    private fun coppia(
-        a: VoceRef,
-        b: VoceRef,
-        numeri: Map<RegistrazioneId, Int>,
-        impronte: Map<VoceRef, Map<RegistrazioneId, Impronta>>,
-    ): CoppiaTraParti? {
-        fun prima(v: VoceRef) = impronte.getValue(v).keys.minOf { numeri.getValue(it) }
-        val (x, y) = if (prima(a) < prima(b)) a to b else b to a
-        return if (x != a) {
-            null // the pair is built from A's side only
+    /** The view of the pair (A survives), each Parte the one its excerpt plays from (D-0057); `null` if one is gone. */
+    private fun coppia(a: VoceRef, b: VoceRef, numeri: Map<RegistrazioneId, Int>): CoppiaTraParti? {
+        // a Parte added since `numeri` was read has no number: no pair now, the next computation has it
+        fun lato(v: VoceRef) = estrattoAudio.estratto(v)?.let { e -> numeri[e.registrazioneId]?.let { it to e } }
+        val la = lato(a)
+        val lb = lato(b)
+        return if (la == null || lb == null) {
+            null
         } else {
-            val estrattoA = estrattoAudio.estratto(x)
-            val estrattoB = estrattoAudio.estratto(y)
-            if (estrattoA == null || estrattoB == null) {
-                null
-            } else {
-                CoppiaTraParti(x.voceId, prima(x), estrattoA, y.voceId, prima(y), estrattoB)
-            }
+            CoppiaTraParti(a.voceId, la.first, la.second, b.voceId, lb.first, lb.second)
         }
     }
 }
 
-/** One pair of [PropostaTraParti.perIncontro]: [parteA] < [parteB], the Voci's first Parti ([INV-I2]); A survives. */
+/**
+ * One pair of [PropostaTraParti.perIncontro]. [voceA] is the Voce whose first Parte is earlier ([INV-I2]): it survives
+ * the join. [parteA] / [parteB] are the numbers (1..N in the Incontro's order) of the Parte [estrattoA] / [estrattoB]
+ * plays from — the Parte where that Voce speaks most ([INV-I17], D-0057) — so the banner names the Parte the user
+ * hears; they always differ, but [parteA] may be greater than [parteB].
+ */
 public data class CoppiaTraParti(
     val voceA: VoceId,
     val parteA: Int,

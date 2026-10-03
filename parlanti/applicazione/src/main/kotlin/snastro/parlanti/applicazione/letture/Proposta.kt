@@ -36,9 +36,10 @@ import snastro.parlanti.dominio.TipoParlante
  * (slice, print) pairs and its extract comes from the Parte of the chosen print ([INV-I17]).
  *
  * The result is cached per `Voce` (AC-422: [EstrattoreImpronta.estrai] is called exactly once per Parte of the
- * Voce per computation, never once per Candidato) until [invalida] is called — by the future Revisione/
- * Attribuzione/`ImpronteRiallineate` subscriber (AC-173: this block only exposes the invalidation, it
- * does not subscribe to `DispatcherEventi` itself, that belongs to `:parlanti:adattatori`). A
+ * Voce per computation, never once per Candidato) until [invalida] is called — by the open project's after-commit
+ * subscriber (`AggiornamentiVistaParlanti` in `:avvio`) on Revisione, Attribuzione, Parlante, `ImpronteRiallineate`,
+ * `TrascrittoSostituito` and `RegistrazioneEliminata` events; the deleted Parte's Voci and prints were already purged
+ * in the deleting unit, on `TrascrittoEliminato` (AC-173: this block only exposes the invalidation). A
  * cancelled computation ([InterruptedException] from [EstrattoreImpronta.estrai], ADR 0017 §1.5)
  * leaves no cache entry — the cache is written only after a computation returns normally (AC-423), so
  * the next request recomputes.
