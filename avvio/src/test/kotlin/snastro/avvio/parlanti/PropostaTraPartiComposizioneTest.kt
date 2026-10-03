@@ -4,6 +4,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.AmbienteProgetto
 import snastro.avvio.progetto.DiarizzatoreScriptato
@@ -174,7 +175,12 @@ class PropostaTraPartiComposizioneTest {
                 attendiFinche(timeout = 10.seconds, messaggio = "il calcolo in attesa del Mutex") {
                     mutex.hasQueuedThreads()
                 }
-                assertEquals(1, it.parlanti.letture.traParti(primo).size, "la cache si legge senza attendere")
+                // Bounded: a regression blocks on the Mutex and must fail here, not hang the gate.
+                val dallaCache = CoroutineScope(Dispatchers.Default).async { it.parlanti.letture.traParti(primo) }
+                val lette = runBlocking {
+                    withTimeoutOrNull(5.seconds) { dallaCache.await() }
+                }
+                assertEquals(1, lette?.size, "la cache si legge senza attendere il Mutex")
                 assertTrue(!calcolo.isCompleted)
             } finally {
                 mutex.unlock()
