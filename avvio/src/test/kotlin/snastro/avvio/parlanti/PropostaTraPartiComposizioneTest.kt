@@ -160,6 +160,29 @@ class PropostaTraPartiComposizioneTest {
         }
     }
 
+    @Test
+    fun `AC-I92 una lettura in cache non attende dietro il calcolo di un altro Incontro`() {
+        val estrattore = EstrattoreConMutex()
+        ambiente(estrattore).use {
+            val primo = it.dueParti().first
+            assertEquals(1, it.parlanti.letture.traParti(primo).size) // cached
+            val secondo = it.dueParti().first
+            val mutex = estrattore.lock
+            mutex.lock()
+            val calcolo = CoroutineScope(Dispatchers.Default).async { it.parlanti.letture.traParti(secondo) }
+            try {
+                attendiFinche(timeout = 10.seconds, messaggio = "il calcolo in attesa del Mutex") {
+                    mutex.hasQueuedThreads()
+                }
+                assertEquals(1, it.parlanti.letture.traParti(primo).size, "la cache si legge senza attendere")
+                assertTrue(!calcolo.isCompleted)
+            } finally {
+                mutex.unlock()
+            }
+            runBlocking { assertEquals(1, calcolo.await().size) }
+        }
+    }
+
     private fun ambiente(estrattore: EstrattoreConMutex): AmbienteProgetto {
         val unaVoce = DiarizzatoreScriptato(listOf(Turno(IntervalloMs(0, 1_000), 0)))
         return AmbienteProgetto(radice, unaVoce, estrattore = estrattore)

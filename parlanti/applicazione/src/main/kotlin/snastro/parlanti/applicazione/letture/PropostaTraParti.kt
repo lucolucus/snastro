@@ -26,7 +26,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * The result is cached per Incontro until [invalida] — called by the subscriber of `VociUnite`, `VoceDivisa`,
  * `SegmentoRiassegnato`, `ElaborazioneCompletata`, `TrascrittoSostituito`, `TrascrittoEliminato`,
- * `AttribuzioneConfermata`, `ImpronteRiallineate` (it belongs to `:parlanti:adattatori`, this block only exposes the
+ * `AttribuzioneConfermata`, `ImpronteRiallineate` (it belongs to `:avvio`, this block only exposes the
  * invalidation). A cancelled computation ([InterruptedException] from [EstrattoreImpronta.estrai]) leaves no entry.
  */
 @Suppress("LongParameterList") // one parameter per collaborator
@@ -42,8 +42,16 @@ public class PropostaTraParti(
     /** Thread-safe: `perIncontro` runs on the multi-threaded io dispatcher, `invalida` on the committing thread. */
     private val cache = ConcurrentHashMap<IncontroId, List<CoppiaTraParti>>()
 
-    /** Per-Incontro generation: bumped by [invalida]; a result computed under an older one is never stored. */
-    private val generazioni = ConcurrentHashMap<IncontroId, Long>()
+    /** Per-Incontro generation and computations in flight; an entry exists only while one of them is non-trivial. */
+    private data class Stato(val generazione: Long, val inCorso: Int)
+
+    private val stati = ConcurrentHashMap<IncontroId, Stato>()
+
+    /** Entries of the generation bookkeeping (none at rest: it is pruned when no computation is in flight). */
+    internal fun statiTracciati(): Int = stati.size
+
+    /** The cached proposal of [incontroId], or `null` if none: never computes, never waits. */
+    public fun inCache(incontroId: IncontroId): List<CoppiaTraParti>? = cache[incontroId]
 
     /**
      * [INV-I18]: the pairs of [incontroId] ([CoppiaTraParti]), by `voceA`; empty when none or unknown. A failure of
@@ -52,21 +60,26 @@ public class PropostaTraParti(
      */
     public fun perIncontro(incontroId: IncontroId): List<CoppiaTraParti> {
         cache[incontroId]?.let { return it }
-        val generazione = generazioni[incontroId] ?: 0L
-        val calcolato = calcola(incontroId) // AC-I49: only a finished computation is ever stored
-        generazioni.compute(incontroId) { _, attuale ->
-            // Atomic with invalida's bump: stored only if no invalida ran since the computation began.
-            if ((attuale ?: 0L) == generazione) cache[incontroId] = calcolato
-            attuale
+        val generazione = stati.compute(incontroId) { _, s -> Stato(s?.generazione ?: 0L, (s?.inCorso ?: 0) + 1) }!!
+            .generazione
+        var calcolato: List<CoppiaTraParti>? = null
+        try {
+            calcolato = calcola(incontroId) // AC-I49: only a finished computation is ever stored
+            return calcolato
+        } finally {
+            stati.compute(incontroId) { _, s ->
+                // Atomic with invalida's bump: stored only if no invalida ran since the computation began.
+                if (calcolato != null && s!!.generazione == generazione) cache[incontroId] = calcolato
+                s!!.copy(inCorso = s.inCorso - 1).takeIf { it.inCorso > 0 } // last one out prunes the entry
+            }
         }
-        return calcolato
     }
 
     /** AC-I49: forgets the cached proposal of one Incontro, and any computation still in flight for it. */
     public fun invalida(incontroId: IncontroId) {
-        generazioni.compute(incontroId) { _, attuale ->
+        stati.compute(incontroId) { _, s ->
             cache.remove(incontroId)
-            (attuale ?: 0L) + 1
+            s?.copy(generazione = s.generazione + 1) // nothing in flight: no entry to keep
         }
     }
 
