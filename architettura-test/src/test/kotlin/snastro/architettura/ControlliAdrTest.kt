@@ -152,17 +152,27 @@ class ControlliAdrTest {
 
     private data class Esito(val passa: Boolean, val uscita: String)
 
+    /**
+     * The output goes to a file, not a pipe read before [Process.waitFor]: a pipe read blocks until the script
+     * ends, so a hanging script would hang the gate instead of failing at the timeout.
+     */
     private fun esegui(c: ControlloAdr, albero: File): Esito {
-        val processo = ProcessBuilder("sh", File(radice, c.percorso).path, albero.path)
-            .directory(radice)
-            .redirectErrorStream(true)
-            .start()
-        val uscita = processo.inputStream.bufferedReader().readText()
-        if (!processo.waitFor(TIMEOUT_SECONDI, TimeUnit.SECONDS)) {
-            processo.destroyForcibly()
-            fail("${c.nome}: timed out after ${TIMEOUT_SECONDI}s")
+        val uscitaFile = File.createTempFile("controllo-adr-", ".out").apply { deleteOnExit() }
+        try {
+            val processo = ProcessBuilder("sh", File(radice, c.percorso).path, albero.path)
+                .directory(radice)
+                .redirectErrorStream(true)
+                .redirectOutput(uscitaFile)
+                .start()
+            if (!processo.waitFor(TIMEOUT_SECONDI, TimeUnit.SECONDS)) {
+                processo.descendants().forEach { it.destroyForcibly() }
+                processo.destroyForcibly()
+                fail("${c.nome}: timed out after ${TIMEOUT_SECONDI}s\n${uscitaFile.readText()}")
+            }
+            return Esito(processo.exitValue() == 0, uscitaFile.readText())
+        } finally {
+            uscitaFile.delete()
         }
-        return Esito(processo.exitValue() == 0, uscita)
     }
 
     private fun comando(cartella: File, vararg argomenti: String) {

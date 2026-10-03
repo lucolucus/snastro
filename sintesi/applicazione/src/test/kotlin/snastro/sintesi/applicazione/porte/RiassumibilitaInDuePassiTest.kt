@@ -50,16 +50,16 @@ class RiassumibilitaInDuePassiTest {
     }
 
     @Test
-    fun `L229 una Parte TRASCRITTA senza Segmenti letti blocca come da trascrivere, mai saltando la stima`() {
+    fun `L229 una Parte TRASCRITTA senza Segmenti letti blocca come in elaborazione, mai saltando la stima`() {
         val esito = riassumibilitaInDuePassi(true, trascritta, false) {
-            Esito.Errore(ErroreSintesi.PartiNonTrascritte(2))
+            Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(2))
         }
 
-        assertEquals(Esito.Errore(ErroreSintesi.PartiNonTrascritte(2)), esito)
+        assertEquals(Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(2)), esito)
     }
 
     @Test
-    fun `stimaTokenDi si ferma alla prima Parte senza Trascritto e la nomina`() {
+    fun `L248 stimaTokenDi si ferma alla prima Parte senza Trascritto e la nomina come in elaborazione`() {
         val r1 = RegistrazioneId("r1")
         val r2 = RegistrazioneId("r2")
         val r3 = RegistrazioneId("r3")
@@ -72,7 +72,7 @@ class RiassumibilitaInDuePassiTest {
             if (r == r2) null else listOf(segmento)
         }
 
-        assertEquals(Esito.Errore(ErroreSintesi.PartiNonTrascritte(2)), stima)
+        assertEquals(Esito.Errore(ErroreSintesi.ElaborazioneGiaAperta(2)), stima)
         assertEquals(listOf(r1, r2), lette)
         val tutte = stimaTokenDi(parti) { listOf(segmento) }
         assertTrue(tutte is Esito.Ok && tutte.valore > 0)

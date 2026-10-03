@@ -360,6 +360,23 @@ class RiassumiServizioTest {
     }
 
     @Test
+    fun `L248 Parte 2 TRASCRITTA ma senza Segmenti alla lettura rifiuta con ElaborazioneGiaAperta(2) e non scrive`() {
+        // the race: the state read says TRASCRITTA, the Segmenti read right after finds no Trascritto
+        val finta = LettoreTrascrittoFinta(listOf(REG1, REG2).associateWith { listOf(unSegmentoSintesi()) })
+        val inCorsa = object : LettoreTrascritto by finta {
+            override fun segmenti(r: RegistrazioneId): List<SegmentoSintesi>? =
+                if (r == REG2) null else finta.segmenti(r)
+        }
+        val a = unAmbiente(trascritti = inCorsa, incontri = LettoreIncontroFinta(mapOf(INCONTRO to listOf(REG1, REG2))))
+
+        val errore = a.servizio.esegui(Riassumi(INCONTRO)).erroreAtteso<ErroreSintesi.ElaborazioneGiaAperta>()
+
+        assertEquals(2, errore.parte)
+        assertEquals(emptyList(), a.riassunti.trova(INCONTRO))
+        assertEquals(emptyList(), a.eventi.pubblicati)
+    }
+
+    @Test
     fun `Incontro di 2 Parti, un Riassunto gia aperto rifiuta con RiassuntoGiaAperto dell Incontro`() {
         val a = unAmbienteMultiParte(trascritte = setOf(REG1, REG2))
         val aperto = unRiassunto("aperto-1", INCONTRO)

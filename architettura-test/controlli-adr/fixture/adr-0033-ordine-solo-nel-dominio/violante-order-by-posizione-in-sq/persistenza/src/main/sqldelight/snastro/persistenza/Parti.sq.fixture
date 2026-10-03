@@ -1,0 +1,2 @@
+perPosizione:
+SELECT DISTINCT id, r.aggiunta_alle FROM registrazione r ORDER BY 2;

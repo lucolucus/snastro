@@ -1,0 +1,5 @@
+package snastro.progetto.dominio
+
+internal fun ordina(parti: List<Parte>): List<Parte> =
+    parti.sortedWith(compareBy<Parte> { it.oraDiInizio == null }.thenBy { it.oraDiInizio }.thenBy { it.aggiuntaAlle })
+internal fun prima(parti: List<Parte>): Parte? = parti.minByOrNull { it.aggiuntaAlle }

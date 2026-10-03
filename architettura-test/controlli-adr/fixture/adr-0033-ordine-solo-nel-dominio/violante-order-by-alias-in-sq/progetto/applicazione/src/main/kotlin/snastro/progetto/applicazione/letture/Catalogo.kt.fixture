@@ -1,0 +1,5 @@
+package snastro.progetto.applicazione.letture
+
+internal fun vista(r: Registrazione) = ParteVista(oraDiInizio = r.oraDiInizio?.valore, aggiunta = r.aggiuntaAlle)
+internal fun daOrdinare(p: List<Registrazione>) = p.map { ParteDaOrdinare(it.id, it.oraDiInizio, it.aggiuntaAlle) }
+internal fun ordinate(p: List<Vista>) = p.sortedBy { it.titolo }

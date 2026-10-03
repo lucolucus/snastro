@@ -1,0 +1,4 @@
+package snastro.sintesi.adattatori.persistenza
+
+internal fun inDominio(riga: Riga): Riassunto = Riassunto(strutturaRegistrata = riga.struttura)
+internal fun inRiga(r: Riassunto, s: StrutturaIncontro): Riga = Riga(struttura = r.strutturaRegistrata ?: s.chiave)
