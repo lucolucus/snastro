@@ -60,8 +60,9 @@ public class PropostaTraParti(
      */
     public fun perIncontro(incontroId: IncontroId): List<CoppiaTraParti> {
         cache[incontroId]?.let { return it }
-        val generazione = stati.compute(incontroId) { _, s -> Stato(s?.generazione ?: 0L, (s?.inCorso ?: 0) + 1) }!!
-            .generazione
+        val generazione = checkNotNull(
+            stati.compute(incontroId) { _, s -> Stato(s?.generazione ?: 0L, (s?.inCorso ?: 0) + 1) },
+        ).generazione
         var calcolato: List<CoppiaTraParti>? = null
         try {
             calcolato = calcola(incontroId) // AC-I49: only a finished computation is ever stored
@@ -69,8 +70,9 @@ public class PropostaTraParti(
         } finally {
             stati.compute(incontroId) { _, s ->
                 // Atomic with invalida's bump: stored only if no invalida ran since the computation began.
-                if (calcolato != null && s!!.generazione == generazione) cache[incontroId] = calcolato
-                s!!.copy(inCorso = s.inCorso - 1).takeIf { it.inCorso > 0 } // last one out prunes the entry
+                val stato = checkNotNull(s) { "stato of $incontroId vanished while a computation was in flight" }
+                if (calcolato != null && stato.generazione == generazione) cache[incontroId] = calcolato
+                stato.copy(inCorso = stato.inCorso - 1).takeIf { it.inCorso > 0 } // last one out prunes the entry
             }
         }
     }
