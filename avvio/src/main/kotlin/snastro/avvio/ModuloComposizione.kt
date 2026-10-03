@@ -38,6 +38,12 @@ internal interface ModuloComposizione : Avviabile {
 
     fun abbonatiDopoCommit(): List<Abbonamento<AbbonatoDopoCommit>> = emptyList()
 
+    /**
+     * After-commit subscribers registered BEFORE every module's [abbonatiDopoCommit] (a cache invalidation: it must
+     * run before ANY other subscriber, whatever its module, can trigger a reload that reads the cache).
+     */
+    fun abbonatiDopoCommitPrioritari(): List<Abbonamento<AbbonatoDopoCommit>> = emptyList()
+
     fun fontiCoda(): List<FonteCoda> = emptyList()
 
     override fun avvia(scope: CoroutineScope) = Unit
