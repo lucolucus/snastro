@@ -360,6 +360,30 @@ class AggiungiRegistrazioneServizioTest {
     }
 
     @Test
+    fun `INV-I2 le Parti di un import successivo seguono quelle del precedente anche sullo stesso millisecondo`() {
+        leggibili(A, B, C, D, E)
+        var n = 10
+        val idDecrescenti = object : GeneratoreId {
+            override fun nuovo(): String = "id-${--n}" // later ids sort first: only aggiuntaAlle keeps imports apart
+        }
+        val servizioOrdinato = AggiungiRegistrazioneServizio(
+            eventi.unitaDiLavoro, idDecrescenti, clock, progetti, registrazioni, incontri, sonda, archivio, eventi,
+        )
+        servizioOrdinato.esegui(comando(A, B, C)).atteso()
+        val incontroId = registrazioni.delProgetto(progettoId).first().incontroId
+
+        // The same fixed clock: the second import reads the very millisecond of the first.
+        servizioOrdinato.esegui(comando(D, E, destinazione = Destinazione.Incontro(incontroId))).atteso()
+
+        val parti = registrazioni.delProgetto(progettoId)
+        val ordinate = OrdineDelleParti.ordina(
+            parti.map { ParteDaOrdinare(it.id, it.dataRegistrazione, it.oraDiInizio, it.aggiuntaAlle) },
+        )
+        val titoli = parti.associate { it.id to it.titolo }
+        assertEquals(listOf("a", "b", "c", "d", "e"), ordinate.map { titoli.getValue(it.registrazioneId) })
+    }
+
+    @Test
     fun `AC-61 aggiungere due volte lo stesso file crea due Registrazioni distinte, la seconda con titolo (2)`() {
         servizio.esegui(comando(SORGENTE)).atteso()
         servizio.esegui(comando(SORGENTE)).atteso()
@@ -522,5 +546,7 @@ class AggiungiRegistrazioneServizioTest {
         const val A = "/sorgenti/a.m4a"
         const val B = "/sorgenti/b.m4a"
         const val C = "/sorgenti/c.m4a"
+        const val D = "/sorgenti/d.m4a"
+        const val E = "/sorgenti/e.m4a"
     }
 }

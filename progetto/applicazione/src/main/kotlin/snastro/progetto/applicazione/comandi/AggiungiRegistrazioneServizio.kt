@@ -99,9 +99,11 @@ public class AggiungiRegistrazioneServizio(
         val titoli = registrazioni.titoliDelProgetto(progettoId).toMutableList()
         var incontroComune = incontroEsistente?.id
         val eventiDaPubblicare = mutableListOf<RegistrazioneAggiunta>()
-        // INV-I2 (ADR 0033 §2): ONE instant per import, +1 ms per file in the user's selection order, so Parti with
-        // the same data and no OraDiInizio follow that order (a per-file clock.instant() ties at the stored ms).
-        val aggiuntaAlle = clock.instant()
+        // INV-I2 (ADR 0033 §2): ONE instant per import, +1 ms per file in the user's selection order, after every
+        // Registrazione already in the Progetto, so Parti with the same data and no OraDiInizio follow the selection
+        // and then the import order (a per-file clock.instant() ties at the stored ms).
+        val giaNelProgetto = registrazioni.delProgetto(progettoId)
+        val aggiunte = Registrazione.istantiDiAggiunta(clock.instant(), copie.size, giaNelProgetto)
         for ((indice, copia) in copie.withIndex()) {
             val incontroId = incontroComune ?: IncontroId(generatoreId.nuovo()).also { nuovo ->
                 incontri.salva(Incontro.nuovo(nuovo, progettoId)) // saved before its Parte (AC-I55)
@@ -117,7 +119,7 @@ public class AggiungiRegistrazioneServizio(
                 riferimentoAudio = copia.riferimento,
                 durataMs = copia.info.durataMs,
                 dataRegistrazione = copia.info.dataFile,
-                aggiuntaAlle = aggiuntaAlle.plusMillis(indice.toLong()),
+                aggiuntaAlle = aggiunte[indice],
                 oraDiInizio = copia.ora,
             )
             registrazioni.salva(creato.aggregato)

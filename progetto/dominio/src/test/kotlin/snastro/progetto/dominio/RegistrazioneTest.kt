@@ -10,6 +10,7 @@ import java.lang.reflect.Modifier
 import java.time.Instant
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.temporal.ChronoUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -245,5 +246,33 @@ class RegistrazioneTest {
 
         assertEquals(OraDiInizioModificataDominio(id, incontroId, precedente = ora("10:25:00"), nuova = null), evento)
         assertNull(registrazione.oraDiInizio)
+    }
+
+    private fun aggiuntaAlle(millis: Long) = Registrazione.aggiungi(
+        id = RegistrazioneId("r-$millis"),
+        progettoId = progettoId,
+        incontroId = IncontroId("i"),
+        titolo = "r",
+        riferimentoAudio = RiferimentoAudio("audio/r.m4a"),
+        durataMs = 1L,
+        dataRegistrazione = dataFile,
+        aggiuntaAlle = Instant.ofEpochMilli(millis),
+    ).aggregato
+
+    @Test
+    fun `INV-I2 gli istanti di un import, uno per file, partono dopo l'ultima Registrazione del Progetto`() {
+        data class Caso(val nome: String, val adesso: Instant, val esistenti: List<Long>, val atteso: List<Long>)
+        val adesso = Instant.ofEpochMilli(100)
+        listOf(
+            Caso("Progetto vuoto: adesso + 1 ms per file", adesso, emptyList(), listOf(100, 101, 102)),
+            Caso("ultima ben prima: adesso", adesso, listOf(5, 50), listOf(100, 101, 102)),
+            Caso("stesso ms dell'import prima", adesso, listOf(100, 101, 102), listOf(103, 104, 105)),
+            Caso("orologio indietro", Instant.ofEpochMilli(10), listOf(100), listOf(101, 102, 103)),
+            Caso("adesso troncato al ms", adesso.plusNanos(999_999), listOf(99), listOf(100, 101, 102)),
+        ).forEach { c ->
+            val istanti = Registrazione.istantiDiAggiunta(c.adesso, 3, c.esistenti.map(::aggiuntaAlle))
+            assertEquals(c.atteso, istanti.map { it.toEpochMilli() }, c.nome)
+            assertEquals(istanti, istanti.map { it.truncatedTo(ChronoUnit.MILLIS) }, c.nome)
+        }
     }
 }
