@@ -161,10 +161,14 @@ internal class AzioniSomiglianzaProgetto(
                     }
                 }
             } catch (e: ConsegnaDopoCommitFallita) {
-                // L237: the plan COMMITTED, only an after-commit follow-up (a view refresh) failed: the outcome
-                // is shown, and S3 reloads on it; the failed refresh is a warning, never "it failed".
-                log.log(Level.WARNING, "riassegnazione di $id applicata, aggiornamento dopo il commit fallito", e)
+                // L237: the plan COMMITTED, only an after-commit subscriber then failed (the view subscriber
+                // itself never rethrows): the outcome is shown, S3 reloads on it; a warning, never "it failed".
+                log.log(Level.WARNING, "riassegnazione di $id applicata, un abbonato dopo-commit e fallito", e)
                 Esito.Ok(Unit)
+            } catch (e: CancellationException) {
+                // L262: never swallowed into an Errore; the panel is released first so it is not left 'Applicazione'.
+                imposta(id, StatoSomiglianza.Errore(ErroreSomiglianzaUi.Altro(MESSAGGIO_ERRORE_GENERICO)))
+                throw e
             } catch (
                 // A SQL fault (ADR 0003): the transaction rolled back; the panel shows it in plain words.
                 @Suppress("TooGenericExceptionCaught") e: Exception,

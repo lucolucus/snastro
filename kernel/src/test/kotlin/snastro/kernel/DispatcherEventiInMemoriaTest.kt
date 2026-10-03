@@ -68,6 +68,41 @@ class DispatcherEventiInMemoriaTest : DispatcherEventiContratto() {
         assertEquals(setOf("rigenerato"), effetti.visibili())
     }
 
+    @Test
+    fun `L258 la consegna fallita di una transazione aperta da un abbonato dopo-commit non si annida due volte`() {
+        val guasto = IllegalStateException("abbonato annidato")
+        val seguito = object : EventoPubblicato {}
+        reale.registraDopoCommit { e ->
+            if (e == seguito) throw guasto
+            reale.unitaDiLavoro.inTransazione {
+                reale.pubblica(seguito)
+                Esito.Ok(Unit)
+            }
+        }
+        val lanciata = assertFailsWith<ConsegnaDopoCommitFallita> {
+            reale.unitaDiLavoro.inTransazione {
+                reale.pubblica(Evento)
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(guasto, lanciata.cause, "la causa e il guasto originale, non un'altra ConsegnaDopoCommitFallita")
+    }
+
+    @Test
+    fun `L255 un abbonato prioritario riceve tutti gli eventi del commit prima di ogni abbonato ordinario`() {
+        val visti = mutableListOf<String>()
+        val primo = object : EventoPubblicato {}
+        val invalidante = object : EventoPubblicato {}
+        reale.registraDopoCommit { e -> if (e == primo) visti += "ricarica-per-primo" }
+        reale.registraDopoCommitPrioritario { e -> if (e == invalidante) visti += "invalida" }
+        reale.unitaDiLavoro.inTransazione {
+            reale.pubblica(primo)
+            reale.pubblica(invalidante)
+            Esito.Ok(Unit)
+        }.atteso()
+        assertEquals(listOf("invalida", "ricarica-per-primo"), visti)
+    }
+
     /** A delegate that dooms nothing: the dispatcher alone must carry the nested-failure rule. */
     private val ingenua = object : UnitaDiLavoro {
         override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> = blocco()

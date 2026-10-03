@@ -10,8 +10,8 @@ import kotlin.test.assertSame
  * Contract of [DispatcherEventi] (ADR 0012): synchronous subscribers run in publication order
  * inside the transaction and an [Esito.Errore] or exception of theirs dooms the command (rollback);
  * after-commit subscribers run only after commit, never after a rollback; an ordinary failure of theirs
- * surfaces as [ConsegnaDopoCommitFallita] (the command stays committed), a fatal throwable stops their
- * delivery at once. One subclass per implementation.
+ * surfaces as [ConsegnaDopoCommitFallita] (the command stays committed), a fatal throwable (any [Error],
+ * cancellation, interruption) stops their delivery at once and propagates unwrapped. One subclass per implementation.
  */
 public abstract class DispatcherEventiContratto {
     /** A fresh environment: dispatcher, the unit of work services receive, a transactional effect. */
@@ -267,6 +267,11 @@ public abstract class DispatcherEventiContratto {
     @Test
     public fun `AC-3 un VirtualMachineError di un abbonato dopo-commit si propaga subito e ferma la consegna`() {
         fataleFermaLaConsegna(StackOverflowError("di prova"))
+    }
+
+    @Test
+    public fun `L261 un Error non VirtualMachineError di un abbonato dopo-commit si propaga intatto e ferma la consegna`() {
+        fataleFermaLaConsegna(AssertionError("di prova"))
     }
 
     @Test

@@ -157,6 +157,9 @@ internal class AmbienteVoci(
 
     /** Runs inside every Trascritto read (on the io dispatcher) — lets a test observe the state mid-reload. */
     var allaLetturaTrascritto: () -> Unit = {}
+
+    /** L253: the Trascritto read answers `null` (e.g. the Parte was deleted meanwhile). */
+    var trascrittoSparito = false
     val chiamateTraParti: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
 
     /** ADR 0018 Amendment (b) §2 (AC-452/454): `null` unless a test opts in via `presenter(conStati = true)`. */
@@ -303,7 +306,7 @@ internal class AmbienteVoci(
         registrazioneId = REG,
         trascritto = {
             allaLetturaTrascritto()
-            vista
+            vista.takeUnless { trascrittoSparito }
         },
         sbobinatura = { "/progetti/demo.snastro/sbobinature/seduta.md" },
         lettore = lettore,

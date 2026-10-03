@@ -49,6 +49,30 @@ class RegistraAbbonatiOrdineTest {
     }
 
     @Test
+    fun `L255 l'invalidazione precede la ricarica di un evento precedente dello stesso commit`() {
+        val dispatcher = DispatcherEventiInMemoria(UnitaDiLavoroFinta())
+        val visti = mutableListOf<String>()
+        val presto = Modulo(
+            ordinari = listOf(
+                Abbonamento(ElaborazioneCompletata::class, AbbonatoDopoCommit { visti += "ricarica-schermata" }),
+            ),
+        )
+        val invalida = Abbonamento(Invalidante::class, AbbonatoDopoCommit { visti += "invalida" })
+        val tardi = Modulo(prioritari = listOf(invalida))
+
+        registraAbbonati(dispatcher, sincroni = emptyList(), dopoCommit = listOf(presto, tardi))
+        dispatcher.unitaDiLavoro.inTransazione {
+            dispatcher.pubblica(ElaborazioneCompletata(RegistrazioneId("r"), IncontroId("i")) as EventoPubblicato)
+            dispatcher.pubblica(Invalidante)
+            Esito.Ok(Unit)
+        }
+
+        assertEquals(listOf("invalida", "ricarica-schermata"), visti)
+    }
+
+    private object Invalidante : EventoPubblicato
+
+    @Test
     fun `in produzione l'invalidazione tra Parti e prioritaria, mai fra gli abbonati ordinari di Parlanti`() {
         val radice = Files.createTempDirectory("ordine-abbonati")
         AmbienteProgetto(radice).use {

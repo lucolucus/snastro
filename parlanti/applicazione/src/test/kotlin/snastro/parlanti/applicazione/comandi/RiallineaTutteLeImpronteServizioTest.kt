@@ -30,6 +30,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 /** [RiallineaTutteLeImpronteServizio] over the real [RiallineaImpronteServizio] and the ports' fakes (D1): AC-300. */
@@ -142,6 +143,18 @@ class RiallineaTutteLeImpronteServizioTest {
         assertEquals("0-1000", sorgenteDi(marco, A))
         assertEquals(CHIAVE, sorgenteDi(marco, B), "B riallineata nonostante A")
         assertEquals(listOf(ImpronteRiallineate(unIncontroDi(B))), eventi.pubblicati)
+    }
+
+    @Test
+    fun `L257 un Error di un abbonato dopo-commit si propaga subito, intatto, e ferma gli altri Incontri`() {
+        val marco = unParlanteConImpronteObsolete("Marco", PROGETTO, listOf(A, B))
+        val errore = AssertionError("abbonato dopo-commit")
+        eventi.registraDopoCommit { throw errore }
+
+        val lanciato = assertFailsWith<AssertionError> { servizio().esegui(RiallineaTutteLeImpronte(PROGETTO)) }
+
+        assertSame(errore, lanciato, "mai avvolto in ConsegnaDopoCommitFallita ne raccolto come fallimento")
+        assertEquals(1, listOf(A, B).count { sorgenteDi(marco, it) == CHIAVE }, "il secondo Incontro non e partito")
     }
 
     private companion object {
