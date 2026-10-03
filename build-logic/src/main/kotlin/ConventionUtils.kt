@@ -1,3 +1,4 @@
+import io.gitlab.arturbosch.detekt.Detekt
 import io.gitlab.arturbosch.detekt.extensions.DetektExtension
 import org.gradle.api.Project
 import org.gradle.api.artifacts.VersionCatalog
@@ -48,6 +49,14 @@ internal fun Project.configureDetekt() {
         baseline = null
     }
     dependencies.add("detektPlugins", versionCatalog.library("detekt-formatting"))
+    // CR-6: `UnsafeCallOnNullableType` needs type resolution, which the plain `detekt` task (what `check` runs) lacks
+    // (probe 2026-10-03: `x!!.length` -> exit 0). `detektMain` has it: wire it into the gate, restricted to that one rule
+    // (detekt-cr6.yml, no default config) so the other type-resolved rules don't surface; generated sources are skipped (excludes in the yml).
+    tasks.named<Detekt>("detektMain") {
+        buildUponDefaultConfig = false
+        config.setFrom(files(rootDir.resolve("config/detekt/detekt-cr6.yml")))
+    }
+    tasks.named("check") { dependsOn("detektMain") }
 }
 
 /** JUnit 5 platform + kotlin.test assertions + coroutines-test + mockk (dev-architecture-app.md#test). */

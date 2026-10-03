@@ -1,0 +1,12 @@
+# snastro — detekt config for the type-resolved run (detektMain), CR-6 ONLY (code-rules.md).
+# `UnsafeCallOnNullableType` needs type resolution, which plain `detekt` lacks. Every other rule runs in the plain
+# task (detekt.yml); this file keeps the type-resolved pass to the one rule that needs it. Used WITHOUT the default
+# config (build-logic/ConventionUtils.kt), so nothing else is active here.
+
+build:
+  maxIssues: 0
+
+potential-bugs:
+  UnsafeCallOnNullableType: # CR-6: no `!!` (main source sets).
+    active: true
+    excludes: ['**/build/**'] # generated sources (SQLDelight) are not ours to fix.
