@@ -1,0 +1,2 @@
+traFunzione:
+SELECT * FROM registrazione WHERE 1 BETWEEN 0 AND coalesce(ora_di_inizio, 0);

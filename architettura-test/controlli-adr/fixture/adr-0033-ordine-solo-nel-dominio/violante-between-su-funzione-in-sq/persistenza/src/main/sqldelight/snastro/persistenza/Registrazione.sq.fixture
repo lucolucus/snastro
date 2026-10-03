@@ -1,0 +1,38 @@
+-- ORDER BY ora_di_inizio is the domain's job.
+trovaDelProgetto:
+SELECT * FROM registrazione WHERE progetto_id = :progettoId;
+
+trovaConOra:
+SELECT * FROM registrazione WHERE ora_di_inizio IS NULL OR ora_di_inizio = :ora OR aggiunta_alle <> :a
+    ORDER BY data_registrazione, id;
+
+inserisci:
+INSERT INTO registrazione(id, aggiunta_alle, ora_di_inizio) VALUES (:id, :aggiuntaAlle, :oraDiInizio);
+
+aggiorna:
+UPDATE registrazione SET ora_di_inizio = :oraDiInizio WHERE id = :id;
+
+-- A subquery's ORDER BY ends at its `)`: the equality after it is allowed.
+ultimaConOra:
+SELECT * FROM registrazione WHERE id IN (SELECT id FROM registrazione ORDER BY data_registrazione LIMIT 1)
+    AND ora_di_inizio = :ora;
+
+/* MIN(aggiunta_alle) and ORDER BY ora_di_inizio in a block comment;
+   across lines */
+conFunzione:
+SELECT printf_max(ora_di_inizio) AS ora FROM registrazione WHERE nota = '-- aggiunta_alle < 3'
+    AND data_registrazione BETWEEN :da AND :a AND aggiunta_alle = :aggiunta;
+
+-- A quoted identifier named between, with no AND after it.
+citato:
+SELECT "between" FROM registrazione;
+
+-- BETWEEN on another column whose lower bound holds an AND; the equality after the depth-0 AND is allowed.
+traAltre:
+SELECT * FROM registrazione WHERE data_registrazione BETWEEN (CASE WHEN 1 AND 2 THEN :a END) AND :b
+    AND ora_di_inizio = :ora;
+
+-- A LIMIT subquery is not the ORDER BY list; ORDER BY by alias or position of another column.
+limitata:
+SELECT data_registrazione AS d, ora_di_inizio, id FROM registrazione ORDER BY d, 3
+    LIMIT (SELECT count(*) FROM registrazione WHERE ora_di_inizio = :ora);

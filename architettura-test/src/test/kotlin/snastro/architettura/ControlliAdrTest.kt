@@ -150,29 +150,58 @@ class ControlliAdrTest {
         return destinazione
     }
 
-    private data class Esito(val passa: Boolean, val uscita: String)
+    private data class Esito(val passa: Boolean, val uscita: String, val scaduto: Boolean = false)
+
+    private fun esegui(c: ControlloAdr, albero: File): Esito {
+        val esito = eseguiScript(File(radice, c.percorso), albero, TIMEOUT_SECONDI)
+        if (esito.scaduto) fail("${c.nome}: timed out after ${TIMEOUT_SECONDI}s\n${esito.uscita}")
+        return esito
+    }
 
     /**
      * The output goes to a file, not a pipe read before [Process.waitFor]: a pipe read blocks until the script
-     * ends, so a hanging script would hang the gate instead of failing at the timeout.
+     * ends, so a hanging script would hang the gate instead of ending at the timeout. On the timeout the script and
+     * its descendants are killed and awaited, so none outlives the call.
      */
-    private fun esegui(c: ControlloAdr, albero: File): Esito {
+    private fun eseguiScript(script: File, albero: File, timeoutSecondi: Long): Esito {
         val uscitaFile = File.createTempFile("controllo-adr-", ".out").apply { deleteOnExit() }
         try {
-            val processo = ProcessBuilder("sh", File(radice, c.percorso).path, albero.path)
+            val processo = ProcessBuilder("sh", script.path, albero.path)
                 .directory(radice)
                 .redirectErrorStream(true)
                 .redirectOutput(uscitaFile)
                 .start()
-            if (!processo.waitFor(TIMEOUT_SECONDI, TimeUnit.SECONDS)) {
-                processo.descendants().forEach { it.destroyForcibly() }
+            if (!processo.waitFor(timeoutSecondi, TimeUnit.SECONDS)) {
+                val figli = processo.descendants().toList()
+                figli.forEach { it.destroyForcibly() }
                 processo.destroyForcibly()
-                fail("${c.nome}: timed out after ${TIMEOUT_SECONDI}s\n${uscitaFile.readText()}")
+                (figli.map { it.onExit() } + processo.onExit()).forEach {
+                    it.get(ATTESA_UCCISIONE_SECONDI, TimeUnit.SECONDS)
+                }
+                return Esito(passa = false, uscita = uscitaFile.readText(), scaduto = true)
             }
             return Esito(processo.exitValue() == 0, uscitaFile.readText())
         } finally {
             uscitaFile.delete()
         }
+    }
+
+    @Test
+    fun `L281 uno script che non finisce scade e lui e i suoi figli sono morti al ritorno`() {
+        val cartella = File(cartellaLavoro, "timeout")
+        cartella.deleteRecursively()
+        cartella.mkdirs()
+        val pidFiglio = File(cartella, "figlio.pid")
+        val script = File(cartella, "appeso.sh").apply {
+            writeText("sleep 600 &\necho $! > '${pidFiglio.path}'\necho avviato\nwait\n")
+        }
+
+        val esito = eseguiScript(script, cartella, timeoutSecondi = 2)
+
+        assertTrue(esito.scaduto, "the script ran past the timeout, it must be reported as timed out")
+        assertTrue(esito.uscita.contains("avviato"), "the output written before the kill is kept: ${esito.uscita}")
+        val figlio = ProcessHandle.of(pidFiglio.readText().trim().toLong())
+        assertTrue(figlio.isEmpty || !figlio.get().isAlive, "the script's child outlived the timeout")
     }
 
     private fun comando(cartella: File, vararg argomenti: String) {
@@ -191,5 +220,6 @@ class ControlliAdrTest {
         const val USCITA_ATTESA = ".uscita-attesa"
         val MARCATORI = setOf(MARCATORE_GIT, USCITA_ATTESA)
         const val TIMEOUT_SECONDI = 60L
+        const val ATTESA_UCCISIONE_SECONDI = 10L
     }
 }

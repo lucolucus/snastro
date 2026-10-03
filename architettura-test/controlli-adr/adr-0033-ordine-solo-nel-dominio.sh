@@ -17,7 +17,9 @@
 #      `--` and `/* */` comments stripped, string literals blanked), neither column sits in an ORDER BY list (up to the
 #      `)` closing its level: a subquery's ORDER BY does not reach the outer WHERE), inside a MIN(/MAX( argument (word
 #      boundary before, nested parentheses followed), or is an operand of <, >, <=, >=, BETWEEN (`=`, `<>`, `!=`,
-#      IS NULL allowed).
+#      IS NULL allowed). A column wrapped in a call (`coalesce(ora_di_inizio, 0) > 1`) is an operand; an ORDER BY alias
+#      counts when any `AS alias` of the statement (a FROM subquery included) names the column; `->>`/`->` are not
+#      comparisons.
 # FAIL when progetto/dominio is missing.
 # Usage: sh architettura-test/controlli-adr/adr-0033-ordine-solo-nel-dominio.sh [project-root]
 N='ADR-0033 ordine-solo-nel-dominio'
@@ -115,23 +117,72 @@ V3=$(printf '%s\n' "$SQ" | while IFS= read -r f; do [ -n "$f" ] && awk '
     }
     return ""
   }
+  # A word that is never an alias (nor the word before one): `x IS NOT NULL`, `x DESC`, `x AND y` end in no alias.
+  function riservata(w) {
+    return w ~ /^(null|true|false|end|asc|desc|is|not|and|or|like|glob|in|between|when|then|else|case|distinct|by|on|from|where|select|as)$/
+  }
+  # The item of a list that ends at position k of s: back to its depth-0 comma or SELECT, or the start of its level.
+  function elemento(s, k,   j, c, d) {
+    d = 0
+    for (j = k - 1; j >= 1; j--) {
+      c = substr(s, j, 1)
+      if (c == ")") d++
+      else if (c == "(") { if (d == 0) break; d-- }
+      else if (d == 0 && (c == "," || c == "e" && parola(s, j - 5, "select"))) break
+    }
+    return substr(s, j + 1, k - j - 1)
+  }
+  # True when the word x is, anywhere in the statement (a FROM subquery included), the `AS x` alias of an item that
+  # names the column.
+  function aliasInTutto(t, x,   u, k) {
+    for (u = 1; match(substr(t, u), "[[:space:]]as[[:space:]]+" x "([^a-z0-9_]|$)"); u += RSTART + RLENGTH - 1) {
+      k = u + RSTART - 1
+      if (nomina(elemento(t, k))) return 1
+    }
+    return 0
+  }
   # True when the ORDER BY list o (starting at position q of t) names, by alias or by position, a select item of its
-  # level that names the column.
-  function perVoce(t, q, o,   i, n, m, k, e, r, x, a, j) {
+  # level that names the column, or an alias of such an item defined anywhere in the statement.
+  function perVoce(t, q, o,   i, n, m, k, e, r, x, a, j, r2) {
     i = inizio(t, q); n = elementi(elenco(substr(t, i, q - i)), e); m = elementi(o, r)
     for (k = 1; k <= m; k++) {
       x = r[k]; sub(/^[[:space:]]+/, "", x); sub(/[^a-z0-9_].*$/, "", x)
       if (x ~ /^[0-9]+$/) { if (x + 0 >= 1 && x + 0 <= n && nomina(e[x + 0])) return 1; continue }
-      if (x == "") continue
+      if (x == "" || riservata(x)) continue
+      if (aliasInTutto(t, x)) return 1
       for (j = 1; j <= n; j++) {
         a = e[j]; sub(/[[:space:]]+$/, "", a)
-        if (nomina(a) && (a ~ ("[[:space:]]as[[:space:]]+" x "$") || a ~ ("[a-z0-9_)][[:space:]]+" x "$"))) return 1
+        if (!nomina(a) || a !~ ("[a-z0-9_)][[:space:]]+" x "$")) continue
+        r2 = a; sub(("[[:space:]]+" x "$"), "", r2); sub(/^.*[^a-z0-9_]/, "", r2)
+        if (!riservata(r2)) return 1
       }
     }
     return 0
   }
-  function controlla(s, primo,   t, p, q, o, v, a, b, COL, OP, AR, AP, CH, LIM) {
-    t = tolower(s); gsub(/<>/, " != ", t); v = 0
+  # A function name that is a keyword before its parenthesis (`IN (`, `EXISTS (`, `AND (`...), not a call.
+  function parolaChiave(w) {
+    return w ~ /^(in|exists|select|where|and|or|not|on|from|join|when|then|else|case|values|between|by|using|set|as|having|like|glob|distinct|all|any|union|limit|offset|end|is|over|into|table|unique|index|primary|key|references|check|if)$/
+  }
+  # s with every call whose arguments name the column (`coalesce(ora_di_inizio, 0)`, nested too) replaced by the bare
+  # column: a wrapped operand is then an operand like any other. Each round either shortens s (the call is replaced by
+  # a part of its own arguments) or moves p past the name, so it ends.
+  function svolgi(s,   p, q, m, w, o, a, c) {
+    p = 1
+    while (p <= length(s) && match(substr(s, p), /(^|[^a-z0-9_.])[a-z_][a-z0-9_]*[[:space:]]*\(/)) {
+      q = p + RSTART - 1; m = substr(s, q, RLENGTH)
+      if (m !~ /^[a-z_]/) { q++; m = substr(m, 2) }
+      w = m; sub(/[[:space:]]*\($/, "", w)
+      o = q + length(m); a = livello(s, o, "")
+      if (!parolaChiave(w) && nomina(a)) {
+        match(a, /ora_di_inizio|aggiunta_alle/); c = substr(a, RSTART, RLENGTH)
+        s = substr(s, 1, q - 1) c substr(s, o + length(a) + 1)
+        p = q
+      } else p = q + length(w)
+    }
+    return s
+  }
+  function controlla(s, primo,   t, tc, p, q, o, v, a, b, COL, OP, AR, AP, CH, LIM) {
+    t = tolower(s); gsub(/<>/, " != ", t); gsub(/->>?/, " json ", t); v = 0
     # An operand: the column, optionally parenthesised, signed or inside an arithmetic/concatenation chain.
     COL = "([a-z0-9_]+[.])?(ora_di_inizio|aggiunta_alle)"; OP = "[a-z0-9_.:?$@\047]+"
     AR = "[[:space:]]*([-+*/%]|[|][|])[[:space:]]*"; AP = "[[:space:](-]*"; CH = "[[:space:])]*"
@@ -146,16 +197,17 @@ V3=$(printf '%s\n' "$SQ" | while IFS= read -r f; do [ -n "$f" ] && awk '
       o = p + RSTART + RLENGTH - 1
       if (nomina(livello(t, o, ""))) v = 1
     }
+    tc = svolgi(t)
     # BETWEEN: the column as its lower bound, or as its upper bound (the operand after the AND at depth 0).
-    for (p = 1; match(substr(t, p), /(^|[^a-z0-9_])between/); p = o) {
+    for (p = 1; match(substr(tc, p), /(^|[^a-z0-9_])between/); p = o) {
       o = p + RSTART + RLENGTH - 1
-      if (!confine(t, o)) continue
-      a = substr(t, o); b = livello(a, 1, "and")
+      if (!confine(tc, o)) continue
+      a = substr(tc, o); b = livello(a, 1, "and")
       if (a ~ LIM || substr(a, length(b) + 1, 3) == "and" && substr(a, length(b) + 4) ~ LIM) v = 1
     }
     # <, >, <=, >= with the column on either side; the column before BETWEEN.
-    if (v || t ~ ("(^|[^a-z0-9_])" COL CH "(" AR AP OP CH ")*(<|>|between([^a-z0-9_]|$))") ||
-        t ~ ("[<>]=?" AP "(" OP CH AR AP ")*" COL "([^a-z0-9_]|$)"))
+    if (v || tc ~ ("(^|[^a-z0-9_])" COL CH "(" AR AP OP CH ")*(<|>|between([^a-z0-9_]|$))") ||
+        tc ~ ("[<>]=?" AP "(" OP CH AR AP ")*" COL "([^a-z0-9_]|$)"))
       print FILENAME ":" primo ": " s "  <- orders, compares or aggregates a Parte-order column"
   }
   # SQL comments (`--` to the end of the line, `/* */` across lines) dropped; a string literal is blanked to `'"''"'`,

@@ -1,0 +1,2 @@
+perFunzione:
+SELECT * FROM registrazione WHERE coalesce(ora_di_inizio, 0) > 1;
