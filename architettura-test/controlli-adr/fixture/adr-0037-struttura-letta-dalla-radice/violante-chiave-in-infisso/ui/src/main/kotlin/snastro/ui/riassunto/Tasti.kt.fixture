@@ -1,0 +1,4 @@
+package snastro.ui.riassunto
+
+// Another type's FUNCTION named chiave: a call, never the structure's key property.
+internal fun tasto(mappa: Tastiera): String = mappa.chiave(1) + mappa?.chiave (2) + mappa.chiave { it.nome }

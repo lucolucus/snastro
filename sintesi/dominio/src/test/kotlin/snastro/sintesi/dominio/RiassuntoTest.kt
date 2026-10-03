@@ -205,7 +205,6 @@ class RiassuntoTest {
         r.completaInUnaParte(bozzaValida, unaStruttura(1 to 1, 2 to 2, 3 to 1)).atteso()
 
         assertEquals("parte-1=1:1,2:2,3:1", r.strutturaRegistrata)
-        assertEquals(PARTE, r.parte)
         assertFalse(r.superato(inUnaParte(unaStruttura(3 to 1, 1 to 1, 2 to 2))), "stessa assegnazione")
         assertTrue(r.superato(inUnaParte(unaStruttura(1 to 1, 2 to 1, 3 to 1))), "segmento 2 passa da V2 a V1")
         assertFalse(r.superato(inUnaParte(unaStruttura(1 to 1, 2 to 2, 3 to 1))), "segmento 2 torna a V2")

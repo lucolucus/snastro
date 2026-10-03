@@ -13,6 +13,7 @@ import snastro.sintesi.applicazione.porte.DisponibilitaModelloLinguisticoFinta
 import snastro.sintesi.applicazione.porte.LettoreIncontro
 import snastro.sintesi.applicazione.porte.LettoreIncontroFinta
 import snastro.sintesi.applicazione.porte.LettoreNomiFinta
+import snastro.sintesi.applicazione.porte.LettoreTrascritto
 import snastro.sintesi.applicazione.porte.LettoreTrascrittoFinta
 import snastro.sintesi.applicazione.porte.ParteSintesi
 import snastro.sintesi.applicazione.porte.RiassuntoRepositoryFinta
@@ -224,6 +225,20 @@ class RiassuntoVisteLetturaIncontroTest {
     }
 
     @Test
+    fun `L229 una Parte TRASCRITTA i cui Segmenti mancano nella lettura e da trascrivere, mai Disponibile`() {
+        val tutti = LettoreTrascrittoFinta(listOf(p1, p2).associateWith { listOf(segmento(1, 1)) })
+        // statoParte says TRASCRITTA, the Segmenti read in the same snapshot are gone (a concurrent re-run)
+        val senzaSegmenti2 = object : LettoreTrascritto by tutti {
+            override fun segmenti(r: RegistrazioneId): List<SegmentoSintesi>? = tutti.segmenti(r).takeUnless { r == p2 }
+        }
+
+        assertEquals(
+            DisponibilitaVista.NonDisponibile(MotivoNonDisponibile.PartiNonTrascritte(2)),
+            vistaDi(listOf(p1, p2), senzaSegmenti2, RiassuntoRepositoryFinta()).disponibilita,
+        )
+    }
+
+    @Test
     fun `INV-I3 un Incontro di una Parte senza Trascritto non offre la scheda, mai Parte 1 non riuscita`() {
         val riassunti = RiassuntoRepositoryFinta()
         listOf(
@@ -274,14 +289,14 @@ class RiassuntoVisteLetturaIncontroTest {
 
     private fun vistaDi(
         parti: List<RegistrazioneId>,
-        trascritti: LettoreTrascrittoFinta,
+        trascritti: LettoreTrascritto,
         riassunti: RiassuntoRepositoryFinta,
     ) =
         checkNotNull(lettura(parti, trascritti, riassunti, LettoreNomiFinta()).di(incontro))
 
     private fun lettura(
         parti: List<RegistrazioneId>,
-        trascritti: LettoreTrascrittoFinta,
+        trascritti: LettoreTrascritto,
         riassunti: RiassuntoRepositoryFinta,
         nomi: LettoreNomiFinta,
     ) = RiassuntoVisteLettura(

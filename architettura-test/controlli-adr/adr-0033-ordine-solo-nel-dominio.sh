@@ -14,8 +14,10 @@
 #      compareBy*/compareTo/compareValues*/Comparator/thenBy*/thenComparing/maxBy*/minBy*/maxOf*/minOf*/maxWith/minWith/
 #      max(/min(/coerce*/isBefore/isAfter/rangeTo/`..`/a spaced binary ` < `, ` > `, ` <= `, ` >= ` (`==`/`!=` allowed).
 #   3. SQL: in every *.sq under */src/main/sqldelight (*.sqm migrations excluded), per statement (joined up to its `;`,
-#      `--` comments stripped), neither column follows ORDER BY, sits inside MIN(/MAX(, or is an operand of <, >, <=, >=,
-#      BETWEEN (`=`, `<>`, `!=`, IS NULL allowed).
+#      `--` and `/* */` comments stripped, string literals blanked), neither column sits in an ORDER BY list (up to the
+#      `)` closing its level: a subquery's ORDER BY does not reach the outer WHERE), inside a MIN(/MAX( argument (word
+#      boundary before, nested parentheses followed), or is an operand of <, >, <=, >=, BETWEEN (`=`, `<>`, `!=`,
+#      IS NULL allowed).
 # FAIL when progetto/dominio is missing.
 # Usage: sh architettura-test/controlli-adr/adr-0033-ordine-solo-nel-dominio.sh [project-root]
 N='ADR-0033 ordine-solo-nel-dominio'
@@ -58,17 +60,53 @@ V12=$(printf '%s\n' "$KT" | while IFS= read -r f; do [ -n "$f" ] && awk -f "$AWK
 # Clause 3 on the *.sq statements.
 SQ=$(find . -type f -name '*.sq' -path '*/src/main/sqldelight/*' -not -path '*/build/*' 2>/dev/null)
 V3=$(printf '%s\n' "$SQ" | while IFS= read -r f; do [ -n "$f" ] && awk '
-  function controlla(s, primo,   t, c) {
-    t = tolower(s); gsub(/<>/, " != ", t); c = "(ora_di_inizio|aggiunta_alle)"
-    if (t ~ ("order[[:space:]]+by[^;]*(^|[^a-z0-9_])" c "([^a-z0-9_]|$)") ||
-        t ~ ("(min|max)[[:space:]]*\\(([^)]*[^a-z0-9_])?" c "([^a-z0-9_]|$)") ||
-        t ~ ("(^|[^a-z0-9_])" c "[[:space:]]*(<|>|between([^a-z0-9_]|$))") ||
-        t ~ ("[<>]=?[[:space:]]*([a-z0-9_]+[.])?" c "([^a-z0-9_]|$)") ||
-        t ~ ("between[[:space:]]+[^;]*[[:space:]]and[[:space:]]+([a-z0-9_]+[.])?" c "([^a-z0-9_]|$)") ||
-        t ~ ("between[[:space:]]+([a-z0-9_]+[.])?" c "([^a-z0-9_]|$)"))
+  # The column as a whole word (a qualifier `r.` is allowed).
+  function nomina(s) { return s ~ ("(^|[^a-z0-9_])(ora_di_inizio|aggiunta_alle)([^a-z0-9_]|$)") }
+  # s from position i up to the first `)` closing the enclosing level (or `;`, or the end): an ORDER BY list or a
+  # MIN(/MAX( argument, nested parentheses included, never the text after a subquery closes.
+  function livello(s, i,   j, c, d) {
+    d = 0
+    for (j = i; j <= length(s); j++) {
+      c = substr(s, j, 1)
+      if (c == "(") d++
+      else if (c == ")") { if (d == 0) break; d-- }
+      else if (c == ";" && d == 0) break
+    }
+    return substr(s, i, j - i)
+  }
+  function controlla(s, primo,   t, r, v, k, a) {
+    t = tolower(s); gsub(/<>/, " != ", t); v = 0
+    for (r = t; match(r, /(^|[^a-z0-9_])order[[:space:]]+by([^a-z0-9_]|$)/); r = substr(r, RSTART + RLENGTH))
+      if (nomina(livello(r, RSTART + RLENGTH))) v = 1
+    for (r = t; match(r, /(^|[^a-z0-9_])(min|max)[[:space:]]*\(/); r = substr(r, RSTART + RLENGTH))
+      if (nomina(livello(r, RSTART + RLENGTH))) v = 1
+    # BETWEEN: the column before it, as its lower bound, or as its upper bound (the operand after its FIRST AND).
+    for (r = t; match(r, /(^|[^a-z0-9_])between([^a-z0-9_]|$)/); r = substr(r, RSTART + RLENGTH)) {
+      a = substr(r, RSTART + RLENGTH)
+      if (a ~ "^[[:space:]]*([a-z0-9_]+[.])?(ora_di_inizio|aggiunta_alle)([^a-z0-9_]|$)") v = 1
+      if (match(a, /[^a-z0-9_]and[^a-z0-9_]/) &&
+          substr(a, RSTART + 1) ~ "^and[[:space:]]+([a-z0-9_]+[.])?(ora_di_inizio|aggiunta_alle)([^a-z0-9_]|$)") v = 1
+    }
+    if (v || t ~ "(^|[^a-z0-9_])(ora_di_inizio|aggiunta_alle)[[:space:]]*(<|>|between([^a-z0-9_]|$))" ||
+        t ~ "[<>]=?[[:space:]]*([a-z0-9_]+[.])?(ora_di_inizio|aggiunta_alle)([^a-z0-9_]|$)")
       print FILENAME ":" primo ": " s "  <- orders, compares or aggregates a Parte-order column"
   }
-  { riga = $0; sub(/--.*/, "", riga)
+  # SQL comments (`--` to the end of the line, `/* */` across lines) dropped; a string literal is blanked to `'"''"'`,
+  # so neither a `--`, a `;` nor a column name inside it counts.
+  function codice(l,   o, c, j) {
+    o = ""
+    for (j = 1; j <= length(l); j++) {
+      c = substr(l, j, 1)
+      if (commento) { if (substr(l, j, 2) == "*/") { commento = 0; j++; o = o " " } continue }
+      if (stringa) { if (c == "'"'"'") { stringa = 0; o = o c } continue }
+      if (c == "'"'"'") { stringa = 1; o = o c; continue }
+      if (substr(l, j, 2) == "--") break
+      if (substr(l, j, 2) == "/*") { commento = 1; j++; continue }
+      o = o c
+    }
+    return o
+  }
+  { riga = codice($0)
     if (riga !~ /[^[:space:]]/) next
     if (stmt == "") primo = FNR
     stmt = stmt " " riga

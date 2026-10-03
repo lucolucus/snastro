@@ -1,0 +1,2 @@
+ultima:
+SELECT MAX(coalesce(aggiunta_alle, 0) + 1) FROM registrazione WHERE incontro_id = :incontroId;

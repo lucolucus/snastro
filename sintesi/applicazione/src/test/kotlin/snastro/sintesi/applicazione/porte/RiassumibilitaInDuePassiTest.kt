@@ -10,7 +10,6 @@ import snastro.sintesi.dominio.LimiteIngresso
 import snastro.sintesi.dominio.StatoParte
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The two-pass guard shared by `RiassumiServizio` and `RiassuntoVisteLettura` (L216): the estimate is lazy. */
@@ -28,7 +27,7 @@ class RiassumibilitaInDuePassiTest {
             var stime = 0
             val esito = riassumibilitaInDuePassi(c.first, c.second, c.third) {
                 stime++
-                0
+                Esito.Ok(0)
             }
 
             assertTrue(esito is Esito.Errore, nome)
@@ -41,17 +40,26 @@ class RiassumibilitaInDuePassiTest {
         var stime = 0
         val troppo = riassumibilitaInDuePassi(true, trascritta, false) {
             stime++
-            LimiteIngresso.LIMITE_TOKEN + 1
+            Esito.Ok(LimiteIngresso.LIMITE_TOKEN + 1)
         }
 
         assertEquals(1, stime)
         val limite = LimiteIngresso.LIMITE_TOKEN
         assertEquals(Esito.Errore(ErroreSintesi.IngressoTroppoLungo(limite + 1, limite)), troppo)
-        assertEquals(Esito.Ok(Unit), riassumibilitaInDuePassi(true, trascritta, false) { 1 })
+        assertEquals(Esito.Ok(Unit), riassumibilitaInDuePassi(true, trascritta, false) { Esito.Ok(1) })
     }
 
     @Test
-    fun `stimaTokenDi si ferma alla prima Parte senza Trascritto`() {
+    fun `L229 una Parte TRASCRITTA senza Segmenti letti blocca come da trascrivere, mai saltando la stima`() {
+        val esito = riassumibilitaInDuePassi(true, trascritta, false) {
+            Esito.Errore(ErroreSintesi.PartiNonTrascritte(2))
+        }
+
+        assertEquals(Esito.Errore(ErroreSintesi.PartiNonTrascritte(2)), esito)
+    }
+
+    @Test
+    fun `stimaTokenDi si ferma alla prima Parte senza Trascritto e la nomina`() {
         val r1 = RegistrazioneId("r1")
         val r2 = RegistrazioneId("r2")
         val r3 = RegistrazioneId("r3")
@@ -64,8 +72,9 @@ class RiassumibilitaInDuePassiTest {
             if (r == r2) null else listOf(segmento)
         }
 
-        assertNull(stima)
+        assertEquals(Esito.Errore(ErroreSintesi.PartiNonTrascritte(2)), stima)
         assertEquals(listOf(r1, r2), lette)
-        assertTrue(checkNotNull(stimaTokenDi(parti) { listOf(segmento) }) > 0)
+        val tutte = stimaTokenDi(parti) { listOf(segmento) }
+        assertTrue(tutte is Esito.Ok && tutte.valore > 0)
     }
 }

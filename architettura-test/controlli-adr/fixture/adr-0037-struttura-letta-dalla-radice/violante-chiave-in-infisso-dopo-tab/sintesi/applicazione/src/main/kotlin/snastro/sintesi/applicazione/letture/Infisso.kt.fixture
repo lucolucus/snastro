@@ -1,0 +1,3 @@
+package snastro.sintesi.applicazione.letture
+
+internal fun presente(s: StrutturaIncontro, c: Set<String>): Boolean = s.chiave	in c

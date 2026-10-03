@@ -3,7 +3,6 @@ package snastro.sintesi.dominio
 import snastro.kernel.Creato
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
-import snastro.kernel.RegistrazioneId
 import snastro.kernel.RicostituzioneDaPersistenza
 import snastro.kernel.SegmentoRef
 import snastro.kernel.mappa
@@ -72,15 +71,6 @@ public class Riassunto internal constructor(
      */
     public val strutturaRegistrata: String? get() = _strutturaRegistrata
 
-    /**
-     * TRANSITION (ADR 0033 §4.1): the Parte of a one-Parte recorded structure; null unless `pronto`, or when the
-     * structure has several Parti. Only an I1 end-to-end test reads it; the wave-5/6 blocks drop it.
-     */
-    public val parte: RegistrazioneId?
-        get() = _strutturaRegistrata?.takeUnless { SEPARATORE_PARTI in it }
-            ?.substringBefore(SEPARATORE_PARTE)
-            ?.let(::RegistrazioneId)
-
     /** `in_attesa` or `in_corso`. */
     public val aperto: Boolean get() = stato == IN_ATTESA || stato == IN_CORSO
     public val inAttesa: Boolean get() = stato == IN_ATTESA
@@ -145,9 +135,6 @@ public class Riassunto internal constructor(
         Esito.Errore(ErroreSintesi.TransizioneNonAmmessa(stato.codice, verso.codice))
 
     public companion object {
-        private const val SEPARATORE_PARTE = '='
-        private const val SEPARATORE_PARTI = ';'
-
         public fun richiedi(
             id: RiassuntoId,
             incontroId: IncontroId,
