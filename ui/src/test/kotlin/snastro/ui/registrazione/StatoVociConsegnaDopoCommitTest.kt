@@ -12,13 +12,17 @@ import snastro.kernel.EstrattoRef
 import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
+import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.CoppiaTraParti
+import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
+import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
 import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -80,6 +84,84 @@ class StatoVociConsegnaDopoCommitTest {
         assertNull(presenter.dati.errore)
         assertEquals(listOf(V2, V3), assertNotNull(presenter.dati.pannello).carte.map { it.voceId })
     }
+
+    @Test
+    fun `L275 un Dividi confermato con un abbonato dopo-commit fallito ricarica senza errore`() = runTest {
+        val a = ambiente()
+        val presenter = avvia(a)
+        advanceUntilIdle()
+        a.esitoRevisione = { confermatoMaSeguitoFallito(a) { v -> spostato(v, segmento = 1, voce = VoceId(4)) } }
+        presenter.azioni.selezionaSegmento(SegmentoId(1))
+
+        presenter.azioni.dividiVoce()
+        advanceUntilIdle()
+
+        assertIs<DividiVoce>(a.revisioni.single())
+        assertNull(presenter.dati.errore)
+        assertEquals(VoceId(4), presenter.dati.segmenti.single { it.segmentoId == SegmentoId(1) }.voceId)
+    }
+
+    @Test
+    fun `L275 un Togli conferma confermato con un abbonato dopo-commit fallito ricarica senza errore`() = runTest {
+        val a = ambiente()
+        a.vista = a.vista.copy(segmenti = a.vista.segmenti.map { it.copy(confermato = it.segmentoId == SegmentoId(1)) })
+        val presenter = avvia(a)
+        advanceUntilIdle()
+        a.esitoRevisione = { c ->
+            val conferma = c as ConfermaSegmento
+            confermatoMaSeguitoFallito(a) { v ->
+                val tolto = conferma.segmento
+                v.copy(segmenti = v.segmenti.map { it.copy(confermato = it.confermato && it.segmentoId != tolto) })
+            }
+        }
+        presenter.azioni.selezionaSegmento(SegmentoId(1))
+
+        presenter.azioni.togliConferma()
+        advanceUntilIdle()
+
+        assertIs<ConfermaSegmento>(a.revisioni.single())
+        assertNull(presenter.dati.errore)
+        assertFalse(presenter.dati.segmenti.single { it.segmentoId == SegmentoId(1) }.confermato)
+    }
+
+    @Test
+    fun `L274 un guasto al secondo Segmento rilegge cio che il primo ha gia spostato e mostra l errore`() = runTest {
+        val a = ambiente()
+        val presenter = avvia(a)
+        advanceUntilIdle()
+        a.esitoRevisione = { c ->
+            check((c as RiassegnaSegmento).segmento != SegmentoId(3)) { "guasto SQL" }
+            Esito.Ok(Unit)
+        }
+        presenter.azioni.selezionaSegmento(SegmentoId(1))
+        presenter.azioni.selezionaSegmento(SegmentoId(3))
+
+        presenter.azioni.riassegnaA(V2)
+        advanceUntilIdle()
+
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, presenter.dati.errore)
+        assertEquals(V2, presenter.dati.segmenti.single { it.segmentoId == SegmentoId(1) }.voceId, "riletto")
+    }
+
+    @Test
+    fun `L274 se la nuova Voce non si rilegge dopo il primo Segmento ci si ferma invece di aprirne una per Segmento`() =
+        runTest {
+            val a = ambiente()
+            val presenter = avvia(a)
+            advanceUntilIdle()
+            a.esitoRevisione = {
+                a.trascrittoSparito = true
+                Esito.Ok(Unit)
+            }
+            presenter.azioni.selezionaSegmento(SegmentoId(1))
+            presenter.azioni.selezionaSegmento(SegmentoId(3))
+
+            presenter.azioni.riassegnaA(null)
+            advanceUntilIdle()
+
+            assertEquals(1, a.revisioni.size, "nessuna seconda nuova Voce")
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, presenter.dati.errore)
+        }
 
     @Test
     fun `L260 un guasto che non e una consegna dopo-commit resta il messaggio generico`() = runTest {

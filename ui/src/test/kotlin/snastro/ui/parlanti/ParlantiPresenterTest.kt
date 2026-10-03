@@ -1,5 +1,6 @@
 package snastro.ui.parlanti
 
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -159,6 +160,30 @@ class ParlantiPresenterTest {
             assertEquals(listOf("Marco"), dati.eliminati.map { it.nome })
             assertTrue(dati.ricorrenti.isEmpty())
         }
+
+    @Test
+    fun `L269 un Error dopo il commit si propaga ma non lascia la riga in corso`() = runTest {
+        val sfuggite = mutableListOf<Throwable>()
+        val dispatcher = StandardTestDispatcher(testScheduler)
+        val presenter = ParlantiPresenter(
+            CoroutineScope(dispatcher + CoroutineExceptionHandler { _, e -> sfuggite += e }),
+            dispatcher,
+            { listOf(unParlante()) },
+            { throw AssertionError("abbonato dopo-commit: errore di programmazione") },
+            { error("promuovi non atteso in questo test") },
+            { error("elimina non atteso in questo test") },
+            LettoreAudioFinta(),
+            AggiornamentiVistaFinta(),
+        )
+        advanceUntilIdle()
+
+        presenter.azioni.rinomina(PARLANTE_1, "Marco Rossi")
+        advanceUntilIdle()
+
+        val riga = assertIs<ParlantiUiStato.Dati>(presenter.stato.value).ricorrenti.single()
+        assertEquals(false, riga.operazioneInCorso, "la riga non resta bloccata")
+        assertIs<AssertionError>(sfuggite.single(), "l Error si propaga al gestore dello scope (D-0065)")
+    }
 
     @Test
     fun `L259 un guasto che non e una consegna dopo-commit resta il messaggio generico`() = runTest {

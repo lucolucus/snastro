@@ -26,6 +26,7 @@ import snastro.supporto.figlioDi
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmenti
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.trascrizione.dominio.SpostamentoSegmento
+import snastro.ui.comandoConfermato
 import snastro.ui.registrazione.AzioniSomiglianza
 import snastro.ui.registrazione.ErroreSomiglianzaUi
 import snastro.ui.registrazione.FrasiInParte
@@ -49,7 +50,8 @@ import java.util.logging.Logger
  *   ALL inside ONE [unita] transaction (ADR 0019 §4.5 + Amendment 2026-10-02): the first Errore stops the rest and
  *   rolls back the Parti already moved. Nothing recomputed, nothing extracted (AC-549). The final transaction is not
  *   interrupted once started (`NonCancellable`). The plan is dropped whatever the outcome. A
- *   [ConsegnaDopoCommitFallita] means the plan committed: the outcome is shown, the failure only logged (L237).
+ *   [ConsegnaDopoCommitFallita] means the plan committed: the outcome is shown, the failure only logged (L237); so
+ *   does a CancellationException after the transaction block returned Ok (L273), which still propagates.
  * - [annulla] interrupts a computation or discards a preview (nothing written); clears a final result.
  * - At most one computation, preview or application per Registrazione: a [calcola] meanwhile is ignored.
  * - Everything runs in a child of [progetto] (the project's Parlanti scope): closing the project cancels a
@@ -152,22 +154,31 @@ internal class AzioniSomiglianzaProgetto(
             RiassegnaSegmenti(parte, spostamenti, incontroDelleVoci = piano.incontroId) // INV-I7
         }
         scope.launch {
+            var pianoScritto = false
             val esito = try {
-                withContext(NonCancellable + bg) {
-                    unita.inTransazione {
-                        comandi.fold<RiassegnaSegmenti, Esito<Unit>>(Esito.Ok(Unit)) { finora, comando ->
-                            if (finora is Esito.Ok) applicaPiano(comando) else finora
+                // L237: the plan COMMITTED, only an after-commit subscriber then failed (the view subscriber
+                // itself never rethrows): the outcome is shown, S3 reloads on it; a warning, never "it failed".
+                comandoConfermato("riassegnazione di $id") {
+                    withContext(NonCancellable + bg) {
+                        unita.inTransazione {
+                            comandi.fold<RiassegnaSegmenti, Esito<Unit>>(Esito.Ok(Unit)) { finora, comando ->
+                                if (finora is Esito.Ok) applicaPiano(comando) else finora
+                            }.also { pianoScritto = it is Esito.Ok }
                         }
                     }
                 }
-            } catch (e: ConsegnaDopoCommitFallita) {
-                // L237: the plan COMMITTED, only an after-commit subscriber then failed (the view subscriber
-                // itself never rethrows): the outcome is shown, S3 reloads on it; a warning, never "it failed".
-                log.log(Level.WARNING, "riassegnazione di $id applicata, un abbonato dopo-commit e fallito", e)
-                Esito.Ok(Unit)
             } catch (e: CancellationException) {
                 // L262: never swallowed into an Errore; the panel is released first so it is not left 'Applicazione'.
-                imposta(id, StatoSomiglianza.Errore(ErroreSomiglianzaUi.Altro(MESSAGGIO_ERRORE_GENERICO)))
+                // L273: once the block returned Ok the plan committed — a CancellationException then came from the
+                // after-commit delivery (or a late resume): the panel shows the committed outcome, never Errore.
+                imposta(
+                    id,
+                    if (pianoScritto) {
+                        StatoSomiglianza.Esito(piano.spostamenti.size, piano.incerte)
+                    } else {
+                        StatoSomiglianza.Errore(ErroreSomiglianzaUi.Altro(MESSAGGIO_ERRORE_GENERICO))
+                    },
+                )
                 throw e
             } catch (
                 // A SQL fault (ADR 0003): the transaction rolled back; the panel shows it in plain words.

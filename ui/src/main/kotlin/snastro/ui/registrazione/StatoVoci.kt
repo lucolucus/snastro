@@ -112,7 +112,8 @@ internal class StatoVoci(
         val vociIncontro: List<VoceIncontroRiga>,
     )
 
-    private class RisultatoRevisione(val esito: Esito<Unit>, val modificato: Boolean)
+    /** [esito] `null`: a failure with no domain error, shown as the generic message. */
+    private class RisultatoRevisione(val esito: Esito<Unit>?, val modificato: Boolean)
 
     private var dati: DatiParlanti? = null
     private var erroreLettura = false
@@ -447,24 +448,40 @@ internal class StatoVoci(
         eseguiRevisione { riassegnaTutti(ordinati, destinazione) }
     }
 
+    /**
+     * L274: a failure after Segmenti already moved (committed one by one) still reports them as changed, so the
+     * transcript is re-read; an Error still propagates (D-0065). 'nuova voce' whose Voce cannot be read back after the
+     * first move stops there (generic message) instead of opening one new Voce per Segmento.
+     */
     private fun riassegnaTutti(segmenti: List<SegmentoId>, destinazione: VoceId?): RisultatoRevisione {
         var verso = destinazione
-        var errore: Esito.Errore? = null
+        var esito: Esito<Unit>? = Esito.Ok(Unit)
         var spostati = 0
-        for (segmento in segmenti) {
-            val esito = comandoConfermato("riassegna $segmento") {
+        val restanti = segmenti.iterator()
+        while (esito is Esito.Ok && restanti.hasNext()) {
+            val segmento = restanti.next()
+            esito = riassegnaUno(segmento, verso, primo = spostati == 0)
+            if (esito is Esito.Ok) {
+                spostati++
+                // 'nuova voce': the first Segmento opens it, the next ones follow it there (one Voce, not one each).
+                val apri = verso == null && restanti.hasNext()
+                if (apri) verso = voceDi(segmento)
+                if (apri && verso == null) esito = null
+            }
+        }
+        return RisultatoRevisione(esito, modificato = spostati > 0)
+    }
+
+    /** One RiassegnaSegmento; after the [primo], a non-fatal failure is `null` (the generic message), never lost. */
+    private fun riassegnaUno(segmento: SegmentoId, verso: VoceId?, primo: Boolean): Esito<Unit>? =
+        catturaNonFatale {
+            comandoConfermato("riassegna $segmento") {
                 sorgenti.riassegna(RiassegnaSegmento(registrazioneId, segmento, verso, incontroDelleVoci = incontroId))
             }
-            if (esito is Esito.Errore) {
-                errore = esito
-                break
-            }
-            spostati++
-            // 'nuova voce': the first Segmento opens it, the next ones follow it there (one Voce, not one each).
-            if (verso == null) verso = trascritto()?.segmenti?.find { it.segmentoId == segmento }?.voceId
-        }
-        return RisultatoRevisione(errore ?: Esito.Ok(Unit), modificato = spostati > 0)
-    }
+        }.getOrElse { e -> if (primo || e is Error) throw e else null } // an Error propagates (D-0065)
+
+    private fun voceDi(segmento: SegmentoId): VoceId? =
+        catturaNonFatale { trascritto()?.segmenti?.find { it.segmentoId == segmento }?.voceId }.getOrNull()
 
     /** 'Unisci con ▾' on a card ([sopravvive] = that card) and the merge banner's 'Unisci' (AC-216). */
     fun unisci(sopravvive: VoceId, rimossa: VoceId) {
@@ -495,7 +512,11 @@ internal class StatoVoci(
             try {
                 val risultato = withContext(io) { blocco() }
                 if (risultato.modificato) ricaricaDopoRevisione(azzeraSelezione = risultato.esito is Esito.Ok)
-                (risultato.esito as? Esito.Errore)?.let { impostaErrore(messaggioPer(it.errore)) }
+                when (val esito = risultato.esito) {
+                    is Esito.Ok -> Unit
+                    is Esito.Errore -> impostaErrore(messaggioPer(esito.errore))
+                    null -> impostaErrore(MESSAGGIO_ERRORE_GENERICO)
+                }
             } catch (e: CancellationException) {
                 throw e
             } catch (

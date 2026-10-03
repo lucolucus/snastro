@@ -484,9 +484,11 @@ private fun SelettoreParte(parte: IntestazioneParte, vaiAllaParte: (Registrazion
     // L200: the tabs keep their width and the strip scrolls when the header column has less room than N Parti need.
     val selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0)
     val scorrimento = rememberScrollState()
-    // L254: the step is the MEASURED strip width over the tab count (tabs share it equally), not the width constant.
+    // L254/L268: the step is the strip's measured width (in px, whatever the density) over the tab count. That is the
+    // tab's own width because SchedeSn gives every tab `weight(1f)`, an equal share; unequal tabs would need each
+    // tab's own position. L267: never divides by zero, even for an empty list the switcher does not show today.
     var larghezzaStriscia by remember { mutableIntStateOf(0) }
-    val passo = larghezzaStriscia / parte.parti.size
+    val passo = larghezzaStriscia / parte.parti.size.coerceAtLeast(1)
     // L235: the selected Parte's tab is brought into view (scrollTo clamps to the strip's end).
     LaunchedEffect(selezionata, passo) { scorrimento.scrollTo(selezionata * passo) }
     Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scorrimento)) {

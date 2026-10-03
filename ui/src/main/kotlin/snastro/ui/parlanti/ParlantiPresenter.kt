@@ -190,6 +190,9 @@ class ParlantiPresenter(
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
                 aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+            } finally {
+                // L269 (D-0065): an Error (e.g. from an after-commit subscriber) propagates, but the row is released.
+                aggiornaRiga(id) { it.copy(operazioneInCorso = false) }
             }
         }
     }
