@@ -30,6 +30,7 @@ internal class PropostaTraPartiProgetto(
     private val lock: ReentrantLock,
 ) : AbbonatoDopoCommit {
     fun perIncontro(incontroId: IncontroId): List<CoppiaTraParti> {
+        proposta.inCache(incontroId)?.let { return it } // a hit never waits behind a computation (AC-I92 is for misses)
         lock.lockInterruptibly()
         try {
             return proposta.perIncontro(incontroId)

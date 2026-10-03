@@ -247,6 +247,17 @@ class PropostaTraPartiTest {
     }
 
     @Test
+    fun `AC-I49 la contabilita delle generazioni non cresce, nemmeno per un Incontro invalidato`() {
+        val a = ambiente(fetta(1, P1, A), fetta(2, P2, A))
+        a.api.perIncontro(INCONTRO)
+        a.api.invalida(INCONTRO)
+        a.api.invalida(IncontroId("mai-calcolato"))
+        a.api.perIncontro(INCONTRO)
+        assertEquals(0, a.api.statiTracciati())
+        assertEquals(a.api.perIncontro(INCONTRO), a.api.inCache(INCONTRO))
+    }
+
+    @Test
     fun `AC-I49 accessi concorrenti a perIncontro e invalida non corrompono la cache`() {
         // Many Incontri written at once from every thread, released together by a start barrier, several rounds: a
         // plain map breaks (ConcurrentModificationException) or loses entries on concurrent resizes.

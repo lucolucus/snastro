@@ -105,7 +105,7 @@ class ParlanteImprontePerParteTest {
     }
 
     @Test
-    fun `INV-21 riassegnaImpronte in eredita sposta ogni impronta di B su A con la sua Parte`() {
+    fun `INV-21 riassegnaImpronte sposta ogni impronta di B su A con la sua Parte`() {
         val p = unParlante()
         val a = unaVoce(1)
         val b = unaVoce(2)
