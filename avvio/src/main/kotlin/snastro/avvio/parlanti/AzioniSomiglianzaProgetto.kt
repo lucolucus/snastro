@@ -15,6 +15,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import snastro.avvio.gestoreErrori
+import snastro.kernel.ConsegnaDopoCommitFallita
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
@@ -47,7 +48,8 @@ import java.util.logging.Logger
  * - [applica] sends EXACTLY the held plan, 1:1, as one `RiassegnaSegmenti` per Parte ([applicaPiano]) in plan order,
  *   ALL inside ONE [unita] transaction (ADR 0019 §4.5 + Amendment 2026-10-02): the first Errore stops the rest and
  *   rolls back the Parti already moved. Nothing recomputed, nothing extracted (AC-549). The final transaction is not
- *   interrupted once started (`NonCancellable`). The plan is dropped whatever the outcome.
+ *   interrupted once started (`NonCancellable`). The plan is dropped whatever the outcome. A
+ *   [ConsegnaDopoCommitFallita] means the plan committed: the outcome is shown, the failure only logged (L237).
  * - [annulla] interrupts a computation or discards a preview (nothing written); clears a final result.
  * - At most one computation, preview or application per Registrazione: a [calcola] meanwhile is ignored.
  * - Everything runs in a child of [progetto] (the project's Parlanti scope): closing the project cancels a
@@ -158,6 +160,11 @@ internal class AzioniSomiglianzaProgetto(
                         }
                     }
                 }
+            } catch (e: ConsegnaDopoCommitFallita) {
+                // L237: the plan COMMITTED, only an after-commit follow-up (a view refresh) failed: the outcome
+                // is shown, and S3 reloads on it; the failed refresh is a warning, never "it failed".
+                log.log(Level.WARNING, "riassegnazione di $id applicata, aggiornamento dopo il commit fallito", e)
+                Esito.Ok(Unit)
             } catch (
                 // A SQL fault (ADR 0003): the transaction rolled back; the panel shows it in plain words.
                 @Suppress("TooGenericExceptionCaught") e: Exception,

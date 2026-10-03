@@ -20,8 +20,9 @@ import kotlin.coroutines.cancellation.CancellationException
  *   §2). A fatal throwable, or an exception with no Errore doom, still propagates.
  * - [AbbonatoDopoCommit]s receive the transaction's events, in publication order, only after
  *   [delegata] committed. They never run after a rollback or an exception. Every after-commit
- *   subscriber receives every event even if one throws. The first exception is then rethrown
- *   with the others attached as suppressed (the command is already committed). A fatal throwable
+ *   subscriber receives every event even if one throws. Then a [ConsegnaDopoCommitFallita] is thrown,
+ *   its cause the first exception and the others attached to it as suppressed (the command is already
+ *   committed; a commit failure is never wrapped). A fatal throwable
  *   ([VirtualMachineError], [CancellationException], [InterruptedException] — the interrupt flag is
  *   restored) stops delivery and propagates at once, carrying the earlier failures as suppressed.
  *
@@ -123,9 +124,9 @@ public class DispatcherEventiInMemoria(private val delegata: UnitaDiLavoro) : Di
             }
         }
         val unici = fallimenti.distinct()
-        val primo = unici.firstOrNull() ?: return
-        unici.drop(1).forEach(primo::addSuppressed)
-        throw primo
+        val fallita = ConsegnaDopoCommitFallita(unici.firstOrNull() ?: return)
+        unici.drop(1).forEach(fallita::addSuppressed)
+        throw fallita
     }
 }
 

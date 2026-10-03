@@ -1,6 +1,7 @@
 package snastro.progetto.applicazione.comandi
 
 import org.junit.jupiter.api.Timeout
+import snastro.kernel.ConsegnaDopoCommitFallita
 import snastro.kernel.DispatcherEventiFinta
 import snastro.kernel.ErroreDiProva
 import snastro.kernel.Esito
@@ -38,6 +39,7 @@ import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -306,7 +308,8 @@ class AggiungiRegistrazioneServizioTest {
         leggibili(A, B)
         eventi.registraDopoCommit { throw GuastoDiProva() }
 
-        assertFailsWith<GuastoDiProva> { importa(A, B) }
+        val e = assertFailsWith<ConsegnaDopoCommitFallita> { importa(A, B) }
+        assertIs<GuastoDiProva>(e.cause)
 
         val salvate = registrazioni.delProgetto(progettoId)
         assertEquals(2, salvate.size, "il commit e' avvenuto prima dell'abbonato")

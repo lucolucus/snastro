@@ -104,4 +104,26 @@ class DispatcherEventiInMemoriaTest : DispatcherEventiContratto() {
         }.erroreAtteso<ErroreDiProva.Fallito>()
         assertEquals(emptyList(), ricevuti)
     }
+
+    @Test
+    fun `L237 un guasto del commit resta del suo tipo e non e mai una consegna dopo-commit fallita`() {
+        val guasto = IllegalStateException("commit fallito")
+        val commitCheFallisce = object : UnitaDiLavoro {
+            override fun <T> inTransazione(blocco: () -> Esito<T>): Esito<T> {
+                blocco()
+                throw guasto
+            }
+        }
+        val dispatcher = DispatcherEventiInMemoria(commitCheFallisce)
+        val ricevuti = mutableListOf<EventoPubblicato>()
+        dispatcher.registraDopoCommit { ricevuti += it }
+        val lanciata = assertFailsWith<IllegalStateException> {
+            dispatcher.unitaDiLavoro.inTransazione {
+                dispatcher.pubblica(Evento)
+                Esito.Ok(Unit)
+            }
+        }
+        assertSame(guasto, lanciata)
+        assertEquals(emptyList(), ricevuti)
+    }
 }
