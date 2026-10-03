@@ -7,19 +7,19 @@ import snastro.avvio.ModuloComposizione
 import snastro.avvio.coda.Campanello
 import snastro.avvio.coda.CodaCondivisa
 import snastro.avvio.coda.FonteCoda
-import snastro.avvio.parlanti.CollaboratoriParlanti
 import snastro.avvio.parlanti.ModuloParlanti
 import snastro.avvio.sbobinatura.ModuloSbobinatura
 import snastro.avvio.segnalazioneApp
 import snastro.avvio.sintesi.ModuloSintesi
-import snastro.avvio.trascrizione.CollaboratoriTrascrizione
 import snastro.avvio.trascrizione.ModuloTrascrizione
 import snastro.avvio.unisci
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.AbbonatoSincrono
+import snastro.kernel.ConsegnaDopoCommitFallita
 import snastro.kernel.DispatcherEventiInMemoria
 import snastro.kernel.Esito
 import snastro.kernel.EventoPubblicato
+import snastro.kernel.RegistrazioneId
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 
 /**
@@ -93,7 +93,9 @@ internal fun apriProgetto(
         parlanti = parlanti.collaboratori,
         sintesi = sintesi.collaboratori,
         sbobinatura = sbobinatura.collaboratori,
-        avviaElaborazione = avviaEScarta(trascrizione.collaboratori, parlanti.collaboratori),
+        avviaElaborazione = avviaEScarta(trascrizione.collaboratori.avviaElaborazione) {
+            parlanti.collaboratori.somiglianza.scarta(it)
+        },
         posizioniNellaCoda = coda,
         aggiornamentiVista = unisci(
             listOf(
@@ -109,14 +111,22 @@ internal fun apriProgetto(
     return ProgettoComposto(porte, collaboratori, coda, sincroni, dopoCommit, avviati, arresto)
 }
 
-/** 'Trascrivi'/'Riprova'/'Ritrascrivi': Trascrizione's command, then that Registrazione's similarity is dropped. */
-private fun avviaEScarta(
-    trascrizione: CollaboratoriTrascrizione,
-    parlanti: CollaboratoriParlanti,
+/**
+ * 'Trascrivi'/'Riprova'/'Ritrascrivi': Trascrizione's command, then that Registrazione's similarity is dropped. L270
+ * (D-0062): a [ConsegnaDopoCommitFallita] means the command COMMITTED, so the similarity is dropped too, and the
+ * failure is rethrown for S2 (`comandoConfermato` shows the committed outcome).
+ */
+internal fun avviaEScarta(
+    avvia: (AvviaElaborazione) -> Esito<Unit>,
+    scarta: (RegistrazioneId) -> Unit,
 ): (AvviaElaborazione) -> Esito<Unit> = { comando ->
-    trascrizione.avviaElaborazione(comando).also {
-        if (it is Esito.Ok) parlanti.somiglianza.scarta(comando.registrazioneId)
+    val esito = try {
+        avvia(comando)
+    } catch (e: ConsegnaDopoCommitFallita) {
+        scarta(comando.registrazioneId)
+        throw e
     }
+    esito.also { if (it is Esito.Ok) scarta(comando.registrazioneId) }
 }
 
 /** Steps 2 and 3: every declared pair, in the declared module order, each delivering only its event type. */

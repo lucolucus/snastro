@@ -25,6 +25,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 
 /** D2 (AC-418): the per-project adapter honours the consumer's [ComandiVoce] contract unchanged. */
@@ -57,6 +58,11 @@ class ComandiVoceProgettoTest : ComandiVoceContratto() {
     @Test
     fun `L261 attraverso withContext arriva la stessa ConsegnaDopoCommitFallita, mai una copia che la avvolge`() =
         runBlocking {
+            // L277: the assertSame below discriminates only when kotlinx stack-trace recovery is on (the gate's
+            // `-ea`): the control proves it is, so this test fails loudly instead of passing silently elsewhere.
+            val controllo = IllegalStateException("copiabile")
+            val ricevuto = assertFailsWith<IllegalStateException> { withContext(Dispatchers.IO) { throw controllo } }
+            assertNotSame(controllo, ricevuto, "stack-trace recovery spenta: il test non discriminerebbe")
             val lanciata = assertFailsWith<ConsegnaDopoCommitFallita> {
                 withContext(Dispatchers.IO) { throw consegnaFallita }
             }

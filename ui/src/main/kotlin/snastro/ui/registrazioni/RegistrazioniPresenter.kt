@@ -493,10 +493,14 @@ class RegistrazioniPresenter(
         _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
         val percorso = percorsi.single()
         scope.launch {
-            val comando = AggiungiRegistrazione(progettoId, percorsi, Destinazione.NuovoIncontro)
-            val errore = inviaImport(comando) { messaggioImportFallito(percorso, messaggioPer(it)) }
-            carica() // M1: merges the refreshed list, preserving importoInCorso/errore until reset below
-            aggiornaDati { it.copy(importoInCorso = false, errore = errore) }
+            try {
+                val comando = AggiungiRegistrazione(progettoId, percorsi, Destinazione.NuovoIncontro)
+                val errore = inviaImport(comando) { messaggioImportFallito(percorso, messaggioPer(it)) }
+                carica() // M1: merges the refreshed list, preserving importoInCorso/errore until reset below
+                aggiornaDati { it.copy(importoInCorso = false, errore = errore) }
+            } finally {
+                aggiornaDati { it.copy(importoInCorso = false) } // L269: an Error propagates, S2 is released
+            }
         }
     }
 
@@ -519,12 +523,16 @@ class RegistrazioniPresenter(
         }
         aggiornaDialogo { it.copy(invioInCorso = true, errore = null) }
         scope.launch {
-            val esito = inviaImport(AggiungiRegistrazione(progettoId, dialogo.percorsi, destinazione))
-            if (esito == null) {
-                carica()
-                aggiornaDati { it.copy(dialogoImporta = null) }
-            } else {
-                aggiornaDialogo { it.copy(invioInCorso = false, errore = esito) }
+            try {
+                val esito = inviaImport(AggiungiRegistrazione(progettoId, dialogo.percorsi, destinazione))
+                if (esito == null) {
+                    carica()
+                    aggiornaDati { it.copy(dialogoImporta = null) }
+                } else {
+                    aggiornaDialogo { it.copy(invioInCorso = false, errore = esito) }
+                }
+            } finally {
+                aggiornaDialogo { it.copy(invioInCorso = false) } // L269
             }
         }
     }
@@ -540,15 +548,19 @@ class RegistrazioniPresenter(
         if (attuale !is RegistrazioniUiStato.Dati || attuale.importoInCorso || attuale.dialogoImporta != null) return
         _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
         scope.launch {
-            val errore = inviaImport(AggiungiRegistrazione(progettoId, percorsi, Destinazione.Incontro(incontroId)))
-            if (errore == null) carica()
-            aggiornaDati {
-                it.copy(
-                    importoInCorso = false,
-                    errore = errore,
-                    avviso = if (errore == null) messaggioPartiAggiunte(percorsi.size, titolo) else null,
-                    titoloAvviso = ETICHETTA_PARTI_AGGIUNTE,
-                )
+            try {
+                val errore = inviaImport(AggiungiRegistrazione(progettoId, percorsi, Destinazione.Incontro(incontroId)))
+                if (errore == null) carica()
+                aggiornaDati {
+                    it.copy(
+                        importoInCorso = false,
+                        errore = errore,
+                        avviso = if (errore == null) messaggioPartiAggiunte(percorsi.size, titolo) else null,
+                        titoloAvviso = ETICHETTA_PARTI_AGGIUNTE,
+                    )
+                }
+            } finally {
+                aggiornaDati { it.copy(importoInCorso = false) } // L269
             }
         }
     }
@@ -649,7 +661,9 @@ class RegistrazioniPresenter(
             azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
             scope.launch {
                 try {
-                    val esito = withContext(io) { comando(AnnullaElaborazione(elaborazioneId)) }
+                    val esito = withContext(io) {
+                        comandoConfermato("annulla $elaborazioneId") { comando(AnnullaElaborazione(elaborazioneId)) }
+                    }
                     carica() // AC-476: reload on both Ok and Errore (see the kdoc above)
                     val messaggio = (esito as? Esito.Errore)?.errore
                         ?.let { it as? ErroreTrascrizione.ElaborazioneGiaAvviata }
@@ -661,6 +675,8 @@ class RegistrazioniPresenter(
                     @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
                 ) {
                     aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                } finally {
+                    aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
                 }
             }
         }
@@ -702,7 +718,8 @@ class RegistrazioniPresenter(
         azzeraAvviso()
         scope.launch {
             try {
-                when (val esito = withContext(io) { comando(EliminaRegistrazione(id)) }) {
+                val esito = withContext(io) { comandoConfermato("elimina $id") { comando(EliminaRegistrazione(id)) } }
+                when (esito) {
                     is Esito.Ok -> {
                         val statoLettore = lettore.stato.value
                         if (statoLettore.registrazioneId == id && statoLettore.inRiproduzione) {
@@ -750,6 +767,8 @@ class RegistrazioniPresenter(
                 aggiornaRiga(id) {
                     it.copy(operazioneInCorso = false, confermaElimina = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO)
                 }
+            } finally {
+                aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
             }
         }
     }
@@ -792,7 +811,9 @@ class RegistrazioniPresenter(
                 azzeraAvviso()
                 scope.launch {
                     val avvia = AvviaElaborazioniDellIncontro(id, campo.numero)
-                    val esito = catturaNonFatale { withContext(io) { comando(avvia) } }.getOrNull()
+                    val esito = catturaNonFatale {
+                        withContext(io) { comandoConfermato("trascrivi $id") { comando(avvia) } }
+                    }.getOrNull()
                     val errore = when (esito) {
                         is Esito.Ok -> null
                         is Esito.Errore -> messaggioPer(esito.errore)
@@ -824,13 +845,14 @@ class RegistrazioniPresenter(
         return dati.righe.find { it.registrazioneId == id }?.takeUnless { it.operazioneInCorso }
     }
 
+    /** One row command; committed with only its after-commit follow-up failed is a success (D-0062, L270). */
     private fun suRiga(id: RegistrazioneId, operazione: suspend () -> Esito<Unit>) {
         val riga = rigaLibera(id) ?: return
         aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
         azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
         scope.launch {
             try {
-                when (val esito = operazione()) {
+                when (val esito = comandoConfermato("comando di riga su $id") { operazione() }) {
                     is Esito.Ok -> {
                         carica() // M1: merges the refreshed list, preserving this row's flags until reset below
                         aggiornaRiga(id) {
@@ -846,6 +868,9 @@ class RegistrazioniPresenter(
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
                 aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+            } finally {
+                // L269 (D-0065): an Error (e.g. after the commit) propagates, but the row is released.
+                aggiornaRiga(id) { it.copy(operazioneInCorso = false) }
             }
         }
     }

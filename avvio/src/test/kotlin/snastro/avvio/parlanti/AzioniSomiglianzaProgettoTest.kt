@@ -226,6 +226,34 @@ class AzioniSomiglianzaProgettoTest {
     }
 
     @Test
+    fun `L273 una CancellationException trapelata dalla consegna dopo-commit mostra l Esito confermato e si propaga`() {
+        val eventi = DispatcherEventiInMemoria(unita)
+        val riassegnati = object : EventoPubblicato {}
+        eventi.registraDopoCommit { throw CancellationException("cancellazione trapelata da un abbonato") }
+        val dentro = CountDownLatch(1)
+        val via = CountDownLatch(1)
+        esitoApplica = {
+            dentro.countDown()
+            via.await(5, TimeUnit.SECONDS)
+            eventi.pubblica(riassegnati)
+            Esito.Ok(Unit)
+        }
+        val p = porta(eventi.unitaDiLavoro) { _, _ -> Esito.Ok(piano) }.inAnteprima()
+
+        p.applica(REG)
+        assertTrue(dentro.await(10, TimeUnit.SECONDS), "applica non e partito")
+        val lavori = progetto.coroutineContext.job.children.flatMap { it.children }.filter { it.isActive }.toList()
+        via.countDown()
+        attendiFinche(timeout = 10.seconds, messaggio = "fine") {
+            p.stato.value[REG].let { it is StatoSomiglianza.Esito || it is StatoSomiglianza.Errore }
+        }
+        runBlocking { lavori.forEach { it.join() } }
+
+        assertEquals(StatoSomiglianza.Esito(3, 1), p.stato.value[REG], "il piano e confermato")
+        assertTrue(lavori.single().isCancelled, "la cancellazione si propaga (D-0065)")
+    }
+
+    @Test
     fun `L262 una CancellationException durante applica non diventa un Errore ingoiato e libera il pannello`() {
         val dentro = CountDownLatch(1)
         val via = CountDownLatch(1)

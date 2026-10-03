@@ -17,6 +17,7 @@ import snastro.parlanti.applicazione.comandi.SaltaVoce
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
 import snastro.parlanti.dominio.TipoParlante
 import snastro.supporto.figlioDi
+import snastro.ui.comandoConfermato
 import snastro.ui.registrazione.ComandiVoce
 import snastro.ui.registrazione.ComandoVoce
 import snastro.ui.registrazione.ErroreComandoVoce
@@ -61,13 +62,8 @@ internal class ComandiVoceProgetto(
     override suspend fun esegui(comando: ComandoVoce): Esito<Unit>? =
         voci.esegui(comando.voceRef) {
             protetto("comando ${comando::class.simpleName} su ${comando.voceRef}") {
-                try {
-                    esecutore(comando)
-                } catch (e: ConsegnaDopoCommitFallita) {
-                    // L237: ONE command, committed; only an after-commit subscriber then failed.
-                    log.log(Level.WARNING, "${comando.voceRef} confermato, un abbonato dopo-commit e fallito", e)
-                    Esito.Ok(Unit)
-                }
+                // L237: ONE command, committed; only an after-commit subscriber then failed (L276: the shared rule).
+                comandoConfermato("${comando.voceRef}") { esecutore(comando) }
             }
         }
 
