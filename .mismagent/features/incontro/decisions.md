@@ -892,3 +892,16 @@ The why-ledger of this feature (format: mismAgent tools/CLI.md § Decision notes
 - By: decided: mismagent-worker; recorded: Claude (worker-composer); consulted: mismagent-verifier, code-review
 - Docs: [pre-release](pre-release.md)
 - Revisit: a priority subscriber that can really fail, or an ordinary subscriber with no at-open recovery.
+
+### D-0068 · Righe nuove dopo post-I4 marcate residuo
+- Meta: 2026-10-03; scope: feature; status: accepted; sha: 56a78912
+- Question: Where do the new MED/LOW findings of the post-I4 fix groups go, once post-I4 itself is being closed?
+- Options: A a `residuo` label, closed only on the user's request. B tag them post-I4 again: a fix loop that never ends. C fix them at once: beyond the only-HIGH-reworks rule.
+- Hypothesis: n/a — decided by the composer at the post-I4 fixes, [pre-release](pre-release.md)
+- Check: n/a — decided by the composer at the post-I4 fixes, [pre-release](pre-release.md)
+- Result: n/a — decided by the composer at the post-I4 fixes, [pre-release](pre-release.md)
+- Debate: none.
+- Decision: A. Cost: 4 MED stay open, notably a re-submittable import dialog after an Error that follows a committed import.
+- By: decided: Claude (worker-composer); recorded: Claude (worker-composer)
+- Docs: [pre-release](pre-release.md)
+- Revisit: the user asks for another cleanup round.
