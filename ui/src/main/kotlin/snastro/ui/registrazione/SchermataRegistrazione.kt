@@ -37,6 +37,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -45,6 +46,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -479,10 +481,15 @@ private fun testoIntestazione(stato: RegistrazioneUiStato.Dati): String {
 private fun SelettoreParte(parte: IntestazioneParte, vaiAllaParte: (RegistrazioneId) -> Unit) {
     Spacer(modifier = Modifier.height(SnastroMisure.space2))
     // L200: the tabs keep their width and the strip scrolls when the header column has less room than N Parti need.
-    Box(modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+    val selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0)
+    val scorrimento = rememberScrollState()
+    val passo = with(LocalDensity.current) { LARGHEZZA_SELETTORE_PARTE_PER_PARTE.roundToPx() }
+    // L235: the selected Parte's tab is brought into view (scrollTo clamps to the strip's end).
+    LaunchedEffect(selezionata, passo) { scorrimento.scrollTo(selezionata * passo) }
+    Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scorrimento)) {
         SchedeSn(
             schede = parte.parti.map { etichettaParte(it.numero) },
-            selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0),
+            selezionata = selezionata,
             onSeleziona = { indice ->
                 parte.parti[indice].takeIf { it.numero != parte.numero }?.let { vaiAllaParte(it.registrazioneId) }
             },

@@ -144,6 +144,24 @@ class RegistrazioneTraPartiTest {
     }
 
     @Test
+    fun `AC-I84 L189 dopo una Revisione la coppia non e piu offerta gia durante la rilettura`() = runTest {
+        val a = ambiente().apply { traParti = listOf(unaCoppia()) }
+        val presenter = avvia(a)
+        advanceUntilIdle()
+        assertNotNull(assertNotNull(presenter.dati.pannello).traParti)
+
+        var durante: CoppiaTraParti? = unaCoppia()
+        a.esitoRevisione = {
+            a.allaLetturaTrascritto = { durante = presenter.dati.pannello?.traParti }
+            Esito.Ok(Unit)
+        }
+        presenter.azioni.unisci(V1, V3)
+        advanceUntilIdle()
+
+        assertNull(durante)
+    }
+
+    @Test
     fun `AC-I84 un calcolo fallito non mostra banner e il pannello resta utilizzabile`() = runTest {
         val a = ambiente().apply { traPartiRotta = true }
         val presenter = avvia(a)

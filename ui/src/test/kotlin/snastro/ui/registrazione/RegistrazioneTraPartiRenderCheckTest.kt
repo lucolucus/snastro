@@ -10,6 +10,7 @@ import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isRoot
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -24,6 +25,7 @@ import snastro.kernel.VoceId
 import snastro.parlanti.applicazione.letture.CoppiaTraParti
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.ui.lettore.LettoreUiStato
+import snastro.ui.testi.descrizioneAscoltaVoce
 import snastro.ui.testi.testoTraParti
 import snastro.ui.testi.testoUnione
 import java.awt.image.BufferedImage
@@ -121,12 +123,24 @@ class RegistrazioneTraPartiRenderCheckTest {
             onNodeWithText(testoTraParti(1, 1, 5)).assertIsDisplayed()
             onNodeWithTag("voci-tra-parti-estratto-1").assertIsDisplayed().assertIsEnabled().performClick()
             onNodeWithTag("voci-tra-parti-estratto-5").assertIsDisplayed().assertIsEnabled().performClick()
+            onNodeWithContentDescription(descrizioneAscoltaVoce(1)).assertIsDisplayed() // L191
+            onNodeWithContentDescription(descrizioneAscoltaVoce(5)).assertIsDisplayed()
             assertEquals(0, onAllNodes(hasTestTag("voci-tra-parti-no")).fetchSemanticsNodes().size)
             assertEquals(0, onAllNodes(hasText("No")).fetchSemanticsNodes().size)
             onNodeWithText("Unisci").assertIsDisplayed().performClick()
         }
         assertEquals(listOf(ESTRATTO_A, ESTRATTO_B, ESTRATTO_A, ESTRATTO_B), suonati.take(4))
         assertEquals(VoceId(1) to VoceId(5), unite)
+    }
+
+    @Test
+    fun `AC-I83 D-0057 la parte del testo e quella da cui suona l estratto anche se e successiva all altra`() {
+        // voce A plays from Parte 2, voce B from Parte 1: the bracket still names voce A's Parte.
+        val tardi = CoppiaTraParti(VoceId(1), 2, ESTRATTO_B, VoceId(5), 1, ESTRATTO_A)
+        assertEquals("Voce 5 e Voce 1 (parte 2) sembrano la stessa persona", testoTraParti(1, tardi.parteA, 5))
+        scena("banner-parte-a-dopo-b", statoTraParti(pannelloTraParti(coppia = tardi))) {
+            onNodeWithText("Voce 5 e Voce 1 (parte 2) sembrano la stessa persona").assertIsDisplayed()
+        }
     }
 
     @Test

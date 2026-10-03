@@ -154,6 +154,9 @@ internal class AmbienteVoci(
 
     var traParti: List<CoppiaTraParti> = emptyList()
     var traPartiRotta = false
+
+    /** Runs inside every Trascritto read (on the io dispatcher) — lets a test observe the state mid-reload. */
+    var allaLetturaTrascritto: () -> Unit = {}
     val chiamateTraParti: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
 
     /** ADR 0018 Amendment (b) §2 (AC-452/454): `null` unless a test opts in via `presenter(conStati = true)`. */
@@ -298,7 +301,10 @@ internal class AmbienteVoci(
         scope = scope,
         io = io,
         registrazioneId = REG,
-        trascritto = { vista },
+        trascritto = {
+            allaLetturaTrascritto()
+            vista
+        },
         sbobinatura = { "/progetti/demo.snastro/sbobinature/seduta.md" },
         lettore = lettore,
         apriEsterno = ApriEsternoFinta(),

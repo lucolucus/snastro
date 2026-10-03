@@ -20,6 +20,7 @@ import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.ui.testi.ETICHETTA_AGGIUNGI_PARTI
 import snastro.ui.testi.ETICHETTA_ORA_SCONOSCIUTA
+import snastro.ui.testi.ETICHETTA_RIPROVA
 import snastro.ui.testi.ETICHETTA_TRASCRIVI
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.etichettaParteInCoda
@@ -31,6 +32,7 @@ import java.io.File
 import java.time.LocalDate
 import java.time.LocalTime
 import javax.imageio.ImageIO
+import kotlin.test.assertEquals
 
 private val INC = IncontroId("incontro-1")
 private val PARTI = listOf(RegistrazioneId("parte-1"), RegistrazioneId("parte-2"), RegistrazioneId("parte-3"))
@@ -233,6 +235,24 @@ class RegistrazioniIncontriRenderCheckTest {
             onNodeWithText("Parte 1").assertIsDisplayed()
             onNodeWithText("Parte 3").assertIsDisplayed()
         }
+    }
+
+    @Test
+    fun `L236 una Parte non riuscita offre Riprova dall elenco e Riprova la riavvia`() {
+        val parti = listOf(parte(1, COMPLETATA), parte(2, StatoElaborazioneRiga.Fallita("audio illeggibile")))
+        val avviate = mutableListOf<RegistrazioneId>()
+        runDesktopComposeUiTest(1280, 800) {
+            setContent {
+                SchermataRegistrazioni(
+                    stato = stato(parti, listOf(incontro(parti, espanso = true))),
+                    azioni = AZIONI.copy(avviaElaborazione = { avviate += it }),
+                    scuro = false,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithText(ETICHETTA_RIPROVA).assertIsDisplayed().performClick()
+        }
+        assertEquals(listOf(PARTI[1]), avviate)
     }
 
     @Test

@@ -39,6 +39,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -86,6 +88,7 @@ import snastro.ui.testi.MESSAGGIO_ESTRATTI_NON_DISPONIBILI
 import snastro.ui.testi.MESSAGGIO_PROPOSTA_IN_ATTESA
 import snastro.ui.testi.SUGGERIMENTO_PRIMA_REGISTRAZIONE
 import snastro.ui.testi.TITOLO_PANNELLO_VOCI
+import snastro.ui.testi.descrizioneAscoltaVoce
 import snastro.ui.testi.testoAncheInParti
 import snastro.ui.testi.testoConferma
 import snastro.ui.testi.testoEstrattoParte
@@ -243,7 +246,8 @@ private fun BannerTraParti(coppia: CoppiaTraParti, pannello: PannelloVoci, azion
                     variante = VarianteBottone.Fantasma,
                     piccolo = true,
                     icona = Icona.Listen,
-                    modifier = Modifier.testTag("voci-tra-parti-estratto-$b"),
+                    modifier = Modifier.testTag("voci-tra-parti-estratto-$b")
+                        .semantics(mergeDescendants = true) { contentDescription = descrizioneAscoltaVoce(b) },
                 )
                 BottoneSn(
                     "Voce $a",
@@ -252,7 +256,8 @@ private fun BannerTraParti(coppia: CoppiaTraParti, pannello: PannelloVoci, azion
                     variante = VarianteBottone.Fantasma,
                     piccolo = true,
                     icona = Icona.Listen,
-                    modifier = Modifier.testTag("voci-tra-parti-estratto-$a"),
+                    modifier = Modifier.testTag("voci-tra-parti-estratto-$a")
+                        .semantics(mergeDescendants = true) { contentDescription = descrizioneAscoltaVoce(a) },
                 )
             }
         },

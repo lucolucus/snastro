@@ -54,7 +54,9 @@ public fun BannerSn(
             )
             Column(Modifier.weight(1f)) {
                 Text(text = titolo, style = tipografia.heading)
-                Text(text = testo, style = tipografia.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (testo.isNotEmpty()) {
+                    Text(text = testo, style = tipografia.body, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 extra?.invoke()
             }
             if (azione != null) {
