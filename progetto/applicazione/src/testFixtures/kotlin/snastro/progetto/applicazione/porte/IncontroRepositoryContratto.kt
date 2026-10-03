@@ -64,6 +64,20 @@ public abstract class IncontroRepositoryContratto {
     }
 
     @Test
+    public fun `AC-I15 salvare un Incontro esistente sotto un altro Progetto lancia e non cambia la riga`() {
+        val a = ambiente()
+        val incontro = a.nuovoIncontro("incontro-a")
+
+        val rifiuto = assertFails { a.inTransazione { incontri.salva(Incontro.nuovo(incontro, ProgettoId("altro"))) } }
+
+        // The precondition's own refusal (a bug of the caller, ADR 0003), not any failure such as a missing Progetto.
+        assertTrue(generateSequence(rifiuto) { it.cause }.any { it is IllegalStateException }, "$rifiuto")
+        assertEquals(a.progettoId, assertNotNull(a.incontri.trova(incontro)).progettoId)
+        a.inTransazione { incontri.salva(Incontro.nuovo(incontro, progettoId)) } // same Progetto: still idempotent
+        assertEquals(a.progettoId, assertNotNull(a.incontri.trova(incontro)).progettoId)
+    }
+
+    @Test
     public fun `AC-I18 partiDi elenca tutte e sole le Registrazioni dell'Incontro`() {
         val a = ambiente()
         val incontro = a.nuovoIncontro("incontro-a")

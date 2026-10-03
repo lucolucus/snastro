@@ -15,7 +15,11 @@ public interface IncontroRepository {
     /** The Incontro [id], or `null` if it was never saved or was removed. */
     public fun trova(id: IncontroId): Incontro?
 
-    /** Inserts [i]; saving it again changes nothing (its identity and Progetto are immutable, AC-I15). */
+    /**
+     * Inserts [i]; saving it again changes nothing (its identity and Progetto are immutable, AC-I15). An Incontro
+     * already saved under ANOTHER Progetto is REFUSED: the call throws [IllegalStateException] (a bug of the caller,
+     * ADR 0003) and the stored Incontro stays as it was.
+     */
     public fun salva(i: Incontro)
 
     /**

@@ -120,6 +120,18 @@ private constructor(
                 RegistrazioneAggiunta(id, progettoId),
             )
 
+        /**
+         * INV-I2: the [aggiuntaAlle] of the [quanti] files of ONE import, in the user's selection order — one instant
+         * plus 1 ms per file, the instant being [adesso] (to the millisecond) but never before 1 ms after the latest of
+         * [esistenti] (the Progetto's Registrazioni). A later import's Parti so follow an earlier one's even when the
+         * clock reads the same millisecond, lags the previous import's +n ms, or steps back.
+         */
+        public fun istantiDiAggiunta(adesso: Instant, quanti: Int, esistenti: List<Registrazione>): List<Instant> {
+            val dopoLUltima = esistenti.maxOfOrNull { it.aggiuntaAlle }?.plusMillis(1) ?: Instant.MIN
+            val inizio = maxOf(adesso.truncatedTo(ChronoUnit.MILLIS), dopoLUltima)
+            return List(quanti) { inizio.plusMillis(it.toLong()) }
+        }
+
         /** Rebuilds a persisted Registrazione; the database is trusted, nothing is re-validated (CR-15). */
         @RicostituzioneDaPersistenza
         @Suppress("LongParameterList") // one parameter per persisted field
