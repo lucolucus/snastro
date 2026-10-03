@@ -61,13 +61,16 @@ fun messaggioDownloadFallito(motivo: MotivoDownload, dimensioneModelloByte: Long
     MotivoDownload.ScritturaFallita -> "Non è stato possibile salvare il modello sul disco."
 }
 
+/** The one wording of "this Parte has no transcript", shared by the tab hint and the refusal message (L240). */
+fun testoParteNonTrascritta(parte: Int): String = "Manca la trascrizione della parte $parte."
+
 /** AC-S129: [MotivoNonDisponibile] — "1 h 10" is provisional (spike `contesto-lungo`). */
 fun messaggioNonDisponibile(motivo: MotivoNonDisponibile, numParti: Int): String = when (motivo) {
     MotivoNonDisponibile.TroppoLunga -> "La registrazione è troppo lunga per il riassunto (oltre 1 h 10 circa)."
     // AC-I80: names the blocking Parte on a multi-part Incontro; the one-Parte text is today's (INV-I3).
     is MotivoNonDisponibile.ElaborazioneAperta ->
         if (numParti > 1) "Parte ${motivo.parte} in trascrizione." else "Aspetta la fine della trascrizione."
-    is MotivoNonDisponibile.PartiNonTrascritte -> "Manca la trascrizione della parte ${motivo.parte}."
+    is MotivoNonDisponibile.PartiNonTrascritte -> testoParteNonTrascritta(motivo.parte)
     is MotivoNonDisponibile.PartiFallite -> "Parte ${motivo.parte} non riuscita: riprova o eliminala."
 }
 

@@ -39,6 +39,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,7 +47,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -483,7 +484,9 @@ private fun SelettoreParte(parte: IntestazioneParte, vaiAllaParte: (Registrazion
     // L200: the tabs keep their width and the strip scrolls when the header column has less room than N Parti need.
     val selezionata = parte.parti.indexOfFirst { it.numero == parte.numero }.coerceAtLeast(0)
     val scorrimento = rememberScrollState()
-    val passo = with(LocalDensity.current) { LARGHEZZA_SELETTORE_PARTE_PER_PARTE.roundToPx() }
+    // L254: the step is the MEASURED strip width over the tab count (tabs share it equally), not the width constant.
+    var larghezzaStriscia by remember { mutableIntStateOf(0) }
+    val passo = larghezzaStriscia / parte.parti.size
     // L235: the selected Parte's tab is brought into view (scrollTo clamps to the strip's end).
     LaunchedEffect(selezionata, passo) { scorrimento.scrollTo(selezionata * passo) }
     Box(modifier = Modifier.fillMaxWidth().horizontalScroll(scorrimento)) {
@@ -494,6 +497,7 @@ private fun SelettoreParte(parte: IntestazioneParte, vaiAllaParte: (Registrazion
                 parte.parti[indice].takeIf { it.numero != parte.numero }?.let { vaiAllaParte(it.registrazioneId) }
             },
             modifier = Modifier.width(LARGHEZZA_SELETTORE_PARTE_PER_PARTE * parte.parti.size)
+                .onSizeChanged { larghezzaStriscia = it.width }
                 .testTag("registrazione-parti"),
             prefissoTag = "parte",
         )

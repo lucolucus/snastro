@@ -225,7 +225,10 @@ private fun BannerUnione(unione: PropostaDiUnione, abilitata: Boolean, azioni: A
     )
 }
 
-/** AC-I83: never automatic, no 'No'; one '▶' per Voce plays its own estratto; the earlier Parte's Voce survives. */
+/**
+ * AC-I83: never automatic, no 'No'; one '▶' per Voce plays its own estratto; the Voce whose first Parte is
+ * earlier survives (D-0057).
+ */
 @Composable
 private fun BannerTraParti(coppia: CoppiaTraParti, pannello: PannelloVoci, azioni: AzioniRegistrazione) {
     val a = coppia.voceA.numero
