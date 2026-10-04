@@ -20,6 +20,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
+import org.junit.jupiter.api.Assumptions.assumeFalse
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test
 import snastro.kernel.ElaborazioneId
@@ -52,9 +54,9 @@ import snastro.ui.testi.messaggioRitrascrizioneNonRiuscita
 import snastro.ui.testi.titoloConfermaElimina
 import snastro.ui.testi.titoloConfermaRitrascrivi
 import java.io.File
-import java.security.MessageDigest
 import java.time.LocalDate
 import javax.imageio.ImageIO
+import kotlin.test.fail
 
 private const val LARGHEZZA_GRANDE_PX = 1280
 private const val ALTEZZA_GRANDE_PX = 800
@@ -1213,18 +1215,49 @@ class RegistrazioniRenderCheckTest {
     }
 
     /**
+     * rilascio-ci: the byte comparison holds only on a host that renders like the one that recorded the baseline —
+     * recognized by [improntaSondaDiResa] equal to the `# sonda-host` line of the baseline file. On any other host it
+     * is SKIPPED only when `CI=true` (the GitHub runner sets it), and this test reports the skip with both
+     * fingerprints; locally it FAILS, so a changed rendering stack (macOS, JBR, fonts) is a loud signal to re-record,
+     * never a silent pass.
+     */
+    @Test
+    fun `INV-I3 il confronto byte per byte vale sull host che ha registrato la baseline`() {
+        if (sondaQui == SONDA_BASELINE) return
+        val motivo = "INV-I3: this host renders the reference probe differently (sonda $sondaQui, baseline recorded " +
+            "with $SONDA_BASELINE)"
+        assumeFalse(IN_CI) { "$motivo — byte comparison SKIPPED on this CI host; the semantic asserts still ran" }
+        fail(
+            "$motivo — the rendering stack changed: check S2 by eye (build/render-check), then re-record " +
+                "registrazioni-1-parte-baseline.txt and its '# sonda-host' line deliberately",
+        )
+    }
+
+    /**
      * INV-I3: every fixture of this class is a 1-part Incontro, and its PNG must equal the one S2 rendered BEFORE the
      * Incontri (the SHA-256 of today's PNG, `registrazioni-1-parte-baseline.txt`, taken at 1280x800 and 1024x640, light
      * and dark). The open-menu fixtures ([MENU_APERTI_ESCLUSI]) are not in it: their menu gains 'Aggiungi parti…' by
-     * design. L201: it fails CLOSED — a PNG that is in neither the baseline nor that list is a failure, not a skip.
+     * design. L201: it fails CLOSED — a PNG that is in neither the baseline nor that list is a failure, not a skip, on
+     * every host. rilascio-ci: the bytes are not compared on a CI host whose probe differs (see the test above).
      */
     private fun verificaUgualeAOggi(png: File) {
         val atteso = checkNotNull(BASELINE_1_PARTE[png.name]) {
             "INV-I3: ${png.name} is not in registrazioni-1-parte-baseline.txt (and it is not an open-menu fixture)"
         }
-        val impronta = MessageDigest.getInstance("SHA-256").digest(png.readBytes())
-        val effettivo = impronta.joinToString("") { "%02x".format(it) }
+        if (sondaQui != SONDA_BASELINE && IN_CI) return
+        val effettivo = sha256(png.readBytes())
         check(effettivo == atteso) { "INV-I3: ${png.name} differs from today's PNG ($effettivo != $atteso)" }
+    }
+
+    companion object {
+        private lateinit var sondaQui: String
+
+        /** Rendered once per class, before (never inside) the fixtures' own compose tests. */
+        @JvmStatic
+        @BeforeAll
+        fun rendiLaSonda() {
+            sondaQui = improntaSondaDiResa()
+        }
     }
 }
 
@@ -1236,7 +1269,16 @@ private val MENU_APERTI_ESCLUSI = setOf(
     "registrazioni-ritrascrizione-non-riuscita",
 )
 
-private val BASELINE_1_PARTE: Map<String, String> =
+private val IN_CI: Boolean = System.getenv("CI") == "true"
+
+private val RIGHE_BASELINE: List<String> =
     RegistrazioniRenderCheckTest::class.java.getResourceAsStream("/registrazioni-1-parte-baseline.txt")!!
         .bufferedReader().readLines().filter { it.isNotBlank() }
-        .associate { it.substringBefore(' ') to it.substringAfter(' ') }
+
+/** rilascio-ci: the host fingerprint recorded with the baseline, `# sonda-host <sha256> <host description>`. */
+private val SONDA_BASELINE: String = checkNotNull(RIGHE_BASELINE.firstOrNull { it.startsWith("# sonda-host ") }) {
+    "registrazioni-1-parte-baseline.txt has no '# sonda-host' line"
+}.split(' ')[2]
+
+private val BASELINE_1_PARTE: Map<String, String> =
+    RIGHE_BASELINE.filterNot { it.startsWith("#") }.associate { it.substringBefore(' ') to it.substringAfter(' ') }

@@ -53,6 +53,9 @@ val renderCheck by tasks.registering(Test::class) {
         includeTags("render")
     }
     shouldRunAfter(tasks.named("test"))
+    // rilascio-ci: RegistrazioniRenderCheckTest skips INV-I3's byte comparison on a foreign host only when CI=true, so
+    // CI is an input — a result recorded under CI=true is never reused as up-to-date for a local run.
+    inputs.property("ci", providers.environmentVariable("CI").orElse(""))
 }
 
 tasks.named("check") {

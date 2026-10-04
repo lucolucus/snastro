@@ -27,7 +27,6 @@ import snastro.persistenza.DatabaseProgetto
 import snastro.persistenza.SnastroDatabase
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.supporto.test.attendiFinche
-import snastro.supporto.test.pausaInTempoReale
 import snastro.supporto.test.restaVeroPer
 import snastro.trascrizione.adattatori.persistenza.ElaborazioneRepositorySql
 import snastro.trascrizione.applicazione.comandi.DividiVoce
@@ -325,14 +324,13 @@ class ComposizioneParlantiTest {
      * The genuinely discriminating proof is `RitentaConBackoff`'s OWN "fallito"/"riuscito" report reaching the
      * log — checking the WAL file alone would NOT discriminate: releasing the parked reader alone lets SQLite's own
      * busy_timeout-bounded wait inside a wal_checkpoint(TRUNCATE) call succeed on its own, wired or not (verified:
-     * an unwired run still empties the WAL). [ATTESA_PRIMO_RITENTO_MS] holds the reader past that busy_timeout, so
-     * the FIRST wal_checkpoint(TRUNCATE) — both the commit-time one and the retry worker's own first attempt —
-     * genuinely gives up (`busy`) instead of just outwaiting the reader; only a SUBSEQUENT attempt, after
-     * `RitentaConBackoff`'s own backoff, converges. A throwaway probe removing `ModuloParlanti.avvia`'s
+     * an unwired run still empties the WAL). So the reader stays parked until the worker has REPORTED a failed
+     * attempt (condition-based, rilascio-ci: the former fixed 7 s pause raced the worker's start on a slow host —
+     * a worker whose first attempt began after the pause overlapped the release, succeeded at once and never
+     * logged, v1.0.2 and v1.5.0 release runs), and only then is released; the next attempt, after the backoff,
+     * converges and reports "riuscito". A throwaway probe removing `ModuloParlanti.avvia`'s
      * `avviaRitentaCheckpoint` call (never committed) leaves `registro` with ONLY the commit-time "incompleto"
-     * line — verified: the final `attendiFinche` below times out (`richiedi(Unit)` queues a request nobody
-     * consumes), the WAL still becomes empty on its own once the reader releases, but no `RitentaConBackoff:`
-     * report is ever logged.
+     * line: the "fallito" wait below times out (`richiedi(Unit)` queues a request nobody consumes).
      */
     @Test
     fun `B17 un checkpoint incompleto per un lettore DEFERRED e ritentato dal worker di ModuloParlanti, loggato`() {
@@ -365,19 +363,24 @@ class ComposizioneParlantiTest {
                 // commit — incomplete here, since the DEFERRED reader above is still parked on an older snapshot.
                 ambiente.parlanti.comandiParlante.elimina(EliminaParlante(anna)).atteso()
 
-                assertTrue(
-                    registro.contieneMessaggio("checkpoint WAL incompleto"),
-                    "il checkpoint a fine commit deve risultare incompleto e loggato col lettore ancora parcheggiato",
-                )
-                pausaInTempoReale(
-                    ATTESA_PRIMO_RITENTO_MS.milliseconds,
-                    motivo = "il primo tentativo del worker deve vedere anch'esso il lettore parcheggiato e fallire",
-                )
-                via.countDown()
-                lettore.join(10_000)
+                try {
+                    assertTrue(
+                        registro.contieneMessaggio("checkpoint WAL incompleto"),
+                        "il checkpoint a fine commit deve risultare incompleto e loggato, col lettore parcheggiato",
+                    )
+                    attendiFinche(
+                        timeout = ATTESA_RITENTO,
+                        messaggio = "col lettore parcheggiato il worker deve riportare un tentativo fallito",
+                    ) {
+                        registro.contieneMessaggio("RitentaConBackoff:", "fallito")
+                    }
+                } finally {
+                    via.countDown()
+                    lettore.join(10_000)
+                }
 
-                attendiFinche(timeout = 15.seconds, messaggio = "RitentaConBackoff deve riportare il proprio ritento") {
-                    registro.contieneMessaggio("RitentaConBackoff")
+                attendiFinche(timeout = ATTESA_RITENTO, messaggio = "liberato il lettore, il worker deve riuscire") {
+                    registro.contieneMessaggio("RitentaConBackoff:", "riuscito dopo")
                 }
             }
         }
@@ -455,8 +458,9 @@ class ComposizioneParlantiTest {
         private fun causataDallEstrattore(e: Throwable?): Boolean =
             generateSequence(e) { c -> c.cause }.any { c -> c.message == "estrazione fallita (finta)" }
 
-        /** B17: any record (any level, any logger under "snastro") whose message contains [sottostringa]. */
-        fun contieneMessaggio(sottostringa: String): Boolean = record.any { sottostringa in it.message.orEmpty() }
+        /** B17: any record (any level, any logger under "snastro") whose message contains every [parti]. */
+        fun contieneMessaggio(vararg parti: String): Boolean =
+            record.any { r -> parti.all { it in r.message.orEmpty() } }
 
         override fun publish(r: LogRecord) {
             record += r
@@ -472,14 +476,12 @@ class ComposizioneParlantiTest {
     private companion object {
         const val ATTESA_NESSUNA_RIGENERAZIONE_MS = 500L
 
-        // Only a hang guard: B17 releases the reader itself. At 15 s a slower host (the GitHub macOS runner) let the
-        // reader release on its own before the commit-time checkpoint ran, so that checkpoint completed.
+        // Only a hang guard: B17 releases the reader itself (in a finally). At 15 s a slower host (the GitHub
+        // macOS runner) let the reader release on its own before the commit-time checkpoint ran, which then completed.
         const val ATTESA_LETTORE_S = 60L
 
-        // Comfortably longer than AperturaDatabase's busy_timeout (5s): the FIRST wal_checkpoint(TRUNCATE) — both
-        // the commit-time one and the retry worker's own first attempt — internally WAITS on that timeout for the
-        // parked reader before giving up, so holding it any shorter would let that internal wait alone (not the
-        // retry's OWN backoff/second attempt) explain a success — never actually exercising the backoff+retry path.
-        const val ATTESA_PRIMO_RITENTO_MS = 7_000L
+        // Each attempt with the reader parked waits AperturaDatabase's busy_timeout (5 s) before giving up: room for
+        // a slow host to schedule the worker late, still inside the default 60 s JUnit timeout.
+        val ATTESA_RITENTO = 20.seconds
     }
 }
