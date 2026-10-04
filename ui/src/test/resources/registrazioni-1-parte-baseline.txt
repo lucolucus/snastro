@@ -1,3 +1,4 @@
+# sonda-host 89f07928078efe02b95baf8c60ce09f2fe12adabc25e73dc9bcc3da9a56f1505 macOS 26.4 arm64, JBR 21 toolchain, recorded 2026-10-04 (rilascio-ci)
 registrazioni-audio-non-disponibile-1024x640.png c6d7d4f218e53bd379e7670b886f19deaea3707663691b70407e310f9b4bff57
 registrazioni-audio-non-disponibile-1280x800.png 84864cb9cb30d6a95fb2d2e32f0dd397f7918206536064f97d3ae05f2d23fb22
 registrazioni-audio-non-disponibile-scuro-1024x640.png 930a7a4b610099e224a79351caf8e59dd221e1e8d0b9eb429ded3fa67182d13f
