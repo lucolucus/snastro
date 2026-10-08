@@ -1,8 +1,5 @@
 package snastro.ui.progetti
 
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsEnabled
@@ -28,6 +25,8 @@ private val TEST = ProgettoVista(
     ultimaAttivita = Instant.parse("2026-10-08T10:00:00Z"),
 )
 
+private val CAMPO_NOME = hasSetTextAction() and hasAnyAncestor(hasTestTag("progetti-campo-nome-elimina"))
+
 /** R0 smoke (EX-1..EX-3): the card's "⋯" menu and the confirmation reach the presenter's delete actions. */
 @OptIn(ExperimentalTestApi::class)
 class SchermataProgettiEliminaTest {
@@ -49,45 +48,52 @@ class SchermataProgettiEliminaTest {
     }
 
     @Test
-    fun `la conferma passa il nome digitato, Annulla annulla e il bottone resta disattivo`() =
-        runDesktopComposeUiTest(1280, 800) {
-            var conferma by mutableStateOf(ConfermaEliminazione(TEST))
-            var annullate = 0
-            setContent {
-                SchermataProgetti(
-                    ProgettiUiStato.Dati(listOf(TEST), conferma = conferma),
-                    AZIONI_VUOTE.copy(
-                        digitaNomeElimina = { conferma = conferma.copy(nomeDigitato = it) },
-                        annullaElimina = { annullate++ },
-                    ),
-                    "/tmp/x",
-                    SceltaCartellaFinta(),
-                )
-            }
-            onNodeWithTag("progetti-conferma-elimina").assertIsDisplayed()
-            onNodeWithTag("progetti-conferma-elimina-conferma").assertIsNotEnabled()
-
-            val campo = hasSetTextAction() and hasAnyAncestor(hasTestTag("progetti-campo-nome-elimina"))
-            onNode(campo).performTextInput("tes")
-            onNodeWithTag("progetti-conferma-elimina-annulla").performClick()
-
-            assertEquals("tes", conferma.nomeDigitato)
-            assertEquals(1, annullate)
-        }
-
-    @Test
-    fun `con il nome esatto il bottone Elimina conferma`() = runDesktopComposeUiTest(1280, 800) {
-        var confermate = 0
+    fun `Elimina si attiva solo col nome esatto e passa il nome digitato`() = runDesktopComposeUiTest(1280, 800) {
+        var confermato: String? = null
         setContent {
             SchermataProgetti(
-                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST, "test")),
-                AZIONI_VUOTE.copy(confermaElimina = { confermate++ }),
+                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST)),
+                AZIONI_VUOTE.copy(confermaElimina = { confermato = it }),
                 "/tmp/x",
                 SceltaCartellaFinta(),
             )
         }
+        onNodeWithTag("progetti-conferma-elimina").assertIsDisplayed()
+        onNode(CAMPO_NOME).performTextInput("tes")
+        onNodeWithTag("progetti-conferma-elimina-conferma").assertIsNotEnabled()
+
+        onNode(CAMPO_NOME).performTextInput("t")
         onNodeWithTag("progetti-conferma-elimina-conferma").assertIsEnabled().performClick()
 
-        assertEquals(1, confermate)
+        assertEquals("test", confermato)
+    }
+
+    @Test
+    fun `Annulla nella conferma la annulla`() = runDesktopComposeUiTest(1280, 800) {
+        var annullate = 0
+        setContent {
+            SchermataProgetti(
+                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST)),
+                AZIONI_VUOTE.copy(annullaElimina = { annullate++ }),
+                "/tmp/x",
+                SceltaCartellaFinta(),
+            )
+        }
+        onNodeWithTag("progetti-conferma-elimina-annulla").performClick()
+
+        assertEquals(1, annullate)
+    }
+
+    @Test
+    fun `un eliminazione fallita mostra il suo messaggio nella conferma`() = runDesktopComposeUiTest(1280, 800) {
+        setContent {
+            SchermataProgetti(
+                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST, errore = "non riuscita")),
+                AZIONI_VUOTE,
+                "/tmp/x",
+                SceltaCartellaFinta(),
+            )
+        }
+        onNodeWithTag("progetti-errore-elimina").assertIsDisplayed()
     }
 }

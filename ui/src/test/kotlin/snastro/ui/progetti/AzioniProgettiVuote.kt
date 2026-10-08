@@ -8,8 +8,6 @@ internal val AZIONI_VUOTE = AzioniProgetti(
     chiudiErroreApri = {},
     riprova = {},
     chiediElimina = {},
-    digitaNomeElimina = {},
     annullaElimina = {},
     confermaElimina = {},
-    chiudiErroreElimina = {},
 )

@@ -83,32 +83,30 @@ class ProgettiPresenter(
         alFallimento = { stato, messaggio -> stato.copy(erroreApri = messaggio) },
     )
 
-    /** R0 (EX-1/EX-3): opens the delete confirmation of [progetto], with nothing typed yet. */
+    /** R0 (EX-1/EX-3): opens the delete confirmation of [progetto]. */
     fun chiediElimina(progetto: ProgettoVista) =
-        aggiorna { if (it.inCorso) it else it.copy(conferma = ConfermaEliminazione(progetto), erroreElimina = null) }
+        _stato.aggiorna { if (it.inCorso) it else it.copy(conferma = ConfermaEliminazione(progetto)) }
 
-    /** R0 (EX-2): the name typed in the open confirmation, if any. */
-    fun digitaNomeElimina(testo: String) =
-        aggiorna { stato -> stato.copy(conferma = stato.conferma?.copy(nomeDigitato = testo)) }
-
-    /** R0 (EX-3): closes the confirmation; nothing is deleted. */
-    fun annullaElimina() = aggiorna { it.copy(conferma = null) }
+    /** R0 (EX-3): closes the confirmation, unless its delete is already running; nothing is deleted. */
+    fun annullaElimina() = _stato.aggiorna { if (it.inCorso) it else it.copy(conferma = null) }
 
     /**
-     * R0 (EX-1): deletes the confirmed project, then reloads the list without it — only when the typed name matches
-     * exactly (EX-2: the view's disabled button is not the only guard).
+     * R0 (EX-1): deletes the confirmed project, then closes the confirmation over the list reloaded without it — only
+     * when [nomeDigitato] is the project's exact name (EX-2: the view's disabled button is not the only guard). A
+     * failure stays in the confirmation.
      */
-    fun confermaElimina() {
-        val conferma = (_stato.value as? ProgettiUiStato.Dati)?.conferma?.takeIf { it.confermabile } ?: return
+    fun confermaElimina(nomeDigitato: String) {
+        val conferma = (_stato.value as? ProgettiUiStato.Dati)?.conferma ?: return
+        if (!conferma.confermataDa(nomeDigitato)) return
         avvia(
-            pulisci = { it.copy(conferma = null, erroreElimina = null) },
+            pulisci = { it.copy(conferma = conferma.copy(errore = null)) },
             operazione = { sessione.elimina(conferma.progetto.percorso).poi { Esito.Ok(elenco.progetti()) } },
-            alSuccesso = { stato, progetti -> stato.copy(progetti = progetti) },
-            alFallimento = { stato, messaggio -> stato.copy(erroreElimina = messaggio) },
+            alSuccesso = { stato, progetti -> stato.copy(progetti = progetti, conferma = null) },
+            alFallimento = { stato, messaggio -> stato.copy(conferma = stato.conferma?.copy(errore = messaggio)) },
         )
     }
 
-    // M3: guards a double crea/apri while one is already in flight. `inCorso` is set synchronously
+    // M3: guards a double crea/apri/elimina while one is already in flight. `inCorso` is set synchronously
     // here, before `scope.launch` — unlike ShellPresenter (where `_stato` becomes Caricamento only
     // inside the launched body, needing an extra Job flag), a second synchronous call already reads
     // the updated `_stato.value` and returns immediately: no separate Job guard is needed.
@@ -124,8 +122,8 @@ class ProgettiPresenter(
         scope.launch {
             try {
                 when (val esito = withContext(io) { operazione() }) {
-                    is Esito.Ok -> aggiorna { alSuccesso(it, esito.valore) }
-                    is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
+                    is Esito.Ok -> _stato.aggiorna { alSuccesso(it, esito.valore) }
+                    is Esito.Errore -> _stato.aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -134,30 +132,22 @@ class ProgettiPresenter(
                 // message the user sees (never a stack trace) — same rationale as ShellPresenter M1(b).
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
-                aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
+                _stato.aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
             } finally {
                 // fix-batch-12 #5: reset LAST and UNCONDITIONALLY — Error and Cancellation alike — so
                 // a cancelled `crea`/`apri` (e.g. a spurious CancellationException from the port, same
                 // family as LettorePresenter's own fix) never leaves `inCorso` stuck true, which would
                 // silently block every later crea/apri behind the M3 guard forever.
-                aggiorna { it.copy(inCorso = false) }
+                _stato.aggiorna { it.copy(inCorso = false) }
             }
         }
     }
 
-    private fun aggiorna(f: (ProgettiUiStato.Dati) -> ProgettiUiStato.Dati) {
-        val attuale = _stato.value
-        if (attuale is ProgettiUiStato.Dati) _stato.value = f(attuale)
-    }
-
     /** H1: dismisses the current `erroreCrea` inline message, if any. */
-    fun chiudiErroreCrea() = aggiorna { it.copy(erroreCrea = null) }
+    fun chiudiErroreCrea() = _stato.aggiorna { it.copy(erroreCrea = null) }
 
     /** H1: dismisses the current `erroreApri` inline message, if any. */
-    fun chiudiErroreApri() = aggiorna { it.copy(erroreApri = null) }
-
-    /** H1: dismisses the current `erroreElimina` inline message, if any. */
-    fun chiudiErroreElimina() = aggiorna { it.copy(erroreElimina = null) }
+    fun chiudiErroreApri() = _stato.aggiorna { it.copy(erroreApri = null) }
 
     val azioni: AzioniProgetti = AzioniProgetti(
         crea = ::crea,
@@ -166,9 +156,13 @@ class ProgettiPresenter(
         chiudiErroreApri = ::chiudiErroreApri,
         riprova = ::riprova,
         chiediElimina = ::chiediElimina,
-        digitaNomeElimina = ::digitaNomeElimina,
         annullaElimina = ::annullaElimina,
         confermaElimina = ::confermaElimina,
-        chiudiErroreElimina = ::chiudiErroreElimina,
     )
+}
+
+/** Applies [f] to the [ProgettiUiStato.Dati] state; a no-op while the list is still loading. */
+private fun MutableStateFlow<ProgettiUiStato>.aggiorna(f: (ProgettiUiStato.Dati) -> ProgettiUiStato.Dati) {
+    val attuale = value
+    if (attuale is ProgettiUiStato.Dati) value = f(attuale)
 }

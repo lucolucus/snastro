@@ -10,8 +10,6 @@ data class AzioniProgetti(
     val chiudiErroreApri: () -> Unit,
     val riprova: () -> Unit,
     val chiediElimina: (ProgettoVista) -> Unit,
-    val digitaNomeElimina: (testo: String) -> Unit,
     val annullaElimina: () -> Unit,
-    val confermaElimina: () -> Unit,
-    val chiudiErroreElimina: () -> Unit,
+    val confermaElimina: (nomeDigitato: String) -> Unit,
 )

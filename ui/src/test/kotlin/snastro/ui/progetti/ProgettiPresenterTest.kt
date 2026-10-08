@@ -50,7 +50,8 @@ private class SessioneProgettoFissa(
     override fun apri(percorso: String): Esito<ProgettoAperto> =
         risultatoApri ?: error("apri non atteso in questo test")
 
-    override fun elimina(percorso: String): Esito<Unit> = elimina?.invoke() ?: error("elimina non atteso in questo test")
+    override fun elimina(percorso: String): Esito<Unit> =
+        elimina?.invoke() ?: error("elimina non atteso in questo test")
 
     override fun chiudi() = Unit
 }
@@ -200,7 +201,7 @@ class ProgettiPresenterTest {
     }
 
     @Test
-    fun `un elimina che lancia mostra l errore generico, lascia la lista e chiudiErroreElimina lo toglie`() = runTest {
+    fun `un elimina che lancia lascia la lista e la conferma aperta con l errore generico`() = runTest {
         val voce = VoceRegistro(ProgettoId("id-1"), "test", "/p/test.snastro", 0, ORA)
         val registro = RegistroProgettiFinta().apply { registra(voce) }
         val sessione = SessioneProgettoFissa(elimina = { throw IOException("file bloccato") })
@@ -209,16 +210,11 @@ class ProgettiPresenterTest {
         val prima = assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti
 
         presenter.chiediElimina(prima.single())
-        presenter.digitaNomeElimina("test")
-        presenter.confermaElimina()
+        presenter.confermaElimina("test")
         advanceUntilIdle()
 
-        assertEquals(
-            ProgettiUiStato.Dati(progetti = prima, erroreElimina = MESSAGGIO_ERRORE_GENERICO),
-            presenter.stato.value,
-        )
-        presenter.chiudiErroreElimina()
-        assertEquals(ProgettiUiStato.Dati(progetti = prima), presenter.stato.value)
+        val conferma = ConfermaEliminazione(prima.single(), errore = MESSAGGIO_ERRORE_GENERICO)
+        assertEquals(ProgettiUiStato.Dati(progetti = prima, conferma = conferma), presenter.stato.value)
     }
 
     @Test

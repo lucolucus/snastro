@@ -1,0 +1,4 @@
+# Design notes
+
+- ui (`registrazioni/SchermataRegistrazioni.kt` `MenuAltreAzioni`, `parlanti/SchermataParlanti.kt`, `progetti/SchermataProgetti.kt` `MenuProgetto`): the "⋯" button + `DropdownMenu` is written four times (also `registrazione/SchermataPannelloVoci.kt` `MenuAltreAzioniCarta`), and `MessaggioInlineErrore` four times (`progetti/PannelloNuovoProgetto.kt`, `registrazioni/SchermataRegistrazioni.kt`, `parlanti/SchermataParlanti.kt`, `registrazione/SchermataRegistrazione.kt` — `grep -rn 'fun MessaggioInlineErrore' ui/src/main`); one shared component each in `snastro.ui.stile` would remove the copies — beyond slice 01, which only reached S1.
+- avvio (`progetto/SessioneProgettoImpl.kt` `elimina`): the folder is deleted before the registry entry is removed; a failing `registro.rimuovi` leaves the entry in the list with the folder already gone — slice 02/05 (partial outcome, "Cartella non trovata") should settle what the user sees then.

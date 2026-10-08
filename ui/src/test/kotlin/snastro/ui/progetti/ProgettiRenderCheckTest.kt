@@ -212,7 +212,7 @@ class ProgettiRenderCheckTest {
             val progetto = PIU_PROGETTI.first()
             setContent {
                 SchermataProgetti(
-                    stato = ProgettiUiStato.Dati(PIU_PROGETTI, conferma = ConfermaEliminazione(progetto, "Cons")),
+                    stato = ProgettiUiStato.Dati(PIU_PROGETTI, conferma = ConfermaEliminazione(progetto)),
                     azioni = AZIONI_VUOTE,
                     cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
                     sceltaCartella = SCELTA_CARTELLA_DI_PROVA,

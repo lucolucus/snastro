@@ -24,8 +24,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,9 +55,7 @@ import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.DESCRIZIONE_NUOVO_PROGETTO
-import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
-import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
@@ -158,13 +154,10 @@ private fun ContenutoProgetti(
                 )
             }
             stato.erroreApri?.let { MessaggioInlineErrore(it, azioni.chiudiErroreApri, "progetti-errore-apri") }
-            stato.erroreElimina?.let {
-                MessaggioInlineErrore(it, azioni.chiudiErroreElimina, "progetti-errore-elimina")
-            }
             Spacer(modifier = Modifier.height(SnastroMisure.space5))
             GrigliaProgetti(stato, azioni, onNuovo = { pannelloAperto = true })
         }
-        stato.conferma?.let { ConfermaEliminaProgetto(it, azioni) }
+        stato.conferma?.let { ConfermaEliminaProgetto(it, stato.inCorso, azioni) }
         if (pannelloAperto || stato.erroreCrea != null) {
             PannelloNuovoProgetto(
                 inCorso = stato.inCorso,
@@ -355,32 +348,6 @@ private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, azioni: Az
                 color = colori.inkMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
-}
-
-/** R0: the card's "⋯" button and its menu, with "Elimina…" (danger text) asking to confirm the delete. */
-@Composable
-private fun MenuProgetto(progetto: ProgettoVista, abilitato: Boolean, chiediElimina: (ProgettoVista) -> Unit) {
-    var espanso by remember { mutableStateOf(false) }
-    val id = progetto.progettoId.valore
-    Box {
-        BottoneIconaSn(
-            icona = Icona.More,
-            descrizione = ETICHETTA_ALTRE_AZIONI,
-            onClick = { espanso = true },
-            abilitato = abilitato,
-            modifier = Modifier.testTag("progetti-altre-azioni-$id"),
-        )
-        DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
-            DropdownMenuItem(
-                text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
-                onClick = {
-                    espanso = false
-                    chiediElimina(progetto)
-                },
-                modifier = Modifier.testTag("progetti-menu-elimina-$id"),
             )
         }
     }
