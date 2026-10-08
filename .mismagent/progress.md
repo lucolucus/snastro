@@ -46,3 +46,9 @@
 - `CorsaSingola.avvia` catches through `catturaNonFatale` (CR-19b, `RegoleArchitetturaliTest` frozen counts: a new file with a raw catch-all fails `CR-19b ... congelato 0`); `ProgettiPresenter`'s frozen count lowered 2 → 1. Side effect: a non-VM `Error` thrown by an operation now lands as the generic message instead of escaping (same policy as `catturaNonFatale` elsewhere).
 - Commit 561e95ec was red on CR-19b (I misread a piped `mm gate | tail` exit code); fixed by the next commit, `mm gate` green at HEAD.
 - Next S1 action (slice 05 "togli dalla lista"): add its own holder or a function on `FlussoEliminazione`-style class, reuse `CorsaSingola`; proposal `create presenter-split` in `conventions-proposals.md`.
+
+## 09-test-accettazione-scope-e-contenuto — 2026-10-08
+- One session builder: `conSessioneDiProva(registro) { sessione -> }` (`avvio/src/test/kotlin/snastro/avvio/progetto/SessioneDiProva.kt`, conScopeDiProva scope, `chiudi` in `finally`) and, over it, `conSessione(registro, dispatcher) { }` in the acceptance package (`ConSessione.kt`, adds `runTest(dispatcher)`); all three acceptance files and `SessioneProgettoImplEliminaTest` use them, no implicit-Default scope left there.
+- EX-6's "niente cancellato" now compares recursive relative paths (`Files.walkFileTree`, skips `progetto.db-wal/-shm`, tolerates their `NoSuchFileException` in `visitFileFailed`).
+- `SessioneProgettoImpl.chiudi` returns on a conScopeDiProva scope: acceptance + `SessioneProgettoImplEliminaTest` green 3/3 with `./gradlew :avvio:test --rerun --tests …` (exit 0 each).
+- Still on an implicit scope: `SessioneProgettoImplTest`, `SessioneProgettoImplChiudiTest`, `RinominaRegistrazioneTest` (design note).

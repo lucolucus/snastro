@@ -7,26 +7,20 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
-import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.atteso
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.supporto.test.attendiFinche
-import snastro.supporto.test.conScopeDiProva
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiUiStato
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -42,7 +36,7 @@ import kotlin.time.Duration.Companion.seconds
  * the user's home, ML/audio ([componentiDiProva]), id generator and clock. EX-10's undeletable file is a real one: its
  * folder loses the write permission. The presenter runs on a [StandardTestDispatcher] shared with `runTest` and
  * advanced explicitly, its scope cancelled in teardown; the session, which registers a closed project on real
- * threads, gets its scope from [conScopeDiProva], cancelled when the test ends.
+ * threads, is built by [conSessione]: closed and its scope cancelled when the test ends.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EliminaSoloContenutiSnastroTest {
@@ -59,25 +53,9 @@ class EliminaSoloContenutiSnastroTest {
     @AfterEach
     fun chiudi() = scopePresenter.cancel()
 
-    /** Runs [blocco] under `runTest` with a real session over [registro], then closes it and cancels its scope. */
-    private fun conSessione(blocco: suspend TestScope.(SessioneProgettoImpl) -> Unit) = conScopeDiProva { scope ->
-        val sessione = SessioneProgettoImpl(
-            registro,
-            GeneratoreIdFinto(),
-            Clock.fixed(Instant.parse("2026-10-08T10:00:00Z"), ZoneOffset.UTC),
-            scope,
-            componentiDiProva(),
-        )
-        try {
-            runTest(dispatcher) { blocco(sessione) }
-        } finally {
-            sessione.chiudi()
-        }
-    }
-
     @Test
     fun `EX-9 eliminare skatefest cancella solo cio che ha creato snastro, appunti pdf resta e lo si dice`() =
-        conSessione { sessione ->
+        conSessione(registro, dispatcher) { sessione ->
             val presenter = listaConSkatefestEMangu(sessione)
             Files.writeString(skatefest.resolve("progetto.db-wal"), "")
             Files.writeString(skatefest.resolve("progetto.db-shm"), "")
@@ -102,7 +80,7 @@ class EliminaSoloContenutiSnastroTest {
 
     @Test
     fun `EX-10 un file di audio che non si puo cancellare lascia la cartella, lo si dice e la voce sparisce`() =
-        conSessione { sessione ->
+        conSessione(registro, dispatcher) { sessione ->
             val presenter = listaConSkatefestEMangu(sessione)
             val audio = skatefest.resolve("audio")
             Files.writeString(audio.resolve("incontro.wav"), "RIFF")

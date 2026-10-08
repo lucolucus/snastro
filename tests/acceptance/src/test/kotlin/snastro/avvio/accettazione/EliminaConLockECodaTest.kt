@@ -7,12 +7,11 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
-import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
-import snastro.kernel.GeneratoreIdFinto
+import snastro.avvio.progetto.conSessioneDiProva
 import snastro.kernel.IncontroId
 import snastro.kernel.atteso
 import snastro.persistenza.UnitaDiLavoroSql
@@ -25,15 +24,16 @@ import snastro.progetto.dominio.Incontro
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
 import snastro.sintesi.applicazione.porte.unRiassunto
 import snastro.supporto.test.attendiFinche
-import snastro.supporto.test.conScopeDiProva
 import snastro.ui.ProgettoAperto
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiUiStato
+import java.io.IOException
+import java.nio.file.FileVisitResult
 import java.nio.file.Files
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.time.Clock
-import java.time.Instant
-import java.time.ZoneOffset
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.attribute.BasicFileAttributes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -41,6 +41,9 @@ import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.seconds
+
+/** The files an open database makes and drops on its own. */
+private val FILE_DEL_WAL = setOf("progetto.db-wal", "progetto.db-shm")
 
 /**
  * R0 · elimina con lock e coda (EX-6, EX-11): the list's presenter over the REAL [SessioneProgettoImpl] and real
@@ -51,7 +54,8 @@ import kotlin.time.Duration.Companion.seconds
  * session in this JVM holding the project's real `.lock` (its own registry, so its registration cannot race the
  * list). EX-11's pending summary is written into the closed project's real database through the production SQL
  * repositories. The presenter runs on a [StandardTestDispatcher] shared with `runTest` and advanced explicitly, its
- * scope cancelled in teardown; the sessions get their scope from [conScopeDiProva], cancelled when the test ends.
+ * scope cancelled in teardown; the sessions, built by [conSessione] and [conSessioneDiProva], are closed and their
+ * scopes cancelled when the test ends.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EliminaConLockECodaTest {
@@ -61,7 +65,6 @@ class EliminaConLockECodaTest {
     private val documenti: Path by lazy { casa.resolve("Documents/snastro") }
 
     private val registro = RegistroProgettiFinta()
-    private val orologio = Clock.fixed(Instant.parse("2026-10-08T10:00:00Z"), ZoneOffset.UTC)
     private val dispatcher = StandardTestDispatcher()
     private val scopePresenter = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -70,52 +73,35 @@ class EliminaConLockECodaTest {
 
     @Test
     fun `EX-6 mangu 2 aperto in un'altra finestra non si elimina dalla lista, lo si dice e niente e cancellato`() =
-        conScopeDiProva { scope ->
-            val sessione = sessione(registro, scope)
-            val altraFinestra = sessione(RegistroProgettiFinta(), scope)
-            try {
-                runTest(dispatcher) {
-                    val mangu = creaChiuso(sessione, "mangu 2")
-                    val presenter = lista(sessione)
-                    altraFinestra.apri(mangu.percorso).atteso()
-                    val primaDiEliminare = contenuto(Path.of(mangu.percorso))
+        conSessione(registro, dispatcher) { sessione ->
+            val mangu = creaChiuso(sessione, "mangu 2")
+            val presenter = lista(sessione)
+            conSessioneDiProva(RegistroProgettiFinta()) { altraFinestra ->
+                altraFinestra.apri(mangu.percorso).atteso()
+                val primaDiEliminare = contenuto(Path.of(mangu.percorso))
 
-                    elimina(presenter, "mangu 2")
+                elimina(presenter, "mangu 2")
 
-                    assertEquals("Questo progetto è aperto in un'altra finestra.", dati(presenter).conferma?.errore)
-                    assertEquals(primaDiEliminare, contenuto(Path.of(mangu.percorso)), "niente cancellato")
-                    assertEquals(listOf("mangu 2"), registro.elenco().map { it.nome })
-                }
-            } finally {
-                altraFinestra.chiudi()
-                sessione.chiudi()
+                assertEquals("Questo progetto è aperto in un'altra finestra.", dati(presenter).conferma?.errore)
+                assertEquals(primaDiEliminare, contenuto(Path.of(mangu.percorso)), "niente cancellato")
+                assertEquals(listOf("mangu 2"), registro.elenco().map { it.nome })
             }
         }
 
     @Test
     fun `EX-11 mangu 2 chiuso con un riassunto in attesa nel suo DB si elimina e sparisce dalla lista`() =
-        conScopeDiProva { scope ->
-            val sessione = sessione(registro, scope)
-            try {
-                runTest(dispatcher) {
-                    creaChiuso(sessione, "skatefest")
-                    val mangu = creaChiuso(sessione, "mangu 2")
-                    riassuntoInAttesa(mangu)
-                    val presenter = lista(sessione)
+        conSessione(registro, dispatcher) { sessione ->
+            creaChiuso(sessione, "skatefest")
+            val mangu = creaChiuso(sessione, "mangu 2")
+            riassuntoInAttesa(mangu)
+            val presenter = lista(sessione)
 
-                    elimina(presenter, "mangu 2")
+            elimina(presenter, "mangu 2")
 
-                    assertFalse(Files.exists(Path.of(mangu.percorso)), "mangu 2.snastro cancellata")
-                    assertEquals(listOf("skatefest"), dati(presenter).progetti.map(ProgettoVista::nome))
-                    assertNull(dati(presenter).conferma)
-                }
-            } finally {
-                sessione.chiudi()
-            }
+            assertFalse(Files.exists(Path.of(mangu.percorso)), "mangu 2.snastro cancellata")
+            assertEquals(listOf("skatefest"), dati(presenter).progetti.map(ProgettoVista::nome))
+            assertNull(dati(presenter).conferma)
         }
-
-    private fun sessione(registro: RegistroProgettiFinta, scope: CoroutineScope) =
-        SessioneProgettoImpl(registro, GeneratoreIdFinto(), orologio, scope, componentiDiProva())
 
     /** [nome] created, closed and registered in [registro]. */
     private fun creaChiuso(sessione: SessioneProgettoImpl, nome: String): ProgettoAperto {
@@ -154,10 +140,33 @@ class EliminaConLockECodaTest {
         advanceUntilIdle()
     }
 
-    /** What is in [cartella], but the database's WAL files: the other window's open database makes and drops them. */
-    private fun contenuto(cartella: Path): List<String> = Files.list(cartella).use { percorsi ->
-        percorsi.map { it.fileName.toString() }.filter { !it.startsWith("progetto.db-") }.sorted().toList()
+    /**
+     * Every path under [cartella], relative to it and sorted, but the database's WAL files: the other window's open
+     * database makes and drops them, so they are skipped even when they vanish during the walk.
+     */
+    private fun contenuto(cartella: Path): List<String> {
+        val percorsi = mutableListOf<String>()
+        Files.walkFileTree(
+            cartella,
+            object : SimpleFileVisitor<Path>() {
+                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    if (dir != cartella) percorsi += cartella.relativize(dir).toString()
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                    if (!fileDelWal(file)) percorsi += cartella.relativize(file).toString()
+                    return FileVisitResult.CONTINUE
+                }
+
+                override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult =
+                    if (exc is NoSuchFileException && fileDelWal(file)) FileVisitResult.CONTINUE else throw exc
+            },
+        )
+        return percorsi.sorted()
     }
+
+    private fun fileDelWal(file: Path) = file.fileName.toString() in FILE_DEL_WAL
 
     private fun dati(presenter: ProgettiPresenter): ProgettiUiStato.Dati = assertIs(presenter.stato.value)
 }
