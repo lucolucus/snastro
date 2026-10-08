@@ -19,6 +19,10 @@ checks its controls call the right callbacks (it does not prove the presenter wi
 - for the session's own scope, use `conScopeDiProva` when real threads are needed, or `backgroundScope` with explicit
   scheduler driving; both guarantee cancellation;
 - a separate session lifetime alone does not require a real dispatcher; do not generalize an implicit `Dispatchers.Default`.
+- when a real session needs real threads under the rules above, reuse `conSessione(registro, dispatcher) { sessione -> … }`
+  (`tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/ConSessione.kt`); it delegates to
+  `conSessioneDiProva(registro) { … }` (`avvio/src/test/kotlin/snastro/avvio/progetto/SessioneDiProva.kt`), reused directly
+  for unit tests and a second window.
 
 **Another window** (added 2026-10-08, decided: codex on delegation):
 - model it with a second real `SessioneProgettoImpl` that `apri`s the project and closes in teardown, with its own
