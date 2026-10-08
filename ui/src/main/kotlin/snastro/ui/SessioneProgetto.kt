@@ -19,8 +19,11 @@ interface SessioneProgetto {
     /** Opens the project folder at [percorso]. */
     fun apri(percorso: String): Esito<ProgettoAperto>
 
-    /** Deletes for good the folder of the closed project at [percorso] and drops it from the known projects. */
-    fun elimina(percorso: String): Esito<Unit>
+    /**
+     * Drops the closed project at [percorso] from the known projects and deletes for good what snastro created in its
+     * folder — never a symbolic link's target, never the user's own files; [ProgettoEliminato] says what is left.
+     */
+    fun elimina(percorso: String): Esito<ProgettoEliminato>
 
     /**
      * Closes the currently open project, if any ([corrente] becomes `null`). Blocking too — it may wait

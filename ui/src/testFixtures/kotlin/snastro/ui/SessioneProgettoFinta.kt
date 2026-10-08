@@ -33,9 +33,9 @@ class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreI
         return Esito.Ok(progetto)
     }
 
-    override fun elimina(percorso: String): Esito<Unit> {
+    override fun elimina(percorso: String): Esito<ProgettoEliminato> {
         progetti.remove(percorso)
-        return Esito.Ok(Unit)
+        return Esito.Ok(ProgettoEliminato.Completamente)
     }
 
     override fun chiudi() {

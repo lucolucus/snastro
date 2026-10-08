@@ -16,7 +16,8 @@ sealed interface ProgettiUiStato {
      * replaces [progetti] — [AzioniProgetti.chiudiErroreCrea]/[AzioniProgetti.chiudiErroreApri] clear
      * them). [erroreElenco] (L530d), when set, is the INITIAL elenco load's own failure — a distinct
      * full-width banner with [AzioniProgetti.riprova], never conflated with `erroreCrea`. [conferma], when set, is
-     * the open delete confirmation of one project.
+     * the open delete confirmation of one project. [avvisoEliminazione] (EX-9, EX-10), when set, says what the last
+     * delete left on disk — dismissible ([AzioniProgetti.chiudiAvvisoEliminazione]).
      */
     data class Dati(
         val progetti: List<ProgettoVista>,
@@ -25,6 +26,7 @@ sealed interface ProgettiUiStato {
         val erroreApri: String? = null,
         val erroreElenco: String? = null,
         val conferma: ConfermaEliminazione? = null,
+        val avvisoEliminazione: String? = null,
     ) : ProgettiUiStato
 }
 

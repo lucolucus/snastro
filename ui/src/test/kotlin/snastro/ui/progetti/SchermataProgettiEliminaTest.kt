@@ -8,12 +8,14 @@ import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.letture.ProgettoVista
+import snastro.ui.testi.ETICHETTA_CHIUDI
 import java.time.Instant
 import kotlin.test.assertEquals
 
@@ -95,5 +97,23 @@ class SchermataProgettiEliminaTest {
             )
         }
         onNodeWithTag("progetti-errore-elimina").assertIsDisplayed()
+    }
+
+    @Test
+    fun `EX-9 l avviso di cio che resta si vede e Chiudi lo chiude`() = runDesktopComposeUiTest(1280, 800) {
+        var chiusi = 0
+        setContent {
+            SchermataProgetti(
+                ProgettiUiStato.Dati(emptyList(), avvisoEliminazione = "Il progetto è stato eliminato."),
+                AZIONI_VUOTE.copy(chiudiAvvisoEliminazione = { chiusi++ }),
+                "/tmp/x",
+                SceltaCartellaFinta(),
+            )
+        }
+        onNodeWithTag("progetti-avviso-eliminazione").assertIsDisplayed()
+        onNodeWithText("Il progetto è stato eliminato.").assertIsDisplayed()
+        onNodeWithText(ETICHETTA_CHIUDI).performClick()
+
+        assertEquals(1, chiusi)
     }
 }

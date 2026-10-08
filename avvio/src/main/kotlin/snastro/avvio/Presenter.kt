@@ -36,7 +36,7 @@ internal fun costruisciShellPresenter(grafo: Grafo): ShellPresenter =
 
 /** S1: the recent projects. */
 internal fun costruisciProgettiPresenter(grafo: Grafo): ProgettiPresenter =
-    ProgettiPresenter(grafo.scope, grafo.io, grafo.elencoProgetti, grafo.sessione)
+    ProgettiPresenter(grafo.scope, grafo.io, grafo.elencoProgetti, grafo.sessione, cartellaUtenteReale())
 
 /** Impostazioni (app-wide part, one per window): theme and folder of new projects, over [Grafo.preferenze]. */
 internal fun costruisciImpostazioniPresenter(grafo: Grafo): ImpostazioniPresenter =

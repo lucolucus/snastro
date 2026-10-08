@@ -1,0 +1,29 @@
+package snastro.ui.testi
+
+import snastro.ui.ProgettoEliminato
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+class TestiProgettiTest {
+    @Test
+    fun `una cartella sotto la casa dell utente si mostra con la tilde`() {
+        assertEquals(
+            "~/Documents/snastro/a.snastro",
+            percorsoDaCasa("/Users/me/Documents/snastro/a.snastro", "/Users/me"),
+        )
+        assertEquals("~/a.snastro", percorsoDaCasa("/Users/me/a.snastro", "/Users/me/"))
+    }
+
+    @Test
+    fun `una cartella fuori dalla casa, o una casa sconosciuta, si mostra com e`() {
+        assertEquals("/Users/me2/a.snastro", percorsoDaCasa("/Users/me2/a.snastro", "/Users/me"))
+        assertEquals("/Volumes/Disco/a.snastro", percorsoDaCasa("/Volumes/Disco/a.snastro", "/Users/me"))
+        assertEquals("/Users/me/a.snastro", percorsoDaCasa("/Users/me/a.snastro", ""))
+    }
+
+    @Test
+    fun `un progetto eliminato del tutto non lascia avvisi`() {
+        assertNull(avvisoEliminazione(ProgettoEliminato.Completamente, "/Users/me"))
+    }
+}

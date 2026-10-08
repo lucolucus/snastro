@@ -56,6 +56,7 @@ import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.DESCRIZIONE_NUOVO_PROGETTO
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
+import snastro.ui.testi.ETICHETTA_CHIUDI
 import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
@@ -154,6 +155,16 @@ private fun ContenutoProgetti(
                 )
             }
             stato.erroreApri?.let { MessaggioInlineErrore(it, azioni.chiudiErroreApri, "progetti-errore-apri") }
+            stato.avvisoEliminazione?.let {
+                Spacer(modifier = Modifier.height(SnastroMisure.space4))
+                BannerSn(
+                    tipo = TipoBanner.Avviso,
+                    titolo = it,
+                    testo = "",
+                    azione = AzioneBanner(ETICHETTA_CHIUDI, azioni.chiudiAvvisoEliminazione),
+                    modifier = Modifier.testTag("progetti-avviso-eliminazione"),
+                )
+            }
             Spacer(modifier = Modifier.height(SnastroMisure.space5))
             GrigliaProgetti(stato, azioni, onNuovo = { pannelloAperto = true })
         }

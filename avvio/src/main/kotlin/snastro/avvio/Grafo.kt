@@ -50,7 +50,7 @@ internal class Grafo(
 /** The real per-OS, per-user app-data folder (AC-348) — `main()`'s own binding. */
 internal fun cartellaDatiRegistroProgettiReale(): Path = CartellaDatiRegistroProgetti.risolvi(
     sistemaOperativo = System.getProperty("os.name").orEmpty(),
-    cartellaUtente = System.getProperty("user.home").orEmpty(),
+    cartellaUtente = cartellaUtenteReale(),
     localAppData = System.getenv("LOCALAPPDATA"),
     xdgDataHome = System.getenv("XDG_DATA_HOME"),
 )
@@ -59,8 +59,10 @@ internal fun cartellaDatiRegistroProgettiReale(): Path = CartellaDatiRegistroPro
  * ADR 0010: S1's default parent folder for new projects — `main()`'s own binding (fix-batch-12 #4: `:ui` never calls
  * `System.getProperty` itself). v1 is Mac-only (ADR 0010), so no per-OS resolver is needed here.
  */
-internal fun cartellaProgettiPredefinitaReale(): String =
-    "${System.getProperty("user.home").orEmpty()}/Documents/snastro"
+internal fun cartellaProgettiPredefinitaReale(): String = "${cartellaUtenteReale()}/Documents/snastro"
+
+/** The user's home — `main()`'s own binding, like [cartellaProgettiPredefinitaReale]. */
+internal fun cartellaUtenteReale(): String = System.getProperty("user.home").orEmpty()
 
 /** The app's one clock: millisecond ticks (see [Grafo]'s KDoc — the SQL adapters store epoch millis). */
 internal fun orologioApp(): Clock = Clock.tick(Clock.systemUTC(), Duration.ofMillis(1))

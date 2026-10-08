@@ -30,6 +30,7 @@ import snastro.progetto.applicazione.porte.VoceRegistro
 import snastro.supporto.figlioDi
 import snastro.ui.ErroreSessione
 import snastro.ui.ProgettoAperto
+import snastro.ui.ProgettoEliminato
 import snastro.ui.SessioneProgetto
 import java.io.File
 import java.nio.channels.FileChannel
@@ -190,14 +191,16 @@ internal class SessioneProgettoImpl(
     }
 
     /**
-     * R0 (EX-1): deletes the closed project's folder, then drops it from [registro] — on the registry's own thread,
-     * after every write already queued there (`crea`'s `registra`, `chiudi`'s `aggiorna`), and waited for: the list
-     * read right after must not show it any more.
+     * R0 (EX-1, EX-9, EX-10): only a snastro project folder is touched. The closed project is first dropped from
+     * [registro] — on the registry's own thread, after every write already queued there (`crea`'s `registra`,
+     * `chiudi`'s `aggiorna`), and waited for: the list read right after must not show it any more, and a failing
+     * registry leaves the folder whole. Then what snastro created there is deleted, as much as it can be.
      */
-    override fun elimina(percorso: String): Esito<Unit> {
-        cancellaCartella(Path.of(percorso))
+    override fun elimina(percorso: String): Esito<ProgettoEliminato> {
+        val cartella = Path.of(percorso)
+        if (!validaCartellaProgetto(cartella)) return Esito.Errore(ErroreSessione.CartellaNonValida)
         eseguitoreRegistro.submit { registro.rimuovi(percorso) }.get()
-        return Esito.Ok(Unit)
+        return Esito.Ok(cancellaContenutiSnastro(cartella))
     }
 
     override fun chiudi() {

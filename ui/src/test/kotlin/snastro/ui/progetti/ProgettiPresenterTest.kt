@@ -18,9 +18,11 @@ import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.VoceRegistro
 import snastro.ui.ErroreSessione
 import snastro.ui.ProgettoAperto
+import snastro.ui.ProgettoEliminato
 import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoFinta
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
+import snastro.ui.testi.avvisoEliminazione
 import snastro.ui.testi.messaggioPer
 import java.io.IOException
 import java.time.Instant
@@ -40,7 +42,7 @@ private val ORA: Instant = Instant.parse("2026-09-23T10:15:30Z")
 private class SessioneProgettoFissa(
     private val risultatoCrea: Esito<ProgettoAperto>? = null,
     private val risultatoApri: Esito<ProgettoAperto>? = null,
-    private val elimina: (() -> Esito<Unit>)? = null,
+    private val elimina: (() -> Esito<ProgettoEliminato>)? = null,
 ) : SessioneProgetto {
     override val corrente: StateFlow<ProgettoAperto?> = MutableStateFlow(null)
 
@@ -50,7 +52,7 @@ private class SessioneProgettoFissa(
     override fun apri(percorso: String): Esito<ProgettoAperto> =
         risultatoApri ?: error("apri non atteso in questo test")
 
-    override fun elimina(percorso: String): Esito<Unit> =
+    override fun elimina(percorso: String): Esito<ProgettoEliminato> =
         elimina?.invoke() ?: error("elimina non atteso in questo test")
 
     override fun chiudi() = Unit
@@ -107,9 +109,16 @@ class ProgettiPresenterTest {
         scope: TestScope,
         registro: RegistroProgetti = RegistroProgettiFinta(),
         sessione: SessioneProgetto = SessioneProgettoFinta(),
+        cartellaUtente: String = "",
     ): ProgettiPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return ProgettiPresenter(CoroutineScope(dispatcher), dispatcher, ElencoProgetti(registro), sessione)
+        return ProgettiPresenter(
+            CoroutineScope(dispatcher),
+            dispatcher,
+            ElencoProgetti(registro),
+            sessione,
+            cartellaUtente,
+        )
     }
 
     @Test
@@ -215,6 +224,26 @@ class ProgettiPresenterTest {
 
         val conferma = ConfermaEliminazione(prima.single(), errore = MESSAGGIO_ERRORE_GENERICO)
         assertEquals(ProgettiUiStato.Dati(progetti = prima, conferma = conferma), presenter.stato.value)
+    }
+
+    @Test
+    fun `EX-9 l avviso di cio che resta mostra la cartella dalla casa dell utente e si chiude`() = runTest {
+        val voce = VoceRegistro(ProgettoId("id-1"), "test", "/Users/me/Documents/snastro/test.snastro", 0, ORA)
+        val registro = RegistroProgettiFinta().apply { registra(voce) }
+        val restano = ProgettoEliminato.RestanoFileUtente(voce.percorso)
+        val sessione = SessioneProgettoFissa(elimina = { registro.rimuovi(voce.percorso).let { Esito.Ok(restano) } })
+        val presenter = presentatore(this, registro = registro, sessione = sessione, cartellaUtente = "/Users/me")
+        advanceUntilIdle()
+
+        presenter.chiediElimina(assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti.single())
+        presenter.confermaElimina("test")
+        advanceUntilIdle()
+        val avviso = assertIs<ProgettiUiStato.Dati>(presenter.stato.value).avvisoEliminazione
+        assertEquals(avvisoEliminazione(restano, "/Users/me"), avviso)
+
+        presenter.azioni.chiudiAvvisoEliminazione()
+
+        assertEquals(ProgettiUiStato.Dati(progetti = emptyList()), presenter.stato.value)
     }
 
     @Test

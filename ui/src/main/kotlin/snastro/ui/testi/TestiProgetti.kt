@@ -1,5 +1,7 @@
 package snastro.ui.testi
 
+import snastro.ui.ProgettoEliminato
+
 /** S1 · Progetti screen labels, Italian (dev-architecture `#presenter`: UI strings live in `snastro.ui.testi`). */
 const val ETICHETTA_PROGETTI: String = "Progetti"
 const val MESSAGGIO_PROGETTI_VUOTO: String = "Nessun progetto. Crea il primo"
@@ -38,3 +40,20 @@ const val MESSAGGIO_CONFERMA_ELIMINA_PROGETTO: String =
 
 /** R0 (EX-2): the confirmation field's label — the exact name to type. */
 fun etichettaNomeDaDigitare(nome: String): String = "Per confermare, scrivi il nome del progetto: $nome"
+
+/** R0 (EX-9, EX-10): what a delete left on disk, its folder shown from [cartellaUtente]; `null`: nothing. */
+fun avvisoEliminazione(eliminato: ProgettoEliminato, cartellaUtente: String): String? = when (eliminato) {
+    ProgettoEliminato.Completamente -> null
+    is ProgettoEliminato.RestanoFileUtente ->
+        "Il progetto è stato eliminato. Nella cartella ${percorsoDaCasa(eliminato.cartella, cartellaUtente)} " +
+            "sono rimasti file non creati da snastro."
+    is ProgettoEliminato.InParte ->
+        "Il progetto è stato eliminato solo in parte: resta la cartella " +
+            "${percorsoDaCasa(eliminato.cartella, cartellaUtente)}."
+}
+
+/** [percorso] with the user's home [cartellaUtente] written `~`, as Finder's Go to Folder does; else unchanged. */
+fun percorsoDaCasa(percorso: String, cartellaUtente: String): String {
+    val casa = cartellaUtente.trimEnd('/')
+    return if (casa.isNotEmpty() && percorso.startsWith("$casa/")) "~" + percorso.removePrefix(casa) else percorso
+}

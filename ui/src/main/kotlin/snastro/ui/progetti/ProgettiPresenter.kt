@@ -15,6 +15,7 @@ import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
+import snastro.ui.testi.avvisoEliminazione
 import snastro.ui.testi.messaggioPer
 
 /**
@@ -24,13 +25,15 @@ import snastro.ui.testi.messaggioPer
  * applied from the returned [ProgettoAperto], never left to a collector alone (M1(a) — this presenter
  * has none, but the same "set state from the result" rule keeps `inCorso` from ever getting stuck);
  * a non-cancellation fault becomes the one fixed generic message (M1(b)); a second `crea`/`apri` while
- * one is already in flight is ignored (M3).
+ * one is already in flight is ignored (M3). [cartellaUtente], the user's home, is written `~` in the folders it shows
+ * (empty: shown as they are).
  */
 class ProgettiPresenter(
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
     private val elenco: ElencoProgetti,
     private val sessione: SessioneProgetto,
+    private val cartellaUtente: String = "",
 ) {
     private val _stato = MutableStateFlow<ProgettiUiStato>(ProgettiUiStato.Caricamento)
     val stato: StateFlow<ProgettiUiStato> = _stato.asStateFlow()
@@ -92,16 +95,25 @@ class ProgettiPresenter(
 
     /**
      * R0 (EX-1): deletes the confirmed project, then closes the confirmation over the list reloaded without it — only
-     * when [nomeDigitato] is the project's exact name (EX-2: the view's disabled button is not the only guard). A
-     * failure stays in the confirmation.
+     * when [nomeDigitato] is the project's exact name (EX-2: the view's disabled button is not the only guard) — and
+     * says what is left on disk (EX-9, EX-10). A failure stays in the confirmation.
      */
     fun confermaElimina(nomeDigitato: String) {
         val conferma = (_stato.value as? ProgettiUiStato.Dati)?.conferma ?: return
         if (!conferma.confermataDa(nomeDigitato)) return
         avvia(
-            pulisci = { it.copy(conferma = conferma.copy(errore = null)) },
-            operazione = { sessione.elimina(conferma.progetto.percorso).poi { Esito.Ok(elenco.progetti()) } },
-            alSuccesso = { stato, progetti -> stato.copy(progetti = progetti, conferma = null) },
+            pulisci = { it.copy(conferma = conferma.copy(errore = null), avvisoEliminazione = null) },
+            operazione = {
+                sessione.elimina(conferma.progetto.percorso)
+                    .poi { eliminato -> Esito.Ok(eliminato to elenco.progetti()) }
+            },
+            alSuccesso = { stato, (eliminato, progetti) ->
+                stato.copy(
+                    progetti = progetti,
+                    conferma = null,
+                    avvisoEliminazione = avvisoEliminazione(eliminato, cartellaUtente),
+                )
+            },
             alFallimento = { stato, messaggio -> stato.copy(conferma = stato.conferma?.copy(errore = messaggio)) },
         )
     }
@@ -158,6 +170,9 @@ class ProgettiPresenter(
         chiediElimina = ::chiediElimina,
         annullaElimina = ::annullaElimina,
         confermaElimina = ::confermaElimina,
+        // EX-9/EX-10: dismisses the message of what the last delete left on disk (a lambda: detekt's
+        // TooManyFunctions counts the presenter's functions, and this one is a single state update).
+        chiudiAvvisoEliminazione = { _stato.aggiorna { it.copy(avvisoEliminazione = null) } },
     )
 }
 

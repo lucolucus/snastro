@@ -12,4 +12,5 @@ data class AzioniProgetti(
     val chiediElimina: (ProgettoVista) -> Unit,
     val annullaElimina: () -> Unit,
     val confermaElimina: (nomeDigitato: String) -> Unit,
+    val chiudiAvvisoEliminazione: () -> Unit,
 )
