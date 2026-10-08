@@ -8,20 +8,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
-import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
-import snastro.progetto.dominio.ErroreProgetto
 import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
@@ -34,20 +31,14 @@ import snastro.ui.coda.PosizioniCoda
 import snastro.ui.comandoConfermato
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
-import snastro.ui.testi.ETICHETTA_PARTI_AGGIUNTE
 import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
-import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.etichetta
-import snastro.ui.testi.messaggioEliminata
-import snastro.ui.testi.messaggioImportTuttoONiente
-import snastro.ui.testi.messaggioPartiAggiunte
 import snastro.ui.testi.messaggioPer
-import java.io.File
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -97,17 +88,21 @@ import java.time.LocalTime
  * read from `:ui`'s `PosizioniNellaCoda` (the shared queue's owner, `:avvio`) and joined by
  * [RegistrazioneId], one snapshot per [costruisciRighe] call, absent meaning no position (0).
  *
+ * The import flow is [FlussoImporta]'s and the delete-a-row flow [FlussoEliminaRiga]'s (presenter-split): both write
+ * through the one [StatoS2] over this presenter's state, which also owns the shared row guard and the refresh after a
+ * success; [azioni] binds their functions directly.
+ *
  * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
  * wires all of them, so a missed wiring fails to compile instead of silently hiding a row's control.
  */
-@Suppress("LongParameterList", "TooManyFunctions", "LargeClass") // a parameter per collaborator, a method per action
+@Suppress("LongParameterList", "TooManyFunctions") // a parameter per collaborator, a method per action
 class RegistrazioniPresenter(
     private val scope: CoroutineScope,
     io: CoroutineDispatcher,
-    private val progettoId: ProgettoId,
+    progettoId: ProgettoId,
     private val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
     private val incontri: () -> List<IncontroDelProgettoVista>,
-    private val aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
+    aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     private val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
     private val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,
     private val lettore: LettoreAudio,
@@ -119,7 +114,7 @@ class RegistrazioniPresenter(
     private val identificazioniIncontri: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro>,
     private val ritrascrivi: (AvviaElaborazione) -> Esito<Unit>,
     private val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
-    private val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
+    eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
     private val posizioniNellaCoda: () -> PosizioniCoda,
     private val avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
     private val modificaOraDiInizioRegistrazione: (RegistrazioneId, LocalTime?) -> Esito<Unit>,
@@ -144,6 +139,11 @@ class RegistrazioniPresenter(
 
     // AC-I69: the expanded Incontri — presenter state, so the chevron survives a round trip to S3 and every refresh.
     private val espansi = mutableSetOf<IncontroId>()
+
+    // Before `init`: its collectors may run at once (an immediate dispatcher) and already touch the shared state.
+    private val s2 = StatoS2(_stato, ::carica)
+    private val importazione = FlussoImporta(s2, scope, io, progettoId, aggiungiRegistrazione)
+    private val eliminazione = FlussoEliminaRiga(s2, scope, io, lettore, eliminaRegistrazione)
 
     init {
         scope.launch { carica() }
@@ -173,7 +173,7 @@ class RegistrazioniPresenter(
     /**
      * M1: merges freshly-read [nuove] rows into the CURRENT [RegistrazioniUiStato.Dati] instead of
      * rebuilding it — [RegistrazioniUiStato.Dati.importoInCorso]/`errore` and each row's
-     * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([importa]/[suRiga]) ever
+     * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([FlussoImporta]/[suRiga]) ever
      * clears them. L478a: [riproduzione] is RE-DERIVED from [lettore]'s CURRENT (merge-time) state —
      * never trusted from [nuove], which [costruisciRighe] built from a snapshot taken back when this
      * refresh started on [io]; a play/pause landing on [lettore] while that refresh was still building
@@ -463,7 +463,7 @@ class RegistrazioniPresenter(
     // AC-343: reflects the shared player's live state without re-querying `disponibile` (checked once
     // per `carica`, sticky here — a row already found unavailable stays disabled between refreshes).
     private fun rifletti(s: StatoLettore) =
-        aggiornaDati { dati -> dati.copy(righe = rifletteRiproduzione(dati.righe, s)) }
+        s2.aggiornaDati { dati -> dati.copy(righe = rifletteRiproduzione(dati.righe, s)) }
 
     /** Shared by [rifletti] and [aggiornaConNuoveRighe] (L478a): [righe] with every row's `riproduzione`
      * re-derived from the CURRENT [s] — never a value baked into [righe] from an earlier snapshot. */
@@ -475,119 +475,6 @@ class RegistrazioniPresenter(
                 riga.copy(riproduzione = riproduzioneDi(riga.registrazioneId, s, disponibile = true))
             }
         }
-
-    /**
-     * AC-199..201/AC-I70: drag-and-drop and the file picker both land here. ONE file imports at once as a new
-     * Incontro (`NuovoIncontro`) with its failure reported inline; 2+ files open the import dialog first (D-0019).
-     */
-    fun importa(percorsi: List<String>) {
-        val attuale = _stato.value
-        val libero = attuale is RegistrazioniUiStato.Dati && !attuale.importoInCorso && attuale.dialogoImporta == null
-        if (percorsi.isEmpty() || !libero) return // M3
-        attuale as RegistrazioniUiStato.Dati
-        if (percorsi.size > 1) {
-            _stato.value = attuale.copy(dialogoImporta = DialogoImporta(percorsi), errore = null, avviso = null)
-            return
-        }
-        // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too.
-        _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
-        val percorso = percorsi.single()
-        scope.launch {
-            try {
-                val comando = AggiungiRegistrazione(progettoId, percorsi, Destinazione.NuovoIncontro)
-                val errore = inviaImport(comando) { messaggioImportFallito(percorso, messaggioPer(it)) }
-                carica() // M1: merges the refreshed list, preserving importoInCorso/errore until reset below
-                aggiornaDati { it.copy(importoInCorso = false, errore = errore) }
-            } finally {
-                aggiornaDati { it.copy(importoInCorso = false) } // L269: an Error propagates, S2 is released
-            }
-        }
-    }
-
-    /** AC-I70: 'Un incontro in N parti' / 'N incontri separati' toggle. */
-    fun scegliImporta(scelta: SceltaImporta) =
-        aggiornaDialogo { if (it.invioInCorso) it else it.copy(scelta = scelta) }
-
-    /** AC-I70: 'Annulla' closes the dialog; nothing is sent (not while the command is in flight). */
-    fun annullaImporta() = aggiornaDati { d ->
-        if (d.dialogoImporta?.invioInCorso == true) d else d.copy(dialogoImporta = null)
-    }
-
-    /** AC-I70/AC-I71: 'Importa' sends ONE all-or-nothing command (ADR 0033 §2); on failure the dialog stays open. */
-    fun confermaImporta() {
-        val dialogo = (_stato.value as? RegistrazioniUiStato.Dati)?.dialogoImporta ?: return
-        if (dialogo.invioInCorso) return
-        val destinazione = when (dialogo.scelta) {
-            SceltaImporta.UnIncontro -> Destinazione.NuovoIncontro
-            SceltaImporta.IncontriSeparati -> Destinazione.IncontriSeparati
-        }
-        aggiornaDialogo { it.copy(invioInCorso = true, errore = null) }
-        scope.launch {
-            try {
-                val esito = inviaImport(AggiungiRegistrazione(progettoId, dialogo.percorsi, destinazione))
-                if (esito == null) {
-                    carica()
-                    aggiornaDati { it.copy(dialogoImporta = null) }
-                } else {
-                    aggiornaDialogo { it.copy(invioInCorso = false, errore = esito) }
-                }
-            } finally {
-                aggiornaDialogo { it.copy(invioInCorso = false) } // L269
-            }
-        }
-    }
-
-    /**
-     * AC-I71: "Aggiungi parti…" — [percorsi] come from the row's file picker; ONE command to
-     * `Destinazione.Incontro([incontroId])`. Success: the closable notice '2 parti aggiunte a «[titolo]».';
-     * failure: [RegistrazioniUiStato.Dati.errore] and nothing changes.
-     */
-    fun aggiungiParti(incontroId: IncontroId, titolo: String, percorsi: List<String>) {
-        if (percorsi.isEmpty()) return
-        val attuale = _stato.value
-        if (attuale !is RegistrazioniUiStato.Dati || attuale.importoInCorso || attuale.dialogoImporta != null) return
-        _stato.value = attuale.copy(importoInCorso = true, errore = null, avviso = null)
-        scope.launch {
-            try {
-                val errore = inviaImport(AggiungiRegistrazione(progettoId, percorsi, Destinazione.Incontro(incontroId)))
-                if (errore == null) carica()
-                aggiornaDati {
-                    it.copy(
-                        importoInCorso = false,
-                        errore = errore,
-                        avviso = if (errore == null) messaggioPartiAggiunte(percorsi.size, titolo) else null,
-                        titoloAvviso = ETICHETTA_PARTI_AGGIUNTE,
-                    )
-                }
-            } finally {
-                aggiornaDati { it.copy(importoInCorso = false) } // L269
-            }
-        }
-    }
-
-    /** Runs [comando] off the UI thread; `null` on success (a committed import too, D-0062), else the failure text. */
-    private suspend fun inviaImport(
-        comando: AggiungiRegistrazione,
-        messaggio: (ErroreDominio) -> String = ::messaggioImportTuttoONiente,
-    ): String? = try {
-        when (val esito = withContext(io) { comandoConfermato("import") { aggiungiRegistrazione(comando) } }) {
-            is Esito.Ok -> null
-            is Esito.Errore -> messaggio(esito.errore)
-        }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception) {
-        MESSAGGIO_ERRORE_GENERICO
-    }
-
-    private fun RegistrazioniUiStato.Dati.conAvvisoEliminata(titolo: String) =
-        copy(avviso = messaggioEliminata(titolo), titoloAvviso = ETICHETTA_REGISTRAZIONE_ELIMINATA)
-
-    private fun aggiornaDialogo(f: (DialogoImporta) -> DialogoImporta) =
-        aggiornaDati { d -> d.dialogoImporta?.let { d.copy(dialogoImporta = f(it)) } ?: d }
-
-    private fun messaggioImportFallito(percorso: String, messaggio: String): String =
-        "${File(percorso).name}: $messaggio"
 
     /** AC-206: replaces the DataRegistrazione shown/edited inline on the row. */
     fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) =
@@ -607,10 +494,10 @@ class RegistrazioniPresenter(
      */
     fun avviaElaborazione(id: RegistrazioneId) {
         val comando = avviaElaborazione
-        val riga = rigaLibera(id) ?: return
+        val riga = s2.rigaLibera(id) ?: return
         when (val campo = numeroPersoneCampo(riga.numeroPersone)) {
             NumeroPersoneCampo.NonValido ->
-                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
+                s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
             is NumeroPersoneCampo.Valido ->
                 suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, campo.numero)) } }
         }
@@ -622,22 +509,22 @@ class RegistrazioniPresenter(
      * command right away.
      */
     fun ritrascrivi(id: RegistrazioneId) {
-        val riga = rigaLibera(id) ?: return
+        val riga = s2.rigaLibera(id) ?: return
         when (numeroPersoneCampo(riga.numeroPersone)) {
             NumeroPersoneCampo.NonValido ->
-                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
+                s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
             is NumeroPersoneCampo.Valido ->
-                aggiornaRiga(id) { it.copy(confermaRitrascrivi = true, erroreRiga = null) }
+                s2.aggiornaRiga(id) { it.copy(confermaRitrascrivi = true, erroreRiga = null) }
         }
     }
 
     /** AC-449: 'Annulla' on the confirmation — no command is sent, the field keeps its value. */
-    fun annullaRitrascrivi(id: RegistrazioneId) = aggiornaRiga(id) { it.copy(confermaRitrascrivi = false) }
+    fun annullaRitrascrivi(id: RegistrazioneId) = s2.aggiornaRiga(id) { it.copy(confermaRitrascrivi = false) }
 
     /** AC-449: the confirmed 'Ritrascrivi' — exactly ONE `AvviaElaborazione` with the value [ritrascrivi] validated. */
     fun confermaRitrascrivi(id: RegistrazioneId) {
         val comando = ritrascrivi
-        val riga = rigaLibera(id)?.takeIf { it.confermaRitrascrivi } ?: return
+        val riga = s2.rigaLibera(id)?.takeIf { it.confermaRitrascrivi } ?: return
         val numero = (numeroPersoneCampo(riga.numeroPersone) as? NumeroPersoneCampo.Valido)?.numero
         suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, numero)) } }
     }
@@ -653,12 +540,12 @@ class RegistrazioniPresenter(
      */
     fun annullaElaborazione(id: RegistrazioneId) {
         val comando = annullaElaborazione
-        val riga = rigaLibera(id) ?: return
+        val riga = s2.rigaLibera(id) ?: return
         // ReturnCount (detekt): the third guard (a NonAvviata row has no elaborazioneId) is folded into
         // this `?.let` instead of a third `?: return`.
         riga.elaborazioneId?.let { elaborazioneId ->
-            aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
-            azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
+            s2.aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
+            s2.azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
             scope.launch {
                 try {
                     val esito = withContext(io) {
@@ -668,113 +555,19 @@ class RegistrazioniPresenter(
                     val messaggio = (esito as? Esito.Errore)?.errore
                         ?.let { it as? ErroreTrascrizione.ElaborazioneGiaAvviata }
                         ?.let(::messaggioPer)
-                    aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggio) }
+                    s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggio) }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (
                     @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
                 ) {
-                    aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                    s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
                 } finally {
-                    aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
+                    s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
                 }
             }
         }
     }
-
-    /**
-     * AC-626: 'Elimina…' opens the row's confirmation — a no-op unless [RigaRegistrazione.eliminazione]
-     * is [StatoEliminazione.Disponibile] (AC-625: "a disabled item sends nothing", checked here too,
-     * not only by the view's own disabled `DropdownMenuItem`).
-     */
-    fun elimina(id: RegistrazioneId) {
-        val riga = rigaLibera(id) ?: return
-        // ReturnCount (detekt): the third guard (only StatoEliminazione.Disponibile opens the
-        // confirmation) is folded into this `if`, like RegistrazioniPresenter.annullaElaborazione's own.
-        if (riga.eliminazione == StatoEliminazione.Disponibile) {
-            aggiornaRiga(id) { it.copy(confermaElimina = true, erroreRiga = null) }
-        }
-    }
-
-    /** AC-626: 'Annulla' on the confirmation — no command is sent, the row is unchanged. */
-    fun annullaElimina(id: RegistrazioneId) = aggiornaRiga(id) { it.copy(confermaElimina = false) }
-
-    /**
-     * AC-627/628: the confirmed 'Elimina' — exactly ONE `EliminaRegistrazione`. On Ok: pauses the
-     * player first if it is currently playing THIS row (AC-627), then reloads (the row disappears) and
-     * shows the dismissible success notice with the titolo CAPTURED before the reload (the row itself
-     * is gone from the fresh read). On Errore the dialog always closes (AC-628): `RegistrazioneNonTrovata`
-     * just reloads (the row is already gone remotely, nothing to show it on); `ElaborazioneGiaAperta`
-     * (the race backstop) reloads AND shows [MESSAGGIO_ELIMINAZIONE_RIFIUTATA] inline — a dedicated text,
-     * not the generic [messaggioPer] line for the same error type used by `AvviaElaborazione`/`Ritrascrivi`;
-     * any other Errore shows the generic [messaggioPer] text (AC-180), no reload (H1: "nulla cambia"
-     * beyond the inline message, same as every other row command here).
-     */
-    fun confermaElimina(id: RegistrazioneId) {
-        val comando = eliminaRegistrazione
-        val riga = rigaLibera(id)?.takeIf { it.confermaElimina } ?: return
-        val titolo = riga.titolo
-        aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
-        azzeraAvviso()
-        scope.launch {
-            try {
-                val esito = withContext(io) { comandoConfermato("elimina $id") { comando(EliminaRegistrazione(id)) } }
-                when (esito) {
-                    is Esito.Ok -> {
-                        val statoLettore = lettore.stato.value
-                        if (statoLettore.registrazioneId == id && statoLettore.inRiproduzione) {
-                            withContext(io) { lettore.pausa() }
-                        }
-                        carica()
-                        aggiornaDati { it.conAvvisoEliminata(titolo) }
-                    }
-                    is Esito.Errore -> {
-                        val errore = esito.errore
-                        when {
-                            // AC-628: "the list just reloads" — the row is normally already gone from the
-                            // fresh read too, so this reset is a no-op then; it only matters for the rare
-                            // race where a stale read still shows it, so the dialog still closes and the
-                            // row is not left stuck spinning (AC-628's own "dialog closed" applies here too).
-                            errore is ErroreProgetto.RegistrazioneNonTrovata -> {
-                                carica()
-                                aggiornaRiga(id) { it.copy(operazioneInCorso = false, confermaElimina = false) }
-                            }
-                            errore is ErroreTrascrizione.ElaborazioneGiaAperta -> {
-                                carica()
-                                aggiornaRiga(id) {
-                                    it.copy(
-                                        operazioneInCorso = false,
-                                        confermaElimina = false,
-                                        erroreRiga = MESSAGGIO_ELIMINAZIONE_RIFIUTATA,
-                                    )
-                                }
-                            }
-                            else -> aggiornaRiga(id) {
-                                it.copy(
-                                    operazioneInCorso = false,
-                                    confermaElimina = false,
-                                    erroreRiga = messaggioPer(errore),
-                                )
-                            }
-                        }
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiornaRiga(id) {
-                    it.copy(operazioneInCorso = false, confermaElimina = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO)
-                }
-            } finally {
-                aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
-            }
-        }
-    }
-
-    /** AC-627: dismisses the post-elimination success notice, if any. */
-    fun chiudiAvviso() = azzeraAvviso()
 
     /** AC-I69: the chevron of [id]; the set lives here so it outlives S2's composition and every refresh. */
     fun espandiIncontro(id: IncontroId) {
@@ -808,7 +601,7 @@ class RegistrazioniPresenter(
                 aggiornaIncontro(id) { it.copy(errore = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
             is NumeroPersoneCampo.Valido -> {
                 aggiornaIncontro(id) { it.copy(operazioneInCorso = true, errore = null) }
-                azzeraAvviso()
+                s2.azzeraAvviso()
                 scope.launch {
                     val avvia = AvviaElaborazioniDellIncontro(id, campo.numero)
                     val esito = catturaNonFatale {
@@ -830,47 +623,43 @@ class RegistrazioniPresenter(
     fun chiudiErroreIncontro(id: IncontroId) = aggiornaIncontro(id) { it.copy(errore = null) }
 
     private fun incontroLibero(id: IncontroId): RigaIncontro? =
-        (_stato.value as? RegistrazioniUiStato.Dati)?.incontri?.find { it.incontroId == id }
+        s2.dati?.incontri?.find { it.incontroId == id }
             ?.takeUnless { it.operazioneInCorso }
 
     private fun aggiornaIncontro(id: IncontroId, f: (RigaIncontro) -> RigaIncontro) =
-        aggiornaDati { d -> d.copy(incontri = d.incontri.map { if (it.incontroId == id) f(it) else it }) }
+        s2.aggiornaDati { d -> d.copy(incontri = d.incontri.map { if (it.incontroId == id) f(it) else it }) }
 
     /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only when an action fires). */
-    fun modificaNumeroPersone(id: RegistrazioneId, testo: String) = aggiornaRiga(id) { it.copy(numeroPersone = testo) }
-
-    /** M3: the row [id], unless one of its own operations is already in flight. */
-    private fun rigaLibera(id: RegistrazioneId): RigaRegistrazione? {
-        val dati = _stato.value as? RegistrazioniUiStato.Dati ?: return null
-        return dati.righe.find { it.registrazioneId == id }?.takeUnless { it.operazioneInCorso }
-    }
+    fun modificaNumeroPersone(id: RegistrazioneId, testo: String) =
+        s2.aggiornaRiga(id) { it.copy(numeroPersone = testo) }
 
     /** One row command; committed with only its after-commit follow-up failed is a success (D-0062, L270). */
     private fun suRiga(id: RegistrazioneId, operazione: suspend () -> Esito<Unit>) {
-        val riga = rigaLibera(id) ?: return
-        aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
-        azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
+        val riga = s2.rigaLibera(id) ?: return
+        s2.aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
+        s2.azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
         scope.launch {
             try {
                 when (val esito = comandoConfermato("comando di riga su $id") { operazione() }) {
                     is Esito.Ok -> {
                         carica() // M1: merges the refreshed list, preserving this row's flags until reset below
-                        aggiornaRiga(id) {
+                        s2.aggiornaRiga(id) {
                             it.copy(operazioneInCorso = false, erroreRiga = null, confermaRitrascrivi = false)
                         }
                     }
-                    is Esito.Errore ->
-                        aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggioPer(esito.errore)) }
+                    is Esito.Errore -> s2.aggiornaRiga(id) {
+                        it.copy(operazioneInCorso = false, erroreRiga = messaggioPer(esito.errore))
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
-                aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
             } finally {
                 // L269 (D-0065): an Error (e.g. after the commit) propagates, but the row is released.
-                aggiornaRiga(id) { it.copy(operazioneInCorso = false) }
+                s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false) }
             }
         }
     }
@@ -890,7 +679,7 @@ class RegistrazioniPresenter(
             } catch (
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
-                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
             }
         }
     }
@@ -908,7 +697,7 @@ class RegistrazioniPresenter(
             } catch (
                 @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
             ) {
-                idAttivo?.let { id -> aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) } }
+                idAttivo?.let { id -> s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) } }
             }
         }
     }
@@ -917,33 +706,20 @@ class RegistrazioniPresenter(
      * "iff COMPLETATA" — so a row mid re-run (`InAttesa`/`InCorso` with `ritrascrizione`) opens too, on
      * the still-current old transcript; a click on a row without one is a no-op. */
     fun apriRiga(id: RegistrazioneId) {
-        val dati = _stato.value as? RegistrazioniUiStato.Dati ?: return
-        val riga = dati.righe.find { it.registrazioneId == id } ?: return
+        val riga = s2.dati?.righe?.find { it.registrazioneId == id } ?: return
         if (riga.trascrittoDisponibile) apriRegistrazione(id)
     }
 
     /** H1: dismisses the current list-level error, if any — import ([RegistrazioniUiStato.Dati.errore])
      * or refresh ([RegistrazioniUiStato.Dati.erroreAggiornamento], L485a) — whichever [SchermataRegistrazioni]
      * is showing (AC-566: at most one banner on screen). */
-    fun chiudiErrore() = aggiornaDati { it.copy(errore = null, erroreAggiornamento = null) }
+    fun chiudiErrore() = s2.aggiornaDati { it.copy(errore = null, erroreAggiornamento = null) }
 
     /** H1: dismisses the current `erroreRiga` of [id], if any. */
-    fun chiudiErroreRiga(id: RegistrazioneId) = aggiornaRiga(id) { it.copy(erroreRiga = null) }
-
-    private fun aggiornaDati(f: (RegistrazioniUiStato.Dati) -> RegistrazioniUiStato.Dati) {
-        val attuale = _stato.value
-        if (attuale is RegistrazioniUiStato.Dati) _stato.value = f(attuale)
-    }
-
-    /** ADR 0020/AC-627: clears [RegistrazioniUiStato.Dati.avviso] — "fino a chiudiAvviso o al comando
-     * successivo" (called by [chiudiAvviso] and by every other command's own entry point). */
-    private fun azzeraAvviso() = aggiornaDati { it.copy(avviso = null) }
-
-    private fun aggiornaRiga(id: RegistrazioneId, f: (RigaRegistrazione) -> RigaRegistrazione) =
-        aggiornaDati { dati -> dati.copy(righe = dati.righe.map { if (it.registrazioneId == id) f(it) else it }) }
+    fun chiudiErroreRiga(id: RegistrazioneId) = s2.aggiornaRiga(id) { it.copy(erroreRiga = null) }
 
     val azioni: AzioniRegistrazioni = AzioniRegistrazioni(
-        importa = ::importa,
+        importa = importazione::importa,
         modificaData = ::modificaData,
         rinomina = ::rinomina,
         riproduci = ::riproduci,
@@ -958,14 +734,14 @@ class RegistrazioniPresenter(
         annullaRitrascrivi = ::annullaRitrascrivi,
         confermaRitrascrivi = ::confermaRitrascrivi,
         annullaElaborazione = ::annullaElaborazione,
-        elimina = ::elimina,
-        annullaElimina = ::annullaElimina,
-        confermaElimina = ::confermaElimina,
-        chiudiAvviso = ::chiudiAvviso,
-        aggiungiParti = ::aggiungiParti,
-        scegliImporta = ::scegliImporta,
-        confermaImporta = ::confermaImporta,
-        annullaImporta = ::annullaImporta,
+        elimina = eliminazione::chiedi,
+        annullaElimina = eliminazione::annulla,
+        confermaElimina = eliminazione::conferma,
+        chiudiAvviso = s2::azzeraAvviso,
+        aggiungiParti = importazione::aggiungiParti,
+        scegliImporta = importazione::scegli,
+        confermaImporta = importazione::conferma,
+        annullaImporta = importazione::annulla,
         espandiIncontro = ::espandiIncontro,
         modificaOraDiInizio = ::modificaOraDiInizio,
         modificaNumeroPersoneIncontro = ::modificaNumeroPersoneIncontro,

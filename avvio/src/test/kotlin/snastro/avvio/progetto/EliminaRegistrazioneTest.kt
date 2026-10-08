@@ -82,11 +82,11 @@ class EliminaRegistrazioneTest {
 
             assertEquals(1, righe(it, s.r).getValue("incontro"), "prima: l'Incontro di R c'e'")
             assertEquals(1, righe(it, s.r).getValue("voci_incontro"), "prima: la radice Voci di R c'e'")
-            s2.elimina(s.r)
+            s2.azioni.elimina(s.r)
             attendiFinche(timeout = 10.seconds, messaggio = "conferma") { riga(s2, s.r)?.confermaElimina == true }
             val contato = database.last()
             contato.azzeraCheckpoint()
-            s2.confermaElimina(s.r)
+            s2.azioni.confermaElimina(s.r)
 
             attendiFinche(timeout = 10.seconds, messaggio = "S2 elenca solo Q") {
                 righe(s2)?.map { r -> r.registrazioneId } == listOf(s.q)

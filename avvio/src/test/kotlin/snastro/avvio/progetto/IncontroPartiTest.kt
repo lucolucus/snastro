@@ -44,8 +44,8 @@ class IncontroPartiTest {
             attendiDati(s2, "lista iniziale") { true }
 
             // The dialog ('Un incontro in 2 parti' is its default), then ONE all-or-nothing import.
-            sulThreadUi(ambiente) { s2.importa(ambiente.sorgentiDaImportare) }
-            sulThreadUi(ambiente) { s2.confermaImporta() }
+            sulThreadUi(ambiente) { s2.azioni.importa(ambiente.sorgentiDaImportare) }
+            sulThreadUi(ambiente) { s2.azioni.confermaImporta() }
             attendiDati(s2, "2 Parti importate") { it.righe.size == 2 }
 
             val incontro = ambiente.collaboratori.incontri().single()
@@ -76,8 +76,8 @@ class IncontroPartiTest {
         AmbienteProgetto(radice).use { ambiente ->
             val s2 = presenterS2(ambiente)
             attendiDati(s2, "lista iniziale") { true }
-            sulThreadUi(ambiente) { s2.importa(ambiente.sorgentiDaImportare) }
-            sulThreadUi(ambiente) { s2.confermaImporta() }
+            sulThreadUi(ambiente) { s2.azioni.importa(ambiente.sorgentiDaImportare) }
+            sulThreadUi(ambiente) { s2.azioni.confermaImporta() }
             attendiDati(s2, "2 Parti importate") { it.righe.size == 2 }
             val (conOra, senzaOra) = ambiente.collaboratori.incontri().single().parti.map { it.registrazioneId }
 
@@ -107,8 +107,8 @@ class IncontroPartiTest {
         AmbienteProgetto(radice).use { ambiente ->
             val s2 = presenterS2(ambiente)
             attendiDati(s2, "lista iniziale") { true }
-            sulThreadUi(ambiente) { s2.importa(ambiente.sorgentiDaImportare) }
-            sulThreadUi(ambiente) { s2.confermaImporta() }
+            sulThreadUi(ambiente) { s2.azioni.importa(ambiente.sorgentiDaImportare) }
+            sulThreadUi(ambiente) { s2.azioni.confermaImporta() }
             attendiDati(s2, "2 Parti importate") { it.righe.size == 2 }
             val incontro = ambiente.collaboratori.incontri().single()
             val parti = incontro.parti.map { it.registrazioneId }

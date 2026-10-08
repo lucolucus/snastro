@@ -164,7 +164,7 @@ class RegistrazioniEliminaParteTest {
         assertEquals(StatoEliminazione.Disponibile, p.riga(P1).eliminazione)
         assertEquals(StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA), p.riga(P2).eliminazione)
         assertEquals(StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO), p.riga(P3).eliminazione)
-        p.elimina(P2)
+        p.azioni.elimina(P2)
         assertEquals(false, p.riga(P2).confermaElimina)
     }
 
@@ -173,8 +173,8 @@ class RegistrazioniEliminaParteTest {
         val p = presentatore(this)
         advanceUntilIdle()
 
-        p.elimina(P2)
-        p.confermaElimina(P2)
+        p.azioni.elimina(P2)
+        p.azioni.confermaElimina(P2)
         advanceUntilIdle()
 
         assertEquals(listOf(EliminaRegistrazione(P2)), eliminazioni)
@@ -188,8 +188,8 @@ class RegistrazioniEliminaParteTest {
         val p = presentatore(this)
         advanceUntilIdle()
 
-        p.elimina(P1)
-        p.confermaElimina(P1)
+        p.azioni.elimina(P1)
+        p.azioni.confermaElimina(P1)
         advanceUntilIdle()
 
         assertEquals(listOf(P2, P3), p.righe().map { it.registrazioneId })
@@ -206,7 +206,7 @@ class RegistrazioniEliminaParteTest {
 
             assertEquals(listOf(P1, P2, P3), p.righe().map { it.registrazioneId })
             assertEquals(listOf(null, null, null), p.righe().map { it.parte })
-            p.elimina(P2)
+            p.azioni.elimina(P2)
             assertEquals(true, p.riga(P2).confermaElimina) // today's dialog, still reachable
         }
 
