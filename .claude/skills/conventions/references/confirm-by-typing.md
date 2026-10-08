@@ -11,6 +11,6 @@ invariant still lives with its owner (RC-1). Narrow on purpose: one occurrence s
 framework nor a universal exact-name policy. Decided: codex (delegated by the user), 2026-10-08.
 
 **Shown by:** `ui/src/main/kotlin/snastro/ui/progetti/ProgettiUiStato.kt` (`ConfermaEliminazione.confermataDa`),
-`ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt` (`confermaElimina`),
+`ui/src/main/kotlin/snastro/ui/progetti/FlussoEliminazione.kt` (`conferma`),
 `ui/src/main/kotlin/snastro/ui/progetti/EliminaProgetto.kt`,
 `ui/src/test/kotlin/snastro/ui/progetti/ProgettiPresenterTest.kt`.
