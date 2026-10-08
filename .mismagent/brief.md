@@ -113,5 +113,6 @@ Risposte dell'utente:
 - R1-5 (H2): l'argomento diventa **contesto, non filtro**: aiuta a capire di cosa si parla, non toglie mai punti.
 - R1-6: quando il modello si ripete, la generazione si ferma presto (non dopo 40 minuti); riassunto fallito con un
   messaggio chiaro e Rigenera disponibile.
-Aperte:
-- R1-7: l'elenco di riferimento dei punti cardine di skatefest (bozza da confermare con l'utente), per esempi verificabili.
+- R1-7: elenco di riferimento dei punti cardine di skatefest confermato dall'utente ("si"), in `examples.md` sopra EX-14.
+- Taglio di R1 approvato: slice 22–25, esempi EX-14..EX-19 ("va bene così").
+Nessuna domanda aperta per R1. Per dopo: percentuale del parlato (R1-1..3, H3).
