@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples: EX-1, EX-2, EX-3
+Base: 15b3682d2617bc22d335d037ba75db120bdd062a
 
 Bring the acceptance tests in line with the conventions topic acceptance-tests: move
 `EliminaProgettoDallaListaTest` to `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/`, add that directory
