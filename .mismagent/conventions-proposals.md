@@ -1,1 +1,2 @@
 # Conventions proposals
+- update non-fatal-faults: add S4 to "Shown by" — `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt` (`suRiga` on `eccezioneRegistrata`, taking the operation name once and wrapping `comandoConfermato` itself; `carica`, `riproduci` on `nonFataleRegistrato`), test `ui/src/test/kotlin/snastro/ui/parlanti/ParlantiPresenterGuastiTest.kt` (CR-7) (slice 29: S4 is no longer a frozen CR-19b site)

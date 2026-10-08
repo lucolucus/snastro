@@ -162,3 +162,9 @@
 - `SomiglianzaVoci.suIo(operazione, chiamata)` on `eccezioneRegistrata` (runs the committing `applica`; `Exception` only, as before).
 - CR-19b entries for both files removed (4 -> 0, 1 -> 0). New `RegistrazionePresenterGuastiTest` (2 CR-7 tests, red before with "Collection contains no element matching the predicate"); it reuses the package's `internal val REG` from `AmbienteVoci.kt` (a file-private `REG` there does not compile: "Conflicting declarations").
 - ui 699/699, architettura-test 459/459, `:ui:detekt` clean; `mm gate` green. Citation proposal in `conventions-proposals.md`.
+
+## 29-parlanti-guasti-registrati — 2026-10-09
+- `ParlantiPresenter`: `suRiga(id, operazione, comando)` runs `withContext(io) { comandoConfermato(operazione, comando) }` inside `eccezioneRegistrata(operazione)` (the name is written once per command, not twice as in S2); Ok/refusal in `concludi`; L269 reset in `finally`. `carica` and `riproduci` on `nonFataleRegistrato` (now every non-fatal `Throwable`, was `Exception`); M1 generation check and M5 `segnalaErroreDiCaricamento` kept.
+- No raw catch left in the file; CR-19b entry for `ParlantiPresenter.kt` removed (3 -> 0).
+- New `ParlantiPresenterGuastiTest` (2 CR-7 tests, red before with "Collection contains no element matching the predicate"); `ParlantiPresenterTest` unchanged. ui 701/701, `./gradlew check` exit 0.
+- Remaining frozen `:ui` sites: Impostazioni (2), LunghezzaRiassunto (2), Lettore (1), Modelli (1). Citation proposal in `conventions-proposals.md`.
