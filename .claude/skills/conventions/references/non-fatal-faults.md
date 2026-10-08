@@ -26,4 +26,10 @@ the committing-block helper `eccezioneRegistrata` (same private `registrato` log
 `supporto/src/main/kotlin/snastro/supporto/CatturaEccezione.kt`, used by S2's row runner
 `ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt` (`comandoDiRiga`), tested in
 `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniRinominaTest.kt` (CR-7);
+committing blocks outside the row runner on `eccezioneRegistrata`, resets in `finally` (in `invia`'s callers):
+`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt` (`avviaElaborazioniIncontro`) and
+`ui/src/main/kotlin/snastro/ui/registrazioni/FlussoImporta.kt` (`invia`); the same presenter's reads and player (`carica`,
+`conteggiIdentificazione`, `gruppi`, `precompilato`, `riproduci`, `pausa`) on `nonFataleRegistrato` — ADR 0041 §3's split
+with no raw catch in these two files; tested in `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniConsegnaDopoCommitTest.kt`
+(L269) and `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterAggiornamentoTest.kt` (CR-7);
 the test spy on the `snastro.ui` logger `ui/src/test/kotlin/snastro/ui/LogUi.kt` (`registriLogUi`, `causatoDa`).
