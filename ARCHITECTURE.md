@@ -7,6 +7,10 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-09 — conventions presenter-split (decided: codex, delegated by the user): an extracted flow's collaborators
+  move into one public data class per holder, built by `:avvio`; the presenter's parameter list may change, ADR 0030 §1
+  compile-time wiring kept by required non-null fields. Before, the frozen constructor meant a split could never shrink
+  `RegistrazioniPresenter`'s 21 parameters (release review R0-3).
 - 2026-10-08 — acceptance tests move to *tests/acceptance/src/test/kotlin*, compiled as an extra test source dir of
   `:avvio` (conventions topic acceptance-tests; decided: codex, delegated by the user): mm reads `EX-<n>` markers only
   there, and a separate Gradle module would cost settings, module-map and allowed-edge changes. Refactor slice 06.

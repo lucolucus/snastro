@@ -1,10 +1,18 @@
 # Presenter split
 
 **Rule.** Split a presenter by user flow when it gains multiple reasons to change, using `internal` holders over its
-existing screen state. Preserve its constructor, `stato` and `azioni`; bind extracted actions directly to holder
+existing screen state. Preserve its `stato` and `azioni` (the constructor's parameter list may change, see
+**Collaborators of an extracted flow**); bind extracted actions directly to holder
 functions, without forwarding members or lambdas hiding `TooManyFunctions`. Preserve each screen's concurrency
 contract: S1 holders share one `internal` `CorsaSingola` over one `MutableStateFlow`, owning the synchronous M3 guard,
 the M1(b) generic message for non-fatal faults, and the `inCorso` reset in `finally`; never duplicate that runner.
+
+**Collaborators of an extracted flow** (2026-10-09, decided: codex on delegation; replaces "preserve its
+constructor"): group the flow's collaborators in one public data class per `internal` holder, built by `:avvio` and
+required by the presenter's constructor in place of those collaborators. Every collaborator and bundle is a required,
+non-null parameter, with no defaults or fallbacks: omitted wiring fails to compile (ADR 0030 §1). Preserve `stato`,
+`azioni`, the direct bindings, the shared state and the screen's concurrency contract. Not: `internal` bundles — `:avvio`
+could not build them (`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, `avvio/src/main/kotlin/snastro/avvio/Presenter.kt`).
 
 **The shell** (added 2026-10-08, decided: codex on delegation): the shell's extracted holder uses the shell's existing
 `MutableStateFlow` and receives its M3 guard as `occupata: () -> Boolean`; the presenter includes the holder's in-flight
