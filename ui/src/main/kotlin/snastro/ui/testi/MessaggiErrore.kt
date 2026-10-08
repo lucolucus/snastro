@@ -36,6 +36,8 @@ fun messaggioPer(errore: ErroreSessione): String = when (errore) {
     ErroreSessione.CartellaNonValida -> "La cartella scelta non è valida."
     ErroreSessione.ProgettoGiaAperto -> "Questo progetto è già aperto in un'altra finestra."
     ErroreSessione.ProgettoApertoAltrove -> "Questo progetto è aperto in un'altra finestra."
+    ErroreSessione.ElaborazioneInCorso ->
+        "C'è un'elaborazione in corso: aspetta che finisca prima di eliminare il progetto."
     ErroreSessione.DatabasePiuRecente ->
         "Questo progetto è stato creato con una versione più recente di snastro: aggiorna l'app per aprirlo."
 }

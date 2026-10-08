@@ -198,11 +198,28 @@ internal class SessioneProgettoImpl(
      * already queued there (`crea`'s `registra`, `chiudi`'s `aggiorna`), and waited for: the list read right after
      * must not show it any more, and a failing registry leaves the folder whole. Then what snastro created there is
      * deleted, as much as it can be — the `.lock` file too, while still held (unlinking a locked file is allowed).
+     *
+     * EX-4/EX-5: the project open in THIS session is refused ([ErroreSessione.ElaborazioneInCorso], left open) while
+     * its shared queue has something running or waiting; otherwise it is closed first — its own `.lock` released —
+     * and [corrente] becomes `null` only once it is deleted, so S1 never lists it again.
      */
     override fun elimina(percorso: String): Esito<ProgettoEliminato> {
         val cartella = Path.of(percorso)
-        if (!validaCartellaProgetto(cartella)) return Esito.Errore(ErroreSessione.CartellaNonValida)
-        return eliminaSeNonAperto(cartella, percorso)
+        val sessione = aperta?.takeIf { percorsoAssoluto(it.cartella) == percorsoAssoluto(cartella) }
+        return when {
+            !validaCartellaProgetto(cartella) -> Esito.Errore(ErroreSessione.CartellaNonValida)
+            sessione == null -> eliminaSeNonAperto(cartella, percorso)
+            sessione.composto.coda.inCorsoOInCoda() -> Esito.Errore(ErroreSessione.ElaborazioneInCorso)
+            else -> {
+                aperta = null
+                try {
+                    chiudiSessione(sessione)
+                    eliminaSeNonAperto(cartella, percorso)
+                } finally {
+                    _corrente.value = null
+                }
+            }
+        }
     }
 
     /** [elimina] of the valid project folder [cartella], under its `.lock` from start to end. */
@@ -219,6 +236,18 @@ internal class SessioneProgettoImpl(
     override fun chiudi() {
         val sessione = aperta ?: return
         aperta = null
+        try {
+            chiudiSessione(sessione)
+        } finally {
+            _corrente.value = null
+        }
+    }
+
+    /**
+     * [chiudi] of [sessione], already taken out of [aperta], but for [corrente]: the registry's update, then the
+     * shutdown in its pinned order. Never throws but a cancellation (AC-347).
+     */
+    private fun chiudiSessione(sessione: SessioneAperta) {
         try {
             val numRegistrazioni = sessione.composto.porte.registrazioni.delProgetto(sessione.progettoId).size
             val percorso = percorsoAssoluto(sessione.cartella)
@@ -252,9 +281,8 @@ internal class SessioneProgettoImpl(
             // lo scope qui sopra; ArrestoProgetto attende, entro UNA scadenza condivisa (AC-C73), che smettano davvero
             // di toccare il database PRIMA di chiuderlo. fix-batch-16 MED-1: se un lavoratore sopravvive alla scadenza
             // (una chiamata nativa ignora l'interruzione), chiusura del database e rilascio del lock sono RINVIATI alla
-            // sua fine — mai un database chiuso sotto un lavoratore vivo; `corrente` si azzera comunque subito.
+            // sua fine — mai un database chiuso sotto un lavoratore vivo; `corrente` lo azzera il chiamante, comunque.
             arresta(sessione.composto, rilascioUnaVolta(sessione))
-            _corrente.value = null
         }
     }
 
@@ -269,21 +297,6 @@ internal class SessioneProgettoImpl(
                 chiudiSilenziosamente("chiusura del database fallita in chiudi") { sessione.risorse.chiudiDb() }
                 chiudiSilenziosamente("rilascio del lock fallito in chiudi") { rilasciaLock(sessione.lockCartella) }
             }
-        }
-    }
-
-    /** A failing shutdown is logged, never rethrown (AC-347): [rilascia] then runs at once. */
-    private fun arresta(composto: ProgettoComposto, rilascia: () -> Unit) {
-        try {
-            composto.arresta(rilascia)
-        } catch (e: CancellationException) {
-            rilascia()
-            throw e
-        } catch (
-            @Suppress("TooGenericExceptionCaught") e: Exception,
-        ) {
-            log.log(Level.WARNING, "arresto del progetto fallito in chiudi", e)
-            rilascia()
         }
     }
 
@@ -364,6 +377,21 @@ internal data class SessioneProgettoSeams(
      */
     val fontiCodaAggiuntive: List<FonteCoda> = emptyList(),
 )
+
+/** A failing shutdown of [composto] is logged, never rethrown (AC-347): [rilascia] then runs at once. */
+private fun arresta(composto: ProgettoComposto, rilascia: () -> Unit) {
+    try {
+        composto.arresta(rilascia)
+    } catch (e: CancellationException) {
+        rilascia()
+        throw e
+    } catch (
+        @Suppress("TooGenericExceptionCaught") e: Exception,
+    ) {
+        log.log(Level.WARNING, "arresto del progetto fallito in chiudi", e)
+        rilascia()
+    }
+}
 
 /** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */
 private class LockCartella(val canale: FileChannel, val lock: FileLock)

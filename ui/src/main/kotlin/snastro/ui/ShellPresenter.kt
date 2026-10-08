@@ -15,8 +15,9 @@ import snastro.ui.testi.messaggioPer
 
 /**
  * State holder of the app shell (RC-2, thin UI): reflects [SessioneProgetto.corrente] and forwards
- * `crea`/`apri`/`chiudi`/`seleziona` to it. [sezioniDisponibili] is injected by the composition root
- * (AC-341) — the single composition's `SEZIONI_SHELL` always includes every [DestinazioneShell].
+ * `crea`/`apri`/`chiudi`/`seleziona` to it; the open project's delete is [EliminazioneProgettoAperto]'s.
+ * [sezioniDisponibili] is injected by the composition root (AC-341) — the single composition's `SEZIONI_SHELL` always
+ * includes every [DestinazioneShell].
  */
 class ShellPresenter(
     private val scope: CoroutineScope,
@@ -39,10 +40,19 @@ class ShellPresenter(
     // catches two synchronous calls issued before the dispatcher gets a chance to run either.
     private var operazioneInCorso: Job? = null
 
+    private val eliminazione = EliminazioneProgettoAperto(_stato, scope, io, sessione, ::occupata)
+
     init {
         scope.launch {
             sessione.corrente.collect { progetto -> _stato.value = statoDi(progetto) }
         }
+    }
+
+    /** M3: a shell operation — apri/crea/chiudi or the open project's delete — is in flight. */
+    private fun occupata(): Boolean {
+        val attuale = _stato.value
+        return attuale is ShellUiStato.Caricamento || operazioneInCorso?.isActive == true ||
+            (attuale is ShellUiStato.ConProgetto && attuale.eliminazioneInCorso)
     }
 
     private fun statoDi(progetto: ProgettoAperto?): ShellUiStato =
@@ -57,7 +67,7 @@ class ShellPresenter(
     fun crea(cartellaGenitore: String, nome: String) = avvia { sessione.crea(cartellaGenitore, nome) }
 
     private fun avvia(operazione: suspend () -> Esito<ProgettoAperto>) {
-        if (_stato.value is ShellUiStato.Caricamento || operazioneInCorso?.isActive == true) return
+        if (occupata()) return
         operazioneInCorso = scope.launch {
             _stato.value = ShellUiStato.Caricamento
             try {
@@ -120,7 +130,7 @@ class ShellPresenter(
      * Ignored while another apri/crea/chiudi is in flight (M3).
      */
     fun chiudi() {
-        if (_stato.value is ShellUiStato.Caricamento || operazioneInCorso?.isActive == true) return
+        if (occupata()) return
         operazioneInCorso = scope.launch {
             _stato.value = ShellUiStato.Caricamento
             try {
@@ -162,5 +172,8 @@ class ShellPresenter(
         chiudi = ::chiudi,
         chiudiErrore = ::chiudiErrore,
         seleziona = ::seleziona,
+        chiediElimina = eliminazione::chiedi,
+        annullaElimina = eliminazione::annulla,
+        confermaElimina = eliminazione::conferma,
     )
 }

@@ -27,6 +27,8 @@ private val TEST = ProgettoVista(
     ultimaAttivita = Instant.parse("2026-10-08T10:00:00Z"),
 )
 
+private val CONFERMA_TEST = ConfermaEliminazione(TEST.nome, TEST.percorso)
+
 private val CAMPO_NOME = hasSetTextAction() and hasAnyAncestor(hasTestTag("progetti-campo-nome-elimina"))
 
 /** R0 smoke (EX-1..EX-3): the card's "⋯" menu and the confirmation reach the presenter's delete actions. */
@@ -54,7 +56,7 @@ class SchermataProgettiEliminaTest {
         var confermato: String? = null
         setContent {
             SchermataProgetti(
-                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST)),
+                ProgettiUiStato.Dati(listOf(TEST), conferma = CONFERMA_TEST),
                 AZIONI_VUOTE.copy(confermaElimina = { confermato = it }),
                 "/tmp/x",
                 SceltaCartellaFinta(),
@@ -75,7 +77,7 @@ class SchermataProgettiEliminaTest {
         var annullate = 0
         setContent {
             SchermataProgetti(
-                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST)),
+                ProgettiUiStato.Dati(listOf(TEST), conferma = CONFERMA_TEST),
                 AZIONI_VUOTE.copy(annullaElimina = { annullate++ }),
                 "/tmp/x",
                 SceltaCartellaFinta(),
@@ -90,7 +92,7 @@ class SchermataProgettiEliminaTest {
     fun `un eliminazione fallita mostra il suo messaggio nella conferma`() = runDesktopComposeUiTest(1280, 800) {
         setContent {
             SchermataProgetti(
-                ProgettiUiStato.Dati(listOf(TEST), conferma = ConfermaEliminazione(TEST, errore = "non riuscita")),
+                ProgettiUiStato.Dati(listOf(TEST), conferma = CONFERMA_TEST.copy(errore = "non riuscita")),
                 AZIONI_VUOTE,
                 "/tmp/x",
                 SceltaCartellaFinta(),

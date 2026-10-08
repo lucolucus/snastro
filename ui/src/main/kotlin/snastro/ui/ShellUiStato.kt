@@ -1,5 +1,7 @@
 package snastro.ui
 
+import snastro.ui.progetti.ConfermaEliminazione
+
 /** State of the app shell (AC-177, AC-181, AC-341) — presenter-owned, rendered by [SchermataShell]. */
 sealed interface ShellUiStato {
     /**
@@ -16,11 +18,15 @@ sealed interface ShellUiStato {
      * A Progetto is open: the left nav shows only [destinazioniDisponibili] (AC-177, AC-341 — the single
      * composition always includes [DestinazioneShell.PARLANTI]). [erroreApertura], when set, is a
      * dismissible banner over the nav for the last failed `crea`/`apri` while this Progetto stayed open (H1).
+     * [conferma] (R0, EX-4/EX-5), when set, is the open delete confirmation of this Progetto, asked from the header's
+     * menu; [eliminazioneInCorso] is true while its delete runs.
      */
     data class ConProgetto(
         val progetto: ProgettoAperto,
         val destinazioniDisponibili: Set<DestinazioneShell>,
         val destinazioneSelezionata: DestinazioneShell,
         val erroreApertura: String? = null,
+        val conferma: ConfermaEliminazione? = null,
+        val eliminazioneInCorso: Boolean = false,
     ) : ShellUiStato
 }

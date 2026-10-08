@@ -10,7 +10,8 @@ import snastro.kernel.ProgettoId
 
 /**
  * Fake [SessioneProgetto] (RC-9): `crea` mints a Progetto keyed by its own `percorso`; `apri` reopens
- * one previously created under that same `percorso` — a round trip, no filesystem; `elimina` forgets it.
+ * one previously created under that same `percorso` — a round trip, no filesystem; `elimina` forgets it, closing it
+ * first when it is the open one.
  */
 class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreIdFinto()) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
@@ -34,6 +35,7 @@ class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreI
     }
 
     override fun elimina(percorso: String): Esito<ProgettoEliminato> {
+        if (_corrente.value?.percorso == percorso) _corrente.value = null
         progetti.remove(percorso)
         return Esito.Ok(ProgettoEliminato.Completamente)
     }

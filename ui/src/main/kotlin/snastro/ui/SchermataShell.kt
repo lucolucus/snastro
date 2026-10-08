@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -33,14 +34,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import snastro.ui.progetti.ConfermaEliminaProgetto
 import snastro.ui.stile.BottoneIconaSn
 import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MenuAltreAzioni
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CHIUDI_PROGETTO
+import snastro.ui.testi.ETICHETTA_ELIMINA_PROGETTO
 import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import snastro.ui.testi.ETICHETTA_TUTTO_IN_LOCALE
 import snastro.ui.testi.etichetta
@@ -107,6 +111,14 @@ fun SchermataShell(
                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) { contenuto(stato) }
                         }
                         stato.erroreApertura?.let { BannerErroreApertura(it, azioni.chiudiErrore) }
+                        stato.conferma?.let {
+                            ConfermaEliminaProgetto(
+                                it,
+                                stato.eliminazioneInCorso,
+                                azioni.annullaElimina,
+                                azioni.confermaElimina,
+                            )
+                        }
                     }
             }
         }
@@ -182,7 +194,7 @@ private fun NavigazioneShell(
             .padding(SnastroMisure.space3),
         verticalArrangement = Arrangement.spacedBy(SnastroMisure.space1),
     ) {
-        SelettoreProgetto(nome = stato.progetto.nome, onChiudi = azioni.chiudi)
+        SelettoreProgetto(nome = stato.progetto.nome, onChiudi = azioni.chiudi, onElimina = azioni.chiediElimina)
         DestinazioneShell.entries.filter { it in stato.destinazioniDisponibili }.forEach { destinazione ->
             val giaSelezionata = destinazione == stato.destinazioneSelezionata
             VoceNavigazione(
@@ -212,10 +224,11 @@ private fun NavigazioneShell(
 /**
  * AC-572/rework cycle 1 (HIGH #2): Reel icon (`accentInk`) + project name (`heading`, ellipsised) —
  * no longer clickable itself (a bare name + a bare chevron gave no visible affordance and silently
- * closed the project). "Chiudi progetto" is now its own `BottoneIcona Close` at the row's end.
+ * closed the project). "Chiudi progetto" is now its own `BottoneIcona Close` at the row's end, after the "⋯" menu
+ * whose "Elimina progetto…" (danger text, R0 EX-4) asks to confirm the delete ([onElimina]).
  */
 @Composable
-private fun SelettoreProgetto(nome: String, onChiudi: () -> Unit) {
+private fun SelettoreProgetto(nome: String, onChiudi: () -> Unit, onElimina: () -> Unit) {
     val colori = LocalSnastroColori.current
     Row(
         modifier = Modifier
@@ -234,6 +247,16 @@ private fun SelettoreProgetto(nome: String, onChiudi: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
+        MenuAltreAzioni("shell-altre-azioni", abilitato = true) { chiudi ->
+            DropdownMenuItem(
+                text = { Text(ETICHETTA_ELIMINA_PROGETTO, color = colori.danger) },
+                onClick = {
+                    chiudi()
+                    onElimina()
+                },
+                modifier = Modifier.testTag("shell-menu-elimina"),
+            )
+        }
         BottoneIconaSn(
             icona = Icona.Close,
             descrizione = ETICHETTA_CHIUDI_PROGETTO,

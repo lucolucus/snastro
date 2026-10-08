@@ -19,8 +19,9 @@ internal class FlussoEliminazione(
     private val cartellaUtente: String,
 ) {
     /** EX-1/EX-3: opens the delete confirmation of [progetto]. */
-    fun chiedi(progetto: ProgettoVista) =
-        corsa.aggiorna { if (it.inCorso) it else it.copy(conferma = ConfermaEliminazione(progetto)) }
+    fun chiedi(progetto: ProgettoVista) = corsa.aggiorna {
+        if (it.inCorso) it else it.copy(conferma = ConfermaEliminazione(progetto.nome, progetto.percorso))
+    }
 
     /** EX-3: closes the confirmation, unless its delete is already running; nothing is deleted. */
     fun annulla() = corsa.aggiorna { if (it.inCorso) it else it.copy(conferma = null) }
@@ -36,7 +37,7 @@ internal class FlussoEliminazione(
         corsa.avvia(
             pulisci = { it.copy(conferma = conferma.copy(errore = null), avvisoEliminazione = null) },
             operazione = {
-                sessione.elimina(conferma.progetto.percorso)
+                sessione.elimina(conferma.percorso)
                     .poi { eliminato -> Esito.Ok(eliminato to elenco.progetti()) }
             },
             alSuccesso = { stato, (eliminato, progetti) ->

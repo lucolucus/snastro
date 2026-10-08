@@ -7,4 +7,7 @@ data class AzioniShell(
     val chiudi: () -> Unit,
     val chiudiErrore: () -> Unit,
     val seleziona: (DestinazioneShell) -> Unit,
+    val chiediElimina: () -> Unit,
+    val annullaElimina: () -> Unit,
+    val confermaElimina: (nomeDigitato: String) -> Unit,
 )

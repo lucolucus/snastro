@@ -8,7 +8,7 @@ import kotlin.test.assertNull
  * Consumer-driven contract of [FonteCoda] (A122, ADR 0023 §1/§2): every REAL source (`fonteCodaRiassunto`,
  * `fonteCodaElaborazione`) must keep [FonteCoda.teste]'s "oldest eligible, excluding `esclusi`" promise —
  * agreeing with [FonteCoda.prossima] on which id that is, honouring `esclusi` when it grows, and refusing a
- * head past `limite` — the exact contract [CodaCondivisa] leans on for its total order (raccogliPicco) and for
+ * head past `limite` — the exact contract [CodaCondivisa] leans on for its total order (piccoGlobale) and for
  * [FonteCoda.tutti]'s bounded fallback ([enumeraViaTeste]) not to spin forever on a source that gets this wrong.
  *
  * [conDue] seeds (through the subclass's OWN context: real repository fake + real command service, never a

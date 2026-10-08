@@ -80,6 +80,7 @@ class MessaggiErroreTest {
                 ErroreSessione.CartellaNonValida,
                 ErroreSessione.ProgettoGiaAperto,
                 ErroreSessione.ProgettoApertoAltrove,
+                ErroreSessione.ElaborazioneInCorso,
                 ErroreSessione.DatabasePiuRecente,
             ),
         ) { messaggioPer(it) }

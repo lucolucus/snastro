@@ -47,18 +47,24 @@ internal fun MenuProgetto(progetto: ProgettoVista, abilitato: Boolean, chiediEli
 }
 
 /**
- * R0 (EX-1..EX-3): the delete confirmation of [conferma]'s project — the question, what it does, the field where the
- * exact name is typed, the failed delete's message, "Annulla" and "Elimina" (`Pericolo`, enabled only by the exact
- * name: [ConfermaEliminazione.confermataDa]). Like the new-project panel, the typed name is local UI state, fresh each
- * time the confirmation opens; nothing can be pressed while [inCorso].
+ * R0 (EX-1..EX-5): the delete confirmation of [conferma]'s project, from S1's list or the open project's header — the
+ * question, what it does, the field where the exact name is typed, the failed delete's message, "Annulla"
+ * ([onAnnulla]) and "Elimina" ([onConferma] with the typed name; `Pericolo`, enabled only by the exact name:
+ * [ConfermaEliminazione.confermataDa]). Like the new-project panel, the typed name is local UI state, fresh each time
+ * the confirmation opens; nothing can be pressed while [inCorso].
  */
 @Composable
-internal fun ConfermaEliminaProgetto(conferma: ConfermaEliminazione, inCorso: Boolean, azioni: AzioniProgetti) {
+internal fun ConfermaEliminaProgetto(
+    conferma: ConfermaEliminazione,
+    inCorso: Boolean,
+    onAnnulla: () -> Unit,
+    onConferma: (nomeDigitato: String) -> Unit,
+) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
-    val nomeProgetto = conferma.progetto.nome
-    var nome by remember(conferma.progetto) { mutableStateOf("") }
-    PannelloSuVelo(chiudibile = !inCorso, onChiudi = azioni.annullaElimina, tag = "progetti-conferma-elimina") {
+    val nomeProgetto = conferma.nome
+    var nome by remember(conferma.percorso) { mutableStateOf("") }
+    PannelloSuVelo(chiudibile = !inCorso, onChiudi = onAnnulla, tag = "progetti-conferma-elimina") {
         Text(text = titoloConfermaEliminaProgetto(nomeProgetto), style = tipografia.title, color = colori.ink)
         Spacer(modifier = Modifier.height(SnastroMisure.space2))
         Text(text = MESSAGGIO_CONFERMA_ELIMINA_PROGETTO, style = tipografia.body, color = colori.inkMuted)
@@ -84,7 +90,7 @@ internal fun ConfermaEliminaProgetto(conferma: ConfermaEliminazione, inCorso: Bo
             Spacer(modifier = Modifier.weight(1f))
             BottoneSn(
                 etichetta = ETICHETTA_ANNULLA,
-                onClick = azioni.annullaElimina,
+                onClick = onAnnulla,
                 variante = VarianteBottone.Fantasma,
                 abilitato = !inCorso,
                 modifier = Modifier.testTag("progetti-conferma-elimina-annulla"),
@@ -92,7 +98,7 @@ internal fun ConfermaEliminaProgetto(conferma: ConfermaEliminazione, inCorso: Bo
             Spacer(modifier = Modifier.width(SnastroMisure.space2))
             BottoneSn(
                 etichetta = ETICHETTA_CONFERMA_ELIMINAZIONE,
-                onClick = { azioni.confermaElimina(nome) },
+                onClick = { onConferma(nome) },
                 variante = VarianteBottone.Pericolo,
                 abilitato = !inCorso && conferma.confermataDa(nome),
                 modifier = Modifier.testTag("progetti-conferma-elimina-conferma"),

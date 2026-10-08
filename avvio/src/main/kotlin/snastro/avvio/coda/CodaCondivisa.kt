@@ -220,8 +220,14 @@ internal class CodaCondivisa(
         return PosizioniCoda(elaborazioni, riassunti)
     }
 
+    /**
+     * R0 (EX-5): whether any source has an item waiting ([FonteCoda.tutti]) or one is running right now. The waiting
+     * ones are read FIRST: an item claimed between the two reads is already running when the second one looks.
+     */
+    fun inCorsoOInCoda(): Boolean = fonti.any { it.tutti().isNotEmpty() } || inCorso != null
+
     private suspend fun provaAvanzare() {
-        val picco = when (val esito = eseguiProtetto { raccogliPicco() }) {
+        val picco = when (val esito = eseguiProtetto { piccoGlobale(fonti, esclusi) }) {
             is RisultatoProtetto.Concluso -> esito.valore
             is RisultatoProtetto.Sfuggito -> {
                 // il picco stesso e' sfuggito (MED user-approved): trattato come una fuga qualunque, su ogni fonte
@@ -278,26 +284,6 @@ internal class CodaCondivisa(
      */
     private suspend fun liberaInCorsoSeAttivo() {
         if (coroutineContext.isActive) inCorso = null
-    }
-
-    /**
-     * Il picco GLOBALE di questo giro (AC-S56..S61): `null` se nessuna fonte e' idonea, O se la fonte
-     * scelta e' [FonteCoda.trattenuta] (AC-S60) — in ENTRAMBI i casi il chiamante si limita a
-     * riprogrammare, quindi qui non c'e' bisogno di distinguerli. Altrimenti la fonte scelta, la sua
-     * testa, e [limite] (`nonDopo`/`primaDi`): la piu' piccola istante tra le teste di OGNI ALTRA fonte.
-     */
-    private fun raccogliPicco(): Triple<FonteCoda, ElementoInCoda, Instant?>? {
-        val teste: Map<FonteCoda, ElementoInCoda> = fonti
-            .mapNotNull { fonte -> fonte.teste(esclusi.getValue(fonte))?.let { fonte to it } }
-            .toMap()
-        // AC-S60: la fonte scelta trattenuta -> tutta la coda resta ferma, come "nessun picco" per il chiamante
-        return teste.entries
-            .minWithOrNull(compareBy({ it.value.istante }, { it.key.tipo.ordinal }, { it.value.id }))
-            ?.takeUnless { it.key.trattenuta() }
-            ?.let { (fonteScelta, testaScelta) ->
-                val limite = teste.entries.filter { it.key !== fonteScelta }.minOfOrNull { it.value.istante }
-                Triple(fonteScelta, testaScelta, limite)
-            }
     }
 
     /**
@@ -422,6 +408,29 @@ internal sealed interface RisultatoTentativo {
 
     /** [id]'s claim transaction was refused; it is still `in_attesa`. */
     data class Rifiutata(val id: String) : RisultatoTentativo
+}
+
+/**
+ * Il picco GLOBALE di un giro di [CodaCondivisa] (AC-S56..S61) sulle [fonti], ciascuna senza i propri [esclusi]: `null`
+ * se nessuna fonte e' idonea, O se la fonte scelta e' [FonteCoda.trattenuta] (AC-S60) — in ENTRAMBI i casi il
+ * chiamante si limita a riprogrammare, quindi qui non c'e' bisogno di distinguerli. Altrimenti la fonte scelta, la sua
+ * testa, e il limite (`nonDopo`/`primaDi`): la piu' piccola istante tra le teste di OGNI ALTRA fonte.
+ */
+private fun piccoGlobale(
+    fonti: List<FonteCoda>,
+    esclusi: Map<FonteCoda, Set<String>>,
+): Triple<FonteCoda, ElementoInCoda, Instant?>? {
+    val teste: Map<FonteCoda, ElementoInCoda> = fonti
+        .mapNotNull { fonte -> fonte.teste(esclusi.getValue(fonte))?.let { fonte to it } }
+        .toMap()
+    // AC-S60: la fonte scelta trattenuta -> tutta la coda resta ferma, come "nessun picco" per il chiamante
+    return teste.entries
+        .minWithOrNull(compareBy({ it.value.istante }, { it.key.tipo.ordinal }, { it.value.id }))
+        ?.takeUnless { it.key.trattenuta() }
+        ?.let { (fonteScelta, testaScelta) ->
+            val limite = teste.entries.filter { it.key !== fonteScelta }.minOfOrNull { it.value.istante }
+            Triple(fonteScelta, testaScelta, limite)
+        }
 }
 
 /** Esito di una chiamata protetta ([eseguiProtetto]): conclusa normalmente, o sfuggita con [errore] (AC-312). */

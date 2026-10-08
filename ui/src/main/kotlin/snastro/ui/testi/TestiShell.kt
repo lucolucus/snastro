@@ -22,5 +22,8 @@ const val ETICHETTA_MODELLI_E_LICENZE: String = "Modelli e licenze"
  * whole clickable row to a dedicated `BottoneIcona Close` — this is its tooltip/accessible name. */
 const val ETICHETTA_CHIUDI_PROGETTO: String = "Chiudi progetto"
 
+/** R0 (EX-4): the open project's header menu entry that asks to delete it. */
+const val ETICHETTA_ELIMINA_PROGETTO: String = "Elimina progetto…"
+
 /** M1(b): a non-cancellation exception from `SessioneProgetto.apri`/`crea` maps to this, never a stack trace. */
 const val MESSAGGIO_ERRORE_GENERICO: String = "Si è verificato un errore imprevisto. Riprova."

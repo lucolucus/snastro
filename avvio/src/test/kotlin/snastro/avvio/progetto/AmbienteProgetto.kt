@@ -96,6 +96,7 @@ import snastro.trascrizione.applicazione.porte.DecodificatoreAudio as Decodifica
  * ([diarizzatore], [riconoscitore]), the print [estrattore], the LLM ([modello]) and its availability ([disponibilita],
  * `Installato` by default).
  *
+ * The project is created as [nome] (default "Prova") under `radice/progetti`.
  * [collaboratori], [porte] and [composto] are those of the project open right now (the one `crea` made, or the latest
  * `apri`); [composti] keeps every opening of this session, oldest first.
  */
@@ -124,6 +125,7 @@ internal class AmbienteProgetto(
     // guarantee ordering injects an OrologioFinto and calls avanza() instead of Thread.sleep.
     val clock: Clock = orologioApp(),
     scadenzaArresto: Duration = ComponentiApp.SCADENZA_ARRESTO,
+    nome: String = "Prova",
 ) : AutoCloseable {
     private val sorgenti = mutableMapOf<RiferimentoAudio, Long>()
     private val sorgente: Path = radice.resolve("riunione.wav").also { Files.write(it, ByteArray(DIMENSIONE_SORGENTE)) }
@@ -162,8 +164,11 @@ internal class AmbienteProgetto(
         scadenzaArresto = scadenzaArresto,
     )
 
+    /** The per-user registry of [sessione]: the project [nome] is registered there once created. */
+    val registro = RegistroProgettiFinta()
+
     val sessione = SessioneProgettoImpl(
-        registro = RegistroProgettiFinta(),
+        registro = registro,
         generatoreId = GeneratoreIdUuid(),
         clock = clock,
         scopeGenitore = scope,
@@ -186,7 +191,7 @@ internal class AmbienteProgetto(
     )
 
     private val apertura = SondaCostruzioni.durante {
-        sessione.crea(radice.resolve("progetti").toString(), "Prova").atteso()
+        sessione.crea(radice.resolve("progetti").toString(), nome).atteso()
     }
 
     val progetto: ProgettoAperto = apertura.first

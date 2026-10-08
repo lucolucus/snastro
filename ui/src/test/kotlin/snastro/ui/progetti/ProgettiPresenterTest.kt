@@ -222,7 +222,8 @@ class ProgettiPresenterTest {
         presenter.azioni.confermaElimina("test")
         advanceUntilIdle()
 
-        val conferma = ConfermaEliminazione(prima.single(), errore = MESSAGGIO_ERRORE_GENERICO)
+        val test = prima.single()
+        val conferma = ConfermaEliminazione(test.nome, test.percorso, errore = MESSAGGIO_ERRORE_GENERICO)
         assertEquals(ProgettiUiStato.Dati(progetti = prima, conferma = conferma), presenter.stato.value)
     }
 

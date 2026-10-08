@@ -20,8 +20,10 @@ interface SessioneProgetto {
     fun apri(percorso: String): Esito<ProgettoAperto>
 
     /**
-     * Drops the closed project at [percorso] from the known projects and deletes for good what snastro created in its
+     * Drops the project at [percorso] from the known projects and deletes for good what snastro created in its
      * folder — never a symbolic link's target, never the user's own files; [ProgettoEliminato] says what is left.
+     * The project open here is closed first ([corrente] becomes `null` once it is deleted), unless something runs
+     * or waits in its queue: then [ErroreSessione.ElaborazioneInCorso], and it stays open.
      */
     fun elimina(percorso: String): Esito<ProgettoEliminato>
 

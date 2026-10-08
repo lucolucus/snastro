@@ -20,6 +20,9 @@ sealed interface ErroreSessione : ErroreDominio {
     /** R0 (EX-6): `elimina` refused, the project's `.lock` is held by another running instance. */
     data object ProgettoApertoAltrove : ErroreSessione
 
+    /** R0 (EX-5): `elimina` of the open project refused, something is running or waiting in its shared queue. */
+    data object ElaborazioneInCorso : ErroreSessione
+
     /** The project's schema/data was written by a newer version of the app. */
     data object DatabasePiuRecente : ErroreSessione
 }

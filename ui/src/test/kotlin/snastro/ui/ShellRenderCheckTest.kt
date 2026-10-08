@@ -24,7 +24,16 @@ private const val ALTEZZA_PICCOLA_PX = 640
 
 private val OGNI_SEZIONE = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
 private val PROGETTO_PROVA = ProgettoAperto(ProgettoId("id-1"), "Riunione team", "/tmp/riunione-team.snastro")
-private val AZIONI_VUOTE = AzioniShell(apri = {}, crea = { _, _ -> }, chiudi = {}, chiudiErrore = {}, seleziona = {})
+private val AZIONI_VUOTE = AzioniShell(
+    apri = {},
+    crea = { _, _ -> },
+    chiudi = {},
+    chiudiErrore = {},
+    seleziona = {},
+    chiediElimina = {},
+    annullaElimina = {},
+    confermaElimina = {},
+)
 
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): every [ShellUiStato] fixture at both sizes —

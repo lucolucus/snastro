@@ -31,10 +31,11 @@ sealed interface ProgettiUiStato {
 }
 
 /**
- * The open delete confirmation of [progetto] (R0); [errore], when set, is the message of the delete that failed, shown
- * inside it like `erroreCrea` inside the new-project panel.
+ * The open delete confirmation of the project [nome] at [percorso] (R0) — from S1's list or from the open project's
+ * header; [errore], when set, is the message of the delete that failed, shown inside it like `erroreCrea` inside the
+ * new-project panel.
  */
-data class ConfermaEliminazione(val progetto: ProgettoVista, val errore: String? = null) {
+data class ConfermaEliminazione(val nome: String, val percorso: String, val errore: String? = null) {
     /** EX-2: only the project's exact name confirms — same case, nothing more, nothing less. */
-    fun confermataDa(nomeDigitato: String): Boolean = nomeDigitato == progetto.nome
+    fun confermataDa(nomeDigitato: String): Boolean = nomeDigitato == nome
 }

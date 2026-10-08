@@ -169,7 +169,9 @@ private fun ContenutoProgetti(
             Spacer(modifier = Modifier.height(SnastroMisure.space5))
             GrigliaProgetti(stato, azioni, onNuovo = { pannelloAperto = true })
         }
-        stato.conferma?.let { ConfermaEliminaProgetto(it, stato.inCorso, azioni) }
+        stato.conferma?.let {
+            ConfermaEliminaProgetto(it, stato.inCorso, azioni.annullaElimina, azioni.confermaElimina)
+        }
         if (pannelloAperto || stato.erroreCrea != null) {
             PannelloNuovoProgetto(
                 inCorso = stato.inCorso,
