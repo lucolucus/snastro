@@ -173,4 +173,18 @@ class RegistrazioniConsegnaDopoCommitTest {
         assertTrue(sfuggite.all { it is AssertionError })
         assertTrue(inviati.filterIsInstance<AggiungiRegistrazione>().size == 3)
     }
+
+    @Test
+    fun `L269 un Error dopo il commit di Trascrivi N parti si propaga ma non lascia l Incontro in corso`() = runTest {
+        guasto = { AssertionError("abbonato dopo-commit: errore di programmazione") }
+        val p = presentatore(this)
+        advanceUntilIdle()
+
+        p.azioni.avviaElaborazioniIncontro(IncontroId(REG.valore))
+        advanceUntilIdle()
+
+        assertEquals(false, p.dati().incontri.single().operazioneInCorso, "l Incontro non resta bloccato")
+        assertEquals(1, sfuggite.size, "l Error si propaga al gestore dello scope (D-0065)")
+        assertIs<AssertionError>(sfuggite.single())
+    }
 }

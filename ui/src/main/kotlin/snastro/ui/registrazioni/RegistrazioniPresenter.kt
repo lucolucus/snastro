@@ -1,6 +1,5 @@
 package snastro.ui.registrazioni
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +18,6 @@ import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
 import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
-import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontro
@@ -29,8 +27,10 @@ import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.comandoConfermato
+import snastro.ui.eccezioneRegistrata
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
@@ -151,22 +151,16 @@ class RegistrazioniPresenter(
         scope.launch { lettore.stato.collect { s -> rifletti(s) } }
     }
 
+    /** A failed read is logged (CR-7) and keeps the previous good rows, if any, on screen (H1): never stuck loading. */
     private suspend fun carica() {
         val generazione = ++generazioneCaricamento
-        try {
-            val lista = withContext(io) { costruisciLista() }
-            if (generazione > generazioneApplicata) { // L485b
+        val lista = nonFataleRegistrato("carica le registrazioni") { withContext(io) { costruisciLista() } }
+        when {
+            lista == null -> if (generazione == generazioneCaricamento) segnalaErroreDiCaricamento()
+            generazione > generazioneApplicata -> { // L485b
                 generazioneApplicata = generazione
                 aggiornaConNuoveRighe(lista)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            // Wraps the read-model load in error handling (lesson from schermata-progetti/lettore-audio
-            // reviews): the previous good rows (if any) stay on screen, H1 — never stuck in Caricamento.
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            if (generazione == generazioneCaricamento) segnalaErroreDiCaricamento()
         }
     }
 
@@ -276,7 +270,7 @@ class RegistrazioniPresenter(
      */
     private fun gruppi(progetto: List<RegistrazioneDelProgettoVista>): List<Gruppo> {
         val perId = progetto.associateBy { it.registrazioneId }
-        val letti = catturaNonFatale { incontri() }.getOrDefault(emptyList())
+        val letti = nonFataleRegistrato("leggi gli incontri") { incontri() }.orEmpty()
         val raggruppati = letti.mapNotNull { i ->
             val parti = i.parti.mapNotNull { p -> perId[p.registrazioneId]?.let { it to p.oraDiInizio } }
             parti.takeIf { it.isNotEmpty() }?.let { Gruppo(i.incontroId, i.titolo, i.data, it) }
@@ -333,7 +327,7 @@ class RegistrazioniPresenter(
 
     /** AC-I67: the latest number used in the Incontro; a failing read only costs the prefill. */
     private fun precompilato(id: IncontroId): String =
-        catturaNonFatale { numeroPersonePrecompilato(id)?.toString().orEmpty() }.getOrDefault("")
+        nonFataleRegistrato("leggi il numero di persone di $id") { numeroPersonePrecompilato(id)?.toString() }.orEmpty()
 
     @Suppress("LongParameterList") // the row's sources: catalogue entry, status, queue, player, Incontro context
     private fun costruisciRiga(
@@ -397,20 +391,12 @@ class RegistrazioniPresenter(
 
     /**
      * AC-345: an empty map — never a partial batch — when [identificazioniIncontri]'s read throws; a throw here
-     * is contained to this batch (never the outer [carica] catch of [costruisciLista]'s OTHER sources),
+     * is logged and contained to this batch (never the failure of [carica] over [costruisciLista]'s OTHER sources),
      * so a failing Parlanti source only costs every row its badge, the rest of each row (title, date,
      * status, playback…) stays built from its own source.
      */
     private fun conteggiIdentificazione(ids: List<IncontroId>): Map<IncontroId, IdentificazioneIncontro> =
-        try {
-            identificazioniIncontri(ids)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            emptyMap()
-        }
+        nonFataleRegistrato("leggi l'identificazione degli incontri") { identificazioniIncontri(ids) }.orEmpty()
 
     /** AC-204/AC-345: a badge on a 1-part row only once BOTH `numVoci` (only known for `COMPLETATA`) and the
      * Parlanti [conteggio] of its Incontro are known — a missing [vista]/`numVoci`/[conteggio] (source
@@ -621,7 +607,9 @@ class RegistrazioniPresenter(
 
     /**
      * AC-I67: 'Trascrivi N parti' — the field validated like a row's (invalid → the same inline message, nothing
-     * sent), then ONE `AvviaElaborazioniDellIncontro(id, n)` over the Incontro.
+     * sent), then ONE `AvviaElaborazioniDellIncontro(id, n)` over the Incontro. A committing command (ADR 0041 §3): a
+     * thrown `Exception` is logged and shows the generic message, an `Error` propagates (D-0065); L269: the Incontro
+     * is released in `finally`.
      */
     fun avviaElaborazioniIncontro(id: IncontroId) {
         val comando = avviaElaborazioniDellIncontro
@@ -633,17 +621,21 @@ class RegistrazioniPresenter(
                 aggiornaIncontro(id) { it.copy(operazioneInCorso = true, errore = null) }
                 s2.azzeraAvviso()
                 scope.launch {
-                    val avvia = AvviaElaborazioniDellIncontro(id, campo.numero)
-                    val esito = catturaNonFatale {
-                        withContext(io) { comandoConfermato("trascrivi $id") { comando(avvia) } }
-                    }.getOrNull()
-                    val errore = when (esito) {
-                        is Esito.Ok -> null
-                        is Esito.Errore -> messaggioPer(esito.errore)
-                        null -> MESSAGGIO_ERRORE_GENERICO
+                    try {
+                        val avvia = AvviaElaborazioniDellIncontro(id, campo.numero)
+                        val esito = eccezioneRegistrata("trascrivi $id") {
+                            withContext(io) { comandoConfermato("trascrivi $id") { comando(avvia) } }
+                        }
+                        val errore = when (esito) {
+                            is Esito.Ok -> null
+                            is Esito.Errore -> messaggioPer(esito.errore)
+                            null -> MESSAGGIO_ERRORE_GENERICO
+                        }
+                        if (errore == null) carica()
+                        aggiornaIncontro(id) { it.copy(errore = errore) }
+                    } finally {
+                        aggiornaIncontro(id) { it.copy(operazioneInCorso = false) } // L269
                     }
-                    if (errore == null) carica()
-                    aggiornaIncontro(id) { it.copy(operazioneInCorso = false, errore = errore) }
                 }
             }
         }
@@ -678,21 +670,14 @@ class RegistrazioniPresenter(
 
     /**
      * AC-343: always `daMs = 0` — 'restart from the beginning', never a resume from `posizioneMs`.
-     * H2: a throwing [LettoreAudio] is mapped to an inline row error, never left to kill this
+     * H2: a throwing [LettoreAudio] is logged (CR-7) and mapped to an inline row error, never left to kill this
      * coroutine — [scope] has no supervisor, so an uncaught exception here would also take down the
      * `stato`/`AggiornamentiVista`/`LettoreAudio.stato` collectors launched in `init`.
      */
     fun riproduci(id: RegistrazioneId) {
         scope.launch {
-            try {
-                withContext(io) { lettore.riproduciDa(id, 0) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
-            }
+            nonFataleRegistrato("riproduci $id") { withContext(io) { lettore.riproduciDa(id, 0) } }
+                ?: s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
         }
     }
 
@@ -702,15 +687,8 @@ class RegistrazioniPresenter(
     fun pausa() {
         val idAttivo = lettore.stato.value.registrazioneId
         scope.launch {
-            try {
-                withContext(io) { lettore.pausa() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                idAttivo?.let { id -> s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) } }
-            }
+            nonFataleRegistrato("pausa") { withContext(io) { lettore.pausa() } }
+                ?: idAttivo?.let { id -> s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) } }
         }
     }
 

@@ -15,17 +15,21 @@ import snastro.progetto.applicazione.porte.ErroreApplicazioneProgetto
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
+import snastro.ui.causatoDa
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
+import snastro.ui.registriLogUi
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private val REG_1 = RegistrazioneId("id-1")
 private val DATA_1: LocalDate = LocalDate.of(2026, 3, 12)
@@ -110,6 +114,28 @@ class RegistrazioniPresenterAggiornamentoTest {
         advanceUntilIdle()
 
         assertNull(assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).erroreAggiornamento)
+    }
+
+    @Test
+    fun `CR-7 un refresh fallito registra un WARNING causato dal guasto`() = runTest {
+        val guasto = IllegalStateException("guasto di rete")
+        var fallisce = false
+        val aggiornamenti = AggiornamentiVistaFinta()
+        val presenter = presentatore(
+            this,
+            registrazioni = { if (fallisce) throw guasto else listOf(rigaVista(REG_1)) },
+            aggiornamenti = aggiornamenti,
+        )
+        advanceUntilIdle()
+
+        fallisce = true
+        val registri = registriLogUi {
+            aggiornamenti.emetti(Cambiamento(REG_1))
+            advanceUntilIdle()
+        }
+
+        assertTrue(registri.any { it.level == Level.WARNING && it.causatoDa(guasto) }, "registri: $registri")
+        assertNotNull(assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).erroreAggiornamento)
     }
 
     @Test

@@ -1,1 +1,3 @@
 # Conventions proposals
+
+- update non-fatal-faults: "Shown by" also cites the committing commands outside the row runner on `eccezioneRegistrata` with the reset in `finally` — `RegistrazioniPresenter.avviaElaborazioniIncontro` and `FlussoImporta.invia` — and S2's reads/player on `nonFataleRegistrato` (`carica`, `conteggiIdentificazione`, `gruppi`, `precompilato`, `riproduci`, `pausa`), tested in `RegistrazioniConsegnaDopoCommitTest` (L269 'Trascrivi N parti') and `RegistrazioniPresenterAggiornamentoTest` (CR-7 refresh) — ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt, FlussoImporta.kt (slice 19: S2 now has no raw catch, so it is the complete example of ADR 0041 §3's split)

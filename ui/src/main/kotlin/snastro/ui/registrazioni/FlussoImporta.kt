@@ -1,6 +1,5 @@
 package snastro.ui.registrazioni
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -12,6 +11,7 @@ import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.ui.comandoConfermato
+import snastro.ui.eccezioneRegistrata
 import snastro.ui.testi.ETICHETTA_PARTI_AGGIUNTE
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioImportTuttoONiente
@@ -120,19 +120,23 @@ internal class FlussoImporta(
     private fun libero(dati: RegistrazioniUiStato.Dati?): Boolean =
         dati != null && !dati.importoInCorso && dati.dialogoImporta == null
 
-    /** Runs [comando] off the UI thread; `null` on success (a committed import too, D-0062), else the failure text. */
+    /**
+     * Runs [comando] off the UI thread; `null` on success (a committed import too, D-0062), else the failure text. A
+     * committing command (ADR 0041 §3): a thrown `Exception` is logged and answers the generic message, an `Error`
+     * propagates to the caller's `finally` (D-0065, L269).
+     */
     private suspend fun invia(
         comando: AggiungiRegistrazione,
         messaggio: (ErroreDominio) -> String = ::messaggioImportTuttoONiente,
-    ): String? = try {
-        when (val esito = withContext(io) { comandoConfermato("import") { aggiungiRegistrazione(comando) } }) {
+    ): String? {
+        val esito = eccezioneRegistrata("import") {
+            withContext(io) { comandoConfermato("import") { aggiungiRegistrazione(comando) } }
+        }
+        return when (esito) {
             is Esito.Ok -> null
             is Esito.Errore -> messaggio(esito.errore)
+            null -> MESSAGGIO_ERRORE_GENERICO
         }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (@Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception) {
-        MESSAGGIO_ERRORE_GENERICO
     }
 
     private fun aggiornaDialogo(f: (DialogoImporta) -> DialogoImporta) =
