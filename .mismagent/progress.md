@@ -98,3 +98,9 @@
 - CR-19b frozen entry for `ShellPresenter.kt` removed (2 -> 0); `EliminazioneProgettoAperto` unchanged (own guard and flag).
 - New tests in `ShellPresenterTest`: a thrown `apri`/`chiudi` is logged at WARNING with its cause (red before: 2 failed of 20); ShellSelettoreProgettoTest, EliminazioneProgettoApertoTest, acceptance EliminaProgettoApertoTest green unchanged.
 - conventions `non-fatal-faults` "Shown by" now cites `ShellPresenter.kt` (`corri`); "Still the defect" line removed. `./gradlew check` and `mm gate` green (exit 0).
+
+## 15-test-accettazione-banco-s1 — 2026-10-08
+- New `tests/acceptance/.../accettazione/BancoS1.kt`: abstract base `BancoS1` (`@TempDir casa`, `documenti` = `casa/Documents/snastro`, `registro`, `dispatcher`, presenter scope cancelled `@AfterEach`, `creaChiuso`, `lista`/`shell` over `casa`, `elimina` for S1 and shell, `dati`/`nomi`/`progetto`) plus top-level `contenuto` (recursive, WAL-tolerant) and `attendiRegistrati`. The five S1/shell acceptance classes extend it; 13/13 EX tests green, names unchanged.
+- Helpers in a public base class can't take `internal` types (`SessioneProgettoImpl`): compile error "protected function exposes its internal parameter type" — they take the `snastro.ui.SessioneProgetto` interface.
+- EX-1..EX-4 now pass the temp home instead of `""` and EX-1..4's projects live under `casa/Documents/snastro`; no assertion changed. `contenuto` no longer lists the root `""` (it compares before/after only).
+- Conventions `acceptance-tests` "Shared harness" now cites `BancoS1.kt`. `./gradlew check` and `mm gate` green (exit 0).
