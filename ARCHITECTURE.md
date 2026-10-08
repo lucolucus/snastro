@@ -7,42 +7,30 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
-- 2026-10-09 — conventions non-fatal-faults (decided: codex, delegated by the user): states that a handled fault at a
-  non-committing edge (a start, a playback) also shows the generic message, as the 2026-10-08 error policy already
-  requires; slice 26 left two such edges without it (review 26-1, advice 4).
-- 2026-10-09 — conventions presenter-split (decided: codex, delegated by the user): an extracted flow's collaborators
-  move into one public data class per holder, built by `:avvio`; the presenter's parameter list may change, ADR 0030 §1
-  compile-time wiring kept by required non-null fields. Before, the frozen constructor meant a split could never shrink
-  `RegistrazioniPresenter`'s 21 parameters (release review R0-3).
-- 2026-10-08 — acceptance tests move to *tests/acceptance/src/test/kotlin*, compiled as an extra test source dir of
-  `:avvio` (conventions topic acceptance-tests; decided: codex, delegated by the user): mm reads `EX-<n>` markers only
-  there, and a separate Gradle module would cost settings, module-map and allowed-edge changes. Refactor slice 06.
-- 2026-10-08 — design pass (R0): `.mismagent/architecture.md` (R3 registry line) now says that `:avvio`'s
-  `SessioneProgetto` also deletes a project — it said open/close only, the code does more since slices 01–03
-  (`SessioneProgettoImpl.elimina`). No decision changed. Queued refactors 08–11: delete flow out of
-  `ProgettiPresenter` (it sits at detekt's `TooManyFunctions` limit), acceptance-test scopes and the recursive
-  EX-6 check, one shared `MessaggioInlineErrore` and one "More" menu in S4.
-- 2026-10-08 — design pass (R0, release review R0-1): `.mismagent/architecture.md` (R3 registry line) now names
-  `togliDallaLista` and the port `CartelleProgetti` (slice 05), and states the error policy for the session port: a
-  registry failure is technical, it throws and the presenter's edge logs it and shows the generic message; expected
-  refusals stay `Esito`. So `togliDallaLista` returning `Unit` is not a gap (`elimina` throws on the same failure);
-  the gap is the dropped cause. No decision changed. Queued refactors 12–16: log non-fatal causes in the S1 runner and
-  the open-project delete, `ErroreSessione` messages only with the home, one shell runner, one acceptance harness,
-  the import and row-delete flows out of `RegistrazioniPresenter`.
-- 2026-10-08 — design pass (R0, release review R0-2): the faults at a presenter's edge get one rule (new
-  [ADR 0041](.mismagent/decisions/0041-guasti-ai-bordi-dei-presenter.md), amending ADR 0028 §2;
-  `.mismagent/architecture.md` amendment of the same date). A committing command catches `Exception` only through
-  `eccezioneRegistrata` over a new `:supporto` `catturaEccezione`, so an `Error` after the commit still propagates
-  (D-0065). Everything else uses `nonFataleRegistrato`. Both log.
-  - Why: S2's eight raw catches drop the cause, but `nonFataleRegistrato` would swallow the `Error`s that the L269 tests
-    require to propagate. The review's fix for `avviaElaborazioniIncontro` would have kept its D-0065 defect.
-  - This is the target. The code moves in the queued refactors 17–21: S1's list load logged, the S2 per-row runner on
-    `StatoS2`, S2's remaining edges, the Incontro flow out of `RegistrazioniPresenter`, and `SchermataRegistrazioni`
-    split by flow.
-- 2026-10-08 — design pass (R1, after release review R0-3): ADR 0041's amendment in `.mismagent/architecture.md` now
-  says what is true. The rule holds for S1, the shell and S2. The other `:ui` presenters (S3, S4, Riassunto, settings,
-  models, player) still drop causes under frozen CR-19b counts. No decision changed.
-  - Queued refactors 26–30: one per edge, Riassunto first, because R1 changes that flow.
-  - Not queued yet: S2's row commands out of `RegistrazioniPresenter`. Moving them cannot shrink the 21-parameter
-    constructor while presenter-split says "Preserve its constructor", so that waits for the human's call on the
-    proposal in `.mismagent/conventions-proposals.md`.
+- 2026-10-09 — design pass (R1, after refactors 26–30): ADR 0041's amendment in `.mismagent/architecture.md` now
+  says it has landed in every `:ui` presenter. No `:ui` file is left in CR-19b's frozen list. What is still open is
+  the user-facing half of "Message at every edge": some edges fall back silently. No decision changed.
+  - Queued refactors 31–35:
+    - 31–32: the generic message at the silent edges (Riassunto, settings, the player's `pausa`, S3);
+    - 33: S2's row runner owns `io` and `comandoConfermato`, as S4's `suRiga` already does;
+    - 34–35: the row commands and then the row building move out of `RegistrazioniPresenter`, each behind a public
+      bundle (presenter-split 2026-10-09).
+  - Proposed: an edge with a load-specific message needs no extra generic one, and one shape for the row runner.
+- 2026-10-09 — conventions non-fatal-faults (codex, delegated): a non-committing edge also shows the generic
+  message (review 26-1). Presenter-split (codex, delegated): an extracted flow's collaborators become one public data
+  class per holder, built by `:avvio`. ADR 0030 §1 still holds through required non-null fields. Before this, the
+  frozen constructor blocked shrinking `RegistrazioniPresenter` (R0-3).
+- 2026-10-08 — acceptance tests moved to *tests/acceptance/src/test/kotlin*, an extra test source dir of `:avvio`
+  (conventions acceptance-tests; codex, delegated). mm reads `EX-<n>` markers only there, and a Gradle module would
+  have cost a module-map change. Refactor 06.
+- 2026-10-08 — design passes R0 (with release reviews R0-1 and R0-2):
+  - `.mismagent/architecture.md`'s R3 line now says that `SessioneProgetto` also deletes a project, and names
+    `togliDallaLista`/`CartelleProgetti`.
+  - Error policy of the session port: a registry failure throws, and the presenter's edge logs it and shows the
+    generic message. Expected refusals stay `Esito`.
+  - New [ADR 0041](.mismagent/decisions/0041-guasti-ai-bordi-dei-presenter.md), amending ADR 0028 §2: committing
+    blocks use `eccezioneRegistrata` (an `Error` propagates, D-0065), every other edge uses `nonFataleRegistrato`.
+    Both log.
+  - Refactors 08–21 queued.
+- 2026-10-08 — design pass R1 (after R0-3): ADR 0041's status was made true for S1, the shell and S2, and
+  refactors 26–30 were queued.

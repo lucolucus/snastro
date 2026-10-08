@@ -273,7 +273,7 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
   (D-0065). It uses `eccezioneRegistrata` (`:ui`), which sits on `:supporto`'s `catturaEccezione`.
 - **Every other edge** (reads, refreshes, the player, S1's list load) uses `nonFataleRegistrato` over `catturaNonFatale`.
 - S2's per-row commands share one runner on `StatoS2`.
-- Landed for S1, the shell and S2 (slices 12, 14, 17–19: their CR-19b counts are 0). The remaining unlogged `:ui`
-  catch-alls are debt, not an exception. They are S3 (`StatoVoci`, `RegistrazionePresenter`, `SomiglianzaVoci`), S4,
-  the Riassunto tab, the settings, the models and the player, and each is still a CR-19b count. Refactor slices 26–30
-  queue them *(design pass R1, 2026-10-08)*.
+- Landed in every `:ui` presenter (slices 12, 14, 17–19, 26–30): no `:ui` file is left in CR-19b's frozen list
+  (`RegoleArchitetturaliTest.kt:699-722`). Every caught fault is logged. Not yet every edge shows the generic message
+  (non-fatal-faults, "Message at every edge"): the silent fallbacks in the Riassunto tab, the settings, the player's
+  `pausa` (no edge at all) and S3 are debt, queued as refactors 31–32 *(design pass R1, 2026-10-09)*.
