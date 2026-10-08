@@ -12,12 +12,12 @@ import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
 import snastro.avvio.progetto.conSessioneDiProva
+import snastro.avvio.progetto.elencoProgetti
 import snastro.kernel.IncontroId
 import snastro.kernel.atteso
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
-import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.dominio.Incontro
@@ -131,7 +131,7 @@ class EliminaConLockECodaTest {
     }
 
     private fun TestScope.lista(sessione: SessioneProgettoImpl): ProgettiPresenter =
-        ProgettiPresenter(scopePresenter, dispatcher, ElencoProgetti(registro), sessione, casa.toString())
+        ProgettiPresenter(scopePresenter, dispatcher, elencoProgetti(registro), sessione, casa.toString())
             .also { advanceUntilIdle() }
 
     private fun TestScope.elimina(presenter: ProgettiPresenter, nome: String) {

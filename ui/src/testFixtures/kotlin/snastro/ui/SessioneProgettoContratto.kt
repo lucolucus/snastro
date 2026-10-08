@@ -61,7 +61,10 @@ abstract class SessioneProgettoContratto {
 
         sessione.elimina(creato.percorso).atteso()
 
-        assertEquals(ErroreSessione.CartellaNonValida, sessione.apri(creato.percorso).erroreAtteso<ErroreSessione>())
+        assertEquals(
+            ErroreSessione.CartellaNonTrovata(creato.percorso),
+            sessione.apri(creato.percorso).erroreAtteso<ErroreSessione>(),
+        )
     }
 
     @Test
@@ -72,7 +75,22 @@ abstract class SessioneProgettoContratto {
         sessione.elimina(creato.percorso).atteso()
 
         assertNull(sessione.corrente.value)
-        assertEquals(ErroreSessione.CartellaNonValida, sessione.apri(creato.percorso).erroreAtteso<ErroreSessione>())
+        assertEquals(
+            ErroreSessione.CartellaNonTrovata(creato.percorso),
+            sessione.apri(creato.percorso).erroreAtteso<ErroreSessione>(),
+        )
+    }
+
+    @Test
+    fun `un progetto tolto dalla lista non e cancellato e si riapre`() {
+        val sessione = con()
+        val creato = sessione.crea(cartellaGenitoreProva(), nomeProva()).atteso()
+        sessione.chiudi()
+
+        sessione.togliDallaLista(creato.percorso)
+
+        assertEquals(creato, sessione.apri(creato.percorso).atteso())
+        sessione.chiudi()
     }
 
     @Test

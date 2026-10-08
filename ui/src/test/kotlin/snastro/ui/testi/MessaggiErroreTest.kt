@@ -78,6 +78,7 @@ class MessaggiErroreTest {
             listOf(
                 ErroreSessione.NomeProgettoVuoto,
                 ErroreSessione.CartellaNonValida,
+                ErroreSessione.CartellaNonTrovata("/Users/me/Documents/snastro/test.snastro"),
                 ErroreSessione.ProgettoGiaAperto,
                 ErroreSessione.ProgettoApertoAltrove,
                 ErroreSessione.ElaborazioneInCorso,

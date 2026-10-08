@@ -57,6 +57,7 @@ import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.DESCRIZIONE_NUOVO_PROGETTO
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
+import snastro.ui.testi.ETICHETTA_CARTELLA_NON_TROVATA
 import snastro.ui.testi.ETICHETTA_CHIUDI
 import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
@@ -156,6 +157,7 @@ private fun ContenutoProgetti(
                 )
             }
             stato.erroreApri?.let { MessaggioInlineErrore(it, azioni.chiudiErroreApri, "progetti-errore-apri") }
+            stato.erroreTogli?.let { MessaggioInlineErrore(it, azioni.chiudiErroreTogli, "progetti-errore-togli") }
             stato.avvisoEliminazione?.let {
                 Spacer(modifier = Modifier.height(SnastroMisure.space4))
                 BannerSn(
@@ -329,7 +331,8 @@ private fun CardNuovoProgetto(abilitato: Boolean, onNuovo: () -> Unit) {
 
 /**
  * AC-573/AC-198: one project = one card (name `heading`, "n registrazioni · ultima attività" `caption`); a click opens
- * it, its "⋯" menu holds "Elimina…" (R0).
+ * it, its "⋯" menu holds "Elimina…" (R0). A project whose folder is not found is marked "Cartella non trovata" in
+ * place of the caption (EX-7); a click still tries to open it (EX-13).
  */
 @Composable
 private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, azioni: AzioniProgetti) {
@@ -343,9 +346,13 @@ private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, azioni: Az
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TesseraIcona(Icona.Reel, sfondo = colori.sunken, tinta = colori.accentInk)
+                if (progetto.cartellaTrovata) {
+                    TesseraIcona(Icona.Reel, sfondo = colori.sunken, tinta = colori.accentInk)
+                } else {
+                    TesseraIcona(Icona.Alert, sfondo = colori.warningSoft, tinta = colori.warning)
+                }
                 Spacer(modifier = Modifier.weight(1f))
-                MenuProgetto(progetto, abilitato, azioni.chiediElimina)
+                MenuProgetto(progetto, abilitato, azioni)
             }
             Spacer(modifier = Modifier.weight(1f))
             Text(
@@ -355,14 +362,24 @@ private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, azioni: Az
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val dataUltimaAttivita = formattaData(progetto.ultimaAttivita.atZone(ZoneId.systemDefault()).toLocalDate())
-            Text(
-                text = "${etichettaRegistrazioni(progetto.numRegistrazioni)} · $dataUltimaAttivita",
-                style = tipografia.caption,
-                color = colori.inkMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (progetto.cartellaTrovata) {
+                val dataUltimaAttivita =
+                    formattaData(progetto.ultimaAttivita.atZone(ZoneId.systemDefault()).toLocalDate())
+                Text(
+                    text = "${etichettaRegistrazioni(progetto.numRegistrazioni)} · $dataUltimaAttivita",
+                    style = tipografia.caption,
+                    color = colori.inkMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            } else {
+                Text(
+                    text = ETICHETTA_CARTELLA_NON_TROVATA,
+                    style = tipografia.caption,
+                    color = colori.warning,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

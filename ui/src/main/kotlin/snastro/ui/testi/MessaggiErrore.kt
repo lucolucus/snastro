@@ -34,6 +34,7 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
 fun messaggioPer(errore: ErroreSessione): String = when (errore) {
     ErroreSessione.NomeProgettoVuoto -> "Il nome del progetto non può essere vuoto."
     ErroreSessione.CartellaNonValida -> "La cartella scelta non è valida."
+    is ErroreSessione.CartellaNonTrovata -> avvisoCartellaNonTrovata(errore.cartella, cartellaUtente = "")
     ErroreSessione.ProgettoGiaAperto -> "Questo progetto è già aperto in un'altra finestra."
     ErroreSessione.ProgettoApertoAltrove -> "Questo progetto è aperto in un'altra finestra."
     ErroreSessione.ElaborazioneInCorso ->

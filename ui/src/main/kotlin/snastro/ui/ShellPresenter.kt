@@ -18,14 +18,14 @@ import snastro.ui.testi.messaggioPer
  * State holder of the app shell (RC-2, thin UI): reflects [SessioneProgetto.corrente] and forwards
  * `crea`/`apri`/`chiudi`/`seleziona` to it; the open project's delete is [EliminazioneProgettoAperto]'s.
  * [sezioniDisponibili] is injected by the composition root (AC-341) — the single composition's `SEZIONI_SHELL` always
- * includes every [DestinazioneShell]; [cartellaUtente], the user's home, is written `~` in what that delete shows.
+ * includes every [DestinazioneShell]; [cartellaUtente], the user's home, is written `~` in the folders the shell shows.
  */
 class ShellPresenter(
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
     private val sessione: SessioneProgetto,
     private val sezioniDisponibili: Set<DestinazioneShell>,
-    cartellaUtente: String,
+    private val cartellaUtente: String,
 ) {
     init {
         require(sezioniDisponibili.isNotEmpty()) { "la shell richiede almeno una sezione disponibile" }
@@ -114,7 +114,7 @@ class ShellPresenter(
                 sezioniDisponibili,
                 destinazioneCorrente,
             )
-            is Esito.Errore -> statoConErrore(messaggioPer(esito.errore))
+            is Esito.Errore -> statoConErrore(messaggioPer(esito.errore, cartellaUtente))
         }
     }
 

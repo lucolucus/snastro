@@ -10,8 +10,9 @@ import snastro.kernel.ProgettoId
 
 /**
  * Fake [SessioneProgetto] (RC-9): `crea` mints a Progetto keyed by its own `percorso`; `apri` reopens
- * one previously created under that same `percorso` — a round trip, no filesystem; `elimina` forgets it, closing it
- * first when it is the open one.
+ * one previously created under that same `percorso` — a round trip, no filesystem, so any other `percorso` is a
+ * folder not found; `elimina` forgets it, closing it first when it is the open one; `togliDallaLista` keeps it (this
+ * fake has no list).
  */
 class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreIdFinto()) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
@@ -29,7 +30,7 @@ class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreI
     }
 
     override fun apri(percorso: String): Esito<ProgettoAperto> {
-        val progetto = progetti[percorso] ?: return Esito.Errore(ErroreSessione.CartellaNonValida)
+        val progetto = progetti[percorso] ?: return Esito.Errore(ErroreSessione.CartellaNonTrovata(percorso))
         _corrente.value = progetto
         return Esito.Ok(progetto)
     }
@@ -39,6 +40,8 @@ class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreI
         progetti.remove(percorso)
         return Esito.Ok(ProgettoEliminato.Completamente)
     }
+
+    override fun togliDallaLista(percorso: String) = Unit
 
     override fun chiudi() {
         _corrente.value = null

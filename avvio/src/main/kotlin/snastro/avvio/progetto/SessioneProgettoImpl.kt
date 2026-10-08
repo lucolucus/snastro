@@ -33,13 +33,9 @@ import snastro.ui.ProgettoAperto
 import snastro.ui.ProgettoEliminato
 import snastro.ui.SessioneProgetto
 import java.io.File
-import java.nio.channels.FileChannel
-import java.nio.channels.FileLock
-import java.nio.channels.OverlappingFileLockException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardOpenOption
 import java.time.Clock
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -150,6 +146,7 @@ internal class SessioneProgettoImpl(
     @Suppress("ReturnCount") // guard clauses, one per ErroreSessione — mapping each is clearer than nesting
     override fun apri(percorso: String): Esito<ProgettoAperto> {
         val cartella = Path.of(percorso)
+        if (!Files.isDirectory(cartella)) return Esito.Errore(ErroreSessione.CartellaNonTrovata(percorso))
         if (!validaCartellaProgetto(cartella)) return Esito.Errore(ErroreSessione.CartellaNonValida)
 
         val lockCartella = acquisisciLock(cartella) ?: return Esito.Errore(ErroreSessione.ProgettoGiaAperto)
@@ -233,11 +230,20 @@ internal class SessioneProgettoImpl(
     private fun eliminaSeNonAperto(cartella: Path, percorso: String): Esito<ProgettoEliminato> {
         val lockCartella = acquisisciLock(cartella) ?: return Esito.Errore(ErroreSessione.ProgettoApertoAltrove)
         return try {
-            eseguitoreRegistro.submit { registro.rimuovi(percorso) }.get()
+            togliDallaLista(percorso)
             Esito.Ok(cancellaContenutiSnastro(cartella))
         } finally {
             chiudiSilenziosamente("rilascio del lock fallito in elimina") { rilasciaLock(lockCartella) }
         }
+    }
+
+    /**
+     * R0 (EX-8): drops [percorso] from [registro], touching nothing on disk — on the registry's own thread, after every
+     * write already queued there (`crea`'s `registra`, `chiudi`'s `aggiorna`), and waited for: the list read right
+     * after must not show it any more. A failing registry throws to the caller. [elimina] starts the same way.
+     */
+    override fun togliDallaLista(percorso: String) {
+        eseguitoreRegistro.submit { registro.rimuovi(percorso) }.get()
     }
 
     override fun chiudi() {
@@ -291,23 +297,9 @@ internal class SessioneProgettoImpl(
             // di toccare il database PRIMA di chiuderlo. fix-batch-16 MED-1: se un lavoratore sopravvive alla scadenza
             // (una chiamata nativa ignora l'interruzione), chiusura del database e rilascio del lock sono RINVIATI alla
             // sua fine — mai un database chiuso sotto un lavoratore vivo; `corrente` lo azzera il chiamante, comunque.
-            inTempo = arresta(sessione.composto, rilascioUnaVolta(sessione))
+            inTempo = arresta(sessione.composto, rilascioUnaVolta(sessione.risorse.chiudiDb, sessione.lockCartella))
         }
         return inTempo
-    }
-
-    /**
-     * The database close (fix-batch-12 #2) + the `.lock` release of [sessione], each guarded on its own
-     * (AC-347), run at most once — now or, fix-batch-16 MED-1, later, on a worker's own thread.
-     */
-    private fun rilascioUnaVolta(sessione: SessioneAperta): () -> Unit {
-        val fatto = AtomicBoolean(false)
-        return {
-            if (fatto.compareAndSet(false, true)) {
-                chiudiSilenziosamente("chiusura del database fallita in chiudi") { sessione.risorse.chiudiDb() }
-                chiudiSilenziosamente("rilascio del lock fallito in chiudi") { rilasciaLock(sessione.lockCartella) }
-            }
-        }
     }
 
     /** Composes the project just opened/created ([apriProgetto]) and sets [corrente]. */
@@ -405,8 +397,19 @@ private fun arresta(composto: ProgettoComposto, rilascia: () -> Unit): Boolean =
     true
 }
 
-/** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */
-private class LockCartella(val canale: FileChannel, val lock: FileLock)
+/**
+ * The database close [chiudiDb] (fix-batch-12 #2) + the release of [lockCartella] of a closed project, each guarded on
+ * its own (AC-347), run at most once — now or, fix-batch-16 MED-1, later, on a worker's own thread.
+ */
+private fun rilascioUnaVolta(chiudiDb: () -> Unit, lockCartella: LockCartella): () -> Unit {
+    val fatto = AtomicBoolean(false)
+    return {
+        if (fatto.compareAndSet(false, true)) {
+            chiudiSilenziosamente("chiusura del database fallita in chiudi", chiudiDb)
+            chiudiSilenziosamente("rilascio del lock fallito in chiudi") { rilasciaLock(lockCartella) }
+        }
+    }
+}
 
 private fun validaCartellaProgetto(cartella: Path): Boolean =
     Files.isDirectory(cartella) &&
@@ -425,29 +428,6 @@ private fun creaCartellaLibera(genitore: Path, base: String): Path {
             candidato = genitore.resolve("$base ($numero).snastro")
             numero++
         }
-    }
-}
-
-/** `null` = the lock is already held (by another process, or another instance in this same JVM). */
-private fun acquisisciLock(cartella: Path): LockCartella? {
-    val canale = FileChannel.open(cartella.resolve(".lock"), StandardOpenOption.CREATE, StandardOpenOption.WRITE)
-    val lock = try {
-        canale.tryLock()
-    } catch (ignored: OverlappingFileLockException) {
-        null
-    }
-    if (lock == null) {
-        canale.close()
-        return null
-    }
-    return LockCartella(canale, lock)
-}
-
-private fun rilasciaLock(lockCartella: LockCartella) {
-    try {
-        lockCartella.lock.release()
-    } finally {
-        lockCartella.canale.close()
     }
 }
 

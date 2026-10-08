@@ -1,5 +1,7 @@
 package snastro.ui.testi
 
+import snastro.kernel.ErroreDominio
+import snastro.ui.ErroreSessione
 import snastro.ui.ProgettoEliminato
 
 /** S1 · Progetti screen labels, Italian (dev-architecture `#presenter`: UI strings live in `snastro.ui.testi`). */
@@ -51,6 +53,27 @@ fun avvisoEliminazione(eliminato: ProgettoEliminato, cartellaUtente: String): St
         "Il progetto è stato eliminato solo in parte: resta la cartella " +
             "${percorsoDaCasa(eliminato.cartella, cartellaUtente)}."
 }
+
+/** R0 (EX-7): the mark of a project whose folder is not there any more. */
+const val ETICHETTA_CARTELLA_NON_TROVATA: String = "Cartella non trovata"
+
+/** R0 (EX-7, EX-8): a not-found project's action, dropping it from the list without deleting anything. */
+const val ETICHETTA_TOGLI_DALLA_LISTA: String = "Togli dalla lista"
+
+/** R0 (EX-13): opening a project whose [cartella] is not there — the mark, then the folder from [cartellaUtente]. */
+fun avvisoCartellaNonTrovata(cartella: String, cartellaUtente: String): String =
+    "$ETICHETTA_CARTELLA_NON_TROVATA: ${percorsoDaCasa(cartella, cartellaUtente)}"
+
+/**
+ * [messaggioPer] for a screen that knows the user's home [cartellaUtente]: a folder it names is written `~` from there
+ * (display-paths), the rest is unchanged.
+ */
+fun messaggioPer(errore: ErroreDominio, cartellaUtente: String): String =
+    if (errore is ErroreSessione.CartellaNonTrovata) {
+        avvisoCartellaNonTrovata(errore.cartella, cartellaUtente)
+    } else {
+        messaggioPer(errore)
+    }
 
 /** [percorso] with the user's home [cartellaUtente] written `~`, as Finder's Go to Folder does; else unchanged. */
 fun percorsoDaCasa(percorso: String, cartellaUtente: String): String {

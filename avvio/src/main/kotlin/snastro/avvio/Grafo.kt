@@ -9,6 +9,7 @@ import snastro.avvio.modelli.ModelliApp
 import snastro.avvio.parlanti.adattatoriParlanti
 import snastro.avvio.progetto.ComponentiApp
 import snastro.avvio.progetto.SessioneProgettoImpl
+import snastro.avvio.progetto.elencoProgetti
 import snastro.avvio.progetto.registroProgettiFile
 import snastro.avvio.sintesi.modelloLinguistico
 import snastro.avvio.trascrizione.SceltaMl
@@ -101,7 +102,7 @@ internal fun costruisciGrafo(
         io = io,
         clock = clock,
         sessione = sessione,
-        elencoProgetti = ElencoProgetti(registro),
+        elencoProgetti = elencoProgetti(registro),
         cartellaProgettiPredefinita = cartellaProgettiPredefinitaReale(),
         servizioModelli = modelli.servizio,
         apriEsterno = ApriEsternoDesktop(),

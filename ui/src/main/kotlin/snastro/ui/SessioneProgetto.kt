@@ -6,8 +6,8 @@ import snastro.kernel.Esito
 /**
  * `tec-shell-ui` (owned here, in-process, consumer-driven contract test — [SessioneProgettoContratto]):
  * the UI-side session over one open [ProgettoAperto], implemented by `:avvio` (folder layout, `.lock`,
- * database lifecycle — ADR 0010). `crea`/`apri`/`elimina` are blocking (dev-architecture `#servizio`): the
- * presenter dispatches them on its own IO dispatcher.
+ * database lifecycle — ADR 0010). `crea`/`apri`/`elimina`/`togliDallaLista` are blocking (dev-architecture
+ * `#servizio`): the presenter dispatches them on its own IO dispatcher.
  */
 interface SessioneProgetto {
     /** The Progetto currently open, or `null` if none is (one project open per app instance). */
@@ -16,7 +16,7 @@ interface SessioneProgetto {
     /** Creates a new project folder under [cartellaGenitore] named after [nome] and opens it. */
     fun crea(cartellaGenitore: String, nome: String): Esito<ProgettoAperto>
 
-    /** Opens the project folder at [percorso]. */
+    /** Opens the project folder at [percorso]; [ErroreSessione.CartellaNonTrovata] if it is not there (EX-13). */
     fun apri(percorso: String): Esito<ProgettoAperto>
 
     /**
@@ -27,6 +27,9 @@ interface SessioneProgetto {
      * in time, it is closed but not deleted: [ErroreSessione.ProgettoChiusoNonEliminato].
      */
     fun elimina(percorso: String): Esito<ProgettoEliminato>
+
+    /** R0 (EX-8): drops the project at [percorso] from the known projects, deleting nothing. */
+    fun togliDallaLista(percorso: String)
 
     /**
      * Closes the currently open project, if any ([corrente] becomes `null`). Blocking too — it may wait

@@ -11,8 +11,8 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
+import snastro.avvio.progetto.elencoProgetti
 import snastro.kernel.atteso
-import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.supporto.test.attendiFinche
@@ -105,7 +105,7 @@ class EliminaProgettoDallaListaTest {
                 registro.elenco().any { it.percorso == creato.percorso }
             }
         }
-        return ProgettiPresenter(scopePresenter, dispatcher, ElencoProgetti(registro), sessione, cartellaUtente = "")
+        return ProgettiPresenter(scopePresenter, dispatcher, elencoProgetti(registro), sessione, cartellaUtente = "")
             .also { advanceUntilIdle() }
     }
 

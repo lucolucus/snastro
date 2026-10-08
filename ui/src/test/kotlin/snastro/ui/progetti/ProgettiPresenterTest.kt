@@ -13,6 +13,8 @@ import snastro.kernel.Esito
 import snastro.kernel.ProgettoId
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
+import snastro.progetto.applicazione.porte.CartelleProgetti
+import snastro.progetto.applicazione.porte.CartelleProgettiFinta
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.applicazione.porte.VoceRegistro
@@ -43,6 +45,7 @@ private class SessioneProgettoFissa(
     private val risultatoCrea: Esito<ProgettoAperto>? = null,
     private val risultatoApri: Esito<ProgettoAperto>? = null,
     private val elimina: (() -> Esito<ProgettoEliminato>)? = null,
+    private val togli: ((percorso: String) -> Unit)? = null,
 ) : SessioneProgetto {
     override val corrente: StateFlow<ProgettoAperto?> = MutableStateFlow(null)
 
@@ -54,6 +57,9 @@ private class SessioneProgettoFissa(
 
     override fun elimina(percorso: String): Esito<ProgettoEliminato> =
         elimina?.invoke() ?: error("elimina non atteso in questo test")
+
+    override fun togliDallaLista(percorso: String) =
+        togli?.invoke(percorso) ?: error("togliDallaLista non atteso in questo test")
 
     override fun chiudi() = Unit
 }
@@ -110,12 +116,13 @@ class ProgettiPresenterTest {
         registro: RegistroProgetti = RegistroProgettiFinta(),
         sessione: SessioneProgetto = SessioneProgettoFinta(),
         cartellaUtente: String = "",
+        cartelle: CartelleProgetti = CartelleProgettiFinta(),
     ): ProgettiPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         return ProgettiPresenter(
             CoroutineScope(dispatcher),
             dispatcher,
-            ElencoProgetti(registro),
+            ElencoProgetti(registro, cartelle),
             sessione,
             cartellaUtente,
         )
@@ -145,7 +152,7 @@ class ProgettiPresenterTest {
 
             val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
             assertEquals(
-                listOf(ProgettoVista(ProgettoId("id-1"), "Consiglio comunale", "/p/Consiglio.snastro", 3, ORA)),
+                listOf(ProgettoVista(ProgettoId("id-1"), "Consiglio comunale", "/p/Consiglio.snastro", 3, ORA, true)),
                 stato.progetti,
             )
         }
@@ -245,6 +252,63 @@ class ProgettiPresenterTest {
         presenter.azioni.chiudiAvvisoEliminazione()
 
         assertEquals(ProgettiUiStato.Dati(progetti = emptyList()), presenter.stato.value)
+    }
+
+    @Test
+    fun `EX-13 aprire un progetto la cui cartella non c e avvisa con la cartella dalla casa dell utente`() = runTest {
+        val percorso = "/Users/me/Documents/snastro/test.snastro"
+        val sessione = SessioneProgettoFissa(risultatoApri = Esito.Errore(ErroreSessione.CartellaNonTrovata(percorso)))
+        val presenter = presentatore(this, sessione = sessione, cartellaUtente = "/Users/me")
+        advanceUntilIdle()
+
+        presenter.apri(percorso)
+        advanceUntilIdle()
+
+        val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
+        assertEquals("Cartella non trovata: ~/Documents/snastro/test.snastro", stato.erroreApri)
+    }
+
+    @Test
+    fun `EX-8 togliere dalla lista un progetto non trovato lo toglie e ricarica la lista`() = runTest {
+        val voce = VoceRegistro(ProgettoId("id-1"), "test", "/Users/me/Desktop/test.snastro", 0, ORA)
+        val registro = RegistroProgettiFinta().apply { registra(voce) }
+        val tolti = mutableListOf<String>()
+        val sessione = SessioneProgettoFissa(
+            togli = {
+                tolti += it
+                registro.rimuovi(it)
+            },
+        )
+        val cartelle = CartelleProgettiFinta().apply { sposta(voce.percorso) }
+        val presenter = presentatore(this, registro = registro, sessione = sessione, cartelle = cartelle)
+        advanceUntilIdle()
+
+        presenter.azioni.togliDallaLista(assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti.single())
+        advanceUntilIdle()
+
+        assertEquals(listOf(voce.percorso), tolti)
+        assertEquals(ProgettiUiStato.Dati(progetti = emptyList()), presenter.stato.value)
+    }
+
+    @Test
+    fun `togliere dalla lista che fallisce lascia la lista e mostra l errore generico, che si chiude`() = runTest {
+        val voce = VoceRegistro(ProgettoId("id-1"), "test", "/Users/me/Desktop/test.snastro", 0, ORA)
+        val registro = RegistroProgettiFinta().apply { registra(voce) }
+        val sessione = SessioneProgettoFissa(togli = { throw IOException("registro non scrivibile") })
+        val presenter = presentatore(this, registro = registro, sessione = sessione)
+        advanceUntilIdle()
+        val prima = assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti
+
+        presenter.azioni.togliDallaLista(prima.single())
+        advanceUntilIdle()
+        assertEquals(
+            ProgettiUiStato.Dati(progetti = prima, erroreTogli = MESSAGGIO_ERRORE_GENERICO),
+            presenter.stato.value,
+        )
+
+        presenter.azioni.chiudiErroreTogli()
+
+        assertEquals(ProgettiUiStato.Dati(progetti = prima), presenter.stato.value)
     }
 
     @Test

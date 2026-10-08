@@ -13,12 +13,14 @@ import snastro.ui.testi.messaggioPer
 /**
  * The one single-flight runner of S1 · Progetti over its shared [stato], used by [ProgettiPresenter] and
  * [FlussoEliminazione] alike: one copy of the M3 guard (a second operation while one is in flight is ignored) and of
- * M1(b) (a non-cancellation fault becomes the one fixed generic message).
+ * M1(b) (a non-cancellation fault becomes the one fixed generic message). An expected failure's message writes the
+ * folders it names `~` from [cartellaUtente] (empty: shown as they are).
  */
 internal class CorsaSingola(
     private val stato: MutableStateFlow<ProgettiUiStato>,
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
+    private val cartellaUtente: String,
 ) {
     /** The loaded state, or null while the list is still loading. */
     val dati: ProgettiUiStato.Dati? get() = stato.value as? ProgettiUiStato.Dati
@@ -48,7 +50,7 @@ internal class CorsaSingola(
                 // message the user sees, never a stack trace; `catturaNonFatale` rethrows cancellation.
                 when (val esito = catturaNonFatale { withContext(io) { operazione() } }.getOrNull()) {
                     is Esito.Ok -> aggiorna { alSuccesso(it, esito.valore) }
-                    is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
+                    is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore, cartellaUtente)) }
                     null -> aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
                 }
             } finally {

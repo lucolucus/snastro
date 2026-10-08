@@ -14,8 +14,8 @@ import snastro.avvio.SEZIONI_SHELL
 import snastro.avvio.progetto.AmbienteProgetto
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
+import snastro.avvio.progetto.elencoProgetti
 import snastro.kernel.atteso
-import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgetti
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
@@ -128,7 +128,7 @@ class EliminaProgettoApertoTest {
 
     /** The names S1 shows, on a fresh presenter as the app builds it each time S1 is entered. */
     private fun TestScope.nomiInLista(sessione: SessioneProgettoImpl): List<String> {
-        val lista = ProgettiPresenter(scopePresenter, dispatcher, ElencoProgetti(registro), sessione, "")
+        val lista = ProgettiPresenter(scopePresenter, dispatcher, elencoProgetti(registro), sessione, "")
         advanceUntilIdle()
         return assertIs<ProgettiUiStato.Dati>(lista.stato.value).progetti.map(ProgettoVista::nome)
     }

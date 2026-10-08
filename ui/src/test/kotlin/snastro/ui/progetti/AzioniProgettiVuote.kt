@@ -11,4 +11,6 @@ internal val AZIONI_VUOTE = AzioniProgetti(
     annullaElimina = {},
     confermaElimina = {},
     chiudiAvvisoEliminazione = {},
+    togliDallaLista = {},
+    chiudiErroreTogli = {},
 )

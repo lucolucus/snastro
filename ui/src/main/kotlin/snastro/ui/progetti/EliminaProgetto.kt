@@ -26,23 +26,38 @@ import snastro.ui.stile.VarianteBottone
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_ELIMINA
+import snastro.ui.testi.ETICHETTA_TOGLI_DALLA_LISTA
 import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_PROGETTO
 import snastro.ui.testi.etichettaNomeDaDigitare
 import snastro.ui.testi.titoloConfermaEliminaProgetto
 
-/** R0: a project card's "⋯" menu, whose "Elimina…" (danger text) asks to confirm the delete. */
+/**
+ * R0: a project card's "⋯" menu — "Elimina…" (danger text), which asks to confirm the delete, or, for a project whose
+ * folder is not found, "Togli dalla lista" only (EX-7, EX-8).
+ */
 @Composable
-internal fun MenuProgetto(progetto: ProgettoVista, abilitato: Boolean, chiediElimina: (ProgettoVista) -> Unit) {
+internal fun MenuProgetto(progetto: ProgettoVista, abilitato: Boolean, azioni: AzioniProgetti) {
     val id = progetto.progettoId.valore
     MenuAltreAzioni("progetti-altre-azioni-$id", abilitato) { chiudi ->
-        DropdownMenuItem(
-            text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
-            onClick = {
-                chiudi()
-                chiediElimina(progetto)
-            },
-            modifier = Modifier.testTag("progetti-menu-elimina-$id"),
-        )
+        if (progetto.cartellaTrovata) {
+            DropdownMenuItem(
+                text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
+                onClick = {
+                    chiudi()
+                    azioni.chiediElimina(progetto)
+                },
+                modifier = Modifier.testTag("progetti-menu-elimina-$id"),
+            )
+        } else {
+            DropdownMenuItem(
+                text = { Text(ETICHETTA_TOGLI_DALLA_LISTA) },
+                onClick = {
+                    chiudi()
+                    azioni.togliDallaLista(progetto)
+                },
+                modifier = Modifier.testTag("progetti-menu-togli-$id"),
+            )
+        }
     }
 }
 

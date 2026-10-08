@@ -14,6 +14,9 @@ sealed interface ErroreSessione : ErroreDominio {
     /** The `cartellaGenitore`/`percorso` given to `crea`/`apri` does not name a usable project folder. */
     data object CartellaNonValida : ErroreSessione
 
+    /** R0 (EX-13): `apri`'s [cartella] is not there any more — moved, or on a disk that is not attached. */
+    data class CartellaNonTrovata(val cartella: String) : ErroreSessione
+
     /** The project's `.lock` is held by another running instance (ADR 0010). */
     data object ProgettoGiaAperto : ErroreSessione
 

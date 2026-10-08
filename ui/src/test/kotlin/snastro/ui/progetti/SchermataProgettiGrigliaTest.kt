@@ -24,6 +24,7 @@ private val PROGETTO = ProgettoVista(
     percorso = "/progetti/Consiglio comunale.snastro",
     numRegistrazioni = 3,
     ultimaAttivita = Instant.parse("2026-09-23T10:15:30Z"),
+    cartellaTrovata = true,
 )
 
 /** The home grid: the "Nuovo progetto" card opens the panel, a project card opens it, the header's hooks fire. */

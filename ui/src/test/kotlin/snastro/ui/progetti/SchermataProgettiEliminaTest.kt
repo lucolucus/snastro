@@ -25,6 +25,7 @@ private val TEST = ProgettoVista(
     percorso = "/Users/me/Documents/snastro/test.snastro",
     numRegistrazioni = 0,
     ultimaAttivita = Instant.parse("2026-10-08T10:00:00Z"),
+    cartellaTrovata = true,
 )
 
 private val CONFERMA_TEST = ConfermaEliminazione(TEST.nome, TEST.percorso)

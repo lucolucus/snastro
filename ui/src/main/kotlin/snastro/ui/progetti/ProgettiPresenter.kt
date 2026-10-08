@@ -15,13 +15,13 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 
 /**
  * State holder of S1 · Progetti (RC-2, thin UI): loads [ElencoProgetti] once and forwards `crea`/`apri` to
- * [SessioneProgetto]; the delete flow is [FlussoEliminazione]'s, both run by one [CorsaSingola]. Reapplies the shell's
- * lessons (dev-architecture `#presenter`): an error is a dismissible inline message over the list, never a replacement
- * of it (H1); success is applied from the returned [ProgettoAperto], never left to a collector alone (M1(a) — this
- * presenter has none, but the same "set state from the result" rule keeps `inCorso` from ever getting stuck); a
- * non-cancellation fault becomes the one fixed generic message (M1(b)); a second operation while one is already in
- * flight is ignored (M3). [cartellaUtente], the user's home, is written `~` in the folders the delete flow shows
- * (empty: shown as they are).
+ * [SessioneProgetto]; the delete flow is [FlussoEliminazione]'s, "Togli dalla lista" [FlussoTogliDallaLista]'s, all run
+ * by one [CorsaSingola]. Reapplies the shell's lessons (dev-architecture `#presenter`): an error is a dismissible
+ * inline message over the list, never a replacement of it (H1); success is applied from the returned [ProgettoAperto],
+ * never left to a collector alone (M1(a) — this presenter has none, but the same "set state from the result" rule
+ * keeps `inCorso` from ever getting stuck); a non-cancellation fault becomes the one fixed generic message (M1(b)); a
+ * second operation while one is already in flight is ignored (M3). [cartellaUtente], the user's home, is written `~`
+ * in the folders S1 shows (empty: shown as they are).
  */
 class ProgettiPresenter(
     private val scope: CoroutineScope,
@@ -32,8 +32,9 @@ class ProgettiPresenter(
 ) {
     private val _stato = MutableStateFlow<ProgettiUiStato>(ProgettiUiStato.Caricamento)
     val stato: StateFlow<ProgettiUiStato> = _stato.asStateFlow()
-    private val corsa = CorsaSingola(_stato, scope, io)
+    private val corsa = CorsaSingola(_stato, scope, io, cartellaUtente)
     private val eliminazione = FlussoEliminazione(corsa, elenco, sessione, cartellaUtente)
+    private val rimozione = FlussoTogliDallaLista(corsa, elenco, sessione)
 
     init {
         scope.launch { caricaElenco() }
@@ -99,5 +100,7 @@ class ProgettiPresenter(
         annullaElimina = eliminazione::annulla,
         confermaElimina = eliminazione::conferma,
         chiudiAvvisoEliminazione = eliminazione::chiudiAvviso,
+        togliDallaLista = rimozione::togli,
+        chiudiErroreTogli = rimozione::chiudiErrore,
     )
 }

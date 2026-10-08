@@ -14,6 +14,7 @@ import snastro.avvio.gestoreErrori
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.Esito
 import snastro.progetto.adattatori.audio.ArchivioAudioFile
+import snastro.progetto.adattatori.porte.CartelleProgettiFile
 import snastro.progetto.adattatori.porte.RegistroProgettiFile
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazioneServizio
@@ -32,6 +33,7 @@ import snastro.progetto.applicazione.eventi.OraDiInizioModificata
 import snastro.progetto.applicazione.eventi.RegistrazioneAggiunta
 import snastro.progetto.applicazione.eventi.RegistrazioneEliminata
 import snastro.progetto.applicazione.eventi.RegistrazioneRinominata
+import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.IncontriDelProgetto
 import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
@@ -166,3 +168,7 @@ internal class CollaboratoriRegistrazioni(
 /** The app's per-user registry of recent projects, in [cartella] (AC-348) — `costruisciGrafo`'s own binding. */
 internal fun registroProgettiFile(cartella: Path): RegistroProgetti =
     RegistroProgettiFile(cartella.resolve("registro-progetti.tsv"))
+
+/** S1's list over [registro], each project's folder looked for on disk (R0, EX-7) — `costruisciGrafo`'s own binding. */
+internal fun elencoProgetti(registro: RegistroProgetti): ElencoProgetti =
+    ElencoProgetti(registro, CartelleProgettiFile())

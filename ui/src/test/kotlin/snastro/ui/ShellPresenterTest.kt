@@ -42,6 +42,8 @@ private class SessioneProgettoCheEsplode(private val eccezione: () -> Throwable)
 
     override fun elimina(percorso: String): Esito<ProgettoEliminato> = throw eccezione()
 
+    override fun togliDallaLista(percorso: String): Unit = throw eccezione()
+
     override fun chiudi() = Unit
 }
 
@@ -93,6 +95,8 @@ private class SessioneProgettoConCorrenteChePassaAvanti(
     override fun apri(percorso: String): Esito<ProgettoAperto> = crea("", "")
 
     override fun elimina(percorso: String): Esito<ProgettoEliminato> = error("elimina non atteso in questo test")
+
+    override fun togliDallaLista(percorso: String): Unit = error("togliDallaLista non atteso in questo test")
 
     override fun chiudi() {
         _corrente.value = null
@@ -147,7 +151,7 @@ class ShellPresenterTest {
         presenter.apri("/percorso/inesistente")
         advanceUntilIdle()
         val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.avviso)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonTrovata("/percorso/inesistente")), stato.avviso)
     }
 
     @Test
@@ -184,7 +188,7 @@ class ShellPresenterTest {
         val conErrore = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
         assertEquals(aperto.progetto, conErrore.progetto)
         assertEquals(aperto.destinazioniDisponibili, conErrore.destinazioniDisponibili)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), conErrore.avviso)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonTrovata("/percorso/inesistente")), conErrore.avviso)
 
         presenter.chiudiErrore()
 

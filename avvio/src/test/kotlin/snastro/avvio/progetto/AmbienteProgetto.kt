@@ -36,7 +36,6 @@ import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.Destinazione
 import snastro.progetto.applicazione.comandi.Destinazione.NuovoIncontro
-import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.porte.InfoAudio
 import snastro.progetto.applicazione.porte.RegistrazioneRepository
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
@@ -233,7 +232,7 @@ internal class AmbienteProgetto(
         io = dispatcherIo,
         clock = clock,
         sessione = sessione,
-        elencoProgetti = ElencoProgetti(RegistroProgettiFinta()),
+        elencoProgetti = elencoProgetti(RegistroProgettiFinta()),
         cartellaProgettiPredefinita = progetto.percorso,
         servizioModelli = servizioModelli,
         apriEsterno = ApriEsternoFinta(),

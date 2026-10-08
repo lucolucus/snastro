@@ -276,9 +276,10 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
     }
 
     @Test
-    fun `AC-349 aprire un percorso inesistente restituisce CartellaNonValida`() {
-        val errore = con().apri(cartella.resolve("non-esiste").toString()).erroreAtteso<ErroreSessione>()
-        assertEquals(ErroreSessione.CartellaNonValida, errore)
+    fun `EX-13 aprire un percorso inesistente restituisce CartellaNonTrovata con quel percorso`() {
+        val percorso = cartella.resolve("non-esiste").toString()
+        val errore = con().apri(percorso).erroreAtteso<ErroreSessione>()
+        assertEquals(ErroreSessione.CartellaNonTrovata(percorso), errore)
     }
 
     @Test

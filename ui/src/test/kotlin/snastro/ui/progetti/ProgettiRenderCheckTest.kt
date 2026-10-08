@@ -17,6 +17,7 @@ import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.ui.ErroreSessione
 import snastro.ui.formattaData
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
+import snastro.ui.testi.ETICHETTA_CARTELLA_NON_TROVATA
 import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
 import snastro.ui.testi.ETICHETTA_RIPROVA
@@ -42,6 +43,7 @@ private val UN_PROGETTO = ProgettoVista(
     percorso = "/progetti/Consiglio comunale.snastro",
     numRegistrazioni = 3,
     ultimaAttivita = Instant.parse("2026-09-23T10:15:30Z"),
+    cartellaTrovata = true,
 )
 
 private val PIU_PROGETTI = listOf(
@@ -51,14 +53,20 @@ private val PIU_PROGETTI = listOf(
         nome = "Riunione team settimanale con un nome davvero lungo",
         numRegistrazioni = 7,
     ),
-    UN_PROGETTO.copy(progettoId = ProgettoId("id-3"), nome = "Intervista Via Roquel", numRegistrazioni = 1),
+    UN_PROGETTO.copy(
+        progettoId = ProgettoId("id-3"),
+        nome = "Intervista Via Roquel",
+        numRegistrazioni = 1,
+        cartellaTrovata = false,
+    ),
     UN_PROGETTO.copy(progettoId = ProgettoId("id-4"), nome = "Lezioni di storia", numRegistrazioni = 12),
     UN_PROGETTO.copy(progettoId = ProgettoId("id-5"), nome = "Podcast", numRegistrazioni = 0),
 )
 
 /**
  * `:ui:renderCheck` (profile `ui_render_check`): every [ProgettiUiStato] fixture at both sizes, both
- * themes — sizing/overflow/contrast/state-rendering (AC-192/193/194/195/196/197/198/573).
+ * themes — sizing/overflow/contrast/state-rendering (AC-192/193/194/195/196/197/198/573; R0 EX-7: the grid holds a
+ * project whose folder is not found).
  * [SchermataProgetti] renders directly from fixture `UiStato` values (dev-architecture `#presenter`).
  */
 @OptIn(ExperimentalTestApi::class)
@@ -244,6 +252,7 @@ class ProgettiRenderCheckTest {
             onNodeWithTag("progetti-nuovo").assertIsDisplayed()
             onNodeWithTag("progetti-impostazioni").assertIsDisplayed()
             onNodeWithText(PIU_PROGETTI.first().nome).assertIsDisplayed()
+            onNodeWithText(ETICHETTA_CARTELLA_NON_TROVATA).assertIsDisplayed()
             catturaPng("progetti-griglia", width, height, scuro)
         }
 
