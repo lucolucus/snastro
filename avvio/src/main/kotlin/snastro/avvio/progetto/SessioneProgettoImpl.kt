@@ -191,16 +191,29 @@ internal class SessioneProgettoImpl(
     }
 
     /**
-     * R0 (EX-1, EX-9, EX-10): only a snastro project folder is touched. The closed project is first dropped from
-     * [registro] — on the registry's own thread, after every write already queued there (`crea`'s `registra`,
-     * `chiudi`'s `aggiorna`), and waited for: the list read right after must not show it any more, and a failing
-     * registry leaves the folder whole. Then what snastro created there is deleted, as much as it can be.
+     * R0 (EX-1, EX-6, EX-9, EX-10, EX-11): only a snastro project folder is touched, and only while no other instance
+     * has it open: its `.lock` is taken first and held to the end ([ErroreSessione.ProgettoApertoAltrove] if another
+     * instance holds it, nothing touched). A closed project has nothing running: what its database still has queued
+     * goes with it. The project is then dropped from [registro] — on the registry's own thread, after every write
+     * already queued there (`crea`'s `registra`, `chiudi`'s `aggiorna`), and waited for: the list read right after
+     * must not show it any more, and a failing registry leaves the folder whole. Then what snastro created there is
+     * deleted, as much as it can be — the `.lock` file too, while still held (unlinking a locked file is allowed).
      */
     override fun elimina(percorso: String): Esito<ProgettoEliminato> {
         val cartella = Path.of(percorso)
         if (!validaCartellaProgetto(cartella)) return Esito.Errore(ErroreSessione.CartellaNonValida)
-        eseguitoreRegistro.submit { registro.rimuovi(percorso) }.get()
-        return Esito.Ok(cancellaContenutiSnastro(cartella))
+        return eliminaSeNonAperto(cartella, percorso)
+    }
+
+    /** [elimina] of the valid project folder [cartella], under its `.lock` from start to end. */
+    private fun eliminaSeNonAperto(cartella: Path, percorso: String): Esito<ProgettoEliminato> {
+        val lockCartella = acquisisciLock(cartella) ?: return Esito.Errore(ErroreSessione.ProgettoApertoAltrove)
+        return try {
+            eseguitoreRegistro.submit { registro.rimuovi(percorso) }.get()
+            Esito.Ok(cancellaContenutiSnastro(cartella))
+        } finally {
+            chiudiSilenziosamente("rilascio del lock fallito in elimina") { rilasciaLock(lockCartella) }
+        }
     }
 
     override fun chiudi() {

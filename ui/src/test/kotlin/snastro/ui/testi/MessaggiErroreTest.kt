@@ -79,6 +79,7 @@ class MessaggiErroreTest {
                 ErroreSessione.NomeProgettoVuoto,
                 ErroreSessione.CartellaNonValida,
                 ErroreSessione.ProgettoGiaAperto,
+                ErroreSessione.ProgettoApertoAltrove,
                 ErroreSessione.DatabasePiuRecente,
             ),
         ) { messaggioPer(it) }
