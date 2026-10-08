@@ -132,3 +132,9 @@
 - CR-19b entries for `RegistrazioniPresenter.kt` (4) and `FlussoImporta.kt` (1) removed; MED residuo `pre-release.md:291` closed.
 - New tests: L269 'Trascrivi N parti' in `RegistrazioniConsegnaDopoCommitTest` (red before: 0 of 1 Error reached the handler), CR-7 refresh in `RegistrazioniPresenterAggiornamentoTest` (red before: `registri: []`); ui 691/691, avvio 409, `mm gate` and `mm check --base` exit 0.
 - `carica` now catches every non-fatal `Throwable` (was `Exception`), per ADR 0041 §3 for reads. Citation proposal for non-fatal-faults in `conventions-proposals.md`.
+
+## 20-registrazioni-flusso-incontro — 2026-10-08
+- `RegistrazioniPresenter` (784 -> 715 lines): `espandiIncontro`, `modificaNumeroPersoneIncontro`, `avviaElaborazioniIncontro`, `chiudiErroreIncontro`, `incontroLibero`, `aggiornaIncontro` and the `espansi` set -> `internal FlussoIncontro(s2, scope, io, avviaElaborazioniDellIncontro)`, declared before `init`; `fondiIncontri` reads `incontro.espanso(id)`; `azioni` binds `incontro::…`. After success it calls `s2.ricarica()` (= `::carica`, same behaviour).
+- `NumeroPersoneCampo`/`numeroPersoneCampo` went from file-`private` to `internal` (shared by the presenter's row commands and `FlussoIncontro`).
+- `TooManyFunctions` stays: `./gradlew :ui:detekt` without it reported "Class 'RegistrazioniPresenter' with '32' functions detected ... threshold ... '11'" (was 38). Next: row-commands flow and the list build (`costruisciLista` + helpers).
+- Tests calling the moved members go through `azioni` (`RegistrazioniIncontriTest`, avvio `IncontroPartiTest`); ui 691/691, avvio 409/409 with `--rerun`; `mm gate` and `mm check --base` exit 0. Citation updates for presenter-split / non-fatal-faults proposed in `conventions-proposals.md`.
