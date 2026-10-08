@@ -69,3 +69,9 @@
 - `SessioneProgettoImpl.elimina` of the project open here: `coda.inCorsoOInCoda()` (waiting read before running) → `ErroreSessione.ElaborazioneInCorso`; else `chiudiSessione` then delete, `corrente = null` only AFTER the registry removal, so the fresh S1 never lists it. `SessioneProgettoContratto` pins it for fake and real.
 - Detekt limits hit: `SessioneProgettoImpl`/`CodaCondivisa` at TooManyFunctions 11 — `arresta` and `piccoGlobale` (ex `raccogliPicco`) moved to top-level private functions to make room; no suppression added.
 - `AmbienteProgetto(nome = …)` and its `registro` are now exposed for tests (EX-5 runs a real held transcription there).
+
+## 04-elimina-progetto-aperto — 2026-10-08 (rework 1)
+- B1: the open project's delete now says on S1 what is left on disk: `ShellUiStato.SenzaProgetto.avviso` (renamed from `erroreApertura`, both states; tag `shell-avviso`), set from `avvisoEliminazione`; `ShellPresenter` takes `cartellaUtente` (composition root: `cartellaUtenteReale()`).
+- B2: `chiudiSessione` returns `ArrestoProgetto`'s in-time flag; past the deadline `elimina` deletes nothing and answers `ErroreSessione.ProgettoChiusoNonEliminato`. Test: `SessioneProgettoImplEliminaApertoTest` holds `chiudiDatabase` past a 300 ms `scadenzaArresto`, then deletes from the list once released.
+- Shell rule: a failure after the project was closed (`corrente == null`) goes to S1's banner, never to the gone confirmation; the `corrente` collector keeps an S1 already shown (with its banner) instead of overwriting it — without it both new UI tests fail (checked by reverting the line).
+- Gate flake (environment): `ControlliAdrTest` ADR-0034/0035 scripts timed out at 60s on 3 runs while the machine was loaded (`sh adr-0035-impronte-mutate-dalla-radice.sh .` took 1:06 real; 9.2 s on the same tree minutes later); `mm gate` green on retry.
