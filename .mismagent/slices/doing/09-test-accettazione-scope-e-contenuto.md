@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: 0ff999f23ae89995063b81eba1e81d5462c2945b
 
 Bring the remaining test scopes and the EX-6 "nothing deleted" check in line with the conventions topic
 acceptance-tests ("Wiring and scheduling", "Another window"):
