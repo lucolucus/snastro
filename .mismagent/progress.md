@@ -63,3 +63,9 @@
 - `MenuAltreAzioniParlante` (`parlanti/SchermataParlanti.kt`) now calls the shared `snastro.ui.stile.MenuAltreAzioni` (tag `parlanti-altre-azioni-<id>`, `abilitato = !riga.operazioneInCorso`); its own button, `DropdownMenu`, `FocusRequester` and expanded state are gone, items call `chiudi` before their action.
 - No new test: `ParlantiVistaTest` (More button, focus return) and `ParlantiRenderCheckTest` green unchanged; `mm gate` green (exit 0).
 - All four "⋯" menus with focus return (progetti, registrazioni riga/incontro, parlanti) now go through `MenuAltreAzioni`; only `MenuAltreAzioniCarta` (registrazione) stays separate by design (design-notes.md).
+
+## 04-elimina-progetto-aperto — 2026-10-08
+- Header "⋯" → "Elimina progetto…" (`SchermataShell`, tag `shell-altre-azioni`/`shell-menu-elimina`) opens S1's same confirmation (`ConfermaEliminaProgetto`, now lambda-based; `ConfermaEliminazione(nome, percorso, errore)`), run by the shell holder `EliminazioneProgettoAperto` over `ShellUiStato.ConProgetto.conferma/eliminazioneInCorso`; `ShellPresenter.occupata()` is the one M3 guard.
+- `SessioneProgettoImpl.elimina` of the project open here: `coda.inCorsoOInCoda()` (waiting read before running) → `ErroreSessione.ElaborazioneInCorso`; else `chiudiSessione` then delete, `corrente = null` only AFTER the registry removal, so the fresh S1 never lists it. `SessioneProgettoContratto` pins it for fake and real.
+- Detekt limits hit: `SessioneProgettoImpl`/`CodaCondivisa` at TooManyFunctions 11 — `arresta` and `piccoGlobale` (ex `raccogliPicco`) moved to top-level private functions to make room; no suppression added.
+- `AmbienteProgetto(nome = …)` and its `registro` are now exposed for tests (EX-5 runs a real held transcription there).
