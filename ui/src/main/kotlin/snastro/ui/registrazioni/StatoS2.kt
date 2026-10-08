@@ -10,10 +10,10 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 
 /**
  * The one state of S2 · Registrazioni shared by [RegistrazioniPresenter] and its flow holders ([FlussoImporta],
- * [FlussoEliminaRiga]): one copy of the [RegistrazioniUiStato.Dati] updates (a no-op while the list is not loaded),
- * of the M3 row guard ([rigaLibera]), of the per-row command runner ([comandoDiRiga]) and of the list refresh a
- * command runs after its success ([ricarica], M1: it merges the fresh rows, keeping every in-flight flag until its
- * owner resets it). Mutated only from [scope] (the presenter's, confined UI dispatcher).
+ * [FlussoEliminaRiga], [FlussoIncontro]): one copy of the [RegistrazioniUiStato.Dati] updates (a no-op while the
+ * list is not loaded), of the M3 row guard ([rigaLibera]), of the per-row command runner ([comandoDiRiga]) and of the
+ * list refresh a command runs after its success ([ricarica], M1: it merges the fresh rows, keeping every in-flight
+ * flag until its owner resets it). Mutated only from [scope] (the presenter's, confined UI dispatcher).
  */
 internal class StatoS2(
     private val stato: MutableStateFlow<RegistrazioniUiStato>,

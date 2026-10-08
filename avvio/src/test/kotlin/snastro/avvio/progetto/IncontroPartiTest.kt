@@ -56,8 +56,8 @@ class IncontroPartiTest {
             assertEquals("riunione-ore-10", incontro.parti.first().titolo)
             listOf(parte1, parte2).forEach(ambiente::rendiLeggibile)
 
-            sulThreadUi(ambiente) { s2.modificaNumeroPersoneIncontro(incontro.incontroId, "4") }
-            sulThreadUi(ambiente) { s2.avviaElaborazioniIncontro(incontro.incontroId) }
+            sulThreadUi(ambiente) { s2.azioni.modificaNumeroPersoneIncontro(incontro.incontroId, "4") }
+            sulThreadUi(ambiente) { s2.azioni.avviaElaborazioniIncontro(incontro.incontroId) }
             attendiFinche(timeout = 20.seconds, messaggio = "le 2 Parti trascritte") {
                 listOf(parte1, parte2).all { ambiente.stato(it) == StatoElaborazioneVista.COMPLETATA }
             }

@@ -27,7 +27,6 @@ import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.comandoConfermato
-import snastro.ui.eccezioneRegistrata
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
 import snastro.ui.nonFataleRegistrato
@@ -88,9 +87,9 @@ import java.time.LocalTime
  * read from `:ui`'s `PosizioniNellaCoda` (the shared queue's owner, `:avvio`) and joined by
  * [RegistrazioneId], one snapshot per [costruisciRighe] call, absent meaning no position (0).
  *
- * The import flow is [FlussoImporta]'s and the delete-a-row flow [FlussoEliminaRiga]'s (presenter-split): both write
- * through the one [StatoS2] over this presenter's state, which also owns the shared row guard and the refresh after a
- * success; [azioni] binds their functions directly.
+ * The import flow is [FlussoImporta]'s, the delete-a-row flow [FlussoEliminaRiga]'s and the Incontro commands
+ * [FlussoIncontro]'s (presenter-split): all write through the one [StatoS2] over this presenter's state, which also
+ * owns the shared row guard and the refresh after a success; [azioni] binds their functions directly.
  *
  * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
  * wires all of them, so a missed wiring fails to compile instead of silently hiding a row's control.
@@ -116,7 +115,7 @@ class RegistrazioniPresenter(
     private val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
     eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
     private val posizioniNellaCoda: () -> PosizioniCoda,
-    private val avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
+    avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
     private val modificaOraDiInizioRegistrazione: (RegistrazioneId, LocalTime?) -> Esito<Unit>,
     private val numeroPersonePrecompilato: (IncontroId) -> Int?,
 ) {
@@ -137,13 +136,11 @@ class RegistrazioniPresenter(
     // FAILED (which never produced a result of its own to prefer).
     private var generazioneApplicata = 0
 
-    // AC-I69: the expanded Incontri — presenter state, so the chevron survives a round trip to S3 and every refresh.
-    private val espansi = mutableSetOf<IncontroId>()
-
     // Before `init`: its collectors may run at once (an immediate dispatcher) and already touch the shared state.
     private val s2 = StatoS2(_stato, scope, ::carica)
     private val importazione = FlussoImporta(s2, scope, io, progettoId, aggiungiRegistrazione)
     private val eliminazione = FlussoEliminaRiga(s2, io, lettore, eliminaRegistrazione)
+    private val incontro = FlussoIncontro(s2, scope, io, avviaElaborazioniDellIncontro)
 
     init {
         scope.launch { carica() }
@@ -234,11 +231,11 @@ class RegistrazioniPresenter(
     }
 
     /** AC-I69: an Incontro's own flags survive a refresh like a row's (M1); its field takes the fresh prefill only
-     * when its aggregated state moved on; [espansi] is the chevron's single owner. */
+     * when its aggregated state moved on; [FlussoIncontro] is the chevron's single owner. */
     private fun fondiIncontri(nuovi: List<RigaIncontro>, vecchi: List<RigaIncontro>): List<RigaIncontro> =
         nuovi.map { nuovo ->
             val vecchio = vecchi.find { it.incontroId == nuovo.incontroId }
-            val base = nuovo.copy(espanso = nuovo.incontroId in espansi)
+            val base = nuovo.copy(espanso = incontro.espanso(nuovo.incontroId))
             if (vecchio == null) {
                 base
             } else {
@@ -580,12 +577,6 @@ class RegistrazioniPresenter(
         )
     }
 
-    /** AC-I69: the chevron of [id]; the set lives here so it outlives S2's composition and every refresh. */
-    fun espandiIncontro(id: IncontroId) {
-        if (!espansi.add(id)) espansi.remove(id)
-        aggiornaIncontro(id) { it.copy(espanso = id in espansi) }
-    }
-
     /**
      * AC-I68: replaces a Parte's start time ([ora] `null` clears it) — `ModificaOraDiInizio`, whose `OraDiInizio` VO
      * `:avvio` builds (CR-1: `:ui` does not see the domain). The list is read again on success, so the sub-rows come
@@ -600,56 +591,6 @@ class RegistrazioniPresenter(
             suEsito = { concludiRiga(id, it) },
         )
     }
-
-    /** AC-I67: the text of an Incontro's ONE 'Numero di persone' field, as typed (validated when 'Trascrivi' fires). */
-    fun modificaNumeroPersoneIncontro(id: IncontroId, testo: String) =
-        aggiornaIncontro(id) { it.copy(numeroPersone = testo) }
-
-    /**
-     * AC-I67: 'Trascrivi N parti' — the field validated like a row's (invalid → the same inline message, nothing
-     * sent), then ONE `AvviaElaborazioniDellIncontro(id, n)` over the Incontro. A committing command (ADR 0041 §3): a
-     * thrown `Exception` is logged and shows the generic message, an `Error` propagates (D-0065); L269: the Incontro
-     * is released in `finally`.
-     */
-    fun avviaElaborazioniIncontro(id: IncontroId) {
-        val comando = avviaElaborazioniDellIncontro
-        val incontro = incontroLibero(id) ?: return
-        when (val campo = numeroPersoneCampo(incontro.numeroPersone)) {
-            NumeroPersoneCampo.NonValido ->
-                aggiornaIncontro(id) { it.copy(errore = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
-            is NumeroPersoneCampo.Valido -> {
-                aggiornaIncontro(id) { it.copy(operazioneInCorso = true, errore = null) }
-                s2.azzeraAvviso()
-                scope.launch {
-                    try {
-                        val avvia = AvviaElaborazioniDellIncontro(id, campo.numero)
-                        val esito = eccezioneRegistrata("trascrivi $id") {
-                            withContext(io) { comandoConfermato("trascrivi $id") { comando(avvia) } }
-                        }
-                        val errore = when (esito) {
-                            is Esito.Ok -> null
-                            is Esito.Errore -> messaggioPer(esito.errore)
-                            null -> MESSAGGIO_ERRORE_GENERICO
-                        }
-                        if (errore == null) carica()
-                        aggiornaIncontro(id) { it.copy(errore = errore) }
-                    } finally {
-                        aggiornaIncontro(id) { it.copy(operazioneInCorso = false) } // L269
-                    }
-                }
-            }
-        }
-    }
-
-    /** AC-I67: dismisses the inline message of Incontro [id]. */
-    fun chiudiErroreIncontro(id: IncontroId) = aggiornaIncontro(id) { it.copy(errore = null) }
-
-    private fun incontroLibero(id: IncontroId): RigaIncontro? =
-        s2.dati?.incontri?.find { it.incontroId == id }
-            ?.takeUnless { it.operazioneInCorso }
-
-    private fun aggiornaIncontro(id: IncontroId, f: (RigaIncontro) -> RigaIncontro) =
-        s2.aggiornaDati { d -> d.copy(incontri = d.incontri.map { if (it.incontroId == id) f(it) else it }) }
 
     /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only when an action fires). */
     fun modificaNumeroPersone(id: RegistrazioneId, testo: String) =
@@ -732,16 +673,16 @@ class RegistrazioniPresenter(
         scegliImporta = importazione::scegli,
         confermaImporta = importazione::conferma,
         annullaImporta = importazione::annulla,
-        espandiIncontro = ::espandiIncontro,
+        espandiIncontro = incontro::espandiIncontro,
         modificaOraDiInizio = ::modificaOraDiInizio,
-        modificaNumeroPersoneIncontro = ::modificaNumeroPersoneIncontro,
-        avviaElaborazioniIncontro = ::avviaElaborazioniIncontro,
-        chiudiErroreIncontro = ::chiudiErroreIncontro,
+        modificaNumeroPersoneIncontro = incontro::modificaNumeroPersoneIncontro,
+        avviaElaborazioniIncontro = incontro::avviaElaborazioniIncontro,
+        chiudiErroreIncontro = incontro::chiudiErroreIncontro,
     )
 }
 
 /** ADR 0014/AC-375: the field's text → `null` (empty, automatic), 1..10, or [NonValido]. */
-private sealed interface NumeroPersoneCampo {
+internal sealed interface NumeroPersoneCampo {
     data class Valido(val numero: Int?) : NumeroPersoneCampo
     data object NonValido : NumeroPersoneCampo
 }
@@ -751,7 +692,7 @@ private sealed interface NumeroPersoneCampo {
 // neither a sane representation of a person count.
 private val REGEX_NUMERO_PERSONE = Regex("^($NUMERO_PERSONE_MAX|[1-9])$")
 
-private fun numeroPersoneCampo(testo: String): NumeroPersoneCampo {
+internal fun numeroPersoneCampo(testo: String): NumeroPersoneCampo {
     val t = testo.trim()
     val numero = t.toIntOrNull()?.takeIf {
         REGEX_NUMERO_PERSONE.matches(t) && it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX

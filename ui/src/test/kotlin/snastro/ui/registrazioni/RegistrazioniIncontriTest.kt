@@ -230,7 +230,7 @@ class RegistrazioniIncontriTest {
         advanceUntilIdle()
         assertEquals("4", p.incontro().numeroPersone)
 
-        p.avviaElaborazioniIncontro(INCONTRO)
+        p.azioni.avviaElaborazioniIncontro(INCONTRO)
         advanceUntilIdle()
 
         assertEquals(listOf(AvviaElaborazioniDellIncontro(INCONTRO, 4)), avvii)
@@ -245,14 +245,14 @@ class RegistrazioniIncontriTest {
         val p = presentatore(this)
         advanceUntilIdle()
 
-        p.modificaNumeroPersoneIncontro(INCONTRO, "11")
-        p.avviaElaborazioniIncontro(INCONTRO)
+        p.azioni.modificaNumeroPersoneIncontro(INCONTRO, "11")
+        p.azioni.avviaElaborazioniIncontro(INCONTRO)
         advanceUntilIdle()
         assertEquals(MESSAGGIO_NUMERO_PERSONE_NON_VALIDO, p.incontro().errore)
         assertTrue(avvii.isEmpty())
 
-        p.modificaNumeroPersoneIncontro(INCONTRO, "")
-        p.avviaElaborazioniIncontro(INCONTRO)
+        p.azioni.modificaNumeroPersoneIncontro(INCONTRO, "")
+        p.azioni.avviaElaborazioniIncontro(INCONTRO)
         advanceUntilIdle()
         assertEquals(listOf(AvviaElaborazioniDellIncontro(INCONTRO, null)), avvii)
         assertNull(p.incontro().errore)
@@ -361,7 +361,7 @@ class RegistrazioniIncontriTest {
         advanceUntilIdle()
         assertFalse(p.incontro().espanso)
 
-        p.espandiIncontro(INCONTRO)
+        p.azioni.espandiIncontro(INCONTRO)
         assertTrue(p.incontro().espanso)
 
         p.apriRiga(P1) // S3 opens …
@@ -369,7 +369,7 @@ class RegistrazioniIncontriTest {
         advanceUntilIdle()
         assertTrue(p.incontro().espanso)
 
-        p.espandiIncontro(INCONTRO)
+        p.azioni.espandiIncontro(INCONTRO)
         advanceUntilIdle()
         assertFalse(p.incontro().espanso)
     }
