@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: 4a2a8d6f3b536fb7f468574310d5e19c70d2d42a
 
 `ui/src/main/kotlin/snastro/ui/registrazioni/SchermataRegistrazioni.kt` has 1503 lines and 41 top-level functions
 under a file-level `@file:Suppress("TooManyFunctions")` (`:3`). It is the view half of release review R0-2's worst
