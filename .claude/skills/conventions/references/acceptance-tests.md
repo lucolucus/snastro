@@ -32,6 +32,11 @@ checks its controls call the right callbacks (it does not prove the presenter wi
 - for "nothing deleted", compare recursive relative paths, excluding only `progetto.db-wal`/`progetto.db-shm`, and
   tolerate their disappearance during traversal.
 
+**Shared harness** (added 2026-10-08, decided: codex on delegation; lands with slice 15): S1/shell acceptance tests share
+one harness beside `ConSessione.kt` — registry, dispatcher, presenter scope cancelled after each test, presenter builders,
+`dati`, `elimina` — keeping the scheduling rules above; one recursive relative-path `contenuto`, excluding only
+`progetto.db-wal`/`progetto.db-shm` and tolerating their disappearance during traversal; no per-file copies.
+
 **Why.** mm looks for `EX-<n>` markers only under *tests/acceptance/*; *tests/acceptance/* as its own Gradle module
 would need settings, module-map and allowed-edge changes and test fixtures out of `:avvio`, while an extra source
 directory of `:avvio` keeps access to its internal test helpers. Konsist already scans `**/src/**/*.kt`.

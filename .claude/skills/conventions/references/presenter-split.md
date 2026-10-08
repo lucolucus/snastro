@@ -12,6 +12,11 @@ flag in that guard, keeping the shell's own concurrency contract without `CorsaS
 faults through `catturaNonFatale` and resets its flag in `finally` (`ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`,
 `ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`).
 
+**Shell operations** (added 2026-10-08, decided: codex on delegation; lands with slice 14): shell `apri`/`crea`/`chiudi`
+share one private single-flight runner owning the synchronous M3 guard, `Caricamento`, fault handling through the
+non-fatal-faults helper, and cleanup in `finally`; never a try/catch runner per operation. The open-project delete
+holder keeps its own guard and flag, coordinated through `occupata()`.
+
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): the screen keeps one state and one
 `azioni` while each flow gets its own small home. A lambda in `azioni` or a forwarding member only hides the size.
 Other screens keep their own concurrency (e.g. the audio of `RegistrazionePresenter`). Not yet uniform practice:

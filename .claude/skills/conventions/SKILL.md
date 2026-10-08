@@ -12,3 +12,4 @@ The project's rules live in `.mismagent/architecture.md`, `.mismagent/code-rules
 - confirm-by-typing → `references/confirm-by-typing.md`
 - display-paths → `references/display-paths.md`
 - presenter-split → `references/presenter-split.md`
+- non-fatal-faults → `references/non-fatal-faults.md`

@@ -10,6 +10,11 @@ explicitly means unknown).
 `CorsaSingola` and `ShellPresenter` supply their injected home, callers with an unknown home pass `""` explicitly; a
 one-argument `messaggioPer` must not silently assume an unknown home for path-bearing errors.
 
+**Session errors** (added 2026-10-08, decided: codex on delegation; lands with slice 13): map every `ErroreSessione`
+member in one function requiring `cartellaUtente`, to which `messaggioPer(ErroreDominio, cartellaUtente)` delegates; the
+one-argument `messaggioPer(ErroreDominio)` rejects `ErroreSessione` — an omitted home is a wiring defect, while an
+explicitly supplied `""` still means unknown home.
+
 **Why.** Presentation formatting belongs to the thin UI (RC-2 in `.mismagent/code-rules.md`), while reading the
 environment belongs to the composition in `:avvio`. A silent default would hide a missing wiring: tests pass a home
 or an explicit `""`. Paths outside the home, sibling prefixes (a home "luca" vs a folder "luca2") and an unknown home
