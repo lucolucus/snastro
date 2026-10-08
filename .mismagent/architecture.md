@@ -185,7 +185,9 @@ One composition, organised by context rather than by release. The release **meth
 - **R3 project registry:** `:progetto:applicazione` also declares `RegistroProgetti` (per-user list of
   recent projects), implemented in `:progetto:adattatori` over a file in the OS app-data dir. Project
   folder layout, `.lock`, DB opening and registry updates on open/close are done by `:avvio`'s
-  `SessioneProgetto`.
+  `SessioneProgetto` — *(2026-10-08, design pass: truth of R0 slices 01–03)* and so is deleting a project:
+  `elimina` holds the `.lock` throughout, removes the registry entry first, then deletes only snastro's
+  contents (`progetto.db{,-wal,-shm}`, `audio/`, `cache/`, `sbobinature/`, `.lock`).
 - **`:ui` declares ports implemented by `:avvio`:** `LettoreAudio` (existing), `SessioneProgetto`,
   `ApriEsterno` (open file / reveal in folder), `AggiornamentiVista` (refresh flow, R15),
   `ServizioModelli` (S5, R10 — `:ui` cannot reach `:modelli`).

@@ -1,1 +1,2 @@
 # Conventions proposals
+- update acceptance-tests: the presenter's scope is `CoroutineScope(SupervisorJob() + dispatcher)` on the shared test scheduler, cancelled in `@AfterEach` — not `backgroundScope`, whose tasks `advanceUntilIdle()` skips (the presenter stayed in `Caricamento`); `conScopeDiProva`/`backgroundScope` are for the session's own scope — `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/EliminaSoloContenutiSnastroTest.kt` (progress.md, slice 02 rework 1: the "Wiring and scheduling" bullet names `backgroundScope` without saying which scope it fits)
