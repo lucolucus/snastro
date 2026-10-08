@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: 621d9586155d33053deffd27369e60f0bf23e7c7
 
 `ProgettiPresenter.caricaElenco` (`ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt:43-60`) catches
 `Exception` with `SwallowedException`. It shows only `erroreElenco`, so a corrupt or unreadable registry leaves no
