@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: 7e2cd606760453cc112b5afcb076c9ec0ddf4070
 
 After slice 18, `RegistrazioniPresenter` and `FlussoImporta` still have five raw `catch (e: Exception)` blocks that drop
 the cause, plus three `catturaNonFatale { … }.getOrNull()/getOrDefault` reads with no log (release review R0-2, errors).
