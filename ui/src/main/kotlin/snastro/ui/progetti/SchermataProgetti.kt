@@ -24,6 +24,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -55,7 +57,9 @@ import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.DESCRIZIONE_NUOVO_PROGETTO
+import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_APRI_PROGETTO
+import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_ERRORE_CARICAMENTO_PROGETTI
 import snastro.ui.testi.ETICHETTA_IMPOSTAZIONI
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
@@ -154,9 +158,13 @@ private fun ContenutoProgetti(
                 )
             }
             stato.erroreApri?.let { MessaggioInlineErrore(it, azioni.chiudiErroreApri, "progetti-errore-apri") }
+            stato.erroreElimina?.let {
+                MessaggioInlineErrore(it, azioni.chiudiErroreElimina, "progetti-errore-elimina")
+            }
             Spacer(modifier = Modifier.height(SnastroMisure.space5))
-            GrigliaProgetti(stato, abilitato = !stato.inCorso, onNuovo = { pannelloAperto = true }, apri = azioni.apri)
+            GrigliaProgetti(stato, azioni, onNuovo = { pannelloAperto = true })
         }
+        stato.conferma?.let { ConfermaEliminaProgetto(it, azioni) }
         if (pannelloAperto || stato.erroreCrea != null) {
             PannelloNuovoProgetto(
                 inCorso = stato.inCorso,
@@ -233,12 +241,8 @@ private fun Intestazione(
  * the AC-192 empty message spanning the row. The grid itself scrolls; the header stays.
  */
 @Composable
-private fun GrigliaProgetti(
-    stato: ProgettiUiStato.Dati,
-    abilitato: Boolean,
-    onNuovo: () -> Unit,
-    apri: (String) -> Unit,
-) {
+private fun GrigliaProgetti(stato: ProgettiUiStato.Dati, azioni: AzioniProgetti, onNuovo: () -> Unit) {
+    val abilitato = !stato.inCorso
     LazyVerticalGrid(
         columns = GridCells.Adaptive(LARGHEZZA_MINIMA_CARD),
         horizontalArrangement = Arrangement.spacedBy(SnastroMisure.space4),
@@ -252,7 +256,7 @@ private fun GrigliaProgetti(
         if (stato.progetti.isEmpty()) {
             item(key = "vuoto", span = { GridItemSpan(maxLineSpan) }) { ProgettiVuoto() }
         } else {
-            items(stato.progetti, key = { it.progettoId.valore }) { CardProgetto(it, abilitato, apri) }
+            items(stato.progetti, key = { it.progettoId.valore }) { CardProgetto(it, abilitato, azioni) }
         }
     }
 }
@@ -316,14 +320,17 @@ private fun CardNuovoProgetto(abilitato: Boolean, onNuovo: () -> Unit) {
     }
 }
 
-/** AC-573/AC-198: one project = one card (name `heading`, "n registrazioni · ultima attività" `caption`). */
+/**
+ * AC-573/AC-198: one project = one card (name `heading`, "n registrazioni · ultima attività" `caption`); a click opens
+ * it, its "⋯" menu holds "Elimina…" (R0).
+ */
 @Composable
-private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, apri: (String) -> Unit) {
+private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, azioni: AzioniProgetti) {
     val colori = LocalSnastroColori.current
     val tipografia = LocalSnastroTipografia.current
     CardGriglia(
         abilitato = abilitato,
-        onClick = { apri(progetto.percorso) },
+        onClick = { azioni.apri(progetto.percorso) },
         tag = "progetti-riga-${progetto.progettoId.valore}",
         sfondo = colori.raised,
     ) {
@@ -331,12 +338,7 @@ private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, apri: (Str
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TesseraIcona(Icona.Reel, sfondo = colori.sunken, tinta = colori.accentInk)
                 Spacer(modifier = Modifier.weight(1f))
-                IconaSn(
-                    Icona.ChevronRight,
-                    descrizione = null,
-                    tinta = colori.inkFaint,
-                    dimensione = SnastroMisure.iconS,
-                )
+                MenuProgetto(progetto, abilitato, azioni.chiediElimina)
             }
             Spacer(modifier = Modifier.weight(1f))
             Text(
@@ -353,6 +355,32 @@ private fun CardProgetto(progetto: ProgettoVista, abilitato: Boolean, apri: (Str
                 color = colori.inkMuted,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+/** R0: the card's "⋯" button and its menu, with "Elimina…" (danger text) asking to confirm the delete. */
+@Composable
+private fun MenuProgetto(progetto: ProgettoVista, abilitato: Boolean, chiediElimina: (ProgettoVista) -> Unit) {
+    var espanso by remember { mutableStateOf(false) }
+    val id = progetto.progettoId.valore
+    Box {
+        BottoneIconaSn(
+            icona = Icona.More,
+            descrizione = ETICHETTA_ALTRE_AZIONI,
+            onClick = { espanso = true },
+            abilitato = abilitato,
+            modifier = Modifier.testTag("progetti-altre-azioni-$id"),
+        )
+        DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
+            DropdownMenuItem(
+                text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
+                onClick = {
+                    espanso = false
+                    chiediElimina(progetto)
+                },
+                modifier = Modifier.testTag("progetti-menu-elimina-$id"),
             )
         }
     }

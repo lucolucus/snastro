@@ -22,6 +22,7 @@ import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoFinta
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
+import java.io.IOException
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -39,6 +40,7 @@ private val ORA: Instant = Instant.parse("2026-09-23T10:15:30Z")
 private class SessioneProgettoFissa(
     private val risultatoCrea: Esito<ProgettoAperto>? = null,
     private val risultatoApri: Esito<ProgettoAperto>? = null,
+    private val elimina: (() -> Esito<Unit>)? = null,
 ) : SessioneProgetto {
     override val corrente: StateFlow<ProgettoAperto?> = MutableStateFlow(null)
 
@@ -48,7 +50,7 @@ private class SessioneProgettoFissa(
     override fun apri(percorso: String): Esito<ProgettoAperto> =
         risultatoApri ?: error("apri non atteso in questo test")
 
-    override fun elimina(percorso: String): Esito<Unit> = error("elimina non atteso in questo test")
+    override fun elimina(percorso: String): Esito<Unit> = elimina?.invoke() ?: error("elimina non atteso in questo test")
 
     override fun chiudi() = Unit
 }
@@ -195,6 +197,28 @@ class ProgettiPresenterTest {
 
         val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
         assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.erroreApri)
+    }
+
+    @Test
+    fun `un elimina che lancia mostra l errore generico, lascia la lista e chiudiErroreElimina lo toglie`() = runTest {
+        val voce = VoceRegistro(ProgettoId("id-1"), "test", "/p/test.snastro", 0, ORA)
+        val registro = RegistroProgettiFinta().apply { registra(voce) }
+        val sessione = SessioneProgettoFissa(elimina = { throw IOException("file bloccato") })
+        val presenter = presentatore(this, registro = registro, sessione = sessione)
+        advanceUntilIdle()
+        val prima = assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti
+
+        presenter.chiediElimina(prima.single())
+        presenter.digitaNomeElimina("test")
+        presenter.confermaElimina()
+        advanceUntilIdle()
+
+        assertEquals(
+            ProgettiUiStato.Dati(progetti = prima, erroreElimina = MESSAGGIO_ERRORE_GENERICO),
+            presenter.stato.value,
+        )
+        presenter.chiudiErroreElimina()
+        assertEquals(ProgettiUiStato.Dati(progetti = prima), presenter.stato.value)
     }
 
     @Test

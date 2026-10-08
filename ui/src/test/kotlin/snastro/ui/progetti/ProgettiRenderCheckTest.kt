@@ -200,6 +200,31 @@ class ProgettiRenderCheckTest {
     fun `pannello Nuovo progetto a 1024x640 (scuro)`() =
         verificaPannello(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
 
+    @Test
+    fun `conferma Elimina progetto a 1280x800`() = verificaConfermaElimina(LARGHEZZA_GRANDE_PX, ALTEZZA_GRANDE_PX)
+
+    @Test
+    fun `conferma Elimina progetto a 1024x640 (scuro)`() =
+        verificaConfermaElimina(LARGHEZZA_PICCOLA_PX, ALTEZZA_PICCOLA_PX, scuro = true)
+
+    private fun verificaConfermaElimina(width: Int, height: Int, scuro: Boolean = false) =
+        runDesktopComposeUiTest(width, height) {
+            val progetto = PIU_PROGETTI.first()
+            setContent {
+                SchermataProgetti(
+                    stato = ProgettiUiStato.Dati(PIU_PROGETTI, conferma = ConfermaEliminazione(progetto, "Cons")),
+                    azioni = AZIONI_VUOTE,
+                    cartellaGenitorePredefinita = CARTELLA_GENITORE_DI_PROVA,
+                    sceltaCartella = SCELTA_CARTELLA_DI_PROVA,
+                    scuro = scuro,
+                    riduciMovimento = true,
+                )
+            }
+            onNodeWithTag("progetti-conferma-elimina").assertIsDisplayed()
+            onNodeWithTag("progetti-conferma-elimina-conferma").assertIsNotEnabled()
+            catturaPng("progetti-conferma-elimina", width, height, scuro)
+        }
+
     private fun verificaGriglia(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
             setContent {

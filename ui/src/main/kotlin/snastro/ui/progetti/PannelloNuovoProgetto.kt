@@ -7,6 +7,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,7 +45,7 @@ import snastro.ui.testi.ETICHETTA_CREA
 import snastro.ui.testi.ETICHETTA_NOME_PROGETTO
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
 
-private val LARGHEZZA_PANNELLO_NUOVO = 460.dp
+private val LARGHEZZA_PANNELLO = 460.dp
 private val OMBRA_PANNELLO = 12.dp
 private const val OPACITA_VELO = 0.32f
 
@@ -53,7 +54,7 @@ private const val OPACITA_VELO = 0.32f
  * modal): name, the parent folder with "Cambia cartella…", "Annulla"/"Crea"; a failed `crea` shows its message
  * here. The form values are local UI state, fresh each time the panel opens.
  */
-@Suppress("LongParameterList", "LongMethod") // state + actions + injected default and port + close hook
+@Suppress("LongParameterList") // state + actions + injected default and port + close hook
 @Composable
 internal fun PannelloNuovoProgetto(
     inCorso: Boolean,
@@ -67,6 +68,70 @@ internal fun PannelloNuovoProgetto(
     val tipografia = LocalSnastroTipografia.current
     var cartella by remember { mutableStateOf(cartellaGenitorePredefinita) }
     var nome by remember { mutableStateOf("") }
+    PannelloSuVelo(chiudibile = !inCorso, onChiudi = onChiudi, tag = "progetti-pannello-nuovo") {
+        Text(text = ETICHETTA_NUOVO_PROGETTO, style = tipografia.title, color = colori.ink)
+        Spacer(modifier = Modifier.height(SnastroMisure.space4))
+        CampoSn(
+            valore = nome,
+            onValoreCambiato = { nome = it },
+            etichetta = ETICHETTA_NOME_PROGETTO,
+            abilitato = !inCorso,
+            modifier = Modifier.fillMaxWidth().testTag("progetti-campo-nome"),
+        )
+        Spacer(modifier = Modifier.height(SnastroMisure.space3))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconaSn(Icona.Reveal, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
+            Spacer(modifier = Modifier.width(SnastroMisure.space1))
+            Text(
+                text = cartella,
+                style = tipografia.caption,
+                color = colori.inkMuted,
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+                modifier = Modifier.weight(1f).testTag("progetti-cartella"),
+            )
+            BottoneSn(
+                etichetta = ETICHETTA_CAMBIA_CARTELLA,
+                onClick = { sceltaCartella.scegli(ETICHETTA_CAMBIA_CARTELLA)?.let { cartella = it } },
+                variante = VarianteBottone.Link,
+                abilitato = !inCorso,
+            )
+        }
+        erroreCrea?.let { MessaggioInlineErrore(it, azioni.chiudiErroreCrea, "progetti-errore-crea") }
+        Spacer(modifier = Modifier.height(SnastroMisure.space5))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Spacer(modifier = Modifier.weight(1f))
+            BottoneSn(
+                etichetta = ETICHETTA_ANNULLA,
+                onClick = onChiudi,
+                variante = VarianteBottone.Fantasma,
+                abilitato = !inCorso,
+                modifier = Modifier.testTag("progetti-annulla-nuovo"),
+            )
+            Spacer(modifier = Modifier.width(SnastroMisure.space2))
+            BottoneSn(
+                etichetta = ETICHETTA_CREA,
+                onClick = { azioni.crea(cartella, nome) },
+                variante = VarianteBottone.Primario,
+                abilitato = !inCorso,
+                modifier = Modifier.testTag("progetti-crea"),
+            )
+        }
+    }
+}
+
+/**
+ * A panel over a veil that closes it (`anteprime/Dialog.html`, inside the window — never an OS-level modal): the
+ * veil closes it with [onChiudi] while [chiudibile]; [tag] names the panel itself.
+ */
+@Composable
+internal fun PannelloSuVelo(
+    chiudibile: Boolean,
+    onChiudi: () -> Unit,
+    tag: String,
+    contenuto: @Composable ColumnScope.() -> Unit,
+) {
+    val colori = LocalSnastroColori.current
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         // The veil is the panel's SIBLING, not its parent: a clickable parent would merge the panel's fields into
         // its own semantics node.
@@ -75,7 +140,7 @@ internal fun PannelloNuovoProgetto(
                 .fillMaxSize()
                 .background(Color.Black.copy(alpha = OPACITA_VELO))
                 .clickable(
-                    enabled = !inCorso,
+                    enabled = chiudibile,
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onChiudi,
@@ -88,61 +153,12 @@ internal fun PannelloNuovoProgetto(
             border = BorderStroke(1.dp, colori.line),
             shadowElevation = OMBRA_PANNELLO,
             modifier = Modifier
-                .width(LARGHEZZA_PANNELLO_NUOVO)
+                .width(LARGHEZZA_PANNELLO)
                 // Swallows taps, so a click inside the panel never reaches the veil behind it.
                 .pointerInput(Unit) { detectTapGestures {} }
-                .testTag("progetti-pannello-nuovo"),
+                .testTag(tag),
         ) {
-            Column(modifier = Modifier.padding(SnastroMisure.space5)) {
-                Text(text = ETICHETTA_NUOVO_PROGETTO, style = tipografia.title, color = colori.ink)
-                Spacer(modifier = Modifier.height(SnastroMisure.space4))
-                CampoSn(
-                    valore = nome,
-                    onValoreCambiato = { nome = it },
-                    etichetta = ETICHETTA_NOME_PROGETTO,
-                    abilitato = !inCorso,
-                    modifier = Modifier.fillMaxWidth().testTag("progetti-campo-nome"),
-                )
-                Spacer(modifier = Modifier.height(SnastroMisure.space3))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconaSn(Icona.Reveal, descrizione = null, tinta = colori.inkMuted, dimensione = SnastroMisure.iconS)
-                    Spacer(modifier = Modifier.width(SnastroMisure.space1))
-                    Text(
-                        text = cartella,
-                        style = tipografia.caption,
-                        color = colori.inkMuted,
-                        maxLines = 1,
-                        overflow = TextOverflow.MiddleEllipsis,
-                        modifier = Modifier.weight(1f).testTag("progetti-cartella"),
-                    )
-                    BottoneSn(
-                        etichetta = ETICHETTA_CAMBIA_CARTELLA,
-                        onClick = { sceltaCartella.scegli(ETICHETTA_CAMBIA_CARTELLA)?.let { cartella = it } },
-                        variante = VarianteBottone.Link,
-                        abilitato = !inCorso,
-                    )
-                }
-                erroreCrea?.let { MessaggioInlineErrore(it, azioni.chiudiErroreCrea, "progetti-errore-crea") }
-                Spacer(modifier = Modifier.height(SnastroMisure.space5))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(modifier = Modifier.weight(1f))
-                    BottoneSn(
-                        etichetta = ETICHETTA_ANNULLA,
-                        onClick = onChiudi,
-                        variante = VarianteBottone.Fantasma,
-                        abilitato = !inCorso,
-                        modifier = Modifier.testTag("progetti-annulla-nuovo"),
-                    )
-                    Spacer(modifier = Modifier.width(SnastroMisure.space2))
-                    BottoneSn(
-                        etichetta = ETICHETTA_CREA,
-                        onClick = { azioni.crea(cartella, nome) },
-                        variante = VarianteBottone.Primario,
-                        abilitato = !inCorso,
-                        modifier = Modifier.testTag("progetti-crea"),
-                    )
-                }
-            }
+            Column(modifier = Modifier.padding(SnastroMisure.space5), content = contenuto)
         }
     }
 }
