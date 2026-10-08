@@ -92,3 +92,9 @@
 - `EliminazioneProgettoAperto` passes its `cartellaUtente` (new test: a `CartellaNonTrovata` from `elimina` reads `~/Riunione.snastro`; red before the fix with `/tmp/Riunione.snastro`).
 - Tests that compared against `messaggioPer(ErroreSessione.X)` now pass the home explicitly (`""` where the presenter's home is `""`): ShellPresenterTest, ProgettiPresenterTest, ProgettiRenderCheckTest, TestiProgettiTest, EliminazioneProgettoApertoTest.
 - A new `:ui`/`:avvio` caller that can receive an `ErroreSessione` must hold a home; the one-arg form crashes at runtime, not at compile time (static type `ErroreDominio`). `./gradlew check` and `mm gate` green (exit 0).
+
+## 14-shell-corsa-singola — 2026-10-08
+- `ShellPresenter` apri/crea/chiudi now share one private runner `corri(cosa, operazione, applica = {})` (`T : Any`, so null from `nonFataleRegistrato` always means a fault): M3 guard via `occupata()` + `operazioneInCorso` Job, `Caricamento`, the L457a `finally` reset; no raw catch left, the stale "no logging sink" comment is gone.
+- CR-19b frozen entry for `ShellPresenter.kt` removed (2 -> 0); `EliminazioneProgettoAperto` unchanged (own guard and flag).
+- New tests in `ShellPresenterTest`: a thrown `apri`/`chiudi` is logged at WARNING with its cause (red before: 2 failed of 20); ShellSelettoreProgettoTest, EliminazioneProgettoApertoTest, acceptance EliminaProgettoApertoTest green unchanged.
+- conventions `non-fatal-faults` "Shown by" now cites `ShellPresenter.kt` (`corri`); "Still the defect" line removed. `./gradlew check` and `mm gate` green (exit 0).
