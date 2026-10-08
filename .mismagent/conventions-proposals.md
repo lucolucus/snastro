@@ -1,2 +1,1 @@
 # Conventions proposals
-- update presenter-split: the "S2 · Registrazioni" holders list adds `FlussoIncontro` (Incontro commands and the chevron's `espansi` set, read by the refresh through `espanso(id)`, no copy); and non-fatal-faults "Shown by" moves `avviaElaborazioniIncontro` from `RegistrazioniPresenter.kt` to `FlussoIncontro.kt` — `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoIncontro.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt` (slice 20 moved the code; the citations now point at the wrong file)

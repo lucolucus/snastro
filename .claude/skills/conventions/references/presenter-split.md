@@ -17,7 +17,8 @@ share one private single-flight runner owning the synchronous M3 guard, `Caricam
 non-fatal-faults helper, and cleanup in `finally`; never a try/catch runner per operation. The open-project delete
 holder keeps its own guard and flag, coordinated through `occupata()`.
 
-**S2 · Registrazioni** (added 2026-10-08, decided: codex on delegation): S2 holders (`FlussoImporta`, `FlussoEliminaRiga`)
+**S2 · Registrazioni** (added 2026-10-08, decided: codex on delegation): S2 holders (`FlussoImporta`, `FlussoEliminaRiga`, and since slice 20 `FlussoIncontro` — Incontro commands and the
+chevron's `espansi` set, read by the refresh through `espanso(id)`, no copy)
 share one `internal StatoS2` over `_stato`, owning `aggiornaDati`/`aggiornaRiga`, `rigaLibera`, `azzeraAvviso` and
 `ricarica` supplied as `::carica`; preserve S2's per-row concurrency and import guard, with no screen-wide single-flight
 runner; initialize `s2` and the holders before `init`; bind shared-state-only actions directly
