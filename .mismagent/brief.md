@@ -105,6 +105,13 @@ Risposte dell'utente:
   Il limite d'ingresso è già calcolato su quel tetto (`LimiteIngresso.kt:8-10`), quindi non si perde spazio.
 - R1-2: percentuale da 10% a 100%, a passi di 5.
 - R1-3: un incontro con percentuale personalizzata la tiene anche se cambia quella del progetto, finché l'utente non la toglie.
+- H1 fatto: `.mismagent/spikes/h1.md`. Il filtro dell'argomento svuota le liste; senza filtro il modello le riempie
+  ripetendo e inventando (una decisione inventata confermata dall'utente); la quota sposta poco la lunghezza e a 0.8 il
+  modello va in ciclo per ~40 minuti.
+- R1-4: la percentuale del parlato **esce da R1** (scelta dell'utente dopo H1). R1-1..3 restano scritte per quando
+  tornerà; H3 (default) resta aperta per allora. R1 = punti affidabili + protezione dal ciclo.
+- R1-5 (H2): l'argomento diventa **contesto, non filtro**: aiuta a capire di cosa si parla, non toglie mai punti.
+- R1-6: quando il modello si ripete, la generazione si ferma presto (non dopo 40 minuti); riassunto fallito con un
+  messaggio chiaro e Rigenera disponibile.
 Aperte:
-- H1 in corso: spike usa e getta in `../snastro-h1` (branch `spike/h1`), 6 varianti sulla sbobinatura di skatefest; rapporto in `.mismagent/spikes/h1.md`.
-- H2 (argomento come filtro o istruzione) e H3 (default della percentuale): dopo H1.
+- R1-7: l'elenco di riferimento dei punti cardine di skatefest (bozza da confermare con l'utente), per esempi verificabili.
