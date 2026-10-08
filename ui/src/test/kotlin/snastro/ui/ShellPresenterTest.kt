@@ -22,6 +22,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -356,6 +357,31 @@ class ShellPresenterTest {
         presenter.chiudi()
         advanceUntilIdle()
         assertEquals(ShellUiStato.SenzaProgetto(avviso = MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+    }
+
+    @Test
+    fun `CR-7 il guasto di un apri che lancia e registrato con la sua causa`() = runTest {
+        val guasto = IllegalStateException("registro rotto")
+        val presenter = presentatore(this, sessione = SessioneProgettoCheEsplode { guasto })
+        val registri = registriLogUi {
+            presenter.apri("/tmp/qualsiasi")
+            advanceUntilIdle()
+        }
+        assertTrue(registri.any { it.level == Level.WARNING && it.causatoDa(guasto) && "apri" in it.message })
+    }
+
+    @Test
+    fun `CR-7 il guasto di un chiudi che lancia e registrato con la sua causa`() = runTest {
+        val guasto = IllegalStateException("arresto rotto")
+        val sessione = object : SessioneProgetto by SessioneProgettoFinta() {
+            override fun chiudi() = throw guasto
+        }
+        val presenter = presentatore(this, sessione = sessione)
+        val registri = registriLogUi {
+            presenter.chiudi()
+            advanceUntilIdle()
+        }
+        assertTrue(registri.any { it.level == Level.WARNING && it.causatoDa(guasto) && "chiudi" in it.message })
     }
 
     private companion object {

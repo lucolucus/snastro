@@ -713,7 +713,6 @@ class RegoleArchitetturaliTest {
         "persistenza/src/main/kotlin/snastro/persistenza/UnitaDiLavoroSql.kt" to 4,
         "trascrizione/applicazione/src/main/kotlin/snastro/trascrizione/applicazione/comandi/" +
             "EseguiProssimaElaborazioneServizio.kt" to 3,
-        "ui/src/main/kotlin/snastro/ui/ShellPresenter.kt" to 2,
         "ui/src/main/kotlin/snastro/ui/impostazioni/ImpostazioniPresenter.kt" to 2,
         "ui/src/main/kotlin/snastro/ui/impostazioni/LunghezzaRiassuntoPresenter.kt" to 2,
         "ui/src/main/kotlin/snastro/ui/lettore/LettorePresenter.kt" to 1,

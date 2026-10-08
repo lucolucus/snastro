@@ -1,6 +1,5 @@
 package snastro.ui
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -37,7 +36,7 @@ class ShellPresenter(
     private val _stato = MutableStateFlow(statoDi(sessione.corrente.value))
     val stato: StateFlow<ShellUiStato> = _stato.asStateFlow()
 
-    // M3: guards a double apri/crea while one is already in flight. A freshly launched Job is
+    // M3: guards a double apri/crea/chiudi while one is already in flight. A freshly launched Job is
     // `isActive` from the moment `launch` returns, even before its body starts running, so this also
     // catches two synchronous calls issued before the dispatcher gets a chance to run either.
     private var operazioneInCorso: Job? = null
@@ -69,29 +68,32 @@ class ShellPresenter(
             ShellUiStato.SenzaProgetto()
         }
 
-    fun apri(percorso: String) = avvia { sessione.apri(percorso) }
+    fun apri(percorso: String) = corri("apri", { sessione.apri(percorso) }, ::applica)
 
-    fun crea(cartellaGenitore: String, nome: String) = avvia { sessione.crea(cartellaGenitore, nome) }
+    fun crea(cartellaGenitore: String, nome: String) =
+        corri("crea", { sessione.crea(cartellaGenitore, nome) }, ::applica)
 
-    private fun avvia(operazione: suspend () -> Esito<ProgettoAperto>) {
+    /**
+     * fix-batch-16 MED-1(a): `sessione.chiudi` blocks (bounded) while the project's background work stops — never on
+     * the UI thread. The collector normally already moved the state to S1; AC-347 says it never throws.
+     */
+    fun chiudi() = corri("chiudi", { sessione.chiudi() })
+
+    /**
+     * The one single-flight run of the shell's apri/crea/chiudi: ignored while a shell operation is in flight (M3);
+     * [ShellUiStato.Caricamento] while [operazione] runs on [io]; its result handed to [applica]. A non-fatal fault,
+     * logged with its cause under [cosa] (CR-7), becomes M1(b)'s one fixed generic message; cancellation propagates.
+     */
+    private fun <T : Any> corri(cosa: String, operazione: suspend () -> T, applica: (T) -> Unit = {}) {
         if (occupata()) return
         operazioneInCorso = scope.launch {
             _stato.value = ShellUiStato.Caricamento
             try {
-                applica(withContext(io) { operazione() })
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // M1(b): any other fault of `sessione.apri`/`crea` becomes the one FIXED, plain-Italian
-                // message the user sees (never a stack trace) — this codebase has no logging sink to
-                // hand the technical cause to (same rationale as `EseguiProssimaElaborazioneServizio`).
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                _stato.value = statoConErrore(MESSAGGIO_ERRORE_GENERICO)
+                val risultato = nonFataleRegistrato(cosa) { withContext(io) { operazione() } }
+                if (risultato != null) applica(risultato) else _stato.value = statoConErrore(MESSAGGIO_ERRORE_GENERICO)
             } finally {
-                // L457a: same fallback as `chiudi` (:121) — a CancellationException above is rethrown
-                // without ever reaching `applica`/the catch block, which would otherwise leave `_stato`
-                // stuck at Caricamento forever for a `scope` that outlives this one cancelled operation.
+                // L457a: a cancellation never reaches `applica` or the generic message; without this `_stato` would
+                // stay stuck at Caricamento for a `scope` that outlives this one cancelled operation.
                 if (_stato.value is ShellUiStato.Caricamento) _stato.value = statoDi(sessione.corrente.value)
             }
         }
@@ -127,31 +129,6 @@ class ShellPresenter(
             ShellUiStato.ConProgetto(progetto, sezioniDisponibili, destinazioneCorrente, avviso = messaggio)
         } else {
             ShellUiStato.SenzaProgetto(avviso = messaggio)
-        }
-    }
-
-    /**
-     * fix-batch-16 MED-1(a): `sessione.chiudi` blocks (bounded) while the project's background work stops
-     * — never on the UI thread: it runs on [io], [ShellUiStato.Caricamento] shown meanwhile, and the
-     * `finally` never leaves the state stuck there (the collector normally already moved it to S1).
-     * Ignored while another apri/crea/chiudi is in flight (M3).
-     */
-    fun chiudi() {
-        if (occupata()) return
-        operazioneInCorso = scope.launch {
-            _stato.value = ShellUiStato.Caricamento
-            try {
-                withContext(io) { sessione.chiudi() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // AC-347 says chiudi never throws; if it ever does, the same fixed message as M1(b).
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                _stato.value = statoConErrore(MESSAGGIO_ERRORE_GENERICO)
-            } finally {
-                if (_stato.value is ShellUiStato.Caricamento) _stato.value = statoDi(sessione.corrente.value)
-            }
         }
     }
 
