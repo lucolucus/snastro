@@ -52,3 +52,9 @@
 - EX-6's "niente cancellato" now compares recursive relative paths (`Files.walkFileTree`, skips `progetto.db-wal/-shm`, tolerates their `NoSuchFileException` in `visitFileFailed`).
 - `SessioneProgettoImpl.chiudi` returns on a conScopeDiProva scope: acceptance + `SessioneProgettoImplEliminaTest` green 3/3 with `./gradlew :avvio:test --rerun --tests …` (exit 0 each).
 - Still on an implicit scope: `SessioneProgettoImplTest`, `SessioneProgettoImplChiudiTest`, `RinominaRegistrazioneTest` (design note).
+
+## 10-messaggio-inline-errore-condiviso — 2026-10-08
+- `MessaggioInlineErrore(messaggio, onChiudi, tag)` now lives once in `ui/src/main/kotlin/snastro/ui/stile/MessaggioInlineErrore.kt` (internal); the copies in `PannelloNuovoProgetto.kt`, `SchermataRegistrazioni.kt`, `SchermataParlanti.kt` are gone, callers import `snastro.ui.stile.MessaggioInlineErrore`.
+- Characterization: `ui/src/test/kotlin/snastro/ui/stile/MessaggioInlineErroreTest.kt` (text shown, `<tag>-chiudi` click calls `onChiudi`), green before and after the move; render checks unchanged.
+- `registrazione/SchermataRegistrazione.kt` keeps its own private 2-arg `MessaggioInlineErrore` (different style/label); it does not import the shared one (explicit imports only), so no rename was needed.
+- Detekt `ImportOrdering` is strict lexicographic (`MenuAltreAzioni` before `MessaggioInlineErrore`): seen red in `./gradlew :ui:detekt` on the first gate run.
