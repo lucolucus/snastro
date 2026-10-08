@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: da5e014e5f442814f2eddf7e66aa768b3dba8f7c
 
 `ShellPresenter.avvia` (`ui/src/main/kotlin/snastro/ui/ShellPresenter.kt:76-98`) and `ShellPresenter.chiudi`
 (`:139-156`) are two hand-written copies of the same single-flight run: M3 guard, `Caricamento`, a raw
