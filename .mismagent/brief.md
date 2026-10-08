@@ -98,3 +98,13 @@ Nessuna per R0. Risolte il 2026-10-08 ("ok va bene tutto"):
 - R0-2: file estranei → si cancellano solo i contenuti creati dall'app, il resto rimane e lo si dice (EX-9).
 - R0-3: "Elimina" nel menu "⋯" della scheda in lista e nel menu dell'intestazione del progetto aperto.
 - R0-4: "non trovato" ricontrollato a ogni apertura della lista; torna normale se la cartella ricompare (EX-12, EX-13).
+
+### R1 (in corso, 2026-10-08)
+Risposte dell'utente:
+- R1-1: il tetto non è più un'impostazione: fisso a 10 000 parole, limite di sicurezza interno; il valore salvato oggi nei progetti si ignora.
+  Il limite d'ingresso è già calcolato su quel tetto (`LimiteIngresso.kt:8-10`), quindi non si perde spazio.
+- R1-2: percentuale da 10% a 100%, a passi di 5.
+- R1-3: un incontro con percentuale personalizzata la tiene anche se cambia quella del progetto, finché l'utente non la toglie.
+Aperte:
+- H1 in corso: spike usa e getta in `../snastro-h1` (branch `spike/h1`), 6 varianti sulla sbobinatura di skatefest; rapporto in `.mismagent/spikes/h1.md`.
+- H2 (argomento come filtro o istruzione) e H3 (default della percentuale): dopo H1.
