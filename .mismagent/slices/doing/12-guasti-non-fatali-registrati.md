@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: 60c5531f162d015ecf35349487ad33e150413edb
 
 The S1 runner and the open-project delete turn a non-fatal fault into the generic message and drop its cause:
 `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt:51` and `ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt:53`
