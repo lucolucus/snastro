@@ -7,6 +7,9 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-09 — conventions non-fatal-faults (decided: codex, delegated by the user): states that a handled fault at a
+  non-committing edge (a start, a playback) also shows the generic message, as the 2026-10-08 error policy already
+  requires; slice 26 left two such edges without it (review 26-1, advice 4).
 - 2026-10-09 — conventions presenter-split (decided: codex, delegated by the user): an extracted flow's collaborators
   move into one public data class per holder, built by `:avvio`; the presenter's parameter list may change, ADR 0030 §1
   compile-time wiring kept by required non-null fields. Before, the frozen constructor meant a split could never shrink

@@ -33,3 +33,10 @@ committing blocks outside the row runner on `eccezioneRegistrata`, resets in `fi
 with no raw catch in these two files; tested in `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniConsegnaDopoCommitTest.kt`
 (L269) and `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterAggiornamentoTest.kt` (CR-7);
 the test spy on the `snastro.ui` logger `ui/src/test/kotlin/snastro/ui/LogUi.kt` (`registriLogUi`, `causatoDa`).
+
+**Riassunto tab** (2026-10-09, slice 26, decided: codex on delegation): `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`
+— `riassumi` on `eccezioneRegistrata`, showing the generic message; `scaricaModello` and `apriFonte` on
+`nonFataleRegistrato`, keeping the re-read and the switch of Parte after a handled fault; tested in
+`ui/src/test/kotlin/snastro/ui/riassunto/RiassuntoPresenterGuastiTest.kt`. A handled fault at a non-committing edge
+(a start, a playback) also shows M1(b)'s generic message (`.mismagent/architecture.md`, 2026-10-08): the two latter
+edges still omit it — debt, not an exemption. Slices 27–30 keep the follow-up and show the message.
