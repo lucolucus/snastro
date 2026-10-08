@@ -8,8 +8,8 @@ shared log line:
   `eccezioneRegistrata(operazione) { … }`: it catches `Exception` only, so every `Error` propagates (D-0065);
 - **every other edge** (reads, starts, playback, refreshes) uses `nonFataleRegistrato(operazione) { … }`.
 
-Each caller names its operation; a screen's commands share one runner (S2's row runner on `StatoS2`, S3's
-`lanciaComando`), resetting their guard in `finally`, never a try/catch per command.
+Each caller names its operation once; a screen's commands share one runner (S2's row runner on `StatoS2`, S3's
+`lanciaComando`, S4's `suRiga`), resetting their guard in `finally`, never a try/catch per command.
 
 **Message at every edge** (2026-10-09, decided: codex on delegation): a handled fault at a non-committing edge — a
 start, a playback, a background read — also shows the generic message, keeping its follow-up (re-read, switch of
@@ -27,9 +27,11 @@ Decided: codex (delegated by the user), 2026-10-08 and 2026-10-09.
 `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoIncontro.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`;
 S3 `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt`,
 `ui/src/main/kotlin/snastro/ui/registrazione/SomiglianzaVoci.kt` (`suIo` on `eccezioneRegistrata`: it runs the
-committing `applica`); the Riassunto tab `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`. Tests: the
+committing `applica`); S4 `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt` (`suRiga`: `eccezioneRegistrata`
+wrapping `comandoConfermato`; `carica`/`riproduci`: `nonFataleRegistrato`); the Riassunto tab `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`. Tests: the
 logger spy `ui/src/test/kotlin/snastro/ui/LogUi.kt` (`registriLogUi`, `causatoDa`);
 `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniConsegnaDopoCommitTest.kt` (L269),
 `ui/src/test/kotlin/snastro/ui/registrazione/StatoVociGuastiTest.kt` (CR-7, L269),
 `ui/src/test/kotlin/snastro/ui/registrazione/RegistrazionePresenterGuastiTest.kt`,
-`ui/src/test/kotlin/snastro/ui/riassunto/RiassuntoPresenterGuastiTest.kt`.
+`ui/src/test/kotlin/snastro/ui/riassunto/RiassuntoPresenterGuastiTest.kt`,
+`ui/src/test/kotlin/snastro/ui/parlanti/ParlantiPresenterGuastiTest.kt` (CR-7).
