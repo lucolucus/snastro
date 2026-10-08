@@ -168,3 +168,9 @@
 - No raw catch left in the file; CR-19b entry for `ParlantiPresenter.kt` removed (3 -> 0).
 - New `ParlantiPresenterGuastiTest` (2 CR-7 tests, red before with "Collection contains no element matching the predicate"); `ParlantiPresenterTest` unchanged. ui 701/701, `./gradlew check` exit 0.
 - Remaining frozen `:ui` sites: Impostazioni (2), LunghezzaRiassunto (2), Lettore (1), Modelli (1). Citation proposal in `conventions-proposals.md`.
+
+## 30-impostazioni-modelli-lettore-guasti-registrati — 2026-10-09
+- `ImpostazioniPresenter` (`salva`, `leggiSenzaErrori`), `LunghezzaRiassuntoPresenter` (`carica`, `avviaModifica`: a `null` branch in the `when` beside Ok/Errore, `inCorso` reset in `finally`), `ModelliPresenter.scarica` and `LettorePresenter.avvia` on `nonFataleRegistrato`; shown messages and fallbacks unchanged. Lettore's port-thrown `CancellationException` branch (`ensureActive()`) stays, since the helper rethrows it.
+- CR-19b entries for the four files removed (2, 2, 1, 1 -> 0): no `:ui` file is left in the frozen list.
+- New CR-7 tests in the existing test classes (6, red before with "Collection contains no element matching the predicate"); `LunghezzaRiassuntoPresenter`'s fault paths had no test before. ui 707/707, architettura-test 459/459, `mm gate` green.
+- Debt in `design-notes.md`: `leggiSenzaErrori` falls back with no message; `LettorePresenter.pausa` has no edge at all. Citation proposal in `conventions-proposals.md`.
