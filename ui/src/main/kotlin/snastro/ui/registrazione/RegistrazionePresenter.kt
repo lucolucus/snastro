@@ -1,7 +1,6 @@
 package snastro.ui.registrazione
 
 import androidx.compose.runtime.Composable
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -15,7 +14,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
-import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -25,6 +23,7 @@ import snastro.ui.ApriEsterno
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.LettoreUiStato
 import snastro.ui.lettore.StatoLettore
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.stile.SegnoScheda
 import snastro.ui.testi.MESSAGGIO_AUDIO_NON_DISPONIBILE
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO
@@ -145,65 +144,62 @@ class RegistrazionePresenter(
         voci.avvia()
     }
 
+    // A fault of trascritto/stati/lettore never leaves this screen stuck on Caricamento: it is logged and the
+    // screen shows the load error (CR-7, ADR 0041 §3).
     private suspend fun carica() {
-        try {
-            // AC-453/455: a reload never keeps a selection or a panel from a previous generation.
-            voci.deseleziona()
-            val vista = withContext(io) { trascritto() }
-            if (vista == null) {
-                _stato.value = statoSenzaTrascritto()
-                return
-            }
-            // L573b: `sbobinatura()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
-            // to fall into the same catch below as `trascritto()` and take the WHOLE screen to `Errore`,
-            // discarding the vista just read. `sbobinatura()` is the simpler of the two: `null` is already
-            // its own legitimate "not resolved yet" value (AC-218 disables 'Apri sbobinatura'/'Mostra
-            // nella cartella' the same way, no separate signal is worth adding), so a thrown call is
-            // folded into that same `null` by [sbobinaturaOSicuro] — never a silent swallow, just no extra
-            // state for a fault that already has a safe, defined UI.
-            val percorso = sbobinaturaOSicuro()
-            // `lettore.disponibile()` is NOT folded the same way: a THROWN call says nothing about the
-            // source itself (unlike a clean `false`), so it must not look like "audio non disponibile"
-            // (which disables retry). [disponibileOSicuro] tells the two apart; a throw sets
-            // [disponibilitaIncerta] instead, [barraDi] maps THAT to the lettore's transient `Errore`
-            // state (play stays enabled) and [audioDisponibile] below stays `true` so a retry click is
-            // never blocked. `disponibilitaIncerta` clears itself once a real `lettore.stato` tick for
-            // THIS Registrazione arrives (`rifletti`) and settles the question.
-            val disponibileEsito = disponibileOSicuro()
-            disponibilitaIncerta = disponibileEsito == null
-            val disponibile = disponibileEsito ?: true
-            val statoLettore = lettore.stato.value
-            // AC-I75: the read-only lock is the Incontro's — a re-run of ANY Parte (vista.solaLettura) or of this one.
-            val soloLettura = vista.solaLettura != null || soloLetturaDi(withContext(io) { stati() })
-            // L199: on a multi-Parte page the banner always names the Parte (this one's when the lock is its own run).
-            val parteInCorso = vista.solaLettura?.parte ?: vista.numeroParte.takeIf { vista.parti.size > 1 }
-            voci.vista = vista
-            _stato.value = RegistrazioneUiStato.Dati(
-                titolo = vista.titolo,
-                dataRegistrazione = vista.dataRegistrazione,
-                durataMs = vista.durataMs,
-                segmenti = segmentiDi(vista, statoLettore),
-                barra = barraDi(statoLettore, disponibile),
-                audioDisponibile = disponibile,
-                sbobinaturaPercorso = percorso,
-                soloLettura = soloLettura,
-                bannerRitrascrizione = if (soloLettura) bannerSolaLettura(parteInCorso) else null,
-                contenutoRiassunto = contenutoRiassunto,
-                schedaSelezionata = selezioneSchedaS3.scheda,
-                segnoRiassunto = segnoRiassuntoAttuale,
-                parte = intestazioneParte(vista),
-            )
-            voci.pubblica()
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            // Same rationale as every other presenter in this codebase (RegistrazioniPresenter/ShellPresenter):
-            // a fault of trascritto/sbobinatura/lettore never leaves this screen stuck on Caricamento.
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)
-        }
+        nonFataleRegistrato("carica trascritto $registrazioneId") { mostraTrascritto() }
+            ?: run { _stato.value = RegistrazioneUiStato.Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO) }
         if (_stato.value is RegistrazioneUiStato.Dati) voci.ricaricaParlanti()
+    }
+
+    private suspend fun mostraTrascritto() {
+        // AC-453/455: a reload never keeps a selection or a panel from a previous generation.
+        voci.deseleziona()
+        val vista = withContext(io) { trascritto() }
+        if (vista == null) {
+            _stato.value = statoSenzaTrascritto()
+            return
+        }
+        // L573b: `sbobinatura()`/`lettore.disponibile()` degrade PER CALL — a fault of either one used
+        // to fall into the same handler of `carica()` as `trascritto()` and take the WHOLE screen to `Errore`,
+        // discarding the vista just read. `sbobinatura()` is the simpler of the two: `null` is already
+        // its own legitimate "not resolved yet" value (AC-218 disables 'Apri sbobinatura'/'Mostra
+        // nella cartella' the same way, no separate signal is worth adding), so a thrown call is
+        // folded into that same `null` by [sbobinaturaOSicuro] — never a silent swallow, just no extra
+        // state for a fault that already has a safe, defined UI.
+        val percorso = sbobinaturaOSicuro()
+        // `lettore.disponibile()` is NOT folded the same way: a THROWN call says nothing about the
+        // source itself (unlike a clean `false`), so it must not look like "audio non disponibile"
+        // (which disables retry). [disponibileOSicuro] tells the two apart; a throw sets
+        // [disponibilitaIncerta] instead, [barraDi] maps THAT to the lettore's transient `Errore`
+        // state (play stays enabled) and [audioDisponibile] below stays `true` so a retry click is
+        // never blocked. `disponibilitaIncerta` clears itself once a real `lettore.stato` tick for
+        // THIS Registrazione arrives (`rifletti`) and settles the question.
+        val disponibileEsito = disponibileOSicuro()
+        disponibilitaIncerta = disponibileEsito == null
+        val disponibile = disponibileEsito ?: true
+        val statoLettore = lettore.stato.value
+        // AC-I75: the read-only lock is the Incontro's — a re-run of ANY Parte (vista.solaLettura) or of this one.
+        val soloLettura = vista.solaLettura != null || soloLetturaDi(withContext(io) { stati() })
+        // L199: on a multi-Parte page the banner always names the Parte (this one's when the lock is its own run).
+        val parteInCorso = vista.solaLettura?.parte ?: vista.numeroParte.takeIf { vista.parti.size > 1 }
+        voci.vista = vista
+        _stato.value = RegistrazioneUiStato.Dati(
+            titolo = vista.titolo,
+            dataRegistrazione = vista.dataRegistrazione,
+            durataMs = vista.durataMs,
+            segmenti = segmentiDi(vista, statoLettore),
+            barra = barraDi(statoLettore, disponibile),
+            audioDisponibile = disponibile,
+            sbobinaturaPercorso = percorso,
+            soloLettura = soloLettura,
+            bannerRitrascrizione = if (soloLettura) bannerSolaLettura(parteInCorso) else null,
+            contenutoRiassunto = contenutoRiassunto,
+            schedaSelezionata = selezioneSchedaS3.scheda,
+            segnoRiassunto = segnoRiassuntoAttuale,
+            parte = intestazioneParte(vista),
+        )
+        voci.pubblica()
     }
 
     /**
@@ -212,9 +208,11 @@ class RegistrazionePresenter(
      * (a 1-Parte Incontro, an unreadable Incontro or state, a COMPLETATA without Trascritto) stays the generic Errore.
      */
     private suspend fun statoSenzaTrascritto(): RegistrazioneUiStato {
-        val elaborazione = catturaNonFatale { withContext(io) { stati() } }.getOrNull()?.stato
-        val incontro = catturaNonFatale { withContext(io) { parti.incontroDi(registrazioneId) } }.getOrNull()
-            ?.takeIf { it.parti.size > 1 }
+        val elaborazione = nonFataleRegistrato("stato elaborazione $registrazioneId") { withContext(io) { stati() } }
+            ?.stato
+        val incontro = nonFataleRegistrato("incontro di $registrazioneId") {
+            withContext(io) { parti.incontroDi(registrazioneId) }
+        }?.takeIf { it.parti.size > 1 }
         val questa = incontro?.parti?.firstOrNull { it.registrazioneId == registrazioneId }
         val messaggio = questa?.let { elaborazione?.let { e -> messaggioParteSenzaTrascritto(e, it.numero) } }
         return if (incontro == null || questa == null || messaggio == null) {
@@ -246,7 +244,9 @@ class RegistrazionePresenter(
     // the title falls back to this Parte's and the time to none.
     private suspend fun intestazioneParte(vista: TrascrittoView): IntestazioneParte? {
         if (vista.parti.size < 2) return null
-        val incontro = catturaNonFatale { withContext(io) { parti.incontro(vista.incontroId) } }.getOrNull()
+        val incontro = nonFataleRegistrato("incontro ${vista.incontroId}") {
+            withContext(io) { parti.incontro(vista.incontroId) }
+        }
         return IntestazioneParte(
             numero = vista.numeroParte,
             totale = vista.parti.size,
@@ -257,29 +257,17 @@ class RegistrazionePresenter(
     }
 
     // L573b: `sbobinatura()` degraded to `null` (same as it legitimately having none) — 'Apri sbobinatura'/
-    // 'Mostra nella cartella' just stay disabled (AC-218), the transcript is untouched.
-    private suspend fun sbobinaturaOSicuro(): String? = try {
-        withContext(io) { sbobinatura() }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-    ) {
-        null
-    }
+    // 'Mostra nella cartella' just stay disabled (AC-218), the transcript is untouched; the fault is logged.
+    private suspend fun sbobinaturaOSicuro(): String? =
+        nonFataleRegistrato("sbobinatura $registrazioneId") { withContext(io) { sbobinatura() } }
 
     // L573b: `null` means the call THREW (told apart from a clean `false`, see `carica()`) — the whole
     // screen never goes to Errore for this, but a thrown call must not read as "confirmed unavailable"
-    // either.
-    private suspend fun disponibileOSicuro(): Boolean? = try {
-        withContext(io) { lettore.disponibile(registrazioneId) }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-    ) {
-        null
-    }
+    // either. The fault is logged.
+    private suspend fun disponibileOSicuro(): Boolean? =
+        nonFataleRegistrato("audio disponibile $registrazioneId") {
+            withContext(io) { lettore.disponibile(registrazioneId) }
+        }
 
     /** Retries the initial load after [RegistrazioneUiStato.Errore] — shows [RegistrazioneUiStato.Caricamento]
      * while the retry itself is in flight (L573f), instead of leaving the stale Errore on screen. */
@@ -347,7 +335,7 @@ class RegistrazionePresenter(
         val dati = _stato.value as? RegistrazioneUiStato.Dati ?: return
         if (!dati.audioDisponibile) return
         dati.segmenti.find { it.segmentoId == id }?.let { segmento ->
-            avviaLettore { lettore.riproduciDa(registrazioneId, segmento.inizioMs) }
+            avviaLettore("riproduci segmento ${id.numero}") { lettore.riproduciDa(registrazioneId, segmento.inizioMs) }
         }
     }
 
@@ -355,40 +343,32 @@ class RegistrazionePresenter(
     fun riproduciDaInizio() {
         val dati = _stato.value as? RegistrazioneUiStato.Dati ?: return
         if (!dati.audioDisponibile) return
-        avviaLettore { lettore.riproduciDa(registrazioneId, 0) }
+        avviaLettore("riproduci $registrazioneId") { lettore.riproduciDa(registrazioneId, 0) }
     }
 
     /** The header audio bar's own pause. */
-    fun pausa() = avviaLettore { lettore.pausa() }
+    fun pausa() = avviaLettore("pausa") { lettore.pausa() }
 
     /** AC-218: opens the Sbobinatura with the OS default app. A no-op while
      * [RegistrazioneUiStato.Dati.sbobinaturaPercorso] has not resolved yet. */
-    fun apriSbobinatura() = conSbobinatura(apriEsterno::apriFile)
+    fun apriSbobinatura() = conSbobinatura("apri sbobinatura", apriEsterno::apriFile)
 
     /** AC-218: reveals the Sbobinatura in a file manager window. Same guard as [apriSbobinatura]. */
-    fun mostraSbobinaturaNellaCartella() = conSbobinatura(apriEsterno::mostraNellaCartella)
+    fun mostraSbobinaturaNellaCartella() = conSbobinatura("mostra sbobinatura", apriEsterno::mostraNellaCartella)
 
-    private fun conSbobinatura(azione: (String) -> Unit) {
+    private fun conSbobinatura(operazione: String, azione: (String) -> Unit) {
         val percorso = (_stato.value as? RegistrazioneUiStato.Dati)?.sbobinaturaPercorso ?: return
-        avvia { azione(percorso) }
+        eseguiSuLane(io, operazione) { azione(percorso) }
     }
 
-    // H2: every port call this presenter fires off the main flow runs here, wrapped the same way as
-    // every other presenter in this codebase (RegistrazioniPresenter/LettorePresenter) — a fault never
-    // escapes `scope.launch` and takes the `stato`/`lettore.stato` collectors down with it.
-    private fun eseguiSuLane(dispatcher: CoroutineDispatcher, operazione: () -> Unit): Job = scope.launch {
-        try {
-            withContext(dispatcher) { operazione() }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            aggiornaDati { it.copy(errore = MESSAGGIO_ERRORE_GENERICO) }
+    // H2: every port call this presenter fires off the main flow runs here — a fault never escapes
+    // `scope.launch` and takes the `stato`/`lettore.stato` collectors down with it: it is logged under
+    // [operazione] and shows the generic message (CR-7, ADR 0041 §3: none of these commits).
+    private fun eseguiSuLane(dispatcher: CoroutineDispatcher, operazione: String, chiamata: () -> Unit): Job =
+        scope.launch {
+            nonFataleRegistrato(operazione) { withContext(dispatcher) { chiamata() } }
+                ?: aggiornaDati { it.copy(errore = MESSAGGIO_ERRORE_GENERICO) }
         }
-    }
-
-    private fun avvia(operazione: () -> Unit): Job = eseguiSuLane(io, operazione)
 
     // L573a: every command that reaches the shared `lettore` (segmento/estratto/pausa/header-play) runs
     // on [ioLettore] (the single lane), never on the plain, possibly multi-threaded [io] — click order
@@ -396,9 +376,9 @@ class RegistrazionePresenter(
     // queued (not yet started): a new one always cancels whatever Job is recorded here, so a click that
     // never reached the port at all is skipped outright, exactly the fix `LettorePresenter`'s own
     // HIGH-1 already applies for its single shared instance.
-    private fun avviaLettore(operazione: () -> Unit) {
+    private fun avviaLettore(operazione: String, chiamata: () -> Unit) {
         comandoLettoreInCorso?.cancel()
-        comandoLettoreInCorso = eseguiSuLane(ioLettore, operazione)
+        comandoLettoreInCorso = eseguiSuLane(ioLettore, operazione, chiamata)
     }
 
     /** AC-403: '▶ estratto' of a Voce card — a no-op while the audio source is missing. */
@@ -406,13 +386,15 @@ class RegistrazionePresenter(
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
         // ADR 0033 §4.1: the Voce is the Incontro's, read off the trascritto shown.
         val incontroId = voci.vista?.incontroId ?: return
-        avviaLettore { parlanti.estratto(VoceRef(incontroId, voceId))?.let(lettore::riproduciEstratto) }
+        avviaLettore("riproduci estratto voce ${voceId.numero}") {
+            parlanti.estratto(VoceRef(incontroId, voceId))?.let(lettore::riproduciEstratto)
+        }
     }
 
     /** AC-403: '▶' of a Candidato (its own past excerpt) — a no-op while the audio source is missing. */
     fun riproduciEstratto(estratto: EstrattoRef) {
         if ((_stato.value as? RegistrazioneUiStato.Dati)?.audioDisponibile != true) return
-        avviaLettore { lettore.riproduciEstratto(estratto) }
+        avviaLettore("riproduci estratto") { lettore.riproduciEstratto(estratto) }
     }
 
     /** H1: dismisses the current inline `errore`, if any. */

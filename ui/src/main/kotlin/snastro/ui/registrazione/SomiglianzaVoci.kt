@@ -1,6 +1,5 @@
 package snastro.ui.registrazione
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -8,6 +7,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.VoceId
+import snastro.ui.eccezioneRegistrata
 import snastro.ui.testi.AVVISO_TUTTA_LA_VOCE
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.SUGGERIMENTO_RIFERIMENTI_INSUFFICIENTI
@@ -56,7 +56,7 @@ internal class SomiglianzaVoci(
             primaLettura = false
             // AC-533: a result message is cleared by leaving S3 — a presenter created over one clears it.
             if (attuale is StatoSomiglianza.Esito || attuale is StatoSomiglianza.Errore) {
-                suIo { porta.annulla(registrazioneId) }
+                suIo("annulla somiglianza $registrazioneId") { porta.annulla(registrazioneId) }
                 attuale = null
             }
         }
@@ -89,7 +89,7 @@ internal class SomiglianzaVoci(
         val daAnnullare = stato is StatoSomiglianza.InCorso || stato is StatoSomiglianza.Anteprima
         if (soloLettura && daAnnullare && !annullamentoRichiesto) {
             annullamentoRichiesto = true
-            suIo { porta.annulla(registrazioneId) }
+            suIo("annulla somiglianza $registrazioneId") { porta.annulla(registrazioneId) }
         }
     }
 
@@ -116,7 +116,7 @@ internal class SomiglianzaVoci(
 
     /** 'Riassegna per somiglianza' and 'Ricalcola' (AC-547) — only while the button is enabled. */
     fun calcola() {
-        if (abilitato) suIo { porta.calcola(registrazioneId) }
+        if (abilitato) suIo("calcola somiglianza $registrazioneId") { porta.calcola(registrazioneId) }
     }
 
     /** AC-546: 'Applica' → [AzioniSomiglianza.applica] exactly once (a double click is one call). */
@@ -125,26 +125,20 @@ internal class SomiglianzaVoci(
         if (applicaInviato || anteprima.gruppi.sumOf { it.frasi } == 0) return
         applicaInviato = true
         pubblica()
-        suIo { porta.applica(registrazioneId) }
+        suIo("applica somiglianza $registrazioneId") { porta.applica(registrazioneId) }
     }
 
     /** AC-532/AC-546: 'Annulla' / 'Chiudi', and a result message's dismissal — never during the application. */
     fun annulla() {
         if (stato == null || stato == StatoSomiglianza.Applicazione || applicaInviato) return
-        suIo { porta.annulla(registrazioneId) }
+        suIo("annulla somiglianza $registrazioneId") { porta.annulla(registrazioneId) }
     }
 
-    private fun suIo(chiamata: () -> Unit) {
+    // ADR 0041 §3: [applica] commits, so every call here catches `Exception` only (an `Error` propagates, D-0065);
+    // the fault is logged under [operazione] and shows the generic message.
+    private fun suIo(operazione: String, chiamata: () -> Unit) {
         scope.launch {
-            try {
-                withContext(io) { chiamata() }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                errore(MESSAGGIO_ERRORE_GENERICO)
-            }
+            eccezioneRegistrata(operazione) { withContext(io) { chiamata() } } ?: errore(MESSAGGIO_ERRORE_GENERICO)
         }
     }
 }
