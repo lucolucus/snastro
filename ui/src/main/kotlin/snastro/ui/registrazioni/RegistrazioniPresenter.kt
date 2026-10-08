@@ -141,9 +141,9 @@ class RegistrazioniPresenter(
     private val espansi = mutableSetOf<IncontroId>()
 
     // Before `init`: its collectors may run at once (an immediate dispatcher) and already touch the shared state.
-    private val s2 = StatoS2(_stato, ::carica)
+    private val s2 = StatoS2(_stato, scope, ::carica)
     private val importazione = FlussoImporta(s2, scope, io, progettoId, aggiungiRegistrazione)
-    private val eliminazione = FlussoEliminaRiga(s2, scope, io, lettore, eliminaRegistrazione)
+    private val eliminazione = FlussoEliminaRiga(s2, io, lettore, eliminaRegistrazione)
 
     init {
         scope.launch { carica() }
@@ -173,8 +173,8 @@ class RegistrazioniPresenter(
     /**
      * M1: merges freshly-read [nuove] rows into the CURRENT [RegistrazioniUiStato.Dati] instead of
      * rebuilding it — [RegistrazioniUiStato.Dati.importoInCorso]/`errore` and each row's
-     * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([FlussoImporta]/[suRiga]) ever
-     * clears them. L478a: [riproduzione] is RE-DERIVED from [lettore]'s CURRENT (merge-time) state —
+     * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([FlussoImporta]/[StatoS2.comandoDiRiga])
+     * ever clears them. L478a: [riproduzione] is RE-DERIVED from [lettore]'s CURRENT (merge-time) state —
      * never trusted from [nuove], which [costruisciRighe] built from a snapshot taken back when this
      * refresh started on [io]; a play/pause landing on [lettore] while that refresh was still building
      * rows would otherwise be silently reverted by this merge once it lands.
@@ -477,15 +477,33 @@ class RegistrazioniPresenter(
         }
 
     /** AC-206: replaces the DataRegistrazione shown/edited inline on the row. */
-    fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) =
-        suRiga(id) { withContext(io) { modificaDataRegistrazione(ModificaDataRegistrazione(id, nuovaData)) } }
+    fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) = s2.comandoDiRiga(
+        id,
+        "modifica la data di $id",
+        comando = {
+            withContext(io) {
+                comandoConfermato("modifica la data di $id") {
+                    modificaDataRegistrazione(ModificaDataRegistrazione(id, nuovaData))
+                }
+            }
+        },
+        suEsito = { concludiRiga(id, it) },
+    )
 
     /**
      * AC-363: renames the Registrazione from the row's inline titolo field — same row guard (M3) and
      * inline error as [modificaData]; the list refreshes only after a success.
      */
-    fun rinomina(id: RegistrazioneId, nuovoTitolo: String) =
-        suRiga(id) { withContext(io) { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) } }
+    fun rinomina(id: RegistrazioneId, nuovoTitolo: String) = s2.comandoDiRiga(
+        id,
+        "rinomina $id",
+        comando = {
+            withContext(io) {
+                comandoConfermato("rinomina $id") { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) }
+            }
+        },
+        suEsito = { concludiRiga(id, it) },
+    )
 
     /**
      * AC-344/AC-203: 'Trascrivi' (NON_AVVIATA) and 'Riprova' (FALLITA) both land here, carrying the row's
@@ -498,8 +516,18 @@ class RegistrazioniPresenter(
         when (val campo = numeroPersoneCampo(riga.numeroPersone)) {
             NumeroPersoneCampo.NonValido ->
                 s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
-            is NumeroPersoneCampo.Valido ->
-                suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, campo.numero)) } }
+            is NumeroPersoneCampo.Valido -> s2.comandoDiRiga(
+                id,
+                "avvia l'elaborazione di $id",
+                comando = {
+                    withContext(io) {
+                        comandoConfermato("avvia l'elaborazione di $id") {
+                            comando(AvviaElaborazione(id, campo.numero))
+                        }
+                    }
+                },
+                suEsito = { concludiRiga(id, it) },
+            )
         }
     }
 
@@ -526,7 +554,14 @@ class RegistrazioniPresenter(
         val comando = ritrascrivi
         val riga = s2.rigaLibera(id)?.takeIf { it.confermaRitrascrivi } ?: return
         val numero = (numeroPersoneCampo(riga.numeroPersone) as? NumeroPersoneCampo.Valido)?.numero
-        suRiga(id) { withContext(io) { comando(AvviaElaborazione(id, numero)) } }
+        s2.comandoDiRiga(
+            id,
+            "ritrascrivi $id",
+            comando = {
+                withContext(io) { comandoConfermato("ritrascrivi $id") { comando(AvviaElaborazione(id, numero)) } }
+            },
+            suEsito = { concludiRiga(id, it) },
+        )
     }
 
     /**
@@ -540,33 +575,23 @@ class RegistrazioniPresenter(
      */
     fun annullaElaborazione(id: RegistrazioneId) {
         val comando = annullaElaborazione
-        val riga = s2.rigaLibera(id) ?: return
-        // ReturnCount (detekt): the third guard (a NonAvviata row has no elaborazioneId) is folded into
-        // this `?.let` instead of a third `?: return`.
-        riga.elaborazioneId?.let { elaborazioneId ->
-            s2.aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
-            s2.azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
-            scope.launch {
-                try {
-                    val esito = withContext(io) {
-                        comandoConfermato("annulla $elaborazioneId") { comando(AnnullaElaborazione(elaborazioneId)) }
-                    }
-                    carica() // AC-476: reload on both Ok and Errore (see the kdoc above)
-                    val messaggio = (esito as? Esito.Errore)?.errore
-                        ?.let { it as? ErroreTrascrizione.ElaborazioneGiaAvviata }
-                        ?.let(::messaggioPer)
-                    s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggio) }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (
-                    @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-                ) {
-                    s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
-                } finally {
-                    s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
+        val elaborazioneId = s2.rigaLibera(id)?.elaborazioneId ?: return
+        s2.comandoDiRiga(
+            id,
+            "annulla $elaborazioneId",
+            comando = {
+                withContext(io) {
+                    comandoConfermato("annulla $elaborazioneId") { comando(AnnullaElaborazione(elaborazioneId)) }
                 }
-            }
-        }
+            },
+            suEsito = { esito ->
+                carica() // AC-476: reload on both Ok and Errore (see the kdoc above)
+                val messaggio = (esito as? Esito.Errore)?.errore
+                    ?.let { it as? ErroreTrascrizione.ElaborazioneGiaAvviata }
+                    ?.let(::messaggioPer)
+                s2.aggiornaRiga(id) { it.copy(erroreRiga = messaggio) }
+            },
+        )
     }
 
     /** AC-I69: the chevron of [id]; the set lives here so it outlives S2's composition and every refresh. */
@@ -582,7 +607,12 @@ class RegistrazioniPresenter(
      */
     fun modificaOraDiInizio(id: RegistrazioneId, ora: LocalTime?) {
         val comando = modificaOraDiInizioRegistrazione
-        suRiga(id) { withContext(io) { comando(id, ora) } }
+        s2.comandoDiRiga(
+            id,
+            "modifica l'ora di inizio di $id",
+            comando = { withContext(io) { comandoConfermato("modifica l'ora di inizio di $id") { comando(id, ora) } } },
+            suEsito = { concludiRiga(id, it) },
+        )
     }
 
     /** AC-I67: the text of an Incontro's ONE 'Numero di persone' field, as typed (validated when 'Trascrivi' fires). */
@@ -633,35 +663,17 @@ class RegistrazioniPresenter(
     fun modificaNumeroPersone(id: RegistrazioneId, testo: String) =
         s2.aggiornaRiga(id) { it.copy(numeroPersone = testo) }
 
-    /** One row command; committed with only its after-commit follow-up failed is a success (D-0062, L270). */
-    private fun suRiga(id: RegistrazioneId, operazione: suspend () -> Esito<Unit>) {
-        val riga = s2.rigaLibera(id) ?: return
-        s2.aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
-        s2.azzeraAvviso() // ADR 0020/AC-627: "the next command" clears any stale Elimina notice too
-        scope.launch {
-            try {
-                when (val esito = comandoConfermato("comando di riga su $id") { operazione() }) {
-                    is Esito.Ok -> {
-                        carica() // M1: merges the refreshed list, preserving this row's flags until reset below
-                        s2.aggiornaRiga(id) {
-                            it.copy(operazioneInCorso = false, erroreRiga = null, confermaRitrascrivi = false)
-                        }
-                    }
-                    is Esito.Errore -> s2.aggiornaRiga(id) {
-                        it.copy(operazioneInCorso = false, erroreRiga = messaggioPer(esito.errore))
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
-            } finally {
-                // L269 (D-0065): an Error (e.g. after the commit) propagates, but the row is released.
-                s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false) }
-            }
+    /**
+     * The outcome of a plain row command on [StatoS2.comandoDiRiga]: Ok reloads (M1: the merge keeps this row's flags
+     * until the runner resets them) and closes the Ritrascrivi confirmation; a refusal shows its message inline (H1).
+     * Committed with only its after-commit follow-up failed is an Ok (`comandoConfermato`, D-0062, L270).
+     */
+    private suspend fun concludiRiga(id: RegistrazioneId, esito: Esito<Unit>) = when (esito) {
+        is Esito.Ok -> {
+            carica()
+            s2.aggiornaRiga(id) { it.copy(erroreRiga = null, confermaRitrascrivi = false) }
         }
+        is Esito.Errore -> s2.aggiornaRiga(id) { it.copy(erroreRiga = messaggioPer(esito.errore)) }
     }
 
     /**

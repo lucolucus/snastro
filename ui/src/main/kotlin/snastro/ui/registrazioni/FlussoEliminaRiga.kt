@@ -1,9 +1,6 @@
 package snastro.ui.registrazioni
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.ErroreDominio
 import snastro.kernel.Esito
@@ -15,19 +12,17 @@ import snastro.ui.comandoConfermato
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
-import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioEliminata
 import snastro.ui.testi.messaggioPer
 
 /**
  * The delete-a-row flow of S2 · Registrazioni (ADR 0020 §6, AC-625..628): the row's 'Elimina…' confirmation
  * ([RigaRegistrazione.confermaElimina]), ONE [eliminaRegistrazione] run on [io], the [lettore] paused first when it
- * plays the deleted row, and the dismissible success notice. M3: the row's own guard ([StatoS2.rigaLibera]); L269:
- * its in-flight flag is reset in `finally`.
+ * plays the deleted row, and the dismissible success notice. The command runs on S2's one row runner
+ * ([StatoS2.comandoDiRiga]: M3 guard, logged fault, L269 reset).
  */
 internal class FlussoEliminaRiga(
     private val s2: StatoS2,
-    private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
     private val lettore: LettoreAudio,
     private val eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
@@ -54,15 +49,14 @@ internal class FlussoEliminaRiga(
      * is gone from the fresh read). On Errore the dialog always closes (AC-628), see [rifiutata].
      */
     fun conferma(id: RegistrazioneId) {
-        val riga = s2.rigaLibera(id)?.takeIf { it.confermaElimina } ?: return
-        val titolo = riga.titolo
-        s2.aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
-        s2.azzeraAvviso()
-        scope.launch {
-            try {
-                val esito = withContext(io) {
-                    comandoConfermato("elimina $id") { eliminaRegistrazione(EliminaRegistrazione(id)) }
-                }
+        val titolo = s2.rigaLibera(id)?.takeIf { it.confermaElimina }?.titolo ?: return
+        s2.comandoDiRiga(
+            id,
+            "elimina $id",
+            comando = {
+                withContext(io) { comandoConfermato("elimina $id") { eliminaRegistrazione(EliminaRegistrazione(id)) } }
+            },
+            suEsito = { esito ->
                 when (esito) {
                     is Esito.Ok -> {
                         pausaSeInRiproduzione(id)
@@ -71,18 +65,9 @@ internal class FlussoEliminaRiga(
                     }
                     is Esito.Errore -> rifiutata(id, esito.errore)
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                s2.aggiornaRiga(id) {
-                    it.copy(operazioneInCorso = false, confermaElimina = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO)
-                }
-            } finally {
-                s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
-            }
-        }
+            },
+            suGuasto = { it.copy(confermaElimina = false) },
+        )
     }
 
     private fun RegistrazioniUiStato.Dati.conAvvisoEliminata(titolo: String) =
@@ -106,24 +91,16 @@ internal class FlussoEliminaRiga(
         when (errore) {
             // AC-628: "the list just reloads" — the row is normally already gone from the fresh read too, so this
             // reset is a no-op then; it only matters for the rare race where a stale read still shows it, so the
-            // dialog still closes and the row is not left stuck spinning.
+            // dialog still closes (the runner releases the row itself).
             is ErroreProgetto.RegistrazioneNonTrovata -> {
                 s2.ricarica()
-                s2.aggiornaRiga(id) { it.copy(operazioneInCorso = false, confermaElimina = false) }
+                s2.aggiornaRiga(id) { it.copy(confermaElimina = false) }
             }
             is ErroreTrascrizione.ElaborazioneGiaAperta -> {
                 s2.ricarica()
-                s2.aggiornaRiga(id) {
-                    it.copy(
-                        operazioneInCorso = false,
-                        confermaElimina = false,
-                        erroreRiga = MESSAGGIO_ELIMINAZIONE_RIFIUTATA,
-                    )
-                }
+                s2.aggiornaRiga(id) { it.copy(confermaElimina = false, erroreRiga = MESSAGGIO_ELIMINAZIONE_RIFIUTATA) }
             }
-            else -> s2.aggiornaRiga(id) {
-                it.copy(operazioneInCorso = false, confermaElimina = false, erroreRiga = messaggioPer(errore))
-            }
+            else -> s2.aggiornaRiga(id) { it.copy(confermaElimina = false, erroreRiga = messaggioPer(errore)) }
         }
     }
 }

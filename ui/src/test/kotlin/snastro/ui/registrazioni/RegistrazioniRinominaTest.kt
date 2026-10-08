@@ -13,18 +13,22 @@ import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.ui.AggiornamentiVistaFinta
+import snastro.ui.causatoDa
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudioFinta
+import snastro.ui.registriLogUi
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneOffset
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private val REG_1 = RegistrazioneId("id-1")
 
@@ -170,5 +174,26 @@ class RegistrazioniRinominaTest {
         val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
         assertEquals(MESSAGGIO_ERRORE_GENERICO, riga.erroreRiga)
         assertEquals("Seduta", riga.titolo)
+    }
+
+    @Test
+    fun `CR-7 un eccezione di un comando di riga e registrata a WARNING con la sua causa`() = runTest {
+        val guasto = IllegalStateException("database non disponibile")
+        val presenter = presentatore(
+            this,
+            registrazioni = { listOf(rigaVista(REG_1, titolo = "Seduta")) },
+            rinomina = { throw guasto },
+        )
+        advanceUntilIdle()
+
+        val registri = registriLogUi {
+            presenter.azioni.rinomina(REG_1, "Nuovo titolo")
+            advanceUntilIdle()
+        }
+
+        assertTrue(registri.any { it.level == Level.WARNING && it.causatoDa(guasto) }, "registri: $registri")
+        val riga = assertIs<RegistrazioniUiStato.Dati>(presenter.stato.value).righe.single()
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, riga.erroreRiga)
+        assertEquals(false, riga.operazioneInCorso)
     }
 }
