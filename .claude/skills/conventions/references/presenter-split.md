@@ -6,6 +6,12 @@ functions, without forwarding members or lambdas hiding `TooManyFunctions`. Pres
 contract: S1 holders share one `internal` `CorsaSingola` over one `MutableStateFlow`, owning the synchronous M3 guard,
 the M1(b) generic message for non-fatal faults, and the `inCorso` reset in `finally`; never duplicate that runner.
 
+**The shell** (added 2026-10-08, decided: codex on delegation): the shell's extracted holder uses the shell's existing
+`MutableStateFlow` and receives its M3 guard as `occupata: () -> Boolean`; the presenter includes the holder's in-flight
+flag in that guard, keeping the shell's own concurrency contract without `CorsaSingola`; the holder handles non-fatal
+faults through `catturaNonFatale` and resets its flag in `finally` (`ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`,
+`ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`).
+
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): the screen keeps one state and one
 `azioni` while each flow gets its own small home. A lambda in `azioni` or a forwarding member only hides the size.
 Other screens keep their own concurrency (e.g. the audio of `RegistrazionePresenter`). Not yet uniform practice:
