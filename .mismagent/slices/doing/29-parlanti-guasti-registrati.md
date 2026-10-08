@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: e2fd4c84ef79e4302ce4b23b7a58f87807d389bf
 
 S4 is the other L269 site, and ADR 0041's Consequences already queue it ("S4 moves onto `eccezioneRegistrata` with the
 next change there"). Its three raw catches drop the cause (CR-7; release review R0-3, worst place 2).
