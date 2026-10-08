@@ -16,6 +16,14 @@ checks its controls call the right callbacks (it does not prove the presenter wi
 - a separate session lifetime does not need a real dispatcher: do not generalize an implicit `Dispatchers.Default`;
   use `conScopeDiProva` / `backgroundScope` for test-created scopes, with guaranteed cancellation.
 
+**Another window** (added 2026-10-08, decided: codex on delegation):
+- model it with a second real `SessioneProgettoImpl` that `apri`s the project and closes in teardown, with its own
+  `RegistroProgettiFinta` so its asynchronous registration cannot race the list;
+- this covers same-JVM lock contention (`OverlappingFileLockException` normalized in `acquisisciLock`); cross-process
+  locking needs a separate-process test;
+- for "nothing deleted", compare recursive relative paths, excluding only `progetto.db-wal`/`progetto.db-shm`, and
+  tolerate their disappearance during traversal.
+
 **Why.** mm looks for `EX-<n>` markers only under *tests/acceptance/*; *tests/acceptance/* as its own Gradle module
 would need settings, module-map and allowed-edge changes and test fixtures out of `:avvio`, while an extra source
 directory of `:avvio` keeps access to its internal test helpers. Konsist already scans `**/src/**/*.kt`.
