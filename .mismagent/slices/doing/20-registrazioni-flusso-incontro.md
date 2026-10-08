@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: f1435b8f625f4fcea0bd3eb3636fa36c97a94941
 
 `RegistrazioniPresenter` (784 lines, `@Suppress("LongParameterList", "TooManyFunctions")` at
 `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt:98`) still mixes five things: loading, grouping,
