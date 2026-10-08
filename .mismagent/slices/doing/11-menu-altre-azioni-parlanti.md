@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: 0a63f0c496c4f13eb35f380004f545f690fae216
 
 `parlanti/SchermataParlanti.kt` `MenuAltreAzioniParlante` hand-writes the "⋯" button + `DropdownMenu` with the same
 focus-return code (L742b) that slice 01 put once in `ui/src/main/kotlin/snastro/ui/stile/MenuAltreAzioni.kt`
