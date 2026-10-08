@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: a0c6dc30f0c2455f06656ce5357609e38afb9a67
 
 Split the delete-project flow out of `ProgettiPresenter` before the next S1 action lands (slice 05 adds "togli dalla
 lista"). Today the presenter is at detekt's `TooManyFunctions` limit (10 functions, threshold 11 — progress.md, slice
