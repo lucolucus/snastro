@@ -273,4 +273,7 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
   (D-0065). It uses `eccezioneRegistrata` (`:ui`), which sits on `:supporto`'s `catturaEccezione`.
 - **Every other edge** (reads, refreshes, the player, S1's list load) uses `nonFataleRegistrato` over `catturaNonFatale`.
 - S2's per-row commands share one runner on `StatoS2`.
-- Target, landing with refactor slices 17–19. Until then, S2's raw catches are debt (CR-19b counts), not an exception.
+- Landed for S1, the shell and S2 (slices 12, 14, 17–19: their CR-19b counts are 0). The remaining unlogged `:ui`
+  catch-alls are debt, not an exception. They are S3 (`StatoVoci`, `RegistrazionePresenter`, `SomiglianzaVoci`), S4,
+  the Riassunto tab, the settings, the models and the player, and each is still a CR-19b count. Refactor slices 26–30
+  queue them *(design pass R1, 2026-10-08)*.

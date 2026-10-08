@@ -32,3 +32,10 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
   - This is the target. The code moves in the queued refactors 17–21: S1's list load logged, the S2 per-row runner on
     `StatoS2`, S2's remaining edges, the Incontro flow out of `RegistrazioniPresenter`, and `SchermataRegistrazioni`
     split by flow.
+- 2026-10-08 — design pass (R1, after release review R0-3): ADR 0041's amendment in `.mismagent/architecture.md` now
+  says what is true. The rule holds for S1, the shell and S2. The other `:ui` presenters (S3, S4, Riassunto, settings,
+  models, player) still drop causes under frozen CR-19b counts. No decision changed.
+  - Queued refactors 26–30: one per edge, Riassunto first, because R1 changes that flow.
+  - Not queued yet: S2's row commands out of `RegistrazioniPresenter`. Moving them cannot shrink the 21-parameter
+    constructor while presenter-split says "Preserve its constructor", so that waits for the human's call on the
+    proposal in `.mismagent/conventions-proposals.md`.
