@@ -23,7 +23,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,11 +60,11 @@ import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MenuAltreAzioni
 import snastro.ui.stile.MessaggioInlineErrore
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
-import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_ELIMINA
@@ -292,48 +291,30 @@ private fun RigaParlanteControlli(riga: RigaParlante, azioni: AzioniParlanti) {
  * AC-577 rework cycle 1: `BottoneIcona More` opening a `Menu.html`-style menu — "Promuovi a
  * ricorrente" (AC-224, only for an occasionale row — same trivial `==` on already-known data as
  * before) and "Elimina…" (`danger` text, same command as before: opens the existing inline
- * confirmation, AC-225).
+ * confirmation, AC-225). The button, menu and focus return (L742b) are the shared [MenuAltreAzioni].
  */
 @Composable
 private fun MenuAltreAzioniParlante(riga: RigaParlante, azioni: AzioniParlanti) {
-    var espanso by remember { mutableStateOf(false) }
-    // L742b: focus returns to this same button once the menu closes — by dismissal (click outside/Esc)
-    // or by any item's own action — instead of being dropped on the floor.
-    val richiestaFocus = remember { FocusRequester() }
-    fun chiudi() {
-        espanso = false
-        richiestaFocus.requestFocus()
-    }
-    Box {
-        BottoneIconaSn(
-            icona = Icona.More,
-            descrizione = ETICHETTA_ALTRE_AZIONI,
-            onClick = { espanso = true },
-            abilitato = !riga.operazioneInCorso,
-            modifier = Modifier
-                .focusRequester(richiestaFocus)
-                .testTag("parlanti-altre-azioni-${riga.parlanteId.valore}"),
-        )
-        DropdownMenu(expanded = espanso, onDismissRequest = ::chiudi) {
-            if (riga.tipoParlante == TipoParlanteVista.OCCASIONALE) {
-                DropdownMenuItem(
-                    text = { Text(ETICHETTA_PROMUOVI) },
-                    onClick = {
-                        chiudi()
-                        azioni.promuovi(riga.parlanteId)
-                    },
-                    modifier = Modifier.testTag("parlanti-promuovi-${riga.parlanteId.valore}"),
-                )
-            }
+    val id = riga.parlanteId
+    MenuAltreAzioni("parlanti-altre-azioni-${id.valore}", !riga.operazioneInCorso) { chiudi ->
+        if (riga.tipoParlante == TipoParlanteVista.OCCASIONALE) {
             DropdownMenuItem(
-                text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
+                text = { Text(ETICHETTA_PROMUOVI) },
                 onClick = {
                     chiudi()
-                    azioni.chiediConfermaEliminazione(riga.parlanteId)
+                    azioni.promuovi(id)
                 },
-                modifier = Modifier.testTag("parlanti-elimina-${riga.parlanteId.valore}"),
+                modifier = Modifier.testTag("parlanti-promuovi-${id.valore}"),
             )
         }
+        DropdownMenuItem(
+            text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
+            onClick = {
+                chiudi()
+                azioni.chiediConfermaEliminazione(id)
+            },
+            modifier = Modifier.testTag("parlanti-elimina-${id.valore}"),
+        )
     }
 }
 
