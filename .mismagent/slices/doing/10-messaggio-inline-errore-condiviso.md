@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: cbfc06c8d72448b9745dfc34807c37edf83bb333
 
 `MessaggioInlineErrore(messaggio, onChiudi, tag)` is written three times, identical: `progetti/PannelloNuovoProgetto.kt`
 (internal, also used by `progetti/SchermataProgetti.kt`), `registrazioni/SchermataRegistrazioni.kt` and
