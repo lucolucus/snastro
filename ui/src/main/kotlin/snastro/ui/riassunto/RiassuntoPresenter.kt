@@ -1,6 +1,5 @@
 package snastro.ui.riassunto
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
@@ -22,10 +21,12 @@ import snastro.sintesi.applicazione.letture.ImpostazioniSintesiVista
 import snastro.sintesi.applicazione.letture.RiassuntoVista
 import snastro.sintesi.applicazione.letture.RichiestaApertaVista
 import snastro.sintesi.applicazione.letture.StatoModelloVista
-import snastro.supporto.catturaNonFatale
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
+import snastro.ui.eccezioneRegistrata
 import snastro.ui.modelli.ServizioModelli
+import snastro.ui.nonFataleRegistrato
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.contatoreArgomento
 import snastro.ui.testi.erroreArgomentoTroppoLungo
 import snastro.ui.testi.erroreLunghezzaMassima
@@ -260,29 +261,30 @@ class RiassuntoPresenter(
         aggiornaDati { it.copy(argomento = argomentoUiDi(testo)) }
     }
 
-    /** AC-S128/S134/S139: one click sends [riassumiCmd] once; re-reads the view either way. */
+    /**
+     * AC-S128/S134/S139: one click sends [riassumiCmd] once; re-reads the view either way. The command commits (it
+     * queues a Riassunto), so a thrown one goes through [eccezioneRegistrata] (ADR 0041 §3): logged, the generic
+     * message shown like a refusal's, and an `Error` still propagates.
+     */
     private fun riassumi() {
         if (invioInCorso || argomentoAttuale.trim().length > limiteCaratteriArgomento) return
         invioInCorso = true
         val argomento = argomentoAttuale
         scope.launch {
-            var erroreDaMostrare: String? = null
-            try {
-                when (val esito = withContext(io) { riassumiCmd(argomento) }) {
+            // Finding #159: the in-flight guard is released whatever happened, or Riassumi stays disabled for good.
+            val erroreDaMostrare = try {
+                val esito = eccezioneRegistrata("riassumi ${registrazioneId.valore}") {
+                    withContext(io) { riassumiCmd(argomento) }
+                }
+                when (esito) {
                     is Esito.Ok -> {
                         argomentoToccato = false
                         moduloAperto = false
+                        null
                     }
-                    is Esito.Errore -> erroreDaMostrare = messaggioPer(esito.errore)
+                    is Esito.Errore -> messaggioPer(esito.errore)
+                    null -> MESSAGGIO_ERRORE_GENERICO
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // Finding #159 (rework, LOW): a thrown `riassumiCmd` used to leave [invioInCorso] stuck
-                // `true` forever (no `finally`) — same H2-style guard as [scaricaModello] below.
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                // Nothing to show beyond the next reload's own state — see `scaricaModello`'s KDoc.
             } finally {
                 invioInCorso = false
             }
@@ -298,22 +300,18 @@ class RiassuntoPresenter(
 
     /** AC-S125/S127: "Scarica il modello"/"Riprova" both call this — blocks, run off [io] (mirrors
      * [snastro.ui.modelli.ModelliPresenter.scarica]); the reactive `statoFacoltativi` collector above
-     * is what actually reflects the outcome, this call only starts it. */
+     * is what actually reflects the outcome, this call only starts it. Starting it commits nothing, so a fault goes
+     * through [nonFataleRegistrato] (ADR 0041 §3): logged, then the view is re-read. */
     private fun scaricaModello() {
         // Finding #157 (rework, MED): no in-flight guard — a double click started two 6 GB downloads.
         if (scaricaModelloInCorso) return
         scaricaModelloInCorso = true
         scope.launch {
             try {
-                withContext(io) { servizioModelli.scaricaFacoltativo(idModelloLinguistico) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                // Same guard as `ModelliPresenter.scarica` (H2-style): an unexpected throw from the port
-                // must not take this presenter's collectors down with it.
-                ricarica()
+                val avviato = nonFataleRegistrato("scarica il modello linguistico") {
+                    withContext(io) { servizioModelli.scaricaFacoltativo(idModelloLinguistico) }
+                }
+                if (avviato == null) ricarica()
             } finally {
                 scaricaModelloInCorso = false
             }
@@ -396,11 +394,13 @@ class RiassuntoPresenter(
     /**
      * AC-I81: a Fonte chip of [parte]: the audio plays from [daMs] (off the UI thread), then another Parte's page
      * is opened (the tab stays). Playing first: the switch may dispose this presenter's own scope. L194: a failing
-     * playback (no audio, a port fault) never escapes the coroutine and never stops the switch to the Parte.
+     * playback (no audio, a port fault) is logged, never escapes the coroutine and never stops the switch to the Parte.
      */
     private fun apriFonte(parte: RegistrazioneId, daMs: Long) {
         scope.launch {
-            catturaNonFatale { withContext(io) { riproduciDa(parte, daMs) } }
+            nonFataleRegistrato("riproduci la fonte di ${parte.valore} da $daMs ms") {
+                withContext(io) { riproduciDa(parte, daMs) }
+            }
             if (parte != registrazioneId) vaiAllaParte(parte)
         }
     }

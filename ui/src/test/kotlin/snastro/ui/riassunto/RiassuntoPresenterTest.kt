@@ -5,11 +5,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.erroreAtteso
@@ -19,7 +16,6 @@ import snastro.sintesi.applicazione.letture.DisponibilitaVista
 import snastro.sintesi.applicazione.letture.ElementoVista
 import snastro.sintesi.applicazione.letture.FallimentoVista
 import snastro.sintesi.applicazione.letture.FonteVista
-import snastro.sintesi.applicazione.letture.ImpostazioniSintesiVista
 import snastro.sintesi.applicazione.letture.MotivoNonDisponibile
 import snastro.sintesi.applicazione.letture.ParteTestoVista
 import snastro.sintesi.applicazione.letture.RiassuntoMostrato
@@ -34,7 +30,6 @@ import snastro.supporto.test.restaVeroPer
 import snastro.ui.AggiornamentiVistaFinta
 import snastro.ui.Cambiamento
 import snastro.ui.coda.PosizioniCoda
-import snastro.ui.modelli.ServizioModelli
 import snastro.ui.modelli.ServizioModelliFinta
 import java.time.Clock
 import java.time.Instant
@@ -50,17 +45,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.milliseconds
 
-private val REG_1 = RegistrazioneId("id-1")
 private val REG_2 = RegistrazioneId("id-2")
-private val REG_3 = RegistrazioneId("id-3")
-private val ISTANTE_0: Instant = Instant.parse("2026-09-26T10:00:00Z")
-
-/** A [Clock] whose [instant] a test moves forward explicitly — the running status line ticks off it. */
-private class OrologioFinto(var istante: Instant) : Clock() {
-    override fun getZone(): ZoneId = ZoneOffset.UTC
-    override fun withZone(zone: ZoneId?): Clock = this
-    override fun instant(): Instant = istante
-}
 
 /**
  * Pre-release finding #159 rework 2 (regression): a [Clock] whose [instant] can be ARMED to pause,
@@ -108,26 +93,6 @@ private fun unFallimentoVista(codice: String = "INTERROTTO"): FallimentoVista {
     return costruttore.newInstance(valore) as FallimentoVista
 }
 
-@Suppress("LongParameterList")
-private fun unaVista(
-    modello: StatoModelloVista = StatoModelloVista.Installato,
-    richiestaAperta: RichiestaApertaVista? = null,
-    ultimoFallimento: FallimentoVista? = null,
-    disponibilita: DisponibilitaVista = DisponibilitaVista.Disponibile,
-    argomentoPrecompilato: String? = null,
-    mostrato: RiassuntoMostrato? = null,
-    numParti: Int = 1,
-) = RiassuntoVista(
-    unIncontroDi(REG_1),
-    numParti,
-    modello,
-    richiestaAperta,
-    ultimoFallimento,
-    disponibilita,
-    argomentoPrecompilato,
-    mostrato,
-)
-
 private fun unaFonte(segmentoId: Int, voce: VoceVista, inizioMs: Long) =
     FonteVista(REG_1, 1, segmentoId, voce, inizioMs, segmentoPresente = true)
 
@@ -160,114 +125,8 @@ private fun unMostrato(
     puntiChiave = puntiChiave,
 )
 
-private fun unaImpostazioni(parole: Int = 2_000, minimo: Int = 300, massimo: Int = 2_500) =
-    ImpostazioniSintesiVista(parole, minimo, massimo)
-
-/** ADR 0026 §8, mirrors [RiassuntoPresenter]'s own private constant — the ONE optional catalogue entry. */
-private const val ID_MODELLO_LINGUISTICO = "llm-qwen3.5-9b-q4_k_m"
-
-/**
- * Records [scaricaFacoltativo] calls (AC-S125/S127: "called once with the exact id") without touching
- * `ServizioModelliFinta` (owned by block `servizio-modelli-facoltativo`, already integrated) — an
- * interface-delegating spy, same technique as a decorator, confined to this block's own test file.
- */
-private class ServizioModelliSpia(private val delegato: ServizioModelliFinta = ServizioModelliFinta()) :
-    ServizioModelli by delegato {
-    val chiamateScaricaFacoltativo = mutableListOf<String>()
-
-    override fun scaricaFacoltativo(id: String) {
-        chiamateScaricaFacoltativo.add(id)
-        delegato.scaricaFacoltativo(id)
-    }
-}
-
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiassuntoPresenterTest {
-    private class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
-        val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        val coroutineScope = CoroutineScope(dispatcher)
-
-        // Pre-release finding #151 (rework, MED): a SEPARATE dispatcher instance (same virtual
-        // scheduler, so time control is unaffected) — `withContext` between the SAME dispatcher
-        // instance takes a fast, non-suspending path with no cancellation window at all, which would
-        // make the AC-S151 test below pass whether or not `ricarica()` is really single-flight.
-        val io = StandardTestDispatcher(scope.testScheduler)
-        var vistaCorrente: RiassuntoVista? = unaVista()
-        var impostazioniCorrenti = unaImpostazioni()
-        var posizioniCorrenti = PosizioniCoda.VUOTA
-        val chiamateRiassumi = mutableListOf<String?>()
-        var risultatoRiassumi: Esito<Unit> = Esito.Ok(Unit)
-
-        // Pre-release finding #159 (rework, LOW): simulates `riassumiCmd` throwing (a real port fault),
-        // never a legitimate `Esito.Errore`.
-        var lanciaRiassumiCmd = false
-        var lanciaRiproduciDa = false
-        val chiamateLunghezza = mutableListOf<Int>()
-        var risultatoLunghezza: Esito<Unit> = Esito.Ok(Unit)
-        val servizioModelli = ServizioModelliSpia()
-        val aggiornamenti = AggiornamentiVistaFinta()
-        val orologio = OrologioFinto(ISTANTE_0)
-
-        // Pre-release finding #151 (rework, MED): counts every completed `ricarica()` — a
-        // single-flight reload only ever lets the LATEST trigger reach this last read.
-        var chiamatePosizioni = 0
-
-        val eventi = mutableListOf<String>()
-
-        val presenter = RiassuntoPresenter(
-            scope = coroutineScope,
-            io = io,
-            registrazioneId = REG_1,
-            vista = { vistaCorrente },
-            impostazioni = { impostazioniCorrenti },
-            posizioni = {
-                chiamatePosizioni++
-                posizioniCorrenti
-            },
-            riassumiCmd = { argomento ->
-                chiamateRiassumi.add(argomento)
-                if (lanciaRiassumiCmd) error("guasto simulato di riassumiCmd")
-                risultatoRiassumi
-            },
-            modificaLunghezzaMassimaCmd = { n ->
-                chiamateLunghezza.add(n)
-                risultatoLunghezza
-            },
-            servizioModelli = servizioModelli,
-            aggiornamenti = aggiornamenti,
-            clock = orologio,
-            idModelloLinguistico = ID_MODELLO_LINGUISTICO,
-            dimensioneModelloLinguisticoByte = 6_169_341_984,
-            limiteCaratteriArgomento = limiteCaratteriArgomento,
-            vaiAllaParte = { parte -> eventi.add("vai:${parte.valore}") },
-            riproduciDa = { parte, ms ->
-                eventi.add("play:${parte.valore}@$ms")
-                if (lanciaRiproduciDa) error("guasto simulato di riproduciDa")
-            },
-        )
-    }
-
-    /**
-     * [RiassuntoPresenter]'s own ticker (`while (true) { delay(1_000) }`, AC-S131) never becomes idle
-     * by design: `runTest` would otherwise hang forever on its own final drain once the test body
-     * returns (the pre-release `avvio-coda-condivisa` finding #119's own lesson, one level up — here
-     * fixed by cancelling [Ambiente.coroutineScope] in a `finally`, unconditionally, rather than
-     * relying on `backgroundScope`'s own, less predictable interaction with [runCurrent]/[advanceTimeBy]).
-     */
-    private fun eseguiTest(
-        limiteCaratteriArgomento: Int = 200,
-        corpo: suspend TestScope.(Ambiente) -> Unit,
-    ) = runTest {
-        val a = Ambiente(this, limiteCaratteriArgomento)
-        try {
-            corpo(a)
-        } finally {
-            a.coroutineScope.cancel()
-        }
-    }
-
-    private fun dati(presenter: RiassuntoPresenter) = assertIs<RiassuntoUiStato.Dati>(presenter.stato.value)
-
     @Test
     fun `AC-S136 prima del caricamento lo stato e Caricamento`() = eseguiTest { a ->
         assertEquals(RiassuntoUiStato.Caricamento, a.presenter.stato.value)
@@ -307,11 +166,6 @@ class RiassuntoPresenterTest {
         assertEquals(2, a.chiamateRiassumi.size, "invioInCorso e' rimasto vero dopo il guasto")
     }
 
-    // Pre-release finding #151 (rework, MED): three independent triggers (init, cambiamenti,
-    // statoFacoltativi) each `launch`ed their OWN `ricarica()` — none cancelling another. Firing TWO
-    // of them back-to-back (before draining the scheduler) used to let BOTH complete their own full
-    // read chain; single-flight (`collectLatest` over one merged flow) cancels the older one, so at
-    // most ONE reload ever reaches its last read (`posizioni()`) per settle.
     @Test
     fun `AC-S151 rework due trigger ravvicinati non completano due ricariche in parallelo`() = eseguiTest { a ->
         runCurrent()
