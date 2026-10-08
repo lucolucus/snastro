@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: d40eae969b6ec23489acbf72228ed83c1d251319
 
 S2 has the same per-row command handler written by hand three times:
 - `RegistrazioniPresenter.suRiga` (`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt:637-667`);
