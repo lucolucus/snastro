@@ -170,7 +170,7 @@ class ProgettiPresenterTest {
         advanceUntilIdle()
 
         val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto), stato.erroreCrea)
+        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto, cartellaUtente = ""), stato.erroreCrea)
         assertNull(stato.erroreApri)
         assertEquals(false, stato.inCorso)
     }
@@ -188,7 +188,7 @@ class ProgettiPresenterTest {
         // e' un MutableStateFlow(null) che nessun codice qui aggiorna mai, quindi restava null a
         // prescindere dal comportamento del presenter. Le asserzioni utili sono sullo STATO del presenter.
         val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.erroreCrea)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida, cartellaUtente = ""), stato.erroreCrea)
         assertEquals(false, stato.inCorso)
         assertNull(stato.erroreApri)
     }
@@ -203,7 +203,7 @@ class ProgettiPresenterTest {
         advanceUntilIdle()
 
         val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.ProgettoGiaAperto), stato.erroreApri)
+        assertEquals(messaggioPer(ErroreSessione.ProgettoGiaAperto, cartellaUtente = ""), stato.erroreApri)
         assertNull(stato.erroreCrea)
     }
 
@@ -217,7 +217,7 @@ class ProgettiPresenterTest {
         advanceUntilIdle()
 
         val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.erroreApri)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida, cartellaUtente = ""), stato.erroreApri)
     }
 
     @Test
@@ -350,14 +350,14 @@ class ProgettiPresenterTest {
         presenter.apri("/progetti/Riunione.snastro")
         advanceUntilIdle()
         assertIs<ProgettiUiStato.Dati>(presenter.stato.value).let {
-            assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), it.erroreCrea)
-            assertEquals(messaggioPer(ErroreSessione.ProgettoGiaAperto), it.erroreApri)
+            assertEquals(messaggioPer(ErroreSessione.CartellaNonValida, cartellaUtente = ""), it.erroreCrea)
+            assertEquals(messaggioPer(ErroreSessione.ProgettoGiaAperto, cartellaUtente = ""), it.erroreApri)
         }
 
         presenter.chiudiErroreCrea()
         val dopoChiudiCrea = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
         assertNull(dopoChiudiCrea.erroreCrea)
-        assertEquals(messaggioPer(ErroreSessione.ProgettoGiaAperto), dopoChiudiCrea.erroreApri)
+        assertEquals(messaggioPer(ErroreSessione.ProgettoGiaAperto, cartellaUtente = ""), dopoChiudiCrea.erroreApri)
 
         presenter.chiudiErroreApri()
         val dopoChiudiApri = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)

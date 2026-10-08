@@ -352,7 +352,7 @@ class ProgettiRenderCheckTest {
 
     private fun verificaErroreCrea(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
-            val messaggio = messaggioPer(ErroreSessione.CartellaNonValida)
+            val messaggio = messaggioPer(ErroreSessione.CartellaNonValida, cartellaUtente = "")
             setContent {
                 SchermataProgetti(
                     stato = ProgettiUiStato.Dati(progetti = emptyList(), erroreCrea = messaggio),
@@ -370,7 +370,7 @@ class ProgettiRenderCheckTest {
 
     private fun verificaErroreApri(width: Int, height: Int, scuro: Boolean = false) =
         runDesktopComposeUiTest(width, height) {
-            val messaggio = messaggioPer(ErroreSessione.ProgettoGiaAperto)
+            val messaggio = messaggioPer(ErroreSessione.ProgettoGiaAperto, cartellaUtente = "")
             setContent {
                 SchermataProgetti(
                     stato = ProgettiUiStato.Dati(progetti = listOf(UN_PROGETTO), erroreApri = messaggio),

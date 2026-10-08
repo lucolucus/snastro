@@ -85,7 +85,14 @@ class MessaggiErroreTest {
                 ErroreSessione.ProgettoChiusoNonEliminato,
                 ErroreSessione.DatabasePiuRecente,
             ),
-        ) { messaggioPer(it) }
+        ) { messaggioPer(it, cartellaUtente = "/Users/me") }
+    }
+
+    @Test
+    fun `senza la casa un ErroreSessione e' un difetto di cablaggio, non un messaggio (display-paths)`() {
+        val errore: ErroreDominio = ErroreSessione.ProgettoGiaAperto
+
+        assertFailsWith<IllegalStateException> { messaggioPer(errore) }
     }
 
     @Test
@@ -294,7 +301,7 @@ class MessaggiErroreTest {
             esempi.map { gerarchiaDi(it).name }.distinct().sorted(),
             "ogni gerarchia di ErroreDominio visibile a :ui ha un esempio (e un ramo in messaggioPer)",
         )
-        esempi.forEach { errore -> assertTrue(messaggioPer(errore).isNotBlank(), "messaggio vuoto per $errore") }
+        esempi.forEach { errore -> assertTrue(messaggioPer(errore, "").isNotBlank(), "messaggio vuoto per $errore") }
     }
 
     /** The sealed `Errore<X>` of [errore]: the one interface of its class directly extending [ErroreDominio]. */

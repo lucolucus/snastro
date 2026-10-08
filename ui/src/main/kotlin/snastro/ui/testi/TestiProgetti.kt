@@ -65,15 +65,11 @@ fun avvisoCartellaNonTrovata(cartella: String, cartellaUtente: String): String =
     "$ETICHETTA_CARTELLA_NON_TROVATA: ${percorsoDaCasa(cartella, cartellaUtente)}"
 
 /**
- * [messaggioPer] for a screen that knows the user's home [cartellaUtente]: a folder it names is written `~` from there
- * (display-paths), the rest is unchanged.
+ * [messaggioPer] for a screen that knows the user's home [cartellaUtente] (`""` if unknown): the entry point that can
+ * take any [ErroreDominio], an [ErroreSessione] included, whose folder is written `~` from there (display-paths).
  */
 fun messaggioPer(errore: ErroreDominio, cartellaUtente: String): String =
-    if (errore is ErroreSessione.CartellaNonTrovata) {
-        avvisoCartellaNonTrovata(errore.cartella, cartellaUtente)
-    } else {
-        messaggioPer(errore)
-    }
+    if (errore is ErroreSessione) messaggioPer(errore, cartellaUtente) else messaggioPer(errore)
 
 /** [percorso] with the user's home [cartellaUtente] written `~`, as Finder's Go to Folder does; else unchanged. */
 fun percorsoDaCasa(percorso: String, cartellaUtente: String): String {

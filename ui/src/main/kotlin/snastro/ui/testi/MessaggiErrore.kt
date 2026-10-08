@@ -19,7 +19,9 @@ import snastro.ui.registrazione.ErroreComandoVoce
  * message — goes red without anyone having to remember to update a hand-written list.
  */
 fun messaggioPer(errore: ErroreDominio): String = when (errore) {
-    is ErroreSessione -> messaggioPer(errore)
+    // display-paths: a session error may name a folder, written from the user's home — a caller without it is a
+    // wiring defect, never a message with a silently unknown home. It goes through `messaggioPer(errore, casa)`.
+    is ErroreSessione -> error("ErroreSessione senza cartellaUtente: usa messaggioPer(errore, cartellaUtente): $errore")
     is ErroreApplicazioneProgetto -> messaggioPer(errore)
     is ErroreProgetto -> messaggioPer(errore)
     is ErroreTrascrizione -> messaggioPer(errore)
@@ -31,10 +33,14 @@ fun messaggioPer(errore: ErroreDominio): String = when (errore) {
     else -> error("ErroreDominio non mappato: $errore")
 }
 
-fun messaggioPer(errore: ErroreSessione): String = when (errore) {
+/**
+ * Every [ErroreSessione], the one mapping of them (display-paths): a folder it names is written `~` from the user's
+ * home [cartellaUtente]; `""` means an unknown home, and the folder stays as it is.
+ */
+fun messaggioPer(errore: ErroreSessione, cartellaUtente: String): String = when (errore) {
     ErroreSessione.NomeProgettoVuoto -> "Il nome del progetto non può essere vuoto."
     ErroreSessione.CartellaNonValida -> "La cartella scelta non è valida."
-    is ErroreSessione.CartellaNonTrovata -> avvisoCartellaNonTrovata(errore.cartella, cartellaUtente = "")
+    is ErroreSessione.CartellaNonTrovata -> avvisoCartellaNonTrovata(errore.cartella, cartellaUtente)
     ErroreSessione.ProgettoGiaAperto -> "Questo progetto è già aperto in un'altra finestra."
     ErroreSessione.ProgettoApertoAltrove -> "Questo progetto è aperto in un'altra finestra."
     ErroreSessione.ElaborazioneInCorso ->

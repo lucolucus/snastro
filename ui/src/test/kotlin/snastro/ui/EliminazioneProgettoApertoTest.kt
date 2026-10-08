@@ -106,7 +106,7 @@ class EliminazioneProgettoApertoTest {
         shell.azioni.confermaElimina("Riunione")
         advanceUntilIdle()
 
-        assertEquals(ShellUiStato.SenzaProgetto(messaggioPer(nonEliminato)), shell.stato.value)
+        assertEquals(ShellUiStato.SenzaProgetto(messaggioPer(nonEliminato, CARTELLA_UTENTE)), shell.stato.value)
     }
 
     @Test
@@ -132,8 +132,20 @@ class EliminazioneProgettoApertoTest {
         advanceUntilIdle()
 
         val stato = shell.conProgetto()
-        assertEquals(messaggioPer(ErroreSessione.ElaborazioneInCorso), stato.conferma?.errore)
+        assertEquals(messaggioPer(ErroreSessione.ElaborazioneInCorso, CARTELLA_UTENTE), stato.conferma?.errore)
         assertEquals(false, stato.eliminazioneInCorso)
+    }
+
+    @Test
+    fun `un errore che nomina una cartella la scrive dalla casa (display-paths)`() = runTest(dispatcher) {
+        val nonTrovata = ErroreSessione.CartellaNonTrovata("/tmp/Riunione.snastro")
+        val shell = conRiunioneAperta(SessioneCheElimina({ Esito.Errore(nonTrovata) }))
+
+        shell.azioni.chiediElimina()
+        shell.azioni.confermaElimina("Riunione")
+        advanceUntilIdle()
+
+        assertEquals("Cartella non trovata: ~/Riunione.snastro", shell.conProgetto().conferma?.errore)
     }
 
     @Test

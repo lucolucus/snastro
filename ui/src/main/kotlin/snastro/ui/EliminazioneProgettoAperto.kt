@@ -58,7 +58,7 @@ internal class EliminazioneProgettoAperto(
                     // EX-10: what is left on disk is said on S1, as the same delete from the list says it.
                     is Esito.Ok ->
                         stato.value = ShellUiStato.SenzaProgetto(avvisoEliminazione(esito.valore, cartellaUtente))
-                    is Esito.Errore -> fallita(messaggioPer(esito.errore))
+                    is Esito.Errore -> fallita(messaggioPer(esito.errore, cartellaUtente))
                     null -> fallita(MESSAGGIO_ERRORE_GENERICO)
                 }
             } finally {

@@ -29,6 +29,10 @@ import kotlin.test.assertTrue
 
 private val OGNI_SEZIONE = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
 
+// The shell knows no home here (`presentatore` passes ""): the folder stays as it is.
+private val MESSAGGIO_CARTELLA_INESISTENTE =
+    messaggioPer(ErroreSessione.CartellaNonTrovata("/percorso/inesistente"), cartellaUtente = "")
+
 /**
  * A [SessioneProgetto] whose `apri`/`crea` throw instead of returning [Esito] (M1(b)): a hand-written
  * fake, not a MockK stub, per RC-9/CR-17.
@@ -151,7 +155,7 @@ class ShellPresenterTest {
         presenter.apri("/percorso/inesistente")
         advanceUntilIdle()
         val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonTrovata("/percorso/inesistente")), stato.avviso)
+        assertEquals(MESSAGGIO_CARTELLA_INESISTENTE, stato.avviso)
     }
 
     @Test
@@ -160,7 +164,7 @@ class ShellPresenterTest {
         presenter.crea("/tmp", "")
         advanceUntilIdle()
         val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto), stato.avviso)
+        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto, ""), stato.avviso)
     }
 
     @Test
@@ -188,7 +192,7 @@ class ShellPresenterTest {
         val conErrore = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
         assertEquals(aperto.progetto, conErrore.progetto)
         assertEquals(aperto.destinazioniDisponibili, conErrore.destinazioniDisponibili)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonTrovata("/percorso/inesistente")), conErrore.avviso)
+        assertEquals(MESSAGGIO_CARTELLA_INESISTENTE, conErrore.avviso)
 
         presenter.chiudiErrore()
 

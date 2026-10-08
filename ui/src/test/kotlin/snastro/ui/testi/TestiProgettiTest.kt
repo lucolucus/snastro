@@ -42,13 +42,13 @@ class TestiProgettiTest {
         val nonTrovata = ErroreSessione.CartellaNonTrovata("/Users/me/Documents/snastro/test.snastro")
 
         assertEquals("Cartella non trovata: ~/Documents/snastro/test.snastro", messaggioPer(nonTrovata, "/Users/me"))
-        assertEquals("Cartella non trovata: /Users/me/Documents/snastro/test.snastro", messaggioPer(nonTrovata))
+        assertEquals("Cartella non trovata: /Users/me/Documents/snastro/test.snastro", messaggioPer(nonTrovata, ""))
     }
 
     @Test
-    fun `gli altri errori si dicono come sempre, con o senza la casa`() {
+    fun `gli altri errori si dicono come sempre, con la casa nota o ignota`() {
         assertEquals(
-            messaggioPer(ErroreSessione.ProgettoGiaAperto),
+            messaggioPer(ErroreSessione.ProgettoGiaAperto, ""),
             messaggioPer(ErroreSessione.ProgettoGiaAperto, "/Users/me"),
         )
     }
