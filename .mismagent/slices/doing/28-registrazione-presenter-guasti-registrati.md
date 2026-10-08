@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: 118062bc037904b0c3fe47e3198be99ece5f715d
 
 S3's own presenter and its similarity holder drop the cause of every unexpected fault (CR-7; release review R0-3,
 worst place 1, second half).
