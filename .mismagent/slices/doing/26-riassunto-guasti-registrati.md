@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: 70a8e62c997ffda075451880826328850fc3a7b4
 
 The Riassunto tab drops every unexpected fault without a trace (CR-7; release review R0-3, errors=3), and R1's slices
 22–25 change exactly this flow (EX-18: a failed Riassunto and "Riprova"). Clean the edge before R1 builds on it.
