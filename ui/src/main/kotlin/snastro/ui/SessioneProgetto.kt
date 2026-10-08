@@ -23,7 +23,8 @@ interface SessioneProgetto {
      * Drops the project at [percorso] from the known projects and deletes for good what snastro created in its
      * folder — never a symbolic link's target, never the user's own files; [ProgettoEliminato] says what is left.
      * The project open here is closed first ([corrente] becomes `null` once it is deleted), unless something runs
-     * or waits in its queue: then [ErroreSessione.ElaborazioneInCorso], and it stays open.
+     * or waits in its queue: then [ErroreSessione.ElaborazioneInCorso], and it stays open. If its work does not stop
+     * in time, it is closed but not deleted: [ErroreSessione.ProgettoChiusoNonEliminato].
      */
     fun elimina(percorso: String): Esito<ProgettoEliminato>
 

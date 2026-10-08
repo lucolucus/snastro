@@ -19,6 +19,7 @@ class NavigazioneProgettoDimenticaTest {
         Dispatchers.Unconfined,
         SessioneProgettoFinta().also { it.crea("/tmp", "Prova") },
         SEZIONI_SHELL,
+        cartellaUtente = "",
     )
 
     @AfterEach

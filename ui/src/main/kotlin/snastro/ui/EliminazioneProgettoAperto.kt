@@ -9,13 +9,16 @@ import snastro.kernel.Esito
 import snastro.supporto.catturaNonFatale
 import snastro.ui.progetti.ConfermaEliminazione
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
+import snastro.ui.testi.avvisoEliminazione
 import snastro.ui.testi.messaggioPer
 
 /**
  * The delete flow of the open project (R0, EX-4/EX-5), asked from the shell's header, over the shell's own [stato]:
  * the confirmation, then [SessioneProgetto.elimina] — which closes the project before deleting it, or refuses while
- * something runs or waits in its queue — and S1 once it is gone. A failure stays in the confirmation. [occupata] is
- * the shell's own M3 guard: nothing is asked, cancelled or started while a shell operation is in flight.
+ * something runs or waits in its queue — and S1 once it is gone, with S1's banner saying what is left on disk (EX-10),
+ * its folder written `~` from [cartellaUtente]. A failure stays in the confirmation while the project is still open,
+ * else it goes to S1's banner: never silence. [occupata] is the shell's own M3 guard: nothing is asked, cancelled or
+ * started while a shell operation is in flight.
  */
 internal class EliminazioneProgettoAperto(
     private val stato: MutableStateFlow<ShellUiStato>,
@@ -23,6 +26,7 @@ internal class EliminazioneProgettoAperto(
     private val io: CoroutineDispatcher,
     private val sessione: SessioneProgetto,
     private val occupata: () -> Boolean,
+    private val cartellaUtente: String,
 ) {
     /** EX-4: opens the delete confirmation of the open project. */
     fun chiedi() {
@@ -49,7 +53,9 @@ internal class EliminazioneProgettoAperto(
                 val esito = catturaNonFatale { withContext(io) { sessione.elimina(conferma.percorso) } }.getOrNull()
                 when (esito) {
                     // M1(a): S1 is set from the result, never left to the `corrente` collector alone.
-                    is Esito.Ok -> stato.value = ShellUiStato.SenzaProgetto()
+                    // EX-10: what is left on disk is said on S1, as the same delete from the list says it.
+                    is Esito.Ok ->
+                        stato.value = ShellUiStato.SenzaProgetto(avvisoEliminazione(esito.valore, cartellaUtente))
                     is Esito.Errore -> fallita(messaggioPer(esito.errore))
                     null -> fallita(MESSAGGIO_ERRORE_GENERICO)
                 }
@@ -60,7 +66,14 @@ internal class EliminazioneProgettoAperto(
         }
     }
 
-    private fun fallita(messaggio: String) = aggiorna { it.copy(conferma = it.conferma?.copy(errore = messaggio)) }
+    /** In the confirmation while the project is still open; on S1's banner once it was closed without being deleted. */
+    private fun fallita(messaggio: String) {
+        if (sessione.corrente.value == null) {
+            stato.value = ShellUiStato.SenzaProgetto(messaggio)
+        } else {
+            aggiorna { it.copy(conferma = it.conferma?.copy(errore = messaggio)) }
+        }
+    }
 
     /** Applies [f] to the [ShellUiStato.ConProgetto] state; a no-op on any other. */
     private fun aggiorna(f: (ShellUiStato.ConProgetto) -> ShellUiStato.ConProgetto) {

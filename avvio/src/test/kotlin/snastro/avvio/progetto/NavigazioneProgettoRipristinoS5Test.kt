@@ -41,7 +41,7 @@ class NavigazioneProgettoRipristinoS5Test {
     @Test
     fun `S5 aperto da S3 e lasciato verso Parlanti torna a S3, non alla lista`() = runDesktopComposeUiTest {
         val sessione = SessioneProgettoFinta().also { it.crea("/tmp", "Prova") }
-        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL)
+        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL, "")
         setContent {
             ShellProgetto(
                 shellPresenter = shell,

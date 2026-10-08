@@ -114,7 +114,7 @@ class EliminaProgettoApertoTest {
 
     /** The shell over [sessione], showing the project open there. */
     private fun TestScope.shell(sessione: SessioneProgetto): ShellPresenter =
-        ShellPresenter(scopePresenter, dispatcher, sessione, SEZIONI_SHELL).also {
+        ShellPresenter(scopePresenter, dispatcher, sessione, SEZIONI_SHELL, "").also {
             advanceUntilIdle()
             assertIs<ShellUiStato.ConProgetto>(it.stato.value)
         }

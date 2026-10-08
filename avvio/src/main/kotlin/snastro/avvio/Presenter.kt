@@ -32,7 +32,7 @@ import snastro.ui.riassunto.segnoRiassunto
 
 /** The shell (S1 ↔ open project), with the app's ONE [SEZIONI_SHELL]. */
 internal fun costruisciShellPresenter(grafo: Grafo): ShellPresenter =
-    ShellPresenter(grafo.scope, grafo.io, grafo.sessione, SEZIONI_SHELL)
+    ShellPresenter(grafo.scope, grafo.io, grafo.sessione, SEZIONI_SHELL, cartellaUtenteReale())
 
 /** S1: the recent projects. */
 internal fun costruisciProgettiPresenter(grafo: Grafo): ProgettiPresenter =

@@ -201,7 +201,11 @@ internal class SessioneProgettoImpl(
      *
      * EX-4/EX-5: the project open in THIS session is refused ([ErroreSessione.ElaborazioneInCorso], left open) while
      * its shared queue has something running or waiting; otherwise it is closed first — its own `.lock` released —
-     * and [corrente] becomes `null` only once it is deleted, so S1 never lists it again.
+     * and [corrente] becomes `null` only once it is deleted, so S1 never lists it again. If its work outlives the
+     * shutdown deadline, the `.lock` stays with that work: nothing is deleted, the project is closed and listed,
+     * [ErroreSessione.ProgettoChiusoNonEliminato]. The check is not atomic with the close: work queued or finished in
+     * between is cancelled by the shutdown and deleted with the project. An item the queue gave up on for this session
+     * still counts as waiting: such a project is deleted from the list, once closed.
      */
     override fun elimina(percorso: String): Esito<ProgettoEliminato> {
         val cartella = Path.of(percorso)
@@ -213,8 +217,11 @@ internal class SessioneProgettoImpl(
             else -> {
                 aperta = null
                 try {
-                    chiudiSessione(sessione)
-                    eliminaSeNonAperto(cartella, percorso)
+                    if (chiudiSessione(sessione)) {
+                        eliminaSeNonAperto(cartella, percorso)
+                    } else {
+                        Esito.Errore(ErroreSessione.ProgettoChiusoNonEliminato)
+                    }
                 } finally {
                     _corrente.value = null
                 }
@@ -245,9 +252,11 @@ internal class SessioneProgettoImpl(
 
     /**
      * [chiudi] of [sessione], already taken out of [aperta], but for [corrente]: the registry's update, then the
-     * shutdown in its pinned order. Never throws but a cancellation (AC-347).
+     * shutdown in its pinned order. Never throws but a cancellation (AC-347). Returns `false` when a worker outlived
+     * the shutdown deadline: the database close and the `.lock` release then wait for its end.
      */
-    private fun chiudiSessione(sessione: SessioneAperta) {
+    private fun chiudiSessione(sessione: SessioneAperta): Boolean {
+        var inTempo = true
         try {
             val numRegistrazioni = sessione.composto.porte.registrazioni.delProgetto(sessione.progettoId).size
             val percorso = percorsoAssoluto(sessione.cartella)
@@ -282,8 +291,9 @@ internal class SessioneProgettoImpl(
             // di toccare il database PRIMA di chiuderlo. fix-batch-16 MED-1: se un lavoratore sopravvive alla scadenza
             // (una chiamata nativa ignora l'interruzione), chiusura del database e rilascio del lock sono RINVIATI alla
             // sua fine — mai un database chiuso sotto un lavoratore vivo; `corrente` lo azzera il chiamante, comunque.
-            arresta(sessione.composto, rilascioUnaVolta(sessione))
+            inTempo = arresta(sessione.composto, rilascioUnaVolta(sessione))
         }
+        return inTempo
     }
 
     /**
@@ -378,19 +388,21 @@ internal data class SessioneProgettoSeams(
     val fontiCodaAggiuntive: List<FonteCoda> = emptyList(),
 )
 
-/** A failing shutdown of [composto] is logged, never rethrown (AC-347): [rilascia] then runs at once. */
-private fun arresta(composto: ProgettoComposto, rilascia: () -> Unit) {
-    try {
-        composto.arresta(rilascia)
-    } catch (e: CancellationException) {
-        rilascia()
-        throw e
-    } catch (
-        @Suppress("TooGenericExceptionCaught") e: Exception,
-    ) {
-        log.log(Level.WARNING, "arresto del progetto fallito in chiudi", e)
-        rilascia()
-    }
+/**
+ * A failing shutdown of [composto] is logged, never rethrown (AC-347): [rilascia] then runs at once. `false`: a worker
+ * outlived the shutdown deadline, [rilascia] waits for its end.
+ */
+private fun arresta(composto: ProgettoComposto, rilascia: () -> Unit): Boolean = try {
+    composto.arresta(rilascia)
+} catch (e: CancellationException) {
+    rilascia()
+    throw e
+} catch (
+    @Suppress("TooGenericExceptionCaught") e: Exception,
+) {
+    log.log(Level.WARNING, "arresto del progetto fallito in chiudi", e)
+    rilascia()
+    true
 }
 
 /** AC-238: a project-level lock, distinct from the per-user registry's own file lock (F4). */

@@ -20,10 +20,15 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private val OGNI_SEZIONE = setOf(DestinazioneShell.REGISTRAZIONI, DestinazioneShell.PARLANTI)
+private const val CARTELLA_UTENTE = "/tmp"
 
-/** Like [SessioneProgettoFinta], but `elimina` answers [esito] and counts its calls. */
+/**
+ * Like [SessioneProgettoFinta], but `elimina` answers [esito] and counts its calls — closing the open project first
+ * when [chiude], as the real one does whenever it does not refuse.
+ */
 private class SessioneCheElimina(
     private val esito: () -> Esito<ProgettoEliminato>,
+    private val chiude: Boolean = false,
     private val delegato: SessioneProgetto = SessioneProgettoFinta(),
 ) : SessioneProgetto by delegato {
     var eliminati = 0
@@ -31,6 +36,7 @@ private class SessioneCheElimina(
 
     override fun elimina(percorso: String): Esito<ProgettoEliminato> {
         eliminati++
+        if (chiude) delegato.chiudi()
         return esito()
     }
 }
@@ -46,7 +52,7 @@ class EliminazioneProgettoApertoTest {
 
     /** The shell over [sessione], "Riunione" created and open there. */
     private fun TestScope.conRiunioneAperta(sessione: SessioneProgetto = SessioneProgettoFinta()): ShellPresenter =
-        ShellPresenter(scope, dispatcher, sessione, OGNI_SEZIONE).also {
+        ShellPresenter(scope, dispatcher, sessione, OGNI_SEZIONE, CARTELLA_UTENTE).also {
             it.crea("/tmp", "Riunione")
             advanceUntilIdle()
         }
@@ -75,6 +81,31 @@ class EliminazioneProgettoApertoTest {
 
         assertEquals(ShellUiStato.SenzaProgetto(), shell.stato.value)
         assertNull(sessione.corrente.value)
+    }
+
+    @Test
+    fun `EX-10 eliminato solo in parte lo dice sopra S1`() = runTest(dispatcher) {
+        val restaCartella = ProgettoEliminato.InParte("/tmp/Riunione.snastro")
+        val shell = conRiunioneAperta(SessioneCheElimina({ Esito.Ok(restaCartella) }, chiude = true))
+
+        shell.azioni.chiediElimina()
+        shell.azioni.confermaElimina("Riunione")
+        advanceUntilIdle()
+
+        val avviso = "Il progetto è stato eliminato solo in parte: resta la cartella ~/Riunione.snastro."
+        assertEquals(ShellUiStato.SenzaProgetto(avviso), shell.stato.value)
+    }
+
+    @Test
+    fun `chiuso ma non eliminato lo dice sopra S1, non nella conferma che non c'e piu`() = runTest(dispatcher) {
+        val nonEliminato = ErroreSessione.ProgettoChiusoNonEliminato
+        val shell = conRiunioneAperta(SessioneCheElimina({ Esito.Errore(nonEliminato) }, chiude = true))
+
+        shell.azioni.chiediElimina()
+        shell.azioni.confermaElimina("Riunione")
+        advanceUntilIdle()
+
+        assertEquals(ShellUiStato.SenzaProgetto(messaggioPer(nonEliminato)), shell.stato.value)
     }
 
     @Test

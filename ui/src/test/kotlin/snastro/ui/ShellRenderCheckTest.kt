@@ -226,7 +226,7 @@ class ShellRenderCheckTest {
             val messaggio = "La cartella scelta non è valida."
             setContent {
                 SchermataShell(
-                    stato = ShellUiStato.SenzaProgetto(erroreApertura = messaggio),
+                    stato = ShellUiStato.SenzaProgetto(avviso = messaggio),
                     azioni = AZIONI_VUOTE,
                     contenutoSenzaProgetto = { Text("S1 - elenco progetti") },
                     scuro = scuro,
@@ -234,9 +234,9 @@ class ShellRenderCheckTest {
                 )
             }
             onNodeWithText("S1 - elenco progetti").assertIsDisplayed()
-            onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
+            onNodeWithTag("shell-avviso").assertIsDisplayed()
             onNodeWithText(messaggio).assertIsDisplayed()
-            catturaPng("shell-errore-apertura", width, height, scuro)
+            catturaPng("shell-avviso", width, height, scuro)
         }
 
     // H1: the error overlays the ConProgetto nav (still reachable), it does not replace it.
@@ -249,7 +249,7 @@ class ShellRenderCheckTest {
                         PROGETTO_PROVA,
                         OGNI_SEZIONE,
                         DestinazioneShell.REGISTRAZIONI,
-                        erroreApertura = messaggio,
+                        avviso = messaggio,
                     ),
                     azioni = AZIONI_VUOTE,
                     contenuto = { Text("Contenuto della sezione selezionata") },
@@ -260,7 +260,7 @@ class ShellRenderCheckTest {
             onNodeWithText(PROGETTO_PROVA.nome).assertIsDisplayed()
             onNodeWithText("Registrazioni").assertIsDisplayed()
             onNodeWithText("Parlanti").assertIsDisplayed()
-            onNodeWithTag("shell-errore-apertura").assertIsDisplayed()
+            onNodeWithTag("shell-avviso").assertIsDisplayed()
             onNodeWithText(messaggio).assertIsDisplayed()
             catturaPng("shell-errore-con-progetto", width, height, scuro)
         }

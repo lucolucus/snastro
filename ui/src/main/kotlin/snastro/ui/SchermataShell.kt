@@ -89,11 +89,11 @@ fun SchermataShell(
         Surface(modifier = Modifier.fillMaxSize(), color = colori.ground) {
             when (stato) {
                 // H1: the error is an overlay banner, never a replacement of S1 / the nav — see
-                // BannerErroreApertura.
+                // BannerAvviso.
                 is ShellUiStato.SenzaProgetto ->
                     Box(modifier = Modifier.fillMaxSize()) {
                         contenutoSenzaProgetto()
-                        stato.erroreApertura?.let { BannerErroreApertura(it, azioni.chiudiErrore) }
+                        stato.avviso?.let { BannerAvviso(it, azioni.chiudiErrore) }
                     }
                 ShellUiStato.Caricamento -> IndicatoreCaricamento()
                 is ShellUiStato.ConProgetto ->
@@ -110,7 +110,7 @@ fun SchermataShell(
                             )
                             Box(modifier = Modifier.weight(1f).fillMaxHeight()) { contenuto(stato) }
                         }
-                        stato.erroreApertura?.let { BannerErroreApertura(it, azioni.chiudiErrore) }
+                        stato.avviso?.let { BannerAvviso(it, azioni.chiudiErrore) }
                         stato.conferma?.let {
                             ConfermaEliminaProgetto(
                                 it,
@@ -140,13 +140,13 @@ private fun IndicatoreCaricamento() {
  * frugal choice here (rung 6) instead of forcing a fake heading onto the shared component.
  */
 @Composable
-private fun BannerErroreApertura(messaggio: String, onChiudi: () -> Unit) {
+private fun BannerAvviso(messaggio: String, onChiudi: () -> Unit) {
     val colori = LocalSnastroColori.current
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
         Surface(
             color = colori.dangerSoft,
             shape = RoundedCornerShape(SnastroMisure.radiusCard),
-            modifier = Modifier.padding(PADDING_MESSAGGIO).testTag("shell-errore-apertura"),
+            modifier = Modifier.padding(PADDING_MESSAGGIO).testTag("shell-avviso"),
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,

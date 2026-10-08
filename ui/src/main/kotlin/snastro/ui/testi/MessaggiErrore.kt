@@ -38,6 +38,8 @@ fun messaggioPer(errore: ErroreSessione): String = when (errore) {
     ErroreSessione.ProgettoApertoAltrove -> "Questo progetto è aperto in un'altra finestra."
     ErroreSessione.ElaborazioneInCorso ->
         "C'è un'elaborazione in corso: aspetta che finisca prima di eliminare il progetto."
+    ErroreSessione.ProgettoChiusoNonEliminato ->
+        "Il progetto è stato chiuso ma non ancora eliminato: riprova tra poco dalla lista."
     ErroreSessione.DatabasePiuRecente ->
         "Questo progetto è stato creato con una versione più recente di snastro: aggiorna l'app per aprirlo."
 }

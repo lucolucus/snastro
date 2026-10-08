@@ -111,7 +111,7 @@ class ShellPresenterTest {
         sessione: SessioneProgetto = SessioneProgettoFinta(),
     ): ShellPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return ShellPresenter(CoroutineScope(dispatcher), dispatcher, sessione, sezioni)
+        return ShellPresenter(CoroutineScope(dispatcher), dispatcher, sessione, sezioni, "")
     }
 
     @Test
@@ -147,7 +147,7 @@ class ShellPresenterTest {
         presenter.apri("/percorso/inesistente")
         advanceUntilIdle()
         val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.erroreApertura)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), stato.avviso)
     }
 
     @Test
@@ -156,7 +156,7 @@ class ShellPresenterTest {
         presenter.crea("/tmp", "")
         advanceUntilIdle()
         val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
-        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto), stato.erroreApertura)
+        assertEquals(messaggioPer(ErroreSessione.NomeProgettoVuoto), stato.avviso)
     }
 
     @Test
@@ -184,13 +184,13 @@ class ShellPresenterTest {
         val conErrore = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
         assertEquals(aperto.progetto, conErrore.progetto)
         assertEquals(aperto.destinazioniDisponibili, conErrore.destinazioniDisponibili)
-        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), conErrore.erroreApertura)
+        assertEquals(messaggioPer(ErroreSessione.CartellaNonValida), conErrore.avviso)
 
         presenter.chiudiErrore()
 
         val dopo = assertIs<ShellUiStato.ConProgetto>(presenter.stato.value)
         assertEquals(aperto.progetto, dopo.progetto)
-        assertEquals(null, dopo.erroreApertura)
+        assertEquals(null, dopo.avviso)
     }
 
     @Test
@@ -216,7 +216,7 @@ class ShellPresenterTest {
         presenter.apri("/tmp/qualsiasi")
         advanceUntilIdle()
         val stato = assertIs<ShellUiStato.SenzaProgetto>(presenter.stato.value)
-        assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.erroreApertura)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.avviso)
     }
 
     @Test
@@ -305,7 +305,8 @@ class ShellPresenterTest {
         val scope = CoroutineScope(SupervisorJob() + esecutoreUi.asCoroutineDispatcher())
         val sessione = SessioneProgettoCheChiudeLentamente()
         try {
-            val presenter = ShellPresenter(scope, esecutoreIo.asCoroutineDispatcher(), sessione, OGNI_SEZIONE)
+            val io = esecutoreIo.asCoroutineDispatcher()
+            val presenter = ShellPresenter(scope, io, sessione, OGNI_SEZIONE, cartellaUtente = "")
             scope.launch { presenter.crea("/tmp", "Riunione") }
             attendiFinche(messaggio = "ConProgetto dopo crea") { presenter.stato.value is ShellUiStato.ConProgetto }
 
@@ -346,7 +347,7 @@ class ShellPresenterTest {
         val presenter = presentatore(this, sessione = sessione)
         presenter.chiudi()
         advanceUntilIdle()
-        assertEquals(ShellUiStato.SenzaProgetto(erroreApertura = MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+        assertEquals(ShellUiStato.SenzaProgetto(avviso = MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
     }
 
     private companion object {

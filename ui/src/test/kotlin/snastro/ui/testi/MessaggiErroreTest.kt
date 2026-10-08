@@ -81,6 +81,7 @@ class MessaggiErroreTest {
                 ErroreSessione.ProgettoGiaAperto,
                 ErroreSessione.ProgettoApertoAltrove,
                 ErroreSessione.ElaborazioneInCorso,
+                ErroreSessione.ProgettoChiusoNonEliminato,
                 ErroreSessione.DatabasePiuRecente,
             ),
         ) { messaggioPer(it) }

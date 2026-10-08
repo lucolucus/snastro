@@ -7,6 +7,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
@@ -17,13 +18,14 @@ import snastro.ui.testi.messaggioPer
  * State holder of the app shell (RC-2, thin UI): reflects [SessioneProgetto.corrente] and forwards
  * `crea`/`apri`/`chiudi`/`seleziona` to it; the open project's delete is [EliminazioneProgettoAperto]'s.
  * [sezioniDisponibili] is injected by the composition root (AC-341) — the single composition's `SEZIONI_SHELL` always
- * includes every [DestinazioneShell].
+ * includes every [DestinazioneShell]; [cartellaUtente], the user's home, is written `~` in what that delete shows.
  */
 class ShellPresenter(
     private val scope: CoroutineScope,
     private val io: CoroutineDispatcher,
     private val sessione: SessioneProgetto,
     private val sezioniDisponibili: Set<DestinazioneShell>,
+    cartellaUtente: String,
 ) {
     init {
         require(sezioniDisponibili.isNotEmpty()) { "la shell richiede almeno una sezione disponibile" }
@@ -40,11 +42,16 @@ class ShellPresenter(
     // catches two synchronous calls issued before the dispatcher gets a chance to run either.
     private var operazioneInCorso: Job? = null
 
-    private val eliminazione = EliminazioneProgettoAperto(_stato, scope, io, sessione, ::occupata)
+    private val eliminazione = EliminazioneProgettoAperto(_stato, scope, io, sessione, ::occupata, cartellaUtente)
 
     init {
         scope.launch {
-            sessione.corrente.collect { progetto -> _stato.value = statoDi(progetto) }
+            // S1 already shown keeps its banner: the delete of the open project may set it before this sees `null`.
+            sessione.corrente.collect { progetto ->
+                _stato.update { attuale ->
+                    if (progetto == null && attuale is ShellUiStato.SenzaProgetto) attuale else statoDi(progetto)
+                }
+            }
         }
     }
 
@@ -117,9 +124,9 @@ class ShellPresenter(
     private fun statoConErrore(messaggio: String): ShellUiStato {
         val progetto = sessione.corrente.value
         return if (progetto != null) {
-            ShellUiStato.ConProgetto(progetto, sezioniDisponibili, destinazioneCorrente, erroreApertura = messaggio)
+            ShellUiStato.ConProgetto(progetto, sezioniDisponibili, destinazioneCorrente, avviso = messaggio)
         } else {
-            ShellUiStato.SenzaProgetto(erroreApertura = messaggio)
+            ShellUiStato.SenzaProgetto(avviso = messaggio)
         }
     }
 
@@ -148,11 +155,11 @@ class ShellPresenter(
         }
     }
 
-    /** H1: dismisses the current state's `erroreApertura` banner, if any. */
+    /** H1: dismisses the current state's `avviso` banner, if any. */
     fun chiudiErrore() {
         _stato.value = when (val attuale = _stato.value) {
-            is ShellUiStato.SenzaProgetto -> attuale.copy(erroreApertura = null)
-            is ShellUiStato.ConProgetto -> attuale.copy(erroreApertura = null)
+            is ShellUiStato.SenzaProgetto -> attuale.copy(avviso = null)
+            is ShellUiStato.ConProgetto -> attuale.copy(avviso = null)
             ShellUiStato.Caricamento -> attuale
         }
     }

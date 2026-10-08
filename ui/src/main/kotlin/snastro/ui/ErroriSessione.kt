@@ -23,6 +23,12 @@ sealed interface ErroreSessione : ErroreDominio {
     /** R0 (EX-5): `elimina` of the open project refused, something is running or waiting in its shared queue. */
     data object ElaborazioneInCorso : ErroreSessione
 
+    /**
+     * R0 (EX-4): `elimina` of the open project closed it, but its work did not stop within the shutdown deadline:
+     * the folder is left whole, to be deleted from the list once that work ends.
+     */
+    data object ProgettoChiusoNonEliminato : ErroreSessione
+
     /** The project's schema/data was written by a newer version of the app. */
     data object DatabasePiuRecente : ErroreSessione
 }

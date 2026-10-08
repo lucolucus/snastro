@@ -78,7 +78,7 @@ class NavigazioneProgettoTest {
 
     private fun ComposeUiTest.componi() {
         val sessione = SessioneProgettoFinta().also { it.crea("/tmp", "Prova") }
-        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL)
+        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL, "")
         setContent {
             ShellProgetto(
                 shellPresenter = shell,
@@ -110,7 +110,7 @@ class NavigazioneProgettoTest {
         val servizio = ServizioModelliFinta()
         val modelliPresenter = ModelliPresenter(scope, Dispatchers.Unconfined, servizio)
         val sessione = SessioneProgettoFinta().also { it.crea("/tmp", "Prova") }
-        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL)
+        val shell = ShellPresenter(scope, Dispatchers.Unconfined, sessione, SEZIONI_SHELL, "")
         setContent {
             ShellProgetto(
                 shellPresenter = shell,
