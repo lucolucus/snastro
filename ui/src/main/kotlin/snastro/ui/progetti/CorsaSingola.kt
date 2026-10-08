@@ -1,12 +1,12 @@
 package snastro.ui.progetti
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
+import snastro.supporto.catturaNonFatale
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 
@@ -44,18 +44,13 @@ internal class CorsaSingola(
         stato.value = pulisci(attuale).copy(inCorso = true)
         scope.launch {
             try {
-                when (val esito = withContext(io) { operazione() }) {
+                // M1(b): any non-fatal fault of the operation (null here) becomes the one FIXED, plain-Italian
+                // message the user sees, never a stack trace; `catturaNonFatale` rethrows cancellation.
+                when (val esito = catturaNonFatale { withContext(io) { operazione() } }.getOrNull()) {
                     is Esito.Ok -> aggiorna { alSuccesso(it, esito.valore) }
                     is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
+                    null -> aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // Any other fault of `sessione.apri`/`crea`/`elimina` becomes the one FIXED, plain-Italian
-                // message the user sees (never a stack trace) — same rationale as ShellPresenter M1(b).
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
             } finally {
                 // fix-batch-12 #5: reset LAST and UNCONDITIONALLY — Error and Cancellation alike — so
                 // a cancelled operation (e.g. a spurious CancellationException from the port, same
