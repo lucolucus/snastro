@@ -218,8 +218,8 @@ class ProgettiPresenterTest {
         advanceUntilIdle()
         val prima = assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti
 
-        presenter.chiediElimina(prima.single())
-        presenter.confermaElimina("test")
+        presenter.azioni.chiediElimina(prima.single())
+        presenter.azioni.confermaElimina("test")
         advanceUntilIdle()
 
         val conferma = ConfermaEliminazione(prima.single(), errore = MESSAGGIO_ERRORE_GENERICO)
@@ -235,8 +235,8 @@ class ProgettiPresenterTest {
         val presenter = presentatore(this, registro = registro, sessione = sessione, cartellaUtente = "/Users/me")
         advanceUntilIdle()
 
-        presenter.chiediElimina(assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti.single())
-        presenter.confermaElimina("test")
+        presenter.azioni.chiediElimina(assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti.single())
+        presenter.azioni.confermaElimina("test")
         advanceUntilIdle()
         val avviso = assertIs<ProgettiUiStato.Dati>(presenter.stato.value).avvisoEliminazione
         assertEquals(avvisoEliminazione(restano, "/Users/me"), avviso)

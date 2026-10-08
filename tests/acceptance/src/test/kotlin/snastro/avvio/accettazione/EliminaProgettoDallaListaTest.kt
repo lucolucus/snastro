@@ -71,8 +71,8 @@ class EliminaProgettoDallaListaTest {
         runTest(dispatcher) {
             val presenter = listaConTreProgetti()
 
-            presenter.chiediElimina(progetto(presenter, "test"))
-            presenter.confermaElimina("test")
+            presenter.azioni.chiediElimina(progetto(presenter, "test"))
+            presenter.azioni.confermaElimina("test")
             advanceUntilIdle()
 
             assertFalse(Files.exists(documenti.resolve("test.snastro")))
@@ -83,11 +83,11 @@ class EliminaProgettoDallaListaTest {
     @Test
     fun `EX-2 un nome digitato diverso da test non conferma e non cancella niente`() = runTest(dispatcher) {
         val presenter = listaConTreProgetti()
-        presenter.chiediElimina(progetto(presenter, "test"))
+        presenter.azioni.chiediElimina(progetto(presenter, "test"))
 
         for (digitato in listOf("Test", "tes")) {
             assertFalse(assertNotNull(dati(presenter).conferma).confermataDa(digitato), digitato)
-            presenter.confermaElimina(digitato)
+            presenter.azioni.confermaElimina(digitato)
             advanceUntilIdle()
         }
 
@@ -101,8 +101,8 @@ class EliminaProgettoDallaListaTest {
         val presenter = listaConTreProgetti()
         val prima = nomi(presenter)
 
-        presenter.chiediElimina(progetto(presenter, "test"))
-        presenter.annullaElimina()
+        presenter.azioni.chiediElimina(progetto(presenter, "test"))
+        presenter.azioni.annullaElimina()
         advanceUntilIdle()
 
         assertTrue(Files.isDirectory(documenti.resolve("test.snastro")))

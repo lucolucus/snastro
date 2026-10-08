@@ -8,24 +8,19 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import snastro.kernel.Esito
-import snastro.kernel.poi
 import snastro.progetto.applicazione.letture.ElencoProgetti
-import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
-import snastro.ui.testi.avvisoEliminazione
-import snastro.ui.testi.messaggioPer
 
 /**
- * State holder of S1 · Progetti (RC-2, thin UI): loads [ElencoProgetti] once and forwards
- * `crea`/`apri`/`elimina` to [SessioneProgetto]. Reapplies the shell's lessons (dev-architecture `#presenter`):
- * an error is a dismissible inline message over the list, never a replacement of it (H1); success is
- * applied from the returned [ProgettoAperto], never left to a collector alone (M1(a) — this presenter
- * has none, but the same "set state from the result" rule keeps `inCorso` from ever getting stuck);
- * a non-cancellation fault becomes the one fixed generic message (M1(b)); a second `crea`/`apri` while
- * one is already in flight is ignored (M3). [cartellaUtente], the user's home, is written `~` in the folders it shows
+ * State holder of S1 · Progetti (RC-2, thin UI): loads [ElencoProgetti] once and forwards `crea`/`apri` to
+ * [SessioneProgetto]; the delete flow is [FlussoEliminazione]'s, both run by one [CorsaSingola]. Reapplies the shell's
+ * lessons (dev-architecture `#presenter`): an error is a dismissible inline message over the list, never a replacement
+ * of it (H1); success is applied from the returned [ProgettoAperto], never left to a collector alone (M1(a) — this
+ * presenter has none, but the same "set state from the result" rule keeps `inCorso` from ever getting stuck); a
+ * non-cancellation fault becomes the one fixed generic message (M1(b)); a second operation while one is already in
+ * flight is ignored (M3). [cartellaUtente], the user's home, is written `~` in the folders the delete flow shows
  * (empty: shown as they are).
  */
 class ProgettiPresenter(
@@ -33,10 +28,12 @@ class ProgettiPresenter(
     private val io: CoroutineDispatcher,
     private val elenco: ElencoProgetti,
     private val sessione: SessioneProgetto,
-    private val cartellaUtente: String,
+    cartellaUtente: String,
 ) {
     private val _stato = MutableStateFlow<ProgettiUiStato>(ProgettiUiStato.Caricamento)
     val stato: StateFlow<ProgettiUiStato> = _stato.asStateFlow()
+    private val corsa = CorsaSingola(_stato, scope, io)
+    private val eliminazione = FlussoEliminazione(corsa, elenco, sessione, cartellaUtente)
 
     init {
         scope.launch { caricaElenco() }
@@ -72,94 +69,25 @@ class ProgettiPresenter(
     private val senzaErroriDiApertura: (ProgettiUiStato.Dati, ProgettoAperto) -> ProgettiUiStato.Dati =
         { stato, _ -> stato.copy(erroreCrea = null, erroreApri = null) }
 
-    fun crea(cartellaGenitore: String, nome: String) = avvia(
+    fun crea(cartellaGenitore: String, nome: String) = corsa.avvia(
         pulisci = { it.copy(erroreCrea = null) },
         operazione = { sessione.crea(cartellaGenitore, nome) },
         alSuccesso = senzaErroriDiApertura,
         alFallimento = { stato, messaggio -> stato.copy(erroreCrea = messaggio) },
     )
 
-    fun apri(percorso: String) = avvia(
+    fun apri(percorso: String) = corsa.avvia(
         pulisci = { it.copy(erroreApri = null) },
         operazione = { sessione.apri(percorso) },
         alSuccesso = senzaErroriDiApertura,
         alFallimento = { stato, messaggio -> stato.copy(erroreApri = messaggio) },
     )
 
-    /** R0 (EX-1/EX-3): opens the delete confirmation of [progetto]. */
-    fun chiediElimina(progetto: ProgettoVista) =
-        _stato.aggiorna { if (it.inCorso) it else it.copy(conferma = ConfermaEliminazione(progetto)) }
-
-    /** R0 (EX-3): closes the confirmation, unless its delete is already running; nothing is deleted. */
-    fun annullaElimina() = _stato.aggiorna { if (it.inCorso) it else it.copy(conferma = null) }
-
-    /**
-     * R0 (EX-1): deletes the confirmed project, then closes the confirmation over the list reloaded without it — only
-     * when [nomeDigitato] is the project's exact name (EX-2: the view's disabled button is not the only guard) — and
-     * says what is left on disk (EX-9, EX-10). A failure stays in the confirmation.
-     */
-    fun confermaElimina(nomeDigitato: String) {
-        val conferma = (_stato.value as? ProgettiUiStato.Dati)?.conferma ?: return
-        if (!conferma.confermataDa(nomeDigitato)) return
-        avvia(
-            pulisci = { it.copy(conferma = conferma.copy(errore = null), avvisoEliminazione = null) },
-            operazione = {
-                sessione.elimina(conferma.progetto.percorso)
-                    .poi { eliminato -> Esito.Ok(eliminato to elenco.progetti()) }
-            },
-            alSuccesso = { stato, (eliminato, progetti) ->
-                stato.copy(
-                    progetti = progetti,
-                    conferma = null,
-                    avvisoEliminazione = avvisoEliminazione(eliminato, cartellaUtente),
-                )
-            },
-            alFallimento = { stato, messaggio -> stato.copy(conferma = stato.conferma?.copy(errore = messaggio)) },
-        )
-    }
-
-    // M3: guards a double crea/apri/elimina while one is already in flight. `inCorso` is set synchronously
-    // here, before `scope.launch` — unlike ShellPresenter (where `_stato` becomes Caricamento only
-    // inside the launched body, needing an extra Job flag), a second synchronous call already reads
-    // the updated `_stato.value` and returns immediately: no separate Job guard is needed.
-    private fun <T> avvia(
-        pulisci: (ProgettiUiStato.Dati) -> ProgettiUiStato.Dati,
-        operazione: suspend () -> Esito<T>,
-        alSuccesso: (ProgettiUiStato.Dati, T) -> ProgettiUiStato.Dati,
-        alFallimento: (ProgettiUiStato.Dati, String) -> ProgettiUiStato.Dati,
-    ) {
-        val attuale = _stato.value
-        if (attuale !is ProgettiUiStato.Dati || attuale.inCorso) return
-        _stato.value = pulisci(attuale).copy(inCorso = true)
-        scope.launch {
-            try {
-                when (val esito = withContext(io) { operazione() }) {
-                    is Esito.Ok -> _stato.aggiorna { alSuccesso(it, esito.valore) }
-                    is Esito.Errore -> _stato.aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // Any other fault of `sessione.apri`/`crea` becomes the one FIXED, plain-Italian
-                // message the user sees (never a stack trace) — same rationale as ShellPresenter M1(b).
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                _stato.aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }
-            } finally {
-                // fix-batch-12 #5: reset LAST and UNCONDITIONALLY — Error and Cancellation alike — so
-                // a cancelled `crea`/`apri` (e.g. a spurious CancellationException from the port, same
-                // family as LettorePresenter's own fix) never leaves `inCorso` stuck true, which would
-                // silently block every later crea/apri behind the M3 guard forever.
-                _stato.aggiorna { it.copy(inCorso = false) }
-            }
-        }
-    }
-
     /** H1: dismisses the current `erroreCrea` inline message, if any. */
-    fun chiudiErroreCrea() = _stato.aggiorna { it.copy(erroreCrea = null) }
+    fun chiudiErroreCrea() = corsa.aggiorna { it.copy(erroreCrea = null) }
 
     /** H1: dismisses the current `erroreApri` inline message, if any. */
-    fun chiudiErroreApri() = _stato.aggiorna { it.copy(erroreApri = null) }
+    fun chiudiErroreApri() = corsa.aggiorna { it.copy(erroreApri = null) }
 
     val azioni: AzioniProgetti = AzioniProgetti(
         crea = ::crea,
@@ -167,17 +95,9 @@ class ProgettiPresenter(
         chiudiErroreCrea = ::chiudiErroreCrea,
         chiudiErroreApri = ::chiudiErroreApri,
         riprova = ::riprova,
-        chiediElimina = ::chiediElimina,
-        annullaElimina = ::annullaElimina,
-        confermaElimina = ::confermaElimina,
-        // EX-9/EX-10: dismisses the message of what the last delete left on disk (a lambda: detekt's
-        // TooManyFunctions counts the presenter's functions, and this one is a single state update).
-        chiudiAvvisoEliminazione = { _stato.aggiorna { it.copy(avvisoEliminazione = null) } },
+        chiediElimina = eliminazione::chiedi,
+        annullaElimina = eliminazione::annulla,
+        confermaElimina = eliminazione::conferma,
+        chiudiAvvisoEliminazione = eliminazione::chiudiAvviso,
     )
-}
-
-/** Applies [f] to the [ProgettiUiStato.Dati] state; a no-op while the list is still loading. */
-private fun MutableStateFlow<ProgettiUiStato>.aggiorna(f: (ProgettiUiStato.Dati) -> ProgettiUiStato.Dati) {
-    val attuale = value
-    if (attuale is ProgettiUiStato.Dati) value = f(attuale)
 }

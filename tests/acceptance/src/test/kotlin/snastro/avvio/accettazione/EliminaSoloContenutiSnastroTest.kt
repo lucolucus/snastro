@@ -123,8 +123,8 @@ class EliminaSoloContenutiSnastroTest {
         }
 
     private fun TestScope.elimina(presenter: ProgettiPresenter, nome: String) {
-        presenter.chiediElimina(dati(presenter).progetti.single { it.nome == nome })
-        presenter.confermaElimina(nome)
+        presenter.azioni.chiediElimina(dati(presenter).progetti.single { it.nome == nome })
+        presenter.azioni.confermaElimina(nome)
         advanceUntilIdle()
     }
 

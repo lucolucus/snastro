@@ -1,1 +1,3 @@
 # Conventions proposals
+
+- create presenter-split: a screen presenter that grows past one reason to change splits per user flow into `internal` holders over the presenter's one `MutableStateFlow`, sharing one `internal` single-flight runner (M3 guard, M1(b) generic message, `inCorso` reset in `finally`) — never a second copy, never a lambda in `azioni` to dodge `TooManyFunctions`; the presenter keeps its constructor, `stato` and `azioni`, which wire the holders' functions directly (no forwarding members) — `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `FlussoEliminazione.kt`, `ProgettiPresenter.kt` (slice 08: first split of a presenter; S1's next actions, e.g. "togli dalla lista", copy it)
