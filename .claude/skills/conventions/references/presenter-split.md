@@ -26,6 +26,12 @@ total (not a general permission to transfer frozen allowances); keep cancellatio
 Their unlogged causes remain non-fatal-faults/CR-7 debt, not an approved exception
 (`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`).
 
+**S2 row runner** (added 2026-10-08, ADR 0041, decided: codex on delegation; lands with slice 18): S2 holders and the
+presenter share one per-row command runner on `StatoS2`; never a try/catch runner per command. It owns the synchronous
+row guard, the in-flight flag, `azzeraAvviso`, the launch, the logged generic `erroreRiga` through `eccezioneRegistrata`,
+and the reset in `finally`; callers supply the command and the success/refusal handling, preserving per-row concurrency
+and the separate import guard.
+
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): the screen keeps one state and one
 `azioni` while each flow gets its own small home. A lambda in `azioni` or a forwarding member only hides the size.
 Other screens keep their own concurrency (e.g. the audio of `RegistrazionePresenter`). Not yet uniform practice:
