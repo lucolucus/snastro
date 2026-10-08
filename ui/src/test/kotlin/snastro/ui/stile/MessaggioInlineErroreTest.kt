@@ -7,7 +7,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import snastro.ui.SnastroTema
-import snastro.ui.progetti.MessaggioInlineErrore
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import kotlin.test.Test
 import kotlin.test.assertEquals

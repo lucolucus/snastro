@@ -5,7 +5,6 @@
 package snastro.ui.parlanti
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -62,12 +61,12 @@ import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MessaggioInlineErrore
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
-import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_ELIMINA
 import snastro.ui.testi.ETICHETTA_PROMUOVI
@@ -488,29 +487,4 @@ private fun RigaParlanteEliminatoItem(riga: RigaParlanteEliminato) {
             .padding(vertical = SnastroMisure.space1)
             .testTag("parlanti-eliminato-${riga.parlanteId.valore}"),
     )
-}
-
-@Composable
-private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit, tag: String) {
-    val colori = LocalSnastroColori.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = SnastroMisure.space2).testTag(tag),
-    ) {
-        Text(
-            text = messaggio,
-            color = colori.danger,
-            style = LocalSnastroTipografia.current.caption,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Text(
-            text = ETICHETTA_CHIUDI_ERRORE,
-            color = colori.accentInk,
-            style = LocalSnastroTipografia.current.label,
-            modifier = Modifier
-                .padding(start = SnastroMisure.space2)
-                .clickable(onClick = onChiudi)
-                .testTag("$tag-chiudi"),
-        )
-    }
 }

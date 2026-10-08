@@ -36,11 +36,11 @@ import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MessaggioInlineErrore
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CAMBIA_CARTELLA
-import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_CREA
 import snastro.ui.testi.ETICHETTA_NOME_PROGETTO
 import snastro.ui.testi.ETICHETTA_NUOVO_PROGETTO
@@ -160,30 +160,5 @@ internal fun PannelloSuVelo(
         ) {
             Column(modifier = Modifier.padding(SnastroMisure.space5), content = contenuto)
         }
-    }
-}
-
-@Composable
-internal fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit, tag: String) {
-    val colori = LocalSnastroColori.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = SnastroMisure.space2).testTag(tag),
-    ) {
-        Text(
-            text = messaggio,
-            color = colori.danger,
-            style = LocalSnastroTipografia.current.caption,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Text(
-            text = ETICHETTA_CHIUDI_ERRORE,
-            color = colori.accentInk,
-            style = LocalSnastroTipografia.current.label,
-            modifier = Modifier
-                .padding(start = SnastroMisure.space2)
-                .clickable(onClick = onChiudi)
-                .testTag("$tag-chiudi"),
-        )
     }
 }

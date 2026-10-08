@@ -88,6 +88,7 @@ import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
 import snastro.ui.stile.MenuAltreAzioni
+import snastro.ui.stile.MessaggioInlineErrore
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.TipoChipStato
@@ -1457,31 +1458,6 @@ private fun AvvioConNumeroPersone(
             piccolo = true,
             icona = icona,
             abilitato = !riga.operazioneInCorso,
-        )
-    }
-}
-
-@Composable
-private fun MessaggioInlineErrore(messaggio: String, onChiudi: () -> Unit, tag: String) {
-    val colori = LocalSnastroColori.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.padding(top = SnastroMisure.space2).testTag(tag),
-    ) {
-        Text(
-            text = messaggio,
-            color = colori.danger,
-            style = LocalSnastroTipografia.current.caption,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        Text(
-            text = ETICHETTA_CHIUDI_ERRORE,
-            color = colori.accentInk,
-            style = LocalSnastroTipografia.current.label,
-            modifier = Modifier
-                .padding(start = SnastroMisure.space2)
-                .clickable(onClick = onChiudi)
-                .testTag("$tag-chiudi"),
         )
     }
 }

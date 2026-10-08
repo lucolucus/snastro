@@ -50,6 +50,7 @@ import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MessaggioInlineErrore
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.VarianteBottone
