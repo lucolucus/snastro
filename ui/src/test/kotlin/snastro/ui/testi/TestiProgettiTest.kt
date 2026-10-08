@@ -26,4 +26,13 @@ class TestiProgettiTest {
     fun `un progetto eliminato del tutto non lascia avvisi`() {
         assertNull(avvisoEliminazione(ProgettoEliminato.Completamente, "/Users/me"))
     }
+
+    @Test
+    fun `la conferma di eliminazione promette solo i contenuti di snastro (EX-9)`() {
+        assertEquals(
+            "Vengono cancellati per sempre i contenuti del progetto gestiti da snastro, comprese registrazioni, " +
+                "trascrizioni e riassunti. Gli altri file nella cartella restano.",
+            MESSAGGIO_CONFERMA_ELIMINA_PROGETTO,
+        )
+    }
 }

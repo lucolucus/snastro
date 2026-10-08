@@ -33,10 +33,10 @@ fun sottotitoloProgetti(numero: Int): String = when (numero) {
 /** R0: the delete confirmation's title — the question, naming the project. */
 fun titoloConfermaEliminaProgetto(nome: String): String = "Eliminare il progetto «$nome»?"
 
-/** R0: what deleting a project does — for good, no Trash. */
+/** R0 (EX-9): what deleting a project does — snastro's contents only, for good, no Trash. */
 const val MESSAGGIO_CONFERMA_ELIMINA_PROGETTO: String =
-    "La cartella del progetto viene cancellata per sempre, con registrazioni, trascrizioni e riassunti. " +
-        "Non si può annullare."
+    "Vengono cancellati per sempre i contenuti del progetto gestiti da snastro, comprese registrazioni, " +
+        "trascrizioni e riassunti. Gli altri file nella cartella restano."
 
 /** R0 (EX-2): the confirmation field's label — the exact name to type. */
 fun etichettaNomeDaDigitare(nome: String): String = "Per confermare, scrivi il nome del progetto: $nome"

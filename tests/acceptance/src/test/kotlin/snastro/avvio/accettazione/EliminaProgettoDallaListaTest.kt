@@ -119,7 +119,7 @@ class EliminaProgettoDallaListaTest {
                 registro.elenco().any { it.percorso == creato.percorso }
             }
         }
-        return ProgettiPresenter(scopePresenter, dispatcher, ElencoProgetti(registro), sessione)
+        return ProgettiPresenter(scopePresenter, dispatcher, ElencoProgetti(registro), sessione, cartellaUtente = "")
             .also { advanceUntilIdle() }
     }
 

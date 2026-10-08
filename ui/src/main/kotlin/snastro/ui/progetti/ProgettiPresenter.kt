@@ -33,7 +33,7 @@ class ProgettiPresenter(
     private val io: CoroutineDispatcher,
     private val elenco: ElencoProgetti,
     private val sessione: SessioneProgetto,
-    private val cartellaUtente: String = "",
+    private val cartellaUtente: String,
 ) {
     private val _stato = MutableStateFlow<ProgettiUiStato>(ProgettiUiStato.Caricamento)
     val stato: StateFlow<ProgettiUiStato> = _stato.asStateFlow()
