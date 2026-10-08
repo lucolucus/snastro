@@ -104,3 +104,10 @@
 - Helpers in a public base class can't take `internal` types (`SessioneProgettoImpl`): compile error "protected function exposes its internal parameter type" — they take the `snastro.ui.SessioneProgetto` interface.
 - EX-1..EX-4 now pass the temp home instead of `""` and EX-1..4's projects live under `casa/Documents/snastro`; no assertion changed. `contenuto` no longer lists the root `""` (it compares before/after only).
 - Conventions `acceptance-tests` "Shared harness" now cites `BancoS1.kt`. `./gradlew check` and `mm gate` green (exit 0).
+
+## 16-registrazioni-presenter-flussi — 2026-10-08
+- `RegistrazioniPresenter` (1008 -> 784 lines): import flow -> `FlussoImporta`, delete-a-row -> `FlussoEliminaRiga`, both over one `internal` `StatoS2` (`aggiornaDati`/`aggiornaRiga`/`rigaLibera`/`azzeraAvviso`/`ricarica` = `::carica`), also used by the presenter; `azioni` binds holder functions directly, `chiudiAvviso = s2::azzeraAvviso`. Constructor unchanged (three params now plain, not `private val`).
+- `LargeClass` suppression removed (detekt green). `TooManyFunctions` still bites: `./gradlew :ui:detekt` without it reported "Class 'RegistrazioniPresenter' with '38' functions detected ... threshold ... '11'"; next flows to split: elaborazione (avvia/ritrascrivi/annulla, `suRiga`) and Incontro (`espandiIncontro`..`aggiornaIncontro`).
+- Holders and `s2` are declared BEFORE `init`: its collectors may run at once on an immediate dispatcher and already call `s2`.
+- CR-19b: the two catch-alls moved with their code (Error must still propagate, L269 test in `RegistrazioniConsegnaDopoCommitTest`, so `catturaNonFatale` would change behaviour); frozen counts `RegistrazioniPresenter.kt` 8 -> 6, `FlussoImporta.kt` 1, `FlussoEliminaRiga.kt` 1.
+- Tests calling the moved members now go through `azioni` (`RegistrazioniEliminaParteTest`, avvio `EliminaRegistrazioneTest`, `IncontroPartiTest`); ui 687/687, avvio 409/409 forced with `--rerun`; `./gradlew check` and `mm gate` exit 0.
