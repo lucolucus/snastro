@@ -120,3 +120,9 @@
 ## 17-elenco-progetti-guasto-registrato — 2026-10-08 (rework 1)
 - Restored `.claude/skills/conventions/references/non-fatal-faults.md` to Base 621d9586 (the human's file: `mm check --base` was red); the "Shown by" citation of `ProgettiPresenter.kt` (`caricaElenco`) is now one entry in `.mismagent/conventions-proposals.md`.
 - The previous entry's last line (conventions edited) no longer holds. Never touch `.claude/skills/conventions/`: propose instead.
+
+## 18-s2-corsa-di-riga-registrata — 2026-10-08
+- `:supporto` `catturaEccezione` (built on `catturaNonFatale` + rethrow of non-`Exception`: no new catch, no suppression; CR-18c list + architecture.md row); `:ui` `eccezioneRegistrata` next to `nonFataleRegistrato`, both via one `private` `Result.registrato` (a private fun is callable from an `internal inline` one: `:ui:compileKotlin` clean), logger now `private`.
+- `StatoS2(stato, scope, ricarica).comandoDiRiga(id, operazione, comando, suEsito, suGuasto = { it })`: guard, in-flight, `azzeraAvviso`, launch, logged generic `erroreRiga`, L269 `finally`. Handlers no longer reset `operazioneInCorso` (the runner does). One `suEsito` for Ok+refusal keeps it at 5 params (detekt LongParameterList). `FlussoEliminaRiga` lost its `scope`.
+- CR-19b: `FlussoEliminaRiga.kt` entry removed, `RegistrazioniPresenter.kt` 6 -> 4. New test CR-7 in `RegistrazioniRinominaTest`; ui 689/689, avvio 409, supporto 23, architettura 459, all reran; `mm gate` and `mm check --base` exit 0.
+- Slice 19 (S2 reads/import): `FlussoImporta` and `avviaElaborazioniIncontro` (commits through `catturaNonFatale`, D-0065 residuo) go onto `eccezioneRegistrata`; design note on the name written twice per row command.
