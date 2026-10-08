@@ -17,7 +17,6 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -33,7 +32,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -89,13 +87,13 @@ import snastro.ui.stile.Icona
 import snastro.ui.stile.IconaSn
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MenuAltreAzioni
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.TipoBanner
 import snastro.ui.stile.TipoChipStato
 import snastro.ui.stile.VarianteBottone
 import snastro.ui.temaScuro
 import snastro.ui.testi.ETICHETTA_AGGIUNGI_PARTI
-import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CHIUDI_ERRORE
 import snastro.ui.testi.ETICHETTA_COMPRIMI_PARTI
@@ -744,32 +742,6 @@ private fun MenuAzioniRegistrazione(
             },
             tag = "registrazioni-menu-elimina-${id.valore}",
         )
-    }
-}
-
-/** The row's `More` button and its menu; [contenuto] receives the `chiudi` that also returns focus to the button. */
-@Composable
-private fun MenuAltreAzioni(
-    tag: String,
-    abilitato: Boolean,
-    contenuto: @Composable ColumnScope.(chiudi: () -> Unit) -> Unit,
-) {
-    var espanso by remember { mutableStateOf(false) }
-    // L742b (S4 precedent): focus returns to this same button once the menu closes.
-    val richiestaFocus = remember { FocusRequester() }
-    fun chiudi() {
-        espanso = false
-        richiestaFocus.requestFocus()
-    }
-    Box {
-        BottoneIconaSn(
-            icona = Icona.More,
-            descrizione = ETICHETTA_ALTRE_AZIONI,
-            onClick = { espanso = true },
-            abilitato = abilitato,
-            modifier = Modifier.focusRequester(richiestaFocus).testTag(tag),
-        )
-        DropdownMenu(expanded = espanso, onDismissRequest = ::chiudi) { contenuto(::chiudi) }
     }
 }
 

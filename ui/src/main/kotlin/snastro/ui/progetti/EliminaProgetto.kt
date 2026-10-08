@@ -1,12 +1,10 @@
 package snastro.ui.progetti
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,15 +16,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import snastro.progetto.applicazione.letture.ProgettoVista
-import snastro.ui.stile.BottoneIconaSn
 import snastro.ui.stile.BottoneSn
 import snastro.ui.stile.CampoSn
-import snastro.ui.stile.Icona
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.LocalSnastroTipografia
+import snastro.ui.stile.MenuAltreAzioni
 import snastro.ui.stile.SnastroMisure
 import snastro.ui.stile.VarianteBottone
-import snastro.ui.testi.ETICHETTA_ALTRE_AZIONI
 import snastro.ui.testi.ETICHETTA_ANNULLA
 import snastro.ui.testi.ETICHETTA_CONFERMA_ELIMINAZIONE
 import snastro.ui.testi.ETICHETTA_ELIMINA
@@ -34,29 +30,19 @@ import snastro.ui.testi.MESSAGGIO_CONFERMA_ELIMINA_PROGETTO
 import snastro.ui.testi.etichettaNomeDaDigitare
 import snastro.ui.testi.titoloConfermaEliminaProgetto
 
-/** R0: a project card's "⋯" button and its menu, whose "Elimina…" (danger text) asks to confirm the delete. */
+/** R0: a project card's "⋯" menu, whose "Elimina…" (danger text) asks to confirm the delete. */
 @Composable
 internal fun MenuProgetto(progetto: ProgettoVista, abilitato: Boolean, chiediElimina: (ProgettoVista) -> Unit) {
-    var espanso by remember { mutableStateOf(false) }
     val id = progetto.progettoId.valore
-    Box {
-        BottoneIconaSn(
-            icona = Icona.More,
-            descrizione = ETICHETTA_ALTRE_AZIONI,
-            onClick = { espanso = true },
-            abilitato = abilitato,
-            modifier = Modifier.testTag("progetti-altre-azioni-$id"),
+    MenuAltreAzioni("progetti-altre-azioni-$id", abilitato) { chiudi ->
+        DropdownMenuItem(
+            text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
+            onClick = {
+                chiudi()
+                chiediElimina(progetto)
+            },
+            modifier = Modifier.testTag("progetti-menu-elimina-$id"),
         )
-        DropdownMenu(expanded = espanso, onDismissRequest = { espanso = false }) {
-            DropdownMenuItem(
-                text = { Text(ETICHETTA_ELIMINA, color = LocalSnastroColori.current.danger) },
-                onClick = {
-                    espanso = false
-                    chiediElimina(progetto)
-                },
-                modifier = Modifier.testTag("progetti-menu-elimina-$id"),
-            )
-        }
     }
 }
 
