@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: fe27cddcb2794d6cb27bd072c3cdc83b5e27b253
 
 S3's Voci panel still has the shape S2 had before slice 18. Five hand-written launch / rethrow-cancellation /
 `catch (e: Exception)` / `finally` blocks and three `catturaNonFatale { … }.getOrNull()` reads drop the cause
