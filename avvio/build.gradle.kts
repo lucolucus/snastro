@@ -84,6 +84,12 @@ dependencies {
     testImplementation(project(":supporto-test"))
 }
 
+// Conventions topic acceptance-tests: the acceptance tests (EX-<n>) live in tests/acceptance/, where mm looks for their
+// markers, and compile as `:avvio` tests (access to its internal test helpers); detekt's plain task only scans src/.
+val testDiAccettazione = rootProject.file("tests/acceptance/src/test/kotlin")
+kotlin.sourceSets.named("test") { kotlin.srcDir(testDiAccettazione) }
+detekt { source.from(testDiAccettazione) }
+
 // ADR 0027 §3 / ADR 0016 §3 (AC-S156): the llama.cpp natives are the library's ONE native output
 // (:llama-jni:assembleNatives: libllamajni + libllama + libggml*, built outside the gate) copied next to sherpa's two
 // libs in appResourcesRootDir/<os-arch>/, where the app resolves them through compose.application.resources.dir
