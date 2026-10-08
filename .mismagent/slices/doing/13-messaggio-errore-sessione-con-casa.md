@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: de5d65743ff7f95c40a486e53f5be984c308b618
 
 The one-argument `messaggioPer(ErroreSessione)` maps `CartellaNonTrovata` with `cartellaUtente = ""` in silence
 (`ui/src/main/kotlin/snastro/ui/testi/MessaggiErrore.kt:37`), which display-paths forbids ("a one-argument
