@@ -1,6 +1,5 @@
 package snastro.ui.parlanti
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,7 +18,9 @@ import snastro.parlanti.applicazione.letture.ParlanteDelProgetto
 import snastro.parlanti.applicazione.letture.StatoParlanteVista
 import snastro.ui.AggiornamentiVista
 import snastro.ui.comandoConfermato
+import snastro.ui.eccezioneRegistrata
 import snastro.ui.lettore.LettoreAudio
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO_PARLANTI
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
@@ -73,18 +74,12 @@ class ParlantiPresenter(
         scope.launch { aggiornamenti.cambiamenti.collect { carica() } } // R15
     }
 
+    /** A read: a fault is logged ([nonFataleRegistrato], CR-7) and shown by [segnalaErroreDiCaricamento]. */
     private suspend fun carica() {
         val generazione = ++generazioneCaricamento
-        try {
-            val viste = withContext(io) { parlanti() }
-            if (generazione == generazioneCaricamento) aggiornaConNuoveViste(viste)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            if (generazione == generazioneCaricamento) segnalaErroreDiCaricamento()
-        }
+        val viste = nonFataleRegistrato("caricamento dei parlanti") { withContext(io) { parlanti() } }
+        if (generazione != generazioneCaricamento) return // M1: a newer load has already resolved
+        if (viste != null) aggiornaConNuoveViste(viste) else segnalaErroreDiCaricamento()
     }
 
     /** M1: merges freshly-read [viste] into the CURRENT [ParlantiUiStato.Dati] — each row's
@@ -139,20 +134,12 @@ class ParlantiPresenter(
 
     /** AC-223: renames the Parlante from its row's inline Nome field. */
     fun rinomina(id: ParlanteId, nuovoNome: String) =
-        suRiga(id) {
-            withContext(io) {
-                comandoConfermato("rinomina di $id") { rinominaParlante(RinominaParlante(id, nuovoNome)) }
-            }
-        }
+        suRiga(id, "rinomina di $id") { rinominaParlante(RinominaParlante(id, nuovoNome)) }
 
     /** AC-224: only shown for an `occasionale` row (the view's own decision, exactly like
      * `RegistrazioniPresenter`'s `apribile`); no rename bundled here (out of this block's AC scope). */
     fun promuovi(id: ParlanteId) =
-        suRiga(id) {
-            withContext(io) {
-                comandoConfermato("promozione di $id") { promuoviParlante(PromuoviParlante(id, nome = null)) }
-            }
-        }
+        suRiga(id, "promozione di $id") { promuoviParlante(PromuoviParlante(id, nome = null)) }
 
     /** AC-225: opens the row's inline confirmation — no command sent yet. */
     fun chiediConfermaEliminazione(id: ParlanteId) = aggiornaRiga(id) { it.copy(confermaEliminazione = true) }
@@ -162,56 +149,51 @@ class ParlantiPresenter(
 
     /** AC-225: the confirmed tombstone. */
     fun confermaEliminazione(id: ParlanteId) =
-        suRiga(id) {
-            withContext(io) { comandoConfermato("eliminazione di $id") { eliminaParlante(EliminaParlante(id)) } }
-        }
+        suRiga(id, "eliminazione di $id") { eliminaParlante(EliminaParlante(id)) }
 
-    private fun suRiga(id: ParlanteId, operazione: suspend () -> Esito<Unit>) {
+    /**
+     * S4's one per-row command runner (ADR 0041 §3). M3: a no-op while row [id] has an operation in flight; otherwise
+     * it marks the row in flight, clears its message and runs [comando] on [io] as a `comandoConfermato` named
+     * [operazione] (D-0062). Ok refreshes the list, a refusal shows its message; a thrown `Exception` is logged
+     * ([eccezioneRegistrata], CR-7) and shows the generic `erroreRiga`, while cancellation and every `Error`
+     * propagate (D-0065). L269: the in-flight flag is reset in `finally`, whatever happened.
+     */
+    private fun suRiga(id: ParlanteId, operazione: String, comando: () -> Esito<Unit>) {
         val riga = trovaRiga(id) ?: return
         if (riga.operazioneInCorso) return // M3
         aggiornaRiga(id) { it.copy(operazioneInCorso = true, erroreRiga = null) }
         scope.launch {
             try {
-                when (val esito = operazione()) {
-                    is Esito.Ok -> {
-                        carica() // M1: merges the refreshed list, preserving this row's flags until reset below
-                        aggiornaRiga(id) {
-                            it.copy(operazioneInCorso = false, erroreRiga = null, confermaEliminazione = false)
-                        }
-                    }
-                    is Esito.Errore -> {
-                        val messaggio = messaggioPer(esito.errore)
-                        aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = messaggio) }
-                    }
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiornaRiga(id) { it.copy(operazioneInCorso = false, erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                eccezioneRegistrata(operazione) {
+                    concludi(id, withContext(io) { comandoConfermato(operazione, comando) })
+                } ?: aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
             } finally {
-                // L269 (D-0065): an Error (e.g. from an after-commit subscriber) propagates, but the row is released.
-                aggiornaRiga(id) { it.copy(operazioneInCorso = false) }
+                aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
             }
+        }
+    }
+
+    /** The row [id]'s outcome of its command: Ok refreshes the list and closes the confirmation, a refusal shows. */
+    private suspend fun concludi(id: ParlanteId, esito: Esito<Unit>) = when (esito) {
+        is Esito.Ok -> {
+            carica() // M1: merges the refreshed list, preserving this row's flags until reset below
+            aggiornaRiga(id) { it.copy(erroreRiga = null, confermaEliminazione = false) }
+        }
+        is Esito.Errore -> {
+            val messaggio = messaggioPer(esito.errore)
+            aggiornaRiga(id) { it.copy(erroreRiga = messaggio) }
         }
     }
 
     /** AC-226: plays one of [id]'s `ImprontaVocale` excerpts; a no-op when [RigaParlante.riproduzioneAbilitata]
      * is false (the view already disables '▶' for that case, this is the defensive backstop). H2:
-     * a throwing [LettoreAudio] is mapped to an inline row error, never left to kill this coroutine. */
+     * a throwing [LettoreAudio] is logged ([nonFataleRegistrato], CR-7) and mapped to an inline row error. */
     fun riproduci(id: ParlanteId) {
         val estratto = estrattiPerParlante[id] ?: return
         scope.launch {
-            try {
+            nonFataleRegistrato("riproduzione dell'estratto di $id") {
                 withContext(io) { lettore.riproduciEstratto(estratto) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
-            }
+            } ?: aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
         }
     }
 
