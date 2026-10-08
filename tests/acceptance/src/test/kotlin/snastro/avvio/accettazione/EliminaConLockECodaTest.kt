@@ -1,49 +1,26 @@
 package snastro.avvio.accettazione
 
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.StandardTestDispatcher
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
 import snastro.avvio.progetto.conSessioneDiProva
-import snastro.avvio.progetto.elencoProgetti
 import snastro.kernel.IncontroId
 import snastro.kernel.atteso
 import snastro.persistenza.UnitaDiLavoroSql
 import snastro.persistenza.apriDatabaseProgetto
 import snastro.progetto.adattatori.persistenza.IncontroRepositorySql
-import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.progetto.dominio.Incontro
 import snastro.sintesi.adattatori.persistenza.RiassuntoRepositorySql
 import snastro.sintesi.applicazione.porte.unRiassunto
-import snastro.supporto.test.attendiFinche
 import snastro.ui.ProgettoAperto
-import snastro.ui.progetti.ProgettiPresenter
-import snastro.ui.progetti.ProgettiUiStato
-import java.io.IOException
-import java.nio.file.FileVisitResult
 import java.nio.file.Files
-import java.nio.file.NoSuchFileException
 import java.nio.file.Path
-import java.nio.file.SimpleFileVisitor
-import java.nio.file.attribute.BasicFileAttributes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
-
-/** The files an open database makes and drops on its own. */
-private val FILE_DEL_WAL = setOf("progetto.db-wal", "progetto.db-shm")
 
 /**
  * R0 · elimina con lock e coda (EX-6, EX-11): the list's presenter over the REAL [SessioneProgettoImpl] and real
@@ -53,24 +30,12 @@ private val FILE_DEL_WAL = setOf("progetto.db-wal", "progetto.db-shm")
  * the user's home, ML/audio ([componentiDiProva]), id generator and clock. EX-6's other window is a second real
  * session in this JVM holding the project's real `.lock` (its own registry, so its registration cannot race the
  * list). EX-11's pending summary is written into the closed project's real database through the production SQL
- * repositories. The presenter runs on a [StandardTestDispatcher] shared with `runTest` and advanced explicitly, its
+ * repositories. The presenter runs on [BancoS1]'s dispatcher, shared with `runTest` and advanced explicitly, its
  * scope cancelled in teardown; the sessions, built by [conSessione] and [conSessioneDiProva], are closed and their
  * scopes cancelled when the test ends.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class EliminaConLockECodaTest {
-    @TempDir
-    lateinit var casa: Path
-
-    private val documenti: Path by lazy { casa.resolve("Documents/snastro") }
-
-    private val registro = RegistroProgettiFinta()
-    private val dispatcher = StandardTestDispatcher()
-    private val scopePresenter = CoroutineScope(SupervisorJob() + dispatcher)
-
-    @AfterEach
-    fun chiudi() = scopePresenter.cancel()
-
+class EliminaConLockECodaTest : BancoS1() {
     @Test
     fun `EX-6 mangu 2 aperto in un'altra finestra non si elimina dalla lista, lo si dice e niente e cancellato`() =
         conSessione(registro, dispatcher) { sessione ->
@@ -99,19 +64,9 @@ class EliminaConLockECodaTest {
             elimina(presenter, "mangu 2")
 
             assertFalse(Files.exists(Path.of(mangu.percorso)), "mangu 2.snastro cancellata")
-            assertEquals(listOf("skatefest"), dati(presenter).progetti.map(ProgettoVista::nome))
+            assertEquals(listOf("skatefest"), nomi(presenter))
             assertNull(dati(presenter).conferma)
         }
-
-    /** [nome] created, closed and registered in [registro]. */
-    private fun creaChiuso(sessione: SessioneProgettoImpl, nome: String): ProgettoAperto {
-        val creato = sessione.crea(documenti.toString(), nome).atteso()
-        sessione.chiudi()
-        attendiFinche(timeout = 10.seconds, messaggio = "$nome registrato") {
-            registro.elenco().any { it.percorso == creato.percorso }
-        }
-        return creato
-    }
 
     /** The meeting of 2026-10-07 with a summary still `in_attesa`: the project was closed before it started. */
     private fun riassuntoInAttesa(progetto: ProgettoAperto) {
@@ -129,44 +84,4 @@ class EliminaConLockECodaTest {
             db.chiudi()
         }
     }
-
-    private fun TestScope.lista(sessione: SessioneProgettoImpl): ProgettiPresenter =
-        ProgettiPresenter(scopePresenter, dispatcher, elencoProgetti(registro), sessione, casa.toString())
-            .also { advanceUntilIdle() }
-
-    private fun TestScope.elimina(presenter: ProgettiPresenter, nome: String) {
-        presenter.azioni.chiediElimina(dati(presenter).progetti.single { it.nome == nome })
-        presenter.azioni.confermaElimina(nome)
-        advanceUntilIdle()
-    }
-
-    /**
-     * Every path under [cartella], relative to it and sorted, but the database's WAL files: the other window's open
-     * database makes and drops them, so they are skipped even when they vanish during the walk.
-     */
-    private fun contenuto(cartella: Path): List<String> {
-        val percorsi = mutableListOf<String>()
-        Files.walkFileTree(
-            cartella,
-            object : SimpleFileVisitor<Path>() {
-                override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    if (dir != cartella) percorsi += cartella.relativize(dir).toString()
-                    return FileVisitResult.CONTINUE
-                }
-
-                override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
-                    if (!fileDelWal(file)) percorsi += cartella.relativize(file).toString()
-                    return FileVisitResult.CONTINUE
-                }
-
-                override fun visitFileFailed(file: Path, exc: IOException): FileVisitResult =
-                    if (exc is NoSuchFileException && fileDelWal(file)) FileVisitResult.CONTINUE else throw exc
-            },
-        )
-        return percorsi.sorted()
-    }
-
-    private fun fileDelWal(file: Path) = file.fileName.toString() in FILE_DEL_WAL
-
-    private fun dati(presenter: ProgettiPresenter): ProgettiUiStato.Dati = assertIs(presenter.stato.value)
 }

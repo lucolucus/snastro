@@ -36,6 +36,8 @@ checks its controls call the right callbacks (it does not prove the presenter wi
 one harness beside `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/ConSessione.kt` — registry, dispatcher, presenter scope cancelled after each test, presenter builders,
 `dati`, `elimina` — keeping the scheduling rules above; one recursive relative-path `contenuto`, excluding only
 `progetto.db-wal`/`progetto.db-shm` and tolerating their disappearance during traversal; no per-file copies.
+Shown by `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/BancoS1.kt` (abstract base `BancoS1`, top-level
+`contenuto` and `attendiRegistrati`).
 
 **Why.** mm looks for `EX-<n>` markers only under *tests/acceptance/*; *tests/acceptance/* as its own Gradle module
 would need settings, module-map and allowed-edge changes and test fixtures out of `:avvio`, while an extra source

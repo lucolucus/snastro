@@ -1,32 +1,18 @@
 package snastro.avvio.accettazione
 
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.advanceUntilIdle
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.progetto.SessioneProgettoImpl
 import snastro.avvio.progetto.componentiDiProva
-import snastro.avvio.progetto.elencoProgetti
-import snastro.kernel.atteso
-import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
-import snastro.supporto.test.attendiFinche
 import snastro.ui.progetti.ProgettiPresenter
-import snastro.ui.progetti.ProgettiUiStato
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.time.Duration.Companion.seconds
 
 /**
  * R0 · elimina solo i contenuti di snastro (EX-9, EX-10): the list's presenter over the REAL [SessioneProgettoImpl]
@@ -34,24 +20,13 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Substituted boundaries: the per-user registry ([RegistroProgettiFinta], one shared by the session and the list),
  * the user's home, ML/audio ([componentiDiProva]), id generator and clock. EX-10's undeletable file is a real one: its
- * folder loses the write permission. The presenter runs on a [StandardTestDispatcher] shared with `runTest` and
- * advanced explicitly, its scope cancelled in teardown; the session, which registers a closed project on real
- * threads, is built by [conSessione]: closed and its scope cancelled when the test ends.
+ * folder loses the write permission. The presenter runs on [BancoS1]'s dispatcher, shared with `runTest` and advanced
+ * explicitly, its scope cancelled in teardown; the session, which registers a closed project on real threads, is
+ * built by [conSessione]: closed and its scope cancelled when the test ends.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-class EliminaSoloContenutiSnastroTest {
-    @TempDir
-    lateinit var casa: Path
-
-    private val documenti: Path by lazy { casa.resolve("Documents/snastro") }
+class EliminaSoloContenutiSnastroTest : BancoS1() {
     private val skatefest: Path by lazy { documenti.resolve("skatefest.snastro") }
-
-    private val registro = RegistroProgettiFinta()
-    private val dispatcher = StandardTestDispatcher()
-    private val scopePresenter = CoroutineScope(SupervisorJob() + dispatcher)
-
-    @AfterEach
-    fun chiudi() = scopePresenter.cancel()
 
     @Test
     fun `EX-9 eliminare skatefest cancella solo cio che ha creato snastro, appunti pdf resta e lo si dice`() =
@@ -100,26 +75,9 @@ class EliminaSoloContenutiSnastroTest {
             assertNull(dati(presenter).conferma)
         }
 
-    private fun TestScope.elimina(presenter: ProgettiPresenter, nome: String) {
-        presenter.azioni.chiediElimina(dati(presenter).progetti.single { it.nome == nome })
-        presenter.azioni.confermaElimina(nome)
-        advanceUntilIdle()
-    }
-
     /** "skatefest" and "mangu 2" on disk and in the registry, closed, then the list loaded by the presenter. */
     private fun TestScope.listaConSkatefestEMangu(sessione: SessioneProgettoImpl): ProgettiPresenter {
-        for (nome in listOf("skatefest", "mangu 2")) {
-            val creato = sessione.crea(documenti.toString(), nome).atteso()
-            sessione.chiudi()
-            attendiFinche(timeout = 10.seconds, messaggio = "$nome registrato") {
-                registro.elenco().any { it.percorso == creato.percorso }
-            }
-        }
-        return ProgettiPresenter(scopePresenter, dispatcher, elencoProgetti(registro), sessione, casa.toString())
-            .also { advanceUntilIdle() }
+        for (nome in listOf("skatefest", "mangu 2")) creaChiuso(sessione, nome)
+        return lista(sessione)
     }
-
-    private fun dati(presenter: ProgettiPresenter): ProgettiUiStato.Dati = assertIs(presenter.stato.value)
-
-    private fun nomi(presenter: ProgettiPresenter): List<String> = dati(presenter).progetti.map(ProgettoVista::nome)
 }
