@@ -91,3 +91,10 @@ Verdetto: **RESHAPE**. L'utente accetta il ridisegno ("si tutto"):
 - In parallelo, spike: H1 (skatefest: 0 punti e lunghezza), H8–H9 (FTS5).
 - Dopo: **R1 — punti e lunghezza** (percentuale per progetto, personalizzabile per incontro; tetto 10 000);
   **R2 — ricerca per parole** con anteprima e salto al punto.
+
+## Open questions
+Nessuna per R0. Risolte il 2026-10-08 ("ok va bene tutto"):
+- R0-1: progetto chiuso con lavori in coda nel DB → si elimina (EX-11).
+- R0-2: file estranei → si cancellano solo i contenuti creati dall'app, il resto rimane e lo si dice (EX-9).
+- R0-3: "Elimina" nel menu "⋯" della scheda in lista e nel menu dell'intestazione del progetto aperto.
+- R0-4: "non trovato" ricontrollato a ogni apertura della lista; torna normale se la cartella ricompare (EX-12, EX-13).
