@@ -426,6 +426,27 @@ class ProgettiPresenterTest {
         }
 
     @Test
+    fun `CR-7 un guasto nel caricamento dell elenco e registrato con la sua causa e lascia Riprova`() = runTest {
+        val guasto = IOException("registro illeggibile")
+        val registro = object : RegistroProgetti by RegistroProgettiFinta() {
+            override fun elenco(): List<VoceRegistro> = throw guasto
+        }
+
+        lateinit var presenter: ProgettiPresenter
+        val registri = registriLogUi {
+            presenter = presentatore(this, registro = registro)
+            advanceUntilIdle()
+        }
+
+        val registrato = registri.single { it.causatoDa(guasto) }
+        assertEquals(Level.WARNING, registrato.level)
+        assertTrue("elenco" in registrato.message, registrato.message)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, assertIs<ProgettiUiStato.Dati>(presenter.stato.value).erroreElenco)
+        presenter.azioni.riprova()
+        assertEquals(ProgettiUiStato.Caricamento, presenter.stato.value, "Riprova resta raggiungibile dopo il guasto")
+    }
+
+    @Test
     fun `L530d riprova rimostra Caricamento e poi il nuovo esito`() = runTest {
         var lanciaSempre = true
         val registro = object : RegistroProgetti by RegistroProgettiFinta() {

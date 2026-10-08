@@ -19,5 +19,6 @@ Decided: codex (delegated by the user), 2026-10-08.
 
 **Shown by:** the helper `ui/src/main/kotlin/snastro/ui/GuastoNonFatale.kt`; its users
 `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`,
-`ui/src/main/kotlin/snastro/ui/ShellPresenter.kt` (`corri`);
+`ui/src/main/kotlin/snastro/ui/ShellPresenter.kt` (`corri`), and a read at
+`ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt` (`caricaElenco`);
 the test spy on the `snastro.ui` logger `ui/src/test/kotlin/snastro/ui/LogUi.kt` (`registriLogUi`, `causatoDa`).

@@ -1,6 +1,5 @@
 package snastro.ui.progetti
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,6 +10,7 @@ import kotlinx.coroutines.withContext
 import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 
 /**
@@ -40,22 +40,14 @@ class ProgettiPresenter(
         scope.launch { caricaElenco() }
     }
 
+    /** fix-batch-12 #5, L530d: a failed load lands on its own `erroreElenco` (banner + Riprova), never `erroreCrea`;
+     * crea/apri stay usable (empty `progetti`, `inCorso` false). A read, so [nonFataleRegistrato] (ADR 0041 §3). */
     private suspend fun caricaElenco() {
-        try {
-            val progetti = withContext(io) { elenco.progetti() }
-            _stato.value = ProgettiUiStato.Dati(progetti)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            // fix-batch-12 #5: the initial load itself was unguarded — a throwing `elenco.progetti()`
-            // left `_stato` stuck on Caricamento forever, with crea/apri unreachable (M5's own
-            // rationale for RegistrazioniPresenter, applied here). L530d: lands the failure on its OWN
-            // `erroreElenco` (a full-width banner + Riprova, [riprova]) — never `erroreCrea`, which is
-            // a dismissible per-form message for a FAILED `crea`, a different thing. crea/apri stay
-            // usable right away either way (empty `progetti`, `inCorso` false).
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            _stato.value = ProgettiUiStato.Dati(progetti = emptyList(), erroreElenco = MESSAGGIO_ERRORE_GENERICO)
+        val progetti = nonFataleRegistrato("carica l'elenco dei progetti") { withContext(io) { elenco.progetti() } }
+        _stato.value = if (progetti != null) {
+            ProgettiUiStato.Dati(progetti)
+        } else {
+            ProgettiUiStato.Dati(progetti = emptyList(), erroreElenco = MESSAGGIO_ERRORE_GENERICO)
         }
     }
 
