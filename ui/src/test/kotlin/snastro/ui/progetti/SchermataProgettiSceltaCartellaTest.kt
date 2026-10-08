@@ -12,14 +12,6 @@ import snastro.ui.testi.ETICHETTA_CAMBIA_CARTELLA
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 
-private val AZIONI_VUOTE = AzioniProgetti(
-    crea = { _, _ -> },
-    apri = {},
-    chiudiErroreCrea = {},
-    chiudiErroreApri = {},
-    riprova = {},
-)
-
 /**
  * L464d: [SchermataProgetti] only ever asks its injected [SceltaCartella] — never builds its own
  * dialog — and only ever applies the RESULT, never branches on it beyond null-cancelled (own KDoc).

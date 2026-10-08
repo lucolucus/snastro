@@ -6,14 +6,6 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.runDesktopComposeUiTest
 import org.junit.jupiter.api.Test
 
-private val AZIONI_VUOTE = AzioniProgetti(
-    crea = { _, _ -> },
-    apri = {},
-    chiudiErroreCrea = {},
-    chiudiErroreApri = {},
-    riprova = {},
-)
-
 /**
  * fix-batch-12 #4 (ADR 0010): S1's default parent folder for a new project comes from
  * [SchermataProgetti]'s own injected `cartellaGenitorePredefinita` param — never `System.getProperty`

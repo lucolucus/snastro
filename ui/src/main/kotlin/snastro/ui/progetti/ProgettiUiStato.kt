@@ -15,7 +15,8 @@ sealed interface ProgettiUiStato {
      * when set, are dismissible inline messages for the last failed `crea`/`apri` (H1: an error never
      * replaces [progetti] — [AzioniProgetti.chiudiErroreCrea]/[AzioniProgetti.chiudiErroreApri] clear
      * them). [erroreElenco] (L530d), when set, is the INITIAL elenco load's own failure — a distinct
-     * full-width banner with [AzioniProgetti.riprova], never conflated with `erroreCrea`.
+     * full-width banner with [AzioniProgetti.riprova], never conflated with `erroreCrea`. [conferma], when set, is
+     * the open delete confirmation of one project; [erroreElimina] the dismissible message of a failed delete.
      */
     data class Dati(
         val progetti: List<ProgettoVista>,
@@ -23,5 +24,15 @@ sealed interface ProgettiUiStato {
         val erroreCrea: String? = null,
         val erroreApri: String? = null,
         val erroreElenco: String? = null,
+        val conferma: ConfermaEliminazione? = null,
+        val erroreElimina: String? = null,
     ) : ProgettiUiStato
+}
+
+/**
+ * The delete confirmation of [progetto] (R0, EX-2): it can be confirmed only once [nomeDigitato] is exactly the
+ * project's name — same case, nothing more, nothing less.
+ */
+data class ConfermaEliminazione(val progetto: ProgettoVista, val nomeDigitato: String = "") {
+    val confermabile: Boolean get() = nomeDigitato == progetto.nome
 }

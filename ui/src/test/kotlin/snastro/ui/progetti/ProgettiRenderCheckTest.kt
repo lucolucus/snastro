@@ -34,13 +34,6 @@ private const val ALTEZZA_GRANDE_PX = 800
 private const val LARGHEZZA_PICCOLA_PX = 1024
 private const val ALTEZZA_PICCOLA_PX = 640
 
-private val AZIONI_VUOTE = AzioniProgetti(
-    crea = { _, _ -> },
-    apri = {},
-    chiudiErroreCrea = {},
-    chiudiErroreApri = {},
-    riprova = {},
-)
 private const val CARTELLA_GENITORE_DI_PROVA = "/tmp/snastro"
 private val SCELTA_CARTELLA_DI_PROVA = SceltaCartellaFinta()
 private val UN_PROGETTO = ProgettoVista(

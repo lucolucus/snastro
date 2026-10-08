@@ -9,7 +9,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
+import snastro.kernel.poi
 import snastro.progetto.applicazione.letture.ElencoProgetti
+import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.ui.ProgettoAperto
 import snastro.ui.SessioneProgetto
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
@@ -17,7 +19,7 @@ import snastro.ui.testi.messaggioPer
 
 /**
  * State holder of S1 · Progetti (RC-2, thin UI): loads [ElencoProgetti] once and forwards
- * `crea`/`apri` to [SessioneProgetto]. Reapplies the shell's lessons (dev-architecture `#presenter`):
+ * `crea`/`apri`/`elimina` to [SessioneProgetto]. Reapplies the shell's lessons (dev-architecture `#presenter`):
  * an error is a dismissible inline message over the list, never a replacement of it (H1); success is
  * applied from the returned [ProgettoAperto], never left to a collector alone (M1(a) — this presenter
  * has none, but the same "set state from the result" rule keeps `inCorso` from ever getting stuck);
@@ -64,25 +66,56 @@ class ProgettiPresenter(
         scope.launch { caricaElenco() }
     }
 
+    private val senzaErroriDiApertura: (ProgettiUiStato.Dati, ProgettoAperto) -> ProgettiUiStato.Dati =
+        { stato, _ -> stato.copy(erroreCrea = null, erroreApri = null) }
+
     fun crea(cartellaGenitore: String, nome: String) = avvia(
         pulisci = { it.copy(erroreCrea = null) },
         operazione = { sessione.crea(cartellaGenitore, nome) },
+        alSuccesso = senzaErroriDiApertura,
         alFallimento = { stato, messaggio -> stato.copy(erroreCrea = messaggio) },
     )
 
     fun apri(percorso: String) = avvia(
         pulisci = { it.copy(erroreApri = null) },
         operazione = { sessione.apri(percorso) },
+        alSuccesso = senzaErroriDiApertura,
         alFallimento = { stato, messaggio -> stato.copy(erroreApri = messaggio) },
     )
+
+    /** R0 (EX-1/EX-3): opens the delete confirmation of [progetto], with nothing typed yet. */
+    fun chiediElimina(progetto: ProgettoVista) =
+        aggiorna { if (it.inCorso) it else it.copy(conferma = ConfermaEliminazione(progetto), erroreElimina = null) }
+
+    /** R0 (EX-2): the name typed in the open confirmation, if any. */
+    fun digitaNomeElimina(testo: String) =
+        aggiorna { stato -> stato.copy(conferma = stato.conferma?.copy(nomeDigitato = testo)) }
+
+    /** R0 (EX-3): closes the confirmation; nothing is deleted. */
+    fun annullaElimina() = aggiorna { it.copy(conferma = null) }
+
+    /**
+     * R0 (EX-1): deletes the confirmed project, then reloads the list without it — only when the typed name matches
+     * exactly (EX-2: the view's disabled button is not the only guard).
+     */
+    fun confermaElimina() {
+        val conferma = (_stato.value as? ProgettiUiStato.Dati)?.conferma?.takeIf { it.confermabile } ?: return
+        avvia(
+            pulisci = { it.copy(conferma = null, erroreElimina = null) },
+            operazione = { sessione.elimina(conferma.progetto.percorso).poi { Esito.Ok(elenco.progetti()) } },
+            alSuccesso = { stato, progetti -> stato.copy(progetti = progetti) },
+            alFallimento = { stato, messaggio -> stato.copy(erroreElimina = messaggio) },
+        )
+    }
 
     // M3: guards a double crea/apri while one is already in flight. `inCorso` is set synchronously
     // here, before `scope.launch` — unlike ShellPresenter (where `_stato` becomes Caricamento only
     // inside the launched body, needing an extra Job flag), a second synchronous call already reads
     // the updated `_stato.value` and returns immediately: no separate Job guard is needed.
-    private fun avvia(
+    private fun <T> avvia(
         pulisci: (ProgettiUiStato.Dati) -> ProgettiUiStato.Dati,
-        operazione: suspend () -> Esito<ProgettoAperto>,
+        operazione: suspend () -> Esito<T>,
+        alSuccesso: (ProgettiUiStato.Dati, T) -> ProgettiUiStato.Dati,
         alFallimento: (ProgettiUiStato.Dati, String) -> ProgettiUiStato.Dati,
     ) {
         val attuale = _stato.value
@@ -91,7 +124,7 @@ class ProgettiPresenter(
         scope.launch {
             try {
                 when (val esito = withContext(io) { operazione() }) {
-                    is Esito.Ok -> aggiorna { it.copy(erroreCrea = null, erroreApri = null) }
+                    is Esito.Ok -> aggiorna { alSuccesso(it, esito.valore) }
                     is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore)) }
                 }
             } catch (e: CancellationException) {
@@ -123,11 +156,19 @@ class ProgettiPresenter(
     /** H1: dismisses the current `erroreApri` inline message, if any. */
     fun chiudiErroreApri() = aggiorna { it.copy(erroreApri = null) }
 
+    /** H1: dismisses the current `erroreElimina` inline message, if any. */
+    fun chiudiErroreElimina() = aggiorna { it.copy(erroreElimina = null) }
+
     val azioni: AzioniProgetti = AzioniProgetti(
         crea = ::crea,
         apri = ::apri,
         chiudiErroreCrea = ::chiudiErroreCrea,
         chiudiErroreApri = ::chiudiErroreApri,
         riprova = ::riprova,
+        chiediElimina = ::chiediElimina,
+        digitaNomeElimina = ::digitaNomeElimina,
+        annullaElimina = ::annullaElimina,
+        confermaElimina = ::confermaElimina,
+        chiudiErroreElimina = ::chiudiErroreElimina,
     )
 }

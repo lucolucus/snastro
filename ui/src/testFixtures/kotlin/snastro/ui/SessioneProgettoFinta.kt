@@ -10,7 +10,7 @@ import snastro.kernel.ProgettoId
 
 /**
  * Fake [SessioneProgetto] (RC-9): `crea` mints a Progetto keyed by its own `percorso`; `apri` reopens
- * one previously created under that same `percorso` — a round trip, no filesystem.
+ * one previously created under that same `percorso` — a round trip, no filesystem; `elimina` forgets it.
  */
 class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreIdFinto()) : SessioneProgetto {
     private val _corrente = MutableStateFlow<ProgettoAperto?>(null)
@@ -31,6 +31,11 @@ class SessioneProgettoFinta(private val generatoreId: GeneratoreId = GeneratoreI
         val progetto = progetti[percorso] ?: return Esito.Errore(ErroreSessione.CartellaNonValida)
         _corrente.value = progetto
         return Esito.Ok(progetto)
+    }
+
+    override fun elimina(percorso: String): Esito<Unit> {
+        progetti.remove(percorso)
+        return Esito.Ok(Unit)
     }
 
     override fun chiudi() {

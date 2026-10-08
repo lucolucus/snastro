@@ -48,6 +48,8 @@ private class SessioneProgettoFissa(
     override fun apri(percorso: String): Esito<ProgettoAperto> =
         risultatoApri ?: error("apri non atteso in questo test")
 
+    override fun elimina(percorso: String): Esito<Unit> = error("elimina non atteso in questo test")
+
     override fun chiudi() = Unit
 }
 

@@ -40,6 +40,8 @@ private class SessioneProgettoCheEsplode(private val eccezione: () -> Throwable)
 
     override fun apri(percorso: String): Esito<ProgettoAperto> = throw eccezione()
 
+    override fun elimina(percorso: String): Esito<Unit> = throw eccezione()
+
     override fun chiudi() = Unit
 }
 
@@ -89,6 +91,8 @@ private class SessioneProgettoConCorrenteChePassaAvanti(
     }
 
     override fun apri(percorso: String): Esito<ProgettoAperto> = crea("", "")
+
+    override fun elimina(percorso: String): Esito<Unit> = error("elimina non atteso in questo test")
 
     override fun chiudi() {
         _corrente.value = null

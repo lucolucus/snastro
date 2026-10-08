@@ -18,14 +18,6 @@ import snastro.progetto.applicazione.letture.ProgettoVista
 import java.time.Instant
 import kotlin.test.assertEquals
 
-private val AZIONI_VUOTE = AzioniProgetti(
-    crea = { _, _ -> },
-    apri = {},
-    chiudiErroreCrea = {},
-    chiudiErroreApri = {},
-    riprova = {},
-)
-
 private val PROGETTO = ProgettoVista(
     progettoId = ProgettoId("id-1"),
     nome = "Consiglio comunale",

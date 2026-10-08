@@ -189,6 +189,17 @@ internal class SessioneProgettoImpl(
         return apriGrafo(cartella, lockCartella, porte, { seams.chiudiDatabase(db) }, progetto.id, progetto.nome.valore)
     }
 
+    /**
+     * R0 (EX-1): deletes the closed project's folder, then drops it from [registro] — on the registry's own thread,
+     * after every write already queued there (`crea`'s `registra`, `chiudi`'s `aggiorna`), and waited for: the list
+     * read right after must not show it any more.
+     */
+    override fun elimina(percorso: String): Esito<Unit> {
+        cancellaCartella(Path.of(percorso))
+        eseguitoreRegistro.submit { registro.rimuovi(percorso) }.get()
+        return Esito.Ok(Unit)
+    }
+
     override fun chiudi() {
         val sessione = aperta ?: return
         aperta = null
