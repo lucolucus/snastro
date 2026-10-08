@@ -34,3 +34,9 @@
 - `MESSAGGIO_CONFERMA_ELIMINA_PROGETTO` now promises only snastro's contents ("…Gli altri file nella cartella restano."), pinned by `TestiProgettiTest` (EX-9).
 - `ProgettiPresenter(…, cartellaUtente: String)` has no default; `EliminaProgettoDallaListaTest` (EX-1..3) passes `cartellaUtente = ""`. The private test builder `presentatore(…)` in `ProgettiPresenterTest` keeps `cartellaUtente = ""` as a fixture default and passes it explicitly to the constructor.
 - Seen once: `./gradlew check` failed with `adr-0034-tabelle-incontro-confinate: timed out after 60s` (`ControlliAdrTest.kt:157`) during a 10m41s run; `./gradlew :architettura-test:test --rerun-tasks` passed right after, and `mm gate` was green. Treat it as a load-dependent timeout, not a defect (assumption).
+
+## 03-elimina-con-lock-e-coda — 2026-10-08
+- `SessioneProgettoImpl.elimina` takes the project's `.lock` (same `acquisisciLock` as `apri`) before touching anything and holds it through the registry removal and the deletion (`eliminaSeNonAperto`); held by another instance → new `ErroreSessione.ProgettoApertoAltrove` ("Questo progetto è aperto in un'altra finestra.", no "già": `ProgettoGiaAperto` stays the `apri` text). The `.lock` file is deleted while held, then released.
+- EX-11 was already green before any change (elimina never opens the DB, so a queued `in_attesa` riassunto goes with the folder); its acceptance test seeds a real `incontro` + `riassunto` through `IncontroRepositorySql`/`RiassuntoRepositorySql`.
+- EX-6's other window is a second `SessioneProgettoImpl` in the test JVM that `apri`s the project; asserting on an open project's folder must skip `progetto.db-wal/-shm` (a `Files.walk` failed with `NoSuchFileException …/progetto.db-shm`).
+- Slice 04 (elimina of the project open in THIS instance): today `elimina` on it returns `ProgettoApertoAltrove` too (the same-JVM `OverlappingFileLockException` path), so the open-project flow must `chiudi` first, then `elimina`.
