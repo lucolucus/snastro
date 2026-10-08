@@ -41,10 +41,11 @@ row guard, the in-flight flag, `azzeraAvviso`, the launch, the logged generic `e
 and the reset in `finally`; callers supply the command and the success/refusal handling, preserving per-row concurrency
 and the separate import guard.
 
-**S2 row runner, as built** (slice 18, decided: codex on delegation): `StatoS2.comandoDiRiga(id, operazione, comando,
-suEsito, suGuasto)`; callers keep `withContext(io) { comandoConfermato(…) }` inside `comando` and pass one `suEsito` for
-Ok and refusal (the presenter's plain commands share `concludiRiga`) — `ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoEliminaRiga.kt`.
+**S2 row runner** (2026-10-09, decided: codex on delegation; slice 33 target): `StatoS2.comandoDiRiga` in
+`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt` owns `withContext(io) { comandoConfermato(operazione) { comando() } }`,
+following `suRiga` in `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt`. Callers pass the plain port call
+and name the operation once. Run `suEsito` on the presenter dispatcher, outside both wrappers. Preserve `suGuasto`,
+row/import guards, logging, cancellation/Error propagation and `finally` cleanup.
 
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): the screen keeps one state and one
 `azioni` while each flow gets its own small home. A lambda in `azioni` or a forwarding member only hides the size.

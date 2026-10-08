@@ -1,7 +1,7 @@
 # Non-fatal faults
 
 **Rule.** At presenter edges a fault is logged with its operation and cause at `WARNING` (a `java.util.logging` logger
-under `snastro.ui`), then M1(b)'s generic message is shown. Never discard a failure with
+under `snastro.ui`), then a message is shown as specified below. Never discard a failure with
 `catturaNonFatale { … }.getOrNull()` unlogged; cancellation and fatal errors propagate. Two helpers (ADR 0041), one
 shared log line:
 - **committing blocks** (`comandoConfermato`, imports, a committing step inside a flow) use
@@ -11,9 +11,12 @@ shared log line:
 Each caller names its operation once; a screen's commands share one runner (S2's row runner on `StatoS2`, S3's
 `lanciaComando`, S4's `suRiga`), resetting their guard in `finally`, never a try/catch per command.
 
-**Message at every edge** (2026-10-09, decided: codex on delegation): a handled fault at a non-committing edge — a
-start, a playback, a background read — also shows the generic message, keeping its follow-up (re-read, switch of
-Parte, fallback). Code still missing it is debt in `.mismagent/design-notes.md`, not an exemption.
+**Message at every edge** (2026-10-09, decided: codex on delegation; amended the same day, reversing the first
+reading): a visible error specific to the same fault satisfies the message requirement; do not add a generic duplicate.
+Examples: load errors in `ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt` and
+`ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt`; card/Proposta errors in
+`ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`. Silent fallbacks still owe M1(b)'s generic message;
+preserve follow-up, logging and propagation.
 
 **Why.** CR-7 in `.mismagent/code-rules.md`: a swallowed cause leaves no trace to debug a user's report. One helper
 keeps the log format and the message in one place, within CR-19b's frozen catch-all counts (release review R0-1).

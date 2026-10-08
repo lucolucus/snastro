@@ -7,6 +7,10 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-09 — conventions (decided: codex, delegated by the user): non-fatal-faults — an edge that already shows an
+  error specific to its fault needs no extra generic message (reverses the morning's reading; avoids two messages for
+  one fault); presenter-split — S2's row runner will own `withContext(io)` and `comandoConfermato` like S4's `suRiga`
+  (slice 33).
 - 2026-10-09 — design pass (R1, after refactors 26–30): ADR 0041's amendment in `.mismagent/architecture.md` now
   says it has landed in every `:ui` presenter. No `:ui` file is left in CR-19b's frozen list. What is still open is
   the user-facing half of "Message at every edge": some edges fall back silently. No decision changed.
