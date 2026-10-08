@@ -126,3 +126,9 @@
 - `StatoS2(stato, scope, ricarica).comandoDiRiga(id, operazione, comando, suEsito, suGuasto = { it })`: guard, in-flight, `azzeraAvviso`, launch, logged generic `erroreRiga`, L269 `finally`. Handlers no longer reset `operazioneInCorso` (the runner does). One `suEsito` for Ok+refusal keeps it at 5 params (detekt LongParameterList). `FlussoEliminaRiga` lost its `scope`.
 - CR-19b: `FlussoEliminaRiga.kt` entry removed, `RegistrazioniPresenter.kt` 6 -> 4. New test CR-7 in `RegistrazioniRinominaTest`; ui 689/689, avvio 409, supporto 23, architettura 459, all reran; `mm gate` and `mm check --base` exit 0.
 - Slice 19 (S2 reads/import): `FlussoImporta` and `avviaElaborazioniIncontro` (commits through `catturaNonFatale`, D-0065 residuo) go onto `eccezioneRegistrata`; design note on the name written twice per row command.
+
+## 19-s2-bordi-registrati — 2026-10-08
+- `avviaElaborazioniIncontro` and `FlussoImporta.invia` commit through `eccezioneRegistrata` (Error propagates, Incontro released in `finally`); `carica`, `conteggiIdentificazione`, `gruppi`, `precompilato`, `riproduci`, `pausa` read through `nonFataleRegistrato`. No raw catch or `catturaNonFatale` left in S2's presenter/flows (`grep -rn "catch (\|catturaNonFatale" ui/src/main/kotlin/snastro/ui/registrazioni/` hits only `SchermataRegistrazioni.kt:1216`, `PercorsoTrascinato.kt:87`).
+- CR-19b entries for `RegistrazioniPresenter.kt` (4) and `FlussoImporta.kt` (1) removed; MED residuo `pre-release.md:291` closed.
+- New tests: L269 'Trascrivi N parti' in `RegistrazioniConsegnaDopoCommitTest` (red before: 0 of 1 Error reached the handler), CR-7 refresh in `RegistrazioniPresenterAggiornamentoTest` (red before: `registri: []`); ui 691/691, avvio 409, `mm gate` and `mm check --base` exit 0.
+- `carica` now catches every non-fatal `Throwable` (was `Exception`), per ADR 0041 §3 for reads. Citation proposal for non-fatal-faults in `conventions-proposals.md`.
