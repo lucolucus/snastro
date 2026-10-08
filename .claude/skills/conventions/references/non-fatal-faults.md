@@ -19,19 +19,4 @@ Parte, fallback). Code still missing it is debt in `.mismagent/design-notes.md`,
 keeps the log format and the message in one place, within CR-19b's frozen catch-all counts (release review R0-1).
 Decided: codex (delegated by the user), 2026-10-08 and 2026-10-09.
 
-**Shown by:** the helpers `ui/src/main/kotlin/snastro/ui/GuastoNonFatale.kt` and
-`supporto/src/main/kotlin/snastro/supporto/CatturaEccezione.kt`; S1 and the shell
-`ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt`,
-`ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`, `ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`; S2
-`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoImporta.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazioni/FlussoIncontro.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`;
-S3 `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazione/SomiglianzaVoci.kt` (`suIo` on `eccezioneRegistrata`: it runs the
-committing `applica`); S4 `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt` (`suRiga`: `eccezioneRegistrata`
-wrapping `comandoConfermato`; `carica`/`riproduci`: `nonFataleRegistrato`); the Riassunto tab `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`. Tests: the
-logger spy `ui/src/test/kotlin/snastro/ui/LogUi.kt` (`registriLogUi`, `causatoDa`);
-`ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniConsegnaDopoCommitTest.kt` (L269),
-`ui/src/test/kotlin/snastro/ui/registrazione/StatoVociGuastiTest.kt` (CR-7, L269),
-`ui/src/test/kotlin/snastro/ui/registrazione/RegistrazionePresenterGuastiTest.kt`,
-`ui/src/test/kotlin/snastro/ui/riassunto/RiassuntoPresenterGuastiTest.kt`,
-`ui/src/test/kotlin/snastro/ui/parlanti/ParlantiPresenterGuastiTest.kt` (CR-7).
+**Shown by:** helpers `ui/src/main/kotlin/snastro/ui/GuastoNonFatale.kt`, `supporto/src/main/kotlin/snastro/supporto/CatturaEccezione.kt`; adoption in `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt`, `ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`, `ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoImporta.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoIncontro.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/SomiglianzaVoci.kt`, `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt`, `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`, `ui/src/main/kotlin/snastro/ui/impostazioni/ImpostazioniPresenter.kt`, `ui/src/main/kotlin/snastro/ui/impostazioni/LunghezzaRiassuntoPresenter.kt`, `ui/src/main/kotlin/snastro/ui/modelli/ModelliPresenter.kt`, `ui/src/main/kotlin/snastro/ui/lettore/LettorePresenter.kt` (`avvia`). Lettore’s port-thrown `CancellationException` branch stays outside the helper; genuine job cancellation propagates. Tests: `ui/src/test/kotlin/snastro/ui/LogUi.kt`, `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniConsegnaDopoCommitTest.kt`, `ui/src/test/kotlin/snastro/ui/registrazione/StatoVociGuastiTest.kt`, `ui/src/test/kotlin/snastro/ui/registrazione/RegistrazionePresenterGuastiTest.kt`, `ui/src/test/kotlin/snastro/ui/riassunto/RiassuntoPresenterGuastiTest.kt`, `ui/src/test/kotlin/snastro/ui/parlanti/ParlantiPresenterGuastiTest.kt`, `ui/src/test/kotlin/snastro/ui/impostazioni/ImpostazioniPresenterTest.kt`, `ui/src/test/kotlin/snastro/ui/impostazioni/LunghezzaRiassuntoPresenterTest.kt`, `ui/src/test/kotlin/snastro/ui/modelli/ModelliPresenterTest.kt`, `ui/src/test/kotlin/snastro/ui/lettore/LettorePresenterTest.kt`.
