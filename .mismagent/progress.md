@@ -58,3 +58,8 @@
 - Characterization: `ui/src/test/kotlin/snastro/ui/stile/MessaggioInlineErroreTest.kt` (text shown, `<tag>-chiudi` click calls `onChiudi`), green before and after the move; render checks unchanged.
 - `registrazione/SchermataRegistrazione.kt` keeps its own private 2-arg `MessaggioInlineErrore` (different style/label); it does not import the shared one (explicit imports only), so no rename was needed.
 - Detekt `ImportOrdering` is strict lexicographic (`MenuAltreAzioni` before `MessaggioInlineErrore`): seen red in `./gradlew :ui:detekt` on the first gate run.
+
+## 11-menu-altre-azioni-parlanti — 2026-10-08
+- `MenuAltreAzioniParlante` (`parlanti/SchermataParlanti.kt`) now calls the shared `snastro.ui.stile.MenuAltreAzioni` (tag `parlanti-altre-azioni-<id>`, `abilitato = !riga.operazioneInCorso`); its own button, `DropdownMenu`, `FocusRequester` and expanded state are gone, items call `chiudi` before their action.
+- No new test: `ParlantiVistaTest` (More button, focus return) and `ParlantiRenderCheckTest` green unchanged; `mm gate` green (exit 0).
+- All four "⋯" menus with focus return (progetti, registrazioni riga/incontro, parlanti) now go through `MenuAltreAzioni`; only `MenuAltreAzioniCarta` (registrazione) stays separate by design (design-notes.md).
