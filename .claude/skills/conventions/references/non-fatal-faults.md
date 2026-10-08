@@ -22,4 +22,8 @@ Decided: codex (delegated by the user), 2026-10-08.
 `ui/src/main/kotlin/snastro/ui/ShellPresenter.kt` (`corri`);
 a read on `nonFataleRegistrato` (ADR 0041 §3): `ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt` (`caricaElenco`), tested in
 `ui/src/test/kotlin/snastro/ui/progetti/ProgettiPresenterTest.kt`;
+the committing-block helper `eccezioneRegistrata` (same private `registrato` log line) over
+`supporto/src/main/kotlin/snastro/supporto/CatturaEccezione.kt`, used by S2's row runner
+`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt` (`comandoDiRiga`), tested in
+`ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniRinominaTest.kt` (CR-7);
 the test spy on the `snastro.ui` logger `ui/src/test/kotlin/snastro/ui/LogUi.kt` (`registriLogUi`, `causatoDa`).
