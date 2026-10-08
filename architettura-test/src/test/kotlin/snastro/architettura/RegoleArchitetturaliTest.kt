@@ -714,10 +714,6 @@ class RegoleArchitetturaliTest {
         "persistenza/src/main/kotlin/snastro/persistenza/UnitaDiLavoroSql.kt" to 4,
         "trascrizione/applicazione/src/main/kotlin/snastro/trascrizione/applicazione/comandi/" +
             "EseguiProssimaElaborazioneServizio.kt" to 3,
-        "ui/src/main/kotlin/snastro/ui/impostazioni/ImpostazioniPresenter.kt" to 2,
-        "ui/src/main/kotlin/snastro/ui/impostazioni/LunghezzaRiassuntoPresenter.kt" to 2,
-        "ui/src/main/kotlin/snastro/ui/lettore/LettorePresenter.kt" to 1,
-        "ui/src/main/kotlin/snastro/ui/modelli/ModelliPresenter.kt" to 1,
     )
 
     /** Frozen (CR-19c): the app root scope and S3's scope handed to [snastro.supporto.figlioDi]. Only goes down. */

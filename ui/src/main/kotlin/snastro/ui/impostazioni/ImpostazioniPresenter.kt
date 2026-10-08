@@ -1,6 +1,5 @@
 package snastro.ui.impostazioni
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,6 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI
 
 /**
@@ -49,29 +49,19 @@ class ImpostazioniPresenter(
     private fun salva(nuove: Preferenze) {
         if (nuove == _preferenzeCorrenti.value) return
         scope.launch {
-            try {
-                withContext(io) { preferenze.salva(nuove) }
+            // An IO fault on save becomes one plain message; the shown values stay the last saved ones.
+            if (nonFataleRegistrato("salva preferenze") { withContext(io) { preferenze.salva(nuove) } } == null) {
+                _stato.value = _stato.value.copy(errore = MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI)
+            } else {
                 _preferenzeCorrenti.value = nuove
                 _stato.value = statoDa(nuove).copy(sezione = _stato.value.sezione)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                // An IO fault on save becomes one plain message; the shown values stay the last saved ones.
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                _stato.value = _stato.value.copy(errore = MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI)
             }
         }
     }
 
-    private fun leggiSenzaErrori(): Preferenze = try {
-        preferenze.leggi()
-    } catch (
-        // The port's contract is "never fails"; a broken adapter still must not stop the app from starting.
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-    ) {
-        Preferenze()
-    }
+    // The port's contract is "never fails"; a broken adapter still must not stop the app from starting.
+    private fun leggiSenzaErrori(): Preferenze =
+        nonFataleRegistrato("leggi preferenze") { preferenze.leggi() } ?: Preferenze()
 
     private fun statoDa(p: Preferenze) = ImpostazioniUiStato(
         tema = p.tema,

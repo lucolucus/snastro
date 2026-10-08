@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.EstrattoRef
 import snastro.kernel.RegistrazioneId
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE
 
@@ -78,43 +79,45 @@ class LettorePresenter(
             var esito: LettoreUiStato? = null
             var nuovoIdAtteso: RegistrazioneId? = null
             try {
-                if (!withContext(io) { lettore.disponibile(id) }) { // LOW-1: off the UI thread
-                    // MED-2: a previous source may still be playing — don't strand it with no pause control.
-                    withContext(io) { lettore.pausa() }
-                    esito = LettoreUiStato.NonDisponibile(MESSAGGIO_SORGENTE_NON_DISPONIBILE)
-                } else {
-                    nuovoIdAtteso = id
-                    withContext(io) { comando() }
-                    // MED-1: `lettore.stato` is a StateFlow — it never re-emits a value equal to the one it
-                    // already holds, so an identical repeated request would otherwise never resolve and the
-                    // collector above would never fire for it.
-                    val s = lettore.stato.value
-                    if (s.registrazioneId == id) esito = LettoreUiStato.Pronto(s.posizioneMs, s.inRiproduzione)
-                    // else: left unresolved here on purpose — the `init` collector resolves it once
-                    // `lettore.stato` reports this id, the ordinary asynchronous-player path.
+                // HIGH-2: `disponibile`/`riproduciDa`/`riproduciEstratto`/`pausa` may throw (e.g.
+                // LineUnavailableException, IOException) — logged and mapped to the one fixed message rather than
+                // leaving the bar stuck on Caricamento or letting the fault escape `scope.launch` and take the
+                // `stato` collector down with it (same rationale as ShellPresenter/ProgettiPresenter).
+                val avviata = nonFataleRegistrato("riproduci $id") {
+                    if (!withContext(io) { lettore.disponibile(id) }) { // LOW-1: off the UI thread
+                        // MED-2: a previous source may still be playing — don't strand it with no pause control.
+                        withContext(io) { lettore.pausa() }
+                        esito = LettoreUiStato.NonDisponibile(MESSAGGIO_SORGENTE_NON_DISPONIBILE)
+                    } else {
+                        nuovoIdAtteso = id
+                        withContext(io) { comando() }
+                        // MED-1: `lettore.stato` is a StateFlow — it never re-emits a value equal to the one it
+                        // already holds, so an identical repeated request would otherwise never resolve and the
+                        // collector above would never fire for it.
+                        val s = lettore.stato.value
+                        if (s.registrazioneId == id) esito = LettoreUiStato.Pronto(s.posizioneMs, s.inRiproduzione)
+                        // else: left unresolved here on purpose — the `init` collector resolves it once
+                        // `lettore.stato` reports this id, the ordinary asynchronous-player path.
+                    }
+                }
+                if (avviata == null) {
+                    nuovoIdAtteso = null
+                    // L471d: a transient port fault is NOT "the source is unavailable" — `Errore` keeps the
+                    // play control enabled so the user can just retry, instead of `NonDisponibile`'s disabled
+                    // state (which would also block a retry of a fault that may well not repeat).
+                    esito = LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
                 }
             } catch (
                 // fix-batch-12 #7: `ensureActive()` rethrows exactly when THIS job is really
                 // cancelled (the normal path, left alone below) — a `CancellationException` thrown
                 // by the port itself while the job is still active is not a real cancellation and
                 // must not leave `_stato` stuck on Caricamento (nothing else would ever resolve it).
+                // `nonFataleRegistrato` rethrows it, so it reaches this branch unchanged.
                 @Suppress("SwallowedException") e: CancellationException,
             ) {
                 ensureActive()
                 nuovoIdAtteso = null
-                // L471d: a transient port fault is NOT "the source is unavailable" — `Errore` keeps the
-                // play control enabled so the user can just retry, instead of `NonDisponibile`'s disabled
-                // state (which would also block a retry of a fault that may well not repeat).
-                esito = LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
-            } catch (
-                // HIGH-2: `disponibile`/`riproduciDa`/`riproduciEstratto`/`pausa` may throw (e.g.
-                // LineUnavailableException, IOException) — mapped to the one fixed message rather than
-                // leaving the bar stuck on Caricamento or letting the fault escape `scope.launch` and take
-                // the `stato` collector down with it (same rationale as ShellPresenter/ProgettiPresenter).
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                nuovoIdAtteso = null
-                // L471d: see the CancellationException branch above — same distinct, retry-enabled state.
+                // L471d: see the fault branch above — same distinct, retry-enabled state.
                 esito = LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
             } finally {
                 // HIGH-1/HIGH-2: only the still-current request may touch shared state — a superseded one

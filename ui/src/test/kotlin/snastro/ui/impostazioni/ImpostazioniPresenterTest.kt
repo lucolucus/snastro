@@ -5,8 +5,11 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.ui.causatoDa
+import snastro.ui.registriLogUi
 import snastro.ui.testi.MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI
 import java.io.IOException
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -14,8 +17,9 @@ import kotlin.test.assertTrue
 
 private const val PREDEFINITA = "/Users/io/Documents/snastro"
 
-/** In-memory [PreferenzeApp]; [guasta] makes every `salva` fail as an IO fault would. */
+/** In-memory [PreferenzeApp]; [guasta] makes every `salva` throw [guasto], as an IO fault would. */
 private class PreferenzeFinte(var salvate: Preferenze = Preferenze(), var guasta: Boolean = false) : PreferenzeApp {
+    val guasto = IOException("disco pieno")
     var salvataggi = 0
         private set
 
@@ -23,7 +27,7 @@ private class PreferenzeFinte(var salvate: Preferenze = Preferenze(), var guasta
 
     override fun salva(preferenze: Preferenze) {
         salvataggi++
-        if (guasta) throw IOException("disco pieno")
+        if (guasta) throw guasto
         salvate = preferenze
     }
 }
@@ -111,4 +115,35 @@ class ImpostazioniPresenterTest {
 
         assertEquals(SezioneImpostazioni.MODELLI, p.stato.value.sezione)
     }
+
+    @Test
+    fun `CR-7 un salvataggio fallito e registrato con la sua causa`() = runTest {
+        val preferenze = PreferenzeFinte(guasta = true)
+        val p = presenter(preferenze)
+
+        val registri = registriLogUi {
+            p.azioni.cambiaTema(TemaApp.SCURO)
+            advanceUntilIdle()
+        }
+
+        assertEquals(Level.WARNING, registri.single { it.causatoDa(preferenze.guasto) }.level)
+        assertEquals(MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI, p.stato.value.errore)
+    }
+
+    @Test
+    fun `CR-7 una lettura che lancia e registrata con la sua causa e si parte dalle preferenze predefinite`() =
+        runTest {
+            val guasto = IllegalStateException("file preferenze illeggibile")
+            val rotte = object : PreferenzeApp {
+                override fun leggi(): Preferenze = throw guasto
+                override fun salva(preferenze: Preferenze) = Unit
+            }
+
+            lateinit var p: ImpostazioniPresenter
+            val registri = registriLogUi { p = presenter(rotte) }
+
+            assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
+            assertEquals(Preferenze(), p.preferenzeCorrenti.value)
+            assertEquals(PREDEFINITA, p.stato.value.cartellaProgetti)
+        }
 }

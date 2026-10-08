@@ -17,11 +17,14 @@ import snastro.kernel.IntervalloMs
 import snastro.kernel.RegistrazioneId
 import snastro.supporto.test.attendiFinche
 import snastro.supporto.test.pausaInTempoReale
+import snastro.ui.causatoDa
+import snastro.ui.registriLogUi
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_SORGENTE_NON_DISPONIBILE
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -231,6 +234,20 @@ class LettorePresenterTest {
             val dopo = assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
             assertEquals(0, dopo.posizioneMs)
         }
+
+    @Test
+    fun `CR-7 una eccezione del lettore e registrata con la sua causa`() = runTest {
+        val guasto = IllegalStateException("linea audio non disponibile")
+        val presenter = presentatore(this, LettoreAudioCheEsplode(eccezione = { guasto }))
+
+        val registri = registriLogUi {
+            presenter.riproduci(REGISTRAZIONE_ID, 0)
+            advanceUntilIdle()
+        }
+
+        assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
+        assertEquals(LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+    }
 
     @Test
     fun `fix-batch-12 7 una CancellationException del lettore mentre il job e attivo diventa un errore generico`() =

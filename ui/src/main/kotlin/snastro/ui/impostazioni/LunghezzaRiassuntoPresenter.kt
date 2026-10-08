@@ -1,6 +1,5 @@
 package snastro.ui.impostazioni
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -10,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
 import snastro.sintesi.applicazione.letture.ImpostazioniSintesiVista
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.erroreLunghezzaMassima
 import snastro.ui.testi.messaggioPer
@@ -34,20 +34,16 @@ class LunghezzaRiassuntoPresenter(
     }
 
     private suspend fun carica() {
-        _stato.value = try {
-            val vista = withContext(io) { leggi() }
+        val vista = nonFataleRegistrato("leggi impostazioni sintesi") { withContext(io) { leggi() } }
+        _stato.value = if (vista == null) {
+            LunghezzaRiassuntoUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
+        } else {
             LunghezzaRiassuntoUiStato.Dati(
                 testo = vista.lunghezzaMassimaParole.toString(),
                 salvata = vista.lunghezzaMassimaParole,
                 minimo = vista.minimo,
                 massimo = vista.massimo,
             )
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            LunghezzaRiassuntoUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
         }
     }
 
@@ -70,18 +66,14 @@ class LunghezzaRiassuntoPresenter(
     private fun avviaModifica(parole: Int) {
         scope.launch {
             try {
-                when (val esito = withContext(io) { modifica(parole) }) {
+                val esito = nonFataleRegistrato("modifica lunghezza riassunto") { withContext(io) { modifica(parole) } }
+                when (esito) {
                     is Esito.Ok -> aggiorna {
                         it.copy(testo = parole.toString(), salvata = parole, conferma = true)
                     }
                     is Esito.Errore -> aggiorna { it.copy(errore = messaggioPer(esito.errore)) }
+                    null -> aggiorna { it.copy(errore = MESSAGGIO_ERRORE_GENERICO) }
                 }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                aggiorna { it.copy(errore = MESSAGGIO_ERRORE_GENERICO) }
             } finally {
                 aggiorna { it.copy(inCorso = false) }
             }

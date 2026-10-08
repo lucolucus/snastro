@@ -9,8 +9,11 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.ui.causatoDa
+import snastro.ui.registriLogUi
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -20,10 +23,13 @@ import kotlin.test.assertNull
  * [ServizioModelli] whose `scarica` throws instead of updating `stato` — a hand-written fake
  * (RC-9/CR-17), not a MockK stub, mirroring `LettorePresenterTest`'s `LettoreAudioCheEsplode`.
  */
-private class ServizioModelliCheEsplode(iniziale: StatoModelli) : ServizioModelli {
+private class ServizioModelliCheEsplode(
+    iniziale: StatoModelli,
+    private val guasto: Throwable = IllegalStateException("errore imprevisto"),
+) : ServizioModelli {
     private val _stato = MutableStateFlow(iniziale)
     override val stato: StateFlow<StatoModelli> = _stato.asStateFlow()
-    override fun scarica(): Nothing = error("errore imprevisto")
+    override fun scarica(): Nothing = throw guasto
     override fun licenze(): List<LicenzaVista> = emptyList()
 
     private val _statoFacoltativi = MutableStateFlow<Map<String, StatoModelloFacoltativo>>(emptyMap())
@@ -118,6 +124,21 @@ class ModelliPresenterTest {
         presenter.azioni.scarica()
         advanceUntilIdle()
 
+        assertEquals(ModelliUiStato.Errore(MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+    }
+
+    @Test
+    fun `CR-7 un eccezione imprevista di scarica e registrata con la sua causa`() = runTest {
+        val guasto = IllegalStateException("disco pieno")
+        val fake = ServizioModelliCheEsplode(StatoModelli.Mancanti(numero = 1, totaleByte = 1_000), guasto)
+        val presenter = presentatore(this, fake)
+
+        val registri = registriLogUi {
+            presenter.azioni.scarica()
+            advanceUntilIdle()
+        }
+
+        assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
         assertEquals(ModelliUiStato.Errore(MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
     }
 
