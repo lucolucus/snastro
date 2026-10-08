@@ -12,9 +12,13 @@ checks its controls call the right callbacks (it does not prove the presenter wi
 
 **Wiring and scheduling** (added 2026-10-08, decided: codex on delegation):
 - register the acceptance directory with both `kotlin.srcDir(...)` and `detekt { source.from(...) }` in `avvio/build.gradle.kts`;
-- share one test scheduler between the presenter and `runTest` (`runTest(dispatcher)`), advancing scheduled work explicitly;
-- a separate session lifetime does not need a real dispatcher: do not generalize an implicit `Dispatchers.Default`;
-  use `conScopeDiProva` / `backgroundScope` for test-created scopes, with guaranteed cancellation.
+- use `CoroutineScope(SupervisorJob() + dispatcher)` for the presenter, sharing a `StandardTestDispatcher` with
+  `runTest(dispatcher)`; advance explicitly and cancel in `@AfterEach`;
+- do not use `backgroundScope` for a presenter driven by `advanceUntilIdle()`: advancement stops when only background
+  work remains queued;
+- for the session's own scope, use `conScopeDiProva` when real threads are needed, or `backgroundScope` with explicit
+  scheduler driving; both guarantee cancellation;
+- a separate session lifetime alone does not require a real dispatcher; do not generalize an implicit `Dispatchers.Default`.
 
 **Another window** (added 2026-10-08, decided: codex on delegation):
 - model it with a second real `SessioneProgettoImpl` that `apri`s the project and closes in teardown, with its own
