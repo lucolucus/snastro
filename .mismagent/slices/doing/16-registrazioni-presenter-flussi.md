@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: ef8cb066f646c100d5d6b3499d2bb2e7451ec4c6
 
 `RegistrazioniPresenter` (`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, 1008 lines) has
 21 constructor parameters and `LongParameterList`, `TooManyFunctions` and `LargeClass` suppressed (`:103`). It
