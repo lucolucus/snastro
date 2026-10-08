@@ -17,6 +17,15 @@ share one private single-flight runner owning the synchronous M3 guard, `Caricam
 non-fatal-faults helper, and cleanup in `finally`; never a try/catch runner per operation. The open-project delete
 holder keeps its own guard and flag, coordinated through `occupata()`.
 
+**S2 · Registrazioni** (added 2026-10-08, decided: codex on delegation): S2 holders (`FlussoImporta`, `FlussoEliminaRiga`)
+share one `internal StatoS2` over `_stato`, owning `aggiornaDati`/`aggiornaRiga`, `rigaLibera`, `azzeraAvviso` and
+`ricarica` supplied as `::carica`; preserve S2's per-row concurrency and import guard, with no screen-wide single-flight
+runner; initialize `s2` and the holders before `init`; bind shared-state-only actions directly
+(`chiudiAvviso = s2::azzeraAvviso`). Slice 16 redistributed the two existing CR-19b catch counts without raising the
+total (not a general permission to transfer frozen allowances); keep cancellation/Error propagation and `finally` cleanup.
+Their unlogged causes remain non-fatal-faults/CR-7 debt, not an approved exception
+(`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`).
+
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): the screen keeps one state and one
 `azioni` while each flow gets its own small home. A lambda in `azioni` or a forwarding member only hides the size.
 Other screens keep their own concurrency (e.g. the audio of `RegistrazionePresenter`). Not yet uniform practice:
