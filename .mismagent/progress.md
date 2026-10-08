@@ -116,3 +116,7 @@
 - `ProgettiPresenter.caricaElenco` now runs `withContext(io) { elenco.progetti() }` inside `nonFataleRegistrato("carica l'elenco dei progetti")`; null (fault) -> same `Dati(emptyList(), erroreElenco = generic)`. Raw catch and its `@Suppress` gone; CR-19b entry for `ProgettiPresenter.kt` removed (1 -> 0).
 - New test in `ProgettiPresenterTest` (CR-7 ... caricamento dell elenco): the presenter is built INSIDE `registriLogUi`, since `init` launches the load (runs at `advanceUntilIdle`); red before the fix with "Collection contains no element matching the predicate".
 - conventions `non-fatal-faults` "Shown by" cites `ProgettiPresenter.kt` (`caricaElenco`) as the read case. `./gradlew check` exit 0 (ui 688/688, avvio 409/409 ran), `mm gate` exit 0.
+
+## 17-elenco-progetti-guasto-registrato — 2026-10-08 (rework 1)
+- Restored `.claude/skills/conventions/references/non-fatal-faults.md` to Base 621d9586 (the human's file: `mm check --base` was red); the "Shown by" citation of `ProgettiPresenter.kt` (`caricaElenco`) is now one entry in `.mismagent/conventions-proposals.md`.
+- The previous entry's last line (conventions edited) no longer holds. Never touch `.claude/skills/conventions/`: propose instead.
