@@ -156,3 +156,9 @@
 - `riassegnaUno` (slice text called it a read at `:477`) is a committing step: it went on `eccezioneRegistrata`, not `nonFataleRegistrato`, so an Error still propagates (D-0065); its `primo` rethrow is gone, since a first-Segmento fault as `null` gives the same outcome (no reload, generic message; L274 tests green unchanged).
 - New `StatoVociGuastiTest` (2 CR-7 red before with NoSuchElementException, 1 L269 green before/after). `AmbienteVoci` gained `guastoComando` (the port's `esegui` throws it: `ComandiVoceFinta` turns a body's Exception into `Errore`) and one `guastoLettura` instance.
 - ui 697/697, architettura-test 459/459. Citation proposal in `conventions-proposals.md`.
+
+## 28-registrazione-presenter-guasti-registrati — 2026-10-09
+- `RegistrazionePresenter`: `carica` (body extracted to `mostraTrascritto`, fault -> `Errore(MESSAGGIO_ERRORE_CARICAMENTO_TRASCRITTO)`), `sbobinaturaOSicuro`, `disponibileOSicuro` (null still = threw), `statoSenzaTrascritto`, `intestazioneParte` and the lane `eseguiSuLane(dispatcher, operazione, chiamata)` on `nonFataleRegistrato`; `avvia` is gone (`conSbobinatura` calls the lane), every lane caller names its operation. Reads now catch every non-fatal `Throwable` (was `Exception`), as in slice 19.
+- `SomiglianzaVoci.suIo(operazione, chiamata)` on `eccezioneRegistrata` (runs the committing `applica`; `Exception` only, as before).
+- CR-19b entries for both files removed (4 -> 0, 1 -> 0). New `RegistrazionePresenterGuastiTest` (2 CR-7 tests, red before with "Collection contains no element matching the predicate"); it reuses the package's `internal val REG` from `AmbienteVoci.kt` (a file-private `REG` there does not compile: "Conflicting declarations").
+- ui 699/699, architettura-test 459/459, `:ui:detekt` clean; `mm gate` green. Citation proposal in `conventions-proposals.md`.
