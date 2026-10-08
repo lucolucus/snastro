@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R0
 Examples:
+Base: be4a2b8155960ff55928a3d6e52c6e0c69af7d76
 
 The acceptance-test harness is copied in each of the five test files under
 `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/`: `registro`, `dispatcher`, `scopePresenter` and the
