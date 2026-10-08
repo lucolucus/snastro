@@ -23,16 +23,20 @@ import snastro.ui.ProgettoAperto
 import snastro.ui.ProgettoEliminato
 import snastro.ui.SessioneProgetto
 import snastro.ui.SessioneProgettoFinta
+import snastro.ui.causatoDa
+import snastro.ui.registriLogUi
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.avvisoEliminazione
 import snastro.ui.testi.messaggioPer
 import java.io.IOException
 import java.time.Instant
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private val ORA: Instant = Instant.parse("2026-09-23T10:15:30Z")
 
@@ -232,6 +236,28 @@ class ProgettiPresenterTest {
         val test = prima.single()
         val conferma = ConfermaEliminazione(test.nome, test.percorso, errore = MESSAGGIO_ERRORE_GENERICO)
         assertEquals(ProgettiUiStato.Dati(progetti = prima, conferma = conferma), presenter.stato.value)
+    }
+
+    @Test
+    fun `CR-7 un guasto di un operazione mostra l errore generico ed e registrato con la sua causa`() = runTest {
+        val voce = VoceRegistro(ProgettoId("id-1"), "test", "/p/test.snastro", 0, ORA)
+        val registro = RegistroProgettiFinta().apply { registra(voce) }
+        val guasto = IOException("file bloccato")
+        val sessione = SessioneProgettoFissa(elimina = { throw guasto })
+        val presenter = presentatore(this, registro = registro, sessione = sessione)
+        advanceUntilIdle()
+
+        val registri = registriLogUi {
+            presenter.azioni.chiediElimina(assertIs<ProgettiUiStato.Dati>(presenter.stato.value).progetti.single())
+            presenter.azioni.confermaElimina("test")
+            advanceUntilIdle()
+        }
+
+        val stato = assertIs<ProgettiUiStato.Dati>(presenter.stato.value)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, stato.conferma?.errore)
+        val registrato = registri.single { it.causatoDa(guasto) }
+        assertEquals(Level.WARNING, registrato.level)
+        assertTrue("elimina" in registrato.message, registrato.message)
     }
 
     @Test

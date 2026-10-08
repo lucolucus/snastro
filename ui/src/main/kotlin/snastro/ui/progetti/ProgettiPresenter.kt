@@ -71,6 +71,7 @@ class ProgettiPresenter(
         { stato, _ -> stato.copy(erroreCrea = null, erroreApri = null) }
 
     fun crea(cartellaGenitore: String, nome: String) = corsa.avvia(
+        cosa = "crea il progetto",
         pulisci = { it.copy(erroreCrea = null) },
         operazione = { sessione.crea(cartellaGenitore, nome) },
         alSuccesso = senzaErroriDiApertura,
@@ -78,6 +79,7 @@ class ProgettiPresenter(
     )
 
     fun apri(percorso: String) = corsa.avvia(
+        cosa = "apri il progetto",
         pulisci = { it.copy(erroreApri = null) },
         operazione = { sessione.apri(percorso) },
         alSuccesso = senzaErroriDiApertura,

@@ -6,7 +6,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
-import snastro.supporto.catturaNonFatale
 import snastro.ui.progetti.ConfermaEliminazione
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.avvisoEliminazione
@@ -49,8 +48,11 @@ internal class EliminazioneProgettoAperto(
         stato.value = attuale.copy(conferma = conferma.copy(errore = null), eliminazioneInCorso = true)
         scope.launch {
             try {
-                // M1(b): a non-fatal fault becomes the one fixed message; `catturaNonFatale` rethrows cancellation.
-                val esito = catturaNonFatale { withContext(io) { sessione.elimina(conferma.percorso) } }.getOrNull()
+                // M1(b): a non-fatal fault, logged with its cause, becomes the one fixed message; cancellation
+                // propagates.
+                val esito = nonFataleRegistrato("elimina il progetto aperto") {
+                    withContext(io) { sessione.elimina(conferma.percorso) }
+                }
                 when (esito) {
                     // M1(a): S1 is set from the result, never left to the `corrente` collector alone.
                     // EX-10: what is left on disk is said on S1, as the same delete from the list says it.

@@ -17,6 +17,7 @@ internal class FlussoTogliDallaLista(
 ) {
     /** EX-8: drops [progetto] from the list. */
     fun togli(progetto: ProgettoVista) = corsa.avvia(
+        cosa = "togli il progetto dalla lista",
         pulisci = { it.copy(erroreTogli = null) },
         operazione = {
             sessione.togliDallaLista(progetto.percorso)

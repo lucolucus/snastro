@@ -13,6 +13,7 @@ import snastro.kernel.Esito
 import snastro.ui.progetti.ConfermaEliminazione
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
+import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -145,6 +146,24 @@ class EliminazioneProgettoApertoTest {
 
         assertEquals(MESSAGGIO_ERRORE_GENERICO, shell.conProgetto().conferma?.errore)
     }
+
+    @Test
+    fun `CR-7 un elimina che lancia mostra il messaggio generico ed e registrato con la sua causa`() =
+        runTest(dispatcher) {
+            val guasto = IllegalStateException("registro rotto")
+            val shell = conRiunioneAperta(SessioneCheElimina({ throw guasto }))
+
+            val registri = registriLogUi {
+                shell.azioni.chiediElimina()
+                shell.azioni.confermaElimina("Riunione")
+                advanceUntilIdle()
+            }
+
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, shell.conProgetto().conferma?.errore)
+            val registrato = registri.single { it.causatoDa(guasto) }
+            assertEquals(Level.WARNING, registrato.level)
+            assertTrue("elimina" in registrato.message, registrato.message)
+        }
 
     @Test
     fun `M3 mentre l eliminazione e in corso niente altro parte`() = runTest(dispatcher) {

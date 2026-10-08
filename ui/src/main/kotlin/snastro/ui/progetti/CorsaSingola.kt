@@ -6,15 +6,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
-import snastro.supporto.catturaNonFatale
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.messaggioPer
 
 /**
  * The one single-flight runner of S1 · Progetti over its shared [stato], used by [ProgettiPresenter] and
  * [FlussoEliminazione] alike: one copy of the M3 guard (a second operation while one is in flight is ignored) and of
- * M1(b) (a non-cancellation fault becomes the one fixed generic message). An expected failure's message writes the
- * folders it names `~` from [cartellaUtente] (empty: shown as they are).
+ * M1(b) (a non-cancellation fault becomes the one fixed generic message, logged with its cause under the operation's
+ * name, CR-7). An expected failure's message writes the folders it names `~` from [cartellaUtente] (empty: shown as
+ * they are).
  */
 internal class CorsaSingola(
     private val stato: MutableStateFlow<ProgettiUiStato>,
@@ -36,6 +37,7 @@ internal class CorsaSingola(
     // inside the launched body, needing an extra Job flag), a second synchronous call already reads
     // the updated `stato.value` and returns immediately: no separate Job guard is needed.
     fun <T> avvia(
+        cosa: String,
         pulisci: (ProgettiUiStato.Dati) -> ProgettiUiStato.Dati,
         operazione: suspend () -> Esito<T>,
         alSuccesso: (ProgettiUiStato.Dati, T) -> ProgettiUiStato.Dati,
@@ -46,9 +48,9 @@ internal class CorsaSingola(
         stato.value = pulisci(attuale).copy(inCorso = true)
         scope.launch {
             try {
-                // M1(b): any non-fatal fault of the operation (null here) becomes the one FIXED, plain-Italian
-                // message the user sees, never a stack trace; `catturaNonFatale` rethrows cancellation.
-                when (val esito = catturaNonFatale { withContext(io) { operazione() } }.getOrNull()) {
+                // M1(b): any non-fatal fault of the operation (null here, logged with its cause) becomes the one
+                // FIXED, plain-Italian message the user sees, never a stack trace; cancellation propagates.
+                when (val esito = nonFataleRegistrato(cosa) { withContext(io) { operazione() } }) {
                     is Esito.Ok -> aggiorna { alSuccesso(it, esito.valore) }
                     is Esito.Errore -> aggiorna { alFallimento(it, messaggioPer(esito.errore, cartellaUtente)) }
                     null -> aggiorna { alFallimento(it, MESSAGGIO_ERRORE_GENERICO) }

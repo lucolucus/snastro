@@ -35,6 +35,7 @@ internal class FlussoEliminazione(
         val conferma = corsa.dati?.conferma ?: return
         if (!conferma.confermataDa(nomeDigitato)) return
         corsa.avvia(
+            cosa = "elimina il progetto",
             pulisci = { it.copy(conferma = conferma.copy(errore = null), avvisoEliminazione = null) },
             operazione = {
                 sessione.elimina(conferma.percorso)
