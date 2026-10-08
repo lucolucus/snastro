@@ -10,3 +10,10 @@
 ## 01-elimina-progetto-dalla-lista — 2026-10-08
 - Rework B1: the "⋯" button + menu is now one shared `snastro.ui.stile.MenuAltreAzioni(tag, abilitato, contenuto)` (focus returns to the button on close, L742b); used by the project card and the registrazioni rows.
 - Parlanti and pannello voci still hand-write it (design note); a later slice touching them should switch to the shared one.
+
+## 06-test-accettazione-in-tests-acceptance — 2026-10-08
+- `EliminaProgettoDallaListaTest` (EX-1..3) moved to `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/`, compiled as a test srcDir of `:avvio`, and added to `:avvio`'s plain `detekt` source (`avvio/build.gradle.kts`); `mm gate` green, it finds the markers.
+- Presenter on `StandardTestDispatcher` + `runTest(dispatcher)` + `advanceUntilIdle()` (`@OptIn(ExperimentalCoroutinesApi::class)` as in `CodaCondivisaMultiSorgenteTest`); the real session keeps its own `CoroutineScope(SupervisorJob())`; both cancelled in `@AfterEach`.
+- detekt really scans the new dir: a planted long line was reported at `tests/acceptance/.../EliminaProgettoDallaListaTest.kt:133:1 [MaximumLineLength]`.
+- `mm check` fails when a conventions file cites a missing path: the skill's "Shown by" path was updated with the move.
+- New acceptance tests for other screens go in the same dir (another package needs its own srcDir only if outside `:avvio`).

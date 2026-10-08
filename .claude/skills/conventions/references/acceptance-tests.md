@@ -15,8 +15,8 @@ would need settings, module-map and allowed-edge changes and test fixtures out o
 directory of `:avvio` keeps access to its internal test helpers. Konsist already scans `**/src/**/*.kt`.
 Decided: codex (delegated by the user), 2026-10-08.
 
-**Shown by** (today still in the old place, to be moved by the refactor slice 06):
-`avvio/src/test/kotlin/snastro/avvio/accettazione/EliminaProgettoDallaListaTest.kt`,
+**Shown by** (moved here by the refactor slice 06):
+`tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/EliminaProgettoDallaListaTest.kt`,
 `ui/src/test/kotlin/snastro/ui/progetti/SchermataProgettiEliminaTest.kt`,
 `avvio/src/test/kotlin/snastro/avvio/progetto/ComponentiDiProva.kt`, `avvio/build.gradle.kts`.
 
