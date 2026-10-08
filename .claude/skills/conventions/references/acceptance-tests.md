@@ -33,7 +33,7 @@ checks its controls call the right callbacks (it does not prove the presenter wi
   tolerate their disappearance during traversal.
 
 **Shared harness** (added 2026-10-08, decided: codex on delegation; lands with slice 15): S1/shell acceptance tests share
-one harness beside `ConSessione.kt` — registry, dispatcher, presenter scope cancelled after each test, presenter builders,
+one harness beside `tests/acceptance/src/test/kotlin/snastro/avvio/accettazione/ConSessione.kt` — registry, dispatcher, presenter scope cancelled after each test, presenter builders,
 `dati`, `elimina` — keeping the scheduling rules above; one recursive relative-path `contenuto`, excluding only
 `progetto.db-wal`/`progetto.db-shm` and tolerating their disappearance during traversal; no per-file copies.
 
