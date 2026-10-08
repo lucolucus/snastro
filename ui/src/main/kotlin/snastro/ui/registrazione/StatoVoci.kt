@@ -1,6 +1,5 @@
 package snastro.ui.registrazione
 
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -23,7 +22,6 @@ import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.applicazione.porte.Fascia
-import snastro.supporto.catturaNonFatale
 import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
 import snastro.trascrizione.applicazione.comandi.DividiVoce
 import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
@@ -31,6 +29,8 @@ import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceIncontroRiga
 import snastro.ui.comandoConfermato
+import snastro.ui.eccezioneRegistrata
+import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_PROPOSTA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
@@ -173,12 +173,11 @@ internal class StatoVoci(
     /** AC-405: reads identificazione-voci, parlanti-attivi and proposta-unione, then the Proposte. */
     suspend fun ricaricaParlanti() {
         val generazione = ++generazioneParlanti
-        var nuovi: DatiParlanti? = null
-        var fallito = false
         // AC-I77: the Incontro's Voci are read only when there is another Parte to merge with.
         val incontroDaLeggere = incontroId.takeIf { vista?.parti.orEmpty().size > 1 }
-        try {
-            nuovi = withContext(io) {
+        // AC-405: a failed read (null) shows a message in the cards, the transcript (AC-402) stays usable.
+        val nuovi = nonFataleRegistrato("leggi i parlanti di $registrazioneId") {
+            withContext(io) {
                 DatiParlanti(
                     identificate = sorgenti.identificazione().associateBy { it.voceId },
                     attivi = sorgenti.parlantiAttivi(),
@@ -186,13 +185,6 @@ internal class StatoVoci(
                     vociIncontro = incontroDaLeggere?.let { sorgenti.vociIncontro(it)?.voci }.orEmpty(),
                 )
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (
-            // AC-405: a failed read shows a message in the cards, the transcript (AC-402) stays usable.
-            @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-        ) {
-            fallito = true
         }
         // L665a: a call superseded by a NEWER `ricaricaParlanti()` (already started while this one was
         // still reading) writes nothing at all — not `dati`, not `erroreLettura`, no publish, no Proposta
@@ -202,8 +194,8 @@ internal class StatoVoci(
         // the toolbar all read off it (`nomeDi`, `pannelloDi`) — instead of wiping it to `null` and
         // reverting every label to "Voce n" and every roster-driven control to empty/disabled. The
         // card-level `Errore` (`contenutoDi`) still shows, since `erroreLettura` is unconditional below.
-        if (!fallito) dati = nuovi
-        erroreLettura = fallito
+        if (nuovi != null) dati = nuovi
+        erroreLettura = nuovi == null
         pubblica()
         // AC-454: no Proposta job while read-only — it would only wait on the native Mutex held by the
         // running pipeline (ADR 0017); AC-461: the job starts again once soloLettura ends (the same
@@ -229,8 +221,9 @@ internal class StatoVoci(
             return
         }
         lavoroTraParti = scope.launch {
-            coppiaTraParti = catturaNonFatale { runInterruptible(io) { sorgenti.traParti(incontro) } }
-                .getOrNull()?.firstOrNull()
+            coppiaTraParti = nonFataleRegistrato("calcola la coppia tra parti di $incontro") {
+                runInterruptible(io) { sorgenti.traParti(incontro) }
+            }?.firstOrNull()
             pubblica()
         }
     }
@@ -269,18 +262,12 @@ internal class StatoVoci(
         }
     }
 
-    private suspend fun calcola(voceId: VoceId): StatoProposta = try {
-        val vista = runInterruptible(io) { sorgenti.proposta(voceRef(voceId)) }
-        val candidati = vista?.candidati.orEmpty()
-        // AC-213: all 'nessuna' → the list is still shown, 'nuovo…' is the preferred action.
-        StatoProposta.Pronta(candidati, candidati.isNotEmpty() && candidati.all { it.fascia == Fascia.NESSUNA })
-    } catch (e: CancellationException) {
-        throw e
-    } catch (
-        @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-    ) {
-        StatoProposta.Errore(MESSAGGIO_ERRORE_PROPOSTA)
-    }
+    private suspend fun calcola(voceId: VoceId): StatoProposta =
+        nonFataleRegistrato("calcola la proposta di $voceId") {
+            val candidati = runInterruptible(io) { sorgenti.proposta(voceRef(voceId)) }?.candidati.orEmpty()
+            // AC-213: all 'nessuna' → the list is still shown, 'nuovo…' is the preferred action.
+            StatoProposta.Pronta(candidati, candidati.isNotEmpty() && candidati.all { it.fascia == Fascia.NESSUNA })
+        } ?: StatoProposta.Errore(MESSAGGIO_ERRORE_PROPOSTA)
 
     // --- pending card commands (ADR 0017 §3) -------------------------------------------------------
 
@@ -345,33 +332,48 @@ internal class StatoVoci(
     /**
      * AC-411: the card goes pending AT ONCE (published before the command even starts — a second click
      * finds its actions disabled); AC-414: the outcome is shown like any command's; AC-413: a cancelled
-     * one (`null`) restores the card with no message. `finally`: never a card stuck in 'in corso'.
+     * one (`null`) restores the card with no message; a thrown one is the generic message on the card.
      */
     private fun invia(voceId: VoceId, comando: (VoceRef) -> ComandoVoce) {
         // AC-454: 'Conferma'/'altri ▾'/'nuovo…'/'salta'/'cambia' send no command while read-only —
         // `azioniAbilitate` already folds in `soloLettura` (CartaVoce, built by pannelloDi below).
-        val carta = cartaDi(voceId)?.takeIf { it.azioniAbilitate } ?: return
+        if (cartaDi(voceId)?.azioniAbilitate != true) return
         val ref = voceRef(voceId)
         val inizio = sorgenti.clock.instant()
         invii[ref] = inizio
         erroriCarta.remove(voceId)
         programmaSoglia(ref, inizio)
+        lanciaComando(
+            "comando sulla voce $voceId",
+            libera = { invii.remove(ref) },
+            suGuasto = { erroriCarta[voceId] = MESSAGGIO_ERRORE_GENERICO },
+        ) {
+            when (val esito = withContext(io) { sorgenti.comandi.esegui(comando(ref)) }) {
+                null -> Unit
+                is Esito.Ok -> ricaricaParlanti()
+                is Esito.Errore -> erroriCarta[voceId] = messaggioPer(esito.errore)
+            }
+        }
+    }
+
+    /**
+     * The one runner of the panel's committing commands (cards, Revisione, naming), ADR 0041 §3: publishes the guard
+     * its caller has just set, then runs [comando] through [eccezioneRegistrata] — an `Exception` is logged and
+     * becomes [suGuasto], an `Error` after the commit still propagates (D-0065). [libera] resets the guard in
+     * `finally`: never a card, a row or the toolbar stuck in progress.
+     */
+    private fun lanciaComando(
+        operazione: String,
+        libera: () -> Unit,
+        suGuasto: () -> Unit = { impostaErrore(MESSAGGIO_ERRORE_GENERICO) },
+        comando: suspend () -> Unit,
+    ) {
         pubblica()
         scope.launch {
             try {
-                when (val esito = withContext(io) { sorgenti.comandi.esegui(comando(ref)) }) {
-                    null -> Unit
-                    is Esito.Ok -> ricaricaParlanti()
-                    is Esito.Errore -> erroriCarta[voceId] = messaggioPer(esito.errore)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                erroriCarta[voceId] = MESSAGGIO_ERRORE_GENERICO
+                eccezioneRegistrata(operazione) { comando() } ?: suGuasto()
             } finally {
-                invii.remove(ref)
+                libera()
                 pubblica()
             }
         }
@@ -430,8 +432,9 @@ internal class StatoVoci(
     fun dividiVoce() {
         val barra = vista?.let(::barraDi)?.takeIf { it.dividiAbilitato && it.abilitata } ?: return
         val segmenti = selezione
-        eseguiRevisione {
-            val esito = comandoConfermato("dividi ${barra.voceId}") {
+        val operazione = "dividi ${barra.voceId}"
+        eseguiRevisione(operazione) {
+            val esito = comandoConfermato(operazione) {
                 sorgenti.dividi(DividiVoce(registrazioneId, barra.voceId, segmenti, incontroDelleVoci = incontroId))
             }
             RisultatoRevisione(esito, esito is Esito.Ok)
@@ -445,7 +448,7 @@ internal class StatoVoci(
         val ordinati = v.segmenti
             .filter { it.segmentoId in selezione && it.voceId == barra.voceId }
             .map { it.segmentoId }
-        eseguiRevisione { riassegnaTutti(ordinati, destinazione) }
+        eseguiRevisione("riassegna a ${destinazione ?: "nuova voce"}") { riassegnaTutti(ordinati, destinazione) }
     }
 
     /**
@@ -460,7 +463,7 @@ internal class StatoVoci(
         val restanti = segmenti.iterator()
         while (esito is Esito.Ok && restanti.hasNext()) {
             val segmento = restanti.next()
-            esito = riassegnaUno(segmento, verso, primo = spostati == 0)
+            esito = riassegnaUno(segmento, verso)
             if (esito is Esito.Ok) {
                 spostati++
                 // 'nuova voce': the first Segmento opens it, the next ones follow it there (one Voce, not one each).
@@ -472,22 +475,25 @@ internal class StatoVoci(
         return RisultatoRevisione(esito, modificato = spostati > 0)
     }
 
-    /** One RiassegnaSegmento; after the [primo], a non-fatal failure is `null` (the generic message), never lost. */
-    private fun riassegnaUno(segmento: SegmentoId, verso: VoceId?, primo: Boolean): Esito<Unit>? =
-        catturaNonFatale {
+    /** One RiassegnaSegmento; a thrown `Exception` is logged and `null` (the generic message); an Error propagates. */
+    private fun riassegnaUno(segmento: SegmentoId, verso: VoceId?): Esito<Unit>? =
+        eccezioneRegistrata("riassegna $segmento") {
             comandoConfermato("riassegna $segmento") {
                 sorgenti.riassegna(RiassegnaSegmento(registrazioneId, segmento, verso, incontroDelleVoci = incontroId))
             }
-        }.getOrElse { e -> if (primo || e is Error) throw e else null } // an Error propagates (D-0065)
+        }
 
     private fun voceDi(segmento: SegmentoId): VoceId? =
-        catturaNonFatale { trascritto()?.segmenti?.find { it.segmentoId == segmento }?.voceId }.getOrNull()
+        nonFataleRegistrato("rileggi la voce di $segmento") {
+            trascritto()?.segmenti?.find { it.segmentoId == segmento }?.voceId
+        }
 
     /** 'Unisci con ▾' on a card ([sopravvive] = that card) and the merge banner's 'Unisci' (AC-216). */
     fun unisci(sopravvive: VoceId, rimossa: VoceId) {
         if (sopravvive == rimossa) return
-        eseguiRevisione {
-            val esito = comandoConfermato("unisci $rimossa in $sopravvive") {
+        val operazione = "unisci $rimossa in $sopravvive"
+        eseguiRevisione(operazione) {
+            val esito = comandoConfermato(operazione) {
                 sorgenti.unisci(UnisciVoci(registrazioneId, sopravvive, rimossa, incontroDelleVoci = incontroId))
             }
             RisultatoRevisione(esito, esito is Esito.Ok)
@@ -501,31 +507,19 @@ internal class StatoVoci(
      * committed but whose after-commit follow-up failed is a success (D-0062, [comandoConfermato]).
      * One at a time (no double submit); never blocked by a pending card command (AC-414).
      */
-    private fun eseguiRevisione(blocco: () -> RisultatoRevisione) {
+    private fun eseguiRevisione(operazione: String, blocco: () -> RisultatoRevisione) {
         // AC-454: dividiVoce/riassegnaA/unisci (the merge banner's action included) send no command
         // while read-only — the view already disables their controls, this is the presenter's own
         // backstop (unisci() in particular has no `abilitata` guard of its own to rely on).
         if (modificheBloccate || revisioneInCorso) return
         revisioneInCorso = true
-        pubblica()
-        scope.launch {
-            try {
-                val risultato = withContext(io) { blocco() }
-                if (risultato.modificato) ricaricaDopoRevisione(azzeraSelezione = risultato.esito is Esito.Ok)
-                when (val esito = risultato.esito) {
-                    is Esito.Ok -> Unit
-                    is Esito.Errore -> impostaErrore(messaggioPer(esito.errore))
-                    null -> impostaErrore(MESSAGGIO_ERRORE_GENERICO)
-                }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                impostaErrore(MESSAGGIO_ERRORE_GENERICO)
-            } finally {
-                revisioneInCorso = false
-                pubblica()
+        lanciaComando(operazione, libera = { revisioneInCorso = false }) {
+            val risultato = withContext(io) { blocco() }
+            if (risultato.modificato) ricaricaDopoRevisione(azzeraSelezione = risultato.esito is Esito.Ok)
+            when (val esito = risultato.esito) {
+                is Esito.Ok -> Unit
+                is Esito.Errore -> impostaErrore(messaggioPer(esito.errore))
+                null -> impostaErrore(MESSAGGIO_ERRORE_GENERICO)
             }
         }
     }
@@ -569,22 +563,10 @@ internal class StatoVoci(
         val inizio = sorgenti.clock.instant()
         inviiFrasi[segmento] = inizio
         programmaSoglia(FraseRef(registrazioneId, segmento), inizio)
-        pubblica()
-        scope.launch {
-            try {
-                val esito = withContext(io) { sorgenti.comandi.nominaFrase(registrazioneId, segmento, passi) }
-                ricaricaDopoRevisione(azzeraSelezione = esito is Esito.Ok)
-                (esito as? Esito.Errore)?.let { impostaErrore(messaggioPer(it.errore)) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (
-                @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
-            ) {
-                impostaErrore(MESSAGGIO_ERRORE_GENERICO)
-            } finally {
-                inviiFrasi.remove(segmento)
-                pubblica()
-            }
+        lanciaComando("nomina la frase $segmento", libera = { inviiFrasi.remove(segmento) }) {
+            val esito = withContext(io) { sorgenti.comandi.nominaFrase(registrazioneId, segmento, passi) }
+            ricaricaDopoRevisione(azzeraSelezione = esito is Esito.Ok)
+            (esito as? Esito.Errore)?.let { impostaErrore(messaggioPer(it.errore)) }
         }
     }
 
@@ -594,10 +576,11 @@ internal class StatoVoci(
     /** AC-528: 'Togli conferma' → `ConfermaSegmento(false)` on the ONE selected, confirmed Segmento. */
     fun togliConferma() {
         val menu = vista?.let(::barraDi)?.frase?.takeIf { it.abilitata && it.confermato } ?: return
-        eseguiRevisione {
+        val operazione = "togli conferma ${menu.segmentoId}"
+        eseguiRevisione(operazione) {
             val comando =
                 ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false, incontroDelleVoci = incontroId)
-            val esito = comandoConfermato("togli conferma ${menu.segmentoId}") { sorgenti.confermaSegmento(comando) }
+            val esito = comandoConfermato(operazione) { sorgenti.confermaSegmento(comando) }
             RisultatoRevisione(esito, esito is Esito.Ok)
         }
     }

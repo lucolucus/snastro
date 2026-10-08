@@ -147,6 +147,12 @@ internal class AmbienteVoci(
     var esitoComando: (ComandoVoce) -> Esito<Unit> = { Esito.Ok(Unit) }
     var identificazioneRotta = false
 
+    /** What a broken identificazione read throws ([identificazioneRotta]): one instance, a log names it (CR-7). */
+    val guastoLettura = IllegalStateException("lettura rotta")
+
+    /** When set, the card-command port itself throws it from `esegui` (e.g. the adapter failing outside the body). */
+    var guastoComando: Throwable? = null
+
     /** ADR 0036: what `PropostaTraParti.perIncontro` answers; [chiamateTraParti] records each computation. */
     /** AC-I77: what `TrascrittoQuery.vociIncontro` answers; [chiamateVociIncontro] records each read. */
     var vociIncontro: VociIncontro? = null
@@ -179,7 +185,7 @@ internal class AmbienteVoci(
     val somiglianza = AzioniSomiglianzaFinta(clock)
     val sorgenti = SorgentiParlanti(
         identificazione = {
-            check(!identificazioneRotta) { "lettura rotta" }
+            if (identificazioneRotta) throw guastoLettura
             identificate
         },
         proposta = { r ->
@@ -189,7 +195,12 @@ internal class AmbienteVoci(
         unioni = { unioni },
         parlantiAttivi = { attivi },
         estratto = { r -> EstrattoRef(unicaParteDi(r), listOf(IntervalloMs(0, 500))) },
-        comandi = comandi,
+        comandi = object : ComandiVoce by comandi {
+            override suspend fun esegui(comando: ComandoVoce): Esito<Unit>? {
+                guastoComando?.let { throw it }
+                return comandi.esegui(comando)
+            }
+        },
         unisci = { c -> revisione(c) },
         dividi = { c -> revisione(c) },
         riassegna = { c -> revisione(c) },

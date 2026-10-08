@@ -721,7 +721,6 @@ class RegoleArchitetturaliTest {
         "ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt" to 3,
         "ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt" to 4,
         "ui/src/main/kotlin/snastro/ui/registrazione/SomiglianzaVoci.kt" to 1,
-        "ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt" to 5,
     )
 
     /** Frozen (CR-19c): the app root scope and S3's scope handed to [snastro.supporto.figlioDi]. Only goes down. */
