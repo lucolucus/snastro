@@ -65,6 +65,17 @@ abstract class SessioneProgettoContratto {
     }
 
     @Test
+    fun `il progetto aperto eliminato si chiude e non si riapre piu`() {
+        val sessione = con()
+        val creato = sessione.crea(cartellaGenitoreProva(), nomeProva()).atteso()
+
+        sessione.elimina(creato.percorso).atteso()
+
+        assertNull(sessione.corrente.value)
+        assertEquals(ErroreSessione.CartellaNonValida, sessione.apri(creato.percorso).erroreAtteso<ErroreSessione>())
+    }
+
+    @Test
     fun `un nome vuoto restituisce NomeProgettoVuoto`() {
         val errore = con().crea(cartellaGenitoreProva(), "").erroreAtteso<ErroreSessione>()
         assertEquals(ErroreSessione.NomeProgettoVuoto, errore)
