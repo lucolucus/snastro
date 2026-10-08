@@ -10,6 +10,12 @@ cancelled in teardown — never a blanket `Dispatchers.Unconfined` (the coroutin
 `.mismagent/architetture/dev-architecture-app.md`). Each screen pairs them with a thin Compose test in `:ui` that
 checks its controls call the right callbacks (it does not prove the presenter wiring: the acceptance test does).
 
+**Wiring and scheduling** (added 2026-10-08, decided: codex on delegation):
+- register the acceptance directory with both `kotlin.srcDir(...)` and `detekt { source.from(...) }` in `avvio/build.gradle.kts`;
+- share one test scheduler between the presenter and `runTest` (`runTest(dispatcher)`), advancing scheduled work explicitly;
+- a separate session lifetime does not need a real dispatcher: do not generalize an implicit `Dispatchers.Default`;
+  use `conScopeDiProva` / `backgroundScope` for test-created scopes, with guaranteed cancellation.
+
 **Why.** mm looks for `EX-<n>` markers only under *tests/acceptance/*; *tests/acceptance/* as its own Gradle module
 would need settings, module-map and allowed-edge changes and test fixtures out of `:avvio`, while an extra source
 directory of `:avvio` keeps access to its internal test helpers. Konsist already scans `**/src/**/*.kt`.
