@@ -40,3 +40,11 @@ the test spy on the `snastro.ui` logger `ui/src/test/kotlin/snastro/ui/LogUi.kt`
 `ui/src/test/kotlin/snastro/ui/riassunto/RiassuntoPresenterGuastiTest.kt`. A handled fault at a non-committing edge
 (a start, a playback) also shows M1(b)'s generic message (`.mismagent/architecture.md`, 2026-10-08): the two latter
 edges still omit it — debt, not an exemption. Slices 27–30 keep the follow-up and show the message.
+
+**S3 · Voci panel** (2026-10-09, slice 27, decided: codex on delegation): `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`
+— card/Revisione/naming commands share `lanciaComando` on `eccezioneRegistrata` (a `suGuasto` per command, guard reset
+in `finally`); the committing `riassegnaUno` is on `eccezioneRegistrata` too, so an Error propagates; reads and
+proposals (`ricaricaParlanti`, `calcola`, `avviaTraParti`, `voceDi`) on `nonFataleRegistrato`; tested in
+`ui/src/test/kotlin/snastro/ui/registrazione/StatoVociGuastiTest.kt` (CR-7, L269). It shows the helper choice, not the
+message: the first three reads still omit the generic message (debt; a background read is no exemption); `voceDi`
+reaches it through Revisione.
