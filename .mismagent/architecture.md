@@ -188,6 +188,12 @@ One composition, organised by context rather than by release. The release **meth
   `SessioneProgetto` — *(2026-10-08, design pass: truth of R0 slices 01–03)* and so is deleting a project:
   `elimina` holds the `.lock` throughout, removes the registry entry first, then deletes only snastro's
   contents (`progetto.db{,-wal,-shm}`, `audio/`, `cache/`, `sbobinature/`, `.lock`).
+  *(2026-10-08, design pass R0-1: truth of slice 05)* `SessioneProgetto.togliDallaLista` drops a registry entry
+  without touching the disk (`elimina` starts with it). `:progetto:applicazione` also declares the port
+  `CartelleProgetti` (`porte/CartelleProgetti.kt`; impl `CartelleProgettiFile` in `:progetto:adattatori`), read by
+  `ElencoProgetti` at every list read to mark a project whose folder is not found. A registry failure in
+  `togliDallaLista`/`elimina` is technical, not expected: it throws, and the presenter's edge logs it and shows the
+  generic message (CR-7, CR-8); expected refusals stay `Esito` (`ErroreSessione`).
 - **`:ui` declares ports implemented by `:avvio`:** `LettoreAudio` (existing), `SessioneProgetto`,
   `ApriEsterno` (open file / reveal in folder), `AggiornamentiVista` (refresh flow, R15),
   `ServizioModelli` (S5, R10 — `:ui` cannot reach `:modelli`).

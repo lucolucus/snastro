@@ -15,3 +15,10 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
   (`SessioneProgettoImpl.elimina`). No decision changed. Queued refactors 08–11: delete flow out of
   `ProgettiPresenter` (it sits at detekt's `TooManyFunctions` limit), acceptance-test scopes and the recursive
   EX-6 check, one shared `MessaggioInlineErrore` and one "More" menu in S4.
+- 2026-10-08 — design pass (R0, release review R0-1): `.mismagent/architecture.md` (R3 registry line) now names
+  `togliDallaLista` and the port `CartelleProgetti` (slice 05), and states the error policy for the session port: a
+  registry failure is technical, it throws and the presenter's edge logs it and shows the generic message; expected
+  refusals stay `Esito`. So `togliDallaLista` returning `Unit` is not a gap (`elimina` throws on the same failure);
+  the gap is the dropped cause. No decision changed. Queued refactors 12–16: log non-fatal causes in the S1 runner and
+  the open-project delete, `ErroreSessione` messages only with the home, one shell runner, one acceptance harness,
+  the import and row-delete flows out of `RegistrazioniPresenter`.
