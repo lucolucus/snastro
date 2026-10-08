@@ -18,6 +18,7 @@ import snastro.progetto.applicazione.letture.ElencoProgetti
 import snastro.progetto.applicazione.letture.ProgettoVista
 import snastro.progetto.applicazione.porte.RegistroProgettiFinta
 import snastro.supporto.test.attendiFinche
+import snastro.supporto.test.conScopeDiProva
 import snastro.ui.progetti.ProgettiPresenter
 import snastro.ui.progetti.ProgettiUiStato
 import java.nio.file.Files
@@ -39,8 +40,9 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Substituted boundaries: the per-user registry ([RegistroProgettiFinta], one shared by the session and the list),
  * the user's home, ML/audio ([componentiDiProva]), id generator and clock. EX-10's undeletable file is a real one: its
- * folder loses the write permission. The presenter runs on a [StandardTestDispatcher] advanced explicitly; the session
- * keeps its own real scope. Both scopes are cancelled in teardown.
+ * folder loses the write permission. The presenter runs on a [StandardTestDispatcher] shared with `runTest` and
+ * advanced explicitly, its scope cancelled in teardown; the session, which registers a closed project on real
+ * threads, gets its scope from [conScopeDiProva], cancelled when the test ends.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class EliminaSoloContenutiSnastroTest {
@@ -53,26 +55,30 @@ class EliminaSoloContenutiSnastroTest {
     private val registro = RegistroProgettiFinta()
     private val dispatcher = StandardTestDispatcher()
     private val scopePresenter = CoroutineScope(SupervisorJob() + dispatcher)
-    private val scopeSessione = CoroutineScope(SupervisorJob())
-    private val sessione = SessioneProgettoImpl(
-        registro,
-        GeneratoreIdFinto(),
-        Clock.fixed(Instant.parse("2026-10-08T10:00:00Z"), ZoneOffset.UTC),
-        scopeSessione,
-        componentiDiProva(),
-    )
 
     @AfterEach
-    fun chiudi() {
-        sessione.chiudi()
-        scopePresenter.cancel()
-        scopeSessione.cancel()
+    fun chiudi() = scopePresenter.cancel()
+
+    /** Runs [blocco] under `runTest` with a real session over [registro], then closes it and cancels its scope. */
+    private fun conSessione(blocco: suspend TestScope.(SessioneProgettoImpl) -> Unit) = conScopeDiProva { scope ->
+        val sessione = SessioneProgettoImpl(
+            registro,
+            GeneratoreIdFinto(),
+            Clock.fixed(Instant.parse("2026-10-08T10:00:00Z"), ZoneOffset.UTC),
+            scope,
+            componentiDiProva(),
+        )
+        try {
+            runTest(dispatcher) { blocco(sessione) }
+        } finally {
+            sessione.chiudi()
+        }
     }
 
     @Test
     fun `EX-9 eliminare skatefest cancella solo cio che ha creato snastro, appunti pdf resta e lo si dice`() =
-        runTest(dispatcher) {
-            val presenter = listaConSkatefestEMangu()
+        conSessione { sessione ->
+            val presenter = listaConSkatefestEMangu(sessione)
             Files.writeString(skatefest.resolve("progetto.db-wal"), "")
             Files.writeString(skatefest.resolve("progetto.db-shm"), "")
             Files.writeString(skatefest.resolve("audio/incontro.wav"), "RIFF")
@@ -96,8 +102,8 @@ class EliminaSoloContenutiSnastroTest {
 
     @Test
     fun `EX-10 un file di audio che non si puo cancellare lascia la cartella, lo si dice e la voce sparisce`() =
-        runTest(dispatcher) {
-            val presenter = listaConSkatefestEMangu()
+        conSessione { sessione ->
+            val presenter = listaConSkatefestEMangu(sessione)
             val audio = skatefest.resolve("audio")
             Files.writeString(audio.resolve("incontro.wav"), "RIFF")
             assertTrue(audio.toFile().setWritable(false), "il test presuppone di poter revocare il permesso")
@@ -123,7 +129,7 @@ class EliminaSoloContenutiSnastroTest {
     }
 
     /** "skatefest" and "mangu 2" on disk and in the registry, closed, then the list loaded by the presenter. */
-    private fun TestScope.listaConSkatefestEMangu(): ProgettiPresenter {
+    private fun TestScope.listaConSkatefestEMangu(sessione: SessioneProgettoImpl): ProgettiPresenter {
         for (nome in listOf("skatefest", "mangu 2")) {
             val creato = sessione.crea(documenti.toString(), nome).atteso()
             sessione.chiudi()
