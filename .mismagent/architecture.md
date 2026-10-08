@@ -266,3 +266,11 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
 - **Schema:** `7.sqm` (7 → 8) ([ADR 0034](decisions/0034-persistenza-incontro-7sqm.md)).
 - **R1 read-models per owning context** still applies: S2's `Incontro` rows are `IncontriDelProgetto` (Progetto) ⨝
   `stati-elaborazione` + `VociIncontro` (Trascrizione) ⨝ `identificazione-incontri` (Parlanti) ⨝ `PosizioniNellaCoda`.
+
+## Amendment 2026-10-08 — faults at a presenter's edge ([ADR 0041](decisions/0041-guasti-ai-bordi-dei-presenter.md)) [architect]
+- A presenter's edge never drops a cause (CR-7): it logs at WARNING under `snastro.ui` and shows M1(b)'s generic message.
+- A block that runs a **committing command** catches `Exception` only, so an `Error` after the commit propagates
+  (D-0065). It uses `eccezioneRegistrata` (`:ui`), which sits on `:supporto`'s `catturaEccezione`.
+- **Every other edge** (reads, refreshes, the player, S1's list load) uses `nonFataleRegistrato` over `catturaNonFatale`.
+- S2's per-row commands share one runner on `StatoS2`.
+- Target, landing with refactor slices 17–19. Until then, S2's raw catches are debt (CR-19b counts), not an exception.

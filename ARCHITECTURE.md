@@ -22,3 +22,13 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
   the gap is the dropped cause. No decision changed. Queued refactors 12–16: log non-fatal causes in the S1 runner and
   the open-project delete, `ErroreSessione` messages only with the home, one shell runner, one acceptance harness,
   the import and row-delete flows out of `RegistrazioniPresenter`.
+- 2026-10-08 — design pass (R0, release review R0-2): the faults at a presenter's edge get one rule (new
+  [ADR 0041](.mismagent/decisions/0041-guasti-ai-bordi-dei-presenter.md), amending ADR 0028 §2;
+  `.mismagent/architecture.md` amendment of the same date). A committing command catches `Exception` only through
+  `eccezioneRegistrata` over a new `:supporto` `catturaEccezione`, so an `Error` after the commit still propagates
+  (D-0065). Everything else uses `nonFataleRegistrato`. Both log.
+  - Why: S2's eight raw catches drop the cause, but `nonFataleRegistrato` would swallow the `Error`s that the L269 tests
+    require to propagate. The review's fix for `avviaElaborazioniIncontro` would have kept its D-0065 defect.
+  - This is the target. The code moves in the queued refactors 17–21: S1's list load logged, the S2 per-row runner on
+    `StatoS2`, S2's remaining edges, the Incontro flow out of `RegistrazioniPresenter`, and `SchermataRegistrazioni`
+    split by flow.

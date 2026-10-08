@@ -1,7 +1,7 @@
 ---
 scope: global
 status: accepted
-supersedes: null   # partial, amended in place with dated pointers here: architecture.md (module map, edges table, direction summary), code-rules.md (CR-18 new, CR-2 note), dev-architecture-app.md (#test, #dipendenze-test), ADR 0012 (retry wording of the after-commit workers), ADR 0023 (the queue reports escaped throwables)
+supersedes: null   # partial, amended in place with dated pointers here (2026-10-08: §2 gains catturaEccezione, ADR 0041): architecture.md (module map, edges table, direction summary), code-rules.md (CR-18 new, CR-2 note), dev-architecture-app.md (#test, #dipendenze-test), ADR 0012 (retry wording of the after-commit workers), ADR 0023 (the queue reports escaped throwables)
 closes_spike: null
 decided: 2026-09-27 · user (post-R3 design review, analysis §2.4 X5/X8/X9/X11, §2.7 T1/T2, §6.5; every option as recommended: A1–A5) · architect (contents of the first cut, check names)
 enforced_by:
@@ -165,3 +165,9 @@ new one: by 2026-09-30 `main` again had about 35 `Thread.sleep` in tests and two
 - Every test sleep of `main` was migrated in the same change; the four copies of the Cambiamenti collector in
   `:avvio` tests became one, `AmbienteProgetto.raccogliCambiamenti`.
 
+
+## Amendment 2026-10-08 — `catturaEccezione` (ADR 0041) [architect]
+§2 gains **`catturaEccezione(blocco): Result<T>`**: it catches `Exception` only and rethrows `CancellationException`,
+so an `Error` propagates (D-0065: an `Error` after a commit is fatal). It is the edge catch for a committing command;
+`catturaNonFatale` stays the one for everything else. CR-18c's pinned list gains it in the same change (refactor
+slice 18). Why and the alternatives: [ADR 0041](0041-guasti-ai-bordi-dei-presenter.md).
