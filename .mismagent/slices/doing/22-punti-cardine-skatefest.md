@@ -85,3 +85,31 @@ worktree usa e getta `../snastro-h1`). Se un'altra corsa resta ferma nel primo p
 interrompila e fermati con un `## Question` (GPU occupata). Annota w6 in `.mismagent/spikes/h1.md` e fermati in ogni
 caso con un `## Question` che dica cosa mostra w6 (liste vuote per la grammatica o per il modello) e quale strada ne
 segue: liste dal sommario, un passaggio per lista, o rivedere gli esempi. Niente codice di produzione.
+
+## Question
+w6 è fatta (`.mismagent/spikes/h1.md` § "w6", punti 11–12). Cosa mostra:
+- **Le liste vuote vengono dalla grammatica, non dal modello**: senza grammatica, con lo stesso prompt, il passaggio 2
+  scrive 1 decisione, 1 questione, 2 azioni, 5 punti chiave (in markdown, 53 s). Probabile causa, non ancora provata: il
+  prompt del passaggio 2 non nomina mai il JSON né le chiavi, quindi la grammatica pigra forza un JSON che il modello non
+  si aspettava e sceglie `[]`. Il passaggio 1, che descrive il suo JSON, ha funzionato in tutte le corse.
+- **Ma la classificazione resta debole**: D1 esce tra le azioni (fonte 92, giusta), Q1 tra i punti chiave (fonte 40,
+  giusta), A1 solo in parte (fonte 36, parla di carte e non della seconda mappa), e l'unica "decisione" è sbagliata
+  (fonte 90 dice il contrario). Il punto inventato di EX-14 è assente.
+
+Strade che vedo:
+1. **Una corsa in più con il formato detto nel prompt** del passaggio 2 (chiavi e forma di una voce, come fa il
+   passaggio 1), grammatica attiva. Toglie probabilmente il vuoto, ma da w6 ci si aspetta lo stesso problema di
+   classificazione (D1 tra le azioni). È la prova minima per sapere se basta.
+2. **Un passaggio per lista** (decisioni, questioni, azioni; punti chiave a parte o tolti): ogni prompt chiede un solo
+   tipo con la sua definizione ed esempi, ciò che serve a mettere D1 tra le decisioni e Q1 tra le questioni. Costa
+   ~25 s di prefill per passaggio più la generazione: con 4–5 passaggi circa 3–5 min su skatefest, sotto i 600 s ma
+   meno margine per riunioni più lunghe (EX-18).
+3. **Liste dal sommario**: il sommario è la parte che funziona (D1, Q1, seconda mappa, Amplify in tutte le corse). w6 non
+   dice nulla su questa strada; restano da provare le fonti.
+4. **Rivedere gli esempi**: accettare D1 tra le azioni e Q1 tra i punti chiave. w6 dice che il modello vede i punti, ma
+   li mette in un'altra lista.
+
+Raccomandazione: **1 e poi 2**. La 1 costa una corsa (~2 min) e dice se, risolto il formato, la classificazione basta;
+w6 fa pensare di no, e allora la 2 è la strada che attacca proprio la classificazione, nell'adattatore e senza toccare
+`:llama-jni`. In entrambi i casi la struttura (più passaggi, modello tenuto aperto) va nell'ADR che emenda ADR 0026 §3.
+Nessun codice di produzione finché una corsa non soddisfa EX-14..EX-17.
