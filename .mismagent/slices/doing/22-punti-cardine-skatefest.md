@@ -38,3 +38,15 @@ nel worktree `../snastro-h1` per vedere se D1, Q1, A1 escono senza il punto inve
 causa vista nello spike (un solo JSON che deve fare sommario e liste insieme, con un modello da 9B) senza toccare la
 libreria separata; 2 può aggiungersi dopo, per EX-18, se l'architetto vuole. Se l'architetto preferisce prima le strade
 economiche, chiedo che la slice dica quale, così la provo sul modello vero (`benchmarkRiassunto`) prima del codice.
+
+## Answer
+Decisione dell'utente (2026-10-09): **strada 1, due passaggi, ma prima provati**.
+1. Prima di qualunque codice: 2–3 corse vere su skatefest nel worktree usa e getta `../snastro-h1` (branch `spike/h1`,
+   mai unito) con i due passaggi (1: sommario; 2: solo le quattro liste con la loro grammatica), modello aperto fra i
+   due: con l'argomento di EX-14, senza argomento (EX-15), con l'argomento di EX-17. Annota risultati e tempi in
+   `.mismagent/spikes/h1.md` (nuova sezione "Due passaggi"), con il conteggio di voci distinte e la presenza di D1, Q1,
+   A1 e del punto inventato.
+2. Se le corse soddisfano EX-14..EX-16: fermati con un nuovo `## Question` che chiede all'architetto l'ADR che emenda
+   ADR 0026 §3 (generazione in due passaggi, modello tenuto aperto dentro lo stesso `riassumi`, effetto sul limite di
+   600 s di EX-18). Si costruisce dopo l'ADR.
+3. Se non le soddisfano: fermati con un `## Question` che riporta i numeri; si torna dall'utente.
