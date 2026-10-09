@@ -78,3 +78,10 @@ Strade che vedo:
 Raccomandazione: **1**, perché costa una corsa e decide se il problema è la grammatica (rimediabile dentro
 l'adattatore) o il modello; poi 2 se il modello sceglie davvero liste vuote. Nessun codice di produzione finché non
 c'è una corsa che soddisfa EX-14..EX-17.
+
+## Answer
+Decisione dell'utente (2026-10-10): **prima la corsa diagnostica w6** (secondo passaggio senza grammatica, stesso
+worktree usa e getta `../snastro-h1`). Se un'altra corsa resta ferma nel primo passaggio oltre 5 minuti (di norma 58 s),
+interrompila e fermati con un `## Question` (GPU occupata). Annota w6 in `.mismagent/spikes/h1.md` e fermati in ogni
+caso con un `## Question` che dica cosa mostra w6 (liste vuote per la grammatica o per il modello) e quale strada ne
+segue: liste dal sommario, un passaggio per lista, o rivedere gli esempi. Niente codice di produzione.
