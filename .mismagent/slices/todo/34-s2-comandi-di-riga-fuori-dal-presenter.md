@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+After: 22, 23, 24, 25
 
 `RegistrazioniPresenter` (`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, 715 lines) takes
 21 constructor parameters under `@Suppress("LongParameterList", "TooManyFunctions")` (`:96-121`). That is release

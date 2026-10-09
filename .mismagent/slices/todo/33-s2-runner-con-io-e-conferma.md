@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+After: 22, 23, 24, 25
 
 S2's row runner leaves two things to its callers: the `io` hop and `comandoConfermato`. So every caller writes
 `withContext(io) { comandoConfermato("<op>") { … } }` and writes its operation name twice, once for the runner's log

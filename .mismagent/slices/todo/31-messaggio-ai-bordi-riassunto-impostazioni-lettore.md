@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+After: 22, 23, 24, 25
 
 Since slices 26 and 30 every `:ui` edge logs its fault, but four of them still show the user nothing: the rule
 "Message at every edge" (conventions non-fatal-faults, 2026-10-09) asks for M1(b)'s generic message there too,

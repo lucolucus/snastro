@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+After: 22, 23, 24, 25
 
 After slice 34, `RegistrazioniPresenter` still mixes two jobs (release review R0-3, simple design 3):
 - reading and building the rows: `costruisciLista`, `gruppi`, `costruisciRiga`, `elaborazioneDi`,

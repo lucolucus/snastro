@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+After: 22, 23, 24, 25
 
 S3 has three edges that log a fault and fall back without telling the user (conventions non-fatal-faults,
 "Message at every edge", 2026-10-09; slices 27–28 left them as debt in `.mismagent/design-notes.md`).
