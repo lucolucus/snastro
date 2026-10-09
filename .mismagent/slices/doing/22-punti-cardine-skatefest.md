@@ -50,3 +50,31 @@ Decisione dell'utente (2026-10-09): **strada 1, due passaggi, ma prima provati**
    ADR 0026 §3 (generazione in due passaggi, modello tenuto aperto dentro lo stesso `riassumi`, effetto sul limite di
    600 s di EX-18). Si costruisce dopo l'ADR.
 3. Se non le soddisfano: fermati con un `## Question` che riporta i numeri; si torna dall'utente.
+
+## Question
+Le corse dei due passaggi (risposta qui sopra, punto 3) **non soddisfano EX-14..EX-17**: si torna dall'utente.
+Numeri in `.mismagent/spikes/h1.md` § "Due passaggi" (w1–w6):
+- w1 (argomento EX-14): 127 s; decisioni 0, questioni 0, azioni 3, punti chiave 5, nessun doppione. D1 c'è ma tra le
+  **azioni** (fonti giuste: 90, 92, 107, 108); Q1 solo come punto chiave confuso; A1 assente; punto inventato assente.
+- w2 (senza argomento, EX-15) e w3 (argomento EX-17): 85 s e 90 s, **quattro liste vuote** (30 token in tutto).
+- Varianti su EX-15: w4 (il sommario del passaggio 1 nel prompt delle liste) e w5 (senza "non inventare"): ancora
+  quattro liste vuote.
+- Il **sommario** del passaggio 1 è buono in tutte le corse: racconta D1, Q1, la seconda mappa e Amplify, senza il punto
+  inventato. Il tempo non è un problema (85–127 s contro i 600 s di EX-18).
+- w6 (passaggio 2 senza grammatica, per capire se il vuoto viene dalla grammatica pigra o dal modello) non è stata
+  ottenuta: due tentativi bloccati oltre 15 min nel passaggio 1 con la GPU occupata da un altro processo.
+
+Strade che vedo:
+1. **Diagnosi prima di decidere**: ripetere w6 a GPU libera (~2 min). Se senza grammatica il modello scrive le liste,
+   il vuoto viene dalla grammatica (es. spazi/a capo che la grammatica compatta rifiuta) e i due passaggi si possono
+   ancora salvare con una grammatica più tollerante; se scrive liste vuote anche lì, il passaggio 2 così non funziona.
+2. **Liste estratte dal sommario**: il passaggio 2 legge il sommario (non la trascrizione) e ne trae le voci, poi
+   cerca le fonti. Il sommario contiene già i punti; resta da provare se le fonti vengono giuste.
+3. **Una lista per passaggio** (decisioni, questioni, azioni separate): più passaggi brevi e più tempo (~25 s di
+   prefill ciascuno), prompt più mirato a ciascun tipo.
+4. Rivedere le attese: accettare D1 tra le azioni o Q1 tra i punti chiave ("anche con altre parole" di EX-14 non copre
+   la lista sbagliata).
+
+Raccomandazione: **1**, perché costa una corsa e decide se il problema è la grammatica (rimediabile dentro
+l'adattatore) o il modello; poi 2 se il modello sceglie davvero liste vuote. Nessun codice di produzione finché non
+c'è una corsa che soddisfa EX-14..EX-17.
