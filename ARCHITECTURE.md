@@ -7,6 +7,8 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 32): S3's cross-Parte
+  computation and Sbobinatura/Incontro reads show the generic message; rule unchanged.
 - 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 31): Lettore `pausa`, the
   generic message at Impostazioni start and Riassunto `scaricaModello`/`apriFonte`; rule unchanged.
 - 2026-10-10 — conventions (decided by the user): acceptance-tests — a Riassunto run's duration is asserted on the fake
