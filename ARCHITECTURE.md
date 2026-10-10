@@ -7,6 +7,8 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-10 — conventions (decided by the user): acceptance-tests — a Riassunto run's duration is asserted on the fake
+  library at the measured, conservative speed (`TOKEN_AL_SECONDO`), never with real sleeps (EX-18's 600 s).
 - 2026-10-10 — conventions (decided by the user): acceptance-tests — S3 Riassunto tests extend `BancoRiassunto` on real
   threads with `attendiFinche` (the queue worker is a real thread), an explicit exception to the `StandardTestDispatcher`
   rule; the gate proves the shape, the real model's content is measured outside it (`benchmarkRiassunto`); test names
