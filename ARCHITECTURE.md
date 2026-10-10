@@ -7,6 +7,9 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-11 — conventions (decided by the user): presenter-split — a presenter with bundled collaborators gets one
+  test builder taking the flat collaborators (one reasoned `LongParameterList` suppression); S2 adds
+  `FlussoComandiRiga` over `ComandiRigaS2` (slice 34). Topic condensed to ~300 words, rules unchanged.
 - 2026-10-10 — conventions (decided by the user): presenter-split — the S2 row runner described as built by slice 33;
   rule unchanged.
 - 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 32): S3's cross-Parte
