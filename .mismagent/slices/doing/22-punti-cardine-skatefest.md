@@ -161,3 +161,34 @@ non servono, e annota l'esito in `.mismagent/spikes/h1.md`. Se la prova 2 passa 
 `## Question` per l'architetto (ADR che emenda ADR 0026 §3: sommario + un passaggio per lista, modello aperto, tempi
 misurati, effetto sui 600 s di EX-18), segnalando anche le ripetizioni fra liste diverse (EX-16 parla di una lista
 sola). Se non passa: la prova con la definizione più stretta di decisione (opzione 1), poi fermati con i numeri.
+
+## Question
+Con la tua lettura (movimento automatico = proposta nuova; inventato solo se dato per deciso) le prove 1 e 2 **non
+passano**: il punto inventato c'è in 3 corse su 3 in entrambe (`.mismagent/spikes/h1.md` § "Rivalutazione"). Ho fatto
+quindi la prova 3, cioè l'opzione 1: prova 2 con decisione e azione definite in modo stretto e il sommario come contesto
+di quei due passaggi (§ "Prova 3"). **Non passa nemmeno questa.** I numeri, per EX-14 / EX-15 / EX-17:
+
+| | D1 tra le decisioni | Q1 tra le questioni | A1 tra le azioni | punto inventato | durata |
+|---|---|---|---|---|---|
+| prova 1 (4 liste, 1 passaggio) | no / sì / sì | sì / sì / sì | parziale / sì / no | sì / sì / sì | 182 / 128 / 136 s |
+| prova 2 (1 passaggio per lista) | sì / sì / sì | sì / sì / sì | sì / sì / sì | sì / sì / sì | 237 / 241 / 251 s |
+| prova 3 (2 + definizioni strette) | sì / sì / sì | sì / sì / sì | **no / no / no** | dubbio / sì / **no** | 255 / 297 / 253 s |
+
+Q3 c'è in tutte le corse di EX-17. Dentro ogni lista non ci sono doppioni (EX-16), ma lo stesso punto torna in più liste
+(prove 2 e 3). La prova 3 toglie il punto inventato in 1 corsa su 3 e perde A1 in 3 su 3: col modello da 9B e un prompt
+per lista, separare "proposto" da "deciso" e tenere tutte le azioni vere sembrano tirare in direzioni opposte.
+
+Cosa vedo da qui, per te:
+1. **Prova 2 + un filtro dopo le liste**: un passaggio breve che rilegge le sole decisioni (poche, ~300 token) contro la
+   trascrizione o il sommario e scarta quelle non concordate. Le azioni restano quelle della prova 2, quindi A1 resta.
+   Costo: ~40 s in più, ancora sotto i 600 s. Non provato.
+2. **Prova 2 con la sola decisione stretta** (azione com'era nella prova 2): tiene A1. Resta da vedere l'azione
+   "implementare il movimento automatico" (prova 2 EX-15, EX-17), che oggi conta come inventato. Una prova di 3 corse.
+3. **Rivedere EX-14/EX-15** per accettare il punto inventato come limite noto del modello locale, e passare all'ADR sulla
+   prova 2. EX-14 nomina proprio quel punto: è una scelta tua, non tecnica.
+4. **Fermare qui R1 "punti cardine"** e tenere solo il sommario del passaggio 1, che non ha mai avuto il punto inventato
+   e racconta D1, Q1, A1 e Q3, con le liste in un rilascio successivo.
+
+Raccomandazione: **2 e poi 1**. La 2 è una corsa di 3 riunioni e misura quanto pesa l'azione inventata da sola; la 1
+attacca esattamente l'errore che resta (decisioni non concordate) senza toccare le altre liste. In ogni caso la
+struttura è quella della prova 2: è quella da mettere nell'ADR che emenda ADR 0026 §3, quando una corsa passa.
