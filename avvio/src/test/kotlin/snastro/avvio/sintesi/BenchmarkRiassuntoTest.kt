@@ -58,6 +58,8 @@ import kotlin.time.Duration.Companion.milliseconds
  * AC-I36: `-Pcampione` is a comma-separated list; the samples are the ordered Parti of ONE Incontro (a real 2-3 Parte
  * ~3 h one), summarized by ONE Riassunto. The limit is 600 s per hour of audio (the audio of a Parte is read from the
  * sample's timestamps: its last Segmento start); one sample keeps the fixed 600 s of AC-S153.
+ *
+ * `-Pargomento=<text>` gives the Riassunto that Argomento (EX-20: skatefest with EX-14's Argomento).
  */
 @Tag("benchmark")
 class BenchmarkRiassuntoTest {
@@ -80,7 +82,7 @@ class BenchmarkRiassuntoTest {
         val dispatcher = DispatcherEventiFinta(UnitaDiLavoroFinta(riassunti)).apply {
             registraDopoCommit { eventi += it to System.nanoTime() }
         }
-        riassunti.salva(unRiassunto("r1", incontro, parole = LunghezzaMassimaParole.PREDEFINITA)).atteso()
+        riassunti.salva(unRiassunto("r1", incontro, argomento(), LunghezzaMassimaParole.PREDEFINITA)).atteso()
         val servizio = EseguiProssimoRiassuntoServizio(
             dispatcher.unitaDiLavoro,
             Clock.systemUTC(),
@@ -134,6 +136,9 @@ class BenchmarkRiassuntoTest {
         r.azioni.forEach { add("[azione] ${it.testo.codifica()}") }
         r.puntiChiave.forEach { add("[punto] ${it.testo.codifica()}") }
     }.joinToString("\n")
+
+    /** `-Pargomento`, if given: the Riassunto's Argomento. */
+    private fun argomento(): String? = System.getProperty("snastro.benchmark.argomento")?.takeIf { it.isNotBlank() }
 
     private fun parole(testo: String): Int = testo.split(Regex("\\s+")).count { it.isNotBlank() }
 

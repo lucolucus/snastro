@@ -181,7 +181,8 @@ tasks.named<Test>("test") {
 // llama.cpp adapter; prints load / prefill / generation / release, tokens and peak RSS; fails above 600 s.
 tasks.register<Test>("benchmarkRiassunto") {
     group = "verification"
-    description = "Opt-in NFR benchmark of a Riassunto (ADR 0026 §6, -Pcampione=<Sbobinatura .md> [-Pmodello=<gguf>])."
+    description = "Opt-in NFR benchmark of a Riassunto (ADR 0026 §6, -Pcampione=<Sbobinatura .md> [-Pmodello=<gguf>] " +
+        "[-Pargomento=<text>])."
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform {
@@ -195,6 +196,7 @@ tasks.register<Test>("benchmarkRiassunto") {
     }
     val campione = providers.gradleProperty("campione")
     val modello = providers.gradleProperty("modello")
+    val argomento = providers.gradleProperty("argomento")
     doFirst {
         if (!campione.isPresent) throw GradleException("benchmarkRiassunto needs -Pcampione=<path to a Sbobinatura .md>")
     }
@@ -202,6 +204,7 @@ tasks.register<Test>("benchmarkRiassunto") {
         listOf(
             "-Dsnastro.benchmark.campione=${campione.orNull.orEmpty()}",
             "-Dsnastro.benchmark.modello=${modello.orNull.orEmpty()}",
+            "-Dsnastro.benchmark.argomento=${argomento.orNull.orEmpty()}",
             "-Dsnastro.llm.native.path=${cartellaNativiApp.get().asFile.absolutePath}",
         )
     }
