@@ -1,10 +1,13 @@
 package snastro.ui.registrazioni
 
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
 import snastro.kernel.RegistrazioneId
+import snastro.ui.comandoConfermato
 import snastro.ui.eccezioneRegistrata
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 
@@ -18,6 +21,7 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 internal class StatoS2(
     private val stato: MutableStateFlow<RegistrazioniUiStato>,
     private val scope: CoroutineScope,
+    private val io: CoroutineDispatcher,
     val ricarica: suspend () -> Unit,
 ) {
     /** The loaded list, or null while loading or after the initial load failed. */
@@ -42,15 +46,16 @@ internal class StatoS2(
     /**
      * S2's one per-row command runner (ADR 0041 §4, presenter-split). M3: a no-op while row [id] has an operation in
      * flight; otherwise it marks the row in flight, clears its message and the notice (AC-627: "the next command"),
-     * then runs [comando] on [scope] and hands its [Esito] to [suEsito] — the caller's Ok and refusal. A thrown
-     * `Exception` is logged under [operazione] ([eccezioneRegistrata], CR-7) and shows the generic `erroreRiga`, with
-     * the caller's own [suGuasto] reset (e.g. closing a confirmation); cancellation and every `Error` propagate
-     * (D-0065). L269: the in-flight flag is reset in `finally`, whatever happened.
+     * then runs [comando] on [io] as a `comandoConfermato` named [operazione] (D-0062: committed with only its
+     * after-commit follow-up failed is an Ok) and hands its [Esito] to [suEsito] on [scope] — the caller's Ok and
+     * refusal. A thrown `Exception` is logged under [operazione] ([eccezioneRegistrata], CR-7) and shows the generic
+     * `erroreRiga`, with the caller's own [suGuasto] reset (e.g. closing a confirmation); cancellation and every
+     * `Error` propagate (D-0065). L269: the in-flight flag is reset in `finally`, whatever happened.
      */
     fun comandoDiRiga(
         id: RegistrazioneId,
         operazione: String,
-        comando: suspend () -> Esito<Unit>,
+        comando: () -> Esito<Unit>,
         suEsito: suspend (Esito<Unit>) -> Unit,
         suGuasto: (RigaRegistrazione) -> RigaRegistrazione = { it },
     ) {
@@ -59,8 +64,9 @@ internal class StatoS2(
         azzeraAvviso()
         scope.launch {
             try {
-                eccezioneRegistrata(operazione) { suEsito(comando()) }
-                    ?: aggiornaRiga(id) { suGuasto(it).copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
+                eccezioneRegistrata(operazione) {
+                    suEsito(withContext(io) { comandoConfermato(operazione, comando) })
+                } ?: aggiornaRiga(id) { suGuasto(it).copy(erroreRiga = MESSAGGIO_ERRORE_GENERICO) }
             } finally {
                 aggiornaRiga(id) { it.copy(operazioneInCorso = false) } // L269
             }

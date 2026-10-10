@@ -26,7 +26,6 @@ import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
-import snastro.ui.comandoConfermato
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
 import snastro.ui.nonFataleRegistrato
@@ -137,7 +136,7 @@ class RegistrazioniPresenter(
     private var generazioneApplicata = 0
 
     // Before `init`: its collectors may run at once (an immediate dispatcher) and already touch the shared state.
-    private val s2 = StatoS2(_stato, scope, ::carica)
+    private val s2 = StatoS2(_stato, scope, io, ::carica)
     private val importazione = FlussoImporta(s2, scope, io, progettoId, aggiungiRegistrazione)
     private val eliminazione = FlussoEliminaRiga(s2, io, lettore, eliminaRegistrazione)
     private val incontro = FlussoIncontro(s2, scope, io, avviaElaborazioniDellIncontro)
@@ -463,13 +462,7 @@ class RegistrazioniPresenter(
     fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) = s2.comandoDiRiga(
         id,
         "modifica la data di $id",
-        comando = {
-            withContext(io) {
-                comandoConfermato("modifica la data di $id") {
-                    modificaDataRegistrazione(ModificaDataRegistrazione(id, nuovaData))
-                }
-            }
-        },
+        comando = { modificaDataRegistrazione(ModificaDataRegistrazione(id, nuovaData)) },
         suEsito = { concludiRiga(id, it) },
     )
 
@@ -480,11 +473,7 @@ class RegistrazioniPresenter(
     fun rinomina(id: RegistrazioneId, nuovoTitolo: String) = s2.comandoDiRiga(
         id,
         "rinomina $id",
-        comando = {
-            withContext(io) {
-                comandoConfermato("rinomina $id") { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) }
-            }
-        },
+        comando = { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) },
         suEsito = { concludiRiga(id, it) },
     )
 
@@ -502,13 +491,7 @@ class RegistrazioniPresenter(
             is NumeroPersoneCampo.Valido -> s2.comandoDiRiga(
                 id,
                 "avvia l'elaborazione di $id",
-                comando = {
-                    withContext(io) {
-                        comandoConfermato("avvia l'elaborazione di $id") {
-                            comando(AvviaElaborazione(id, campo.numero))
-                        }
-                    }
-                },
+                comando = { comando(AvviaElaborazione(id, campo.numero)) },
                 suEsito = { concludiRiga(id, it) },
             )
         }
@@ -540,9 +523,7 @@ class RegistrazioniPresenter(
         s2.comandoDiRiga(
             id,
             "ritrascrivi $id",
-            comando = {
-                withContext(io) { comandoConfermato("ritrascrivi $id") { comando(AvviaElaborazione(id, numero)) } }
-            },
+            comando = { comando(AvviaElaborazione(id, numero)) },
             suEsito = { concludiRiga(id, it) },
         )
     }
@@ -562,11 +543,7 @@ class RegistrazioniPresenter(
         s2.comandoDiRiga(
             id,
             "annulla $elaborazioneId",
-            comando = {
-                withContext(io) {
-                    comandoConfermato("annulla $elaborazioneId") { comando(AnnullaElaborazione(elaborazioneId)) }
-                }
-            },
+            comando = { comando(AnnullaElaborazione(elaborazioneId)) },
             suEsito = { esito ->
                 carica() // AC-476: reload on both Ok and Errore (see the kdoc above)
                 val messaggio = (esito as? Esito.Errore)?.errore
@@ -587,7 +564,7 @@ class RegistrazioniPresenter(
         s2.comandoDiRiga(
             id,
             "modifica l'ora di inizio di $id",
-            comando = { withContext(io) { comandoConfermato("modifica l'ora di inizio di $id") { comando(id, ora) } } },
+            comando = { comando(id, ora) },
             suEsito = { concludiRiga(id, it) },
         )
     }

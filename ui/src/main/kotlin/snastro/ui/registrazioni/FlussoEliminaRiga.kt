@@ -8,7 +8,6 @@ import snastro.kernel.RegistrazioneId
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
 import snastro.progetto.dominio.ErroreProgetto
 import snastro.trascrizione.dominio.ErroreTrascrizione
-import snastro.ui.comandoConfermato
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
 import snastro.ui.testi.MESSAGGIO_ELIMINAZIONE_RIFIUTATA
@@ -17,9 +16,9 @@ import snastro.ui.testi.messaggioPer
 
 /**
  * The delete-a-row flow of S2 · Registrazioni (ADR 0020 §6, AC-625..628): the row's 'Elimina…' confirmation
- * ([RigaRegistrazione.confermaElimina]), ONE [eliminaRegistrazione] run on [io], the [lettore] paused first when it
+ * ([RigaRegistrazione.confermaElimina]), ONE [eliminaRegistrazione], the [lettore] paused first (on [io]) when it
  * plays the deleted row, and the dismissible success notice. The command runs on S2's one row runner
- * ([StatoS2.comandoDiRiga]: M3 guard, logged fault, L269 reset).
+ * ([StatoS2.comandoDiRiga]: M3 guard, `io` hop, `comandoConfermato`, logged fault, L269 reset).
  */
 internal class FlussoEliminaRiga(
     private val s2: StatoS2,
@@ -53,9 +52,7 @@ internal class FlussoEliminaRiga(
         s2.comandoDiRiga(
             id,
             "elimina $id",
-            comando = {
-                withContext(io) { comandoConfermato("elimina $id") { eliminaRegistrazione(EliminaRegistrazione(id)) } }
-            },
+            comando = { eliminaRegistrazione(EliminaRegistrazione(id)) },
             suEsito = { esito ->
                 when (esito) {
                     is Esito.Ok -> {
