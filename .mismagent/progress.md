@@ -202,3 +202,10 @@
 - `ImpostazioniPresenter`: an unreadable preferences file still starts from `Preferenze()`, now with `errore = MESSAGGIO_ERRORE_GENERICO` (cleared by `chiudiErrore`). `LettorePresenter.pausa` runs through `nonFataleRegistrato("pausa")` on the single lane; a fault sets `Errore(generic)` only if `richiestaCorrente` is unchanged (before: escaped into `scope` unlogged).
 - 5 new tests (2 in `RiassuntoPresenterGuastiTest`, 2 in `ImpostazioniPresenterTest`, 1 in `LettorePresenterTest`), red before ("expected <generic> but was <null>", "no element matching the predicate"); existing tests unchanged. ui 713/713, `./gradlew check` exit 0.
 - Slice 32 (S3's silent edges) can reuse the same shape: message applied after the re-read, never before (`ricarica()` clears it). Citation update for non-fatal-faults in `conventions-proposals.md`.
+
+## 32-messaggio-ai-bordi-s3 — 2026-10-10
+- `StatoVoci.avviaTraParti`: a failed cross-Parte computation still shows no banner, and now calls `impostaErrore(MESSAGGIO_ERRORE_GENERICO)` after `pubblica()`. A superseded job never gets there, because its cancellation propagates through `nonFataleRegistrato`.
+- `RegistrazionePresenter`: `sbobinaturaOSicuro` and the new `incontroOSicuro` return `Letto<T>?` (file-private; `null` = threw, `Letto(null)` = a clean empty answer). `mostraTrascritto` sets `errore = generic` on the `Dati` it publishes. `intestazioneParte` is now pure (takes the Incontro) and its fallback is unchanged.
+- 3 new CR-7 tests (1 in `StatoVociGuastiTest`, 2 in `RegistrazionePresenterGuastiTest`). Before the fix they were red with "expected <generic> but was <null>" (their log assertions already passed). Existing S3 tests unchanged. ui 716/716; `mm gate` green.
+- `AmbienteVoci`: the stacked KDocs (`:58-63`, `:156-157`) were each moved onto their own declaration. `traPartiRotta` now throws one `guastoTraParti` instance, so a test can match it with `causatoDa`.
+- No silent S3 edge is left. Citation update for non-fatal-faults is in `conventions-proposals.md`.
