@@ -62,12 +62,13 @@ class PromptRiassuntoTest {
     }
 
     @Test
-    fun `R1-8 l'argomento e contesto per il sommario, non un filtro`() {
+    fun `EX-23 l'argomento e contesto per il sommario, non un filtro`() {
         val prompt = PromptRiassunto.componi(richiesta("[s1 V1] testo", argomento = "il sito"))
 
         assertTrue(
-            "Argomento della riunione indicato dall'utente: \"il sito\". Usalo per capire di cosa parla la " +
-                "riunione; racconta comunque tutta la riunione." in prompt,
+            "Argomento della riunione indicato dall'utente: \"il sito\". Usalo solo per capire di cosa parla la " +
+                "riunione, non per scegliere cosa raccontare: racconta comunque tutta la riunione, anche le parti " +
+                "su altri temi, con gli accordi e i prossimi passi." in prompt,
             prompt,
         )
         assertTrue("fuori tema" !in prompt, prompt)

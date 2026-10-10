@@ -7,8 +7,10 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
  * `<think></think>` (thinking off; it matches the model's jinja template, spike: identical token counts). The system
  * turn asks for the Sommario alone, as `{"sommario": "…"}` ([GrammaticaRisposta]), with the `{V<n>}` speaker syntax, a
  * length ([MisuraRisposta]) and — when present — l'Argomento as context, never as a filter. It is pass 1 of spike H1
- * word for word (`.mismagent/spikes/h1.md`, R1-8): the only answer that, on skatefest, told the key points in every run
- * and never invented one. The user turn is the labelled input built by Sintesi (`IngressoRiassunto`: lines
+ * (`.mismagent/spikes/h1.md`, R1-8): the only answer that, on skatefest, told the key points in every run and never
+ * invented one. Only the Argomento line differs: pass 1's "racconta comunque tutta la riunione" alone let an Argomento
+ * about the site drop D1; naming the other topics, the agreements and the next steps keeps it (EX-23, measured in
+ * the spike's "In produzione"). The user turn is the labelled input built by Sintesi (`IngressoRiassunto`: lines
  * `[s<n> V<n>] testo`, then the legend `V<n> = Voce n`, ADR 0032). The system text still says "V<n> = nome": it is the
  * wording measured with the good results, left as is on purpose.
  */
@@ -40,7 +42,8 @@ internal object PromptRiassunto {
         append("è svolta.")
         richiesta.argomento?.let { argomento ->
             append("\n- Argomento della riunione indicato dall'utente: \"${neutro(argomento)}\". ")
-            append("Usalo per capire di cosa parla la riunione; racconta comunque tutta la riunione.")
+            append("Usalo solo per capire di cosa parla la riunione, non per scegliere cosa raccontare: racconta ")
+            append("comunque tutta la riunione, anche le parti su altri temi, con gli accordi e i prossimi passi.")
         }
     }
 
