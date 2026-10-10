@@ -180,3 +180,9 @@
 - First Riassunto acceptance tests (`RiassuntoSoloSommarioTest`, EX-20/21/26) on `BancoRiassunto`: the real composition (`AmbienteProgetto` gained `modelloLinguistico`) + the real `ModelloLinguisticoLlama` over a fake `:llama-jni` that answers what the grammar asks; red before with the invented decision in `decisioni`.
 - Real model, main's code: `./gradlew :avvio:benchmarkRiassunto -Pcampione=<skatefest .md> [-Pargomento=…]` (new opt-in flag) — EX-20 63.5 s / 448 words, EX-21 58.3 s / 413 words, D1 and Q1 told, nothing given as decided (`.mismagent/spikes/h1.md` § "In produzione").
 - Slices 24–25 (EX-23..EX-25): reuse `BancoRiassunto`; slice 24's prompt wording already landed here (pass 1 has it). ADR 0026 §5 still describes the list grammar (design note).
+
+## 23-ciclo-fermato — 2026-10-10
+- EX-18: `max_tokens` = ⌈3.5 × `MisuraRisposta.paroleSommario`⌉ + 512 (`ModelloLinguisticoLlama.maxTokens(richiesta)`, was from the cap: 35 512 at 10 000); reaching it is the new `ErroreApplicazioneSintesi.Ripetuto` → `MotivoFallimento.RIPETUTO` ("ripetuto", no SQL CHECK per ADR 0022) → "Il modello si è ripetuto: riprova." (`MESSAGGIO_MODELLO_RIPETUTO`); the tab's existing state 10 gives Riprova and keeps the previous Riassunto.
+- No time budget on the `cancel` lambda: it cannot tell a loop from a long meeting. Bound derived: an hour of speech at the 10 000 cap = 6 112 tokens ≈ 407 s at 15 t/s. `benchmarkRiassunto` on skatefest after the change: 54.0 s, 581 tokens, 413 words, same Sommario as slice 22 (generation ≈ 20 t/s).
+- `BancoRiassunto` gained `riassumiFinche` (wait for any tab state), `impostaLunghezzaMassima` (the tab's inline editor) and the fake's `siRipete` loop timed at `TOKEN_AL_SECONDO`.
+- Open for the human (design notes): with seed 42 fixed, Riprova on the same input likely loops again (assumption); ADR 0026 §5/§6 and ADR 0022's code list need the architect's amendment.
