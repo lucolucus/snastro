@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: 361c0737d62014b2cba7bb9cec4db65b1c8e0d67
 After: 22, 23, 24, 25
 
 `RegistrazioniPresenter` (`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, 715 lines) takes
