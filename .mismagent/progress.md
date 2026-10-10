@@ -174,3 +174,9 @@
 - CR-19b entries for the four files removed (2, 2, 1, 1 -> 0): no `:ui` file is left in the frozen list.
 - New CR-7 tests in the existing test classes (6, red before with "Collection contains no element matching the predicate"); `LunghezzaRiassuntoPresenter`'s fault paths had no test before. ui 707/707, architettura-test 459/459, `mm gate` green.
 - Debt in `design-notes.md`: `leggiSenzaErrori` falls back with no message; `LettorePresenter.pausa` has no edge at all. Citation proposal in `conventions-proposals.md`.
+
+## 22-punti-cardine-skatefest — 2026-10-10
+- R1-8 built: `PromptRiassunto` is spike H1's pass 1 (only `{"sommario": "..."}`, Argomento as context: "racconta comunque tutta la riunione"), `risposta-sommario.gbnf` replaces `risposta-v1.gbnf`, `RispostaSommario` (was `RispostaV1`) reads exactly one string key and returns the port's `RispostaModello` with empty lists; `MisuraRisposta.massimoVoci` gone. Port, domain, screen and Copia unchanged: they already skip empty lists.
+- First Riassunto acceptance tests (`RiassuntoSoloSommarioTest`, EX-20/21/26) on `BancoRiassunto`: the real composition (`AmbienteProgetto` gained `modelloLinguistico`) + the real `ModelloLinguisticoLlama` over a fake `:llama-jni` that answers what the grammar asks; red before with the invented decision in `decisioni`.
+- Real model, main's code: `./gradlew :avvio:benchmarkRiassunto -Pcampione=<skatefest .md> [-Pargomento=…]` (new opt-in flag) — EX-20 63.5 s / 448 words, EX-21 58.3 s / 413 words, D1 and Q1 told, nothing given as decided (`.mismagent/spikes/h1.md` § "In produzione").
+- Slices 24–25 (EX-23..EX-25): reuse `BancoRiassunto`; slice 24's prompt wording already landed here (pass 1 has it). ADR 0026 §5 still describes the list grammar (design note).
