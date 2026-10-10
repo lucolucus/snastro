@@ -1,20 +1,12 @@
 package snastro.sintesi.adattatori.ml
 
 /**
- * The bounded GBNF of answer schema v1 (`risposta-v1.gbnf` next to this class, ADR 0026 §5): every list ≤ N items,
- * every `fonti` ≤ 6 ids, ids `[1-9][0-9]{0,5}`. Handed to EVERY generation, with `max_tokens` (the second bound).
- * N is per request ([MisuraRisposta.massimoVoci], 2026-09-30): the resource holds the `{0,@ALTRE_VOCI@}` slot.
+ * The bounded GBNF of the answer (`risposta-sommario.gbnf` next to this class, ADR 0026 §5): `{"sommario": "…"}` and
+ * nothing else (R1-8, 2026-10-10: in spike H1 only the Sommario written alone kept the key points without inventing
+ * any). Handed to EVERY generation, with `max_tokens` (the second bound).
  */
 internal object GrammaticaRisposta {
-    private const val SEGNAPOSTO = "@ALTRE_VOCI@"
-
-    private val MODELLO: String = checkNotNull(GrammaticaRisposta::class.java.getResource("risposta-v1.gbnf")) {
-        "risorsa risposta-v1.gbnf assente dal classpath di :sintesi:adattatori"
+    val GBNF: String = checkNotNull(GrammaticaRisposta::class.java.getResource("risposta-sommario.gbnf")) {
+        "risorsa risposta-sommario.gbnf assente dal classpath di :sintesi:adattatori"
     }.readText()
-
-    /** The grammar whose three lists hold at most [massimoVoci] items each. */
-    fun per(massimoVoci: Int): String {
-        require(massimoVoci >= 1) { "massimoVoci deve essere almeno 1: $massimoVoci" }
-        return MODELLO.replace(SEGNAPOSTO, (massimoVoci - 1).toString())
-    }
 }

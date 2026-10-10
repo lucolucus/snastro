@@ -1,0 +1,6 @@
+# The answer of ModelloLinguisticoLlama as a BOUNDED GBNF (ADR 0026 §5; R1-8, 2026-10-10: the Sommario alone, the
+# lists are no longer asked for). The only unbounded repetition is a string's characters: max_tokens bounds it.
+root ::= "{" ws "\"sommario\":" ws string ws "}"
+string ::= "\"" char* "\""
+char ::= [^"\\\x7F\x00-\x1F] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
+ws ::= | " "

@@ -25,9 +25,9 @@ import java.nio.file.Path
  *
  * Every [riassumi] loads the model and its context, generates ONCE and closes both before returning — on success,
  * error and cancellation alike; nothing is kept warm (ADR 0026 §3), so the shared queue never holds the LLM's
- * memory while an Elaborazione runs. The generation is bounded twice (ADR 0026 §5): the bounded grammar of answer
- * schema v1 ([GrammaticaRisposta], lazily sampled) and `maxTokens` = [maxTokens] of the Riassunto's cap; reaching
- * `maxTokens` is [ErroreApplicazioneSintesi.RispostaNonValida], never a truncated answer.
+ * memory while an Elaborazione runs. The generation is bounded twice (ADR 0026 §5): the bounded grammar of the
+ * answer, the Sommario alone since R1-8 ([GrammaticaRisposta], lazily sampled) and `maxTokens` = [maxTokens] of the
+ * Riassunto's cap; reaching `maxTokens` is [ErroreApplicazioneSintesi.RispostaNonValida], never a truncated answer.
  *
  * Locations are the composition's ([cartellaNativi], [fileModello]: suppliers read at each run, never at
  * construction). A `null` native directory means neither `snastro.llm.native.path` nor
@@ -142,7 +142,7 @@ public class ModelloLinguisticoLlama(
                 annulla() -> Esito.Errore(ErroreApplicazioneSintesi.Annullato) // a late cancel: the answer is discarded
                 generazione.value.stop == StopReason.MAX_TOKENS ->
                     Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
-                else -> RispostaV1.leggi(generazione.value.text, legenda)?.let { Esito.Ok(it) }
+                else -> RispostaSommario.leggi(generazione.value.text, legenda)?.let { Esito.Ok(it) }
                     ?: Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
             }
         }
@@ -197,7 +197,7 @@ public class ModelloLinguisticoLlama(
 
         private fun opzioni(richiesta: RichiestaRiassunto) = GenerateOptions(
             maxTokens = maxTokens(richiesta.lunghezzaMassimaParole),
-            grammar = GrammaticaRisposta.per(MisuraRisposta.di(richiesta).massimoVoci),
+            grammar = GrammaticaRisposta.GBNF,
             lazyGrammar = true,
             sampling = CAMPIONAMENTO,
         )

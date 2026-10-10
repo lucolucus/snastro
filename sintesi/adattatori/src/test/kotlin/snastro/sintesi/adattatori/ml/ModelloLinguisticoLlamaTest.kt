@@ -58,7 +58,7 @@ class ModelloLinguisticoLlamaTest {
         val risposta = modello(backend).riassumi(richiesta) { false }.atteso()
 
         assertEquals(listOf("open(-1)", "generate", "close"), backend.chiamate)
-        assertEquals("Combattimento a turni.", risposta.decisioni.single().testo)
+        assertEquals("{V1} e {V2} scelgono il combattimento a turni.", risposta.sommario)
     }
 
     @Test
@@ -161,7 +161,7 @@ class ModelloLinguisticoLlamaTest {
 
         val opzioni = backend.opzioni.single()
         assertEquals(9_262, opzioni.maxTokens)
-        assertEquals(GrammaticaRisposta.per(MisuraRisposta.di(richiesta).massimoVoci), opzioni.grammar)
+        assertEquals(GrammaticaRisposta.GBNF, opzioni.grammar)
         assertEquals("root", opzioni.grammarRoot)
         assertTrue(opzioni.lazyGrammar)
     }
@@ -273,7 +273,8 @@ class ModelloLinguisticoLlamaTest {
 
     @Test
     fun `AC-S180 una risposta fuori schema e RispostaNonValida`() {
-        val backend = BackendFinto(genera = { _, _ -> LlamaResult.Ok(unaGenerazione("""{"sommario":"x"}""")) })
+        val fuoriSchema = unaGenerazione("""{"sommario":"x","decisioni":[]}""")
+        val backend = BackendFinto(genera = { _, _ -> LlamaResult.Ok(fuoriSchema) })
 
         modello(backend).riassumi(richiesta) { false }.erroreAtteso<ErroreApplicazioneSintesi.RispostaNonValida>()
     }

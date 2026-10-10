@@ -1,11 +1,14 @@
 package snastro.ui.riassunto
 
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.Clipboard
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertTextContains
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.runDesktopComposeUiTest
@@ -29,6 +32,9 @@ private class AppuntiFinti : Clipboard {
     override val nativeClipboard: Any get() = this
 }
 
+private const val LARGHEZZA = 1280
+private const val ALTEZZA = 800
+
 private val AZIONI = AzioniRiassunto({}, {}, {}, {}, {}, {}, {})
 
 private val CONTENUTO = ContenutoUi(
@@ -45,32 +51,53 @@ private val CONTENUTO = ContenutoUi(
 @OptIn(ExperimentalTestApi::class)
 class SchedaRiassuntoCopiaTest {
     @Test
-    fun `Copia mette il riassunto negli appunti e conferma`() = runDesktopComposeUiTest(1280, 800) {
+    fun `Copia mette il riassunto negli appunti e conferma`() = runDesktopComposeUiTest(LARGHEZZA, ALTEZZA) {
         val appunti = AppuntiFinti()
-        setContent {
-            SnastroTema(scuro = false, riduciMovimento = true) {
-                CompositionLocalProvider(LocalClipboard provides appunti) {
-                    SchedaRiassunto(
-                        RiassuntoUiStato.Dati(
-                            modello = ModelloUi.Installato,
-                            richiesta = null,
-                            fallimentoTesto = null,
-                            nonDisponibileTesto = null,
-                            contenuto = CONTENUTO,
-                            argomento = ArgomentoUiStato("", "0/200", null),
-                            lunghezzaMassima = LunghezzaMassimaUiStato.Testo(2_000),
-                        ),
-                        AZIONI,
-                    )
-                }
-            }
-        }
+        setContent { Scheda(CONTENUTO, appunti) }
 
         onNodeWithTag("riassunto-copia").performClick()
         waitForIdle()
 
-        val copiato = (appunti.ultimo?.nativeClipEntry as Transferable).getTransferData(DataFlavor.stringFlavor)
-        assertEquals(testoRiassuntoDaCopiare(CONTENUTO), copiato)
+        assertEquals(testoRiassuntoDaCopiare(CONTENUTO), appunti.testo())
         onNodeWithTag("riassunto-copia").assertTextContains(ETICHETTA_RIASSUNTO_COPIATO)
     }
+
+    @Test
+    fun `EX-20 EX-26 solo sommario, niente sezioni e Copia copia il sommario`() =
+        runDesktopComposeUiTest(LARGHEZZA, ALTEZZA) {
+            val appunti = AppuntiFinti()
+            val soloSommario = CONTENUTO.copy(decisioni = emptyList())
+            setContent { Scheda(soloSommario, appunti) }
+
+            listOf("Decisioni", "Questioni aperte", "Azioni", "Punti chiave").forEach {
+                onAllNodesWithText(it).assertCountEquals(0)
+            }
+            onNodeWithTag("riassunto-copia").performClick()
+            waitForIdle()
+
+            assertEquals("Un sommario.", appunti.testo())
+        }
+
+    @Composable
+    private fun Scheda(contenuto: ContenutoUi, appunti: AppuntiFinti) {
+        SnastroTema(scuro = false, riduciMovimento = true) {
+            CompositionLocalProvider(LocalClipboard provides appunti) {
+                SchedaRiassunto(
+                    RiassuntoUiStato.Dati(
+                        modello = ModelloUi.Installato,
+                        richiesta = null,
+                        fallimentoTesto = null,
+                        nonDisponibileTesto = null,
+                        contenuto = contenuto,
+                        argomento = ArgomentoUiStato("", "0/200", null),
+                        lunghezzaMassima = LunghezzaMassimaUiStato.Testo(2_000),
+                    ),
+                    AZIONI,
+                )
+            }
+        }
+    }
+
+    private fun AppuntiFinti.testo(): Any =
+        (ultimo?.nativeClipEntry as Transferable).getTransferData(DataFlavor.stringFlavor)
 }

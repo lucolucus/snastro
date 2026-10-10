@@ -111,6 +111,8 @@ internal class AmbienteProgetto(
     rilasciaMl: () -> Unit = {},
     decodificatoreParlanti: DecodificatoreAudio = DecodificatoreParlantiFinta(),
     val modello: ModelloLinguisticoDiProva = ModelloLinguisticoDiProva(),
+    /** The LLM the composition runs: [modello] unless a test needs the real adapter over a fake library. */
+    modelloLinguistico: ModelloLinguistico = modello,
     val disponibilita: DisponibilitaModelloLinguisticoFinta =
         DisponibilitaModelloLinguisticoFinta(StatoModelloLinguistico.Installato),
     modelliPronti: () -> Boolean = { true },
@@ -158,7 +160,7 @@ internal class AmbienteProgetto(
         decodificatore = { RegistraDecodifiche(DecodificatoreAudioFinta(sorgenti), decodificate) },
         adattatoriParlanti = { AdattatoriParlanti(estrattore, { decodificatoreParlanti }, proposte, rilasciaMl) },
         modelliPronti = modelliPronti,
-        modello = modello,
+        modello = modelloLinguistico,
         disponibilita = disponibilita,
         scadenzaArresto = scadenzaArresto,
     )

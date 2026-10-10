@@ -72,9 +72,5 @@ internal class BackendFinto(
     }
 }
 
-/** A recorded answer of schema v1 (compact, as the bounded grammar writes it). */
-internal const val RISPOSTA_VALIDA: String =
-    """{"sommario":"{V1} e {V2} scelgono il combattimento a turni.","decisioni":[{"testo":"Combattimento a turni.",""" +
-        """"fonti":[1]}],"questioni_aperte":[{"testo":"Quanti nemici per stanza.","fonti":[3]}],"azioni":[""" +
-        """{"testo":"Preparare il prototipo entro venerdi.","fonti":[2],"responsabile":2}],"punti_chiave":[""" +
-        """{"testo":"Il ritmo resta lento di proposito.","fonti":[1,3],"parlante":null}]}"""
+/** A recorded answer (compact, as the bounded grammar writes it): the Sommario alone (R1-8). */
+internal const val RISPOSTA_VALIDA: String = """{"sommario":"{V1} e {V2} scelgono il combattimento a turni."}"""

@@ -5,7 +5,7 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** `neutro`'s ChatML-marker stripping: the input and l'Argomento never open or close a turn nor smuggle a token. */
+/** The prompt (R1-8: the Sommario alone) and `neutro`: the input and l'Argomento never open or close a turn. */
 class PromptRiassuntoTest {
     private fun richiesta(ingresso: String, argomento: String? = null) =
         RichiestaRiassunto(ingresso = ingresso, argomento = argomento, lunghezzaMassimaParole = 500)
@@ -48,13 +48,28 @@ class PromptRiassuntoTest {
     }
 
     @Test
-    fun `la lunghezza e un obiettivo proporzionale al trascritto, il tetto resta il massimo`() {
+    fun `R1-8 il prompt chiede il solo sommario, di una lunghezza proporzionale al trascritto`() {
         val ingresso = (1..200).joinToString("\n") { "[s$it V1] una frase di dieci parole per questa riga di prova" }
         val prompt = PromptRiassunto.componi(
             RichiestaRiassunto(ingresso = ingresso, argomento = null, lunghezzaMassimaParole = 2_000),
         )
 
-        assertTrue("scrivi circa 800 parole in tutto, mai più di 2000" in prompt, prompt)
-        assertTrue("al massimo 5 frasi" !in prompt, prompt)
+        assertTrue("Rispondi con un JSON {\"sommario\": \"...\"}" in prompt, prompt)
+        assertTrue("circa 300 parole che racconta la riunione nell'ordine in cui si è svolta" in prompt, prompt)
+        listOf("decisione", "questione", "azione", "punto chiave", "fonti", "Argomento").forEach {
+            assertTrue(it !in prompt, it)
+        }
+    }
+
+    @Test
+    fun `R1-8 l'argomento e contesto per il sommario, non un filtro`() {
+        val prompt = PromptRiassunto.componi(richiesta("[s1 V1] testo", argomento = "il sito"))
+
+        assertTrue(
+            "Argomento della riunione indicato dall'utente: \"il sito\". Usalo per capire di cosa parla la " +
+                "riunione; racconta comunque tutta la riunione." in prompt,
+            prompt,
+        )
+        assertTrue("fuori tema" !in prompt, prompt)
     }
 }
