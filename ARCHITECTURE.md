@@ -7,6 +7,8 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-10 — conventions (decided by the user): presenter-split — the S2 row runner described as built by slice 33;
+  rule unchanged.
 - 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 32): S3's cross-Parte
   computation and Sbobinatura/Incontro reads show the generic message; rule unchanged.
 - 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 31): Lettore `pausa`, the
