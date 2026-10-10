@@ -186,6 +186,7 @@ private fun mappaErrore(errore: ErroreDominio): EsecuzioneModello = when (errore
     is ErroreApplicazioneSintesi.IngressoTroppoLungo -> fallita(MotivoFallimento.TROPPO_LUNGA)
     is ErroreApplicazioneSintesi.ErroreRuntime -> fallita(MotivoFallimento.ERRORE_MODELLO)
     ErroreApplicazioneSintesi.RispostaNonValida -> fallita(MotivoFallimento.ERRORE_MODELLO)
+    ErroreApplicazioneSintesi.Ripetuto -> fallita(MotivoFallimento.RIPETUTO)
     ErroreApplicazioneSintesi.Annullato -> EsecuzioneModello.Annullata
     null -> error("ModelloLinguistico ha restituito un errore inatteso: $errore")
 }

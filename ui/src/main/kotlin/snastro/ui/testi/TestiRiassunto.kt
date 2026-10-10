@@ -82,17 +82,22 @@ fun messaggioNonDisponibile(motivo: MotivoNonDisponibile, numParti: Int): String
  * branch here still shows a plain sentence instead of crashing the tab), covered — with every KNOWN
  * code — by `TestiRiassuntoTest`.
  */
-fun messaggioFallimento(codice: String): String {
-    val motivo = when (codice) {
-        "modello_non_disponibile" -> "modello non disponibile"
-        "errore_modello" -> "errore del modello"
-        "troppo_lunga" -> "registrazione troppo lunga"
-        "nessun_contenuto_verificabile" -> "nessun contenuto verificabile"
-        "interrotto" -> "interrotto"
-        else -> codice
-    }
-    return "Il riassunto non è riuscito: $motivo."
+fun messaggioFallimento(codice: String): String = when (codice) {
+    "ripetuto" -> MESSAGGIO_MODELLO_RIPETUTO // EX-18: its own sentence, it says what to do
+    else -> "Il riassunto non è riuscito: ${motivoDelFallimento(codice)}."
 }
+
+private fun motivoDelFallimento(codice: String): String = when (codice) {
+    "modello_non_disponibile" -> "modello non disponibile"
+    "errore_modello" -> "errore del modello"
+    "troppo_lunga" -> "registrazione troppo lunga"
+    "nessun_contenuto_verificabile" -> "nessun contenuto verificabile"
+    "interrotto" -> "interrotto"
+    else -> codice
+}
+
+/** EX-18: the model looped until its output bound (`ripetuto`); the tab offers Riprova. */
+const val MESSAGGIO_MODELLO_RIPETUTO: String = "Il modello si è ripetuto: riprova."
 
 /** AC-S131 (pre-release finding #152, rework): the fase label [ChipStato][snastro.ui.stile.ChipStato]
  * shows for state 7 — [snastro.ui.stile.TipoChipStato.InCorso] renders it next to the elapsed time. */

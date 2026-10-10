@@ -273,6 +273,7 @@ class EseguiProssimoRiassuntoServizioTest {
             ErroreApplicazioneSintesi.IngressoTroppoLungo(31_000) to MotivoFallimento.TROPPO_LUNGA,
             ErroreApplicazioneSintesi.ErroreRuntime("metal non disponibile") to MotivoFallimento.ERRORE_MODELLO,
             ErroreApplicazioneSintesi.RispostaNonValida to MotivoFallimento.ERRORE_MODELLO,
+            ErroreApplicazioneSintesi.Ripetuto to MotivoFallimento.RIPETUTO,
         )
 
         casi.forEachIndexed { indice, (errore, motivoAtteso) ->

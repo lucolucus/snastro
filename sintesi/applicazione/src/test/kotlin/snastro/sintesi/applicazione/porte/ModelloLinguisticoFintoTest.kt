@@ -59,6 +59,7 @@ class ModelloLinguisticoFintoTest : ModelloLinguisticoContratto() {
             ErroreApplicazioneSintesi.IngressoTroppoLungo(token = 31_000),
             ErroreApplicazioneSintesi.ErroreRuntime("metal non disponibile"),
             ErroreApplicazioneSintesi.RispostaNonValida,
+            ErroreApplicazioneSintesi.Ripetuto,
             ErroreApplicazioneSintesi.Annullato,
         )
         val finto = ModelloLinguisticoFinto(uow)

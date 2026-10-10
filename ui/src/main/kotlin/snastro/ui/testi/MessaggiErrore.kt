@@ -160,5 +160,6 @@ fun messaggioPer(errore: ErroreApplicazioneSintesi): String = when (errore) {
     is ErroreApplicazioneSintesi.IngressoTroppoLungo -> "La registrazione è troppo lunga per il riassunto."
     is ErroreApplicazioneSintesi.ErroreRuntime -> "Il modello di linguaggio non è riuscito a generare il riassunto."
     ErroreApplicazioneSintesi.RispostaNonValida -> "Il modello di linguaggio ha dato una risposta non valida."
+    ErroreApplicazioneSintesi.Ripetuto -> MESSAGGIO_MODELLO_RIPETUTO
     ErroreApplicazioneSintesi.Annullato -> "Il riassunto è stato annullato."
 }

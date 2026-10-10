@@ -19,6 +19,7 @@ import snastro.kernel.RegistrazioneId
 import snastro.sintesi.adattatori.ml.ModelloLinguisticoLlama
 import snastro.supporto.test.attendiFinche
 import snastro.ui.riassunto.ContenutoUi
+import snastro.ui.riassunto.LunghezzaMassimaUiStato
 import snastro.ui.riassunto.RiassuntoPresenter
 import snastro.ui.riassunto.RiassuntoUiStato
 import java.nio.file.Files
@@ -61,16 +62,36 @@ abstract class BancoRiassunto {
     }
 
     /** Types [argomento] (if any), clicks Riassumi and waits for the Riassunto shown: its content. */
-    protected fun RiassuntoPresenter.riassumi(argomento: String?): ContenutoUi {
+    protected fun RiassuntoPresenter.riassumi(argomento: String?): ContenutoUi =
+        checkNotNull(riassumiFinche(argomento, "Riassunto mostrato") { it.contenuto != null }.contenuto)
+
+    /** Types [argomento] (if any), clicks Riassumi and waits for the tab to show [atteso] ([messaggio]): that tab. */
+    protected fun RiassuntoPresenter.riassumiFinche(
+        argomento: String?,
+        messaggio: String,
+        atteso: (RiassuntoUiStato.Dati) -> Boolean,
+    ): RiassuntoUiStato.Dati {
         runBlocking(ambiente.dispatcherUi) {
             argomento?.let(azioni.cambiaArgomento)
             azioni.riassumi()
         }
-        attendiFinche(timeout = 30.seconds, messaggio = "Riassunto mostrato") { contenuto() != null }
-        return checkNotNull(contenuto())
+        attendiFinche(timeout = 30.seconds, messaggio = messaggio) { dati()?.let(atteso) == true }
+        return checkNotNull(dati())
     }
 
-    private fun RiassuntoPresenter.contenuto(): ContenutoUi? = (stato.value as? RiassuntoUiStato.Dati)?.contenuto
+    /** Sets the Progetto's lunghezza massima from the tab's inline editor (Cambia, [parole], Salva): "Salvato". */
+    protected fun RiassuntoPresenter.impostaLunghezzaMassima(parole: Int) {
+        runBlocking(ambiente.dispatcherUi) {
+            azioni.modificaLunghezzaMassima()
+            azioni.cambiaLunghezzaMassima(parole.toString())
+            azioni.salvaLunghezzaMassima()
+        }
+        attendiFinche(timeout = 30.seconds, messaggio = "lunghezza massima $parole salvata") {
+            dati()?.lunghezzaMassima == LunghezzaMassimaUiStato.Salvato(parole)
+        }
+    }
+
+    private fun RiassuntoPresenter.dati(): RiassuntoUiStato.Dati? = stato.value as? RiassuntoUiStato.Dati
 }
 
 /**
@@ -78,9 +99,18 @@ abstract class BancoRiassunto {
  * app's bounded grammar: just the Sommario when the grammar asks only for it, else the Sommario and the four lists of
  * the earlier answer (with the decision skatefest's spike saw invented, EX-14). Every prompt it receives lands in
  * [prompt].
+ *
+ * With [siRipete], the model falls into the loop of spike H1's v6 instead: it writes the same sentence until the
+ * `maxTokens` it was given and stops there ([StopReason.MAX_TOKENS]), at the speed measured on the real model
+ * ([TOKEN_AL_SECONDO]); the seconds that loop took land in [secondiInCiclo].
  */
 class LibreriaCheSegueLaGrammatica : LlamaBackend {
     val prompt: MutableList<String> = CopyOnWriteArrayList()
+
+    @Volatile
+    var siRipete: Boolean = false
+
+    val secondiInCiclo: MutableList<Double> = CopyOnWriteArrayList()
 
     override val devices: List<BackendDevice> =
         listOf(BackendDevice("CPU", DeviceKind.CPU, freeMemoryBytes = 36L shl 30, totalMemoryBytes = 36L shl 30))
@@ -96,11 +126,21 @@ class LibreriaCheSegueLaGrammatica : LlamaBackend {
             cancel: () -> Boolean,
         ): LlamaResult<Generation> {
             this@LibreriaCheSegueLaGrammatica.prompt += prompt
+            if (siRipete) return LlamaResult.Ok(inCiclo(prompt, options.maxTokens))
             val testo = if (options.grammar.orEmpty().contains("decisioni")) CON_LISTE else SOLO_SOMMARIO
             return LlamaResult.Ok(Generation(testo, prompt.length, testo.length, StopReason.END_OF_GENERATION, TEMPI))
         }
 
         override fun close() = Unit
+
+        private fun inCiclo(prompt: String, maxTokens: Int): Generation {
+            val secondi = maxTokens / TOKEN_AL_SECONDO
+            secondiInCiclo += secondi
+            val frasi = maxTokens / (FRASE_RIPETUTA.length / CARATTERI_PER_TOKEN)
+            val testo = """{"sommario":"""" + FRASE_RIPETUTA.repeat(frasi)
+            val tempi = Timings(loadMs = 1, prefillMs = 1, generationMs = (secondi * MILLIS_AL_SECONDO).toLong())
+            return Generation(testo, prompt.length, maxTokens, StopReason.MAX_TOKENS, tempi)
+        }
     }
 
     companion object {
@@ -114,6 +154,11 @@ class LibreriaCheSegueLaGrammatica : LlamaBackend {
             """"fonti":[2],"responsabile":2}],"punti_chiave":[{"testo":"Il gioco è quasi definitivo.","fonti":[1],""" +
             """"parlante":1}]}"""
         private const val CARATTERI_PER_TOKEN = 3
+        private const val FRASE_RIPETUTA = "Il poliziotto si muove verso il giocatore più vicino. "
+
+        /** Qwen3.5 9B on the M3 Pro: 35 512 tokens in ~40 minutes in v6's loop (≈ 14.8), ≈ 15 in ADR 0026 §5. */
+        const val TOKEN_AL_SECONDO: Double = 15.0
+        private const val MILLIS_AL_SECONDO = 1_000
         private val TEMPI = Timings(loadMs = 1, prefillMs = 1, generationMs = 1)
     }
 }

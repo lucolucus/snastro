@@ -85,6 +85,7 @@ class TestiRiassuntoTest {
             "TROPPO_LUNGA" to "Il riassunto non è riuscito: registrazione troppo lunga.",
             "NESSUN_CONTENUTO_VERIFICABILE" to "Il riassunto non è riuscito: nessun contenuto verificabile.",
             "INTERROTTO" to "Il riassunto non è riuscito: interrotto.",
+            "RIPETUTO" to "Il modello si è ripetuto: riprova.",
         )
         val classe = Class.forName("snastro.sintesi.dominio.MotivoFallimento")
         val getCodice = classe.getMethod("getCodice")

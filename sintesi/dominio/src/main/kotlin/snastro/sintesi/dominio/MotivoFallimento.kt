@@ -7,4 +7,7 @@ public enum class MotivoFallimento(public val codice: String) {
     TROPPO_LUNGA("troppo_lunga"),
     NESSUN_CONTENUTO_VERIFICABILE("nessun_contenuto_verificabile"),
     INTERROTTO("interrotto"),
+
+    /** The model repeated itself until its output bound (R1-6, EX-18). */
+    RIPETUTO("ripetuto"),
 }

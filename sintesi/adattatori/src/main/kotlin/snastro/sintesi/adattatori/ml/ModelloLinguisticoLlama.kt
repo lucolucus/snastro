@@ -27,7 +27,8 @@ import java.nio.file.Path
  * error and cancellation alike; nothing is kept warm (ADR 0026 §3), so the shared queue never holds the LLM's
  * memory while an Elaborazione runs. The generation is bounded twice (ADR 0026 §5): the bounded grammar of the
  * answer, the Sommario alone since R1-8 ([GrammaticaRisposta], lazily sampled) and `maxTokens` = [maxTokens] of the
- * Riassunto's cap; reaching `maxTokens` is [ErroreApplicazioneSintesi.RispostaNonValida], never a truncated answer.
+ * Sommario asked for. A Sommario that reaches `maxTokens` is a model repeating itself (spike H1 v6: a loop until the
+ * bound), so it is [ErroreApplicazioneSintesi.Ripetuto], never a truncated answer (EX-18).
  *
  * Locations are the composition's ([cartellaNativi], [fileModello]: suppliers read at each run, never at
  * construction). A `null` native directory means neither `snastro.llm.native.path` nor
@@ -140,8 +141,7 @@ public class ModelloLinguisticoLlama(
             }
             is LlamaResult.Ok -> when {
                 annulla() -> Esito.Errore(ErroreApplicazioneSintesi.Annullato) // a late cancel: the answer is discarded
-                generazione.value.stop == StopReason.MAX_TOKENS ->
-                    Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
+                generazione.value.stop == StopReason.MAX_TOKENS -> Esito.Errore(ErroreApplicazioneSintesi.Ripetuto)
                 else -> RispostaSommario.leggi(generazione.value.text, legenda)?.let { Esito.Ok(it) }
                     ?: Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
             }
@@ -165,9 +165,9 @@ public class ModelloLinguisticoLlama(
         /** 512-token prefill decodes, each a cancel point: the 10 s cancellation bound (ADR 0026 §4). */
         public const val PREFILL_CHUNK: Int = 512
 
-        /** 3.5 tokens per word of the cap, as an integer ratio (7 per 2 words), + 512 (ADR 0026 §5). */
+        /** 3.5 tokens per word asked, as an integer ratio (7 per 2 words), + 512 (ADR 0026 §5). */
         private const val TOKEN_PER_DUE_PAROLE = 7
-        private const val TOKEN_OLTRE_IL_TETTO = 512
+        private const val TOKEN_OLTRE_IL_SOMMARIO = 512
         private const val NANOS_PER_MILLI = 1_000_000L
 
         /** Thinking off, the spike's sampling (ADR 0026 §3, spike runtime-llm-in-app: temperature 0.2, seed 42). */
@@ -178,9 +178,14 @@ public class ModelloLinguisticoLlama(
         internal const val NATIVI_NON_IMPOSTATI: String = "cartella dei nativi llama.cpp non impostata: né la " +
             "proprietà di sistema snastro.llm.native.path né compose.application.resources.dir è impostata"
 
-        /** `⌈3.5 × lunghezzaMassimaParole⌉ + 512` (ADR 0026 §5): 2000 → 7 512, 10 000 → 35 512. */
-        public fun maxTokens(lunghezzaMassimaParole: Int): Int =
-            (TOKEN_PER_DUE_PAROLE * lunghezzaMassimaParole + 1) / 2 + TOKEN_OLTRE_IL_TETTO
+        /**
+         * `⌈3.5 × the Sommario's words⌉ + 512` ([MisuraRisposta.paroleSommario], EX-18): 100 → 862, 1 600 → 6 112.
+         * About 2.5 times the Sommario asked for at the ≈ 1.4 tokens per word Qwen3.5 9B writes (spike H1: 627 tokens
+         * for 448 words), so only a loop reaches it — and early: an hour of speech at the 10 000 cap stops a loop
+         * after ≈ 7 min of generation at ≈ 15 t/s, where the cap's own bound (35 512) took ~40 min.
+         */
+        public fun maxTokens(richiesta: RichiestaRiassunto): Int =
+            (TOKEN_PER_DUE_PAROLE * MisuraRisposta.di(richiesta).paroleSommario + 1) / 2 + TOKEN_OLTRE_IL_SOMMARIO
 
         /**
          * The run's context: the formatted prompt's estimate (≥ the real count, [LimiteIngresso]) + [maxTokens],
@@ -188,7 +193,7 @@ public class ModelloLinguisticoLlama(
          * grows for the inputs that need it; `ContextOverflow` stays the exact backstop.
          */
         public fun nCtx(prompt: String, richiesta: RichiestaRiassunto): Int {
-            val necessari = LimiteIngresso.stimaToken(prompt).toLong() + maxTokens(richiesta.lunghezzaMassimaParole)
+            val necessari = LimiteIngresso.stimaToken(prompt).toLong() + maxTokens(richiesta)
             val arrotondati = (necessari + GRANA_CONTESTO - 1) / GRANA_CONTESTO * GRANA_CONTESTO
             return arrotondati.coerceIn(N_CTX.toLong(), CONTESTO_NATIVO.toLong()).toInt()
         }
@@ -196,7 +201,7 @@ public class ModelloLinguisticoLlama(
         private fun parametri(nGpuLayers: Int, nCtx: Int) = ModelParams(nGpuLayers, nCtx, N_UBATCH, PREFILL_CHUNK)
 
         private fun opzioni(richiesta: RichiestaRiassunto) = GenerateOptions(
-            maxTokens = maxTokens(richiesta.lunghezzaMassimaParole),
+            maxTokens = maxTokens(richiesta),
             grammar = GrammaticaRisposta.GBNF,
             lazyGrammar = true,
             sampling = CAMPIONAMENTO,

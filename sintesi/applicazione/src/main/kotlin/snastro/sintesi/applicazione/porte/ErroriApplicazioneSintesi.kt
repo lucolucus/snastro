@@ -19,6 +19,9 @@ public sealed interface ErroreApplicazioneSintesi : ErroreDominio {
     /** The generated answer does not fit the answer schema → `errore_modello`. */
     public data object RispostaNonValida : ErroreApplicazioneSintesi
 
+    /** The model wrote until its output bound without ending the answer: it repeated itself → `ripetuto` (EX-18). */
+    public data object Ripetuto : ErroreApplicazioneSintesi
+
     /** The run was cancelled (annullato or interrupted) → nothing is written ([INV-S8]). */
     public data object Annullato : ErroreApplicazioneSintesi
 }

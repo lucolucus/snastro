@@ -32,6 +32,13 @@ class ModelloLinguisticoLlamaTest {
         lunghezzaMassimaParole = 2_000,
     )
 
+    /** An hour of speech (≈ 10 000 words, rounded up) at the highest lunghezza massima. */
+    private val unOraDiParlato = RichiestaRiassunto(
+        ingresso = (1..1_000).joinToString("\n") { "[s$it V1] uno due tre quattro cinque sei sette otto nove dieci" },
+        argomento = null,
+        lunghezzaMassimaParole = 10_000,
+    )
+
     private fun modello(
         backend: LlamaBackend,
         nativi: Path? = cartella,
@@ -121,7 +128,7 @@ class ModelloLinguisticoLlamaTest {
         val atteso = ModelloLinguisticoLlama.nCtx(PromptRiassunto.componi(lunga), lunga)
         assertEquals(atteso, nCtx)
         assertEquals(0, nCtx % 1_024)
-        assertTrue(nCtx in 100_000 + 7_512..ModelloLinguisticoLlama.CONTESTO_NATIVO, "$nCtx")
+        assertTrue(nCtx in 100_000 + ModelloLinguisticoLlama.maxTokens(lunga)..ModelloLinguisticoLlama.CONTESTO_NATIVO)
     }
 
     @Test
@@ -147,31 +154,42 @@ class ModelloLinguisticoLlamaTest {
     // --- AC-S159: output bound ------------------------------------------------------------------------------------
 
     @Test
-    fun `AC-S159 maxTokens e 3,5 per il tetto arrotondato per eccesso piu 512`() {
-        assertEquals(7_512, ModelloLinguisticoLlama.maxTokens(2_000))
-        assertEquals(9_262, ModelloLinguisticoLlama.maxTokens(2_500))
-        assertEquals(1_566, ModelloLinguisticoLlama.maxTokens(301)) // 1053.5 -> 1054
+    fun `EX-18 maxTokens e 3,5 per le parole chieste al sommario arrotondato per eccesso piu 512, non il tetto`() {
+        // The two-Segmento request asks the minimum Sommario (100 words) under any cap: ⌈350⌉ + 512.
+        assertEquals(862, ModelloLinguisticoLlama.maxTokens(richiesta))
+        assertEquals(862, ModelloLinguisticoLlama.maxTokens(richiesta.copy(lunghezzaMassimaParole = 10_000)))
+        // 10 000 spoken words at the 10 000 cap: target 4 000, Sommario 1 600 -> 5 600 + 512.
+        assertEquals(6_112, ModelloLinguisticoLlama.maxTokens(unOraDiParlato))
     }
 
     @Test
-    fun `AC-S159 ogni generazione riceve la grammatica limitata pigra e maxTokens dal tetto del Riassunto`() {
+    fun `EX-18 un ciclo fermato da maxTokens su un'ora di parlato al tetto massimo sta nei 600 s`() {
+        // Qwen3.5 9B on the M3 Pro: ≈ 15 t/s of generation (ADR 0026 §5; spike H1 v6: 35 512 tokens in ~40 min),
+        // ≈ 1.5 min of prefill per hour of audio and ≈ 15 s of cold open (ADR 0026 §3/§6).
+        val secondiDiGenerazione = ModelloLinguisticoLlama.maxTokens(unOraDiParlato) / TOKEN_AL_SECONDO
+
+        assertTrue(secondiDiGenerazione + PREFILL_E_APERTURA_S <= LIMITE_S, "$secondiDiGenerazione s")
+    }
+
+    @Test
+    fun `EX-18 ogni generazione riceve la grammatica limitata pigra e maxTokens dal sommario chiesto`() {
         val backend = BackendFinto()
 
-        modello(backend).riassumi(richiesta.copy(lunghezzaMassimaParole = 2_500)) { false }.atteso()
+        modello(backend).riassumi(unOraDiParlato) { false }.atteso()
 
         val opzioni = backend.opzioni.single()
-        assertEquals(9_262, opzioni.maxTokens)
+        assertEquals(6_112, opzioni.maxTokens)
         assertEquals(GrammaticaRisposta.GBNF, opzioni.grammar)
         assertEquals("root", opzioni.grammarRoot)
         assertTrue(opzioni.lazyGrammar)
     }
 
     @Test
-    fun `AC-S159 una generazione fermata da MAX_TOKENS e RispostaNonValida mai una risposta troncata`() {
+    fun `EX-18 una generazione fermata da MAX_TOKENS e Ripetuto mai una risposta troncata`() {
         val troncata = unaGenerazione(RISPOSTA_VALIDA, StopReason.MAX_TOKENS)
         val backend = BackendFinto(genera = { _, _ -> LlamaResult.Ok(troncata) })
 
-        modello(backend).riassumi(richiesta) { false }.erroreAtteso<ErroreApplicazioneSintesi.RispostaNonValida>()
+        modello(backend).riassumi(richiesta) { false }.erroreAtteso<ErroreApplicazioneSintesi.Ripetuto>()
     }
 
     // --- AC-S179: GPU -> CPU, once ------------------------------------------------------------------------------
@@ -434,5 +452,11 @@ class ModelloLinguisticoLlamaTest {
         assertEquals(90_000L to 60_000L, registrate.prefillMs to registrate.generazioneMs)
         assertEquals(1_234 to 321, registrate.tokenIngresso to registrate.tokenGenerati)
         assertTrue(registrate.gpu)
+    }
+
+    private companion object {
+        const val TOKEN_AL_SECONDO = 15.0
+        const val PREFILL_E_APERTURA_S = 90.0 + 15.0
+        const val LIMITE_S = 600.0 // AC-S153
     }
 }

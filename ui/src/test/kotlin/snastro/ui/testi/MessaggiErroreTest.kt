@@ -271,6 +271,7 @@ class MessaggiErroreTest {
                 ErroreApplicazioneSintesi.IngressoTroppoLungo(31_000),
                 ErroreApplicazioneSintesi.ErroreRuntime("metal non disponibile"),
                 ErroreApplicazioneSintesi.RispostaNonValida,
+                ErroreApplicazioneSintesi.Ripetuto,
                 ErroreApplicazioneSintesi.Annullato,
             ),
         ) { messaggioPer(it) }
