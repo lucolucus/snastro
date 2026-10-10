@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import snastro.ui.causatoDa
 import snastro.ui.registriLogUi
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI
 import java.io.IOException
 import java.util.logging.Level
@@ -146,4 +147,29 @@ class ImpostazioniPresenterTest {
             assertEquals(Preferenze(), p.preferenzeCorrenti.value)
             assertEquals(PREDEFINITA, p.stato.value.cartellaProgetti)
         }
+
+    @Test
+    fun `M1 una lettura che lancia mostra l errore generico sopra le preferenze predefinite`() = runTest {
+        val guasto = IllegalStateException("file preferenze illeggibile")
+        val rotte = object : PreferenzeApp {
+            override fun leggi(): Preferenze = throw guasto
+            override fun salva(preferenze: Preferenze) = Unit
+        }
+
+        lateinit var p: ImpostazioniPresenter
+        val registri = registriLogUi { p = presenter(rotte) }
+
+        assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, p.stato.value.errore)
+        assertEquals(TemaApp.SISTEMA, p.stato.value.tema)
+        assertEquals(PREDEFINITA, p.stato.value.cartellaProgetti)
+
+        p.azioni.chiudiErrore()
+        assertEquals(null, p.stato.value.errore)
+    }
+
+    @Test
+    fun `una lettura riuscita non mostra errori`() = runTest {
+        assertEquals(null, presenter(PreferenzeFinte()).stato.value.errore)
+    }
 }

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.ui.nonFataleRegistrato
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_SALVATAGGIO_IMPOSTAZIONI
 
 /**
@@ -22,10 +23,16 @@ class ImpostazioniPresenter(
     private val preferenze: PreferenzeApp,
     private val cartellaPredefinita: String,
 ) {
-    private val _preferenzeCorrenti = MutableStateFlow(leggiSenzaErrori())
+    // The port's contract is "never fails"; a broken adapter still must not stop the app from starting: it starts
+    // from the defaults and shows M1(b)'s generic message (`null` = the read threw, already logged).
+    private val lette: Preferenze? = nonFataleRegistrato("leggi preferenze") { preferenze.leggi() }
+
+    private val _preferenzeCorrenti = MutableStateFlow(lette ?: Preferenze())
     val preferenzeCorrenti: StateFlow<Preferenze> = _preferenzeCorrenti.asStateFlow()
 
-    private val _stato = MutableStateFlow(statoDa(_preferenzeCorrenti.value))
+    private val _stato = MutableStateFlow(
+        statoDa(_preferenzeCorrenti.value).copy(errore = MESSAGGIO_ERRORE_GENERICO.takeIf { lette == null }),
+    )
     val stato: StateFlow<ImpostazioniUiStato> = _stato.asStateFlow()
 
     /** The folder S1 proposes for a new project: the saved one, else the built-in default. */
@@ -58,10 +65,6 @@ class ImpostazioniPresenter(
             }
         }
     }
-
-    // The port's contract is "never fails"; a broken adapter still must not stop the app from starting.
-    private fun leggiSenzaErrori(): Preferenze =
-        nonFataleRegistrato("leggi preferenze") { preferenze.leggi() } ?: Preferenze()
 
     private fun statoDa(p: Preferenze) = ImpostazioniUiStato(
         tema = p.tema,
