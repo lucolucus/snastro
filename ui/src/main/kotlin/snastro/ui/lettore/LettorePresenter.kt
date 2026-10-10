@@ -133,9 +133,18 @@ class LettorePresenter(
         }
     }
 
-    /** Pauses the current playback, if any (AC-187). */
+    /**
+     * Pauses the current playback, if any (AC-187). A fault is logged and shown as L471d's retry-enabled [Errore]
+     * (ADR 0041 §3), unless a newer request has started meanwhile: its outcome wins, as in [avvia].
+     */
     fun pausa() {
-        scope.launch { withContext(io) { lettore.pausa() } }
+        val richiesta = richiestaCorrente
+        scope.launch {
+            val fermata = nonFataleRegistrato("pausa") { withContext(io) { lettore.pausa() } }
+            if (fermata == null && richiesta == richiestaCorrente) {
+                _stato.value = LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
+            }
+        }
     }
 
     val azioni: AzioniLettore = AzioniLettore(

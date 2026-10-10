@@ -36,11 +36,12 @@ private val REGISTRAZIONE_ID = RegistrazioneId("id-1")
 /**
  * [LettoreAudio] whose `riproduciDa` throws instead of setting `stato` — a hand-written fake (RC-9/
  * CR-17), not a MockK stub. `falliscePer` lets a test make only ONE id fail, so it can also prove the
- * presenter/its `stato` collector survive the fault (HIGH-2).
+ * presenter/its `stato` collector survive the fault (HIGH-2). [pausaGuasta] makes `pausa` throw instead.
  */
 private class LettoreAudioCheEsplode(
     private val eccezione: () -> Throwable,
     private val falliscePer: RegistrazioneId? = null,
+    private val pausaGuasta: Boolean = false,
 ) : LettoreAudio {
     private val _stato = MutableStateFlow(StatoLettore(null, 0, false))
     override val stato: StateFlow<StatoLettore> = _stato.asStateFlow()
@@ -54,7 +55,9 @@ private class LettoreAudioCheEsplode(
 
     override fun riproduciEstratto(e: EstrattoRef): Nothing = throw eccezione()
 
-    override fun pausa() = Unit
+    override fun pausa() {
+        if (pausaGuasta) throw eccezione()
+    }
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -247,6 +250,35 @@ class LettorePresenterTest {
 
         assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
         assertEquals(LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+    }
+
+    @Test
+    fun `M1 una pausa che lancia e registrata, mostra l errore generico e il lettore resta vivo`() = runTest {
+        val guasto = IllegalStateException("linea audio persa")
+        val lettore = LettoreAudioCheEsplode(
+            eccezione = { guasto },
+            falliscePer = RegistrazioneId("nessuna"),
+            pausaGuasta = true,
+        )
+        val presenter = presentatore(this, lettore)
+        presenter.riproduci(REGISTRAZIONE_ID, 0)
+        advanceUntilIdle()
+
+        val registri = registriLogUi {
+            presenter.pausa()
+            advanceUntilIdle()
+        }
+
+        val registrato = registri.single { it.causatoDa(guasto) }
+        assertEquals(Level.WARNING, registrato.level)
+        assertTrue("pausa" in registrato.message, registrato.message)
+        // L471d: the play control stays enabled, so a retry is one click away.
+        assertEquals(LettoreUiStato.Errore(MESSAGGIO_ERRORE_GENERICO), presenter.stato.value)
+
+        // the `stato` collector survived the fault: a later request still resolves.
+        presenter.riproduci(RegistrazioneId("id-2"), 0)
+        advanceUntilIdle()
+        assertIs<LettoreUiStato.Pronto>(presenter.stato.value)
     }
 
     @Test
