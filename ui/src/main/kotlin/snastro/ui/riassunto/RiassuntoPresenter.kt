@@ -289,19 +289,23 @@ class RiassuntoPresenter(
                 invioInCorso = false
             }
             ricarica()
-            // Applied AFTER `ricarica()` (which just cleared it, finding #154): shows for THIS render,
-            // cleared again by the next INDEPENDENT reload.
-            if (erroreDaMostrare != null) {
-                messaggioErrore = erroreDaMostrare
-                aggiornaDati { it.copy(messaggioErrore = erroreDaMostrare) }
-            }
+            if (erroreDaMostrare != null) mostraErrore(erroreDaMostrare)
         }
+    }
+
+    /**
+     * Applied AFTER a `ricarica()` (which just cleared it, finding #154): shows for THIS render, cleared again by the
+     * next INDEPENDENT reload.
+     */
+    private fun mostraErrore(messaggio: String) {
+        messaggioErrore = messaggio
+        aggiornaDati { it.copy(messaggioErrore = messaggio) }
     }
 
     /** AC-S125/S127: "Scarica il modello"/"Riprova" both call this — blocks, run off [io] (mirrors
      * [snastro.ui.modelli.ModelliPresenter.scarica]); the reactive `statoFacoltativi` collector above
      * is what actually reflects the outcome, this call only starts it. Starting it commits nothing, so a fault goes
-     * through [nonFataleRegistrato] (ADR 0041 §3): logged, then the view is re-read. */
+     * through [nonFataleRegistrato] (ADR 0041 §3): logged, the view re-read, then M1(b)'s generic message shown. */
     private fun scaricaModello() {
         // Finding #157 (rework, MED): no in-flight guard — a double click started two 6 GB downloads.
         if (scaricaModelloInCorso) return
@@ -311,7 +315,10 @@ class RiassuntoPresenter(
                 val avviato = nonFataleRegistrato("scarica il modello linguistico") {
                     withContext(io) { servizioModelli.scaricaFacoltativo(idModelloLinguistico) }
                 }
-                if (avviato == null) ricarica()
+                if (avviato == null) {
+                    ricarica()
+                    mostraErrore(MESSAGGIO_ERRORE_GENERICO)
+                }
             } finally {
                 scaricaModelloInCorso = false
             }
@@ -395,13 +402,18 @@ class RiassuntoPresenter(
      * AC-I81: a Fonte chip of [parte]: the audio plays from [daMs] (off the UI thread), then another Parte's page
      * is opened (the tab stays). Playing first: the switch may dispose this presenter's own scope. L194: a failing
      * playback (no audio, a port fault) is logged, never escapes the coroutine and never stops the switch to the Parte.
+     * On this Parte the tab stays, so it also shows M1(b)'s generic message; the switch may dispose this presenter,
+     * so on another Parte the fault is only logged.
      */
     private fun apriFonte(parte: RegistrazioneId, daMs: Long) {
         scope.launch {
-            nonFataleRegistrato("riproduci la fonte di ${parte.valore} da $daMs ms") {
+            val riprodotta = nonFataleRegistrato("riproduci la fonte di ${parte.valore} da $daMs ms") {
                 withContext(io) { riproduciDa(parte, daMs) }
             }
-            if (parte != registrazioneId) vaiAllaParte(parte)
+            when {
+                parte != registrazioneId -> vaiAllaParte(parte)
+                riprodotta == null -> mostraErrore(MESSAGGIO_ERRORE_GENERICO)
+            }
         }
     }
 

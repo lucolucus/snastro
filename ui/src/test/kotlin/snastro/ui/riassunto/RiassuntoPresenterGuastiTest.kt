@@ -13,7 +13,7 @@ import kotlin.test.assertTrue
 
 /**
  * CR-7 at the Riassunto tab's edges (ADR 0041 §3): a fault in a command, in starting the download or in playing a
- * Fonte is logged at WARNING with its cause; what the user then sees is in [RiassuntoPresenterTest].
+ * Fonte is logged at WARNING with its cause, and M1(b)'s generic message is shown where the tab stays on screen.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RiassuntoPresenterGuastiTest {
@@ -68,5 +68,37 @@ class RiassuntoPresenterGuastiTest {
         val registrato = registri.single { it.causatoDa(a.guastoRiproduciDa) }
         assertEquals(Level.WARNING, registrato.level)
         assertTrue("riproduci" in registrato.message, registrato.message)
+    }
+
+    @Test
+    fun `M1 un avvio del download che lancia mostra l errore generico dopo aver riletto la vista`() =
+        eseguiTest { a ->
+            a.vistaCorrente = unaVista(modello = StatoModelloVista.NonInstallato(6_169_341_984))
+            runCurrent()
+            val guasto = IllegalStateException("guasto simulato del download")
+            a.servizioModelli.guasto = guasto
+            val letturePrima = a.chiamatePosizioni
+            val registri = registriLogUi {
+                a.presenter.azioni.scaricaModello()
+                runCurrent()
+            }
+
+            assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
+            assertEquals(letturePrima + 1, a.chiamatePosizioni, "dopo il guasto la vista non e' stata riletta")
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, dati(a.presenter).messaggioErrore)
+        }
+
+    @Test
+    fun `M1 una fonte di questa Parte che non si riproduce mostra l errore generico`() = eseguiTest { a ->
+        runCurrent()
+        a.lanciaRiproduciDa = true
+        val registri = registriLogUi {
+            a.presenter.azioni.apriFonte(REG_1, 750_000)
+            runCurrent()
+        }
+
+        assertEquals(Level.WARNING, registri.single { it.causatoDa(a.guastoRiproduciDa) }.level)
+        assertEquals(listOf("play:${REG_1.valore}@750000"), a.eventi)
+        assertEquals(MESSAGGIO_ERRORE_GENERICO, dati(a.presenter).messaggioErrore)
     }
 }
