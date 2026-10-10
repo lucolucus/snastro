@@ -15,9 +15,21 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import snastro.avvio.costruisciRiassuntoPresenter
 import snastro.avvio.progetto.AmbienteProgetto
+import snastro.kernel.CampioniAudio
 import snastro.kernel.RegistrazioneId
+import snastro.kernel.SegmentoRef
+import snastro.kernel.atteso
 import snastro.sintesi.adattatori.ml.ModelloLinguisticoLlama
+import snastro.sintesi.applicazione.porte.conAvvio
+import snastro.sintesi.applicazione.porte.conCompletamento
+import snastro.sintesi.applicazione.porte.unRiassunto
+import snastro.sintesi.dominio.BozzaRiassunto
+import snastro.sintesi.dominio.StrutturaIncontro
+import snastro.sintesi.dominio.StrutturaTrascritto
 import snastro.supporto.test.attendiFinche
+import snastro.trascrizione.applicazione.porte.Riconoscimento
+import snastro.trascrizione.applicazione.porte.RiconoscitoreParlato
+import snastro.trascrizione.applicazione.porte.RiconoscitoreParlatoFinta
 import snastro.ui.riassunto.ContenutoUi
 import snastro.ui.riassunto.LunghezzaMassimaUiStato
 import snastro.ui.riassunto.RiassuntoPresenter
@@ -25,6 +37,7 @@ import snastro.ui.riassunto.RiassuntoUiStato
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
 
 /**
@@ -34,11 +47,11 @@ import kotlin.time.Duration.Companion.seconds
  *
  * Substituted boundaries: the `:llama-jni` library ([libreria], a model that writes what the grammar asks), the model
  * file and native folder (empty placeholders), and [AmbienteProgetto]'s ML/audio fakes — so the Trascritto is two
- * short Segmenti, not skatefest's. What the real Qwen3.5 9B writes on skatefest is measured outside the gate
- * (`benchmarkRiassunto`, `.mismagent/spikes/h1.md`). The presenter runs on the environment's UI thread and scope,
- * cancelled when the environment closes after each test.
+ * short Segmenti, not skatefest's, with the words of [riconoscitore] (`parola1`… by default). What the real Qwen3.5 9B
+ * writes on skatefest is measured outside the gate (`benchmarkRiassunto`, `.mismagent/spikes/h1.md`). The presenter
+ * runs on the environment's UI thread and scope, cancelled when the environment closes after each test.
  */
-abstract class BancoRiassunto {
+abstract class BancoRiassunto(private val riconoscitore: RiconoscitoreParlato = RiconoscitoreParlatoFinta()) {
     @TempDir
     lateinit var radice: Path
 
@@ -48,6 +61,7 @@ abstract class BancoRiassunto {
         val fileModello = Files.createFile(radice.resolve("modello.gguf"))
         AmbienteProgetto(
             radice,
+            riconoscitore = riconoscitore,
             modelloLinguistico = ModelloLinguisticoLlama({ radice }, { fileModello }, { LlamaResult.Ok(libreria) }),
         )
     }
@@ -55,10 +69,34 @@ abstract class BancoRiassunto {
     @AfterEach
     fun chiudiAmbiente() = ambiente.close()
 
-    /** S3's Riassunto tab of a transcribed Registrazione, built as `:avvio` builds it. */
-    protected fun schedaRiassunto(): RiassuntoPresenter {
-        val id: RegistrazioneId = ambiente.registrazioneTrascritta()
-        return costruisciRiassuntoPresenter(ambiente.grafo(), ambiente.collaboratori, id, ambiente.scope) {}
+    /** A Registrazione imported and transcribed through the composition, alone in its Incontro. */
+    protected fun registrazioneTrascritta(): RegistrazioneId = ambiente.registrazioneTrascritta()
+
+    /** S3's Riassunto tab of the transcribed Registrazione [id] (a new one by default), built as `:avvio` builds it. */
+    protected fun schedaRiassunto(id: RegistrazioneId = registrazioneTrascritta()): RiassuntoPresenter =
+        costruisciRiassuntoPresenter(ambiente.grafo(), ambiente.collaboratori, id, ambiente.scope) {}
+
+    /**
+     * Stores in the project file a `pronto` Riassunto of [id]'s Incontro made from the model's [bozza] as the app made
+     * it before R1: completed by the root's own Verifica delle fonti against the Incontro's Trascritto as stored now
+     * (label k = Segmento k of [id]), so it is not `superato`.
+     */
+    protected fun registraRiassuntoPronto(id: RegistrazioneId, bozza: BozzaRiassunto) {
+        val porte = ambiente.porte
+        val segmenti = checkNotNull(porte.trascrittoPerSintesi.segmenti(id)) { "$id senza Trascritto" }
+        val struttura = StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })
+        val riassunto = unRiassunto("riassunto-prima-di-r1", ambiente.incontroDi(id)).conAvvio().conCompletamento(
+            bozza,
+            StrutturaIncontro(listOf(id to struttura)),
+            segmenti.map { SegmentoRef(id, it.segmentoId) },
+        )
+        porte.unitaDiLavoro.inTransazione { porte.riassunti.salva(riassunto) }.atteso()
+    }
+
+    /** Waits for the tab to show a Riassunto, without clicking anything: its content. */
+    protected fun RiassuntoPresenter.mostrato(): ContenutoUi {
+        attendiFinche(timeout = 30.seconds, messaggio = "Riassunto mostrato") { dati()?.contenuto != null }
+        return checkNotNull(dati()?.contenuto)
     }
 
     /** Types [argomento] (if any), clicks Riassumi and waits for the Riassunto shown: its content. */
@@ -100,7 +138,7 @@ abstract class BancoRiassunto {
 
 /**
  * The `:llama-jni` library with a model that answers in the JSON its grammar asks for — as Qwen3.5 9B does under the
- * app's bounded grammar: just the Sommario when the grammar asks only for it, else the Sommario and the four lists of
+ * app's bounded grammar: just the [sommario] when the grammar asks only for it, else a Sommario and the four lists of
  * the earlier answer (with the decision skatefest's spike saw invented, EX-14). Every prompt it receives lands in
  * [prompt].
  *
@@ -113,6 +151,10 @@ class LibreriaCheSegueLaGrammatica : LlamaBackend {
 
     @Volatile
     var siRipete: Boolean = false
+
+    /** The Sommario the model writes ([SOMMARIO], about skatefest's key points, by default). */
+    @Volatile
+    var sommario: String = SOMMARIO
 
     val secondiInCiclo: MutableList<Double> = CopyOnWriteArrayList()
 
@@ -131,11 +173,13 @@ class LibreriaCheSegueLaGrammatica : LlamaBackend {
         ): LlamaResult<Generation> {
             this@LibreriaCheSegueLaGrammatica.prompt += prompt
             if (siRipete) return LlamaResult.Ok(inCiclo(prompt, options.maxTokens))
-            val testo = if (options.grammar.orEmpty().contains("decisioni")) CON_LISTE else SOLO_SOMMARIO
+            val testo = if (options.grammar.orEmpty().contains("decisioni")) CON_LISTE else soloSommario()
             return LlamaResult.Ok(Generation(testo, prompt.length, testo.length, StopReason.END_OF_GENERATION, TEMPI))
         }
 
         override fun close() = Unit
+
+        private fun soloSommario() = """{"sommario":"$sommario"}"""
 
         private fun inCiclo(prompt: String, maxTokens: Int): Generation {
             val secondi = maxTokens / TOKEN_AL_SECONDO
@@ -151,7 +195,6 @@ class LibreriaCheSegueLaGrammatica : LlamaBackend {
         const val SOMMARIO: String = "{V1} e {V2} si ritrovano fra due o tre settimane per provare il gioco con le " +
             "modifiche. Resta da capire come rendere chiaro il movimento automatico del poliziotto, con traiettorie " +
             "disegnate o colori."
-        private const val SOLO_SOMMARIO = """{"sommario":"$SOMMARIO"}"""
         private const val CON_LISTE = """{"sommario":"$SOMMARIO","decisioni":[{"testo":"Approvato il movimento """ +
             """automatico dei poliziotti verso il più vicino.","fonti":[1]}],"questioni_aperte":[{"testo":"Come """ +
             """mostrare il movimento del poliziotto.","fonti":[2]}],"azioni":[{"testo":"Rifare la seconda mappa.",""" +
@@ -165,4 +208,15 @@ class LibreriaCheSegueLaGrammatica : LlamaBackend {
         private const val MILLIS_AL_SECONDO = 1_000
         private val TEMPI = Timings(loadMs = 1, prefillMs = 1, generationMs = 1)
     }
+}
+
+/**
+ * A recognizer that hears [frasi] in turn, one per call (one per diarized turn, in order), with no token timestamps:
+ * the words a test needs in the Trascritto instead of `parola1`.
+ */
+class RiconoscitoreCheDice(private val frasi: List<String>) : RiconoscitoreParlato {
+    private val prossima = AtomicInteger()
+
+    override fun riconosci(c: CampioniAudio): Riconoscimento =
+        Riconoscimento(frasi[prossima.getAndIncrement() % frasi.size], token = null)
 }
