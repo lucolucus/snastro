@@ -202,3 +202,30 @@ decisione sulle sue fonti e toglie quelle che le fonti non sostengono come accor
 minuti per passaggio; tempi totali. Annota in `.mismagent/spikes/h1.md`. Se passa EX-14..EX-17: `## Question` per
 l'ADR dell'architetto (emenda ADR 0026 §3). Se non passa: `## Question` con i numeri e le due sole strade rimaste,
 "limite noto" (ADR sulla variante 2, EX-14/15 aggiornati) o "solo sommario in R1".
+
+## Question
+Prova 4 fatta, ultimo giro su Qwen3.5 9B (`.mismagent/spikes/h1.md` § "Prova 4" e "Bilancio"). **Non passa
+EX-14..EX-17**: passa EX-14, non EX-15 né EX-17.
+- La verifica delle decisioni scarta 15 decisioni su 17: tutte quelle inventate, ma anche D1 in EX-15 e EX-17 (D1 resta
+  solo dove è scritta "è stato fissato un incontro").
+- Con le azioni della prova 2, l'azione inventata resta in EX-15 ("Implementare la modifica per la carta 'poliziotto'
+  che si muove automaticamente") ed EX-17 ("Modificare le carte dei poliziotti per includere il movimento automatico").
+- Q1, A1 e Q3 sono stabili; 286–305 s a corsa.
+
+In nessuna delle quattro prove D1 tra le decisioni e "niente inventato" stanno insieme in tutte e tre le corse. Le due
+strade rimaste:
+
+1. **Limite noto**: si costruisce la prova 2 (sommario + un passaggio per lista, modello aperto, ~4 min per ~1 h di
+   audio, ADR che emenda ADR 0026 §3). Si rivedono EX-14/EX-15 in modo da ammettere che decisioni e azioni possano
+   dare per deciso ciò che era solo proposto, avvisando chi legge (es. "verifica le decisioni sulla trascrizione").
+   D1, Q1 e A1 escono nella lista giusta in 3 corse su 3; il punto inventato anche, in 3 su 3. La prova 4 è
+   l'alternativa con meno decisioni inventate ma con D1 perso in 2 su 3.
+2. **Solo sommario in R1**: il riassunto di R1 è il solo sommario (il passaggio 1, ~1 min). Decisioni, questioni e
+   azioni escono vuote o nascoste finché non c'è un modo affidabile; EX-14..EX-17 vanno riscritti sul sommario (D1, Q1,
+   A1 e Q3 raccontati, niente dato per deciso), e EX-16 non si applica. Il sommario ha passato questo in tutte le corse
+   viste (w1–w3, prove 1–4: stesso passaggio 1). La struttura a passaggi resta pronta per un rilascio successivo.
+
+Raccomandazione: **2**. È l'unica uscita che in tutte le corse ha i punti cardine e non inventa: per un riassunto da
+leggere al posto della riunione, un punto falso fra le decisioni costa più di una lista mancante. La 1 va bene se per te
+avere le liste conta più del rischio, ma allora EX-14 va riscritto proprio sul punto che nomina. In entrambi i casi la
+scelta cambia gli esempi di R1, quindi è tua prima che dell'architetto.
