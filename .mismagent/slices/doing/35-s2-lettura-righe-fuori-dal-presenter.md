@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: 93d8e8c00dac4f003b949141d086b24bda62a4ec
 After: 22, 23, 24, 25
 
 After slice 34, `RegistrazioniPresenter` still mixes two jobs (release review R0-3, simple design 3):
