@@ -55,14 +55,14 @@ internal val INCONTRO_REG = unIncontroDi(REG)
 
 internal fun ref(voce: VoceId) = VoceRef(unIncontroDi(REG), voce)
 
+/** A [SorgentiParti] with no Incontro to read and a switch that goes nowhere — for tests of a 1-Parte screen. */
+internal fun unaSorgentiPartiInerte() = SorgentiParti(incontro = { null }, incontroDi = { null }, vaiAllaParte = {})
+
 /**
  * A [SorgentiParlanti] a test can pass where the Voci panel itself is not under test (ADR 0030 §1, U1:
  * the collaborator is mandatory, but a fixture that does not exercise it needs no behaviour from it) —
  * every source empty/no-op. Prefer [AmbienteVoci] instead when the test DOES exercise the panel.
  */
-/** A [SorgentiParti] with no Incontro to read and a switch that goes nowhere — for tests of a 1-Parte screen. */
-internal fun unaSorgentiPartiInerte() = SorgentiParti(incontro = { null }, incontroDi = { null }, vaiAllaParte = {})
-
 internal fun unaSorgentiParlantiInerte(scope: CoroutineScope, clock: Clock = Clock.systemUTC()) = SorgentiParlanti(
     identificazione = { emptyList() },
     proposta = { null },
@@ -153,20 +153,23 @@ internal class AmbienteVoci(
     /** When set, the card-command port itself throws it from `esegui` (e.g. the adapter failing outside the body). */
     var guastoComando: Throwable? = null
 
-    /** ADR 0036: what `PropostaTraParti.perIncontro` answers; [chiamateTraParti] records each computation. */
     /** AC-I77: what `TrascrittoQuery.vociIncontro` answers; [chiamateVociIncontro] records each read. */
     var vociIncontro: VociIncontro? = null
     val chiamateVociIncontro: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
 
+    /** ADR 0036: what `PropostaTraParti.perIncontro` answers; [chiamateTraParti] records each computation. */
     var traParti: List<CoppiaTraParti> = emptyList()
+    val chiamateTraParti: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
+
+    /** When set, the cross-Parte computation throws [guastoTraParti]: one instance, a log names it (CR-7). */
     var traPartiRotta = false
+    val guastoTraParti = IllegalStateException("estrazione fallita")
 
     /** Runs inside every Trascritto read (on the io dispatcher) — lets a test observe the state mid-reload. */
     var allaLetturaTrascritto: () -> Unit = {}
 
     /** L253: the Trascritto read answers `null` (e.g. the Parte was deleted meanwhile). */
     var trascrittoSparito = false
-    val chiamateTraParti: MutableList<IncontroId> = Collections.synchronizedList(mutableListOf())
 
     /** ADR 0018 Amendment (b) §2 (AC-452/454): `null` unless a test opts in via `presenter(conStati = true)`. */
     var statoElaborazione: StatoRegistrazioneVista? = null
@@ -210,7 +213,7 @@ internal class AmbienteVoci(
         somiglianza = somiglianza,
         traParti = { incontro ->
             chiamateTraParti += incontro
-            check(!traPartiRotta) { "estrazione fallita" }
+            if (traPartiRotta) throw guastoTraParti
             traParti
         },
         vociIncontro = { incontro ->

@@ -211,7 +211,7 @@ internal class StatoVoci(
     /**
      * AC-I84: the cross-Parte proposal is requested only when the banner could show — not read-only, not in
      * error, no Proposta di unione (which takes the single banner slot). A superseded job is cancelled; a
-     * failed computation shows no banner (the manual 'Unisci con' stays).
+     * failed computation shows no banner (the manual 'Unisci con' stays) and the generic message.
      */
     private fun avviaTraParti() {
         lavoroTraParti?.cancel()
@@ -221,10 +221,13 @@ internal class StatoVoci(
             return
         }
         lavoroTraParti = scope.launch {
-            coppiaTraParti = nonFataleRegistrato("calcola la coppia tra parti di $incontro") {
+            val coppie = nonFataleRegistrato("calcola la coppia tra parti di $incontro") {
                 runInterruptible(io) { sorgenti.traParti(incontro) }
-            }?.firstOrNull()
+            }
+            coppiaTraParti = coppie?.firstOrNull()
             pubblica()
+            // A superseded job never gets here (its cancellation propagates): `null` is a real fault.
+            if (coppie == null) impostaErrore(MESSAGGIO_ERRORE_GENERICO)
         }
     }
 

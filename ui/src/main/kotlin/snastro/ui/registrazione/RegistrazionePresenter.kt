@@ -10,10 +10,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.EstrattoRef
+import snastro.kernel.IncontroId
 import snastro.kernel.RegistrazioneId
 import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
+import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
@@ -164,10 +166,9 @@ class RegistrazionePresenter(
         // to fall into the same handler of `carica()` as `trascritto()` and take the WHOLE screen to `Errore`,
         // discarding the vista just read. `sbobinatura()` is the simpler of the two: `null` is already
         // its own legitimate "not resolved yet" value (AC-218 disables 'Apri sbobinatura'/'Mostra
-        // nella cartella' the same way, no separate signal is worth adding), so a thrown call is
-        // folded into that same `null` by [sbobinaturaOSicuro] — never a silent swallow, just no extra
-        // state for a fault that already has a safe, defined UI.
-        val percorso = sbobinaturaOSicuro()
+        // nella cartella' the same way), so a thrown call ([sbobinaturaOSicuro] answers `null`) shows that
+        // same UI, plus the generic message on the `Dati` published below.
+        val sbobinaturaLetta = sbobinaturaOSicuro()
         // `lettore.disponibile()` is NOT folded the same way: a THROWN call says nothing about the
         // source itself (unlike a clean `false`), so it must not look like "audio non disponibile"
         // (which disables retry). [disponibileOSicuro] tells the two apart; a throw sets
@@ -183,6 +184,8 @@ class RegistrazionePresenter(
         val soloLettura = vista.solaLettura != null || soloLetturaDi(withContext(io) { stati() })
         // L199: on a multi-Parte page the banner always names the Parte (this one's when the lock is its own run).
         val parteInCorso = vista.solaLettura?.parte ?: vista.numeroParte.takeIf { vista.parti.size > 1 }
+        // AC-I74: the Incontro is read only on a multi-Parte page (INV-I3); `null` = the read threw.
+        val incontroLetto = if (vista.parti.size < 2) Letto(null) else incontroOSicuro(vista.incontroId)
         voci.vista = vista
         _stato.value = RegistrazioneUiStato.Dati(
             titolo = vista.titolo,
@@ -191,13 +194,16 @@ class RegistrazionePresenter(
             segmenti = segmentiDi(vista, statoLettore),
             barra = barraDi(statoLettore, disponibile),
             audioDisponibile = disponibile,
-            sbobinaturaPercorso = percorso,
+            sbobinaturaPercorso = sbobinaturaLetta?.valore,
             soloLettura = soloLettura,
             bannerRitrascrizione = if (soloLettura) bannerSolaLettura(parteInCorso) else null,
             contenutoRiassunto = contenutoRiassunto,
             schedaSelezionata = selezioneSchedaS3.scheda,
             segnoRiassunto = segnoRiassuntoAttuale,
-            parte = intestazioneParte(vista),
+            parte = intestazioneParte(vista, incontroLetto?.valore),
+            // Message at every edge (conventions non-fatal-faults): a read that fell back says so — set on the
+            // `Dati` published here, since a state written while the screen is being built is replaced by it.
+            errore = MESSAGGIO_ERRORE_GENERICO.takeIf { sbobinaturaLetta == null || incontroLetto == null },
         )
         voci.pubblica()
     }
@@ -240,13 +246,10 @@ class RegistrazionePresenter(
     private fun bannerSolaLettura(parteInCorso: Int?): String =
         parteInCorso?.let(::messaggioRitrascrizioneParteInCorso) ?: MESSAGGIO_RITRASCRIZIONE_IN_CORSO
 
-    // AC-I74: `null` on a 1-Parte Incontro (INV-I3). A fault reading the Incontro never takes the screen to Errore:
-    // the title falls back to this Parte's and the time to none.
-    private suspend fun intestazioneParte(vista: TrascrittoView): IntestazioneParte? {
+    // AC-I74: `null` on a 1-Parte Incontro (INV-I3). Without the Incontro (none, or a fault reading it) the screen
+    // never goes to Errore: the title falls back to this Parte's and the time to none.
+    private fun intestazioneParte(vista: TrascrittoView, incontro: IncontroDelProgettoVista?): IntestazioneParte? {
         if (vista.parti.size < 2) return null
-        val incontro = nonFataleRegistrato("incontro ${vista.incontroId}") {
-            withContext(io) { parti.incontro(vista.incontroId) }
-        }
         return IntestazioneParte(
             numero = vista.numeroParte,
             totale = vista.parti.size,
@@ -256,10 +259,14 @@ class RegistrazionePresenter(
         )
     }
 
-    // L573b: `sbobinatura()` degraded to `null` (same as it legitimately having none) — 'Apri sbobinatura'/
-    // 'Mostra nella cartella' just stay disabled (AC-218), the transcript is untouched; the fault is logged.
-    private suspend fun sbobinaturaOSicuro(): String? =
-        nonFataleRegistrato("sbobinatura $registrazioneId") { withContext(io) { sbobinatura() } }
+    // `null` means the read threw (logged); a `null` Incontro inside [Letto] is a clean answer.
+    private suspend fun incontroOSicuro(incontroId: IncontroId): Letto<IncontroDelProgettoVista?>? =
+        nonFataleRegistrato("incontro $incontroId") { Letto(withContext(io) { parti.incontro(incontroId) }) }
+
+    // L573b: `null` means `sbobinatura()` threw (logged), told apart from it legitimately having none (`Letto(null)`)
+    // — either way 'Apri sbobinatura'/'Mostra nella cartella' stay disabled (AC-218), the transcript is untouched.
+    private suspend fun sbobinaturaOSicuro(): Letto<String?>? =
+        nonFataleRegistrato("sbobinatura $registrazioneId") { Letto(withContext(io) { sbobinatura() }) }
 
     // L573b: `null` means the call THREW (told apart from a clean `false`, see `carica()`) — the whole
     // screen never goes to Errore for this, but a thrown call must not read as "confirmed unavailable"
@@ -447,3 +454,6 @@ class RegistrazionePresenter(
         const val SOGLIA_ATTESA_VISIBILE_MS: Long = 2_000
     }
 }
+
+/** A read's answer, `null` included — told apart from a fault, which [nonFataleRegistrato] answers as `null`. */
+private class Letto<T>(val valore: T)

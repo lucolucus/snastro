@@ -7,6 +7,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import snastro.kernel.RegistrazioneId
 import snastro.kernel.unIncontroDi
 import snastro.trascrizione.applicazione.letture.ParteRef
 import snastro.trascrizione.applicazione.letture.TrascrittoView
@@ -23,8 +24,10 @@ import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
-private fun unaVistaVuota() = TrascrittoView(
+private fun unaVistaVuota(parti: List<ParteRef> = listOf(ParteRef(REG, 1))) = TrascrittoView(
     registrazioneId = REG,
     incontroId = unIncontroDi(REG),
     titolo = "Seduta",
@@ -33,7 +36,7 @@ private fun unaVistaVuota() = TrascrittoView(
     segmenti = emptyList(),
     voci = emptyList(),
     numeroParte = 1,
-    parti = listOf(ParteRef(REG, 1)),
+    parti = parti,
 )
 
 /** An [ApriEsterno] whose `apriFile` throws [guasto]. */
@@ -42,8 +45,9 @@ private class ApriEsternoRotto(private val guasto: Exception) : ApriEsterno by A
 }
 
 /**
- * CR-7 at S3's own edges (ADR 0041 §3): a thrown read of the Trascritto and a thrown 'Apri sbobinatura' are logged at
- * WARNING with their cause, and the screen still shows its message.
+ * CR-7 at S3's own edges (ADR 0041 §3): a thrown read of the Trascritto, of the Sbobinatura or of the Incontro and a
+ * thrown 'Apri sbobinatura' are logged at WARNING with their cause, and the screen still shows its message beside the
+ * unchanged fallback.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class RegistrazionePresenterGuastiTest {
@@ -51,6 +55,8 @@ class RegistrazionePresenterGuastiTest {
         scope: TestScope,
         trascritto: () -> TrascrittoView? = ::unaVistaVuota,
         apriEsterno: ApriEsterno = ApriEsternoFinta(),
+        sbobinatura: () -> String? = { "/progetto/sbobinature/seduta.docx" },
+        parti: SorgentiParti = unaSorgentiPartiInerte(),
     ): RegistrazionePresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
         val scopeCoroutine = CoroutineScope(dispatcher)
@@ -59,7 +65,7 @@ class RegistrazionePresenterGuastiTest {
             io = dispatcher,
             registrazioneId = REG,
             trascritto = trascritto,
-            sbobinatura = { "/progetto/sbobinature/seduta.docx" },
+            sbobinatura = sbobinatura,
             lettore = LettoreAudioFinta(),
             apriEsterno = apriEsterno,
             parlanti = unaSorgentiParlantiInerte(scopeCoroutine),
@@ -67,7 +73,7 @@ class RegistrazionePresenterGuastiTest {
             aggiornamenti = AggiornamentiVistaFinta(),
             riassunto = SorgenteRiassuntoS3(contenuto = {}, segno = { flowOf(null) }),
             selezioneSchedaS3 = SelezioneSchedaS3(),
-            parti = unaSorgentiPartiInerte(),
+            parti = parti,
         )
     }
 
@@ -100,4 +106,45 @@ class RegistrazionePresenterGuastiTest {
         assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
         assertEquals(MESSAGGIO_ERRORE_GENERICO, assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value).errore)
     }
+
+    @Test
+    fun `CR-7 una Sbobinatura illeggibile e registrata e la schermata mostra l errore generico con i bottoni spenti`() =
+        runTest {
+            val guasto = IllegalStateException("cartella sbobinature illeggibile")
+            lateinit var presenter: RegistrazionePresenter
+
+            val registri = registriLogUi {
+                presenter = presentatore(this, sbobinatura = { throw guasto })
+                advanceUntilIdle()
+            }
+
+            assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
+            val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
+            assertNull(dati.sbobinaturaPercorso, "'Apri sbobinatura' e 'Mostra nella cartella' restano spenti")
+        }
+
+    @Test
+    fun `CR-7 un Incontro illeggibile e registrato e la schermata mostra l errore generico col titolo della Parte`() =
+        runTest {
+            val guasto = IllegalStateException("incontro illeggibile")
+            val dueParti = listOf(ParteRef(REG, 1), ParteRef(RegistrazioneId("id-2"), 2))
+            lateinit var presenter: RegistrazionePresenter
+
+            val registri = registriLogUi {
+                presenter = presentatore(
+                    this,
+                    trascritto = { unaVistaVuota(dueParti) },
+                    parti = SorgentiParti(incontro = { throw guasto }, incontroDi = { null }, vaiAllaParte = {}),
+                )
+                advanceUntilIdle()
+            }
+
+            assertEquals(Level.WARNING, registri.single { it.causatoDa(guasto) }.level)
+            val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
+            val parte = assertNotNull(dati.parte)
+            assertEquals("Seduta", parte.titoloIncontro)
+            assertNull(parte.ora)
+        }
 }

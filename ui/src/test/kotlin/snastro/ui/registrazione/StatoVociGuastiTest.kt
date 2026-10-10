@@ -17,14 +17,15 @@ import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
 import java.util.logging.Level
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * CR-7 at the Voci panel's edges (ADR 0041 §3): a thrown card command and a failed panel read are logged at WARNING
- * with their cause; L269 (D-0065): an `Error` from a card command reaches the scope's handler and leaves no card
- * pending.
+ * CR-7 at the Voci panel's edges (ADR 0041 §3): a thrown card command, a failed panel read and a failed cross-Parte
+ * computation are logged at WARNING with their cause; L269 (D-0065): an `Error` from a card command reaches the scope's
+ * handler and leaves no card pending.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class StatoVociGuastiTest {
@@ -79,6 +80,23 @@ class StatoVociGuastiTest {
         assertEquals(Level.WARNING, registrato.level)
         assertEquals(ContenutoCarta.Errore(MESSAGGIO_ERRORE_VOCI), presenter.carta(V1).contenuto)
     }
+
+    @Test
+    fun `CR-7 un calcolo tra parti che lancia e registrato e la schermata mostra l errore generico senza banner`() =
+        runTest {
+            val a = ambiente().apply { traPartiRotta = true }
+            lateinit var presenter: RegistrazionePresenter
+
+            val registri = registriLogUi {
+                presenter = avvia(a)
+                advanceUntilIdle()
+            }
+
+            assertEquals(Level.WARNING, registri.single { it.causatoDa(a.guastoTraParti) }.level)
+            val dati = assertIs<RegistrazioneUiStato.Dati>(presenter.stato.value)
+            assertEquals(MESSAGGIO_ERRORE_GENERICO, dati.errore)
+            assertNull(assertNotNull(dati.pannello).traParti)
+        }
 
     @Test
     fun `L269 un Error da un comando di card raggiunge il gestore e la card non resta in corso`() = runTest {
