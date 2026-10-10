@@ -192,3 +192,13 @@ Cosa vedo da qui, per te:
 Raccomandazione: **2 e poi 1**. La 2 è una corsa di 3 riunioni e misura quanto pesa l'azione inventata da sola; la 1
 attacca esattamente l'errore che resta (decisioni non concordate) senza toccare le altre liste. In ogni caso la
 struttura è quella della prova 2: è quella da mettere nell'ADR che emenda ADR 0026 §3, quando una corsa passa.
+
+## Answer
+Decisione dell'utente (2026-10-10): **ultimo giro sul 9B**, poi si sceglie. L'utente vuole un modello piccolo per
+riassumere: Qwen3.8-27B e Qwen3.8-Flash-Next (180B totali) sono esclusi, resta Qwen3.5 9B.
+Prova 4, usa e getta: variante 2 (sommario + un passaggio per lista) con la definizione stretta **solo** per le
+decisioni (le azioni con la definizione della prova 2, così A1 resta), più un breve passaggio che ricontrolla ogni
+decisione sulle sue fonti e toglie quelle che le fonti non sostengono come accordo. EX-14, EX-15, EX-17; guardia di 5
+minuti per passaggio; tempi totali. Annota in `.mismagent/spikes/h1.md`. Se passa EX-14..EX-17: `## Question` per
+l'ADR dell'architetto (emenda ADR 0026 §3). Se non passa: `## Question` con i numeri e le due sole strade rimaste,
+"limite noto" (ADR sulla variante 2, EX-14/15 aggiornati) o "solo sommario in R1".
