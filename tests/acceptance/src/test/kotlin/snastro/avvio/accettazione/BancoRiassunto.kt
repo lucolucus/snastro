@@ -92,6 +92,10 @@ abstract class BancoRiassunto {
     }
 
     private fun RiassuntoPresenter.dati(): RiassuntoUiStato.Dati? = stato.value as? RiassuntoUiStato.Dati
+
+    /** The user turn of a [prompt] the model received: the meeting as Sintesi labelled it, legend included. */
+    protected fun riunioneNel(prompt: String): String =
+        prompt.substringAfter("<|im_start|>user\n").substringBefore("<|im_end|>")
 }
 
 /**

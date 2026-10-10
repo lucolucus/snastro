@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
  */
 class RiassuntoSoloSommarioTest : BancoRiassunto() {
     @Test
-    fun `EX-20 skatefest con l'argomento di EX-14 da un riassunto pronto col solo sommario`() {
+    fun `EX-20 con l'argomento di EX-14 da un riassunto pronto col solo sommario`() {
         val contenuto = schedaRiassunto().riassumi(ARGOMENTO_EX_14)
 
         assertSoloSommario(contenuto)
@@ -22,7 +22,7 @@ class RiassuntoSoloSommarioTest : BancoRiassunto() {
     }
 
     @Test
-    fun `EX-21 skatefest senza argomento da come EX-20 il solo sommario`() {
+    fun `EX-21 senza argomento da come EX-20 il solo sommario`() {
         val contenuto = schedaRiassunto().riassumi(argomento = null)
 
         assertSoloSommario(contenuto)
