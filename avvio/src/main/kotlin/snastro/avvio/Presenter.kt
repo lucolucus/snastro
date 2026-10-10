@@ -20,6 +20,7 @@ import snastro.ui.registrazione.SelezioneSchedaS3
 import snastro.ui.registrazione.SorgenteRiassuntoS3
 import snastro.ui.registrazione.SorgentiParlanti
 import snastro.ui.registrazione.SorgentiParti
+import snastro.ui.registrazioni.ComandiRigaS2
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.riassunto.RiassuntoPresenter
 import snastro.ui.riassunto.SchedaRiassunto
@@ -76,21 +77,23 @@ internal fun costruisciRegistrazioniPresenter(
     registrazioni = collaboratori.registrazioni,
     incontri = collaboratori.incontri,
     aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
-    modificaDataRegistrazione = collaboratori.modificaDataRegistrazione,
-    rinominaRegistrazione = collaboratori.rinominaRegistrazione,
     lettore = collaboratori.lettoreAudio,
     aggiornamenti = collaboratori.aggiornamentiVista,
     clock = grafo.clock,
     statiElaborazione = collaboratori.trascrizione.statiElaborazione,
-    avviaElaborazione = collaboratori.avviaElaborazione,
     apriRegistrazione = apriRegistrazione,
     identificazioniIncontri = collaboratori.parlanti.letture.identificazioniIncontri,
-    ritrascrivi = collaboratori.avviaElaborazione,
-    annullaElaborazione = collaboratori.trascrizione.annullaElaborazione,
     eliminaRegistrazione = collaboratori.eliminaRegistrazione,
     posizioniNellaCoda = collaboratori.posizioniNellaCoda::istantanea,
     avviaElaborazioniDellIncontro = collaboratori.trascrizione.avviaElaborazioniDellIncontro,
-    modificaOraDiInizioRegistrazione = { id, ora -> modificaOraDiInizio(collaboratori.modificaOraDiInizio, id, ora) },
+    comandiRiga = ComandiRigaS2(
+        modificaData = collaboratori.modificaDataRegistrazione,
+        rinomina = collaboratori.rinominaRegistrazione,
+        avviaElaborazione = collaboratori.avviaElaborazione,
+        ritrascrivi = collaboratori.avviaElaborazione,
+        annullaElaborazione = collaboratori.trascrizione.annullaElaborazione,
+        modificaOraDiInizio = { id, ora -> modificaOraDiInizio(collaboratori.modificaOraDiInizio, id, ora) },
+    ),
     numeroPersonePrecompilato = collaboratori.trascrizione.numeroPersonePrecompilato,
 )
 

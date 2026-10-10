@@ -91,7 +91,7 @@ class RegistrazioniEliminaTest {
         elimina: (EliminaRegistrazione) -> Esito<Unit> = { Esito.Ok(Unit) },
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
@@ -248,7 +248,7 @@ class RegistrazioniEliminaTest {
     fun `AC-627 su Ok la riga scompare e appare l avviso con il titolo`() = runTest {
         var registrazioniCorrenti = listOf(rigaVista(REG_1))
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val presenter = RegistrazioniPresenter(
+        val presenter = registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
@@ -292,7 +292,7 @@ class RegistrazioniEliminaTest {
         val lettore = LettoreAudioFinta()
         var registrazioniCorrenti = listOf(rigaVista(REG_1))
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val presenter = RegistrazioniPresenter(
+        val presenter = registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
@@ -438,7 +438,7 @@ class RegistrazioniEliminaTest {
     fun `chiudiAvviso cancella l avviso`() = runTest {
         var registrazioniCorrenti = listOf(rigaVista(REG_1))
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val presenter = RegistrazioniPresenter(
+        val presenter = registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),

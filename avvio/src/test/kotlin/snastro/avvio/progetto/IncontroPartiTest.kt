@@ -82,7 +82,7 @@ class IncontroPartiTest {
             val (conOra, senzaOra) = ambiente.collaboratori.incontri().single().parti.map { it.registrazioneId }
 
             // 09:00 < 10:00 → the Parte that had no time becomes the first one; the seconds of the VO are 0.
-            sulThreadUi(ambiente) { s2.modificaOraDiInizio(senzaOra, LocalTime.of(9, 0)) }
+            sulThreadUi(ambiente) { s2.azioni.modificaOraDiInizio(senzaOra, LocalTime.of(9, 0)) }
 
             attendiDati(s2, "ora modificata") { d ->
                 d.riga(senzaOra).let { it.oraDiInizio != null && !it.operazioneInCorso }
@@ -93,7 +93,7 @@ class IncontroPartiTest {
             assertEquals(LocalTime.of(9, 0), dopo.first().oraDiInizio)
 
             // `null` clears it: the Parte without time goes last again.
-            sulThreadUi(ambiente) { s2.modificaOraDiInizio(senzaOra, null) }
+            sulThreadUi(ambiente) { s2.azioni.modificaOraDiInizio(senzaOra, null) }
             attendiDati(s2, "ora azzerata") { d ->
                 d.riga(senzaOra).let { it.oraDiInizio == null && !it.operazioneInCorso }
             }
@@ -124,7 +124,7 @@ class IncontroPartiTest {
             }
 
             val cambiamenti = ambiente.raccogliCambiamenti()
-            sulThreadUi(ambiente) { s2.modificaOraDiInizio(parti.last(), LocalTime.of(9, 0)) }
+            sulThreadUi(ambiente) { s2.azioni.modificaOraDiInizio(parti.last(), LocalTime.of(9, 0)) }
 
             // After commit, every Parte's view (the S3 open on the OTHER Parte too) is told to reload its order.
             attendiFinche(messaggio = "un Cambiamento per ogni Parte") {

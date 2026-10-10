@@ -98,7 +98,7 @@ class RegistrazioniRitrascriviTest {
         posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
@@ -153,7 +153,7 @@ class RegistrazioniRitrascriviTest {
     fun `AC-448 la riga Completata apre S3`() = runTest {
         var aperta: RegistrazioneId? = null
         val dispatcher = StandardTestDispatcher(testScheduler)
-        val presenter = RegistrazioniPresenter(
+        val presenter = registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),

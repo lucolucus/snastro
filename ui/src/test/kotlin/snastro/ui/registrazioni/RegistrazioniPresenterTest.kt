@@ -99,7 +99,7 @@ class RegistrazioniPresenterTest {
         posizioni: PosizioniCoda = PosizioniCoda.VUOTA,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),

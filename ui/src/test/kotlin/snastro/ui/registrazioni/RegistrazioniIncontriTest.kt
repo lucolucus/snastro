@@ -103,7 +103,7 @@ class RegistrazioniIncontriTest {
 
     private fun presentatore(scope: TestScope): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),
@@ -279,7 +279,7 @@ class RegistrazioniIncontriTest {
         val p = presentatore(this)
         advanceUntilIdle()
 
-        p.modificaOraDiInizio(P2, LocalTime.of(9, 5))
+        p.azioni.modificaOraDiInizio(P2, LocalTime.of(9, 5))
         // the read model's answer after the edit
         ordine = mutableListOf(P2 to LocalTime.of(9, 5), P1 to LocalTime.of(10, 0), P3 to null)
         advanceUntilIdle()
@@ -295,12 +295,12 @@ class RegistrazioniIncontriTest {
         val p = presentatore(this)
         advanceUntilIdle()
 
-        p.modificaOraDiInizio(P1, null)
+        p.azioni.modificaOraDiInizio(P1, null)
         advanceUntilIdle()
         assertEquals(listOf<Pair<RegistrazioneId, LocalTime?>>(P1 to null), ore)
 
         rifiutaOra = true
-        p.modificaOraDiInizio(P2, LocalTime.of(9, 0))
+        p.azioni.modificaOraDiInizio(P2, LocalTime.of(9, 0))
         advanceUntilIdle()
         assertNotNull(p.dati().righe.single { it.registrazioneId == P2 }.erroreRiga)
         assertNull(p.dati().righe.single { it.registrazioneId == P1 }.erroreRiga)

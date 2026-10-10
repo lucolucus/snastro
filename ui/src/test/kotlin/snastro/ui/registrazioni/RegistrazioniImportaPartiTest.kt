@@ -37,7 +37,7 @@ class RegistrazioniImportaPartiTest {
         aggiungi: (AggiungiRegistrazione) -> Esito<Unit>,
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = PROGETTO,

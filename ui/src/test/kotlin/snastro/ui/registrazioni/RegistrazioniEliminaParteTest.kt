@@ -84,7 +84,7 @@ class RegistrazioniEliminaParteTest {
         stati: Map<RegistrazioneId, StatoElaborazioneVista> = emptyMap(),
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),

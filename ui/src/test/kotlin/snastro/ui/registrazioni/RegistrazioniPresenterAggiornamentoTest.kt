@@ -54,7 +54,7 @@ class RegistrazioniPresenterAggiornamentoTest {
         stati: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista> = { emptyList() },
     ): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             scope = CoroutineScope(dispatcher),
             io = dispatcher,
             progettoId = ProgettoId("progetto-1"),

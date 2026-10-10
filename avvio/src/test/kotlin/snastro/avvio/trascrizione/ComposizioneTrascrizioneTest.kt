@@ -218,11 +218,11 @@ class ComposizioneTrascrizioneTest {
             attendiFinche(timeout = 30.seconds, messaggio = "S2 con A in corso") {
                 rigaDi(presenter.stato.value, a) is StatoElaborazioneRiga.InCorso
             }
-            presenter.avviaElaborazione(b) // S2 'Trascrivi' (reloads the list: queuing publishes no event)
+            presenter.azioni.avviaElaborazione(b) // S2 'Trascrivi' (reloads the list: queuing publishes no event)
             attendiFinche(timeout = 30.seconds, messaggio = "B in coda") {
                 rigaDi(presenter.stato.value, b) is StatoElaborazioneRiga.InAttesa
             }
-            presenter.avviaElaborazione(c)
+            presenter.azioni.avviaElaborazione(c)
             // `operazioneInCorso` too: the row turns InAttesa BEFORE the 'Trascrivi' operation's own flag is cleared,
             // and an 'Annulla' sent on a row with an operation in flight is (by design, M3) silently ignored.
             attendiFinche(timeout = 30.seconds, messaggio = "B 'In coda (1)' annullabile, C 'In coda (2)'") {
@@ -232,7 +232,7 @@ class ComposizioneTrascrizioneTest {
                     rigaDi(presenter.stato.value, c) == StatoElaborazioneRiga.InAttesa(2)
             }
 
-            presenter.annullaElaborazione(b) // S2 'Annulla'
+            presenter.azioni.annullaElaborazione(b) // S2 'Annulla'
 
             attendiFinche(timeout = 30.seconds, messaggio = "B 'Trascrivi' e C 'In coda (1)' in S2") {
                 val rigaB = rigaCompleta(presenter.stato.value, b)

@@ -53,7 +53,7 @@ class RegistrazioniConsegnaDopoCommitTest {
 
     private fun presentatore(scope: TestScope): RegistrazioniPresenter {
         val dispatcher = StandardTestDispatcher(scope.testScheduler)
-        return RegistrazioniPresenter(
+        return registrazioniPresenterDiProva(
             // SupervisorJob: each L269 case below runs even after an earlier Error reached the handler.
             scope = CoroutineScope(SupervisorJob() + dispatcher + CoroutineExceptionHandler { _, e -> sfuggite += e }),
             io = dispatcher,

@@ -14,16 +14,11 @@ import snastro.kernel.RegistrazioneId
 import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
-import snastro.progetto.applicazione.comandi.ModificaDataRegistrazione
-import snastro.progetto.applicazione.comandi.RinominaRegistrazione
 import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
 import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
-import snastro.trascrizione.applicazione.comandi.AnnullaElaborazione
-import snastro.trascrizione.applicazione.comandi.AvviaElaborazione
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontro
 import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
 import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
-import snastro.trascrizione.dominio.ErroreTrascrizione
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudio
@@ -34,9 +29,7 @@ import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA
 import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
-import snastro.ui.testi.MESSAGGIO_NUMERO_PERSONE_NON_VALIDO
 import snastro.ui.testi.etichetta
-import snastro.ui.testi.messaggioPer
 import java.time.Clock
 import java.time.Duration
 import java.time.LocalDate
@@ -51,9 +44,8 @@ import java.time.LocalTime
  * never a provisional or '0' count, without affecting the rest of the row), keeps a
  * per-row reflection of the shared [LettoreAudio] (AC-343: [LettoreAudio.disponibile] is checked once
  * per refresh, [LettoreAudio.stato] is collected live so the play/pause control never goes stale) and
- * refreshes on [AggiornamentiVista] (R15) or after a successful import/`modificaData`/`rinomina`/
- * `avviaElaborazione` (never after a failure — H1, AC-201/AC-206/AC-363/AC-344: "nulla cambia" beyond
- * the inline message). M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato]
+ * refreshes on [AggiornamentiVista] (R15) or after a successful import or row command (never after a
+ * failure — H1, AC-201/AC-206/AC-363/AC-344: "nulla cambia" beyond the inline message). M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato]
  * instead of rebuilding it from scratch, so a refresh landing mid-flight of an unrelated in-progress
  * operation never wipes [RegistrazioniUiStato.Dati.importoInCorso]/`errore` or a row's
  * `operazioneInCorso`/`erroreRiga`; a generation counter drops a [carica] result that resolves after a
@@ -61,39 +53,34 @@ import java.time.LocalTime
  * is a distinct [RegistrazioniUiStato.Errore] with a retry action, never the misleading AC-199 empty
  * message.
  *
- * Depends on `applicazione` through PLAIN FUNCTION TYPES ([registrazioni]/[aggiungiRegistrazione]/
- * [modificaDataRegistrazione]/[rinominaRegistrazione]/[statiElaborazione]/[avviaElaborazione]) rather
- * than the concrete read-model/service classes: `:avvio` binds the real shape (`RegistrazioniDelProgetto::delProgetto`,
- * `<Comando>Servizio::esegui`). This keeps every one of this presenter's own test doubles a plain
- * lambda over Published-Language DTOs (`RegistrazioneDelProgettoVista`, `StatoRegistrazioneVista`,
- * `Esito`) — `:ui` never needs a `*:dominio` aggregate to build a fixture for them (CR-1(b): a
- * `RegistrazioneRepositoryFinta`/`Registrazione.aggiungi` pair would require importing
- * `snastro.progetto.dominio.Registrazione`, off-limits here even from a test file, since the CR-1
- * Konsist rule scans by package, not by source set).
- *
- * ADR 0018 ([ritrascrivi]/[annullaElaborazione]): [ritrascrivi] backs 'Ritrascrivi' on a `Completata`
- * row with a Trascritto (AC-448/449) — a NEW `Elaborazione` over the existing one, the same underlying
- * command as [avviaElaborazione] but a distinct, independently supplied knob (`ElaborazioneGiaCompletata`
- * no longer exists, ADR 0018 §1). [annullaElaborazione] backs 'Annulla' on a queued row (AC-475/476), no
- * dialog: nothing is lost.
+ * Depends on `applicazione` through PLAIN FUNCTION TYPES ([registrazioni]/[aggiungiRegistrazione]/[statiElaborazione]
+ * and the row commands' [ComandiRigaS2]) rather than the concrete read-model/service classes: `:avvio` binds the real
+ * shape (`RegistrazioniDelProgetto::delProgetto`, `<Comando>Servizio::esegui`). This keeps every one of this
+ * presenter's own test doubles a plain lambda over Published-Language DTOs (`RegistrazioneDelProgettoVista`,
+ * `StatoRegistrazioneVista`, `Esito`) — `:ui` never needs a `*:dominio` aggregate to build a fixture for them (CR-1(b):
+ * a `RegistrazioneRepositoryFinta`/`Registrazione.aggiungi` pair would require importing
+ * `snastro.progetto.dominio.Registrazione`, off-limits here even from a test file, since the CR-1 Konsist rule scans by
+ * package, not by source set).
  *
  * ADR 0020 §6 ([eliminaRegistrazione]): backs the row's More menu — 'Elimina…' (AC-625/626/627/628) and,
- * on every row where [ritrascrivi] also applies, 'Ritrascrivi' too (AC-625 (b): the row's own button
- * then folds into the menu).
+ * on every row where [ComandiRigaS2.ritrascrivi] also applies, 'Ritrascrivi' too (AC-625 (b): the row's own
+ * button then folds into the menu).
  *
  * ADR 0023 §4 (block `avvio-coda-condivisa`, [posizioniNellaCoda]): the "In coda (n)"/"Ritrascrizione
  * in coda (n)" position on an `IN_ATTESA` row no longer comes from `StatoRegistrazioneVista` — it is
  * read from `:ui`'s `PosizioniNellaCoda` (the shared queue's owner, `:avvio`) and joined by
- * [RegistrazioneId], one snapshot per [costruisciRighe] call, absent meaning no position (0).
+ * [RegistrazioneId], one snapshot per [costruisciLista] call, absent meaning no position (0).
  *
- * The import flow is [FlussoImporta]'s, the delete-a-row flow [FlussoEliminaRiga]'s and the Incontro commands
- * [FlussoIncontro]'s (presenter-split): all write through the one [StatoS2] over this presenter's state, which also
- * owns the shared row guard and the refresh after a success; [azioni] binds their functions directly.
+ * The import flow is [FlussoImporta]'s, the plain row commands [FlussoComandiRiga]'s (over [ComandiRigaS2]: the
+ * date, title and start time, 'Trascrivi'/'Riprova', 'Ritrascrivi' (ADR 0018), 'Annulla' on a queued row), the
+ * delete-a-row flow [FlussoEliminaRiga]'s and the Incontro commands [FlussoIncontro]'s (presenter-split): all write
+ * through the one [StatoS2] over this presenter's state, which also owns the shared row guard and the refresh after a
+ * success; [azioni] binds their functions directly.
  *
  * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
  * wires all of them, so a missed wiring fails to compile instead of silently hiding a row's control.
  */
-@Suppress("LongParameterList", "TooManyFunctions") // a parameter per collaborator, a method per action
+@Suppress("LongParameterList", "TooManyFunctions") // a source or flow per parameter (to refactor 35); list read+merge
 class RegistrazioniPresenter(
     private val scope: CoroutineScope,
     io: CoroutineDispatcher,
@@ -101,21 +88,16 @@ class RegistrazioniPresenter(
     private val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
     private val incontri: () -> List<IncontroDelProgettoVista>,
     aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
-    private val modificaDataRegistrazione: (ModificaDataRegistrazione) -> Esito<Unit>,
-    private val rinominaRegistrazione: (RinominaRegistrazione) -> Esito<Unit>,
     private val lettore: LettoreAudio,
     private val aggiornamenti: AggiornamentiVista,
     private val clock: Clock,
     private val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
-    private val avviaElaborazione: (AvviaElaborazione) -> Esito<Unit>,
     private val apriRegistrazione: (RegistrazioneId) -> Unit,
     private val identificazioniIncontri: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro>,
-    private val ritrascrivi: (AvviaElaborazione) -> Esito<Unit>,
-    private val annullaElaborazione: (AnnullaElaborazione) -> Esito<Unit>,
     eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
     private val posizioniNellaCoda: () -> PosizioniCoda,
     avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
-    private val modificaOraDiInizioRegistrazione: (RegistrazioneId, LocalTime?) -> Esito<Unit>,
+    comandiRiga: ComandiRigaS2,
     private val numeroPersonePrecompilato: (IncontroId) -> Int?,
 ) {
     private val io: CoroutineDispatcher = io
@@ -140,6 +122,7 @@ class RegistrazioniPresenter(
     private val importazione = FlussoImporta(s2, scope, io, progettoId, aggiungiRegistrazione)
     private val eliminazione = FlussoEliminaRiga(s2, io, lettore, eliminaRegistrazione)
     private val incontro = FlussoIncontro(s2, scope, io, avviaElaborazioniDellIncontro)
+    private val comandiDiRiga = FlussoComandiRiga(s2, comandiRiga)
 
     init {
         scope.launch { carica() }
@@ -165,7 +148,7 @@ class RegistrazioniPresenter(
      * rebuilding it — [RegistrazioniUiStato.Dati.importoInCorso]/`errore` and each row's
      * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([FlussoImporta]/[StatoS2.comandoDiRiga])
      * ever clears them. L478a: [riproduzione] is RE-DERIVED from [lettore]'s CURRENT (merge-time) state —
-     * never trusted from [nuove], which [costruisciRighe] built from a snapshot taken back when this
+     * never trusted from [nuove], which [costruisciLista] built from a snapshot taken back when this
      * refresh started on [io]; a play/pause landing on [lettore] while that refresh was still building
      * rows would otherwise be silently reverted by this merge once it lands.
      */
@@ -458,134 +441,6 @@ class RegistrazioniPresenter(
             }
         }
 
-    /** AC-206: replaces the DataRegistrazione shown/edited inline on the row. */
-    fun modificaData(id: RegistrazioneId, nuovaData: LocalDate) = s2.comandoDiRiga(
-        id,
-        "modifica la data di $id",
-        comando = { modificaDataRegistrazione(ModificaDataRegistrazione(id, nuovaData)) },
-        suEsito = { concludiRiga(id, it) },
-    )
-
-    /**
-     * AC-363: renames the Registrazione from the row's inline titolo field — same row guard (M3) and
-     * inline error as [modificaData]; the list refreshes only after a success.
-     */
-    fun rinomina(id: RegistrazioneId, nuovoTitolo: String) = s2.comandoDiRiga(
-        id,
-        "rinomina $id",
-        comando = { rinominaRegistrazione(RinominaRegistrazione(id, nuovoTitolo)) },
-        suEsito = { concludiRiga(id, it) },
-    )
-
-    /**
-     * AC-344/AC-203: 'Trascrivi' (NON_AVVIATA) and 'Riprova' (FALLITA) both land here, carrying the row's
-     * 'Numero di persone' field (AC-375): empty → `null` (automatic), an integer 1..10 → that number, anything
-     * else → the inline [MESSAGGIO_NUMERO_PERSONE_NON_VALIDO] and NO command.
-     */
-    fun avviaElaborazione(id: RegistrazioneId) {
-        val comando = avviaElaborazione
-        val riga = s2.rigaLibera(id) ?: return
-        when (val campo = numeroPersoneCampo(riga.numeroPersone)) {
-            NumeroPersoneCampo.NonValido ->
-                s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
-            is NumeroPersoneCampo.Valido -> s2.comandoDiRiga(
-                id,
-                "avvia l'elaborazione di $id",
-                comando = { comando(AvviaElaborazione(id, campo.numero)) },
-                suEsito = { concludiRiga(id, it) },
-            )
-        }
-    }
-
-    /**
-     * AC-449: 'Ritrascrivi' validates the field exactly like [avviaElaborazione] (invalid → the same
-     * inline message, no dialog); a valid field opens the inline confirmation instead of sending the
-     * command right away.
-     */
-    fun ritrascrivi(id: RegistrazioneId) {
-        val riga = s2.rigaLibera(id) ?: return
-        when (numeroPersoneCampo(riga.numeroPersone)) {
-            NumeroPersoneCampo.NonValido ->
-                s2.aggiornaRiga(id) { it.copy(erroreRiga = MESSAGGIO_NUMERO_PERSONE_NON_VALIDO) }
-            is NumeroPersoneCampo.Valido ->
-                s2.aggiornaRiga(id) { it.copy(confermaRitrascrivi = true, erroreRiga = null) }
-        }
-    }
-
-    /** AC-449: 'Annulla' on the confirmation — no command is sent, the field keeps its value. */
-    fun annullaRitrascrivi(id: RegistrazioneId) = s2.aggiornaRiga(id) { it.copy(confermaRitrascrivi = false) }
-
-    /** AC-449: the confirmed 'Ritrascrivi' — exactly ONE `AvviaElaborazione` with the value [ritrascrivi] validated. */
-    fun confermaRitrascrivi(id: RegistrazioneId) {
-        val comando = ritrascrivi
-        val riga = s2.rigaLibera(id)?.takeIf { it.confermaRitrascrivi } ?: return
-        val numero = (numeroPersoneCampo(riga.numeroPersone) as? NumeroPersoneCampo.Valido)?.numero
-        s2.comandoDiRiga(
-            id,
-            "ritrascrivi $id",
-            comando = { comando(AvviaElaborazione(id, numero)) },
-            suEsito = { concludiRiga(id, it) },
-        )
-    }
-
-    /**
-     * ADR 0018 Amendment (b) §3: 'Annulla' on an `InAttesa` row (AC-475), no dialog — nothing is lost.
-     * AC-476: BOTH outcomes reload the list, unlike every other row action here (H1 "nulla cambia"
-     * does not hold for this one): `ElaborazioneGiaAvviata` means the dispatcher's claim raced ahead
-     * and the row's real state already changed elsewhere (ADR 0018 Amendment (b) §3's race, now shown
-     * inline too — "La trascrizione è già partita…"), and `ElaborazioneNonTrovata` means it is already
-     * gone — the reload alone shows the row's accurate current state, with NO inline message (AC-476:
-     * "it just reloads" — a message would refer to an Elaborazione the row no longer shows at all).
-     */
-    fun annullaElaborazione(id: RegistrazioneId) {
-        val comando = annullaElaborazione
-        val elaborazioneId = s2.rigaLibera(id)?.elaborazioneId ?: return
-        s2.comandoDiRiga(
-            id,
-            "annulla $elaborazioneId",
-            comando = { comando(AnnullaElaborazione(elaborazioneId)) },
-            suEsito = { esito ->
-                carica() // AC-476: reload on both Ok and Errore (see the kdoc above)
-                val messaggio = (esito as? Esito.Errore)?.errore
-                    ?.let { it as? ErroreTrascrizione.ElaborazioneGiaAvviata }
-                    ?.let(::messaggioPer)
-                s2.aggiornaRiga(id) { it.copy(erroreRiga = messaggio) }
-            },
-        )
-    }
-
-    /**
-     * AC-I68: replaces a Parte's start time ([ora] `null` clears it) — `ModificaOraDiInizio`, whose `OraDiInizio` VO
-     * `:avvio` builds (CR-1: `:ui` does not see the domain). The list is read again on success, so the sub-rows come
-     * back in their new order; a refusal stays on the Parte's row ([RigaRegistrazione.erroreRiga]).
-     */
-    fun modificaOraDiInizio(id: RegistrazioneId, ora: LocalTime?) {
-        val comando = modificaOraDiInizioRegistrazione
-        s2.comandoDiRiga(
-            id,
-            "modifica l'ora di inizio di $id",
-            comando = { comando(id, ora) },
-            suEsito = { concludiRiga(id, it) },
-        )
-    }
-
-    /** ADR 0014: the text of [id]'s 'Numero di persone' field, as typed (validated only when an action fires). */
-    fun modificaNumeroPersone(id: RegistrazioneId, testo: String) =
-        s2.aggiornaRiga(id) { it.copy(numeroPersone = testo) }
-
-    /**
-     * The outcome of a plain row command on [StatoS2.comandoDiRiga]: Ok reloads (M1: the merge keeps this row's flags
-     * until the runner resets them) and closes the Ritrascrivi confirmation; a refusal shows its message inline (H1).
-     * Committed with only its after-commit follow-up failed is an Ok (`comandoConfermato`, D-0062, L270).
-     */
-    private suspend fun concludiRiga(id: RegistrazioneId, esito: Esito<Unit>) = when (esito) {
-        is Esito.Ok -> {
-            carica()
-            s2.aggiornaRiga(id) { it.copy(erroreRiga = null, confermaRitrascrivi = false) }
-        }
-        is Esito.Errore -> s2.aggiornaRiga(id) { it.copy(erroreRiga = messaggioPer(esito.errore)) }
-    }
-
     /**
      * AC-343: always `daMs = 0` — 'restart from the beginning', never a resume from `posizioneMs`.
      * H2: a throwing [LettoreAudio] is logged (CR-7) and mapped to an inline row error, never left to kill this
@@ -628,20 +483,20 @@ class RegistrazioniPresenter(
 
     val azioni: AzioniRegistrazioni = AzioniRegistrazioni(
         importa = importazione::importa,
-        modificaData = ::modificaData,
-        rinomina = ::rinomina,
+        modificaData = comandiDiRiga::modificaData,
+        rinomina = comandiDiRiga::rinomina,
         riproduci = ::riproduci,
         pausa = ::pausa,
-        avviaElaborazione = ::avviaElaborazione,
-        modificaNumeroPersone = ::modificaNumeroPersone,
+        avviaElaborazione = comandiDiRiga::avviaElaborazione,
+        modificaNumeroPersone = comandiDiRiga::modificaNumeroPersone,
         apriRiga = ::apriRiga,
         chiudiErrore = ::chiudiErrore,
         chiudiErroreRiga = ::chiudiErroreRiga,
         riprova = ::riprova,
-        ritrascrivi = ::ritrascrivi,
-        annullaRitrascrivi = ::annullaRitrascrivi,
-        confermaRitrascrivi = ::confermaRitrascrivi,
-        annullaElaborazione = ::annullaElaborazione,
+        ritrascrivi = comandiDiRiga::ritrascrivi,
+        annullaRitrascrivi = comandiDiRiga::annullaRitrascrivi,
+        confermaRitrascrivi = comandiDiRiga::confermaRitrascrivi,
+        annullaElaborazione = comandiDiRiga::annullaElaborazione,
         elimina = eliminazione::chiedi,
         annullaElimina = eliminazione::annulla,
         confermaElimina = eliminazione::conferma,
@@ -651,42 +506,9 @@ class RegistrazioniPresenter(
         confermaImporta = importazione::conferma,
         annullaImporta = importazione::annulla,
         espandiIncontro = incontro::espandiIncontro,
-        modificaOraDiInizio = ::modificaOraDiInizio,
+        modificaOraDiInizio = comandiDiRiga::modificaOraDiInizio,
         modificaNumeroPersoneIncontro = incontro::modificaNumeroPersoneIncontro,
         avviaElaborazioniIncontro = incontro::avviaElaborazioniIncontro,
         chiudiErroreIncontro = incontro::chiudiErroreIncontro,
     )
 }
-
-/** ADR 0014/AC-375: the field's text → `null` (empty, automatic), 1..10, or [NonValido]. */
-internal sealed interface NumeroPersoneCampo {
-    data class Valido(val numero: Int?) : NumeroPersoneCampo
-    data object NonValido : NumeroPersoneCampo
-}
-
-// L548b: a strict `^(10|[1-9])$` match — never `String.toIntOrNull()` on the trimmed text, which
-// also accepts a leading sign ("+4".toIntOrNull() == 4) and leading zeros ("04".toIntOrNull() == 4),
-// neither a sane representation of a person count.
-private val REGEX_NUMERO_PERSONE = Regex("^($NUMERO_PERSONE_MAX|[1-9])$")
-
-internal fun numeroPersoneCampo(testo: String): NumeroPersoneCampo {
-    val t = testo.trim()
-    val numero = t.toIntOrNull()?.takeIf {
-        REGEX_NUMERO_PERSONE.matches(t) && it in NUMERO_PERSONE_MIN..NUMERO_PERSONE_MAX
-    }
-    return when {
-        t.isEmpty() -> NumeroPersoneCampo.Valido(null)
-        numero != null -> NumeroPersoneCampo.Valido(numero)
-        else -> NumeroPersoneCampo.NonValido
-    }
-}
-
-/**
- * ADR 0014: the range the field accepts before sending the command (AC-375, 'no command' on anything else).
- * `:ui` cannot see the `NumeroPersone` VO (CR-1); `AvviaElaborazione` re-validates it (`NumeroPersone.di`).
- * L548a: `internal` (not `private`) so this boundary is checkable from elsewhere in `:ui`'s own tests; the
- * cross-module parity with the domain's actual range lives in `:avvio`'s own
- * `NumeroPersoneRegistrazioniParitaTest` (`:ui` cannot import `NumeroPersone` itself to share it directly).
- */
-internal const val NUMERO_PERSONE_MIN = 1
-internal const val NUMERO_PERSONE_MAX = 10

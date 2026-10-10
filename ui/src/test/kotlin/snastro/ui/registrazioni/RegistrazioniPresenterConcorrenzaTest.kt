@@ -77,7 +77,7 @@ class RegistrazioniPresenterConcorrenzaTest {
         val lettore = LettoreAudioCheAttendeAllaSecondaChiamata(lettoreReale, ingresso, viaLibera)
         val aggiornamenti = AggiornamentiVistaFinta()
         try {
-            val presenter = RegistrazioniPresenter(
+            val presenter = registrazioniPresenterDiProva(
                 scope = scope,
                 io = esecutoreIo.asCoroutineDispatcher(),
                 progettoId = ProgettoId("progetto-1"),
@@ -157,7 +157,7 @@ class RegistrazioniPresenterConcorrenzaTest {
         val chiamate = AtomicInteger(0)
         val aggiornamenti = AggiornamentiVistaFinta()
         try {
-            val presenter = RegistrazioniPresenter(
+            val presenter = registrazioniPresenterDiProva(
                 scope = scope,
                 io = esecutoreIo.asCoroutineDispatcher(),
                 progettoId = ProgettoId("progetto-1"),

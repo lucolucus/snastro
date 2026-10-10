@@ -184,7 +184,7 @@ class RitrascriviTest {
             attendiFinche(timeout = 10.seconds, messaggio = "S3 in sola lettura") { datiS3(s3)?.soloLettura == true }
             assertEquals(2, datiS3(s3)?.segmenti?.size)
 
-            sulThreadUi(it) { s2.annullaElaborazione(s.x) }
+            sulThreadUi(it) { s2.azioni.annullaElaborazione(s.x) }
 
             attendiFinche(timeout = 10.seconds, messaggio = "S2 'Completata' + 'Ritrascrivi', S3 modificabile") {
                 val r = riga(s2, s.x)
@@ -353,13 +353,13 @@ class RitrascriviTest {
             riga(s2, id)?.let { r -> r.ritrascriviDisponibile && !r.operazioneInCorso } == true
         }
         sulThreadUi(ambiente) {
-            s2.modificaNumeroPersone(id, persone)
-            s2.ritrascrivi(id)
+            s2.azioni.modificaNumeroPersone(id, persone)
+            s2.azioni.ritrascrivi(id)
         }
         attendiFinche(timeout = 10.seconds, messaggio = "conferma di 'Ritrascrivi' con '$persone'") {
             riga(s2, id)?.let { r -> r.confermaRitrascrivi && r.numeroPersone == persone } == true
         }
-        sulThreadUi(ambiente) { s2.confermaRitrascrivi(id) }
+        sulThreadUi(ambiente) { s2.azioni.confermaRitrascrivi(id) }
     }
 
     /** Runs a user action on the presenters' UI thread (the app's `Dispatchers.Swing`), waiting for it to return. */
