@@ -1,9 +1,10 @@
 Kind: feature
 Release: R1
-Examples: EX-14, EX-15, EX-16
+Examples: EX-20, EX-21, EX-26
 
-Riassumendo skatefest, con o senza argomento, decisioni, questioni e azioni riportano i punti cardine della riunione
-(D1, Q1, A1) con le fonti, una volta sola ciascuno e senza il punto inventato. Il come lo sceglie l'architetto (spike H1).
+Riassumendo skatefest, con o senza argomento, il riassunto nuovo è il solo sommario (un'unica generazione col prompt
+del passaggio 1 delle prove H1): racconta D1 e Q1, non inventa; niente liste né fonti nella scheda e in Copia.
+(Riscritta il 2026-10-10: solo sommario in R1, decisione dell'utente; la storia sotto è quella delle prove.)
 
 ## Question
 Quale approccio usa il riassunto per avere i punti cardine (EX-14..EX-16)? Nessun ADR o nota dell'architetto lo ha

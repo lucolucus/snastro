@@ -116,3 +116,8 @@ Risposte dell'utente:
 - R1-7: elenco di riferimento dei punti cardine di skatefest confermato dall'utente ("si"), in `examples.md` sopra EX-14.
 - Taglio di R1 approvato: slice 22–25, esempi EX-14..EX-19 ("va bene così").
 Nessuna domanda aperta per R1. Per dopo: percentuale del parlato (R1-1..3, H3).
+- R1-8 (2026-10-10, dopo quattro prove su Qwen3.5 9B, `.mismagent/spikes/h1.md`): **in R1 il riassunto nuovo è solo il
+  sommario**, generato da solo (una generazione). Nella scheda niente liste e niente chip fonte; Copia copia il solo
+  sommario; i riassunti fatti prima di R1 restano con liste e fonti finché non si rigenerano; EX-18 (ciclo fermato
+  entro 600 s) invariato. Le liste con le fonti, e un modello piccolo migliore, tornano in una release successiva.
+  Esempi EX-20..EX-26 (EX-14..17 e EX-19 superati).
