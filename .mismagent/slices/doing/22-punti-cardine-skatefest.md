@@ -151,3 +151,13 @@ EX-14 e EX-15 per il punto inventato. Opzioni:
 Raccomandazione: **3 e poi 1**. Prima il tuo giudizio sulle voci citate, che decide se serve altro. Se il punto
 inventato c'è, allora la 1: costa tre corse e lascia invariata la struttura della 2, cioè quella da scrivere nell'ADR.
 Nessun codice di produzione finché una corsa non soddisfa EX-14..EX-17.
+
+## Answer
+Risposta dell'utente (2026-10-10): nella riunione il movimento automatico dei poliziotti verso il giocatore più vicino
+era **una proposta nuova**, non la regola esistente. Quindi "soluzione proposta / idea discussa" (punti chiave,
+questioni) è corretta; resta inventato solo presentarlo come **deciso o approvato** (una decisione, o un'azione
+"implementare …" che lo dà per deciso). Rivaluta le corse delle prove 1 e 2 con questa lettura, senza nuove corse se
+non servono, e annota l'esito in `.mismagent/spikes/h1.md`. Se la prova 2 passa EX-14..EX-17: fermati con un
+`## Question` per l'architetto (ADR che emenda ADR 0026 §3: sommario + un passaggio per lista, modello aperto, tempi
+misurati, effetto sui 600 s di EX-18), segnalando anche le ripetizioni fra liste diverse (EX-16 parla di una lista
+sola). Se non passa: la prova con la definizione più stretta di decisione (opzione 1), poi fermati con i numeri.
