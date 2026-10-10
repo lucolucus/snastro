@@ -7,6 +7,10 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-10 — conventions (decided by the user): acceptance-tests — S3 Riassunto tests extend `BancoRiassunto` on real
+  threads with `attendiFinche` (the queue worker is a real thread), an explicit exception to the `StandardTestDispatcher`
+  rule; the gate proves the shape, the real model's content is measured outside it (`benchmarkRiassunto`); test names
+  state no data the test lacks. Topic condensed to ~300 words, rules unchanged.
 - 2026-10-09 — conventions (decided: codex, delegated by the user): non-fatal-faults — an edge that already shows an
   error specific to its fault needs no extra generic message (reverses the morning's reading; avoids two messages for
   one fault); presenter-split — S2's row runner will own `withContext(io)` and `comandoConfermato` like S4's `suRiga`
