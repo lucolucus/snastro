@@ -215,3 +215,9 @@
 - The 7 callers (6 in `RegistrazioniPresenter`, `FlussoEliminaRiga.conferma`) pass only the port call; the operation name is written once. `FlussoEliminaRiga` still uses `io` for the player's `pausa`. `FlussoImporta`/`FlussoIncontro` unchanged.
 - Behaviour kept with no test changed: ui 716/716 (`RegistrazioniConsegnaDopoCommitTest`, `RegistrazioniRinominaTest`, `RegistrazioniPresenterConcorrenzaTest` green); `mm gate` green.
 - The `val comando = <property>` locals in the presenter stay: the properties share names with the public functions (`avviaElaborazione`, `ritrascrivi`, `annullaElaborazione`). Proposal `update presenter-split` (runner as built) is in `conventions-proposals.md`.
+
+## 34-s2-comandi-di-riga-fuori-dal-presenter — 2026-10-11
+- New `internal FlussoComandiRiga(s2, comandi: ComandiRigaS2)` holds S2's plain row commands and `concludiRiga` (reload through `s2.ricarica`); `ComandiRigaS2` (public data class, 6 required fields) replaces six presenter parameters (21 → 16); `azioni` binds `comandiDiRiga::…` directly. `numeroPersoneCampo`/`NUMERO_PERSONE_MIN/MAX` moved with it (shared with `FlussoIncontro`).
+- With the port calls behind `comandi.`, slice 33's `val comando = <property>` locals are gone. `TooManyFunctions` stays: the presenter still has 22 functions (list read/merge, player), over detekt's default of 11.
+- S2 tests build through ONE builder, `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterDiProva.kt` (the old flat parameters → bundles): slice 35 edits only it and `:avvio`'s `costruisciRegistrazioniPresenter`. Tests that called the removed presenter members now call `presenter.azioni.…` (4 files, no assertion changed).
+- Kept: ui 716/716, avvio 416/416, `mm gate` green; smoke `s2.png` e8935777…, `s2-espansa.png` 2c2f89f2… (`shasum`), identical to the 22:21 render from slice 33's code (no `.kt` change from 4bddf4bf to Base).
