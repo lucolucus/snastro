@@ -1,2 +1,1 @@
 # Conventions proposals
-- update non-fatal-faults: "Shown by" — `LettorePresenter.kt` (`avvia`, `pausa`) instead of (`avvia`); a silent fallback's generic message is shown at `ImpostazioniPresenter` start (`lette == null`), `RiassuntoPresenter.scaricaModello` and `apriFonte` on this Parte (`mostraErrore` after `ricarica()`) — `ui/src/main/kotlin/snastro/ui/lettore/LettorePresenter.kt`, `ui/src/main/kotlin/snastro/ui/impostazioni/ImpostazioniPresenter.kt`, `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt` (slice 31: citations only, the rule is unchanged)
