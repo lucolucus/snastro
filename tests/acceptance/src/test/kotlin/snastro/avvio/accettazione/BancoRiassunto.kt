@@ -85,7 +85,7 @@ abstract class BancoRiassunto(private val riconoscitore: RiconoscitoreParlato = 
         val porte = ambiente.porte
         val segmenti = checkNotNull(porte.trascrittoPerSintesi.segmenti(id)) { "$id senza Trascritto" }
         val struttura = StrutturaTrascritto.di(segmenti.map { it.segmentoId to it.voceId })
-        val riassunto = unRiassunto("riassunto-prima-di-r1", ambiente.incontroDi(id)).conAvvio().conCompletamento(
+        val riassunto = unRiassunto("riassunto-pronto", ambiente.incontroDi(id)).conAvvio().conCompletamento(
             bozza,
             StrutturaIncontro(listOf(id to struttura)),
             segmenti.map { SegmentoRef(id, it.segmentoId) },
