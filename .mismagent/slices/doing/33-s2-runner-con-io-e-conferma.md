@@ -9,6 +9,7 @@ and once for `comandoConfermato`. There are 7 callers: 6 in `ui/src/main/kotlin/
 and `FlussoEliminaRiga.kt:53-57`. S4's `suRiga` already owns both (`ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt:160-170`,
 progress.md slice 29: "the name is written once per command"). That leaves the code with two shapes for one runner.
 Release review R0-3 scored duplication 3.
+Base: 647882f9d80411ed43ed8428e22c6412c5a1b848
 
 What changes:
 - `StatoS2` (`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`) receives `io`.
