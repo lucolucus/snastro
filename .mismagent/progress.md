@@ -209,3 +209,9 @@
 - 3 new CR-7 tests (1 in `StatoVociGuastiTest`, 2 in `RegistrazionePresenterGuastiTest`). Before the fix they were red with "expected <generic> but was <null>" (their log assertions already passed). Existing S3 tests unchanged. ui 716/716; `mm gate` green.
 - `AmbienteVoci`: the stacked KDocs (`:58-63`, `:156-157`) were each moved onto their own declaration. `traPartiRotta` now throws one `guastoTraParti` instance, so a test can match it with `causatoDa`.
 - No silent S3 edge is left. Citation update for non-fatal-faults is in `conventions-proposals.md`.
+
+## 33-s2-runner-con-io-e-conferma — 2026-10-10
+- `StatoS2` receives `io`; `comandoDiRiga`'s `comando` is now a plain `() -> Esito<Unit>` port call, run as `withContext(io) { comandoConfermato(operazione, comando) }` inside `eccezioneRegistrata(operazione)`; `suEsito` stays on the presenter dispatcher. Same shape as S4's `suRiga`.
+- The 7 callers (6 in `RegistrazioniPresenter`, `FlussoEliminaRiga.conferma`) pass only the port call; the operation name is written once. `FlussoEliminaRiga` still uses `io` for the player's `pausa`. `FlussoImporta`/`FlussoIncontro` unchanged.
+- Behaviour kept with no test changed: ui 716/716 (`RegistrazioniConsegnaDopoCommitTest`, `RegistrazioniRinominaTest`, `RegistrazioniPresenterConcorrenzaTest` green); `mm gate` green.
+- The `val comando = <property>` locals in the presenter stay: the properties share names with the public functions (`avviaElaborazione`, `ritrascrivi`, `annullaElaborazione`). Proposal `update presenter-split` (runner as built) is in `conventions-proposals.md`.
