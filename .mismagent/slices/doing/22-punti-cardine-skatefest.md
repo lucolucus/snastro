@@ -1,6 +1,7 @@
 Kind: feature
 Release: R1
 Examples: EX-20, EX-21, EX-26
+Base: 2a6533b653c6f993214d89ff93fc47ee14947739
 
 Riassumendo skatefest, con o senza argomento, il riassunto nuovo è il solo sommario (un'unica generazione col prompt
 del passaggio 1 delle prove H1): racconta D1 e Q1, non inventa; niente liste né fonti nella scheda e in Copia.
