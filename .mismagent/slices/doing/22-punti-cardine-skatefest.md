@@ -229,3 +229,9 @@ Raccomandazione: **2**. È l'unica uscita che in tutte le corse ha i punti cardi
 leggere al posto della riunione, un punto falso fra le decisioni costa più di una lista mancante. La 1 va bene se per te
 avere le liste conta più del rischio, ma allora EX-14 va riscritto proprio sul punto che nomina. In entrambi i casi la
 scelta cambia gli esempi di R1, quindi è tua prima che dell'architetto.
+
+## Answer
+Decisione dell'utente (2026-10-10), dopo quattro prove su Qwen3.5 9B: **solo sommario in R1**. Il sommario del primo
+passaggio è l'unica uscita che in tutte le corse ha i punti cardine e non inventa niente. Gli esempi EX-14..EX-17
+cambiano: si torna a `/mismagent:specify` per R1 (esempi nuovi con `(superseded by …)`, slice riscritte); questa slice
+si parcheggia e verrà sostituita.
