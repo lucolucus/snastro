@@ -123,3 +123,31 @@ Decisione dell'utente (2026-10-10): **prova 1 e poi 2**, nel worktree usa e gett
 Annota entrambe in `.mismagent/spikes/h1.md` (D1, Q1, A1 nella lista giusta, fonti, voci distinte, punto inventato,
 tempi) e fermati con un `## Question` che dice quale strada passa EX-14..EX-17, se una passa, per l'ADR che emenda
 ADR 0026 §3. Guardia di 5 minuti su ogni passaggio.
+
+## Question
+Prove 1 e 2 fatte (`.mismagent/spikes/h1.md` § "Prove 1 e 2", punti 13–17). **Nessuna delle due passa EX-14..EX-17.**
+- **Prova 1** (quattro liste in un passaggio, forma del JSON nel prompt): il vuoto sparisce, ma D1, Q1 e A1 sono tutti
+  nella lista giusta solo in 1 corsa su 3 (EX-15). 128–182 s.
+- **Prova 2** (un passaggio per lista): D1 tra le decisioni, Q1 tra le questioni e A1 tra le azioni, con fonti dei minuti
+  giusti, in **3 corse su 3**; Q3 c'è in EX-17. 237–251 s, sotto i 600 s.
+- **In entrambe resta il punto inventato**: il movimento automatico dei poliziotti, che c'è già ed è giudicato
+  controintuitivo (s39–s48), esce come deciso o da introdurre in 4 corse su 6 in modo netto (es. prova 2 EX-14:
+  "Modificare il comportamento dei poliziotti per renderli automatici e prevedibili"). Nelle altre 2 corse è dubbio
+  (prova 1 EX-17: fra le modifiche di D1; prova 2 EX-17: azione "Modificare le carte dei poliziotti per includere il
+  movimento automatico"). Questo giudizio è mio e va confermato da te sulle voci citate.
+
+La strada che si avvicina è la **2**: è quella da mettere nell'ADR che emenda ADR 0026 §3 se si va avanti (sommario,
+poi un passaggio per lista, modello tenuto aperto nello stesso `riassumi`, ~4 min per ~1 h di audio). Ma oggi fallisce
+EX-14 e EX-15 per il punto inventato. Opzioni:
+1. **Un'altra prova sulla 2, mirata al passaggio delle decisioni** (e delle azioni): una decisione è un accordo detto
+   nella riunione, e una proposta, una regola già esistente o un problema da risolvere non lo sono. In più, il sommario
+   del passaggio 1 (che non ha mai avuto il punto inventato) come contesto di quel passaggio. Costo: tre corse, ~13 min.
+   Rischio: una definizione tarata su skatefest.
+2. **ADR ora sulla 2**, con il punto inventato come limite noto, e EX-14/EX-15 rivisti da te (es. tollerare voci
+   "da introdurre" che non dicono "approvato"). Non lo raccomando: EX-14 nomina proprio questo punto.
+3. **Rivedere il mio giudizio**: se per te le voci dubbie (o anche quelle "nette") non dicono che il movimento è stato
+   approvato, la prova 2 passa EX-14..EX-17 già così.
+
+Raccomandazione: **3 e poi 1**. Prima il tuo giudizio sulle voci citate, che decide se serve altro. Se il punto
+inventato c'è, allora la 1: costa tre corse e lascia invariata la struttura della 2, cioè quella da scrivere nell'ADR.
+Nessun codice di produzione finché una corsa non soddisfa EX-14..EX-17.
