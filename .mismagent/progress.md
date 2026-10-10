@@ -186,3 +186,8 @@
 - No time budget on the `cancel` lambda: it cannot tell a loop from a long meeting. Bound derived: an hour of speech at the 10 000 cap = 6 112 tokens ≈ 407 s at 15 t/s. `benchmarkRiassunto` on skatefest after the change: 54.0 s, 581 tokens, 413 words, same Sommario as slice 22 (generation ≈ 20 t/s).
 - `BancoRiassunto` gained `riassumiFinche` (wait for any tab state), `impostaLunghezzaMassima` (the tab's inline editor) and the fake's `siRipete` loop timed at `TOKEN_AL_SECONDO`.
 - Open for the human (design notes): with seed 42 fixed, Riprova on the same input likely loops again (assumption); ADR 0026 §5/§6 and ADR 0022's code list need the architect's amendment.
+
+## 24-argomento-come-contesto — 2026-10-10
+- EX-23: `RiassuntoArgomentoComeContestoTest` (green at once: the gate's shape — whole meeting in the prompt with or without Argomento, "racconta comunque tutta la riunione", the model's Sommario shown whole — had landed in slice 22). `BancoRiassunto.riunioneNel(prompt)` reads a prompt's user turn; EX-20/21 test names lost "skatefest" (design note closed).
+- Real model (`benchmarkRiassunto -Pargomento="Parliamo solo del sito e dell'hosting"`): slice 22's Argomento line dropped D1 (63.0 s, 447 words); the line now says "solo per capire …, non per scegliere cosa raccontare … anche le parti su altri temi, con gli accordi e i prossimi passi": EX-23 has D1, Q1 and Amplify (57.0 s), EX-20 re-measured still holds (52.9 s; D1 as "tra due e quattro settimane"). Table in `.mismagent/spikes/h1.md` § "argomento come contesto".
+- A prompt change is judged by the benchmark, not the gate: one run per case at seed 42, stability across runs unmeasured.
