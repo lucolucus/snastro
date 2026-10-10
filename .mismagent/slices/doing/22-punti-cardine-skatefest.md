@@ -113,3 +113,13 @@ Raccomandazione: **1 e poi 2**. La 1 costa una corsa (~2 min) e dice se, risolto
 w6 fa pensare di no, e allora la 2 è la strada che attacca proprio la classificazione, nell'adattatore e senza toccare
 `:llama-jni`. In entrambi i casi la struttura (più passaggi, modello tenuto aperto) va nell'ADR che emenda ADR 0026 §3.
 Nessun codice di produzione finché una corsa non soddisfa EX-14..EX-17.
+
+## Answer
+Decisione dell'utente (2026-10-10): **prova 1 e poi 2**, nel worktree usa e getta, niente codice di produzione.
+1. Secondo passaggio con la forma del JSON (chiavi e definizioni) descritta nel prompt, grammatica attiva: le tre
+   corse di EX-14, EX-15, EX-17.
+2. Un passaggio per lista (decisioni, questioni aperte, azioni, punti chiave), ognuno con la definizione del suo tipo
+   e la sua grammatica, dopo il passaggio del sommario: le stesse tre corse, con i tempi totali.
+Annota entrambe in `.mismagent/spikes/h1.md` (D1, Q1, A1 nella lista giusta, fonti, voci distinte, punto inventato,
+tempi) e fermati con un `## Question` che dice quale strada passa EX-14..EX-17, se una passa, per l'ADR che emenda
+ADR 0026 §3. Guardia di 5 minuti su ogni passaggio.
