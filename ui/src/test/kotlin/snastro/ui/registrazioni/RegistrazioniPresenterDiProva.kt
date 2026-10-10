@@ -25,7 +25,8 @@ import java.time.LocalTime
 
 /**
  * The ONE place S2's tests build a [RegistrazioniPresenter]: every collaborator as a flat named argument, grouped here
- * into the presenter's bundles ([ComandiRigaS2]), so a regrouping of the constructor changes only this function.
+ * into the presenter's bundles ([LettureS2], [ComandiRigaS2]), so a regrouping of the constructor changes only this
+ * function.
  */
 @Suppress("LongParameterList") // one named argument per collaborator, as the tests pass them
 internal fun registrazioniPresenterDiProva(
@@ -55,17 +56,20 @@ internal fun registrazioniPresenterDiProva(
     scope = scope,
     io = io,
     progettoId = progettoId,
-    registrazioni = registrazioni,
-    incontri = incontri,
+    letture = LettureS2(
+        registrazioni = registrazioni,
+        incontri = incontri,
+        statiElaborazione = statiElaborazione,
+        identificazioniIncontri = identificazioniIncontri,
+        posizioniNellaCoda = posizioniNellaCoda,
+        numeroPersonePrecompilato = numeroPersonePrecompilato,
+        clock = clock,
+    ),
     aggiungiRegistrazione = aggiungiRegistrazione,
     lettore = lettore,
     aggiornamenti = aggiornamenti,
-    clock = clock,
-    statiElaborazione = statiElaborazione,
     apriRegistrazione = apriRegistrazione,
-    identificazioniIncontri = identificazioniIncontri,
     eliminaRegistrazione = eliminaRegistrazione,
-    posizioniNellaCoda = posizioniNellaCoda,
     avviaElaborazioniDellIncontro = avviaElaborazioniDellIncontro,
     comandiRiga = ComandiRigaS2(
         modificaData = modificaDataRegistrazione,
@@ -75,5 +79,4 @@ internal fun registrazioniPresenterDiProva(
         annullaElaborazione = annullaElaborazione,
         modificaOraDiInizio = modificaOraDiInizioRegistrazione,
     ),
-    numeroPersonePrecompilato = numeroPersonePrecompilato,
 )

@@ -21,6 +21,7 @@ import snastro.ui.registrazione.SorgenteRiassuntoS3
 import snastro.ui.registrazione.SorgentiParlanti
 import snastro.ui.registrazione.SorgentiParti
 import snastro.ui.registrazioni.ComandiRigaS2
+import snastro.ui.registrazioni.LettureS2
 import snastro.ui.registrazioni.RegistrazioniPresenter
 import snastro.ui.riassunto.RiassuntoPresenter
 import snastro.ui.riassunto.SchedaRiassunto
@@ -74,17 +75,20 @@ internal fun costruisciRegistrazioniPresenter(
     scope = collaboratori.scope,
     io = grafo.io,
     progettoId = collaboratori.progettoId,
-    registrazioni = collaboratori.registrazioni,
-    incontri = collaboratori.incontri,
+    letture = LettureS2(
+        registrazioni = collaboratori.registrazioni,
+        incontri = collaboratori.incontri,
+        statiElaborazione = collaboratori.trascrizione.statiElaborazione,
+        identificazioniIncontri = collaboratori.parlanti.letture.identificazioniIncontri,
+        posizioniNellaCoda = collaboratori.posizioniNellaCoda::istantanea,
+        numeroPersonePrecompilato = collaboratori.trascrizione.numeroPersonePrecompilato,
+        clock = grafo.clock,
+    ),
     aggiungiRegistrazione = collaboratori.aggiungiRegistrazione,
     lettore = collaboratori.lettoreAudio,
     aggiornamenti = collaboratori.aggiornamentiVista,
-    clock = grafo.clock,
-    statiElaborazione = collaboratori.trascrizione.statiElaborazione,
     apriRegistrazione = apriRegistrazione,
-    identificazioniIncontri = collaboratori.parlanti.letture.identificazioniIncontri,
     eliminaRegistrazione = collaboratori.eliminaRegistrazione,
-    posizioniNellaCoda = collaboratori.posizioniNellaCoda::istantanea,
     avviaElaborazioniDellIncontro = collaboratori.trascrizione.avviaElaborazioniDellIncontro,
     comandiRiga = ComandiRigaS2(
         modificaData = collaboratori.modificaDataRegistrazione,
@@ -94,7 +98,6 @@ internal fun costruisciRegistrazioniPresenter(
         annullaElaborazione = collaboratori.trascrizione.annullaElaborazione,
         modificaOraDiInizio = { id, ora -> modificaOraDiInizio(collaboratori.modificaOraDiInizio, id, ora) },
     ),
-    numeroPersonePrecompilato = collaboratori.trascrizione.numeroPersonePrecompilato,
 )
 
 /**

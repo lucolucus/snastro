@@ -11,65 +11,43 @@ import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ProgettoId
 import snastro.kernel.RegistrazioneId
-import snastro.parlanti.applicazione.letture.IdentificazioneIncontro
 import snastro.progetto.applicazione.comandi.AggiungiRegistrazione
 import snastro.progetto.applicazione.comandi.EliminaRegistrazione
-import snastro.progetto.applicazione.letture.IncontroDelProgettoVista
-import snastro.progetto.applicazione.letture.RegistrazioneDelProgettoVista
 import snastro.trascrizione.applicazione.comandi.AvviaElaborazioniDellIncontro
-import snastro.trascrizione.applicazione.letture.StatoElaborazioneVista
-import snastro.trascrizione.applicazione.letture.StatoRegistrazioneVista
 import snastro.ui.AggiornamentiVista
-import snastro.ui.coda.PosizioniCoda
 import snastro.ui.lettore.LettoreAudio
 import snastro.ui.lettore.StatoLettore
 import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.ETICHETTA_REGISTRAZIONE_ELIMINATA
-import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA
-import snastro.ui.testi.MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO
 import snastro.ui.testi.MESSAGGIO_ERRORE_CARICAMENTO
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
-import snastro.ui.testi.etichetta
-import java.time.Clock
-import java.time.Duration
-import java.time.LocalDate
-import java.time.LocalTime
 
 /**
- * State holder of S2 · Registrazioni del Progetto (RC-2, thin UI): joins `registrazioni-del-progetto`
- * with `stati-elaborazione` by [RegistrazioneId] (AC-342) and with `identificazione-registrazioni`
- * (AC-204/AC-345 — a row's [RigaRegistrazione.identificazione] is built only once BOTH `numVoci` (from
- * `stati-elaborazione`, only ever known for `COMPLETATA`) and the Parlanti count are known for that row
- * — a missing entry (no Trascritto yet) or a failed read of the source leaves just that badge absent,
- * never a provisional or '0' count, without affecting the rest of the row), keeps a
- * per-row reflection of the shared [LettoreAudio] (AC-343: [LettoreAudio.disponibile] is checked once
- * per refresh, [LettoreAudio.stato] is collected live so the play/pause control never goes stale) and
- * refreshes on [AggiornamentiVista] (R15) or after a successful import or row command (never after a
- * failure — H1, AC-201/AC-206/AC-363/AC-344: "nulla cambia" beyond the inline message). M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato]
- * instead of rebuilding it from scratch, so a refresh landing mid-flight of an unrelated in-progress
- * operation never wipes [RegistrazioniUiStato.Dati.importoInCorso]/`errore` or a row's
- * `operazioneInCorso`/`erroreRiga`; a generation counter drops a [carica] result that resolves after a
- * newer one already has (out-of-order completion). M5: the INITIAL load failing (no rows known yet)
- * is a distinct [RegistrazioniUiStato.Errore] with a retry action, never the misleading AC-199 empty
- * message.
+ * State holder of S2 · Registrazioni del Progetto (RC-2, thin UI). The list is read by [LetturaS2] over [LettureS2]
+ * (the joins with `stati-elaborazione`, `identificazione-registrazioni` and the queue positions, AC-342/AC-204/AC-345,
+ * ADR 0023 §4); this presenter merges it into the screen, keeps a per-row reflection of the shared [LettoreAudio]
+ * (AC-343: [LettoreAudio.disponibile] is checked once per refresh, [LettoreAudio.stato] is collected live so the
+ * play/pause control never goes stale) and refreshes on [AggiornamentiVista] (R15) or after a successful import or row
+ * command (never after a failure — H1, AC-201/AC-206/AC-363/AC-344: "nulla cambia" beyond the inline message).
+ * M1: a refresh MERGES the freshly-read rows into the current [RegistrazioniUiStato] instead of rebuilding it from
+ * scratch, so a refresh landing mid-flight of an unrelated in-progress operation never wipes
+ * [RegistrazioniUiStato.Dati.importoInCorso]/`errore` or a row's `operazioneInCorso`/`erroreRiga`; a generation counter
+ * drops a [carica] result that resolves after a newer one already has (out-of-order completion). M5: the INITIAL load
+ * failing (no rows known yet) is a distinct [RegistrazioniUiStato.Errore] with a retry action, never the misleading
+ * AC-199 empty message.
  *
- * Depends on `applicazione` through PLAIN FUNCTION TYPES ([registrazioni]/[aggiungiRegistrazione]/[statiElaborazione]
- * and the row commands' [ComandiRigaS2]) rather than the concrete read-model/service classes: `:avvio` binds the real
- * shape (`RegistrazioniDelProgetto::delProgetto`, `<Comando>Servizio::esegui`). This keeps every one of this
- * presenter's own test doubles a plain lambda over Published-Language DTOs (`RegistrazioneDelProgettoVista`,
- * `StatoRegistrazioneVista`, `Esito`) — `:ui` never needs a `*:dominio` aggregate to build a fixture for them (CR-1(b):
- * a `RegistrazioneRepositoryFinta`/`Registrazione.aggiungi` pair would require importing
+ * Depends on `applicazione` through PLAIN FUNCTION TYPES ([LettureS2], [aggiungiRegistrazione] and the row commands'
+ * [ComandiRigaS2]) rather than the concrete read-model/service classes: `:avvio` binds the real shape
+ * (`RegistrazioniDelProgetto::delProgetto`, `<Comando>Servizio::esegui`). This keeps every one of this presenter's own
+ * test doubles a plain lambda over Published-Language DTOs (`RegistrazioneDelProgettoVista`, `StatoRegistrazioneVista`,
+ * `Esito`) — `:ui` never needs a `*:dominio` aggregate to build a fixture for them (CR-1(b): a
+ * `RegistrazioneRepositoryFinta`/`Registrazione.aggiungi` pair would require importing
  * `snastro.progetto.dominio.Registrazione`, off-limits here even from a test file, since the CR-1 Konsist rule scans by
  * package, not by source set).
  *
  * ADR 0020 §6 ([eliminaRegistrazione]): backs the row's More menu — 'Elimina…' (AC-625/626/627/628) and,
  * on every row where [ComandiRigaS2.ritrascrivi] also applies, 'Ritrascrivi' too (AC-625 (b): the row's own
  * button then folds into the menu).
- *
- * ADR 0023 §4 (block `avvio-coda-condivisa`, [posizioniNellaCoda]): the "In coda (n)"/"Ritrascrizione
- * in coda (n)" position on an `IN_ATTESA` row no longer comes from `StatoRegistrazioneVista` — it is
- * read from `:ui`'s `PosizioniNellaCoda` (the shared queue's owner, `:avvio`) and joined by
- * [RegistrazioneId], one snapshot per [costruisciLista] call, absent meaning no position (0).
  *
  * The import flow is [FlussoImporta]'s, the plain row commands [FlussoComandiRiga]'s (over [ComandiRigaS2]: the
  * date, title and start time, 'Trascrivi'/'Riprova', 'Ritrascrivi' (ADR 0018), 'Annulla' on a queued row), the
@@ -80,28 +58,20 @@ import java.time.LocalTime
  * ADR 0030 §1 (U1): every collaborator above is MANDATORY — the single composition (`:avvio`) always
  * wires all of them, so a missed wiring fails to compile instead of silently hiding a row's control.
  */
-@Suppress("LongParameterList", "TooManyFunctions") // a source or flow per parameter (to refactor 35); list read+merge
+@Suppress("LongParameterList") // the screen's context, the list's reads, the player, and one source per flow
 class RegistrazioniPresenter(
     private val scope: CoroutineScope,
-    io: CoroutineDispatcher,
+    private val io: CoroutineDispatcher,
     progettoId: ProgettoId,
-    private val registrazioni: () -> List<RegistrazioneDelProgettoVista>,
-    private val incontri: () -> List<IncontroDelProgettoVista>,
+    letture: LettureS2,
     aggiungiRegistrazione: (AggiungiRegistrazione) -> Esito<Unit>,
     private val lettore: LettoreAudio,
     private val aggiornamenti: AggiornamentiVista,
-    private val clock: Clock,
-    private val statiElaborazione: (List<RegistrazioneId>) -> List<StatoRegistrazioneVista>,
     private val apriRegistrazione: (RegistrazioneId) -> Unit,
-    private val identificazioniIncontri: (List<IncontroId>) -> Map<IncontroId, IdentificazioneIncontro>,
     eliminaRegistrazione: (EliminaRegistrazione) -> Esito<Unit>,
-    private val posizioniNellaCoda: () -> PosizioniCoda,
     avviaElaborazioniDellIncontro: (AvviaElaborazioniDellIncontro) -> Esito<Unit>,
     comandiRiga: ComandiRigaS2,
-    private val numeroPersonePrecompilato: (IncontroId) -> Int?,
 ) {
-    private val io: CoroutineDispatcher = io
-
     private val _stato = MutableStateFlow<RegistrazioniUiStato>(RegistrazioniUiStato.Caricamento)
     val stato: StateFlow<RegistrazioniUiStato> = _stato.asStateFlow()
 
@@ -123,6 +93,7 @@ class RegistrazioniPresenter(
     private val eliminazione = FlussoEliminaRiga(s2, io, lettore, eliminaRegistrazione)
     private val incontro = FlussoIncontro(s2, scope, io, avviaElaborazioniDellIncontro)
     private val comandiDiRiga = FlussoComandiRiga(s2, comandiRiga)
+    private val lettura = LetturaS2(letture, lettore::disponibile)
 
     init {
         scope.launch { carica() }
@@ -133,7 +104,7 @@ class RegistrazioniPresenter(
     /** A failed read is logged (CR-7) and keeps the previous good rows, if any, on screen (H1): never stuck loading. */
     private suspend fun carica() {
         val generazione = ++generazioneCaricamento
-        val lista = nonFataleRegistrato("carica le registrazioni") { withContext(io) { costruisciLista() } }
+        val lista = nonFataleRegistrato("carica le registrazioni") { withContext(io) { lettura.lista() } }
         when {
             lista == null -> if (generazione == generazioneCaricamento) segnalaErroreDiCaricamento()
             generazione > generazioneApplicata -> { // L485b
@@ -148,9 +119,8 @@ class RegistrazioniPresenter(
      * rebuilding it — [RegistrazioniUiStato.Dati.importoInCorso]/`errore` and each row's
      * `operazioneInCorso`/`erroreRiga` survive; only their OWNING action ([FlussoImporta]/[StatoS2.comandoDiRiga])
      * ever clears them. L478a: [riproduzione] is RE-DERIVED from [lettore]'s CURRENT (merge-time) state —
-     * never trusted from [nuove], which [costruisciLista] built from a snapshot taken back when this
-     * refresh started on [io]; a play/pause landing on [lettore] while that refresh was still building
-     * rows would otherwise be silently reverted by this merge once it lands.
+     * never decided by [LetturaS2], which only knows whether the player has a row's audio; a play/pause landing on
+     * [lettore] while a refresh was still building rows on [io] is never reverted by this merge once it lands.
      */
     private fun aggiornaConNuoveRighe(lista: ListaS2) {
         val nuove = lista.righe
@@ -184,7 +154,7 @@ class RegistrazioniPresenter(
             avviso = precedente?.avviso, // ADR 0020/AC-627: survives an unrelated refresh, H1-style
             titoloAvviso = precedente?.titoloAvviso ?: ETICHETTA_REGISTRAZIONE_ELIMINATA,
             dialogoImporta = precedente?.dialogoImporta, // AC-I70: an open dialog survives a refresh
-            incontri = fondiIncontri(lista.incontri, precedente?.incontri.orEmpty()),
+            incontri = fondiIncontri(lista.incontri, precedente?.incontri.orEmpty(), incontro::espanso),
         )
     }
 
@@ -212,234 +182,10 @@ class RegistrazioniPresenter(
         scope.launch { carica() }
     }
 
-    /** AC-I69: an Incontro's own flags survive a refresh like a row's (M1); its field takes the fresh prefill only
-     * when its aggregated state moved on; [FlussoIncontro] is the chevron's single owner. */
-    private fun fondiIncontri(nuovi: List<RigaIncontro>, vecchi: List<RigaIncontro>): List<RigaIncontro> =
-        nuovi.map { nuovo ->
-            val vecchio = vecchi.find { it.incontroId == nuovo.incontroId }
-            val base = nuovo.copy(espanso = incontro.espanso(nuovo.incontroId))
-            if (vecchio == null) {
-                base
-            } else {
-                base.copy(
-                    operazioneInCorso = vecchio.operazioneInCorso,
-                    errore = vecchio.errore,
-                    numeroPersone = if (vecchio.stato == nuovo.stato) vecchio.numeroPersone else nuovo.numeroPersone,
-                )
-            }
-        }
-
-    /** What S2 shows: the Incontri ([incontri]) and the flat Parte rows ([righe]) they point to. */
-    private class ListaS2(val righe: List<RigaRegistrazione>, val incontri: List<RigaIncontro>)
-
-    /** One Incontro of the list before its rows exist: [parti] are the Registrazioni present in the catalogue. */
-    private class Gruppo(
-        val incontroId: IncontroId,
-        val titolo: String,
-        val data: LocalDate,
-        val parti: List<Pair<RegistrazioneDelProgettoVista, LocalTime?>>,
-        val noto: Boolean = true,
-    )
-
-    /**
-     * AC-I69: the Incontri come from [incontri]; a failure of that read (or a Registrazione it does not list) must not
-     * fail the whole load — each such Registrazione is then an Incontro of its own, today's S2. Its id is only the
-     * Registrazione's (the migration's rule, wrong for a later UUID Incontro, L203): such a group is not [Gruppo.noto],
-     * so it offers no 'Aggiungi parti…' that would target an Incontro that may not exist.
-     */
-    private fun gruppi(progetto: List<RegistrazioneDelProgettoVista>): List<Gruppo> {
-        val perId = progetto.associateBy { it.registrazioneId }
-        val letti = nonFataleRegistrato("leggi gli incontri") { incontri() }.orEmpty()
-        val raggruppati = letti.mapNotNull { i ->
-            val parti = i.parti.mapNotNull { p -> perId[p.registrazioneId]?.let { it to p.oraDiInizio } }
-            parti.takeIf { it.isNotEmpty() }?.let { Gruppo(i.incontroId, i.titolo, i.data, it) }
-        }
-        val coperti = raggruppati.flatMap { g -> g.parti.map { it.first.registrazioneId } }.toSet()
-        val soli = progetto.filter { it.registrazioneId !in coperti }.map {
-            val id = IncontroId(it.registrazioneId.valore)
-            Gruppo(id, it.titolo, it.dataRegistrazione, listOf(it to null), noto = false)
-        }
-        return raggruppati + soli
-    }
-
-    private fun costruisciLista(): ListaS2 {
-        val gruppi = gruppi(registrazioni())
-        val ids = gruppi.flatMap { g -> g.parti.map { it.first.registrazioneId } }
-        val stati = statiElaborazione(ids).associateBy { it.registrazioneId }
-        val incontriIds = gruppi.map { it.incontroId }
-        val conteggi = conteggiIdentificazione(incontriIds)
-        // ADR 0023 §4 (sweep, block avvio-coda-condivisa): the queue position is no longer part of
-        // StatoRegistrazioneVista — it is read from PosizioniNellaCoda (the shared queue's owner) and
-        // joined here by registrazioneId, one snapshot shared by every row (mirrors AC-163's old intent).
-        val posizioni = posizioniNellaCoda()
-        val statoLettore = lettore.stato.value
-        val righe = mutableListOf<RigaRegistrazione>()
-        val incontriRighe = gruppi.map { g ->
-            val multi = g.parti.size > 1
-            val daGruppo = g.parti.mapIndexed { i, (r, ora) ->
-                costruisciRiga(
-                    r,
-                    stati[r.registrazioneId],
-                    posizioni,
-                    statoLettore,
-                    parte = if (multi) ParteDiIncontro(i + 1, g.titolo) else null,
-                    ora = if (multi) ora else null,
-                    identificazione = if (multi) null else conteggi[g.incontroId],
-                )
-            }
-            righe += daGruppo
-            RigaIncontro(
-                incontroId = g.incontroId,
-                titolo = g.titolo,
-                data = g.data,
-                durataMs = g.parti.sumOf { it.first.durataMs },
-                parti = daGruppo.map { it.registrazioneId },
-                stato = statoAggregato(daGruppo),
-                identificazione = conteggi[g.incontroId]?.takeIf { multi }
-                    ?.let { IdentificazioneRiga(it.numVoci, it.numVociDaIdentificare) },
-                numeroPersone = if (multi) precompilato(g.incontroId) else "",
-                aggiungiPartiDisponibile = g.noto,
-            )
-        }
-        return ListaS2(righe, incontriRighe)
-    }
-
-    /** AC-I67: the latest number used in the Incontro; a failing read only costs the prefill. */
-    private fun precompilato(id: IncontroId): String =
-        nonFataleRegistrato("leggi il numero di persone di $id") { numeroPersonePrecompilato(id)?.toString() }.orEmpty()
-
-    @Suppress("LongParameterList") // the row's sources: catalogue entry, status, queue, player, Incontro context
-    private fun costruisciRiga(
-        r: RegistrazioneDelProgettoVista,
-        vista: StatoRegistrazioneVista?,
-        posizioni: PosizioniCoda,
-        statoLettore: StatoLettore,
-        parte: ParteDiIncontro?,
-        ora: LocalTime?,
-        identificazione: IdentificazioneIncontro?,
-    ): RigaRegistrazione {
-        val elaborazioneRiga = vista?.let { elaborazioneDi(it, posizioni) }
-        // AC-451: FALLITA over an existing Trascritto renders as Completata + this notice, whatever
-        // the `ritrascrivi` source's presence — it reports a FACT, independent of the action's
-        // availability (which `ritrascriviDisponibile` gates on its own).
-        val ritrascrizioneFallita = vista
-            ?.takeIf { it.stato == StatoElaborazioneVista.FALLITA && it.trascrittoDisponibile }
-            ?.motivoFallimento
-        return RigaRegistrazione(
-            registrazioneId = r.registrazioneId,
-            titolo = r.titolo,
-            dataRegistrazione = r.dataRegistrazione,
-            durataMs = r.durataMs,
-            elaborazione = elaborazioneRiga,
-            riproduzione = riproduzioneDi(
-                r.registrazioneId,
-                statoLettore,
-                disponibile = lettore.disponibile(r.registrazioneId),
-            ),
-            numeroPersone = numeroPersonePrefillDi(vista),
-            identificazione = identificazioneDi(vista, identificazione),
-            trascrittoDisponibile = vista?.trascrittoDisponibile == true,
-            elaborazioneId = vista?.elaborazioneId,
-            ritrascriviDisponibile = elaborazioneRiga == StatoElaborazioneRiga.Completata,
-            ritrascrizioneFallita = ritrascrizioneFallita,
-            annullabile = elaborazioneRiga is StatoElaborazioneRiga.InAttesa,
-            eliminazione = eliminazioneDi(elaborazioneRiga),
-            parte = parte,
-            oraDiInizio = ora,
-        )
-    }
-
-    /** ADR 0020 §6/AC-625: disabled with its caption on an open Elaborazione (IN_ATTESA/IN_CORSO, plain
-     * or re-run) — every other state (no Elaborazione yet, FALLITA, Completata) is
-     * [StatoEliminazione.Disponibile]. */
-    private fun eliminazioneDi(elaborazione: StatoElaborazioneRiga?): StatoEliminazione = when {
-        elaborazione is StatoElaborazioneRiga.InAttesa ->
-            StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CODA)
-        elaborazione is StatoElaborazioneRiga.InCorso ->
-            StatoEliminazione.NonDisponibile(MESSAGGIO_ELIMINA_DISABILITATA_IN_CORSO)
-        else -> StatoEliminazione.Disponibile
-    }
-
-    /** AC-376 (FALLITA) / AC-448 (Completata, `ritrascrivi` is always wired): the 'Numero di persone'
-     * field prefilled from the row's latest Elaborazione — empty otherwise. */
-    private fun numeroPersonePrefillDi(v: StatoRegistrazioneVista?): String {
-        val fallita = v?.stato == StatoElaborazioneVista.FALLITA
-        val completataConRitrascrivi = v?.stato == StatoElaborazioneVista.COMPLETATA
-        return if (fallita || completataConRitrascrivi) v?.numeroPersone?.toString().orEmpty() else ""
-    }
-
-    /**
-     * AC-345: an empty map — never a partial batch — when [identificazioniIncontri]'s read throws; a throw here
-     * is logged and contained to this batch (never the failure of [carica] over [costruisciLista]'s OTHER sources),
-     * so a failing Parlanti source only costs every row its badge, the rest of each row (title, date,
-     * status, playback…) stays built from its own source.
-     */
-    private fun conteggiIdentificazione(ids: List<IncontroId>): Map<IncontroId, IdentificazioneIncontro> =
-        nonFataleRegistrato("leggi l'identificazione degli incontri") { identificazioniIncontri(ids) }.orEmpty()
-
-    /** AC-204/AC-345: a badge on a 1-part row only once BOTH `numVoci` (only known for `COMPLETATA`) and the
-     * Parlanti [conteggio] of its Incontro are known — a missing [vista]/`numVoci`/[conteggio] (source
-     * absent, not yet loaded for this row, or failed) means no badge, never a provisional one. */
-    private fun identificazioneDi(
-        vista: StatoRegistrazioneVista?,
-        conteggio: IdentificazioneIncontro?,
-    ): IdentificazioneRiga? =
-        vista?.numVoci?.let { numVoci -> conteggio?.let { IdentificazioneRiga(numVoci, it.numVociDaIdentificare) } }
-
-    // ADR 0018/AC-450: IN_ATTESA/IN_CORSO carry `ritrascrizione` = trascrittoDisponibile — a re-run
-    // over an existing Trascritto gets the "Ritrascrizione …" label instead of the plain one.
-    // AC-451: FALLITA over an existing Trascritto is NOT `Fallita` — it renders as `Completata`
-    // (`RigaRegistrazione.ritrascrizioneFallita` carries the notice); a plain FALLITA keeps 'Riprova'.
-    private fun elaborazioneDi(
-        v: StatoRegistrazioneVista,
-        posizioni: PosizioniCoda,
-    ): StatoElaborazioneRiga = when (v.stato) {
-        StatoElaborazioneVista.NON_AVVIATA -> StatoElaborazioneRiga.NonAvviata
-        StatoElaborazioneVista.IN_ATTESA ->
-            StatoElaborazioneRiga.InAttesa(
-                posizioni.elaborazioni[v.registrazioneId] ?: 0,
-                ritrascrizione = v.trascrittoDisponibile,
-            )
-        StatoElaborazioneVista.IN_CORSO -> StatoElaborazioneRiga.InCorso(
-            faseEtichetta = v.fase?.let(::etichetta).orEmpty(),
-            trascorsoMs = v.avviataAlle
-                ?.let { Duration.between(it, clock.instant()).toMillis().coerceAtLeast(0) }
-                ?: 0,
-            ritrascrizione = v.trascrittoDisponibile,
-        )
-        StatoElaborazioneVista.FALLITA -> if (v.trascrittoDisponibile) {
-            StatoElaborazioneRiga.Completata
-        } else {
-            StatoElaborazioneRiga.Fallita(v.motivoFallimento.orEmpty(), v.elaborazioneId) // L548c
-        }
-        StatoElaborazioneVista.COMPLETATA -> StatoElaborazioneRiga.Completata
-    }
-
-    private fun riproduzioneDi(
-        id: RegistrazioneId,
-        s: StatoLettore,
-        disponibile: Boolean,
-    ): StatoRiproduzioneRiga = when {
-        !disponibile -> StatoRiproduzioneRiga.NonDisponibile
-        s.registrazioneId == id && s.inRiproduzione -> StatoRiproduzioneRiga.InRiproduzione
-        else -> StatoRiproduzioneRiga.Disponibile
-    }
-
     // AC-343: reflects the shared player's live state without re-querying `disponibile` (checked once
     // per `carica`, sticky here — a row already found unavailable stays disabled between refreshes).
     private fun rifletti(s: StatoLettore) =
         s2.aggiornaDati { dati -> dati.copy(righe = rifletteRiproduzione(dati.righe, s)) }
-
-    /** Shared by [rifletti] and [aggiornaConNuoveRighe] (L478a): [righe] with every row's `riproduzione`
-     * re-derived from the CURRENT [s] — never a value baked into [righe] from an earlier snapshot. */
-    private fun rifletteRiproduzione(righe: List<RigaRegistrazione>, s: StatoLettore): List<RigaRegistrazione> =
-        righe.map { riga ->
-            if (riga.riproduzione == StatoRiproduzioneRiga.NonDisponibile) {
-                riga
-            } else {
-                riga.copy(riproduzione = riproduzioneDi(riga.registrazioneId, s, disponibile = true))
-            }
-        }
 
     /**
      * AC-343: always `daMs = 0` — 'restart from the beginning', never a resume from `posizioneMs`.
@@ -511,4 +257,37 @@ class RegistrazioniPresenter(
         avviaElaborazioniIncontro = incontro::avviaElaborazioniIncontro,
         chiudiErroreIncontro = incontro::chiudiErroreIncontro,
     )
+}
+
+/** Shared by `rifletti` and `aggiornaConNuoveRighe` (L478a): [righe] with every row's `riproduzione` re-derived from
+ * the CURRENT [s] — never a value baked into [righe] from an earlier snapshot; a row whose audio the player cannot play
+ * ([StatoRiproduzioneRiga.NonDisponibile], from [LetturaS2]) stays so. */
+private fun rifletteRiproduzione(righe: List<RigaRegistrazione>, s: StatoLettore): List<RigaRegistrazione> =
+    righe.map { riga ->
+        when {
+            riga.riproduzione == StatoRiproduzioneRiga.NonDisponibile -> riga
+            s.registrazioneId == riga.registrazioneId && s.inRiproduzione ->
+                riga.copy(riproduzione = StatoRiproduzioneRiga.InRiproduzione)
+            else -> riga.copy(riproduzione = StatoRiproduzioneRiga.Disponibile)
+        }
+    }
+
+/** AC-I69: an Incontro's own flags survive a refresh like a row's (M1); its field takes the fresh prefill only when its
+ * aggregated state moved on; [espanso] is the chevron's single owner's ([FlussoIncontro]). */
+private fun fondiIncontri(
+    nuovi: List<RigaIncontro>,
+    vecchi: List<RigaIncontro>,
+    espanso: (IncontroId) -> Boolean,
+): List<RigaIncontro> = nuovi.map { nuovo ->
+    val vecchio = vecchi.find { it.incontroId == nuovo.incontroId }
+    val base = nuovo.copy(espanso = espanso(nuovo.incontroId))
+    if (vecchio == null) {
+        base
+    } else {
+        base.copy(
+            operazioneInCorso = vecchio.operazioneInCorso,
+            errore = vecchio.errore,
+            numeroPersone = if (vecchio.stato == nuovo.stato) vecchio.numeroPersone else nuovo.numeroPersone,
+        )
+    }
 }
