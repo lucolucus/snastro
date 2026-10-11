@@ -7,6 +7,7 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-11 — conventions (decided by the user): non-fatal-faults — reload-collector rule cites refactor 36 as built.
 - 2026-10-11 — conventions (decided by the user): non-fatal-faults — a reload collector guards its reads inside the
   reload function; first-load fault → error state with Riprova, later fault → shown data kept with M1(b)'s message
   (release review R1-1; refactor 36).
