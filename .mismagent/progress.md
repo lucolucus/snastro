@@ -234,3 +234,10 @@
 - 6 new tests (5 in `RiassuntoPresenterGuastiTest`, 1 D-0065 in `LunghezzaRiassuntoPresenterTest`) + 1 render-check smoke (Errore, Riprova reaches the action). Red before: "no element matching the predicate" / "Expected … Errore, actual Caricamento" / "[]"; the Riassunto D-0065 test was already green (the call was bare). ui 722/722, avvio 416/416, `./gradlew check` exit 0.
 - Smoke renders identical to Base: `git archive e6a0de6d` into the scratchpad + `:avvio:test --tests …SmokeTest`, `shasum` of the 9 rendered PNGs equal (s2 e8935777…, s3-riassunto 2b1159a8…); `avvio/build/smoke/s3.png` is a stale Oct 2 file no test writes.
 - Design note on `ricarica` removed; citation update for non-fatal-faults in `conventions-proposals.md`.
+
+## 37-guasti-delle-fasi-segnalati — 2026-10-11
+- New port `SegnalatoreGuasti` (Trascrizione `porte/`, `fun interface`, never throws) with `SegnalatoreGuastiContratto` + recording `SegnalatoreGuastiFinta`/`GuastoSegnalato` in testFixtures (RC-9); `PortePipeline.guasti` required. `eseguiFase` is now a file-private `PortePipeline` extension taking the id and the `motivo`: it reports, then answers `null`. `:avvio`: `segnalatoreGuastiSu(segnalazioneApp)` logs `Elaborazione di <id> fallita (<motivo>)` with the cause (WARNING).
+- Slice's assumption confirmed: with the cause passed to `guasti.guasto(…)`, `./gradlew detekt` reports no `SwallowedException` at the catch (suppression dropped, only `TooGenericExceptionCaught` kept with its reason).
+- Tests: the six AC-70 throw tests (4 port faults + 2 throwing `fase` signals) assert exactly one report with the same `motivo` and cause instance; the miss and INV-7 assert none, AC-69 asserts a successful run reports none. Red before: "expected: <[GuastoSegnalato(…)]> but was: <[]>". 12 other test files pass `SegnalatoreGuastiFinta()`.
+- `EseguiProssimaElaborazioneServizioTest` hit detekt `LargeClass`: its helpers and constants moved to file level (no assertion changed). It is still near the threshold: a new test there belongs in a new class.
+- `mm gate` green; `.mismagent/architecture.md` amendment of 2026-10-11 now says landed.
