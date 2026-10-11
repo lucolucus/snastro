@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: 7b6b4b0e3e1698c28ddbe6efdc5679f805c63669
 After: 38
 
 This is the second half of S3's presenter split (release review R1-1, simple design 3, worst place 3). After slice 38,
