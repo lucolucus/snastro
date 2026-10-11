@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: e6a0de6d6fdc10fea957c73ae9070f33965efea7
 
 R1's own screen breaks ADR 0041 §3 in two places. This is release review R1-1, error handling 3, worst place 1.
 Both follow the conventions topic non-fatal-faults as written, so no new decision is needed.
