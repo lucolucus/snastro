@@ -7,6 +7,7 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-11 — conventions (decided by the user): screen-split — cites S3's split screens (slice 40); rule unchanged.
 - 2026-10-11 — conventions (decided by the user): presenter-split — S3 split complete (five holders over `StatoVoci`,
   shared helpers in `DatiParlanti.kt` as the one `internal` exception to file-private); topic condensed, rules unchanged.
 - 2026-10-11 — conventions (decided by the user): presenter-split — a holder never carries `TooManyFunctions` (split by

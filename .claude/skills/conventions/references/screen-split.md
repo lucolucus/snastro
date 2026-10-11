@@ -14,4 +14,8 @@ Decided: codex (delegated by the user), 2026-10-08.
 **Shown by:** `ui/src/main/kotlin/snastro/ui/registrazioni/SchermataRegistrazioni.kt` (the shell),
 `ui/src/main/kotlin/snastro/ui/registrazioni/IncontroItem.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/RigaRegistrazioneItem.kt`
 (reasoned residual suppression), `ui/src/main/kotlin/snastro/ui/registrazioni/ColonnaElaborazione.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazioni/MenuAzioniRegistrazione.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/BarraImportazione.kt`.
+`ui/src/main/kotlin/snastro/ui/registrazioni/MenuAzioniRegistrazione.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/BarraImportazione.kt`; S3 (slice 40): `ui/src/main/kotlin/snastro/ui/registrazione/SchermataRegistrazione.kt` (the shell),
+`ui/src/main/kotlin/snastro/ui/registrazione/SegmentoItem.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/IntestazioneRegistrazione.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazione/BarraSelezioneVista.kt` (a long composable split into its controls),
+`ui/src/main/kotlin/snastro/ui/registrazione/CartaVoceVista.kt` (reasoned residual suppression),
+`ui/src/main/kotlin/snastro/ui/registrazione/MenuParlanti.kt` (menus shared across files, `internal`).
