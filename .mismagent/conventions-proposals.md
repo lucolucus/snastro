@@ -1,1 +1,2 @@
 # Conventions proposals
+- update non-fatal-faults: a screen's reload collector guards its reads inside the reload function (`nonFataleRegistrato`), so a fault never ends the collector; a fault on the first load shows an error state with Riprova, a later one keeps the shown data with M1(b)'s message — `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt` (release review R1-1: an unguarded read in `collectLatest { ricarica() }` silently killed the Riassunto tab's refresh; refactor 36)

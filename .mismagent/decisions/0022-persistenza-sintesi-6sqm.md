@@ -2,7 +2,7 @@
 scope: global
 status: accepted
 supersedes: null
-amended: 2026-09-27   # see §4 dated note 2026-09-27 (reads in a LetturaCoerente snapshot, ADR 0029)
+amended: 2026-10-11   # motivo_fallimento gains `ripetuto` (R1-8/EX-18, see the amendment at the end). Earlier 2026-09-27: see §4 dated note 2026-09-27 (reads in a LetturaCoerente snapshot, ADR 0029)
 closes_spike: null
 enforced_by:   # migrated 2026-09-26 (mismAgent 0.22) from the legacy inline shell rule: same grep/find logic, now versioned checks run by the gate (architettura-test ControlliAdrTest, red-green on fixture/<check>/)
   - check: architettura-test/controlli-adr/adr-0022-schema-sintesi.sh
@@ -193,3 +193,10 @@ Sintesi subscriber registered passes (in the `avvio-sintesi` e2e).
   `incontro_id`; `riassunto_fonte` gains `registrazione_id` (no FK); `struttura` is `StrutturaIncontro.chiave`
   (`<registrazioneId>=<old encoding>` per `Parte`, joined by `;`), re-encoded by the migration so nothing becomes `superato`.
 - This ADR's two checks keep reading `6.sqm`, which is never edited; the live schema is checked by ADR 0034's.
+
+## Amendment 2026-10-11 — `motivo_fallimento` gains `ripetuto` (design pass R1; R1-8, EX-18)
+- The canonical codes of §2 gain **`ripetuto`**: the model repeated itself until `max_tokens`
+  (`sintesi/dominio/src/main/kotlin/snastro/sintesi/dominio/MotivoFallimento.kt:12-13`,
+  `ErroreApplicazioneSintesi.Ripetuto`, [ADR 0026](0026-runtime-llm-jni-llama.md) §5 amendment 2026-10-11).
+- A run that reaches `max_tokens` is no longer stored as `errore_modello`.
+- There is still no SQL `CHECK` (§2, by design). The enum is the guard, and no migration is needed.

@@ -268,7 +268,9 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
   `stati-elaborazione` + `VociIncontro` (Trascrizione) ⨝ `identificazione-incontri` (Parlanti) ⨝ `PosizioniNellaCoda`.
 
 ## Amendment 2026-10-08 — faults at a presenter's edge ([ADR 0041](decisions/0041-guasti-ai-bordi-dei-presenter.md)) [architect]
-- A presenter's edge never drops a cause (CR-7): it logs at WARNING under `snastro.ui` and shows M1(b)'s generic message.
+- A presenter's edge never drops a cause (CR-7): it logs at WARNING under `snastro.ui` and shows a message. That is
+  M1(b)'s generic message, or a visible error specific to the same fault (conventions non-fatal-faults, 2026-10-09;
+  aligned 2026-10-11).
 - A block that runs a **committing command** catches `Exception` only, so an `Error` after the commit propagates
   (D-0065). It uses `eccezioneRegistrata` (`:ui`), which sits on `:supporto`'s `catturaEccezione`.
 - **Every other edge** (reads, refreshes, the player, S1's list load) uses `nonFataleRegistrato` over `catturaNonFatale`.
@@ -277,3 +279,14 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
   (`RegoleArchitetturaliTest.kt:699-722`). Every caught fault is logged. Not yet every edge shows the generic message
   (non-fatal-faults, "Message at every edge"): the silent fallbacks in the Riassunto tab, the settings, the player's
   `pausa` (no edge at all) and S3 are debt, queued as refactors 31–32 *(design pass R1, 2026-10-09)*.
+- *(design pass R1, 2026-10-11, release review R1-1)* Refactors 31–32 landed. Two Riassunto-tab edges still break
+  the rule, and refactor 36 fixes them:
+  - `RiassuntoPresenter.ricarica`'s reads have no fault path, so a thrown read ends the tab's only reload collector.
+  - The lunghezza massima save is bare on S3 and `nonFataleRegistrato` in Impostazioni. ADR 0041 §3 asks for
+    `eccezioneRegistrata` on both.
+
+## Amendment 2026-10-11 — a pipeline phase fault is reported ([ADR 0042](decisions/0042-guasti-delle-fasi-segnalati.md)) [architect]
+- Outside `:ui` the same CR-7 holds. An application service that maps a port fault to a fixed user `motivo` hands its
+  cause to a port of its own context. It never drops it, and it never takes `:supporto` (CR-2, edge rule above).
+- Trascrizione: `SegnalatoreGuasti` in `PortePipeline`, implemented by `:avvio` over `segnalazioneApp`. Target state:
+  refactor 37 lands it. Until then, `eseguiFase` drops the cause.

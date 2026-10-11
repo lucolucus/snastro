@@ -7,28 +7,25 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
-- 2026-10-11 — conventions (decided by the user): presenter-split — S2's `LetturaS2` over `LettureS2` (pure read
-  builder; player availability as a function, play/pause left to the merge); merge helpers with no presenter state are
-  file-private functions (slice 35).
-- 2026-10-11 — conventions (decided by the user): presenter-split — a presenter with bundled collaborators gets one
-  test builder taking the flat collaborators (one reasoned `LongParameterList` suppression); S2 adds
-  `FlussoComandiRiga` over `ComandiRigaS2` (slice 34). Topic condensed to ~300 words, rules unchanged.
-- 2026-10-10 — conventions (decided by the user): presenter-split — the S2 row runner described as built by slice 33;
-  rule unchanged.
-- 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 32): S3's cross-Parte
-  computation and Sbobinatura/Incontro reads show the generic message; rule unchanged.
-- 2026-10-10 — conventions (decided by the user): non-fatal-faults — citations only (slice 31): Lettore `pausa`, the
-  generic message at Impostazioni start and Riassunto `scaricaModello`/`apriFonte`; rule unchanged.
-- 2026-10-10 — conventions (decided by the user): acceptance-tests — a Riassunto run's duration is asserted on the fake
-  library at the measured, conservative speed (`TOKEN_AL_SECONDO`), never with real sleeps (EX-18's 600 s).
-- 2026-10-10 — conventions (decided by the user): acceptance-tests — S3 Riassunto tests extend `BancoRiassunto` on real
-  threads with `attendiFinche` (the queue worker is a real thread), an explicit exception to the `StandardTestDispatcher`
-  rule; the gate proves the shape, the real model's content is measured outside it (`benchmarkRiassunto`); test names
-  state no data the test lacks. Topic condensed to ~300 words, rules unchanged.
-- 2026-10-09 — conventions (decided: codex, delegated by the user): non-fatal-faults — an edge that already shows an
-  error specific to its fault needs no extra generic message (reverses the morning's reading; avoids two messages for
-  one fault); presenter-split — S2's row runner will own `withContext(io)` and `comandoConfermato` like S4's `suRiga`
-  (slice 33).
+- 2026-10-11 — design pass R1 (release review R1-1: errors=3, simple=3).
+  - Decisions brought in line with the code. [ADR 0026](.mismagent/decisions/0026-runtime-llm-jni-llama.md) §5/§6 and
+    [ADR 0022](.mismagent/decisions/0022-persistenza-sintesi-6sqm.md) gain dated R1-8 notes: the grammar is the
+    Sommario alone, `max_tokens` comes from the Sommario asked, and reaching it is `ripetuto`. The ADR 0041 amendment
+    in `.mismagent/architecture.md` now admits a fault-specific message, as conventions non-fatal-faults has said since
+    2026-10-09.
+  - New [ADR 0042](.mismagent/decisions/0042-guasti-delle-fasi-segnalati.md): a transcription phase fault is reported
+    through a Trascrizione port, `SegnalatoreGuasti`, not through `:supporto`'s `Segnalazione` as the review suggested.
+    The reason is CR-2: `:supporto` is not reachable from `*:applicazione`.
+  - Queued refactors, by risk:
+    - 36: the Riassunto tab's reads and both lunghezza massima saves, under ADR 0041 §3;
+    - 37: ADR 0042;
+    - 38–39: Revisione with naming, then the Proposte, out of S3's `StatoVoci` (presenter-split);
+    - 40: S3's two screen files split by flow (screen-split).
+- 2026-10-09..11 — conventions (each decided by the user or by codex on delegation; detail in the skill's topics):
+  presenter-split grows S2's holders (`FlussoComandiRiga`, `LetturaS2`), the row runner owning `io` and
+  `comandoConfermato`, and one test builder per bundled presenter; non-fatal-faults: a fault-specific message needs no
+  generic duplicate, plus citations of slices 31–32; acceptance-tests: S3 Riassunto tests on real threads, run time
+  asserted on the fake library at the measured speed.
 - 2026-10-09 — design pass (R1, after refactors 26–30): ADR 0041's amendment in `.mismagent/architecture.md` now
   says it has landed in every `:ui` presenter. No `:ui` file is left in CR-19b's frozen list. What is still open is
   the user-facing half of "Message at every edge": some edges fall back silently. No decision changed.

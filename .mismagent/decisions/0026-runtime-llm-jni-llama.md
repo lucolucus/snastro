@@ -4,7 +4,7 @@ status: accepted
 supersedes: null   # partial, amended in place with dated pointers here: ADR 0004 (System.load admits ./llm/), ADR 0021 §4 (input line) and §5 (LimiteIngresso, deferred items), ADR 0025 §5 (catalogue values); infra-notes (Local LLM, Riassunto NFR); context-map (spike closed, budget line)
 closes_spike: runtime-llm-in-app
 decided: 2026-09-26 · user (runtime, INV-S9 bound, calibrations), from spike evidence features/sintesi/spikes/runtime-llm-in-app.md
-amended: 2026-09-30   # §5: length target + list bound per request (MisuraRisposta) [user]. Earlier 2026-09-29: dated note, §4: the 10 s Annullato bound counts from AFTER the model open completes; a cold first open (10.7-14.5 s) is not interruptible. Source: sintesi D-0014. Earlier: "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
+amended: 2026-10-11   # §5/§6: R1-8, the answer is the Sommario alone; max_tokens from the Sommario asked; reaching it is `ripetuto` (design pass R1). Earlier 2026-09-30: §5: length target + list bound per request (MisuraRisposta) [user]. Earlier 2026-09-29: dated note, §4: the 10 s Annullato bound counts from AFTER the model open completes; a cold first open (10.7-14.5 s) is not interruptible. Source: sintesi D-0014. Earlier: "Amendment 2026-09-26 (ADR 0027)" [user]: the binding is the separate library :llama-jni (§1 module/package/confinement, §2 tasks/cache/shim name/loading, §7 Windows/Linux in scope)
 enforced_by:
   - check: architettura-test/controlli-adr/adr-0026-llm-non-versionato.sh
   # the System.load admission (now ./llama-jni/, ADR 0027) is enforced by ADR 0004's own check (amended
@@ -120,6 +120,20 @@ a chunked prefill/generation cancel point. `AC-S152` and the opt-in `ModelloLing
 their cancel past the open, never during it.)*
 
 ### 5. Context budget, output bound, `LimiteIngresso` [user]
+> **Amended 2026-10-11 (design pass R1; decision R1-8 of `.mismagent/brief.md:119-123` [user], slices 22–23): the
+> answer is the Sommario alone.** This supersedes the "schema v1" grammar, the per-request list bounds and the
+> `max_tokens` from the cap below.
+> - **Grammar:** `{"sommario": string}` (`sintesi/adattatori/src/main/resources/snastro/sintesi/adattatori/ml/risposta-sommario.gbnf:3-6`).
+>   No list and no `fonti` are asked, so `MisuraRisposta` keeps only the Sommario's words and `massimoVoci` is gone.
+>   The only unbounded repetition is the string's characters, and `max_tokens` bounds it. AC-S159's list bounds
+>   no longer apply to a new Riassunto. A Riassunto made before R1 keeps its stored lists (EX-25).
+> - **`max_tokens` = ⌈3.5 × the Sommario's asked words⌉ + 512** (`ModelloLinguisticoLlama.maxTokens`,
+>   `sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/ModelloLinguisticoLlama.kt:182-188`, from
+>   `MisuraRisposta.paroleSommario`), no longer from the cap. For example, 1 600 words → 6 112 tokens.
+> - **Reaching it is a loop, not a truncation:** `StopReason.MAX_TOKENS` → `ErroreApplicazioneSintesi.Ripetuto`
+>   (`ModelloLinguisticoLlama.kt:144`) → `MotivoFallimento.RIPETUTO` (`"ripetuto"`, ADR 0022 amendment 2026-10-11).
+>   It is no longer `RispostaNonValida`/`errore_modello` (EX-18).
+> - The output is still bounded twice: by the grammar's shape and by `max_tokens`.
 > **Amended 2026-09-30 [user]: the length is a target, the list bound follows it.** User report: "the Riassunto
 > stays short" — measured on New Recording 4 (≈ 2 000 words): 635 words, every list exactly at the 6-item bound. The
 > prompt now asks for a TARGET of ≈ 40 % of the transcript's words (rounded to 50, at least 250, never above the cap)
@@ -157,6 +171,11 @@ their cancel past the open, never during it.)*
   `max_tokens` > `n_ctx` → `Errore(IngressoTroppoLungo(token))` → `troppo_lunga`, before any decode.
 
 ### 6. NFR of a `Riassunto` (its single home; amends the "≤ 300 s" of infra-notes and AC-S153) [user]
+> **Amended 2026-10-11 (design pass R1; R1-8, EX-18):** the "known worst case" below now ends `ripetuto`, not
+> `errore_modello`. Its bound comes from the Sommario asked (§5 note). At an hour of speech and the 10 000 cap, that is
+> 6 112 tokens, about 407 s at 15 t/s. This is derived, not measured on a real loop: see `ModelloLinguisticoLlamaTest`,
+> "un ciclo fermato da maxTokens…", and the design note of slice 23. EX-18 asserts the ≤ 600 s on the fake library at
+> that speed (conventions acceptance-tests).
 - **Measurable AC:** on the Apple M3 Pro 36 GB, model installed, app otherwise idle, a real **60-minute
   `Registrazione`** (Via Roquel), cap at the **default 2000 words**: `RiassuntoAvviato → RiassuntoPronto`, model
   load and unload included, **≤ 600 s**. Recorded by the opt-in `./gradlew benchmarkRiassunto -Pcampione=<…>`
