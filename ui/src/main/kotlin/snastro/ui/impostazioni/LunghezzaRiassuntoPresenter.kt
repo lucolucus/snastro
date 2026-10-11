@@ -9,6 +9,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import snastro.kernel.Esito
 import snastro.sintesi.applicazione.letture.ImpostazioniSintesiVista
+import snastro.ui.eccezioneRegistrata
 import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.erroreLunghezzaMassima
@@ -66,7 +67,7 @@ class LunghezzaRiassuntoPresenter(
     private fun avviaModifica(parole: Int) {
         scope.launch {
             try {
-                val esito = nonFataleRegistrato("modifica lunghezza riassunto") { withContext(io) { modifica(parole) } }
+                val esito = eccezioneRegistrata("modifica lunghezza riassunto") { withContext(io) { modifica(parole) } }
                 when (esito) {
                     is Esito.Ok -> aggiorna {
                         it.copy(testo = parole.toString(), salvata = parole, conferma = true)

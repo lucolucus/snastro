@@ -3,6 +3,7 @@ package snastro.ui.riassunto
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,7 +69,8 @@ private const val DURATA_SALVATO_MS = 2_000L
  * so whichever happened to finish LAST won even when it had read the STALEST data (a race the
  * dev-architecture's own `collectLatest`/single-flight idiom exists for). The `init` block below
  * merges every trigger into ONE flow collected with `collectLatest`: a new trigger always cancels
- * whatever `ricarica()` an older one still has in flight before starting its own.
+ * whatever `ricarica()` an older one still has in flight before starting its own. "Riprova" after a failed first
+ * load is one more trigger of that flow, never a second concurrent reload.
  *
  * Local edit state ([argomentoToccato]/[lunghezzaMassimaLocale]) survives a background `ricarica()`
  * that a Cambiamento/statoFacoltativi tick can trigger while the user is mid-edit — the same "never
@@ -136,11 +138,14 @@ class RiassuntoPresenter(
 
     private var messaggioErrore: String? = null
 
+    private val riprovaRichiesta = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     init {
         // Finding #151: ONE collector, single-flight over every reload trigger — see the class KDoc.
         scope.launch {
             merge(
                 flowOf(Unit),
+                riprovaRichiesta,
                 aggiornamenti.cambiamenti
                     .filter { it.registrazioneId == null || it.registrazioneId == registrazioneId }
                     .map {},
@@ -174,7 +179,25 @@ class RiassuntoPresenter(
         }
     }
 
+    /**
+     * Every reload runs here, guarded (conventions non-fatal-faults, Reload collectors): a fault is logged and never
+     * ends the collector. On the first load it shows [RiassuntoUiStato.Errore] with "Riprova"; over shown [Dati]
+     * those stay, with M1(b)'s generic message.
+     */
     private suspend fun ricarica() {
+        nonFataleRegistrato("leggi il riassunto di ${registrazioneId.valore}") { leggiEMostra() }
+            ?: mostraLetturaFallita()
+    }
+
+    private fun mostraLetturaFallita() {
+        if (dati() == null) {
+            _stato.value = RiassuntoUiStato.Errore(MESSAGGIO_ERRORE_GENERICO)
+        } else {
+            mostraErrore(MESSAGGIO_ERRORE_GENERICO)
+        }
+    }
+
+    private suspend fun leggiEMostra() {
         val v = withContext(io) { vista() } ?: return
         val imp = withContext(io) { impostazioni() }
         val pos = withContext(io) { posizioni() }
@@ -302,6 +325,12 @@ class RiassuntoPresenter(
         aggiornaDati { it.copy(messaggioErrore = messaggio) }
     }
 
+    /** "Riprova" after a failed first load: the skeleton while the reload triggered here is in flight. */
+    private fun riprova() {
+        _stato.value = RiassuntoUiStato.Caricamento
+        riprovaRichiesta.tryEmit(Unit)
+    }
+
     /** AC-S125/S127: "Scarica il modello"/"Riprova" both call this — blocks, run off [io] (mirrors
      * [snastro.ui.modelli.ModelliPresenter.scarica]); the reactive `statoFacoltativi` collector above
      * is what actually reflects the outcome, this call only starts it. Starting it commits nothing, so a fault goes
@@ -335,7 +364,11 @@ class RiassuntoPresenter(
         imposta(corrente.copy(valore = testo, errore = null))
     }
 
-    /** AC-S138: out of [minimoLunghezza]..[massimoLunghezza] → inline error, NO command sent. */
+    /**
+     * AC-S138: out of [minimoLunghezza]..[massimoLunghezza] → inline error, NO command sent. The command commits, so a
+     * thrown one goes through [eccezioneRegistrata] (ADR 0041 §3): logged, the generic message in the editor, and an
+     * `Error` still propagates.
+     */
     private fun salvaLunghezzaMassima() {
         val corrente = lunghezzaMassimaLocale as? LunghezzaMassimaUiStato.Modifica
         // Finding #153 (rework, LOW): a Salva already in flight is ignored, same guard as [riassumi].
@@ -348,7 +381,11 @@ class RiassuntoPresenter(
         salvaLunghezzaMassimaInCorso = true
         scope.launch {
             try {
-                when (val esito = withContext(io) { modificaLunghezzaMassimaCmd(n) }) {
+                val operazione = "modifica la lunghezza massima del riassunto di ${registrazioneId.valore}"
+                val esito = eccezioneRegistrata(operazione) {
+                    withContext(io) { modificaLunghezzaMassimaCmd(n) }
+                }
+                when (esito) {
                     is Esito.Ok -> {
                         val salvato = LunghezzaMassimaUiStato.Salvato(n)
                         imposta(salvato)
@@ -364,6 +401,7 @@ class RiassuntoPresenter(
                     // Finding #153/#159 (rework): a COMMAND failure used to always show the generic
                     // range text, hiding the actual `ErroreSintesi` (e.g. a race) it carried.
                     is Esito.Errore -> mostraErroreLunghezzaMassima(corrente, messaggioPer(esito.errore))
+                    null -> mostraErroreLunghezzaMassima(corrente, MESSAGGIO_ERRORE_GENERICO)
                 }
             } finally {
                 salvaLunghezzaMassimaInCorso = false
@@ -428,5 +466,6 @@ class RiassuntoPresenter(
         apriModulo = ::apriModulo,
         chiudiModulo = ::chiudiModulo,
         apriFonte = ::apriFonte,
+        riprova = ::riprova,
     )
 }

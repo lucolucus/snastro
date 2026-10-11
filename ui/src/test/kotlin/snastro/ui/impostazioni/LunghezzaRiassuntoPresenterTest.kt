@@ -1,6 +1,9 @@
 package snastro.ui.impostazioni
 
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -28,8 +31,8 @@ class LunghezzaRiassuntoPresenterTest {
     private var guastoLettura: Throwable? = null
     private var guastoModifica: Throwable? = null
 
-    private fun TestScope.presenter() = LunghezzaRiassuntoPresenter(
-        scope = this,
+    private fun TestScope.presenter(scope: CoroutineScope = this) = LunghezzaRiassuntoPresenter(
+        scope = scope,
         io = StandardTestDispatcher(testScheduler),
         leggi = {
             guastoLettura?.let { throw it }
@@ -139,5 +142,22 @@ class LunghezzaRiassuntoPresenterTest {
         assertEquals(MESSAGGIO_ERRORE_GENERICO, p.dati().errore)
         assertFalse(p.dati().inCorso)
         assertEquals(2000, p.dati().salvata)
+    }
+
+    @Test
+    fun `D-0065 un Error della modifica si propaga`() = runTest {
+        val sfuggite = mutableListOf<Throwable>()
+        val gestore = CoroutineExceptionHandler { _, e -> sfuggite += e }
+        val p = presenter(CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler) + gestore))
+        advanceUntilIdle()
+        val guasto = AssertionError("errore di programmazione dopo il commit")
+        guastoModifica = guasto
+
+        p.azioni.cambia("800")
+        p.azioni.salva()
+        advanceUntilIdle()
+
+        assertTrue(sfuggite.any { e -> generateSequence(e) { it.cause }.any { it === guasto } }, "$sfuggite")
+        assertFalse(p.dati().inCorso)
     }
 }

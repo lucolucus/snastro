@@ -15,4 +15,6 @@ data class AzioniRiassunto(
     val chiudiModulo: () -> Unit = {},
     /** AC-I81: a clickable Fonte chip — switches to its Parte if another, then plays from its minute. */
     val apriFonte: (RegistrazioneId, Long) -> Unit = { _, _ -> },
+    /** "Riprova" after a failed first load ([RiassuntoUiStato.Errore]). */
+    val riprova: () -> Unit = {},
 )

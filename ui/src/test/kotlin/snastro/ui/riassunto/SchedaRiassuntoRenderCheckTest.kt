@@ -29,6 +29,7 @@ import snastro.ui.stile.FonteChip
 import snastro.ui.stile.LocalSnastroColori
 import snastro.ui.stile.TAG_EMPTY_STATE
 import snastro.ui.stile.TAG_PALLINO_IN_CORSO
+import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import java.io.File
 import javax.imageio.ImageIO
 import kotlin.test.assertEquals
@@ -267,6 +268,22 @@ class SchedaRiassuntoRenderCheckTest {
     @Test
     fun `AC-S136 state 12 caricamento scuro a 1024x640`() =
         verifica("caricamento", RiassuntoUiStato.Caricamento, PICCOLA_LARGA, PICCOLA_ALTA, scuro = true)
+
+    @Test
+    fun `un primo caricamento fallito mostra il messaggio e Riprova raggiunge l azione a 1280x800`() {
+        var riprovato = false
+        verifica(
+            "errore-caricamento",
+            RiassuntoUiStato.Errore(MESSAGGIO_ERRORE_GENERICO),
+            LARGA,
+            ALTA,
+            azioni = AZIONI_VUOTE.copy(riprova = { riprovato = true }),
+        ) {
+            onNodeWithText(MESSAGGIO_ERRORE_GENERICO).assertIsDisplayed()
+            onNodeWithTag("riassunto-riprova-caricamento").performClick()
+            assertTrue(riprovato, "Riprova non ha raggiunto il presenter")
+        }
+    }
 
     // Pre-release finding #152 (rework, MED): state 1 used to be a plain Column, not the shared
     // EmptyState pattern the ux-proposal names — this fails on the OLD code (no such tag existed).
@@ -698,11 +715,13 @@ class SchedaRiassuntoRenderCheckTest {
         // A rich `pronto`/`superato`/`fallito` fixture legitimately scrolls the privacy line out of
         // the viewport (AC-S140's own ≥ 12 Decisioni case) — `assertExists` proves it composed at
         // all (never silently dropped), the PNG is what a human reads for clipping/overflow.
-        if (stato is RiassuntoUiStato.Dati) {
-            onNodeWithTag("riassunto-privacy").assertExists()
-            onNodeWithText("Il riassunto si fa sul tuo computer: nessun testo esce.").assertExists()
-        } else {
-            onNodeWithTag("riassunto-scheletro").assertIsDisplayed()
+        when (stato) {
+            is RiassuntoUiStato.Dati -> {
+                onNodeWithTag("riassunto-privacy").assertExists()
+                onNodeWithText("Il riassunto si fa sul tuo computer: nessun testo esce.").assertExists()
+            }
+            is RiassuntoUiStato.Errore -> onNodeWithTag("riassunto-errore-caricamento").assertIsDisplayed()
+            RiassuntoUiStato.Caricamento -> onNodeWithTag("riassunto-scheletro").assertIsDisplayed()
         }
         asserzioni()
         val suffisso = if (scuro) "-scuro" else ""

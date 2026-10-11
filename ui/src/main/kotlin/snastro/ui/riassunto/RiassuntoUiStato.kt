@@ -14,6 +14,9 @@ sealed interface RiassuntoUiStato {
     /** AC-S136 (state 12): the view is local (no network) — brief skeleton lines only. */
     data object Caricamento : RiassuntoUiStato
 
+    /** The first load failed (logged): M1(b)'s [messaggio] with "Riprova" (conventions non-fatal-faults). */
+    data class Errore(val messaggio: String) : RiassuntoUiStato
+
     @Suppress("LongParameterList") // one field per ux-proposal datum this tab shows (states 1..10)
     data class Dati(
         val modello: ModelloUi,

@@ -1,5 +1,6 @@
 package snastro.ui.riassunto
 
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancel
@@ -91,7 +92,14 @@ internal class ServizioModelliSpia(private val delegato: ServizioModelliFinta = 
 
 internal class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
     val dispatcher = StandardTestDispatcher(scope.testScheduler)
-    val coroutineScope = CoroutineScope(dispatcher)
+
+    /** What escaped the presenter's coroutines (D-0065: an `Error` after a commit must get here). */
+    val sfuggite = mutableListOf<Throwable>()
+    val coroutineScope = CoroutineScope(dispatcher + CoroutineExceptionHandler { _, e -> sfuggite += e })
+
+    /** `true` iff [guasto], or a failure it caused, escaped the presenter's coroutines. */
+    fun sfuggito(guasto: Throwable): Boolean =
+        sfuggite.any { e -> generateSequence(e) { it.cause }.any { it === guasto } }
 
     // Pre-release finding #151 (rework, MED): a SEPARATE dispatcher instance (same virtual
     // scheduler, so time control is unaffected) — `withContext` between the SAME dispatcher
@@ -99,6 +107,9 @@ internal class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
     // make the AC-S151 test below pass whether or not `ricarica()` is really single-flight.
     val io = StandardTestDispatcher(scope.testScheduler)
     var vistaCorrente: RiassuntoVista? = unaVista()
+
+    /** When set, reading the vista throws it (a port fault). */
+    var guastoVista: Throwable? = null
     var impostazioniCorrenti = unaImpostazioni()
     var posizioniCorrenti = PosizioniCoda.VUOTA
     val chiamateRiassumi = mutableListOf<String?>()
@@ -112,6 +123,9 @@ internal class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
     val guastoRiproduciDa = IllegalStateException("guasto simulato di riproduciDa")
     val chiamateLunghezza = mutableListOf<Int>()
     var risultatoLunghezza: Esito<Unit> = Esito.Ok(Unit)
+
+    /** When set, `modificaLunghezzaMassimaCmd` throws it after the call is recorded. */
+    var guastoLunghezza: Throwable? = null
     val servizioModelli = ServizioModelliSpia()
     val aggiornamenti = AggiornamentiVistaFinta()
     val orologio = OrologioFinto(ISTANTE_0)
@@ -126,7 +140,10 @@ internal class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
         scope = coroutineScope,
         io = io,
         registrazioneId = REG_1,
-        vista = { vistaCorrente },
+        vista = {
+            guastoVista?.let { throw it }
+            vistaCorrente
+        },
         impostazioni = { impostazioniCorrenti },
         posizioni = {
             chiamatePosizioni++
@@ -139,6 +156,7 @@ internal class Ambiente(scope: TestScope, limiteCaratteriArgomento: Int = 200) {
         },
         modificaLunghezzaMassimaCmd = { n ->
             chiamateLunghezza.add(n)
+            guastoLunghezza?.let { throw it }
             risultatoLunghezza
         },
         servizioModelli = servizioModelli,

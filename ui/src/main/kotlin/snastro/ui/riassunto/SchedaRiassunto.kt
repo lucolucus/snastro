@@ -86,6 +86,8 @@ private const val LARGHEZZA_SCHELETRO_DISPARI = 0.6f
 
 private const val TAG_RADICE = "riassunto"
 private const val TAG_CARICAMENTO = "riassunto-scheletro"
+private const val TAG_ERRORE_CARICAMENTO = "riassunto-errore-caricamento"
+private const val TAG_RIPROVA_CARICAMENTO = "riassunto-riprova-caricamento"
 private const val TAG_CONTENUTO = "riassunto-contenuto"
 private const val TAG_COPIA = "riassunto-copia"
 private const val TAG_BARRA = "riassunto-barra"
@@ -139,7 +141,18 @@ private const val TAG_MESSAGGIO_ERRORE = "riassunto-messaggio-errore"
 fun SchedaRiassunto(stato: RiassuntoUiStato, azioni: AzioniRiassunto, modifier: Modifier = Modifier) {
     when (stato) {
         RiassuntoUiStato.Caricamento -> Scheletro(modifier)
+        is RiassuntoUiStato.Errore -> ErroreCaricamento(stato.messaggio, azioni.riprova, modifier)
         is RiassuntoUiStato.Dati -> ContenutoTab(stato, azioni, modifier)
+    }
+}
+
+/** The first load failed: the message and "Riprova", the same shape as S3's load error. */
+@Composable
+private fun ErroreCaricamento(messaggio: String, onRiprova: () -> Unit, modifier: Modifier) {
+    Column(modifier = modifier.fillMaxWidth().padding(SnastroMisure.space4).testTag(TAG_ERRORE_CARICAMENTO)) {
+        Text(text = messaggio, color = LocalSnastroColori.current.danger, style = LocalSnastroTipografia.current.body)
+        Spacer(modifier = Modifier.height(SnastroMisure.space4))
+        BottoneSn(ETICHETTA_RIPROVA, onClick = onRiprova, modifier = Modifier.testTag(TAG_RIPROVA_CARICAMENTO))
     }
 }
 
