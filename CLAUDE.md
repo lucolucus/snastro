@@ -5,6 +5,7 @@ Definizione del progetto in `.mismagent/` (profilo, architettura, regole del cod
 ## mismagent
 - test: ./gradlew check
 - lint: ./gradlew detekt
+- smoke: ./gradlew :avvio:test --tests 'snastro.avvio.smoke.SmokeTest'
 - max_file_lines: 3100
 
 Nota (scelta dell'utente, 2026-10-08): `max_file_lines` è alto perché il sensore di mm conta anche i test di modulo e

@@ -18,6 +18,11 @@ Examples: load errors in `ui/src/main/kotlin/snastro/ui/registrazione/Registrazi
 `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`. Silent fallbacks still owe M1(b)'s generic message;
 preserve follow-up, logging and propagation.
 
+**Reload collectors** (2026-10-11, decided by the user): a screen's reload collector guards its reads inside the reload
+function (`nonFataleRegistrato`), so a fault never ends the collector. A fault on the first load shows an error state
+with Riprova; a later one keeps the shown data with M1(b)'s message (target of refactor 36 in
+`ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`).
+
 **Why.** CR-7 in `.mismagent/code-rules.md`: a swallowed cause leaves no trace to debug a user's report. One helper
 keeps the log format and the message in one place, within CR-19b's frozen catch-all counts (release review R0-1).
 Decided: codex (delegated by the user), 2026-10-08 and 2026-10-09.
