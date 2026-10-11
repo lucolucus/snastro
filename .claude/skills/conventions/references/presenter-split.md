@@ -2,7 +2,9 @@
 
 **Rule.** When a presenter gains several reasons to change, split it by user flow into `internal` holders over its
 screen state. Keep `stato` and `azioni`, and bind actions directly to holder functions: no forwarding members, no
-lambdas hiding `TooManyFunctions`. Keep each screen's concurrency contract and never duplicate its runner.
+lambdas hiding `TooManyFunctions`. Keep each screen's concurrency contract and never duplicate its runner. A holder carries at most a reasoned
+`LongParameterList`, never `TooManyFunctions`: past detekt's 11 it is split by flow, and helpers that touch no holder
+state are file-private functions (2026-10-11, decided by the user).
 
 **Collaborators** (2026-10-09, decided: codex on delegation): one public data class per holder, built by `:avvio` and
 required by the constructor in place of those collaborators. Every parameter is non-null with no default, so omitted
@@ -27,6 +29,10 @@ Initialize `s2` and the holders before `init`. Row commands go through `comandoD
 availability as `lettore::disponibile` and leaves play/pause to the merge. Merge helpers that touch no presenter state
 are file-private functions. Moving code never raises CR-19b's frozen catch counts.
 
+**S3:** holders (`SomiglianzaVoci`, `RevisioneVoci`, `NominaFraseVoci`) built inside `StatoVoci` take its state and its
+ONE runner `lanciaComando` as functions; holders read each other through functions; the re-read sets holder state only
+through a holder function (`RevisioneVoci.riallinea`); `azioni` binds to the holders.
+
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): one state and one `azioni`, and a small
 home for each flow. Decided: codex (delegated by the user), 2026-10-08/09; the user, 2026-10-11.
 
@@ -35,4 +41,5 @@ home for each flow. Decided: codex (delegated by the user), 2026-10-08/09; the u
 `ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoComandiRiga.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/LetturaS2.kt`,
 `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, `avvio/src/main/kotlin/snastro/avvio/Presenter.kt`,
 `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterDiProva.kt`, `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt` with `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`.
+`ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt` with `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazione/RevisioneVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/NominaFraseVoci.kt`.
