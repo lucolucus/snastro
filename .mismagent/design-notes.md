@@ -1,6 +1,6 @@
 # Design notes
 
-- ui (`registrazione/SchermataPannelloVoci.kt` `MenuAltreAzioniCarta`): the voice card's "⋯" differs from the shared `stile/MenuAltreAzioni.kt` — small button, `MenuSn` container (raised, `radiusDialog`, `line` border), no focus return (L742b). AC-586 (`features/trascrizione-con-parlanti/building-blocks.yaml:3176`) lists the "Altri" menu among those with the raised container, while `MenuAltreAzioni` (S1, S2 rows, and S4 after slice 11) uses a plain `DropdownMenu`: which container every "More" menu uses is a visual choice for the human; once decided, `MenuSn` moves to `snastro.ui.stile` and the card can use the shared component (with a `piccolo` option).
+- ui (`registrazione/CartaVoceVista.kt` `MenuAltreAzioniCarta`): the voice card's "⋯" differs from the shared `stile/MenuAltreAzioni.kt` — small button, `MenuSn` container (raised, `radiusDialog`, `line` border), no focus return (L742b). AC-586 (`features/trascrizione-con-parlanti/building-blocks.yaml:3176`) lists the "Altri" menu among those with the raised container, while `MenuAltreAzioni` (S1, S2 rows, and S4 after slice 11) uses a plain `DropdownMenu`: which container every "More" menu uses is a visual choice for the human; once decided, `MenuSn` moves to `snastro.ui.stile` and the card can use the shared component (with a `piccolo` option).
 - mm (tool, not this repo): a refactor that moves a file cited by a conventions topic cannot pass `mm check --base`: either the skill cites a missing path, or the human's file changed since Base (seen in slice 06, acceptance-tests.md "Shown by"). A conventions-flow step before/inside such slices, or an exemption for path-only updates logged in conventions-proposals.md, would remove the conflict — to report upstream to mismagent.
 - avvio tests `SessioneProgettoImplTest.kt:70`, `SessioneProgettoImplChiudiTest.kt:67`, `RinominaRegistrazioneTest.kt:49` (package `snastro.avvio.progetto`): sessions still on an implicit `CoroutineScope(SupervisorJob())` (Dispatchers.Default, never cancelled by the test); `conSessioneDiProva` (SessioneDiProva.kt) now offers the cancelled one — outside slice 09's scope.
 - ui `progetti/EliminaProgetto.kt` `ConfermaEliminaProgetto`: now also drawn by `SchermataShell`, with `progetti-*` test tags and `PannelloSuVelo` from `progetti/PannelloNuovoProgetto.kt`; if a third screen needs the veil panel, `PannelloSuVelo` belongs in `snastro.ui.stile`.
@@ -26,3 +26,8 @@
 - housekeeping (release review R1-1 advice): untracked `documento/*/build` dirs from a removed module hold 134 stale
   test results that inflate any glob over test XML. They are not in `settings.gradle.kts` and are safe to delete. That
   is not a slice.
+- avvio (`smoke/Smoke.kt:151`): `s3-parte-2` is saved once `voci-pannello` exists, without waiting for Voce 3's
+  Proposta, so the shot can catch its loading dot instead of "Sembra Anna". Evidence (slice 40): the same commit
+  rendered `s3-parte-2.png` f6152cef… in 3 of 12 runs in the main checkout and f46b4275… (Base's) in 8 of 8 runs
+  from a `git archive` copy; Base's copy gave f46b4275… 12 of 12. Waiting for the Proposta (or for no
+  `voce-*-proposta-caricamento` tag) would make the screenshot deterministic.
