@@ -50,6 +50,7 @@ import snastro.trascrizione.applicazione.porte.AllineatoreFinta
 import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import java.time.Instant
@@ -224,6 +225,7 @@ class LettoreNomiDaParlantiTest : LettoreNomiContratto() {
                 DiarizzatoreFinta(turni),
                 AllineatoreFinta(),
                 SegnalatoreFaseFinta(),
+                SegnalatoreGuastiFinta(),
             )
             EseguiProssimaElaborazioneServizio(
                 eventiTrascrizione.unitaDiLavoro,

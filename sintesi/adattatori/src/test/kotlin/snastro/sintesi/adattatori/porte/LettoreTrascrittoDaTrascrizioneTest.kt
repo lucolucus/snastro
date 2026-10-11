@@ -47,6 +47,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import java.time.Clock
@@ -247,6 +248,7 @@ class LettoreTrascrittoDaTrascrizioneTest : LettoreTrascrittoContratto() {
                 DiarizzatoreFinta(turni.map { Turno(it.intervallo, it.voceIndice) }),
                 AllineatoreConTesto(turni.associate { it.intervallo to it.testo }),
                 SegnalatoreFaseFinta(),
+                SegnalatoreGuastiFinta(),
             )
             val altrove = elaborazioni.inAttesa().filter { it.registrazioneId != r }.mapTo(mutableSetOf()) { it.id }
             val servizio = EseguiProssimaElaborazioneServizio(

@@ -17,6 +17,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import java.time.Clock
@@ -175,7 +176,8 @@ class EseguiProssimaElaborazioneNonDopoTest {
         diarizzatore: Diarizzatore = DiarizzatoreFinta(),
         allineatore: Allineatore = AllineatoreFinta(),
         segnalatore: SegnalatoreFase = SegnalatoreFaseFinta(),
-    ): PortePipeline = PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore)
+    ): PortePipeline =
+        PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore, SegnalatoreGuastiFinta())
 
     private fun unaInAttesa(id: RegistrazioneId, creataAlle: Instant): Elaborazione =
         Elaborazione.accoda(ID, id, creataAlle, numeroPersone = null).aggregato

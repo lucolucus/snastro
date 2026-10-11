@@ -24,6 +24,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
@@ -111,7 +112,8 @@ class EseguiProssimaElaborazioneEsclusioneTest {
         diarizzatore: Diarizzatore = DiarizzatoreFinta(),
         allineatore: Allineatore = AllineatoreFinta(),
         segnalatore: SegnalatoreFase = SegnalatoreFaseFinta(),
-    ): PortePipeline = PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore)
+    ): PortePipeline =
+        PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore, SegnalatoreGuastiFinta())
 
     private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio, durataMs: Long): RegistrazioneVista =
         RegistrazioneVista(

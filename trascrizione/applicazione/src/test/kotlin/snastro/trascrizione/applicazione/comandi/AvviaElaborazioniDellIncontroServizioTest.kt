@@ -23,6 +23,7 @@ import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import snastro.trascrizione.dominio.ErroreTrascrizione.ElaborazioneGiaAperta
@@ -180,6 +181,7 @@ class AvviaElaborazioniDellIncontroServizioTest {
             DiarizzatoreFinta(),
             AllineatoreFinta(),
             SegnalatoreFaseFinta(),
+            SegnalatoreGuastiFinta(),
         )
         val presa = EseguiProssimaElaborazioneServizio(
             eventi.unitaDiLavoro,

@@ -20,6 +20,7 @@ import snastro.trascrizione.applicazione.porte.DiarizzatoreFinta
 import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
 import java.time.Clock
@@ -70,6 +71,7 @@ internal class FonteCodaElaborazioneTest : FonteCodaContratto() {
                 DiarizzatoreFinta(),
                 AllineatoreFinta(),
                 SegnalatoreFaseFinta(),
+                SegnalatoreGuastiFinta(),
             ),
             eventi,
         )

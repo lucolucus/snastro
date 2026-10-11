@@ -148,36 +148,38 @@ public class EseguiProssimaElaborazioneServizio(
      * Runs the pipeline (never inside a transaction, AC-73) up to a [RisultatoPipeline]. EVERY port
      * call — the [PortePipeline.registrazioni] lookup and each [PortePipeline.segnalatore]`.fase` signal
      * included — runs inside [eseguiFase], so a fault of any port in any phase becomes `fallita` with
-     * that step's fixed `motivo` (AC-70), never an exception escaping with the Elaborazione left
-     * `in_corso`. A throwing `fase` signal is FATAL like any other port fault (its contract,
-     * `SegnalatoreFaseContratto`, says it never throws; if it does, dropping the fault would be a
-     * swallowed failure, CR-7). A lookup MISS (`null`) is not a fault: its own motivo (F7). One guard
-     * clause per step (readable, each mapped to its own fixed `motivo`) — `@Suppress`: deliberate.
+     * that step's fixed `motivo` (AC-70), its cause reported to [PortePipeline.guasti] (ADR 0042), never an
+     * exception escaping with the Elaborazione left `in_corso`. A throwing `fase` signal is FATAL like any
+     * other port fault (its contract, `SegnalatoreFaseContratto`, says it never throws; if it does, dropping
+     * the fault would be a swallowed failure, CR-7). A lookup MISS (`null`) is not a fault: its own motivo
+     * (F7), nothing reported. One guard clause per step (readable, each mapped to its own fixed `motivo`) —
+     * `@Suppress`: deliberate.
      */
     @Suppress("ReturnCount")
     private fun eseguiPipeline(elaborazione: Elaborazione): RisultatoPipeline {
         val id = elaborazione.registrazioneId
-        val letta = eseguiFase { Lettura(pipeline.registrazioni.registrazione(id)) }
-            ?: return RisultatoPipeline.Fallita(MOTIVO_LETTURA_REGISTRAZIONE)
+        val letta = pipeline.eseguiFase(id, MOTIVO_LETTURA_REGISTRAZIONE) {
+            Lettura(pipeline.registrazioni.registrazione(id))
+        } ?: return RisultatoPipeline.Fallita(MOTIVO_LETTURA_REGISTRAZIONE)
         val vista = letta.vista ?: return RisultatoPipeline.Fallita(MOTIVO_REGISTRAZIONE_MANCANTE)
 
-        val campioni = eseguiFase {
+        val campioni = pipeline.eseguiFase(id, MOTIVO_DECODIFICA) {
             pipeline.segnalatore.fase(id, DECODIFICA)
             pipeline.decodificatore.decodifica(id, vista.riferimentoAudio)
             pipeline.decodificatore.tutti(id)
         } ?: return RisultatoPipeline.Fallita(MOTIVO_DECODIFICA)
 
-        val turni = eseguiFase {
+        val turni = pipeline.eseguiFase(id, MOTIVO_DIARIZZAZIONE) {
             pipeline.segnalatore.fase(id, DIARIZZAZIONE)
             pipeline.diarizzatore.diarizza(campioni, elaborazione.numeroPersone) // AC-370, ADR 0014
         } ?: return RisultatoPipeline.Fallita(MOTIVO_DIARIZZAZIONE)
 
-        val grezzi = eseguiFase {
+        val grezzi = pipeline.eseguiFase(id, MOTIVO_TRASCRIZIONE) {
             pipeline.segnalatore.fase(id, TRASCRIZIONE)
             pipeline.allineatore.allinea(campioni, turni)
         } ?: return RisultatoPipeline.Fallita(MOTIVO_TRASCRIZIONE)
 
-        eseguiFase { pipeline.segnalatore.fase(id, ALLINEAMENTO) }
+        pipeline.eseguiFase(id, MOTIVO_ALLINEAMENTO) { pipeline.segnalatore.fase(id, ALLINEAMENTO) }
             ?: return RisultatoPipeline.Fallita(MOTIVO_ALLINEAMENTO)
         val segmenti = grezzi.map { SegmentoIniziale(it.voceIndice, it.intervallo, it.testo) } // AC-71: voceIndice kept
         return RisultatoPipeline.Successo(durataDecodificata(campioni), segmenti)
@@ -264,8 +266,10 @@ public class EseguiProssimaElaborazioneServizio(
         // aperta, and removes the Elaborazioni with the Parte), it keeps a completion that outlived its Registrazione
         // from re-creating the Parte with Segmenti from id 1. As in the pipeline's lookup, a port fault has its own
         // motivo.
-        val letta = eseguiFase { Lettura(pipeline.registrazioni.registrazione(elaborazione.registrazioneId)) }
-            ?: return concludiConFallimento(elaborazione, MOTIVO_LETTURA_REGISTRAZIONE)
+        val id = elaborazione.registrazioneId
+        val letta = pipeline.eseguiFase(id, MOTIVO_LETTURA_REGISTRAZIONE) {
+            Lettura(pipeline.registrazioni.registrazione(id))
+        } ?: return concludiConFallimento(elaborazione, MOTIVO_LETTURA_REGISTRAZIONE)
         val incontroId = letta.vista?.incontroId
             ?: return concludiConFallimento(elaborazione, MOTIVO_REGISTRAZIONE_MANCANTE)
         val radice = trascritti.trova(incontroId) ?: VociDellIncontro.crea(incontroId)
@@ -381,13 +385,14 @@ public class EseguiProssimaElaborazioneServizio(
 }
 
 /**
- * Runs [blocco]; a fault of the port (I/O, native ML — ADR 0003) becomes `null`. Its technical
- * cause is dropped on purpose: the caller picks the one FIXED, plain-Italian `motivo` the user
- * sees (never raw exception text/paths/ids), and this codebase has no logging sink to hand it to.
- * Coroutine cancellation and thread interruption are never a "port fault": rethrown, the interrupt
- * flag restored — they must not be reported as a `fallita` Elaborazione. An [Error] is never caught.
+ * Runs [blocco]; a fault of the port (I/O, native ML — ADR 0003) is reported to [PortePipeline.guasti] with the
+ * Registrazione [id] and the [motivo] the caller then fails the Elaborazione with (ADR 0042, CR-7), and becomes
+ * `null`. The user only ever sees that FIXED, plain-Italian `motivo` (never raw exception text/paths/ids); the
+ * cause goes to the app's log. Coroutine cancellation and thread interruption are never a "port fault":
+ * rethrown, the interrupt flag restored — they must not be reported as a `fallita` Elaborazione. An [Error] is
+ * never caught.
  */
-private fun <T : Any> eseguiFase(blocco: () -> T): T? = try {
+private fun <T : Any> PortePipeline.eseguiFase(id: RegistrazioneId, motivo: String, blocco: () -> T): T? = try {
     blocco()
 } catch (e: CancellationException) {
     throw e
@@ -395,8 +400,9 @@ private fun <T : Any> eseguiFase(blocco: () -> T): T? = try {
     Thread.currentThread().interrupt()
     throw e
 } catch (
-    @Suppress("TooGenericExceptionCaught", "SwallowedException") e: Exception,
+    @Suppress("TooGenericExceptionCaught") e: Exception, // the boundary takes any port fault (ADR 0003)
 ) {
+    guasti.guasto(id, motivo, e)
     null
 }
 

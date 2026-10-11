@@ -18,6 +18,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
@@ -54,6 +55,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
             diarizzatore,
             AllineatoreSenzaSegmenti(),
             SegnalatoreFaseFinta(),
+            SegnalatoreGuastiFinta(),
         )
         val servizio = EseguiProssimaElaborazioneServizio(
             eventi.unitaDiLavoro,
@@ -89,6 +91,7 @@ class EseguiProssimaElaborazionePipelineAllineamentoTest {
             DiarizzatoreFinta(),
             AllineatoreSegmentiSovrapposti(),
             SegnalatoreFaseFinta(),
+            SegnalatoreGuastiFinta(),
         )
         val servizio = EseguiProssimaElaborazioneServizio(
             eventi.unitaDiLavoro,

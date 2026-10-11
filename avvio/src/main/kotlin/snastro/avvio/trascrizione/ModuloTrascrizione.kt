@@ -8,6 +8,7 @@ import snastro.avvio.coda.FonteCoda
 import snastro.avvio.progetto.AperturaProgetto
 import snastro.avvio.progetto.ComponentiApp
 import snastro.avvio.progetto.PorteProgetto
+import snastro.avvio.segnalazioneApp
 import snastro.kernel.AbbonatoDopoCommit
 import snastro.kernel.AbbonatoSincrono
 import snastro.kernel.Esito
@@ -86,6 +87,7 @@ internal class ModuloTrascrizione(
                 SegnalatoreFaseConCambiamenti(porte.fasiInCorso, aggiornamenti::cambiata),
                 ml.rilasciaDopoElaborazione,
             ),
+            guasti = segnalatoreGuastiSu(segnalazioneApp),
         )
         val esegui =
             EseguiProssimaElaborazioneServizio(uow, clock, porte.elaborazioni, porte.trascritti, pipeline, dispatcher)

@@ -30,6 +30,7 @@ import snastro.trascrizione.applicazione.porte.FaseElaborazione.ALLINEAMENTO
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DECODIFICA
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.DIARIZZAZIONE
 import snastro.trascrizione.applicazione.porte.FaseElaborazione.TRASCRIZIONE
+import snastro.trascrizione.applicazione.porte.GuastoSegnalato
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.ParteDiIncontro
@@ -37,6 +38,8 @@ import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFase
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuasti
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepository
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
@@ -115,13 +118,8 @@ class EseguiProssimaElaborazioneServizioTest {
         val segnalatore = SegnalatoreFaseFinta()
         val registrazioni = LettoreRegistrazioneFinta(mapOf(id to unaVista(id, riferimento, DURATA)))
         val decodificatore = DecodificatoreAudioFinta(mapOf(riferimento to DURATA))
-        val servizio = servizio(
-            eventi.unitaDiLavoro,
-            eventi,
-            elaborazioni,
-            trascritti,
-            pipeline(registrazioni = registrazioni, decodificatore = decodificatore, segnalatore = segnalatore),
-        )
+        val portePipeline = pipeline(registrazioni, decodificatore, segnalatore = segnalatore)
+        val servizio = servizio(eventi.unitaDiLavoro, eventi, elaborazioni, trascritti, portePipeline)
         elaborazioni.salva(unaInAttesa(id)).atteso()
 
         servizio.esegui(EseguiProssimaElaborazione()).atteso()
@@ -134,6 +132,7 @@ class EseguiProssimaElaborazioneServizioTest {
             eventi.pubblicati,
             "il successo deve pubblicare ElaborazioneCompletata",
         )
+        assertEquals(emptyList(), portePipeline.guastiRicevuti(), "ADR 0042: una corsa riuscita non segnala guasti")
     }
 
     private val vistaGuasto = LettoreRegistrazioneFinta(
@@ -157,8 +156,9 @@ class EseguiProssimaElaborazioneServizioTest {
             faseAttesa = listOf(DECODIFICA),
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
-                decodificatore = DecodificatoreCheFallisceSuTutti(decodificaGuasto),
+                decodificatore = DecodificatoreCheFallisceSuTutti(decodificaGuasto, guasto),
             ),
+            causaAttesa = guasto,
         )
     }
 
@@ -170,8 +170,9 @@ class EseguiProssimaElaborazioneServizioTest {
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
                 decodificatore = decodificaGuasto,
-                diarizzatore = DiarizzatoreCheLancia(),
+                diarizzatore = DiarizzatoreCheLancia(guasto),
             ),
+            causaAttesa = guasto,
         )
     }
 
@@ -183,17 +184,26 @@ class EseguiProssimaElaborazioneServizioTest {
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
                 decodificatore = decodificaGuasto,
-                allineatore = AllineatoreCheLancia(),
+                allineatore = AllineatoreCheLancia(guasto),
             ),
+            causaAttesa = guasto,
         )
     }
 
-    /** F6: shared shape of every AC-70 fault point — one port guasto per test, the rest normal. */
+    /** A port fault, simulated (AC-70): the instance a test expects reported to [SegnalatoreGuasti] (ADR 0042). */
+    private val guasto = GuastoDiPortaDiProva("una porta")
+
+    /**
+     * F6: shared shape of every AC-70 fault point — one port guasto per test, the rest normal. A thrown
+     * [causaAttesa] is reported once, with the same `motivo` the Elaborazione failed with (ADR 0042); a miss or
+     * a refusal (`null`) reports nothing.
+     */
     private fun verificaGuastoDiPipeline(
         motivoAtteso: String,
         faseAttesa: List<FaseElaborazione>,
         portePipeline: PortePipeline,
         segnalatore: SegnalatoreFaseFinta = portePipeline.segnalatore as SegnalatoreFaseFinta,
+        causaAttesa: Exception? = null,
     ) {
         val elaborazioni = ElaborazioneRepositoryFinta()
         val trascritti = VociDellIncontroRepositoryFinta()
@@ -215,6 +225,10 @@ class EseguiProssimaElaborazioneServizioTest {
                 ElaborazioneFallita(REGISTRAZIONE_GUASTO, motivoAtteso),
             ),
             eventi.pubblicati,
+        )
+        assertEquals(
+            listOfNotNull(causaAttesa?.let { GuastoSegnalato(REGISTRAZIONE_GUASTO, motivoAtteso, it) }),
+            portePipeline.guastiRicevuti(),
         )
     }
 
@@ -510,7 +524,8 @@ class EseguiProssimaElaborazioneServizioTest {
         verificaGuastoDiPipeline(
             motivoAtteso = "impossibile leggere i dati della registrazione",
             faseAttesa = emptyList(),
-            portePipeline = pipeline(registrazioni = LettoreRegistrazioneCheLancia()),
+            portePipeline = pipeline(registrazioni = LettoreRegistrazioneCheLancia(guasto)),
+            causaAttesa = guasto,
         )
     }
 
@@ -523,9 +538,10 @@ class EseguiProssimaElaborazioneServizioTest {
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
                 decodificatore = decodificaGuasto,
-                segnalatore = SegnalatoreCheFallisceSu(DIARIZZAZIONE, registro),
+                segnalatore = SegnalatoreCheFallisceSu(DIARIZZAZIONE, registro, guasto),
             ),
             segnalatore = registro,
+            causaAttesa = guasto,
         )
     }
 
@@ -538,9 +554,10 @@ class EseguiProssimaElaborazioneServizioTest {
             portePipeline = pipeline(
                 registrazioni = vistaGuasto,
                 decodificatore = decodificaGuasto,
-                segnalatore = SegnalatoreCheFallisceSu(ALLINEAMENTO, registro),
+                segnalatore = SegnalatoreCheFallisceSu(ALLINEAMENTO, registro, guasto),
             ),
             segnalatore = registro,
+            causaAttesa = guasto,
         )
     }
 
@@ -695,49 +712,51 @@ class EseguiProssimaElaborazioneServizioTest {
 
         assertTrue(elaborazioni.diRegistrazione(REGISTRAZIONE_GUASTO).single().completata)
     }
-
-    private fun servizio(
-        uow: UnitaDiLavoro,
-        eventi: DispatcherEventiFinta,
-        elaborazioni: ElaborazioneRepository,
-        trascritti: VociDellIncontroRepository,
-        pipeline: PortePipeline,
-    ): EseguiProssimaElaborazioneServizio =
-        EseguiProssimaElaborazioneServizio(uow, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)
-
-    private fun pipeline(
-        registrazioni: LettoreRegistrazione = LettoreRegistrazioneFinta(),
-        decodificatore: DecodificatoreAudio = DecodificatoreAudioFinta(emptyMap()),
-        diarizzatore: Diarizzatore = DiarizzatoreFinta(),
-        allineatore: Allineatore = AllineatoreFinta(),
-        segnalatore: SegnalatoreFase = SegnalatoreFaseFinta(),
-    ): PortePipeline = PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore)
-
-    private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio, durataMs: Long): RegistrazioneVista =
-        RegistrazioneVista(
-            registrazioneId = id,
-            incontroId = unIncontroDi(id),
-            progettoId = PROGETTO,
-            titolo = "Riunione",
-            riferimentoAudio = riferimento,
-            dataRegistrazione = LocalDate.of(2026, 9, 20),
-            durataMs = durataMs,
-        )
-
-    private fun unaInAttesa(id: RegistrazioneId, creataAlle: Instant = CREATA_VECCHIA): Elaborazione =
-        Elaborazione.accoda(ElaborazioneId("elab-${id.valore}"), id, creataAlle, numeroPersone = null).aggregato
-
-    private companion object {
-        const val DURATA = 2_000L
-        const val CAMPIONI_PER_MS = 16
-        val OROLOGIO: Clock = Clock.fixed(Instant.parse("2026-09-23T10:10:00Z"), ZoneOffset.UTC)
-        val CREATA_VECCHIA: Instant = Instant.parse("2026-09-23T09:00:00Z")
-        val CREATA_RECENTE: Instant = Instant.parse("2026-09-23T09:05:00Z")
-        val PROGETTO = ProgettoId("progetto-1")
-        val REGISTRAZIONE_GUASTO = RegistrazioneId("registrazione-1")
-        val RIFERIMENTO_GUASTO = RiferimentoAudio("audio/registrazione-1.m4a")
-    }
 }
+
+private const val DURATA = 2_000L
+private const val CAMPIONI_PER_MS = 16
+private val OROLOGIO: Clock = Clock.fixed(Instant.parse("2026-09-23T10:10:00Z"), ZoneOffset.UTC)
+private val CREATA_VECCHIA: Instant = Instant.parse("2026-09-23T09:00:00Z")
+private val CREATA_RECENTE: Instant = Instant.parse("2026-09-23T09:05:00Z")
+private val PROGETTO = ProgettoId("progetto-1")
+private val REGISTRAZIONE_GUASTO = RegistrazioneId("registrazione-1")
+private val RIFERIMENTO_GUASTO = RiferimentoAudio("audio/registrazione-1.m4a")
+
+private fun servizio(
+    uow: UnitaDiLavoro,
+    eventi: DispatcherEventiFinta,
+    elaborazioni: ElaborazioneRepository,
+    trascritti: VociDellIncontroRepository,
+    pipeline: PortePipeline,
+): EseguiProssimaElaborazioneServizio =
+    EseguiProssimaElaborazioneServizio(uow, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)
+
+private fun pipeline(
+    registrazioni: LettoreRegistrazione = LettoreRegistrazioneFinta(),
+    decodificatore: DecodificatoreAudio = DecodificatoreAudioFinta(emptyMap()),
+    diarizzatore: Diarizzatore = DiarizzatoreFinta(),
+    allineatore: Allineatore = AllineatoreFinta(),
+    segnalatore: SegnalatoreFase = SegnalatoreFaseFinta(),
+): PortePipeline =
+    PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore, SegnalatoreGuastiFinta())
+
+/** What [pipeline]'s recording [SegnalatoreGuastiFinta] received (ADR 0042). */
+private fun PortePipeline.guastiRicevuti(): List<GuastoSegnalato> = (guasti as SegnalatoreGuastiFinta).guasti
+
+private fun unaVista(id: RegistrazioneId, riferimento: RiferimentoAudio, durataMs: Long): RegistrazioneVista =
+    RegistrazioneVista(
+        registrazioneId = id,
+        incontroId = unIncontroDi(id),
+        progettoId = PROGETTO,
+        titolo = "Riunione",
+        riferimentoAudio = riferimento,
+        dataRegistrazione = LocalDate.of(2026, 9, 20),
+        durataMs = durataMs,
+    )
+
+private fun unaInAttesa(id: RegistrazioneId, creataAlle: Instant = CREATA_VECCHIA): Elaborazione =
+    Elaborazione.accoda(ElaborazioneId("elab-${id.valore}"), id, creataAlle, numeroPersone = null).aggregato
 
 /** Tracks whether a [EseguiProssimaElaborazioneServizio] transaction is currently open (AC-73). */
 private class SorvegliaTransazione(private val delegata: UnitaDiLavoro) : UnitaDiLavoro {
@@ -801,44 +820,43 @@ private class AllineatoreSorvegliato(
 private class GuastoDiPortaDiProva(fase: String) : RuntimeException("guasto di prova in $fase")
 
 /** [DecodificatoreAudio] whose `tutti` always throws once decoded (AC-70: decodifica guasta). */
-private class DecodificatoreCheFallisceSuTutti(private val delegata: DecodificatoreAudio) : DecodificatoreAudio {
+private class DecodificatoreCheFallisceSuTutti(
+    private val delegata: DecodificatoreAudio,
+    private val guasto: Exception,
+) : DecodificatoreAudio {
     override fun decodifica(id: RegistrazioneId, sorgente: RiferimentoAudio): Unit = delegata.decodifica(id, sorgente)
 
-    override fun tutti(id: RegistrazioneId): CampioniAudio = throw GuastoDiPortaDiProva("tutti()")
+    override fun tutti(id: RegistrazioneId): CampioniAudio = throw guasto
 
     override fun campioni(id: RegistrazioneId, intervallo: IntervalloMs): CampioniAudio =
         delegata.campioni(id, intervallo)
 }
 
 /** [Diarizzatore] that always throws [guasto] (AC-70: diarizzazione guasta; F4: cancellation). */
-private class DiarizzatoreCheLancia(
-    private val guasto: Exception = GuastoDiPortaDiProva("diarizza()"),
-) : Diarizzatore {
+private class DiarizzatoreCheLancia(private val guasto: Exception) : Diarizzatore {
     override fun diarizza(c: CampioniAudio, numeroPersone: NumeroPersone?): List<Turno> = throw guasto
 }
 
 /** [Allineatore] that always throws [guasto] (AC-70: allineamento guasto; F4: interruption). */
-private class AllineatoreCheLancia(
-    private val guasto: Exception = GuastoDiPortaDiProva("allinea()"),
-) : Allineatore {
+private class AllineatoreCheLancia(private val guasto: Exception) : Allineatore {
     override fun allinea(campioni: CampioniAudio, turni: List<Turno>): List<SegmentoGrezzo> = throw guasto
 }
 
-/** [LettoreRegistrazione] whose lookup always throws (AC-70/F-A: a fault, not a miss). */
-private class LettoreRegistrazioneCheLancia : LettoreRegistrazione {
-    override fun registrazione(id: RegistrazioneId): RegistrazioneVista? =
-        throw GuastoDiPortaDiProva("registrazione()")
+/** [LettoreRegistrazione] whose lookup always throws [guasto] (AC-70/F-A: a fault, not a miss). */
+private class LettoreRegistrazioneCheLancia(private val guasto: Exception) : LettoreRegistrazione {
+    override fun registrazione(id: RegistrazioneId): RegistrazioneVista? = throw guasto
 
     override fun parti(incontroId: IncontroId): List<ParteDiIncontro>? = throw GuastoDiPortaDiProva("parti()")
 }
 
-/** [SegnalatoreFase] that throws on [guasta] (F-A), recording every other signal into [registro]. */
+/** [SegnalatoreFase] that throws [guasto] on [guasta] (F-A), recording every other signal into [registro]. */
 private class SegnalatoreCheFallisceSu(
     private val guasta: FaseElaborazione,
     private val registro: SegnalatoreFaseFinta,
+    private val guasto: Exception,
 ) : SegnalatoreFase {
     override fun fase(id: RegistrazioneId, f: FaseElaborazione) {
-        if (f == guasta) throw GuastoDiPortaDiProva("fase($f)")
+        if (f == guasta) throw guasto
         registro.fase(id, f)
     }
 

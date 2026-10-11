@@ -31,6 +31,7 @@ import snastro.trascrizione.applicazione.porte.LettoreRegistrazioneFinta
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegmentoGrezzo
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
@@ -249,7 +250,14 @@ class EseguiProssimaElaborazioneRitrascriviTest {
                 DecodificatoreAudioFinta(mapOf(riferimento(R) to DURATA, riferimento(R2) to DURATA)),
             diarizzatore: Diarizzatore = DiarizzatoreFinta(TURNI),
             allineatore: Allineatore = AllineatoreFinta(),
-        ): PortePipeline = PortePipeline(registrazioni, decodificatore, diarizzatore, allineatore, segnalatore)
+        ): PortePipeline = PortePipeline(
+            registrazioni,
+            decodificatore,
+            diarizzatore,
+            allineatore,
+            segnalatore,
+            SegnalatoreGuastiFinta(),
+        )
 
         fun servizio(pipeline: PortePipeline = pipeline()): EseguiProssimaElaborazioneServizio =
             EseguiProssimaElaborazioneServizio(contata, OROLOGIO, elaborazioni, trascritti, pipeline, eventi)

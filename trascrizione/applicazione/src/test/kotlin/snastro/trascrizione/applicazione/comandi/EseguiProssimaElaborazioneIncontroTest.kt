@@ -24,6 +24,7 @@ import snastro.trascrizione.applicazione.porte.ElaborazioneRepositoryFinta
 import snastro.trascrizione.applicazione.porte.LettoreRegistrazione
 import snastro.trascrizione.applicazione.porte.RegistrazioneVista
 import snastro.trascrizione.applicazione.porte.SegnalatoreFaseFinta
+import snastro.trascrizione.applicazione.porte.SegnalatoreGuastiFinta
 import snastro.trascrizione.applicazione.porte.Turno
 import snastro.trascrizione.applicazione.porte.VociDellIncontroRepositoryFinta
 import snastro.trascrizione.dominio.Elaborazione
@@ -185,6 +186,7 @@ class EseguiProssimaElaborazioneIncontroTest {
                 diarizzatore,
                 allineatore,
                 segnalatore,
+                SegnalatoreGuastiFinta(),
             ),
             eventi,
         )
