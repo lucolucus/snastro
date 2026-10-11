@@ -18,19 +18,21 @@ helper, `finally`). The open-project delete holder keeps its own flag, folded in
 `occupata: () -> Boolean`.
 
 **S2:** holders (`FlussoImporta`, `FlussoEliminaRiga`, `FlussoIncontro` with the chevron's `espansi`, `FlussoComandiRiga`
-over `ComandiRigaS2`) share one `internal StatoS2` over `_stato`, which owns `aggiornaDati`/`aggiornaRiga`, `rigaLibera`,
+over `ComandiRigaS2`, `LetturaS2` over `LettureS2`) share one `internal StatoS2` over `_stato`, which owns `aggiornaDati`/`aggiornaRiga`, `rigaLibera`,
 `azzeraAvviso` and `ricarica` (`::carica`). Keep per-row concurrency and the import guard, with no screen-wide runner.
 Initialize `s2` and the holders before `init`. Row commands go through `comandoDiRiga`, which runs
 `eccezioneRegistrata(operazione) { suEsito(withContext(io) { comandoConfermato(operazione, comando) }) }`, like S4's
-`suRiga`; callers pass the plain port call, and `FlussoImporta`/`FlussoIncontro` keep their own blocks. Moving code
-never raises CR-19b's frozen catch counts.
+`suRiga`; callers pass the plain port call, and `FlussoImporta`/`FlussoIncontro` keep their own blocks. `LetturaS2` is a pure builder:
+`carica` calls it on `io` and keeps the generation counters, the merge and the error state; it takes the player's
+availability as `lettore::disponibile` and leaves play/pause to the merge. Merge helpers that touch no presenter state
+are file-private functions. Moving code never raises CR-19b's frozen catch counts.
 
 **Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): one state and one `azioni`, and a small
 home for each flow. Decided: codex (delegated by the user), 2026-10-08/09; the user, 2026-10-11.
 
 **Shown by:** `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt`,
 `ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`, `ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoComandiRiga.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoComandiRiga.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/LetturaS2.kt`,
 `ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, `avvio/src/main/kotlin/snastro/avvio/Presenter.kt`,
 `ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterDiProva.kt`, `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt`,
 `ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt` with `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`.
