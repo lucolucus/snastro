@@ -284,6 +284,10 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
   - `RiassuntoPresenter.ricarica`'s reads have no fault path, so a thrown read ends the tab's only reload collector.
   - The lunghezza massima save is bare on S3 and `nonFataleRegistrato` in Impostazioni. ADR 0041 §3 asks for
     `eccezioneRegistrata` on both.
+- *(design pass R2, 2026-10-11, release review R1-2)* Refactor 36 landed: `RiassuntoPresenter.ricarica` guards its
+  reads (first-load fault → `Errore` with Riprova) and both lunghezza massima saves use `eccezioneRegistrata`. One
+  `:avvio` adapter still drops a cause: `PreferenzeAppFile.leggi` returns the defaults on an `IOException` with no log
+  line (CR-7); refactor 43 logs it.
 
 ## Amendment 2026-10-11 — a pipeline phase fault is reported ([ADR 0042](decisions/0042-guasti-delle-fasi-segnalati.md)) [architect]
 - Outside `:ui` the same CR-7 holds. An application service that maps a port fault to a fixed user `motivo` hands its

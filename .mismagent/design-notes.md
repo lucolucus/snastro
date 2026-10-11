@@ -2,7 +2,6 @@
 
 - ui (`registrazione/CartaVoceVista.kt` `MenuAltreAzioniCarta`): the voice card's "⋯" differs from the shared `stile/MenuAltreAzioni.kt` — small button, `MenuSn` container (raised, `radiusDialog`, `line` border), no focus return (L742b). AC-586 (`features/trascrizione-con-parlanti/building-blocks.yaml:3176`) lists the "Altri" menu among those with the raised container, while `MenuAltreAzioni` (S1, S2 rows, and S4 after slice 11) uses a plain `DropdownMenu`: which container every "More" menu uses is a visual choice for the human; once decided, `MenuSn` moves to `snastro.ui.stile` and the card can use the shared component (with a `piccolo` option).
 - mm (tool, not this repo): a refactor that moves a file cited by a conventions topic cannot pass `mm check --base`: either the skill cites a missing path, or the human's file changed since Base (seen in slice 06, acceptance-tests.md "Shown by"). A conventions-flow step before/inside such slices, or an exemption for path-only updates logged in conventions-proposals.md, would remove the conflict — to report upstream to mismagent.
-- avvio tests `SessioneProgettoImplTest.kt:70`, `SessioneProgettoImplChiudiTest.kt:67`, `RinominaRegistrazioneTest.kt:49` (package `snastro.avvio.progetto`): sessions still on an implicit `CoroutineScope(SupervisorJob())` (Dispatchers.Default, never cancelled by the test); `conSessioneDiProva` (SessioneDiProva.kt) now offers the cancelled one — outside slice 09's scope.
 - ui `progetti/EliminaProgetto.kt` `ConfermaEliminaProgetto`: now also drawn by `SchermataShell`, with `progetti-*` test tags and `PannelloSuVelo` from `progetti/PannelloNuovoProgetto.kt`; if a third screen needs the veil panel, `PannelloSuVelo` belongs in `snastro.ui.stile`.
 - avvio `progetto/SessioneProgettoImpl.kt`: the file sits at detekt's file `TooManyFunctions` limit again (10 top-level, threshold 11; `./gradlew detekt` reported "with '12' functions" before slice 05 moved `LockCartella`/`acquisisciLock`/`rilasciaLock` to `LockCartella.kt`); the next session feature will need another cohesive extraction (e.g. `creaCartellaLibera` + `validaCartellaProgetto` into a folder-layout file).
 - ui (`testi/MessaggiErrore.kt:38-39`): `ErroreSessione.ProgettoGiaAperto` (apri) and `ProgettoApertoAltrove` (elimina) are two members for one idea with near-identical texts; merging them changes the port contract (`SessioneProgettoContratto`) and two texts — worth it only with the next session-error change (release review R0-1, naming). Same review: `SessioneProgettoSeams` (`avvio/.../SessioneProgettoImpl.kt:370`) is the one English name in the glossary.
@@ -13,12 +12,18 @@
 - sintesi R1 (EX-18, Riprova): `CAMPIONAMENTO` is fixed (temperature 0.2, seed 42, `ModelloLinguisticoLlama.kt:174-176`), so Riprova on the same Incontro, Argomento and cap likely loops again — assumption, not measured: llama.cpp's sampler with a fixed seed is deterministic on the same prompt, but Metal reductions may not be bit-identical. If the human wants Riprova to give a different run, a seed per attempt is a decision (ADR 0026 §3 fixes the spike's sampling).
 - sintesi R1 (EX-18, 600 s): the loop is stopped by `max_tokens` alone; there is no time budget through the `cancel` lambda, since a fixed deadline cannot tell a loop from a long meeting (AC-S153 allows 600 s per hour). Bound derived, not measured on a real loop (v6 cannot be reproduced on main's prompt): an hour of speech at the 10 000 cap gives 6 112 tokens, ≈ 407 s at 15 t/s (`ModelloLinguisticoLlamaTest`, "un ciclo fermato da maxTokens…"); measured speed on main 2026-10-10: `benchmarkRiassunto` on skatefest, `generazioneMs=28698, tokenGenerati=581` (≈ 20 t/s), `prefillMs=24162`. Above ~1 h at caps over the default the bound grows with the Sommario asked (up to 14 512 tokens at a 4 000-word Sommario).
 - `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt` `apriFonte`: a Fonte of another Parte that fails to play is only logged, no message (slice 31): the switch to that Parte follows (L194) and may dispose this presenter, so its message cannot show here; showing it would need the target Parte's page (or the shared player bar) to carry the fault.
-- ui S3/Riassunto (release review R1-1, simple design): `RegistrazionePresenter.kt:71` (459 lines) and
-  `RiassuntoPresenter.kt:78` (432 lines) still suppress `LongParameterList` and `TooManyFunctions`. The lunghezza
-  massima editor exists twice, in `RiassuntoPresenter.kt:328-381` and `impostazioni/LunghezzaRiassuntoPresenter.kt:50-81`
-  (duplication 4). One editor holder shared by both would shrink the Riassunto presenter. These are not queued in the
-  R1 design pass, because the user wants the fewest slices that make R1 healthy and the review's worst places are
-  `StatoVoci` and the two S3 screens (refactors 38–40). They are the next candidates once 36–40 land.
+- ui S3/Riassunto (release reviews R1-1, R1-2, simple design 4): after refactors 42 (lunghezza massima editor) and 44
+  (S3 playback lane), what is left large is `RiassuntoPresenter` (Argomento form + Riassumi, model download, Fonte
+  playback; `@Suppress("LongParameterList", "TooManyFunctions")` at `RiassuntoPresenter.kt:80`), its view
+  `SchedaRiassunto.kt` (685 lines, file-level `TooManyFunctions` at `:3` with a reason that cites `SchermataPannelloVoci.kt`, a file slice 40 split and that no longer carries one; screen-split) and `RegistrazionePresenter`'s
+  read path (`carica` … `disponibileOSicuro`, `RegistrazionePresenter.kt:151-277`, a `LetturaS2`-like builder). Not
+  queued: R2 (word search, jump to a point) is not expected to change the Riassunto tab (judgment); split each when a
+  feature next touches it.
+- avvio `PreferenzeAppFile.leggi` (`avvio/.../PreferenzeAppFile.kt:22-35`): after refactor 43 an unreadable
+  preferences file is logged, but the user still sees the defaults with no message, since `ImpostazioniPresenter`
+  shows M1(b)'s message only when `leggi` throws (`ui/.../impostazioni/ImpostazioniPresenter.kt:28,34`). A visible
+  fallback changes the `PreferenzeApp` contract (e.g. an `Esito` or a flag): the human's call, with the next settings
+  change.
 - sintesi (release review R1-1, concision advice): since R1-8 the port's four lists (`RispostaModello.kt:9-12`), their
   DTOs and the Bozza mapping are reached only by fakes, and `MisuraRisposta.obiettivoParole` only by its test. The
   port is kept because the brief says the lists return in a later release (`.mismagent/brief.md:119-123`). If that
@@ -26,9 +31,3 @@
 - housekeeping (release review R1-1 advice): untracked `documento/*/build` dirs from a removed module hold 134 stale
   test results that inflate any glob over test XML. They are not in `settings.gradle.kts` and are safe to delete. That
   is not a slice.
-- avvio (`smoke/Smoke.kt:151`): `s3-parte-2` is saved once `voci-pannello` exists, without waiting for Voce 3's
-  Proposta, so the shot can catch its loading dot instead of "Sembra Anna". Evidence (slice 40): the same commit
-  rendered `s3-parte-2.png` f6152cef… in 3 of 12 runs in the main checkout and f46b4275… (Base's) in 8 of 8 runs
-  from a `git archive` copy; Base's copy gave f46b4275… 12 of 12. Waiting for the Proposta (or for no
-  `voce-*-proposta-caricamento` tag) would make the screenshot deterministic.
-- avvio smoke (`Main.kt:30`, `profile.md:34`): `--smoke` needs a fixture project (default `build/smoke-fixture`) that is neither in the repo nor generated by a task, so a `git archive` copy cannot run the smoke (seen reviewing slice 40); a fixture-building task or documented recipe would make smoke comparisons reproducible.
