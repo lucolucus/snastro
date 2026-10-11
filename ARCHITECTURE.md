@@ -7,6 +7,8 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-11 — conventions (decided by the user): presenter-split — S3 split complete (five holders over `StatoVoci`,
+  shared helpers in `DatiParlanti.kt` as the one `internal` exception to file-private); topic condensed, rules unchanged.
 - 2026-10-11 — conventions (decided by the user): presenter-split — a holder never carries `TooManyFunctions` (split by
   flow past detekt's 11); S3 holders over `StatoVoci` with one runner passed as a function (slice 38).
 - 2026-10-11 — conventions (decided by the user): non-fatal-faults — application services report a mapped port fault

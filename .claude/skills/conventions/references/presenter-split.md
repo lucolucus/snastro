@@ -1,45 +1,37 @@
 # Presenter split
 
 **Rule.** When a presenter gains several reasons to change, split it by user flow into `internal` holders over its
-screen state. Keep `stato` and `azioni`, and bind actions directly to holder functions: no forwarding members, no
-lambdas hiding `TooManyFunctions`. Keep each screen's concurrency contract and never duplicate its runner. A holder carries at most a reasoned
+screen state. Keep `stato` and `azioni`, bind actions directly to holder functions (no forwarding members, no lambdas
+hiding size), and keep the screen's concurrency contract with one runner. A holder carries at most a reasoned
 `LongParameterList`, never `TooManyFunctions`: past detekt's 11 it is split by flow, and helpers that touch no holder
-state are file-private functions (2026-10-11, decided by the user).
+state are file-private (if shared by several files, one `internal` helper file).
 
-**Collaborators** (2026-10-09, decided: codex on delegation): one public data class per holder, built by `:avvio` and
-required by the constructor in place of those collaborators. Every parameter is non-null with no default, so omitted
-wiring fails to compile (ADR 0030 §1). Not: `internal` bundles, which `:avvio` cannot build. **Test builder**
-(2026-10-11, decided by the user): such a presenter gets ONE test builder in its package's test sources, taking the flat
-collaborators (`@Suppress("LongParameterList")` with its reason), so a regrouping touches one function.
+**Collaborators:** one public data class per holder, built by `:avvio`, all parameters required and non-null (ADR 0030
+§1); not `internal`, which `:avvio` cannot build. Such a presenter gets ONE test builder taking the flat collaborators
+(a reasoned `LongParameterList`).
 
-**S1:** holders share one `internal` `CorsaSingola` over one `MutableStateFlow`, which owns the synchronous M3 guard,
-M1(b)'s generic message and the `inCorso` reset in `finally`.
-
-**Shell:** `apri`/`crea`/`chiudi` share one private single-flight runner (guard, `Caricamento`, the non-fatal-faults
-helper, `finally`). The open-project delete holder keeps its own flag, folded into the shell's guard through
+**S1:** holders share `CorsaSingola` (M3 guard, M1(b)'s message, `inCorso` reset in `finally`). **Shell:**
+`apri`/`crea`/`chiudi` share one single-flight runner; the open-project delete holder joins the guard through
 `occupata: () -> Boolean`.
 
-**S2:** holders (`FlussoImporta`, `FlussoEliminaRiga`, `FlussoIncontro` with the chevron's `espansi`, `FlussoComandiRiga`
-over `ComandiRigaS2`, `LetturaS2` over `LettureS2`) share one `internal StatoS2` over `_stato`, which owns `aggiornaDati`/`aggiornaRiga`, `rigaLibera`,
-`azzeraAvviso` and `ricarica` (`::carica`). Keep per-row concurrency and the import guard, with no screen-wide runner.
-Initialize `s2` and the holders before `init`. Row commands go through `comandoDiRiga`, which runs
-`eccezioneRegistrata(operazione) { suEsito(withContext(io) { comandoConfermato(operazione, comando) }) }`, like S4's
-`suRiga`; callers pass the plain port call, and `FlussoImporta`/`FlussoIncontro` keep their own blocks. `LetturaS2` is a pure builder:
-`carica` calls it on `io` and keeps the generation counters, the merge and the error state; it takes the player's
-availability as `lettore::disponibile` and leaves play/pause to the merge. Merge helpers that touch no presenter state
-are file-private functions. Moving code never raises CR-19b's frozen catch counts.
+**S2:** `FlussoImporta`, `FlussoEliminaRiga`, `FlussoIncontro`, `FlussoComandiRiga` (over `ComandiRigaS2`) and
+`LetturaS2` (over `LettureS2`) share `StatoS2`, initialized before `init`; per-row concurrency and the import guard,
+no screen-wide runner. Row commands run through `comandoDiRiga`:
+`eccezioneRegistrata { suEsito(withContext(io) { comandoConfermato(…) }) }`. `LetturaS2` is a pure builder taking
+`lettore::disponibile`; the presenter keeps the generation counters, the merge (play/pause) and the error state.
 
-**S3:** holders (`SomiglianzaVoci`, `RevisioneVoci`, `NominaFraseVoci`) built inside `StatoVoci` take its state and its
-ONE runner `lanciaComando` as functions; holders read each other through functions; the re-read sets holder state only
-through a holder function (`RevisioneVoci.riallinea`); `azioni` binds to the holders.
+**S3:** `SomiglianzaVoci`, `CarteVoci`, `ProposteVoci`, `NominaFraseVoci` and `RevisioneVoci` are built inside
+`StatoVoci`. They take its state as functions, plus its one runner `lanciaComando` when they commit, and read each
+other through functions. Each owns its background jobs, and every job cancels the one before. `StatoVoci` keeps the
+read, the runner and the panel build, and sets holder state only through holder functions. Helpers the holders share
+live in `DatiParlanti.kt`. Moving code never raises CR-19b's frozen catch counts.
 
-**Why.** Thin UI and one screen contract (RC-2 in `.mismagent/code-rules.md`): one state and one `azioni`, and a small
-home for each flow. Decided: codex (delegated by the user), 2026-10-08/09; the user, 2026-10-11.
+**Why.** RC-2 in `.mismagent/code-rules.md`: one state, one `azioni`, a small home per flow. Decided: codex (delegated
+by the user), 2026-10-08/09; the user, 2026-10-11.
 
-**Shown by:** `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `ui/src/main/kotlin/snastro/ui/progetti/ProgettiPresenter.kt`,
-`ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`, `ui/src/main/kotlin/snastro/ui/EliminazioneProgettoAperto.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoComandiRiga.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/LetturaS2.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazioni/RegistrazioniPresenter.kt`, `avvio/src/main/kotlin/snastro/avvio/Presenter.kt`,
-`ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterDiProva.kt`, `ui/src/main/kotlin/snastro/ui/parlanti/ParlantiPresenter.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazione/RegistrazionePresenter.kt` with `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`,
-`ui/src/main/kotlin/snastro/ui/registrazione/RevisioneVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/NominaFraseVoci.kt`.
+**Shown by:** `ui/src/main/kotlin/snastro/ui/progetti/CorsaSingola.kt`, `ui/src/main/kotlin/snastro/ui/ShellPresenter.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazioni/StatoS2.kt`, `ui/src/main/kotlin/snastro/ui/registrazioni/FlussoComandiRiga.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazioni/LetturaS2.kt`, `avvio/src/main/kotlin/snastro/avvio/Presenter.kt`,
+`ui/src/test/kotlin/snastro/ui/registrazioni/RegistrazioniPresenterDiProva.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/StatoVoci.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazione/CarteVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/ProposteVoci.kt`,
+`ui/src/main/kotlin/snastro/ui/registrazione/RevisioneVoci.kt`, `ui/src/main/kotlin/snastro/ui/registrazione/DatiParlanti.kt`.
