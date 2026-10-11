@@ -26,5 +26,3 @@
 - housekeeping (release review R1-1 advice): untracked `documento/*/build` dirs from a removed module hold 134 stale
   test results that inflate any glob over test XML. They are not in `settings.gradle.kts` and are safe to delete. That
   is not a slice.
-
-- non-fatal-faults (2026-10-11): `RiassuntoPresenter.ricarica` still reads unguarded inside `collectLatest` — refactor 36.
