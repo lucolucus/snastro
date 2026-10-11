@@ -24,7 +24,7 @@ no screen-wide runner. Row commands run through `comandoDiRiga`:
 `StatoVoci`. They take its state as functions, plus its one runner `lanciaComando` when they commit, and read each
 other through functions. Each owns its background jobs, and every job cancels the one before. `StatoVoci` keeps the
 read, the runner and the panel build, and sets holder state only through holder functions. Helpers the holders share
-live in `DatiParlanti.kt`. Moving code never raises CR-19b's frozen catch counts.
+live in `ui/src/main/kotlin/snastro/ui/registrazione/DatiParlanti.kt`. Moving code never raises CR-19b's frozen catch counts.
 
 **Why.** RC-2 in `.mismagent/code-rules.md`: one state, one `azioni`, a small home per flow. Decided: codex (delegated
 by the user), 2026-10-08/09; the user, 2026-10-11.
