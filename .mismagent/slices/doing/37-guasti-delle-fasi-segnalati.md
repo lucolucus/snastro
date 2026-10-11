@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R1
 Examples:
+Base: 0ecb3f2da3debfb73a041252a244d5e0c99330e4
 
 A failed transcription leaves the user a fixed `motivo` and leaves the log nothing. This is release review R1-1,
 error handling 3, worst place 2, and it breaks CR-7.
