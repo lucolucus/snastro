@@ -24,6 +24,12 @@ with Riprova; a later one keeps the shown data with M1(b)'s message (`ricarica` 
 `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt`, drawn by `ui/src/main/kotlin/snastro/ui/riassunto/SchedaRiassunto.kt`;
 both lunghezza massima saves, there and in `ui/src/main/kotlin/snastro/ui/impostazioni/LunghezzaRiassuntoPresenter.kt`, use `eccezioneRegistrata`).
 
+**Application services** (2026-10-11, decided by the user; ADR 0042): outside `:ui`, a service that maps a port fault
+to a fixed `motivo` reports id, `motivo` and cause to a `fun interface` port of its own context (required, with a
+never-throwing Contratto and a recording Finta); `:avvio` implements it over `segnalazioneApp`
+(`trascrizione/applicazione/src/main/kotlin/snastro/trascrizione/applicazione/porte/SegnalatoreGuasti.kt`,
+`avvio/src/main/kotlin/snastro/avvio/trascrizione/SegnalatoreGuastiSuSegnalazione.kt`).
+
 **Why.** CR-7 in `.mismagent/code-rules.md`: a swallowed cause leaves no trace to debug a user's report. One helper
 keeps the log format and the message in one place, within CR-19b's frozen catch-all counts (release review R0-1).
 Decided: codex (delegated by the user), 2026-10-08 and 2026-10-09.
