@@ -288,5 +288,5 @@ No new module and no new edge; the edges table and `verificaDipendenzeModuli` ar
 ## Amendment 2026-10-11 — a pipeline phase fault is reported ([ADR 0042](decisions/0042-guasti-delle-fasi-segnalati.md)) [architect]
 - Outside `:ui` the same CR-7 holds. An application service that maps a port fault to a fixed user `motivo` hands its
   cause to a port of its own context. It never drops it, and it never takes `:supporto` (CR-2, edge rule above).
-- Trascrizione: `SegnalatoreGuasti` in `PortePipeline`, implemented by `:avvio` over `segnalazioneApp`. Target state:
-  refactor 37 lands it. Until then, `eseguiFase` drops the cause.
+- Trascrizione: `SegnalatoreGuasti` in `PortePipeline`, implemented by `:avvio` over `segnalazioneApp`. Landed in
+  refactor 37: `eseguiFase` reports every port fault (`segnalatoreGuastiSu`, wired in `ModuloTrascrizione`).
