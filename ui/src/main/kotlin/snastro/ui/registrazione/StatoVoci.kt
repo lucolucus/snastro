@@ -37,8 +37,8 @@ import java.time.Instant
  * The Voci-panel half of [RegistrazionePresenter]: the Voci panel, the Nome labels and the card commands, over
  * the mandatory [SorgentiParlanti] (ADR 0030 §1, U1) — writes into the presenter's own [stato], published only
  * once the transcript is loaded (AC-402). Its holders take the rest of the panel: [revisione] the selection
- * toolbar, the Revisione and the naming of a phrase; [somiglianza] 'Riassegna per somiglianza'. They share this
- * class's one runner, [lanciaComando].
+ * toolbar and the Revisione; [nomina] the naming of a phrase; [somiglianza] 'Riassegna per somiglianza'. They share
+ * this class's one runner, [lanciaComando].
  *
  * Every field below is mutated only on [scope]'s (UI) dispatcher; every blocking read/command runs on
  * [io] (AC-417): the Proposte through `runInterruptible` (leaving S3 interrupts a waiting extraction,
@@ -97,7 +97,7 @@ internal class StatoVoci(
 
     /** AC-530: a Parlanti card command or a naming is pending for this Registrazione. */
     private val comandiPendenti: Boolean
-        get() = invii.isNotEmpty() || inCorsoAltrove.isNotEmpty() || revisione.frasiPendenti
+        get() = invii.isNotEmpty() || inCorsoAltrove.isNotEmpty() || nomina.frasiPendenti
 
     private var dati: DatiParlanti? = null
     private var erroreLettura = false
@@ -131,27 +131,49 @@ internal class StatoVoci(
         errore = ::impostaErrore,
     )
 
-    /** The selection toolbar, the Revisione and the naming of a phrase; [RegistrazionePresenter.azioni] binds to it. */
-    val revisione: RevisioneVoci = RevisioneVoci(
+    /**
+     * The one runner [lanciaComando] with its default `suGuasto`, as the holders take it: a lambda, because a
+     * function reference cannot leave out the defaulted parameter.
+     */
+    private val lanciaComandoGenerico: (String, () -> Unit, suspend () -> Unit) -> Unit =
+        { operazione, libera, comando -> lanciaComando(operazione, libera, comando = comando) }
+
+    /** "Dai un nome a questa frase"; [RegistrazionePresenter.azioni] binds its actions straight to it. */
+    val nomina: NominaFraseVoci = NominaFraseVoci(
         sorgenti,
         scope,
+        io,
+        registrazioneId,
+        vista = { vista },
+        dati = { dati },
+        fraseSelezionata = { vista?.let(revisione::barraDi)?.frase },
+        lanciaComando = lanciaComandoGenerico,
+        ricaricaDopoRevisione = ::ricaricaDopoRevisione,
+        pubblica = ::pubblica,
+        impostaErrore = ::impostaErrore,
+        programmaSoglia = ::programmaSoglia,
+    )
+
+    /** The selection toolbar and the Revisione; [RegistrazionePresenter.azioni] binds its actions straight to it. */
+    val revisione: RevisioneVoci = RevisioneVoci(
+        sorgenti,
         io,
         registrazioneId,
         trascritto,
         vista = { vista },
         dati = { dati },
         modificheBloccate = { modificheBloccate },
-        lanciaComando = { operazione, libera, comando -> lanciaComando(operazione, libera, comando = comando) },
+        attesaFraseDi = nomina::attesaFraseDi,
+        lanciaComando = lanciaComandoGenerico,
         ricaricaDopoRevisione = ::ricaricaDopoRevisione,
         pubblica = ::pubblica,
         impostaErrore = ::impostaErrore,
-        programmaSoglia = ::programmaSoglia,
     )
     private val erroriCarta = mutableMapOf<VoceId, String>()
 
     fun avvia() {
         scope.launch { sorgenti.comandi.stato.collect { mappa -> rifletti(mappa) } }
-        revisione.avvia()
+        nomina.avvia()
         somiglianza.avvia()
         scope.launch {
             // AC-319: ImpronteRiallineate (& co.) reach S3 as a Cambiamento — the Proposte are re-read,
@@ -425,7 +447,7 @@ internal class StatoVoci(
                         riga.copy(
                             etichettaVoce = etichetta(v, riga.voceId),
                             confermato = v.segmenti.find { it.segmentoId == riga.segmentoId }?.confermato == true,
-                            attesaFrase = revisione.attesaFraseDi(riga.segmentoId),
+                            attesaFrase = nomina.attesaFraseDi(riga.segmentoId),
                         )
                     },
                     pannello = pannelloDi(v, d.audioDisponibile),
