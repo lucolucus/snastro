@@ -156,7 +156,7 @@ class RegistrazionePresenter(
 
     private suspend fun mostraTrascritto() {
         // AC-453/455: a reload never keeps a selection or a panel from a previous generation.
-        voci.deseleziona()
+        voci.revisione.deseleziona()
         val vista = withContext(io) { trascritto() }
         if (vista == null) {
             _stato.value = statoSenzaTrascritto()
@@ -426,11 +426,11 @@ class RegistrazionePresenter(
         mostraSbobinaturaNellaCartella = ::mostraSbobinaturaNellaCartella,
         chiudiErrore = ::chiudiErrore,
         riprova = ::riprova,
-        selezionaSegmento = voci::selezionaSegmento,
-        deseleziona = voci::deseleziona,
-        dividiVoce = voci::dividiVoce,
-        riassegnaA = voci::riassegnaA,
-        unisci = voci::unisci,
+        selezionaSegmento = voci.revisione::selezionaSegmento,
+        deseleziona = voci.revisione::deseleziona,
+        dividiVoce = voci.revisione::dividiVoce,
+        riassegnaA = voci.revisione::riassegnaA,
+        unisci = voci.revisione::unisci,
         conferma = voci::conferma,
         confermaParlante = voci::confermaParlante,
         nuovoParlante = voci::nuovoParlante,
@@ -439,12 +439,12 @@ class RegistrazionePresenter(
         chiudiErroreVoce = voci::chiudiErrore,
         riproduciEstrattoVoce = ::riproduciEstrattoVoce,
         riproduciEstratto = ::riproduciEstratto,
-        nominaFrase = voci::nominaFrase,
-        togliConferma = voci::togliConferma,
-        annullaFrase = voci::annullaFrase,
-        calcolaSomiglianza = voci::calcolaSomiglianza,
-        applicaSomiglianza = voci::applicaSomiglianza,
-        annullaSomiglianza = voci::annullaSomiglianza,
+        nominaFrase = voci.revisione::nominaFrase,
+        togliConferma = voci.revisione::togliConferma,
+        annullaFrase = voci.revisione::annullaFrase,
+        calcolaSomiglianza = voci.somiglianza::calcola,
+        applicaSomiglianza = voci.somiglianza::applica,
+        annullaSomiglianza = voci.somiglianza::annulla,
         selezionaScheda = ::selezionaScheda,
         vaiAllaParte = parti.vaiAllaParte,
     )

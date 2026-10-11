@@ -13,7 +13,6 @@ import snastro.kernel.Esito
 import snastro.kernel.IncontroId
 import snastro.kernel.ParlanteId
 import snastro.kernel.RegistrazioneId
-import snastro.kernel.SegmentoId
 import snastro.kernel.VoceId
 import snastro.kernel.VoceRef
 import snastro.parlanti.applicazione.eventi.TipoParlanteVista
@@ -22,28 +21,24 @@ import snastro.parlanti.applicazione.letture.ParlanteAttivo
 import snastro.parlanti.applicazione.letture.PropostaDiUnione
 import snastro.parlanti.applicazione.letture.VoceIdentificata
 import snastro.parlanti.applicazione.porte.Fascia
-import snastro.trascrizione.applicazione.comandi.ConfermaSegmento
-import snastro.trascrizione.applicazione.comandi.DividiVoce
-import snastro.trascrizione.applicazione.comandi.RiassegnaSegmento
-import snastro.trascrizione.applicazione.comandi.UnisciVoci
 import snastro.trascrizione.applicazione.letture.TrascrittoView
 import snastro.trascrizione.applicazione.letture.VoceIncontroRiga
-import snastro.ui.comandoConfermato
 import snastro.ui.eccezioneRegistrata
 import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
 import snastro.ui.testi.MESSAGGIO_ERRORE_PROPOSTA
 import snastro.ui.testi.MESSAGGIO_ERRORE_VOCI
 import snastro.ui.testi.MESSAGGIO_RITRASCRIZIONE_PERSA
-import snastro.ui.testi.SPIEGAZIONE_DIVIDI_INTERA_VOCE
 import snastro.ui.testi.messaggioPer
 import java.time.Duration
 import java.time.Instant
 
 /**
- * The Voci-panel half of [RegistrazionePresenter]: the Voci panel, the Nome labels, the selection
- * toolbar and the Revisione commands, over the mandatory [SorgentiParlanti] (ADR 0030 §1, U1) — writes
- * into the presenter's own [stato], published only once the transcript is loaded (AC-402).
+ * The Voci-panel half of [RegistrazionePresenter]: the Voci panel, the Nome labels and the card commands, over
+ * the mandatory [SorgentiParlanti] (ADR 0030 §1, U1) — writes into the presenter's own [stato], published only
+ * once the transcript is loaded (AC-402). Its holders take the rest of the panel: [revisione] the selection
+ * toolbar, the Revisione and the naming of a phrase; [somiglianza] 'Riassegna per somiglianza'. They share this
+ * class's one runner, [lanciaComando].
  *
  * Every field below is mutated only on [scope]'s (UI) dispatcher; every blocking read/command runs on
  * [io] (AC-417): the Proposte through `runInterruptible` (leaving S3 interrupts a waiting extraction,
@@ -85,8 +80,8 @@ internal class StatoVoci(
      * ADR 0018 Amendment (b) §2 (AC-454/455/461): read live from the presenter's own published [stato]
      * (`RegistrazioneUiStato.Dati.soloLettura`, set by [RegistrazionePresenter.carica] from its
      * optional `stati` source, AC-452) — no separate copy kept here. While `true`, [invia]/
-     * [eseguiRevisione] send no command (the fakes see zero calls) and [ricaricaParlanti] starts no
-     * Proposta job; [pannelloDi]/[barraDi] disable every card/toolbar action. '▶ estratto' and Segmento
+     * [revisione]'s commands send no command (the fakes see zero calls) and [ricaricaParlanti] starts no
+     * Proposta job; [pannelloDi]/[RevisioneVoci.barraDi] disable every card/toolbar action. '▶ estratto' and Segmento
      * playback are untouched (owned by the base presenter, not here).
      */
     private val soloLettura: Boolean
@@ -95,25 +90,14 @@ internal class StatoVoci(
     /**
      * ADR 0019 §6 (AC-531/AC-545): every editing action of the panel and of the toolbar is disabled while
      * read-only AND while a similarity run is computing, previewed or applying — the same controls, the
-     * same presenter backstops ([invia], [eseguiRevisione], [nominaFrase]).
+     * same presenter backstops ([invia] and [revisione]'s commands).
      */
     private val modificheBloccate: Boolean
         get() = soloLettura || somiglianza.aperta
 
     /** AC-530: a Parlanti card command or a naming is pending for this Registrazione. */
     private val comandiPendenti: Boolean
-        get() = listOf(invii, inCorsoAltrove, inviiFrasi, frasiAltrove).any { it.isNotEmpty() }
-
-    private class DatiParlanti(
-        val identificate: Map<VoceId, VoceIdentificata>,
-        val attivi: List<ParlanteAttivo>,
-        val unioni: List<PropostaDiUnione>,
-        /** AC-I77: the Incontro's Voci (empty over a 1-Parte Incontro: not read). */
-        val vociIncontro: List<VoceIncontroRiga>,
-    )
-
-    /** [esito] `null`: a failure with no domain error, shown as the generic message. */
-    private class RisultatoRevisione(val esito: Esito<Unit>?, val modificato: Boolean)
+        get() = invii.isNotEmpty() || inCorsoAltrove.isNotEmpty() || revisione.frasiPendenti
 
     private var dati: DatiParlanti? = null
     private var erroreLettura = false
@@ -134,9 +118,9 @@ internal class StatoVoci(
     private val invii = mutableMapOf<VoceRef, Instant>()
     private var inCorsoAltrove: Map<VoceRef, Instant> = emptyMap()
     private val soglieProgrammate = mutableSetOf<Pair<Any, Instant>>()
-    private val inviiFrasi = mutableMapOf<SegmentoId, Instant>()
-    private var frasiAltrove: Map<SegmentoId, Instant> = emptyMap()
-    private val somiglianza: SomiglianzaVoci = SomiglianzaVoci(
+
+    /** 'Riassegna per somiglianza'; [RegistrazionePresenter.azioni] binds its actions straight to it. */
+    val somiglianza: SomiglianzaVoci = SomiglianzaVoci(
         sorgenti.somiglianza,
         scope,
         io,
@@ -146,13 +130,28 @@ internal class StatoVoci(
         dopoApplicazione = { if (vista != null) ricaricaDopoRevisione(azzeraSelezione = true) },
         errore = ::impostaErrore,
     )
+
+    /** The selection toolbar, the Revisione and the naming of a phrase; [RegistrazionePresenter.azioni] binds to it. */
+    val revisione: RevisioneVoci = RevisioneVoci(
+        sorgenti,
+        scope,
+        io,
+        registrazioneId,
+        trascritto,
+        vista = { vista },
+        dati = { dati },
+        modificheBloccate = { modificheBloccate },
+        lanciaComando = { operazione, libera, comando -> lanciaComando(operazione, libera, comando = comando) },
+        ricaricaDopoRevisione = ::ricaricaDopoRevisione,
+        pubblica = ::pubblica,
+        impostaErrore = ::impostaErrore,
+        programmaSoglia = ::programmaSoglia,
+    )
     private val erroriCarta = mutableMapOf<VoceId, String>()
-    private var selezione: Set<SegmentoId> = emptySet()
-    private var revisioneInCorso = false
 
     fun avvia() {
         scope.launch { sorgenti.comandi.stato.collect { mappa -> rifletti(mappa) } }
-        scope.launch { sorgenti.comandi.statoFrasi.collect { mappa -> riflettiFrasi(mappa) } }
+        revisione.avvia()
         somiglianza.avvia()
         scope.launch {
             // AC-319: ImpronteRiallineate (& co.) reach S3 as a Cambiamento — the Proposte are re-read,
@@ -166,7 +165,7 @@ internal class StatoVoci(
     }
 
     /** AC-405: the attributed Nome replaces "Voce n" in the labels. */
-    fun nomeDi(voceId: VoceId): String? = dati?.identificate?.get(voceId)?.nome
+    fun nomeDi(voceId: VoceId): String? = dati?.nomeDi(voceId)
 
     // --- load --------------------------------------------------------------------------------------
 
@@ -293,21 +292,10 @@ internal class StatoVoci(
         return conclusiAltrove
     }
 
-    /** AC-529/AC-415: the pending namings of this Registrazione, as [rifletti] does for the cards. */
-    private suspend fun riflettiFrasi(mappa: Map<FraseRef, StatoComando>) {
-        val mie = mappa.entries.filter { it.key.registrazioneId == registrazioneId }
-            .associate { it.key.segmentoId to it.value.avviatoAlle }
-        val conclusiAltrove = frasiAltrove.keys - mie.keys - inviiFrasi.keys
-        frasiAltrove = mie
-        mie.forEach { (segmento, inizio) -> programmaSoglia(FraseRef(registrazioneId, segmento), inizio) }
-        pubblica()
-        if (conclusiAltrove.isNotEmpty() && vista != null) ricaricaDopoRevisione(azzeraSelezione = false)
-    }
-
     /** AC-412: re-publishes when [inizio] + the threshold is reached, so the card turns to 'In attesa…'. */
     private fun programmaSoglia(ref: Any, inizio: Instant) {
         if (!soglieProgrammate.add(ref to inizio)) return
-        val restante = RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS - trascorsiMs(inizio)
+        val restante = RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS - trascorsiMs(inizio, sorgenti.clock.instant())
         if (restante > 0) {
             scope.launch {
                 delay(restante)
@@ -316,21 +304,8 @@ internal class StatoVoci(
         }
     }
 
-    private fun trascorsiMs(inizio: Instant): Long = Duration.between(inizio, sorgenti.clock.instant()).toMillis()
-
-    private fun attesaDi(ref: VoceRef): AttesaComando? = attesaDa(invii[ref] ?: inCorsoAltrove[ref])
-
-    private fun attesaFraseDi(segmento: SegmentoId): AttesaComando? =
-        attesaDa(inviiFrasi[segmento] ?: frasiAltrove[segmento])
-
-    private fun attesaDa(inizio: Instant?): AttesaComando? {
-        if (inizio == null) return null
-        return if (trascorsiMs(inizio) >= RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS) {
-            AttesaComando.IN_ATTESA
-        } else {
-            AttesaComando.IN_CORSO
-        }
-    }
+    private fun attesaDi(ref: VoceRef): AttesaComando? =
+        attesaDa(invii[ref] ?: inCorsoAltrove[ref], sorgenti.clock.instant())
 
     /**
      * AC-411: the card goes pending AT ONCE (published before the command even starts — a second click
@@ -412,121 +387,6 @@ internal class StatoVoci(
         pubblica()
     }
 
-    // --- selection + Revisione (AC-209..211, AC-216, AC-404) ----------------------------------------
-
-    /** AC-209: the selection stays inside ONE Voce — a Segmento of another Voce starts a new selection. */
-    fun selezionaSegmento(id: SegmentoId) {
-        val v = vista ?: return
-        val voce = v.segmenti.find { it.segmentoId == id }?.voceId ?: return
-        selezione = when {
-            voceDellaSelezione(v) != voce -> setOf(id)
-            id in selezione -> selezione - id
-            else -> selezione + id
-        }
-        pubblica()
-    }
-
-    fun deseleziona() {
-        selezione = emptySet()
-        pubblica()
-    }
-
-    /** AC-210: only a proper subset of the Voce can be split off (INV-10). */
-    fun dividiVoce() {
-        val barra = vista?.let(::barraDi)?.takeIf { it.dividiAbilitato && it.abilitata } ?: return
-        val segmenti = selezione
-        val operazione = "dividi ${barra.voceId}"
-        eseguiRevisione(operazione) {
-            val esito = comandoConfermato(operazione) {
-                sorgenti.dividi(DividiVoce(registrazioneId, barra.voceId, segmenti, incontroDelleVoci = incontroId))
-            }
-            RisultatoRevisione(esito, esito is Esito.Ok)
-        }
-    }
-
-    /** AC-211: RiassegnaSegmento per Segmento, to [destinazione] or (`null`) ONE new Voce for the whole selection. */
-    fun riassegnaA(destinazione: VoceId?) {
-        val v = vista ?: return
-        val barra = barraDi(v)?.takeIf { it.abilitata && it.voceId != destinazione } ?: return
-        val ordinati = v.segmenti
-            .filter { it.segmentoId in selezione && it.voceId == barra.voceId }
-            .map { it.segmentoId }
-        eseguiRevisione("riassegna a ${destinazione ?: "nuova voce"}") { riassegnaTutti(ordinati, destinazione) }
-    }
-
-    /**
-     * L274: a failure after Segmenti already moved (committed one by one) still reports them as changed, so the
-     * transcript is re-read; an Error still propagates (D-0065). 'nuova voce' whose Voce cannot be read back after the
-     * first move stops there (generic message) instead of opening one new Voce per Segmento.
-     */
-    private fun riassegnaTutti(segmenti: List<SegmentoId>, destinazione: VoceId?): RisultatoRevisione {
-        var verso = destinazione
-        var esito: Esito<Unit>? = Esito.Ok(Unit)
-        var spostati = 0
-        val restanti = segmenti.iterator()
-        while (esito is Esito.Ok && restanti.hasNext()) {
-            val segmento = restanti.next()
-            esito = riassegnaUno(segmento, verso)
-            if (esito is Esito.Ok) {
-                spostati++
-                // 'nuova voce': the first Segmento opens it, the next ones follow it there (one Voce, not one each).
-                val apri = verso == null && restanti.hasNext()
-                if (apri) verso = voceDi(segmento)
-                if (apri && verso == null) esito = null
-            }
-        }
-        return RisultatoRevisione(esito, modificato = spostati > 0)
-    }
-
-    /** One RiassegnaSegmento; a thrown `Exception` is logged and `null` (the generic message); an Error propagates. */
-    private fun riassegnaUno(segmento: SegmentoId, verso: VoceId?): Esito<Unit>? =
-        eccezioneRegistrata("riassegna $segmento") {
-            comandoConfermato("riassegna $segmento") {
-                sorgenti.riassegna(RiassegnaSegmento(registrazioneId, segmento, verso, incontroDelleVoci = incontroId))
-            }
-        }
-
-    private fun voceDi(segmento: SegmentoId): VoceId? =
-        nonFataleRegistrato("rileggi la voce di $segmento") {
-            trascritto()?.segmenti?.find { it.segmentoId == segmento }?.voceId
-        }
-
-    /** 'Unisci con ▾' on a card ([sopravvive] = that card) and the merge banner's 'Unisci' (AC-216). */
-    fun unisci(sopravvive: VoceId, rimossa: VoceId) {
-        if (sopravvive == rimossa) return
-        val operazione = "unisci $rimossa in $sopravvive"
-        eseguiRevisione(operazione) {
-            val esito = comandoConfermato(operazione) {
-                sorgenti.unisci(UnisciVoci(registrazioneId, sopravvive, rimossa, incontroDelleVoci = incontroId))
-            }
-            RisultatoRevisione(esito, esito is Esito.Ok)
-        }
-    }
-
-    /**
-     * AC-404: a Revisione error is an inline message in the transcript — the transcript and the selection
-     * stay as they were (only a partly applied multi-Segmento Riassegna re-reads what did change). A
-     * success re-reads the transcript and the panel (the merge banner disappears on its own, AC-216). A command that
-     * committed but whose after-commit follow-up failed is a success (D-0062, [comandoConfermato]).
-     * One at a time (no double submit); never blocked by a pending card command (AC-414).
-     */
-    private fun eseguiRevisione(operazione: String, blocco: () -> RisultatoRevisione) {
-        // AC-454: dividiVoce/riassegnaA/unisci (the merge banner's action included) send no command
-        // while read-only — the view already disables their controls, this is the presenter's own
-        // backstop (unisci() in particular has no `abilitata` guard of its own to rely on).
-        if (modificheBloccate || revisioneInCorso) return
-        revisioneInCorso = true
-        lanciaComando(operazione, libera = { revisioneInCorso = false }) {
-            val risultato = withContext(io) { blocco() }
-            if (risultato.modificato) ricaricaDopoRevisione(azzeraSelezione = risultato.esito is Esito.Ok)
-            when (val esito = risultato.esito) {
-                is Esito.Ok -> Unit
-                is Esito.Errore -> impostaErrore(messaggioPer(esito.errore))
-                null -> impostaErrore(MESSAGGIO_ERRORE_GENERICO)
-            }
-        }
-    }
-
     private suspend fun ricaricaDopoRevisione(azzeraSelezione: Boolean) {
         // AC-I84 (L189): cancel BEFORE the reload read — an in-flight pre-join pair must never be published meanwhile.
         lavoroTraParti?.cancel()
@@ -540,59 +400,10 @@ internal class StatoVoci(
         }
         vista = nuova
         stato.update { d -> if (d is RegistrazioneUiStato.Dati) d.copy(segmenti = segmentiDi(nuova)) else d }
-        val esistenti = nuova.segmenti.filter { it.segmentoId in selezione }
-        selezione = if (azzeraSelezione || esistenti.map { it.voceId }.distinct().size > 1) {
-            emptySet()
-        } else {
-            esistenti.map { it.segmentoId }.toSet()
-        }
+        revisione.riallinea(nuova, azzera = azzeraSelezione)
         proposte.clear()
         ricaricaParlanti()
     }
-
-    // --- "Dai un nome a questa frase" + "Riassegna per somiglianza" (ADR 0019 §5/§6) ----------------
-
-    /**
-     * AC-526/AC-527/AC-529: the case decision ([passiNominaFrase], pure) then ONE `nominaFrase` through the
-     * per-project [ComandiVoce] — the presenter never calls a command itself. The row goes pending at once;
-     * whatever the outcome the transcript and the panel are re-read (a first step may have committed: e.g.
-     * the new Voce of case (d) stays unnamed when naming it fails, NomeGiaInUso shown inline).
-     */
-    fun nominaFrase(obiettivo: ObiettivoNome) {
-        val v = vista
-        val segmento = v?.let(::barraDi)?.frase?.takeIf { it.abilitata }?.segmentoId
-        val passi = segmento?.let { passiNominaFrase(it, checkNotNull(v), dati?.identificate.orEmpty(), obiettivo) }
-        if (segmento == null || passi == null) return
-        val inizio = sorgenti.clock.instant()
-        inviiFrasi[segmento] = inizio
-        programmaSoglia(FraseRef(registrazioneId, segmento), inizio)
-        lanciaComando("nomina la frase $segmento", libera = { inviiFrasi.remove(segmento) }) {
-            val esito = withContext(io) { sorgenti.comandi.nominaFrase(registrazioneId, segmento, passi) }
-            ricaricaDopoRevisione(azzeraSelezione = esito is Esito.Ok)
-            (esito as? Esito.Errore)?.let { impostaErrore(messaggioPer(it.errore)) }
-        }
-    }
-
-    /** AC-529: 'Annulla' on a naming past the threshold — the steps not yet run are skipped. */
-    fun annullaFrase(segmento: SegmentoId) = sorgenti.comandi.annullaFrase(FraseRef(registrazioneId, segmento))
-
-    /** AC-528: 'Togli conferma' → `ConfermaSegmento(false)` on the ONE selected, confirmed Segmento. */
-    fun togliConferma() {
-        val menu = vista?.let(::barraDi)?.frase?.takeIf { it.abilitata && it.confermato } ?: return
-        val operazione = "togli conferma ${menu.segmentoId}"
-        eseguiRevisione(operazione) {
-            val comando =
-                ConfermaSegmento(registrazioneId, menu.segmentoId, confermato = false, incontroDelleVoci = incontroId)
-            val esito = comandoConfermato(operazione) { sorgenti.confermaSegmento(comando) }
-            RisultatoRevisione(esito, esito is Esito.Ok)
-        }
-    }
-
-    fun calcolaSomiglianza() = somiglianza.calcola()
-
-    fun applicaSomiglianza() = somiglianza.applica()
-
-    fun annullaSomiglianza() = somiglianza.annulla()
 
     private fun impostaErrore(messaggio: String) =
         stato.update { d -> if (d is RegistrazioneUiStato.Dati) d.copy(errore = messaggio) else d }
@@ -601,9 +412,6 @@ internal class StatoVoci(
 
     private fun cartaDi(voceId: VoceId): CartaVoce? =
         (stato.value as? RegistrazioneUiStato.Dati)?.pannello?.carte?.find { it.voceId == voceId }
-
-    private fun voceDellaSelezione(v: TrascrittoView): VoceId? =
-        v.segmenti.firstOrNull { it.segmentoId in selezione }?.voceId
 
     /** Rebuilds the labels, the panel and the toolbar from the raw inputs above. */
     fun pubblica() {
@@ -617,12 +425,12 @@ internal class StatoVoci(
                         riga.copy(
                             etichettaVoce = etichetta(v, riga.voceId),
                             confermato = v.segmenti.find { it.segmentoId == riga.segmentoId }?.confermato == true,
-                            attesaFrase = attesaFraseDi(riga.segmentoId),
+                            attesaFrase = revisione.attesaFraseDi(riga.segmentoId),
                         )
                     },
                     pannello = pannelloDi(v, d.audioDisponibile),
-                    selezione = selezione,
-                    barraSelezione = barraDi(v),
+                    selezione = revisione.selezione,
+                    barraSelezione = revisione.barraDi(v),
                     // AC-454: the panel's own third banner line — only while the base presenter's
                     // soloLettura (AC-452) is set; the base presenter never writes this field itself.
                     bannerRitrascrizionePannello = if (soloLettura) MESSAGGIO_RITRASCRIZIONE_PERSA else null,
@@ -634,11 +442,8 @@ internal class StatoVoci(
 
     private fun etichetta(v: TrascrittoView, voceId: VoceId): String = etichettaDiVoce(v, voceId, nomeDi(voceId))
 
-    private fun opzioni(v: TrascrittoView): List<OpzioneVoce> =
-        v.voci.map { OpzioneVoce(it.voceId, etichetta(v, it.voceId)) }
-
     private fun pannelloDi(v: TrascrittoView, audioDisponibile: Boolean): PannelloVoci {
-        val tutte = opzioni(v)
+        val tutte = opzioniDi(v, ::nomeDi)
         // AC-I77: the Incontro's Voci that do not speak in this Parte, with the Parti they speak in.
         val inAltreParti = dati?.vociIncontro.orEmpty().filter { r -> v.voci.none { it.voceId == r.voceId } }
             .map { r -> nomeDi(r.voceId).let { nome -> OpzioneVoce(r.voceId, nome ?: r.etichetta, r.parti, nome) } }
@@ -666,10 +471,10 @@ internal class StatoVoci(
                 .associate { it.registrazioneId to it.numero },
             // AC-454: the merge banner's action disabled too — '▶ estratto' stays governed only by
             // estrattiDisponibili (audio availability), untouched by soloLettura.
-            unioneAbilitata = !revisioneInCorso && !modificheBloccate,
+            unioneAbilitata = !revisione.revisioneInCorso && !modificheBloccate,
             somiglianza = somiglianza.pannello(
                 riferimentiDi(v, dati?.identificate.orEmpty(), dati?.attivi.orEmpty()),
-                bloccato = soloLettura || comandiPendenti || revisioneInCorso || dati == null,
+                bloccato = soloLettura || comandiPendenti || revisione.revisioneInCorso || dati == null,
                 parti = v.parti.associate { it.registrazioneId to it.numero },
             ) { etichetta(v, it) },
         )
@@ -697,32 +502,36 @@ internal class StatoVoci(
             ContenutoCarta.DaIdentificare(proposta, galleriaVuota = d.attivi.isEmpty())
         }
     }
+}
 
-    private fun barraDi(v: TrascrittoView): BarraSelezione? {
-        val voceId = voceDellaSelezione(v) ?: return null
-        val interaVoce = v.segmenti.filter { it.voceId == voceId }.all { it.segmentoId in selezione }
-        return BarraSelezione(
-            voceId = voceId,
-            etichetta = etichetta(v, voceId),
-            numeroSegmenti = selezione.size,
-            dividiAbilitato = !interaVoce,
-            spiegazioneDividi = if (interaVoce) SPIEGAZIONE_DIVIDI_INTERA_VOCE else null,
-            destinazioni = opzioni(v).filter { it.voceId != voceId },
-            // AC-454: 'Riassegna a ▾'/'Dividi voce' disabled while read-only (and during a similarity run).
-            abilitata = !revisioneInCorso && !modificheBloccate,
-            frase = if (selezione.size == 1) menuFrase(v, selezione.single()) else null,
-        )
-    }
-
-    /** AC-526/AC-528/AC-529: the naming menu of the ONE selected Segmento. */
-    private fun menuFrase(v: TrascrittoView, segmento: SegmentoId) = MenuFrase(
-        segmentoId = segmento,
-        parlanti = dati?.attivi.orEmpty(),
-        confermato = v.segmenti.find { it.segmentoId == segmento }?.confermato == true,
-        abilitata = !revisioneInCorso && !modificheBloccate && dati != null && attesaFraseDi(segmento) == null,
-    )
+/** What the Voci panel reads from Parlanti (AC-405), kept until a newer read succeeds. */
+internal class DatiParlanti(
+    val identificate: Map<VoceId, VoceIdentificata>,
+    val attivi: List<ParlanteAttivo>,
+    val unioni: List<PropostaDiUnione>,
+    /** AC-I77: the Incontro's Voci (empty over a 1-Parte Incontro: not read). */
+    val vociIncontro: List<VoceIncontroRiga>,
+) {
+    /** AC-405: the attributed Nome of [voceId], if any. */
+    fun nomeDi(voceId: VoceId): String? = identificate[voceId]?.nome
 }
 
 /** AC-405: the Nome if attributed, else trascritto-view's own "Voce n". */
 internal fun etichettaDiVoce(vista: TrascrittoView, voceId: VoceId, nome: String?): String =
     nome ?: vista.voci.find { it.voceId == voceId }?.etichetta ?: "Voce ${voceId.numero}"
+
+/** Every Voce of [vista] as a menu option, under its label. */
+internal fun opzioniDi(vista: TrascrittoView, nomeDi: (VoceId) -> String?): List<OpzioneVoce> =
+    vista.voci.map { OpzioneVoce(it.voceId, etichettaDiVoce(vista, it.voceId, nomeDi(it.voceId))) }
+
+/** AC-412/AC-529: a command pending since [inizio] is in progress, then 'In attesa…' past the threshold. */
+internal fun attesaDa(inizio: Instant?, adesso: Instant): AttesaComando? {
+    if (inizio == null) return null
+    return if (trascorsiMs(inizio, adesso) >= RegistrazionePresenter.SOGLIA_ATTESA_VISIBILE_MS) {
+        AttesaComando.IN_ATTESA
+    } else {
+        AttesaComando.IN_CORSO
+    }
+}
+
+private fun trascorsiMs(inizio: Instant, adesso: Instant): Long = Duration.between(inizio, adesso).toMillis()
