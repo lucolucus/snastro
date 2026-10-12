@@ -8,24 +8,27 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.util.Properties
+import java.util.logging.Level
+import java.util.logging.Logger
 
 private const val CHIAVE_TEMA = "tema"
 private const val CHIAVE_CARTELLA_PROGETTI = "cartellaProgetti"
 
+private val log: Logger = Logger.getLogger(PreferenzeAppFile::class.java.name)
+
 /**
  * [PreferenzeApp] over a small `.properties` [file] in the per-user app-data folder (AC-348's, next to the project
- * registry — never inside a project folder). [leggi] never fails: a missing, unreadable or partly invalid file gives
- * the defaults for what it cannot read. [salva] writes a sibling temp file and moves it over [file], so a crash
- * mid-write never leaves a truncated file behind.
+ * registry — never inside a project folder). [leggi] never throws: a missing, unreadable or partly invalid file gives
+ * the defaults for what it cannot read, and an unreadable one is logged with its cause (CR-7). [salva] writes a
+ * sibling temp file and moves it over [file], so a crash mid-write never leaves a truncated file behind.
  */
 internal class PreferenzeAppFile(private val file: Path) : PreferenzeApp {
     override fun leggi(): Preferenze {
         val proprieta = Properties()
         try {
             if (Files.isRegularFile(file)) Files.newBufferedReader(file).use { proprieta.load(it) }
-        } catch (
-            @Suppress("SwallowedException") e: IOException,
-        ) {
+        } catch (e: IOException) {
+            log.log(Level.WARNING, "leggi le preferenze da $file", e)
             return Preferenze()
         }
         return Preferenze(
