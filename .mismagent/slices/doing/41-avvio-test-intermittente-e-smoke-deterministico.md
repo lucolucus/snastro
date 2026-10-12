@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R2
 Examples:
+Base: 53a050289e93bb2deb8ac597e72f1ed6d2680375
 
 The `:avvio` suite is not deterministic, and every slice's gate runs it (release review R1-2, tests 4):
 - One forced `./gradlew cleanTest check --no-build-cache --continue` failed with ":avvio:test … 418 tests completed,
