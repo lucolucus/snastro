@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R2
 Examples:
+Base: 95b3f17b5098a60911ad7ebfd5e065bce2d73d3b
 After: 43
 
 The lunghezza massima editor exists twice, and the two copies disagree (release review R1-2, duplication 4):
