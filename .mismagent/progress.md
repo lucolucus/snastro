@@ -268,3 +268,9 @@
 - ui 722/722, no test touched; `./gradlew check` exit 0. Smoke PNGs `cmp`-identical to Base: the `git archive HEAD` copy matched Base's 9 renders in 8 of 8 runs.
 - `s3-parte-2` is racy in the main checkout: f6152cef… (Voce 3's Proposta still loading) in 3 of 12 runs there, while Base's archive gave f46b4275… 12 of 12. The cause is `Smoke.kt:151`, which does not wait for the Proposta (design note added). Compare smoke renders from a `git archive` copy.
 - Proposal `update screen-split` (S3 citations) appended; design note on `MenuAltreAzioniCarta` now points at `CartaVoceVista.kt`.
+
+## 41-avvio-test-intermittente-e-smoke-deterministico — 2026-10-12
+- Step 1, no `:avvio` failure in the hour: 15 runs of `./gradlew cleanTest check --no-build-cache --continue` on a `git archive` copy of Base (08:29–09:30) plus 12 on HEAD's main checkout in parallel; every kept XML set (scratchpad `loop/runs/xml-*`, `headloop/xml-*`) is 418 tests, 0 failures. Not declared fixed (Decision): R1-2's failure stays unnamed. The archive's only steady failures are ADR-0016/0026 checks (`adr-0016-nativi-non-versionati.sh:8`: "not a git work tree"), and one run lost 12 Konsist tests in `:parlanti:applicazione` (`FileTreeWalk.kt:62`) — design note.
+- Step 3: the five tests no longer leak a scope — `SessioneProgettoImplTest`/`…ChiudiTest` record each scope and cancel it in `@AfterEach` after closing the sessions; `RinominaRegistrazioneTest` closes the session and cancels its scope in `@AfterEach`; the two coda tests build the queue inside `conScopeDiProva`. No assertion changed.
+- Step 4: `Smoke.kt` waits for 'Sembra' + 'Anna' under `voce-3-candidato-0` and no `voce-*-proposta-caricamento` before `s3-parte-2`. 10 renders of a HEAD `git archive` (under load) give `s3-parte-2` f46b4275… 10/10, and all 9 PNGs equal Base's archive render (`shasum`).
+- `mm gate` green. Next: if the `:avvio` flake recurs, the kept-XML loop above is the way to name it.
