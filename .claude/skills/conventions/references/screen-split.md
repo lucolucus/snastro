@@ -6,6 +6,9 @@ Extracted helpers needed across files are `internal`, otherwise `private`; scree
 as `internal`. Remove unnecessary suppressions; keep a reasoned file-level suppression only for a cohesive file still
 over the threshold. Existing layouts need not be renamed solely for conformity.
 
+A file-level suppression's reason states this file's own cohesion, never "same as <other file>" (2026-10-12,
+decided by the user).
+
 **Why.** The view half of presenter-split: each flow gets a small home while the screen keeps one entry, and the thin-UI
 rule (RC-2 in `.mismagent/code-rules.md`) holds. It describes future practice, not an already uniform layout: some
 screens expose a differently named main composable (e.g. `SezioneSomiglianza`, `PannelloVociVista`).

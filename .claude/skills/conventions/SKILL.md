@@ -14,3 +14,4 @@ The project's rules live in `.mismagent/architecture.md`, `.mismagent/code-rules
 - presenter-split → `references/presenter-split.md`
 - non-fatal-faults → `references/non-fatal-faults.md`
 - screen-split → `references/screen-split.md`
+- smoke-renders → `references/smoke-renders.md`

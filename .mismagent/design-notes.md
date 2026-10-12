@@ -31,3 +31,4 @@
 - housekeeping (release review R1-1 advice): untracked `documento/*/build` dirs from a removed module hold 134 stale
   test results that inflate any glob over test XML. They are not in `settings.gradle.kts` and are safe to delete. That
   is not a slice.
+- screen-split (2026-10-12): `ui/src/main/kotlin/snastro/ui/riassunto/SchedaRiassunto.kt:1-3` justifies its `TooManyFunctions` by `SchermataPannelloVoci.kt`, which no longer carries one — restate its own cohesion or split it.
