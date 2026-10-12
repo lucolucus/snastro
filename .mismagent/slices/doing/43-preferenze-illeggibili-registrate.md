@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R2
 Examples:
+Base: e66d64f18acced555382f0534457a5487e47c46c
 
 `PreferenzeAppFile.leggi` (`avvio/src/main/kotlin/snastro/avvio/PreferenzeAppFile.kt:22-35`) turns an unreadable
 preferences file into the defaults and drops the `IOException` (a `@Suppress("SwallowedException")` at `:27`). The
