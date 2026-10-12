@@ -284,3 +284,8 @@
 - B1: the JUL log spy now lives once in `:supporto-test` as `registriDi(logger, blocco)` (public inline, so suspend calls in the block still work); `registriLogUi` delegates, `PreferenzeAppFileTest` calls it with a strongly held file-level logger.
 - The unreadable-file test now asserts the full message `leggi le preferenze da $file` (review advice).
 - Proposed `create test-helpers` in conventions-proposals.md. `SessioneProgettoImplChiudiTest.kt:281-290` keeps its own filtering spy on `snastro` (not in B1's fix; could move to `registriDi` + filter later).
+
+## 42-un-editor-della-lunghezza-massima — 2026-10-12
+- Narrowed by the slice's Decision: one `internal fun lunghezzaMassimaDa(testo, minimo, massimo): Int?` (trim, parse, range) in `ui/src/main/kotlin/snastro/ui/impostazioni/LunghezzaMassima.kt`, called by `RiassuntoPresenter.salvaLunghezzaMassima` and `LunghezzaRiassuntoPresenter.salva`.
+- Visible change: S3 now saves " 500 " as 500 (new test in `RiassuntoPresenterTest`, red before: "expected [500] but was []"); the same case pins Impostazioni (`LunghezzaRiassuntoPresenterTest`, green before). No existing assertion changed.
+- Deferred (design note appended): S3's editor holder out of `RiassuntoPresenter` and the shared save step; `RiassuntoPresenter` keeps its `TooManyFunctions`. `mm gate` green.
