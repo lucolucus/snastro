@@ -1,0 +1,382 @@
+diff --git a/avvio/build.gradle.kts b/avvio/build.gradle.kts
+index 770926e6..5ba4af0d 100644
+--- a/avvio/build.gradle.kts
++++ b/avvio/build.gradle.kts
+@@ -203,6 +203,6 @@ tasks.register<Test>("benchmarkRiassunto") {
+             "-Dsnastro.benchmark.campione=${campione.orNull.orEmpty()}",
+             "-Dsnastro.benchmark.modello=${modello.orNull.orEmpty()}",
+             "-Dsnastro.llm.native.path=${cartellaNativiApp.get().asFile.absolutePath}",
+-        )
++        ) + project.properties.filterKeys { it.startsWith("spike.") }.map { (k, v) -> "-Dsnastro.$k=$v" }
+     }
+ }
+diff --git a/avvio/src/test/kotlin/snastro/avvio/sintesi/BenchmarkRiassuntoTest.kt b/avvio/src/test/kotlin/snastro/avvio/sintesi/BenchmarkRiassuntoTest.kt
+index 46a85d18..dbdc34e7 100644
+--- a/avvio/src/test/kotlin/snastro/avvio/sintesi/BenchmarkRiassuntoTest.kt
++++ b/avvio/src/test/kotlin/snastro/avvio/sintesi/BenchmarkRiassuntoTest.kt
+@@ -80,7 +80,7 @@ class BenchmarkRiassuntoTest {
+         val dispatcher = DispatcherEventiFinta(UnitaDiLavoroFinta(riassunti)).apply {
+             registraDopoCommit { eventi += it to System.nanoTime() }
+         }
+-        riassunti.salva(unRiassunto("r1", incontro, parole = LunghezzaMassimaParole.PREDEFINITA)).atteso()
++        riassunti.salva(unRiassunto("r1", incontro, argomento = System.getProperty("snastro.spike.argomento")?.takeIf { it.isNotBlank() }, parole = System.getProperty("snastro.spike.tetto")?.toIntOrNull() ?: LunghezzaMassimaParole.PREDEFINITA)).atteso()
+         val servizio = EseguiProssimoRiassuntoServizio(
+             dispatcher.unitaDiLavoro,
+             Clock.systemUTC(),
+diff --git a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/MisuraRisposta.kt b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/MisuraRisposta.kt
+index d8b9a935..54799fa2 100644
+--- a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/MisuraRisposta.kt
++++ b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/MisuraRisposta.kt
+@@ -11,7 +11,7 @@ import snastro.sintesi.applicazione.porte.RichiestaRiassunto
+  */
+ internal data class MisuraRisposta(val obiettivoParole: Int, val paroleSommario: Int, val massimoVoci: Int) {
+     companion object {
+-        const val QUOTA_DEL_TRASCRITTO = 0.4
++        val QUOTA_DEL_TRASCRITTO = System.getProperty("snastro.spike.quota")?.toDoubleOrNull() ?: 0.4
+         const val QUOTA_SOMMARIO = 0.4
+         const val GRANA = 50
+         const val MINIMO_OBIETTIVO = 250
+@@ -29,7 +29,7 @@ internal data class MisuraRisposta(val obiettivoParole: Int, val paroleSommario:
+             return MisuraRisposta(
+                 obiettivoParole = obiettivo,
+                 paroleSommario = ((obiettivo * QUOTA_SOMMARIO / GRANA).toInt() * GRANA).coerceAtLeast(GRANA),
+-                massimoVoci = (obiettivo / PAROLE_PER_VOCE).coerceIn(MINIMO_VOCI, MASSIMO_VOCI),
++                massimoVoci = if (System.getProperty("snastro.spike.senzaMassimo") == "true") MASSIMO_VOCI else (obiettivo / PAROLE_PER_VOCE).coerceIn(MINIMO_VOCI, MASSIMO_VOCI),
+             )
+         }
+ 
+diff --git a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/ModelloLinguisticoLlama.kt b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/ModelloLinguisticoLlama.kt
+index 3d48c67f..d3d12f23 100644
+--- a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/ModelloLinguisticoLlama.kt
++++ b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/ModelloLinguisticoLlama.kt
+@@ -69,7 +69,7 @@ public class ModelloLinguisticoLlama(
+         val apertura = millisDa(inizio)
+         var fineGenerazione = 0L
+         val generazione = aperto.modello.use { modello ->
+-            (if (annulla()) null else modello.generate(prompt, opzioni(richiesta), annulla))
++            (if (annulla()) null else if (SpikeDuePassaggi.attivo) SpikeDuePassaggi.genera(modello, richiesta, CAMPIONAMENTO, annulla) else modello.generate(prompt, opzioni(richiesta), annulla))
+                 .also { fineGenerazione = System.nanoTime() }
+         }
+         registraMisure(generazione, apertura, fineGenerazione, aperto.gpu)
+@@ -139,6 +139,7 @@ public class ModelloLinguisticoLlama(
+                 else -> runtime("generazione fallita", errore)
+             }
+             is LlamaResult.Ok -> when {
++                spikeGrezzo(generazione.value.text, generazione.value.stop) -> error("mai")
+                 annulla() -> Esito.Errore(ErroreApplicazioneSintesi.Annullato) // a late cancel: the answer is discarded
+                 generazione.value.stop == StopReason.MAX_TOKENS ->
+                     Esito.Errore(ErroreApplicazioneSintesi.RispostaNonValida)
+@@ -147,6 +148,13 @@ public class ModelloLinguisticoLlama(
+             }
+         }
+ 
++    private fun spikeGrezzo(testo: String, stop: StopReason): Boolean {
++        System.getProperty("snastro.spike.grezzo")?.takeIf { it.isNotBlank() }?.let {
++            java.nio.file.Files.writeString(java.nio.file.Path.of(it), "stop=$stop\n$testo")
++        }
++        return false
++    }
++
+     private fun runtime(contesto: String, errore: LlamaError): Esito<Nothing> =
+         Esito.Errore(ErroreApplicazioneSintesi.ErroreRuntime("$contesto: $errore"))
+ 
+diff --git a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/PromptRiassunto.kt b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/PromptRiassunto.kt
+index df0710ad..a85a6c81 100644
+--- a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/PromptRiassunto.kt
++++ b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/PromptRiassunto.kt
+@@ -35,7 +35,11 @@ internal object PromptRiassunto {
+             - Ogni decisione, questione aperta, azione e punto chiave deve citare in "fonti" i numeri delle righe (es. 12 per s12) da cui deriva. Usa SOLO numeri presenti.
+             - "parlante" e "responsabile" sono il numero n di un V<n> della legenda, oppure null se non è chiaro.
+             - Una decisione è qualcosa su cui il gruppo ha concordato; una questione aperta è qualcosa rimasto da decidere; un'azione è un compito che qualcuno deve fare. Se non ce ne sono, lascia la lista vuota: non inventare.
+-            """.trimIndent(),
++            """.trimIndent().let {
++                if (System.getProperty("snastro.spike.senzaNonInventare") == "true") {
++                    it.replace(" Se non ce ne sono, lascia la lista vuota: non inventare.", "")
++                } else it
++            },
+         )
+         val misura = MisuraRisposta.di(richiesta)
+         append("\n- Lunghezza: scrivi circa ${misura.obiettivoParole} parole in tutto, mai più di ")
+@@ -44,11 +48,19 @@ internal object PromptRiassunto {
+         append("azioni e punti chiave: ognuno in una o due frasi, con il contesto che serve a capirlo senza ")
+         append("leggere la trascrizione. Includi solo voci distinte che compaiono davvero nella trascrizione: non ")
+         append("ripetere mai una voce, né la stessa cosa con altre parole, e non riportare nei punti chiave ciò che è ")
+-        append("già tra le decisioni. Il massimo è ${misura.massimoVoci} voci per tipo, ma è un limite, non un ")
+-        append("obiettivo: meglio poche voci che voci ripetute.")
++        if (System.getProperty("snastro.spike.senzaMassimo") == "true") {
++            append("già tra le decisioni. Meglio poche voci che voci ripetute o non dette nella riunione.")
++        } else {
++            append("già tra le decisioni. Il massimo è ${misura.massimoVoci} voci per tipo, ma è un limite, non un ")
++            append("obiettivo: meglio poche voci che voci ripetute.")
++        }
+         richiesta.argomento?.let { argomento ->
+             append("\n- Argomento della riunione indicato dall'utente: \"${neutro(argomento)}\". ")
+-            append("Riassumi solo ciò che riguarda questo argomento; tutto il resto è fuori tema e va tralasciato.")
++            if (System.getProperty("snastro.spike.argomentoContesto") == "true") {
++                append("Usalo per capire di cosa parla la riunione; non tralasciare per questo decisioni, questioni, azioni o punti chiave.")
++            } else {
++                append("Riassumi solo ciò che riguarda questo argomento; tutto il resto è fuori tema e va tralasciato.")
++            }
+         }
+     }
+ 
+diff --git a/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/SpikeDuePassaggi.kt b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/SpikeDuePassaggi.kt
+new file mode 100644
+index 00000000..e8ee9f03
+--- /dev/null
++++ b/sintesi/adattatori/src/main/kotlin/snastro/sintesi/adattatori/ml/SpikeDuePassaggi.kt
+@@ -0,0 +1,254 @@
++package snastro.sintesi.adattatori.ml
++
++import io.github.lucolucus.llamajni.GenerateOptions
++import io.github.lucolucus.llamajni.Generation
++import io.github.lucolucus.llamajni.LlamaModel
++import io.github.lucolucus.llamajni.LlamaResult
++import io.github.lucolucus.llamajni.Sampling
++import io.github.lucolucus.llamajni.StopReason
++import snastro.sintesi.applicazione.porte.RichiestaRiassunto
++import java.nio.file.Files
++import java.nio.file.Path
++
++/** SPIKE H1 "due passaggi" (throwaway, branch spike/h1): pass 1 sommario only, pass 2 the four lists only, same open model. */
++internal object SpikeDuePassaggi {
++    val attivo: Boolean get() = System.getProperty("snastro.spike.duePassaggi") == "true"
++    private fun prop(k: String) = System.getProperty("snastro.spike.$k")?.takeIf { it.isNotBlank() }
++
++    private const val STRINGA = """
++string ::= "\"" char* "\""
++char ::= [^"\\\x7F\x00-\x1F] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F]{4})
++ws ::= | " "
++"""
++    private val GRAMMATICA_SOMMARIO = "root ::= \"{\" ws \"\\\"sommario\\\":\" ws string ws \"}\"\n$STRINGA"
++
++    private fun grammaticaListe(massimo: Int): String =
++        GrammaticaRisposta.per(massimo).replace("\"\\\"sommario\\\":\" ws string \",\" ws ", "").also {
++            check(!it.contains("sommario")) { "grammatica liste: sommario ancora presente" }
++        }
++
++    private const val INTRO = """Sei un assistente che riassume trascrizioni di riunioni di lavoro, in italiano.
++La trascrizione è automatica: contiene errori di riconoscimento, frasi spezzate e parti in inglese.
++Ogni riga ha la forma [s<numero> V<n>] testo. In fondo c'è la legenda dei parlanti: righe V<n> = nome.
++Regole:
++- Scrivi tutto in italiano. Non scrivere mai i nomi dei parlanti: nei testi indica un parlante SOLO come {V<n>}, ad esempio {V2}.
++- Ignora chiacchiere, battute e argomenti che non c'entrano con lo scopo della riunione."""
++
++    private fun argomento(richiesta: RichiestaRiassunto, liste: Boolean): String {
++        val a = richiesta.argomento ?: return ""
++        if (liste && prop("argomentoListe") == "nessuno") return ""
++        val coda = if (liste) {
++            "Usalo per capire di cosa parla la riunione; non tralasciare per questo decisioni, questioni, azioni o punti chiave."
++        } else {
++            "Usalo per capire di cosa parla la riunione; racconta comunque tutta la riunione."
++        }
++        return "\n- Argomento della riunione indicato dall'utente: \"$a\". $coda"
++    }
++
++    private fun chat(sistema: String, richiesta: RichiestaRiassunto) =
++        "<|im_start|>system\n$sistema<|im_end|>\n<|im_start|>user\n${richiesta.ingresso}<|im_end|>\n" +
++            "<|im_start|>assistant\n<think>\n\n</think>\n\n"
++
++    private val DEFINIZIONI = mapOf(
++        "decisioni" to "una decisione è qualcosa che il gruppo ha stabilito insieme: una scelta, una regola, un piano o una data concordati",
++        "questioni_aperte" to "una questione aperta è un problema o una domanda discussi e rimasti senza una soluzione scelta: ciò che resta da decidere",
++        "azioni" to "un'azione è un compito concreto che qualcuno deve fare dopo la riunione",
++        "punti_chiave" to "un punto chiave è un'informazione importante emersa che non è una decisione, una questione aperta o un'azione",
++    )
++    private val DEFINIZIONI_STRETTE = mapOf(
++        "decisioni" to "una decisione è un accordo che il gruppo prende esplicitamente durante la riunione (qualcuno propone e gli altri approvano, o il gruppo dice che si fa così, o fissa una data). Una proposta, un'idea discussa o una soluzione suggerita su cui non c'è un accordo esplicito NON è una decisione: lasciala fuori da questa lista",
++        "azioni" to "un'azione è un compito concreto che qualcuno deve fare dopo la riunione, su cui il gruppo è d'accordo. Mettere in pratica una proposta che il gruppo non ha approvato NON è un'azione: al massimo è valutarla o provarla",
++    )
++
++    private fun stretta(chiave: String): Boolean =
++        prop("decisioneStretta") == "true" && chiave in DEFINIZIONI_STRETTE ||
++            prop("soloDecisioneStretta") == "true" && chiave == "decisioni"
++
++    private fun definizione(chiave: String): String? =
++        if (stretta(chiave)) DEFINIZIONI_STRETTE.getValue(chiave) else DEFINIZIONI[chiave]
++
++    private val FORMA = mapOf(
++        "decisioni" to "{\"testo\": \"...\", \"fonti\": [numeri di riga]}",
++        "questioni_aperte" to "{\"testo\": \"...\", \"fonti\": [numeri di riga]}",
++        "azioni" to "{\"testo\": \"...\", \"fonti\": [numeri di riga], \"responsabile\": n oppure null}",
++        "punti_chiave" to "{\"testo\": \"...\", \"fonti\": [numeri di riga], \"parlante\": n oppure null}",
++    )
++    private const val REGOLE_VOCI = """- Ogni voce è in una o due frasi, con il contesto che serve a capirla senza leggere la trascrizione, e cita in "fonti" i numeri delle righe (es. 12 per s12) da cui deriva. Usa SOLO numeri presenti.
++- "parlante" e "responsabile" sono il numero n di un V<n> della legenda, oppure null se non è chiaro.
++- Includi solo voci distinte che compaiono davvero nella trascrizione: non ripetere mai una voce, né la stessa cosa con altre parole. Meglio poche voci che voci ripetute o non dette nella riunione. Se non ce ne sono, lascia la lista vuota: non inventare."""
++
++    fun promptListeFormato(richiesta: RichiestaRiassunto): String = chat(
++        INTRO + "\n- Non scrivere il sommario: riporta solo decisioni, questioni aperte, azioni e punti chiave della riunione.\n" +
++            "- Rispondi con un JSON {\"decisioni\": [...], \"questioni_aperte\": [...], \"azioni\": [...], \"punti_chiave\": [...]}.\n" +
++            DEFINIZIONI.keys.joinToString("\n") { "- In \"$it\": ${DEFINIZIONI[it]}. Ogni voce è ${FORMA[it]}." } + "\n" +
++            REGOLE_VOCI + argomento(richiesta, liste = true),
++        richiesta,
++    )
++
++    fun promptUnaLista(richiesta: RichiestaRiassunto, chiave: String, sommario: String? = null): String = chat(
++        INTRO + "\n- Riporta solo la lista \"$chiave\" della riunione: ${definizione(chiave)}.\n" +
++            (if (sommario != null && stretta(chiave)) "- Questo è il sommario della riunione, già scritto da te: \"$sommario\". Usalo per distinguere ciò che è stato deciso da ciò che è stato solo proposto o discusso; le fonti vanno cercate nella trascrizione.\n" else "") +
++            "- Rispondi con un JSON {\"$chiave\": [...]}; ogni voce è ${FORMA[chiave]}.\n" +
++            REGOLE_VOCI + argomento(richiesta, liste = true),
++        richiesta,
++    )
++
++    private fun grammaticaUnaLista(chiave: String, massimo: Int): String {
++        val elenco = when (chiave) { "azioni" -> "elenco-az"; "punti_chiave" -> "elenco-pc"; else -> "elenco-el" }
++        val resto = GrammaticaRisposta.per(massimo).lines().filterNot { it.startsWith("root ::=") || it.startsWith("#") }
++        return (listOf("root ::= \"{\" ws \"\\\"$chiave\\\":\" ws $elenco ws \"}\"") + resto).joinToString("\n")
++    }
++
++    private fun conGuardia(annulla: () -> Boolean): () -> Boolean {
++        val limite = System.nanoTime() + 300_000_000_000L
++        return { annulla() || System.nanoTime() > limite }
++    }
++
++    fun promptSommario(richiesta: RichiestaRiassunto): String {
++        val misura = MisuraRisposta.di(richiesta)
++        return chat(
++            INTRO + "\n- Rispondi con un JSON {\"sommario\": \"...\"}: il sommario è un testo di circa " +
++                "${misura.paroleSommario} parole che racconta la riunione nell'ordine in cui si è svolta." +
++                argomento(richiesta, liste = false),
++            richiesta,
++        )
++    }
++
++    fun promptListe(richiesta: RichiestaRiassunto, massimo: Int, sommario: String?): String {
++        val conSommario = if (prop("sommarioNelleListe") == "true" && sommario != null) {
++            "\n- Questo è il sommario della riunione, già scritto da te: \"$sommario\". Usalo per trovare le decisioni, le questioni aperte e le azioni, e cita le fonti nella trascrizione."
++        } else {
++            ""
++        }
++        val numero = if (prop("numeroNelPrompt") == "true") {
++            " Il massimo è $massimo voci per tipo, ma è un limite, non un obiettivo."
++        } else {
++            ""
++        }
++        return chat(
++            INTRO + """
++- Non scrivere il sommario: riporta solo decisioni, questioni aperte, azioni e punti chiave della riunione, ognuno in una o due frasi, con il contesto che serve a capirlo senza leggere la trascrizione.
++- Ogni decisione, questione aperta, azione e punto chiave deve citare in "fonti" i numeri delle righe (es. 12 per s12) da cui deriva. Usa SOLO numeri presenti.
++- "parlante" e "responsabile" sono il numero n di un V<n> della legenda, oppure null se non è chiaro.
++- Una decisione è qualcosa su cui il gruppo ha concordato; una questione aperta è qualcosa rimasto da decidere; un'azione è un compito che qualcuno deve fare.${if (prop("senzaNonInventare") == "true") "" else " Se non ce ne sono, lascia la lista vuota: non inventare."}
++- Includi solo voci distinte che compaiono davvero nella trascrizione: non ripetere mai una voce, né la stessa cosa con altre parole, e non riportare nei punti chiave ciò che è già tra le decisioni. Meglio poche voci che voci ripetute o non dette nella riunione.$numero""" + conSommario +
++                argomento(richiesta, liste = true),
++            richiesta,
++        )
++    }
++
++    fun genera(
++        modello: LlamaModel,
++        richiesta: RichiestaRiassunto,
++        campionamento: Sampling,
++        annulla: () -> Boolean,
++    ): LlamaResult<Generation> {
++        val massimo = prop("massimoVoci")?.toInt() ?: MisuraRisposta.di(richiesta).massimoVoci
++        val maxSommario = prop("maxSommario")?.toInt() ?: 4_000
++        val maxListe = prop("maxListe")?.toInt() ?: 6_000
++        val t0 = System.nanoTime()
++        val uno = modello.generate(promptSommario(richiesta), GenerateOptions(maxSommario, GRAMMATICA_SOMMARIO, sampling = campionamento), conGuardia(annulla))
++        val t1 = System.nanoTime()
++        dump("1", uno, t0, t1)
++        if (uno !is LlamaResult.Ok || uno.value.stop == StopReason.MAX_TOKENS) return uno
++        if (prop("perLista") == "true") return perLista(modello, richiesta, campionamento, annulla, uno.value, massimo, t1)
++        val promptDue = if (prop("formatoNelPrompt") == "true") promptListeFormato(richiesta) else null
++        val due = if (promptDue != null) modello.generate(promptDue, GenerateOptions(maxListe, grammaticaListe(massimo), sampling = campionamento), conGuardia(annulla)) else modello.generate(promptListe(richiesta, massimo, (JsonMinimo.leggi(uno.value.text).getOrNull() as? Map<*, *>)?.get("sommario") as? String), GenerateOptions(maxListe, if (prop("listeSenzaGrammatica") == "true") null else grammaticaListe(massimo), lazyGrammar = prop("grammaticaNonPigra") != "true", sampling = campionamento), annulla)
++        val t2 = System.nanoTime()
++        dump("2", due, t1, t2)
++        if (due !is LlamaResult.Ok) return due
++        val unito = uno.value.text.trim().removeSuffix("}").trimEnd() + "," + due.value.text.trim().removePrefix("{")
++        prop("grezzo")?.let { Files.writeString(Path.of("$it.tempi"), "massimoVoci=$massimo pass1=${(t1 - t0) / 1_000_000} ms pass2=${(t2 - t1) / 1_000_000} ms\n") }
++        return LlamaResult.Ok(
++            due.value.copy(
++                text = unito,
++                promptTokens = uno.value.promptTokens + due.value.promptTokens,
++                generatedTokens = uno.value.generatedTokens + due.value.generatedTokens,
++            ),
++        )
++    }
++
++    private fun perLista(
++        modello: LlamaModel,
++        richiesta: RichiestaRiassunto,
++        campionamento: Sampling,
++        annulla: () -> Boolean,
++        uno: Generation,
++        massimo: Int,
++        t1: Long,
++    ): LlamaResult<Generation> {
++        val maxLista = prop("maxLista")?.toInt() ?: 2_500
++        val sommarioUno = (JsonMinimo.leggi(uno.text).getOrNull() as? Map<*, *>)?.get("sommario") as? String
++        val parti = mutableListOf(uno.text.trim().removeSuffix("}").trimEnd())
++        var ultimo = uno
++        var tempi = ""
++        var t = t1
++        for (chiave in listOf("decisioni", "questioni_aperte", "azioni", "punti_chiave")) {
++            val r = modello.generate(promptUnaLista(richiesta, chiave, sommarioUno), GenerateOptions(maxLista, grammaticaUnaLista(chiave, massimo), sampling = campionamento), conGuardia(annulla))
++            val fine = System.nanoTime()
++            dump(chiave, r, t, fine)
++            tempi += " $chiave=${(fine - t) / 1_000_000} ms"
++            t = fine
++            if (r !is LlamaResult.Ok || r.value.stop == StopReason.MAX_TOKENS) return r
++            val testoLista = if (chiave == "decisioni" && prop("verificaDecisioni") == "true") {
++                val v0 = System.nanoTime()
++                verifica(modello, richiesta, r.value.text, campionamento, annulla).also { tempi += " verifica=${(System.nanoTime() - v0) / 1_000_000} ms"; t = System.nanoTime() }
++            } else {
++                r.value.text
++            }
++            parti += testoLista.trim().removePrefix("{").removeSuffix("}").trim()
++            ultimo = r.value
++        }
++        prop("grezzo")?.let { Files.writeString(Path.of("$it.tempi"), "massimoVoci=$massimo pass1=${(t1 - (t1 - 0)) } liste:$tempi\n") }
++        return LlamaResult.Ok(ultimo.copy(text = parti.joinToString(",") + "}"))
++    }
++
++    private const val GRAMMATICA_VERDETTO = "root ::= \"{\" ws \"\\\"concordato\\\":\" ws (\"true\" | \"false\") ws \"}\"\nws ::= | \" \"\n"
++
++    /** Keeps only the decisions whose cited lines (±2) show an explicit agreement; one short generate per decision. */
++    private fun verifica(
++        modello: LlamaModel,
++        richiesta: RichiestaRiassunto,
++        json: String,
++        campionamento: Sampling,
++        annulla: () -> Boolean,
++    ): String {
++        val righe = richiesta.ingresso.lines().mapNotNull { r ->
++            Regex("""^\[s(\d+) """).find(r)?.let { it.groupValues[1].toInt() to r }
++        }.toMap()
++        val voci = ((JsonMinimo.leggi(json).getOrNull() as? Map<*, *>)?.get("decisioni") as? List<*>).orEmpty()
++        val log = StringBuilder()
++        val tenute = voci.filter { v ->
++            val m = v as Map<*, *>
++            val fonti = (m["fonti"] as List<*>).map { (it as Long).toInt() }
++            val contesto = fonti.flatMap { (it - 2)..(it + 2) }.distinct().sorted().mapNotNull { righe[it] }
++            val prompt = "<|im_start|>system\nSei un assistente che controlla il riassunto di una riunione, in italiano. " +
++                "Ti do alcune righe della trascrizione automatica (contiene errori di riconoscimento) e una frase del riassunto " +
++                "che dice che il gruppo ha DECISO qualcosa. Rispondi {\"concordato\": true} solo se queste righe mostrano che il " +
++                "gruppo ha concordato esplicitamente proprio ciò che dice la frase; rispondi {\"concordato\": false} se nelle righe " +
++                "è solo proposto, discusso, ipotizzato, o se le righe dicono altro.<|im_end|>\n<|im_start|>user\nRighe:\n" +
++                contesto.joinToString("\n") + "\n\nFrase: \"${m["testo"]}\"<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
++            val esito = modello.generate(prompt, GenerateOptions(32, GRAMMATICA_VERDETTO, sampling = campionamento), conGuardia(annulla))
++            val ok = esito is LlamaResult.Ok && esito.value.text.contains("true")
++            log.append("${if (ok) "TIENI" else "SCARTA"} ${m["testo"]} $fonti -> ${(esito as? LlamaResult.Ok)?.value?.text}\n")
++            ok
++        }
++        prop("grezzo")?.let { Files.writeString(Path.of("$it.verifica"), log.toString()) }
++        return "{\"decisioni\":[" + tenute.joinToString(",") { v ->
++            val m = v as Map<*, *>
++            "{\"testo\":" + stringa(m["testo"] as String) + ",\"fonti\":[" + (m["fonti"] as List<*>).joinToString(",") + "]}"
++        } + "]}"
++    }
++
++    private fun stringa(t: String): String =
++        "\"" + t.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n") + "\""
++
++    private fun dump(n: String, r: LlamaResult<Generation>, da: Long, a: Long) {
++        val f = prop("grezzo") ?: return
++        val testo = when (r) {
++            is LlamaResult.Ok -> "stop=${r.value.stop} ms=${(a - da) / 1_000_000} prompt=${r.value.promptTokens} gen=${r.value.generatedTokens} prefillMs=${r.value.timings.prefillMs} genMs=${r.value.timings.generationMs}\n${r.value.text}"
++            is LlamaResult.Err -> "ERR ${r.error}"
++        }
++        Files.writeString(Path.of("$f.pass$n"), testo)
++    }
++}
