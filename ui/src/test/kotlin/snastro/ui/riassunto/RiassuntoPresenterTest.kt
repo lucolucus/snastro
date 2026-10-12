@@ -631,6 +631,17 @@ class RiassuntoPresenterTest {
         assertEquals(listOf(1_500), a.chiamateLunghezza)
     }
 
+    // Slice 42: the trimming rule is the one Impostazioni › Riassunto uses (shared `lunghezzaMassimaDa`).
+    @Test
+    fun `AC-S138 un valore con spazi intorno e nell intervallo invia il numero`() = eseguiTest { a ->
+        runCurrent()
+        a.presenter.azioni.modificaLunghezzaMassima()
+        a.presenter.azioni.cambiaLunghezzaMassima(" 500 ")
+        a.presenter.azioni.salvaLunghezzaMassima()
+        runCurrent()
+        assertEquals(listOf(500), a.chiamateLunghezza)
+    }
+
     @Test
     fun `AC-S138 un valore valido invia il comando mostra Salvato e poi torna al testo`() = eseguiTest { a ->
         runCurrent()

@@ -55,7 +55,7 @@ class LunghezzaRiassuntoPresenter(
     fun salva() {
         val attuale = _stato.value as? LunghezzaRiassuntoUiStato.Dati
         if (attuale == null || attuale.inCorso) return
-        val parole = attuale.testo.trim().toIntOrNull()?.takeIf { it in attuale.minimo..attuale.massimo }
+        val parole = lunghezzaMassimaDa(attuale.testo, attuale.minimo, attuale.massimo)
         if (parole == null) {
             _stato.value = attuale.copy(errore = erroreLunghezzaMassima(attuale.minimo, attuale.massimo))
         } else {

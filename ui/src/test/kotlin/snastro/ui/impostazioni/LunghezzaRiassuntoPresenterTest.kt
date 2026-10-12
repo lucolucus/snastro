@@ -73,6 +73,19 @@ class LunghezzaRiassuntoPresenterTest {
     }
 
     @Test
+    fun `un valore con spazi intorno e nell intervallo viene salvato come numero`() = runTest {
+        val p = presenter()
+        advanceUntilIdle()
+
+        p.azioni.cambia(" 500 ")
+        p.azioni.salva()
+        advanceUntilIdle()
+
+        assertEquals(listOf(500), modifiche)
+        assertEquals(500, p.dati().salvata)
+    }
+
+    @Test
     fun `un valore fuori intervallo non viene salvato`() = runTest {
         val p = presenter()
         advanceUntilIdle()

@@ -25,6 +25,7 @@ import snastro.sintesi.applicazione.letture.StatoModelloVista
 import snastro.ui.AggiornamentiVista
 import snastro.ui.coda.PosizioniCoda
 import snastro.ui.eccezioneRegistrata
+import snastro.ui.impostazioni.lunghezzaMassimaDa
 import snastro.ui.modelli.ServizioModelli
 import snastro.ui.nonFataleRegistrato
 import snastro.ui.testi.MESSAGGIO_ERRORE_GENERICO
@@ -373,8 +374,8 @@ class RiassuntoPresenter(
         val corrente = lunghezzaMassimaLocale as? LunghezzaMassimaUiStato.Modifica
         // Finding #153 (rework, LOW): a Salva already in flight is ignored, same guard as [riassumi].
         if (salvaLunghezzaMassimaInCorso || corrente == null) return
-        val n = corrente.valore.toIntOrNull()
-        if (n == null || n < minimoLunghezza || n > massimoLunghezza) {
+        val n = lunghezzaMassimaDa(corrente.valore, minimoLunghezza, massimoLunghezza)
+        if (n == null) {
             mostraErroreLunghezzaMassima(corrente, erroreLunghezzaMassima(minimoLunghezza, massimoLunghezza))
             return
         }
