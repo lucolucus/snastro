@@ -274,3 +274,8 @@
 - Step 3: the five tests no longer leak a scope — `SessioneProgettoImplTest`/`…ChiudiTest` record each scope and cancel it in `@AfterEach` after closing the sessions; `RinominaRegistrazioneTest` closes the session and cancels its scope in `@AfterEach`; the two coda tests build the queue inside `conScopeDiProva`. No assertion changed.
 - Step 4: `Smoke.kt` waits for 'Sembra' + 'Anna' under `voce-3-candidato-0` and no `voce-*-proposta-caricamento` before `s3-parte-2`. 10 renders of a HEAD `git archive` (under load) give `s3-parte-2` f46b4275… 10/10, and all 9 PNGs equal Base's archive render (`shasum`).
 - `mm gate` green. Next: if the `:avvio` flake recurs, the kept-XML loop above is the way to name it.
+
+## 43-preferenze-illeggibili-registrate — 2026-10-12
+- `PreferenzeAppFile.leggi` logs an unreadable file at WARNING on its own class logger (`snastro.avvio.PreferenzeAppFile`, file-private `log`, like `CancellazioneCartella.kt:80`): `leggi le preferenze da <file>`, the `IOException` as thrown; `SwallowedException` suppression gone, `./gradlew :avvio:detekt` clean. KDoc: "never throws; an unreadable one is logged".
+- Test (Decision): a real failing read is a file with malformed UTF-8 (`t=` + 0xC3 0x28) — `Files.newBufferedReader` throws `MalformedInputException` (an `IOException`) on every OS and user, unlike a directory (never read) or mode 000 (ignored by root). Red before: "List is empty."; a missing file asserts no record.
+- User-visible message stays the existing design note (design-notes.md:22). `mm gate` green.
