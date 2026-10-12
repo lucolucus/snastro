@@ -279,3 +279,8 @@
 - `PreferenzeAppFile.leggi` logs an unreadable file at WARNING on its own class logger (`snastro.avvio.PreferenzeAppFile`, file-private `log`, like `CancellazioneCartella.kt:80`): `leggi le preferenze da <file>`, the `IOException` as thrown; `SwallowedException` suppression gone, `./gradlew :avvio:detekt` clean. KDoc: "never throws; an unreadable one is logged".
 - Test (Decision): a real failing read is a file with malformed UTF-8 (`t=` + 0xC3 0x28) — `Files.newBufferedReader` throws `MalformedInputException` (an `IOException`) on every OS and user, unlike a directory (never read) or mode 000 (ignored by root). Red before: "List is empty."; a missing file asserts no record.
 - User-visible message stays the existing design note (design-notes.md:22). `mm gate` green.
+
+## 43-preferenze-illeggibili-registrate — 2026-10-12 (rework 1)
+- B1: the JUL log spy now lives once in `:supporto-test` as `registriDi(logger, blocco)` (public inline, so suspend calls in the block still work); `registriLogUi` delegates, `PreferenzeAppFileTest` calls it with a strongly held file-level logger.
+- The unreadable-file test now asserts the full message `leggi le preferenze da $file` (review advice).
+- Proposed `create test-helpers` in conventions-proposals.md. `SessioneProgettoImplChiudiTest.kt:281-290` keeps its own filtering spy on `snastro` (not in B1's fix; could move to `registriDi` + filter later).
