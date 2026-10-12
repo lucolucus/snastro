@@ -23,3 +23,8 @@ How behaviour is kept:
   or a file without read permission) gives `Preferenze()` and one WARNING record carrying the `IOException`; a missing
   file gives `Preferenze()` and no record. Red before: no record.
 - Every existing test stays green with its assertions unchanged.
+
+## Decision (2026-10-12, decided: codex on delegation)
+Keep, but fix the test: a directory never reaches the `catch` (`Files.isRegularFile` excludes it,
+`avvio/src/main/kotlin/snastro/avvio/PreferenzeAppFile.kt:25`). Use a read that really throws `IOException` and check
+both the logged cause and the fallback. The user-visible message stays the separate decision in design-notes.

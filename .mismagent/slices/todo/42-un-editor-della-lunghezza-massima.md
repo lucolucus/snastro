@@ -1,6 +1,7 @@
 Kind: refactor
 Release: R2
 Examples:
+After: 43
 
 The lunghezza massima editor exists twice, and the two copies disagree (release review R1-2, duplication 4):
 - S3: `ui/src/main/kotlin/snastro/ui/riassunto/RiassuntoPresenter.kt:357-420` (`modificaLunghezzaMassima`,
@@ -34,3 +35,9 @@ How behaviour is kept:
   D-0065 saves) and `LunghezzaRiassuntoPresenterTest`.
 - `RiassuntoPresenter` keeps its constructor (ADR 0030 §1; `:avvio` untouched). Its `TooManyFunctions` may stay (the
   remaining split is a design note); report the function count `./gradlew :ui:detekt` gives without it.
+
+## Decision (2026-10-12, decided: codex on delegation)
+Narrowed: only the shared rule (trim, parse, range) and its tests; the extraction of the whole S3 editor out of
+`RiassuntoPresenter` is deferred to when a feature touches the Riassunto (design-notes). The visible change is decided
+explicitly: in both screens " 500 " saves 500 and out-of-range values stay refused (AC-S138 says nothing on spaces).
+Runs after 43.

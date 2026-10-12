@@ -32,3 +32,4 @@
   test results that inflate any glob over test XML. They are not in `settings.gradle.kts` and are safe to delete. That
   is not a slice.
 - screen-split (2026-10-12): `ui/src/main/kotlin/snastro/ui/riassunto/SchedaRiassunto.kt:1-3` justifies its `TooManyFunctions` by `SchermataPannelloVoci.kt`, which no longer carries one — restate its own cohesion or split it.
+- S3 playback (2026-10-12, decided: codex on delegation): refactor 44 (playback lane out of `RegistrazionePresenter`) dropped from R2's queue — its urgency rested on "jump to a point = playback", but the brief asks only to reach the point (scroll to the segment, `.mismagent/brief.md:83`); reassess once R2's search examples exist.

@@ -33,3 +33,9 @@ How behaviour is kept:
   never what it asserts).
 - Smoke: `s3-parte-2.png` is byte-identical across 10 runs from a `git archive` copy (it may differ from Base's render
   once, since Base could catch the loading dot); the other renders stay identical to Base.
+
+## Decision (2026-10-12, decided: codex on delegation — the user asked to review 41–44 with codex)
+Keep, with two changes: keep the one-hour limit, the kept XMLs and cancelling the scopes, but do not declare the
+failure fixed if it simply does not recur. The smoke must wait explicitly for the expected Proposta ("Sembra Anna"),
+not only for the absence of `proposta-caricamento` (the card also has loading, waiting and error states,
+`ui/src/main/kotlin/snastro/ui/registrazione/CartaVoceVista.kt:178`); compare Base and HEAD per smoke-renders.
