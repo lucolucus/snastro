@@ -1,20 +1,21 @@
 package snastro.avvio
 
 import org.junit.jupiter.api.io.TempDir
+import snastro.supporto.test.registriDi
 import snastro.ui.impostazioni.Preferenze
 import snastro.ui.impostazioni.TemaApp
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.logging.Handler
 import java.util.logging.Level
-import java.util.logging.LogRecord
 import java.util.logging.Logger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
-import kotlin.test.assertTrue
+
+/** [PreferenzeAppFile]'s logger, held strongly: `LogManager` keeps named loggers only by a weak reference. */
+private val loggerPreferenze: Logger = Logger.getLogger(PreferenzeAppFile::class.java.name)
 
 class PreferenzeAppFileTest {
     @TempDir
@@ -27,7 +28,7 @@ class PreferenzeAppFileTest {
 
     @Test
     fun `un file mancante non lascia traccia nel log`() {
-        val registri = registriDi { assertEquals(Preferenze(), preferenzeAppFile(cartella).leggi()) }
+        val registri = registriDi(loggerPreferenze) { assertEquals(Preferenze(), preferenzeAppFile(cartella).leggi()) }
 
         assertEquals(emptyList(), registri)
     }
@@ -39,11 +40,11 @@ class PreferenzeAppFileTest {
         // and user (a directory never reaches the read, an unreadable mode is ignored by root).
         Files.write(file, byteArrayOf('t'.code.toByte(), '='.code.toByte(), 0xC3.toByte(), 0x28))
 
-        val registri = registriDi { assertEquals(Preferenze(), preferenzeAppFile(cartella).leggi()) }
+        val registri = registriDi(loggerPreferenze) { assertEquals(Preferenze(), preferenzeAppFile(cartella).leggi()) }
 
         val registro = registri.single()
         assertEquals(Level.WARNING, registro.level)
-        assertTrue(registro.message.contains(file.toString()), registro.message)
+        assertEquals("leggi le preferenze da $file", registro.message)
         assertIs<IOException>(registro.thrown)
     }
 
@@ -69,26 +70,5 @@ class PreferenzeAppFileTest {
         Files.writeString(cartella.resolve("preferenze.properties"), "tema=VIOLA\ncartellaProgetti=/x\n")
 
         assertEquals(Preferenze(tema = TemaApp.SISTEMA, cartellaProgetti = "/x"), preferenzeAppFile(cartella).leggi())
-    }
-
-    /** Runs [blocco] with a spy on [PreferenzeAppFile]'s logger; returns the records published meanwhile. */
-    private fun registriDi(blocco: () -> Unit): List<LogRecord> {
-        val registri = mutableListOf<LogRecord>()
-        val spia = object : Handler() {
-            override fun publish(record: LogRecord) {
-                synchronized(registri) { registri += record }
-            }
-
-            override fun flush() = Unit
-            override fun close() = Unit
-        }
-        val logger = Logger.getLogger(PreferenzeAppFile::class.java.name)
-        logger.addHandler(spia)
-        try {
-            blocco()
-        } finally {
-            logger.removeHandler(spia)
-        }
-        return synchronized(registri) { registri.toList() }
     }
 }
