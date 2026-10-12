@@ -15,3 +15,4 @@ The project's rules live in `.mismagent/architecture.md`, `.mismagent/code-rules
 - non-fatal-faults → `references/non-fatal-faults.md`
 - screen-split → `references/screen-split.md`
 - smoke-renders → `references/smoke-renders.md`
+- test-helpers → `references/test-helpers.md`

@@ -7,6 +7,8 @@ La mappa dell'architettura vive in `.mismagent/` e resta la fonte unica:
 - [`.mismagent/decisions/`](.mismagent/decisions/) — ADR.
 
 ## Change log
+- 2026-10-12 — conventions (decided by the user): new test-helpers — a test helper used by two or more modules lives
+  once in `:supporto-test` (first: `registriDi`, slice 43).
 - 2026-10-12 — conventions (decided by the user): new smoke-renders (compare two `git archive` renders, never the main
   checkout); screen-split — a suppression's reason describes its own file.
 - 2026-10-11 — design pass R2 (release review R1-2, all dimensions 4; R1 stays as tagged at b469bf03).
