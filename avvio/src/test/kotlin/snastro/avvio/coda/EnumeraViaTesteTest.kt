@@ -1,10 +1,8 @@
 package snastro.avvio.coda
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import org.junit.jupiter.api.Timeout
 import snastro.kernel.RegistrazioneId
+import snastro.supporto.test.conScopeDiProva
 import java.time.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,9 +53,9 @@ class EnumeraViaTesteTest {
             // tutti NON sovrascritto: usa il fallback di default enumeraViaTeste — il percorso di produzione che
             // una fonte reale priva di una listing a query singola prenderebbe (CodaCondivisa.kt#tutti).
         )
-        val scope = CoroutineScope(SupervisorJob())
-        val coda = codaAvviata(scope = scope, fonti = listOf(fonteGuasta))
-        scope.cancel() // solo istantanea() e' esercitata: nessun tick necessario (come per D2 di PosizioniNellaCoda)
+        // solo istantanea() e' esercitata: lo scope e' cancellato appena costruita la coda (come per D2 di
+        // PosizioniNellaCoda), nessun tick necessario
+        val coda = conScopeDiProva { scope -> codaAvviata(scope = scope, fonti = listOf(fonteGuasta)) }
         coda.fermaEAttendi(1_000)
 
         val istantanea = coda.istantanea()

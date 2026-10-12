@@ -2,6 +2,7 @@ package snastro.avvio.progetto
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.GeneratoreIdFinto
@@ -47,9 +48,13 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
     /** Every session a test opened: closed after it (their queue and workers must not outlive the @TempDir). */
     private val sessioni = CopyOnWriteArrayList<SessioneProgettoImpl>()
 
+    /** Every scope a test handed to a session: cancelled after the sessions are closed. */
+    private val scopi = CopyOnWriteArrayList<CoroutineScope>()
+
     @AfterEach
     fun chiudiLeSessioni() {
         sessioni.forEach(SessioneProgettoImpl::chiudi)
+        scopi.forEach(CoroutineScope::cancel)
     }
 
     @TempDir
@@ -66,8 +71,8 @@ class SessioneProgettoImplTest : SessioneProgettoContratto() {
     ): SessioneProgettoImpl =
         SessioneProgettoImpl(registro, generatoreId, clock, scopeDiProva(), componentiDiProva()).also(sessioni::add)
 
-    /** Every test scope is a standalone `SupervisorJob` — nothing outlives one test's own assertions. */
-    private fun scopeDiProva(): CoroutineScope = CoroutineScope(SupervisorJob())
+    /** Every test scope is a standalone `SupervisorJob`, cancelled after the test: nothing outlives it. */
+    private fun scopeDiProva(): CoroutineScope = CoroutineScope(SupervisorJob()).also(scopi::add)
 
     // --- AC-239 ------------------------------------------------------------------------------
 

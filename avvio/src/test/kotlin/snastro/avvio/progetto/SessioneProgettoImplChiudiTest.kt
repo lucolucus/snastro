@@ -7,6 +7,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.junit.jupiter.api.AfterEach
@@ -54,9 +55,13 @@ class SessioneProgettoImplChiudiTest {
     /** Every session a test opened: closed after it (their queue and workers must not outlive the @TempDir). */
     private val sessioni = CopyOnWriteArrayList<SessioneProgettoImpl>()
 
+    /** Every scope a test handed to a session: cancelled after the sessions are closed. */
+    private val scopi = CopyOnWriteArrayList<CoroutineScope>()
+
     @AfterEach
     fun chiudiLeSessioni() {
         sessioni.forEach(SessioneProgettoImpl::chiudi)
+        scopi.forEach(CoroutineScope::cancel)
     }
 
     @TempDir
@@ -64,7 +69,7 @@ class SessioneProgettoImplChiudiTest {
 
     private val orologio: Clock = Clock.fixed(Instant.parse("2026-01-01T10:00:00Z"), ZoneOffset.UTC)
 
-    private fun scopeDiProva(): CoroutineScope = CoroutineScope(SupervisorJob())
+    private fun scopeDiProva(): CoroutineScope = CoroutineScope(SupervisorJob()).also(scopi::add)
 
     /** A session with no seam of its own (a reopen, another instance), closed after the test. */
     private fun sessioneSemplice(): SessioneProgettoImpl {

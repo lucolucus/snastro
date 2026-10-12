@@ -5,6 +5,9 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.captureToImage
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -39,6 +42,8 @@ private const val ATTESA_SMOKE_TIMEOUT_MS = 10_000L
 private const val ATTESA_SMOKE_PASSO_MS = 20L
 private const val VOCI = 4
 private const val DA_NOMINARE = 3
+private const val VOCE_PROPOSTA = 3
+private const val NOME_PROPOSTO = "Anna"
 
 /**
  * AC-237 + AC-351 + AC-357 + AC-S151 + AC-I91: S1, S2 over the fixture's 2-Parti Incontro (collapsed with its
@@ -148,7 +153,12 @@ private fun ComposeUiTest.percorriIncontro(grafo: Grafo, fixtureDir: String, out
     salvaSchermata(outputDir, "s3-parte-1")
 
     onNodeWithTag("parte-1").performClick()
-    attendi { esisteTesto("Parte 2 di 2", sottostringa = true) && esisteTag("voci-pannello") }
+    // Voce 3's Proposta drawn ('Sembra Anna'), no card's Proposta still loading: the shot is the same every run.
+    attendi {
+        esisteTesto("Parte 2 di 2", sottostringa = true) && esisteTag("voci-pannello") &&
+            propostaMostrata(VOCE_PROPOSTA, NOME_PROPOSTO) &&
+            (1..VOCI).none { esisteTag("voce-$it-proposta-caricamento") }
+    }
     salvaSchermata(outputDir, "s3-parte-2")
 
     // AC-S151/AC-I91: the Riassunto tab selected, the fixture's pronto Riassunto of the Incontro shown.
@@ -163,6 +173,13 @@ private fun ComposeUiTest.esisteTag(tag: String): Boolean = onAllNodesWithTag(ta
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.esisteTesto(testo: String, sottostringa: Boolean = false): Boolean =
     onAllNodesWithText(testo, substring = sottostringa).fetchSemanticsNodes().isNotEmpty()
+
+/** Voce [voce]'s card shows its Proposta: 'Sembra' and [nome] as its first candidate. */
+@OptIn(ExperimentalTestApi::class)
+private fun ComposeUiTest.propostaMostrata(voce: Int, nome: String): Boolean =
+    esisteTesto("Sembra") &&
+        onAllNodes(hasText(nome) and hasAnyAncestor(hasTestTag("voce-$voce-candidato-0")))
+            .fetchSemanticsNodes().isNotEmpty()
 
 @OptIn(ExperimentalTestApi::class)
 private fun ComposeUiTest.attendi(condizione: () -> Boolean) {

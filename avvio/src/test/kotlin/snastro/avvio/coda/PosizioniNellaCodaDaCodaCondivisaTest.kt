@@ -1,8 +1,6 @@
 package snastro.avvio.coda
 
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import snastro.supporto.test.conScopeDiProva
 import snastro.ui.coda.PosizioniNellaCoda
 import snastro.ui.coda.PosizioniNellaCodaContratto
 import snastro.ui.coda.ScenarioCoda
@@ -41,9 +39,8 @@ class PosizioniNellaCodaDaCodaCondivisaTest : PosizioniNellaCodaContratto() {
                 trattenuta = { false },
             )
         }
-        val scope = CoroutineScope(SupervisorJob())
-        val coda = codaAvviata(scope = scope, fonti = fonti)
-        scope.cancel() // nessun tick necessario per istantanea(): ferma subito il worker dedicato
+        // nessun tick necessario per istantanea(): lo scope cancellato ferma subito il worker dedicato
+        val coda = conScopeDiProva { scope -> codaAvviata(scope = scope, fonti = fonti) }
         coda.fermaEAttendi(1_000)
         return coda
     }

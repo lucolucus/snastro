@@ -2,9 +2,11 @@ package snastro.avvio.progetto
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.io.TempDir
 import snastro.kernel.GeneratoreIdFinto
 import snastro.kernel.RegistrazioneId
@@ -42,11 +44,13 @@ class RinominaRegistrazioneTest {
     private val id = RegistrazioneId("reg-1")
     private var db: SnastroDatabase? = null
 
+    private val scope = CoroutineScope(SupervisorJob())
+
     private val sessione = SessioneProgettoImpl(
         registro = RegistroProgettiFinta(),
         generatoreId = GeneratoreIdFinto(),
         clock = orologio,
-        scopeGenitore = CoroutineScope(SupervisorJob()),
+        scopeGenitore = scope,
         app = componentiDiProva(),
         seams = SessioneProgettoSeams(
             costruisciRegistrazioni = { database ->
@@ -55,6 +59,15 @@ class RinominaRegistrazioneTest {
             },
         ),
     )
+
+    @AfterEach
+    fun chiudiLaSessione() {
+        try {
+            sessione.chiudi()
+        } finally {
+            scope.cancel()
+        }
+    }
 
     private fun apriConUnaRegistrazione(): CollaboratoriProgetto {
         val progetto = sessione.crea(cartella.toString(), "Prova").atteso()
@@ -84,7 +97,6 @@ class RinominaRegistrazioneTest {
         val fileAudio = Files.list(cartellaProgetto.resolve("audio"))
             .use { elenco -> elenco.map { it.fileName.toString() }.toList() }
         assertEquals(listOf("reg-1.m4a"), fileAudio)
-        sessione.chiudi()
     }
 
     @Test
@@ -95,7 +107,6 @@ class RinominaRegistrazioneTest {
 
         assertEquals("Seduta di marzo", collaboratori.registrazioni().single().titolo)
         assertNull(cambiamentiDi(collaboratori).lastOrNull())
-        sessione.chiudi()
     }
 
     /** The latest [Cambiamento] of the project's merged view updates (each source replays its last one), if any. */
